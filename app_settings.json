@@ -1,0 +1,58 @@
+{
+  "minimum_machinable_dimension": 150,
+  "cut_board_width": 1830,
+  "cut_board_height": 2750,
+  "cut_piece_gap": 0,
+  "cut_squaring_allowance": 10,
+  "cut_saw_kerf": 4,
+  "cut_optimization_mode": "Optimización longitudinal",
+  "available_boards": [
+    {
+      "color": "BCO18",
+      "length": 2600,
+      "width": 1830,
+      "thickness": 18,
+      "grain": "0 - Sin Veta",
+      "margin": 10
+    },
+    {
+      "color": "BCO3",
+      "length": 2600,
+      "width": 1830,
+      "thickness": 3,
+      "grain": "0 - Sin Veta",
+      "margin": 10
+    },
+    {
+      "color": "ROBLE18",
+      "length": 2600,
+      "width": 1830,
+      "thickness": 18,
+      "grain": "1 - Longitudinal",
+      "margin": 10
+    },
+    {
+      "color": "GAUDI18",
+      "length": 2750,
+      "width": 1830,
+      "thickness": 18,
+      "grain": "1 - Longitudinal",
+      "margin": 10
+    }
+  ],
+  "available_herrajes": [
+    "Perfil C Superior de Aluminio",
+    "Perfil C Medio de Aluminio",
+    "Puerta Perfil Sierra Negra"
+  ],
+  "available_guias": [
+    "2 Guías Telescopicas Hafele",
+    "2 Bisagras Codo 0 Cierre Suave",
+    "4 Bisagras Codo 0 Cierre Suave",
+    "3 Guías Telescópicas Hafele"
+  ],
+  "available_detalles": [
+    "Patas Regulables 120",
+    "Zócalo de Aluminio"
+  ]
+}

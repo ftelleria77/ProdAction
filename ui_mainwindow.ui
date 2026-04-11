@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>640</width>
+    <height>420</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>CNC Furniture Project Manager</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <widget class="QLabel" name="labelTitle">
+      <property name="text">
+       <string>Proyectos</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QListWidget" name="projectList"/>
+    </item>
+    <item>
+         <layout class="QHBoxLayout" name="hLayoutButtonsRow1">
+            <item>
+             <widget class="QPushButton" name="btnNew">
+                <property name="text">
+                 <string>Nuevo</string>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                    <width>120</width>
+                    <height>40</height>
+                 </size>
+                </property>
+             </widget>
+            </item>
+      <item>
+       <widget class="QPushButton" name="btnOpen">
+        <property name="text">
+         <string>Abrir</string>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>120</width>
+          <height>40</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="hLayoutButtonsRow2">
+      <item>
+             <widget class="QPushButton" name="btnOptions">
+        <property name="text">
+                 <string>Opciones</string>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>120</width>
+          <height>40</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+        <item>
+         <widget class="QPushButton" name="btnClose">
+          <property name="text">
+           <string>Cerrar</string>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>120</width>
+            <height>40</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+         </layout>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
