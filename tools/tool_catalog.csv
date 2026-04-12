@@ -1,0 +1,20 @@
+tool_id,name,description,type,holder_key,overall_assembly_diameter,overall_assembly_length,diameter,pilot_length,sinking_length,tool_offset_length,descent_speed_min,descent_speed_std,descent_speed_max,feed_rate_min,feed_rate_std,feed_rate_max,spindle_speed_min,spindle_speed_std,spindle_speed_max
+1888,001,Broca Plana Vertical Ø8mm,Broca,001,8,73.5,8,77,40,77,2,2,2,2,2,3,6000,6000,6000
+1889,002,Broca Plana Vertical Ø15mm,Broca,002,15,0,15,77,20,77,2,2,2,1,1,1,4000,4000,4000
+1890,003,Broca Plana Vertical Ø20mm,Broca,003,20,0,20,77,20,77,2,2,2,1,1,1,4000,4000,4000
+1891,004,Broca Plana Vertical Ø35mm,Broca,004,35,0,35,77,20,77,2,2,2,1,1,1,4000,4000,4000
+1892,005,Broca Plana Vertical Ø5mm,Broca,005,5,0,5,77,40,77,2,2,2,3,3,5,6000,6000,6000
+1893,006,Broca Plana Vertical Ø4mm,Broca,006,4,0,4,77,40,77,2,2,2,3,3,5,6000,6000,6000
+1894,007,Broca Cónica Vertical Ø5mm,Broca,007,5,0,5,77,40,77,2,2,2,3,3,5,6000,6000,6000
+1895,058,Broca Plana Cara Delantera Ø8mm,Broca,058,8,61.8,8,65,30,65,2,2,2,3,3,3,6000,6000,6000
+1896,059,Broca Plana Cara Trasera Ø8mm,Broca,059,8,61.8,8,65,30,65,2,2,2,3,3,3,6000,6000,6000
+1897,060,Broca Plana Cara Derecha Ø8mm,Broca,060,8,61.8,8,65,30,65,2,2,2,3,3,3,6000,6000,6000
+1898,061,Broca Plana Cara Izquierda Ø8mm,Broca,061,8,61.8,8,65,30,65,2,2,2,3,3,3,6000,6000,6000
+1899,082,Sierra Vertical X 4mm,Sierra Vertical X,082,120,0,120,0,10,60,2,2,2,5,5,5,4000,4000,6000
+1900,E001,Widea 18 mm,Fresa 90º,001,18.36,125.4,18.36,125.4,30,125.4,2,2,2,5,5,6,18000,18000,18000
+1901,E002,Sierra Horizontal,Sierra Horizontal,002,100,107,100,107,30,107,2,2,2,3,3,5,6000,6000,6000
+1902,E003,Fresa Violeta,Freza Compresión,003,9.52,111.5,9.52,111.5,38,111.5,3,3,3,18,18,18,18000,18000,18000
+1903,E004,Fresa 4 mm,Fresa Compresión,004,4,107.2,4,107.2,22,107.2,2,2,2,5,5,5,18000,18000,18000
+1904,E005,Fresa 45º,Fresa 45º,005,76,145.9,76,145.9,54,145.9,2,2,2,5,5,5,18000,18000,18000
+1905,E006,Rectificado,Fresa 0º,006,80,120.87,80,120.87,36,120.87,2,2,2,2,2,4,18000,18000,18000
+1906,E007,Recta 50mm,Fresa 90º,007,17.72,152.1,17.72,152.1,50,152.1,2,2,2,5,5,6,18000,18000,18000

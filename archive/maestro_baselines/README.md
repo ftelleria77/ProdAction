@@ -1,5 +1,7 @@
 Guardar en esta carpeta los `.pgmx` base exportados y guardados manualmente desde Maestro.
 
+Guia de uso de la API publica del sintetizador: `docs/synthesize_pgmx_help.md`
+
 Uso recomendado:
 - Partir de un archivo sin mecanizados o de una variante minima y guardarla aca.
 - Hacer las modificaciones manuales en Maestro sobre copias dentro de esta misma carpeta.
@@ -53,6 +55,41 @@ Nota:
 - En fresados lineales tambien se puede controlar la profundidad con `--line-through/--no-line-through`, `--line-extra-depth` y `--line-target-depth`.
 - El parametro `Area` de `Parametros de Maquina` se controla con `--execution-fields` o su alias `--area`. Si no se indica, la sintesis usa `HG` por defecto. Valores validados hasta ahora: `A`, `EF`, `HG`.
 - Para habilitar el `Approach` con los defaults observados en Maestro (`Entrada=Lineal`, `Acercamiento=En Cota`, `Multipl. radio=2`, `Velocidad` vacia/null), alcanza con `--line-approach-enabled`.
-- Si hace falta ajustar el detalle, tambien estan disponibles `--line-approach-mode`, `--line-approach-radius-multiplier`, `--line-approach-speed` y `--line-approach-arc-side`. Modos validados hasta ahora: `Quote` = `En Cota` y `Down` = `En bajada`.
+- Si hace falta ajustar el detalle, tambien estan disponibles `--line-approach-type`, `--line-approach-mode`, `--line-approach-radius-multiplier`, `--line-approach-speed` y `--line-approach-arc-side`. Tipos validados hasta ahora: `Line` y `Arc`. Modos validados hasta ahora: `Quote` = `En Cota` y `Down` = `En bajada`. Para `Line` se validaron `Quote` y `Down`. Para `Arc` se valido `Quote`.
 - Para habilitar el `Retract` con los defaults observados en Maestro (`Salir=Lineal`, `Alejamiento=En Cota`, `Multipl. radio=2`, `Velocidad` vacia/null, `Sobreposicion=0`), alcanza con `--line-retract-enabled`.
-- Si hace falta ajustar el detalle, tambien estan disponibles `--line-retract-mode`, `--line-retract-radius-multiplier`, `--line-retract-speed`, `--line-retract-arc-side` y `--line-retract-overlap`. Modos validados hasta ahora: `Quote` = `En Cota` y `Up` = `En subida`.
+- Si hace falta ajustar el detalle, tambien estan disponibles `--line-retract-type`, `--line-retract-mode`, `--line-retract-radius-multiplier`, `--line-retract-speed`, `--line-retract-arc-side` y `--line-retract-overlap`. Tipos validados hasta ahora: `Line` y `Arc`. Modos validados hasta ahora: `Quote` = `En Cota` y `Up` = `En subida`. Para `Line` se validaron `Quote` y `Up`. Para `Arc` ya se validaron `Quote` y `Up`.
+
+Hallazgos validados en Maestro al comparar escuadrados manuales:
+- Si `Approach.IsEnabled=false`, Maestro conserva un toolpath vertical de `Approach` en la XY del punto de entrada.
+- Si `Retract.IsEnabled=false`, Maestro conserva un toolpath vertical de `Lift` en la XY del punto de salida.
+- Para `Arc + Quote`, el radio efectivo observado es `tool_width / 2 * (radius_multiplier - 1)`.
+- Para `Line + Down`, la entrada observada es una sola recta oblicua desde `entry_point - direction * (tool_width / 2 * radius_multiplier)` hasta el punto de entrada del toolpath.
+- Para `Line + Up`, la salida observada es una sola recta oblicua desde el punto de salida del toolpath hasta `exit_point + direction * (tool_width / 2 * radius_multiplier)`.
+- En antihorario con `SideOfFeature=Right`:
+- `Approach` usa `linea vertical + arco` con angulos `270° -> 360°`.
+- `Lift` usa `arco + linea vertical` con angulos `0° -> 90°`.
+- En horario con `SideOfFeature=Left`:
+- `Approach` usa `linea vertical + arco` con angulos `90° -> 180°`.
+- `Lift` usa `arco + linea vertical` con angulos `180° -> 270°`.
+- En estos casos validados, `Approach`/`Lift` cambian sin alterar `TrajectoryPath`.
+
+Resumen ordenado de la regla validada:
+- Si `Approach.IsEnabled=false`, `Approach` queda como linea vertical en la XY de entrada.
+- Si `Retract.IsEnabled=false`, `Lift` queda como linea vertical en la XY de salida.
+- Para `Arc + Quote`, el radio efectivo observado es `tool_width / 2 * (radius_multiplier - 1)`.
+- Para `Line + Down`, `Approach` usa una sola recta oblicua desde `entry_point - direction * (tool_width / 2 * radius_multiplier)` hasta `entry_point`.
+- En antihorario con `SideOfFeature=Right`, `Line + Down` corre el punto inicial del `Approach` hacia la izquierda.
+- En horario con `SideOfFeature=Left`, `Line + Down` corre el punto inicial del `Approach` hacia la derecha.
+- Para `Line + Up`, `Lift` usa una sola recta oblicua desde `exit_point` hasta `exit_point + direction * (tool_width / 2 * radius_multiplier)`.
+- En antihorario con `SideOfFeature=Right`, `Line + Up` corre el punto final del `Lift` hacia la derecha.
+- En horario con `SideOfFeature=Left`, `Line + Up` corre el punto final del `Lift` hacia la izquierda.
+- En antihorario con `SideOfFeature=Right`, `Approach` usa `linea vertical + arco` con angulos `270 -> 360`.
+- En antihorario con `SideOfFeature=Right`, `Lift` usa `arco + linea vertical` con angulos `0 -> 90`.
+- En horario con `SideOfFeature=Left`, `Approach` usa `linea vertical + arco` con angulos `90 -> 180`.
+- En horario con `SideOfFeature=Left`, `Lift` usa `arco + linea vertical` con angulos `180 -> 270`.
+- En estos casos validados, `Approach` y `Lift` cambian sin alterar `TrajectoryPath`.
+- Para `Retract Arc + Up`, el radio efectivo sigue siendo `tool_width / 2 * (radius_multiplier - 1)`.
+- Para `Retract Arc + Up`, el arco vive en el plano vertical definido por la direccion de salida y `Z`.
+- En antihorario, `Retract Arc + Up` sale con arco `0 -> 90` y luego linea vertical.
+- En horario, `Retract Arc + Up` sale con arco `180 -> 270` y luego linea vertical.
+- Para `Retract Arc + Up`, el centro del arco queda en `exit_point + (0, 0, arc_radius)` y el final del arco en `exit_point + direction * arc_radius + (0, 0, arc_radius)`.

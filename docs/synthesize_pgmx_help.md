@@ -1,0 +1,426 @@
+# Ayuda `tools.synthesize_pgmx`
+
+Esta guia deja por escrito como usar la API publica de `tools/synthesize_pgmx.py`,
+en que orden conviene llamarla y que reglas de trabajo seguimos para no perder el
+hilo de lo ya validado en Maestro.
+
+## 1. Alcance actual
+
+La API publica actual sirve para sintetizar `.pgmx` a partir de un baseline limpio
+o a partir de un baseline limpio + un `source_pgmx_path` usado como plantilla de
+serializacion.
+
+Casos publicos soportados hoy:
+- lectura de estado basico de pieza (`read_pgmx_state`)
+- fresado lineal abierto (`LineMillingSpec`)
+- fresado sobre polilinea abierta (`PolylineMillingSpec`)
+- control de profundidad pasante/no pasante
+- `Approach` y `Retract` con reglas ya volcadas desde Maestro
+- `Area` de Parametros de Maquina, con `HG` por defecto
+
+Casos que no deben asumirse como API publica estable si no estan documentados aqui:
+- escuadrados cerrados como tipo propio
+- perfiles cerrados arbitrarios
+- familias de feature distintas de `GeneralProfileFeature`
+- cualquier mecanizado que no este construido con `LineMillingSpec` o `PolylineMillingSpec`
+
+## 2. Flujo recomendado
+
+Orden recomendado para usar el sintetizador:
+
+1. Elegir un `baseline_path` limpio.
+2. Si ya existe un caso manual estudiado en Maestro para esa misma familia, pasar tambien `source_pgmx_path`.
+3. Leer o definir la pieza.
+4. Construir la profundidad.
+5. Construir `Approach` y `Retract`.
+6. Construir uno o mas mecanizados (`LineMillingSpec` y/o `PolylineMillingSpec`).
+7. Construir el `PgmxSynthesisRequest`.
+8. Ejecutar `synthesize_request(...)`.
+
+Regla practica:
+- `baseline_path` define el contenedor base.
+- `source_pgmx_path` no reemplaza al baseline: solo aporta serializacion ya observada en Maestro cuando coincide con la familia del mecanizado.
+
+## 3. API publica
+
+### `read_pgmx_state(path: Path) -> PgmxState`
+
+Lee de un `.pgmx`:
+- nombre de pieza
+- largo
+- ancho
+- espesor
+- origen X/Y/Z
+- `execution_fields`
+
+Usos tipicos:
+- tomar dimensiones reales antes de sintetizar
+- clonar el estado de una pieza manual
+- evitar hardcodear origen y espesor
+
+### `build_milling_depth_spec(...) -> MillingDepthSpec`
+
+Firma simplificada:
+
+```python
+build_milling_depth_spec(
+    is_through: bool | None = None,
+    *,
+    target_depth: float | None = None,
+    extra_depth: float | None = None,
+)
+```
+
+Reglas:
+- si no se pasa nada, queda pasante con `extra_depth=0`
+- si `is_through=True`, `extra_depth` representa `Extra`
+- si `is_through=False`, hay que indicar `target_depth`
+- `extra_depth` no aplica a fresados no pasantes
+
+### `build_approach_spec(...) -> ApproachSpec`
+
+Firma simplificada:
+
+```python
+build_approach_spec(
+    enabled: bool | None = None,
+    *,
+    approach_type: str | None = None,
+    mode: str | None = None,
+    radius_multiplier: float | None = None,
+    speed: float | None = None,
+    arc_side: str | None = None,
+)
+```
+
+Defaults relevantes:
+- sin parametros: `Approach` deshabilitado
+- si se habilita sin mas detalle: completa defaults coherentes observados en Maestro
+
+Valores ya validados:
+- `approach_type`: `Line`, `Arc`
+- `mode`: `Down`, `Quote`
+- `arc_side`: `Automatic`
+
+### `build_retract_spec(...) -> RetractSpec`
+
+Firma simplificada:
+
+```python
+build_retract_spec(
+    enabled: bool | None = None,
+    *,
+    retract_type: str | None = None,
+    mode: str | None = None,
+    radius_multiplier: float | None = None,
+    speed: float | None = None,
+    arc_side: str | None = None,
+    overlap: float | None = None,
+)
+```
+
+Defaults relevantes:
+- sin parametros: `Retract` deshabilitado
+- si se habilita sin mas detalle: completa defaults coherentes observados en Maestro
+
+Valores ya validados:
+- `retract_type`: `Line`, `Arc`
+- `mode`: `Up`, `Quote`
+- `arc_side`: `Automatic`
+
+### `build_line_milling_spec(...) -> LineMillingSpec | None`
+
+Construye un fresado lineal de dos puntos.
+
+Firma simplificada:
+
+```python
+build_line_milling_spec(
+    line_x1,
+    line_y1,
+    line_x2,
+    line_y2,
+    line_feature_name,
+    line_tool_id,
+    line_tool_name,
+    line_tool_width,
+    line_security_plane,
+    line_side_of_feature=None,
+    line_is_through=None,
+    line_target_depth=None,
+    line_extra_depth=None,
+    line_approach_enabled=None,
+    line_approach_type=None,
+    line_approach_mode=None,
+    line_approach_radius_multiplier=None,
+    line_approach_speed=None,
+    line_approach_arc_side=None,
+    line_retract_enabled=None,
+    line_retract_type=None,
+    line_retract_mode=None,
+    line_retract_radius_multiplier=None,
+    line_retract_speed=None,
+    line_retract_arc_side=None,
+    line_retract_overlap=None,
+)
+```
+
+Notas:
+- si los cuatro puntos llegan en `None`, devuelve `None`
+- si se informa la linea, hay que informar los cuatro valores
+- `line_side_of_feature` admite `Center`, `Right`, `Left`
+
+### `build_polyline_milling_spec(...) -> PolylineMillingSpec`
+
+Construye un fresado sobre polilinea abierta.
+
+Firma simplificada:
+
+```python
+build_polyline_milling_spec(
+    points,
+    feature_name=None,
+    tool_id=None,
+    tool_name=None,
+    tool_width=None,
+    security_plane=None,
+    side_of_feature=None,
+    is_through=None,
+    target_depth=None,
+    extra_depth=None,
+    approach_enabled=None,
+    approach_type=None,
+    approach_mode=None,
+    approach_radius_multiplier=None,
+    approach_speed=None,
+    approach_arc_side=None,
+    retract_enabled=None,
+    retract_type=None,
+    retract_mode=None,
+    retract_radius_multiplier=None,
+    retract_speed=None,
+    retract_arc_side=None,
+    retract_overlap=None,
+)
+```
+
+Notas:
+- la polilinea debe ser abierta
+- necesita al menos dos puntos
+- no admite segmentos de longitud cero
+
+### `build_synthesis_request(...) -> PgmxSynthesisRequest`
+
+Es el ensamblador del pedido completo.
+
+Firma simplificada:
+
+```python
+build_synthesis_request(
+    baseline_path,
+    output_path,
+    *,
+    source_pgmx_path=None,
+    piece=None,
+    piece_name=None,
+    length=None,
+    width=None,
+    depth=None,
+    origin_x=None,
+    origin_y=None,
+    origin_z=None,
+    execution_fields=None,
+    line_millings=None,
+    polyline_millings=None,
+)
+```
+
+Reglas:
+- si no se indica `execution_fields`, usa `HG` por defecto
+- si no se pasa `piece`, toma el estado desde `source_pgmx_path` o desde el baseline
+- se pueden combinar varios mecanizados lineales y por polilinea en un mismo request
+
+### `synthesize_request(request) -> PgmxSynthesisResult`
+
+Es la funcion principal del flujo programatico.
+
+Hace:
+- carga el baseline
+- hidrata mecanizados si hay `source_pgmx_path`
+- aplica el estado de pieza
+- inserta features, operaciones, worksteps y toolpaths
+- escribe el `.pgmx`
+- devuelve `output_path`, `piece`, `sha256` y el resumen de mecanizados pedidos
+
+### `synthesize_pgmx(...) -> PgmxState`
+
+Wrapper historico para llamadas antiguas.
+
+Usarlo solo si hace falta compatibilidad.
+Para codigo nuevo conviene:
+
+```python
+request = build_synthesis_request(...)
+result = synthesize_request(request)
+```
+
+## 4. Reglas ya validadas en Maestro
+
+### Generales
+
+- `Area` usa `HG` por defecto.
+- Si `Approach.IsEnabled=false`, Maestro conserva un toolpath vertical de entrada.
+- Si `Retract.IsEnabled=false`, Maestro conserva un toolpath vertical de salida.
+
+### `Approach Line + Down`
+
+- usa una sola recta oblicua
+- parte desde `entry_point - direction * (tool_width / 2 * radius_multiplier)`
+- termina en el punto de entrada del toolpath
+
+### `Retract Line + Up`
+
+- usa una sola recta oblicua
+- parte en el punto de salida del toolpath
+- termina en `exit_point + direction * (tool_width / 2 * radius_multiplier)`
+
+### `Arc + Quote`
+
+- radio efectivo: `tool_width / 2 * (radius_multiplier - 1)`
+- entrada: `linea vertical + arco`
+- salida: `arco + linea vertical`
+- antihorario con `SideOfFeature=Right`:
+  - `Approach`: `270 -> 360`
+  - `Lift`: `0 -> 90`
+- horario con `SideOfFeature=Left`:
+  - `Approach`: `90 -> 180`
+  - `Lift`: `180 -> 270`
+
+### `Retract Arc + Up`
+
+- radio efectivo: `tool_width / 2 * (radius_multiplier - 1)`
+- el arco vive en el plano vertical definido por la direccion de salida y `Z`
+- antihorario:
+  - arco `0 -> 90`, luego linea vertical
+- horario:
+  - arco `180 -> 270`, luego linea vertical
+
+## 5. Ejemplos de uso
+
+### Ejemplo minimo: leer una pieza
+
+```python
+from pathlib import Path
+from tools.synthesize_pgmx import read_pgmx_state
+
+state = read_pgmx_state(Path("archive/maestro_baselines/Pieza.pgmx"))
+```
+
+### Ejemplo minimo: linea central pasante
+
+```python
+from pathlib import Path
+from tools.synthesize_pgmx import (
+    build_line_milling_spec,
+    build_synthesis_request,
+    synthesize_request,
+)
+
+line = build_line_milling_spec(
+    line_x1=200.0,
+    line_y1=0.0,
+    line_x2=200.0,
+    line_y2=400.0,
+    line_feature_name="DIVISION_CENTRAL",
+    line_tool_id="1903",
+    line_tool_name="E004",
+    line_tool_width=4.0,
+    line_security_plane=20.0,
+    line_side_of_feature="Center",
+    line_is_through=True,
+    line_extra_depth=0.5,
+)
+
+request = build_synthesis_request(
+    baseline_path=Path("archive/maestro_baselines/baseline_sin_mecanizados.pgmx"),
+    output_path=Path("archive/maestro_baselines/Pieza_sintetizada.pgmx"),
+    piece_name="Pieza",
+    length=400.0,
+    width=400.0,
+    depth=25.0,
+    origin_x=5.0,
+    origin_y=5.0,
+    origin_z=25.0,
+    line_millings=[line],
+)
+
+result = synthesize_request(request)
+print(result.output_path)
+print(result.sha256)
+```
+
+### Ejemplo minimo: polilinea abierta con tool side compensation
+
+```python
+from pathlib import Path
+from tools.synthesize_pgmx import (
+    build_polyline_milling_spec,
+    build_synthesis_request,
+    synthesize_request,
+)
+
+polyline = build_polyline_milling_spec(
+    points=[
+        (250.0, 0.0),
+        (125.0, 250.0),
+        (375.0, 250.0),
+        (250.0, 500.0),
+    ],
+    feature_name="Fresado",
+    tool_id="1902",
+    tool_name="E003",
+    tool_width=9.52,
+    side_of_feature="Right",
+    is_through=True,
+    extra_depth=0.5,
+)
+
+request = build_synthesis_request(
+    baseline_path=Path("archive/maestro_baselines/baseline_sin_mecanizados.pgmx"),
+    output_path=Path("archive/maestro_baselines/Pieza_polilinea.pgmx"),
+    piece_name="Pieza",
+    length=500.0,
+    width=500.0,
+    depth=18.0,
+    origin_x=5.0,
+    origin_y=5.0,
+    origin_z=9.0,
+    polyline_millings=[polyline],
+)
+
+result = synthesize_request(request)
+print(result.output_path)
+```
+
+## 6. Reglas de trabajo para no perder el hilo
+
+Estas reglas aplican cada vez que se trabaja con esta herramienta:
+
+- Antes de inferir una regla nueva, revisar esta guia y los README del repo.
+- Toda la generacion `.pgmx` del repo debe resolverse desde `tools/synthesize_pgmx.py`.
+- Si el usuario pide solo generar una pieza, no cambiar codigo.
+- Si ya existe un caso manual estudiado, usarlo como `source_pgmx_path` antes de inventar serializacion nueva.
+- No asumir que un caso "parecido" ya quedo resuelto: confirmar si la familia publica es linea o polilinea.
+- Cuando aparezca un fallo de Maestro, revisar primero:
+  - serializacion XML final
+  - `xsi:type` y namespaces
+  - referencias internas
+  - si el caso se esta construyendo con la familia correcta (`LineMillingSpec` vs `PolylineMillingSpec`)
+
+## 7. Fuente de verdad
+
+La fuente principal para el uso del sintetizador pasa a ser este archivo:
+
+- `docs/synthesize_pgmx_help.md`
+
+Los README del repo solo deberian resumir y apuntar aqui.

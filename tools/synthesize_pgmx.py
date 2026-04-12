@@ -3,6 +3,9 @@
 La API publica del modulo esta pensada para poder reutilizarla desde el flujo
 principal de la aplicacion, sin depender de la CLI:
 
+Referencia operativa recomendada:
+- `docs/synthesize_pgmx_help.md`
+
 - `read_pgmx_state(...)` lee dimensiones, nombre, origen y area desde un `.pgmx`.
 - `build_synthesis_request(...)` arma una solicitud clara y reusable.
 - `synthesize_request(...)` aplica la solicitud sobre un baseline y escribe el
@@ -12,6 +15,22 @@ principal de la aplicacion, sin depender de la CLI:
 
 Soporte actual de mecanizados sinteticos:
 - `LineMillingSpec`: linea sobre un plano con su fresado asociado.
+- `PolylineMillingSpec`: polilinea abierta con su fresado asociado.
+
+Hallazgos ya volcados en la sintesis:
+- `Area` de `Parametros de Maquina` usa `HG` por defecto si no se indica otro valor.
+- `Approach` y `Retract` soportan `Line` y `Arc`.
+- Para `Approach Line + Down` ya se sintetizo la regla observada en Maestro:
+    una sola bajada oblicua desde un punto previo desplazado sobre la direccion
+    opuesta al avance, sin alterar `TrajectoryPath`.
+- Para `Retract Line + Up` ya se sintetizo la regla observada en Maestro:
+    una sola subida oblicua hacia un punto final desplazado sobre la direccion
+    de salida, sin alterar `TrajectoryPath`.
+- Para `Arc + Quote` ya se sintetizo la regla observada en Maestro para entrada/salida
+    sobre perfiles rectos: toolpath vertical cuando la estrategia esta deshabilitada y
+    `linea vertical + arco` / `arco + linea vertical` cuando esta habilitada.
+- Para `Retract Arc + Up` ya se sintetizo la salida observada en Maestro:
+    `arco en un plano vertical + linea vertical`, sin alterar `TrajectoryPath`.
 """
 
 from __future__ import annotations
@@ -20,34 +39,26 @@ import argparse
 import hashlib
 import json
 import math
+import re
+import zipfile
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Optional, Sequence
 
-from tools.export_pgmx import (
-    ARRAYS_NS,
-    BASE_MODEL_NS,
-    GEOMETRY_NS,
-    MILLING_NS,
-    PGMX_NS,
-    STRATEGY_NS,
-    UTILITY_NS,
-    XSD_NS,
-    XSI_NS,
-    _compact_number,
-    _finalize_pgmx_xml_bytes,
-    _id_counter,
-    _load_pgmx_archive,
-    _set_text,
-    _set_xmlns,
-    _toolpath_line_string,
-    _write_pgmx_zip,
-    _xsi_type,
-)
-
-
+PGMX_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.ProjectModule"
+XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
+BASE_MODEL_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel"
+MILLING_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Milling"
+GEOMETRY_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Geometry"
+STRATEGY_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Strategy"
+UTILITY_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Utility"
+XSD_NS = "http://www.w3.org/2001/XMLSchema"
+ARRAYS_NS = "http://schemas.microsoft.com/2003/10/Serialization/Arrays"
 PARAMETRIC_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Parametrics"
+
+ET.register_namespace("", PGMX_NS)
+ET.register_namespace("i", XSI_NS)
 
 __all__ = [
     "PgmxState",
@@ -69,6 +80,10 @@ __all__ = [
     "synthesize_pgmx",
 ]
 
+
+# ============================================================================
+# Public data model
+# ============================================================================
 
 @dataclass(frozen=True)
 class PgmxState:
@@ -312,6 +327,243 @@ class PgmxSynthesisResult:
     polyline_millings: tuple[PolylineMillingSpec, ...] = ()
 
 
+# ============================================================================
+# Public spec builders
+# ============================================================================
+
+def _strip_namespace(tag: str) -> str:
+    """Devuelve el nombre local de un tag XML, sin su namespace."""
+
+    return tag.split("}", 1)[-1] if "}" in tag else tag
+
+
+def _compact_number(value: float) -> str:
+    """Serializa un numero con el formato compacto que usamos en PGMX."""
+
+    number = float(value)
+    return str(int(number)) if number.is_integer() else f"{number:.6f}".rstrip("0").rstrip(".")
+
+
+def _xsi_type(element: ET.Element) -> str:
+    """Lee el `xsi:type` de un nodo XML sin depender del prefijo exacto."""
+
+    for key, value in element.attrib.items():
+        if _strip_namespace(key).lower() == "type":
+            return value or ""
+    return ""
+
+
+def _set_text(element: Optional[ET.Element], value) -> None:
+    """Asigna texto a un nodo XML, tolerando `None`."""
+
+    if element is not None:
+        element.text = "" if value is None else str(value)
+
+
+def _set_xmlns(element: Optional[ET.Element], prefix: str, uri: str) -> None:
+    """Inyecta una declaracion `xmlns:prefix` en un nodo si existe."""
+
+    if element is not None:
+        element.set(f"xmlns:{prefix}", uri)
+
+
+def _load_pgmx_archive(source_path: Path) -> tuple[ET.Element, dict[str, bytes], str]:
+    """Abre un `.pgmx` como ZIP y devuelve root XML, entradas crudas y nombre del XML."""
+
+    with zipfile.ZipFile(source_path) as zip_file:
+        archive_entries = {name: zip_file.read(name) for name in zip_file.namelist()}
+    xml_entry_name = next((name for name in archive_entries if name.lower().endswith(".xml")), "")
+    if not xml_entry_name:
+        raise ValueError(f"El archivo '{source_path}' no contiene una entrada XML.")
+    xml_root = ET.fromstring(archive_entries[xml_entry_name].decode("utf-8", errors="ignore"))
+    return xml_root, archive_entries, xml_entry_name
+
+
+def _id_counter(root: ET.Element):
+    """Genera IDs nuevos por encima del mayor ID/unsignedInt ya presente en el XML."""
+
+    max_value = 0
+    for element in root.iter():
+        tag = _strip_namespace(element.tag)
+        text = str(element.text or "").strip()
+        if tag not in {"ID", "unsignedInt"} or not text.isdigit():
+            continue
+        max_value = max(max_value, int(text))
+
+    current = max_value + 1
+    while True:
+        yield str(current)
+        current += 1
+
+
+def _toolpath_line_string(
+    start_point: tuple[float, float, float],
+    end_point: tuple[float, float, float],
+) -> str:
+    """Serializa un segmento recto de `ToolpathList` en el formato raw de Maestro."""
+
+    dx = end_point[0] - start_point[0]
+    dy = end_point[1] - start_point[1]
+    dz = end_point[2] - start_point[2]
+    length = math.sqrt((dx * dx) + (dy * dy) + (dz * dz))
+    if length <= 1e-6:
+        raise ValueError("No se puede crear un segmento de toolpath con longitud cero.")
+
+    return "\n".join(
+        [
+            f"8 0 {_compact_number(length)}",
+            " ".join(
+                [
+                    "1",
+                    _compact_number(start_point[0]),
+                    _compact_number(start_point[1]),
+                    _compact_number(start_point[2]),
+                    _compact_number(dx / length),
+                    _compact_number(dy / length),
+                    _compact_number(dz / length),
+                ]
+            ),
+        ]
+    )
+
+
+def _write_pgmx_zip(output_path: Path, xml_bytes: bytes, template_entries: dict[str, bytes], xml_entry_name: str) -> None:
+    """Escribe un `.pgmx` preservando el resto de entradas del template ZIP."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    epl_written = False
+    with zipfile.ZipFile(output_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_file:
+        zip_file.writestr(xml_entry_name, xml_bytes)
+        for entry_name, data in template_entries.items():
+            if entry_name.lower().endswith(".xml"):
+                continue
+            if entry_name.lower().endswith(".epl"):
+                zip_file.writestr(f"{output_path.stem}.epl", data)
+                epl_written = True
+                continue
+            zip_file.writestr(entry_name, data)
+        if not epl_written:
+            zip_file.writestr(f"{output_path.stem}.epl", b"")
+
+
+def _finalize_pgmx_xml_bytes(xml_bytes: bytes) -> bytes:
+    """Normaliza namespaces y tipos XML para que Maestro acepte el `.pgmx`."""
+
+    xml_text = xml_bytes.decode("utf-8")
+    geometry_decl = f'<Geometries xmlns:a="{GEOMETRY_NS}">'
+    global_setup_decl = f'<GlobalSetup xmlns:a="{BASE_MODEL_NS}">'
+    machining_params_decl = (
+        f'<MachiningParameters i:type="a:XilogHeaderParameters" xmlns:a="{BASE_MODEL_NS}">'
+    )
+    workpiece_geometry_decl = f'<Geometry i:type="a:WorkpieceBoxGeometry" xmlns:a="{BASE_MODEL_NS}">'
+    variable_value_decl = f'<Value i:type="b:double" xmlns:b="{XSD_NS}">'
+    toolpath_list_decl = f'<ToolpathList xmlns:b="{BASE_MODEL_NS}">'
+    head_decl = f'<Head xmlns:b="{BASE_MODEL_NS}">'
+    machine_functions_decl = f'<MachineFunctions xmlns:b="{BASE_MODEL_NS}">'
+    start_point_decl = f'<StartPoint xmlns:b="{GEOMETRY_NS}">'
+    tool_key_decl = f'<ToolKey xmlns:b="{UTILITY_NS}">'
+    approach_decl = f'<Approach i:type="b:BaseApproachStrategy" xmlns:b="{STRATEGY_NS}">'
+    retract_decl = f'<Retract i:type="b:BaseRetractStrategy" xmlns:b="{STRATEGY_NS}">'
+
+    if "<Geometries>" in xml_text and geometry_decl not in xml_text:
+        xml_text = xml_text.replace("<Geometries>", geometry_decl, 1)
+    if "<GlobalSetup>" in xml_text and global_setup_decl not in xml_text:
+        xml_text = xml_text.replace("<GlobalSetup>", global_setup_decl, 1)
+    xml_text = xml_text.replace(
+        '<MachiningParameters i:type="a:XilogHeaderParameters">',
+        machining_params_decl,
+    )
+    xml_text = re.sub(
+        r'<(?P<prefix>[A-Za-z_][\w.-]*:)?Geometry i:type="a:WorkpieceBoxGeometry">',
+        lambda match: (
+            f'<{match.group("prefix") or ""}Geometry i:type="a:WorkpieceBoxGeometry" '
+            f'xmlns:a="{BASE_MODEL_NS}">'
+        ),
+        xml_text,
+    )
+    xml_text = re.sub(
+        r'<(?P<prefix>[A-Za-z_][\w.-]*:)?Value i:type="b:double">',
+        lambda match: (
+            f'<{match.group("prefix") or ""}Value i:type="b:double" '
+            f'xmlns:b="{XSD_NS}">'
+        ),
+        xml_text,
+    )
+    if "<ToolpathList>" in xml_text and toolpath_list_decl not in xml_text:
+        xml_text = xml_text.replace("<ToolpathList>", toolpath_list_decl)
+    if "<Head>" in xml_text and head_decl not in xml_text:
+        xml_text = xml_text.replace("<Head>", head_decl)
+    if "<MachineFunctions>" in xml_text and machine_functions_decl not in xml_text:
+        xml_text = xml_text.replace("<MachineFunctions>", machine_functions_decl)
+    if "<StartPoint>" in xml_text and start_point_decl not in xml_text:
+        xml_text = xml_text.replace("<StartPoint>", start_point_decl)
+    if "<ToolKey>" in xml_text and tool_key_decl not in xml_text:
+        xml_text = xml_text.replace("<ToolKey>", tool_key_decl)
+    xml_text = xml_text.replace(
+        '<Approach i:type="b:BaseApproachStrategy">',
+        approach_decl,
+    )
+    xml_text = xml_text.replace(
+        '<Retract i:type="b:BaseRetractStrategy">',
+        retract_decl,
+    )
+    xml_text = re.sub(
+        r'<(?P<prefix>[A-Za-z_][\w.-]*:)?Executable i:type="a:MachiningWorkingStep">',
+        lambda match: (
+            f'<{match.group("prefix") or ""}Executable i:type="a:MachiningWorkingStep" '
+            f'xmlns:a="{PGMX_NS}">'
+        ),
+        xml_text,
+    )
+    xml_text = re.sub(
+        r'<(?P<prefix>[A-Za-z_][\w.-]*:)?Executable i:type="Xn">',
+        lambda match: (
+            f'<{match.group("prefix") or ""}Executable i:type="Xn" '
+            f'xmlns="{BASE_MODEL_NS}">'
+        ),
+        xml_text,
+        count=1,
+    )
+    xml_text = re.sub(
+        r'<(?P<prefix>[A-Za-z_][\w.-]*:)?ManufacturingFeatureID>',
+        lambda match: (
+            f'<{match.group("prefix") or ""}ManufacturingFeatureID '
+            f'xmlns:b="{UTILITY_NS}">'
+        ),
+        xml_text,
+    )
+    xml_text = re.sub(
+        r'<(?P<prefix>[A-Za-z_][\w.-]*:)?OperationID>',
+        lambda match: (
+            f'<{match.group("prefix") or ""}OperationID '
+            f'xmlns:b="{UTILITY_NS}">'
+        ),
+        xml_text,
+    )
+    xml_text = re.sub(
+        r'<(?P<prefix>[A-Za-z_][\w.-]*:)?PlaneID>',
+        lambda match: f'<{match.group("prefix") or ""}PlaneID xmlns:c="{UTILITY_NS}">',
+        xml_text,
+    )
+    xml_text = re.sub(
+        r'<(?P<prefix>[A-Za-z_][\w.-]*:)?BasicCurve i:type="c:GeomCompositeCurve">',
+        lambda match: (
+            f'<{match.group("prefix") or ""}BasicCurve i:type="c:GeomCompositeCurve" '
+            f'xmlns:c="{GEOMETRY_NS}">'
+        ),
+        xml_text,
+    )
+    xml_text = xml_text.replace(
+        '<Geometry i:type="a:WorkpieceBoxGeometry">',
+        workpiece_geometry_decl,
+    )
+    xml_text = xml_text.replace(
+        '<Value i:type="b:double">',
+        variable_value_decl,
+    )
+    return xml_text.encode("utf-8")
+
+
 def _safe_float(value, default: float) -> float:
     raw = "" if value is None else str(value).strip().replace(",", ".")
     if not raw:
@@ -331,6 +583,41 @@ def _safe_bool(value, default: bool) -> bool:
     if raw in {"false", "0", "no"}:
         return False
     return default
+
+
+def _finalize_synthesized_pgmx_xml_bytes(xml_bytes: bytes) -> bytes:
+    finalized = _finalize_pgmx_xml_bytes(xml_bytes)
+    xml_text = finalized.decode("utf-8")
+    expressions_decl = f'<Expressions xmlns:a="{PARAMETRIC_NS}">'
+    if "<Expressions>" in xml_text and expressions_decl not in xml_text:
+        xml_text = xml_text.replace("<Expressions>", expressions_decl, 1)
+    xml_text = re.sub(
+        r'<(?P<prefix>[A-Za-z_][\w.-]*:)?Property i:type="a:CompositeField">',
+        lambda match: (
+            f'<{match.group("prefix") or ""}Property i:type="a:CompositeField" '
+            f'xmlns:a="{PARAMETRIC_NS}">'
+        ),
+        xml_text,
+    )
+    for element_name, namespace_uri in (
+        ("ManufacturingFeature", MILLING_NS),
+        ("Operation", MILLING_NS),
+        ("GeomGeometry", GEOMETRY_NS),
+    ):
+        xml_text = re.sub(
+            rf'<(?P<prefix>[A-Za-z_][\w.-]*:)?{element_name}(?P<attrs>[^>]*) i:type="a:(?P<dtype>[^"]+)"(?P<tail>[^>]*)>',
+            lambda match: (
+                match.group(0)
+                if 'xmlns:a="' in match.group(0)
+                else (
+                    f'<{match.group("prefix") or ""}{element_name}'
+                    f'{match.group("attrs")} i:type="a:{match.group("dtype")}"'
+                    f' xmlns:a="{namespace_uri}"{match.group("tail")}>'
+                )
+            ),
+            xml_text,
+        )
+    return xml_text.encode("utf-8")
 
 
 def _text(node: Optional[ET.Element], path: str, default: str = "") -> str:
@@ -385,9 +672,11 @@ def _normalize_approach_type(value: Optional[str]) -> str:
     mapping = {
         "line": "Line",
         "lineal": "Line",
+        "arc": "Arc",
+        "arco": "Arc",
     }
     if raw not in mapping:
-        raise ValueError("ApproachType invalido. Valores admitidos: Line.")
+        raise ValueError("ApproachType invalido. Valores admitidos: Line, Arc.")
     return mapping[raw]
 
 
@@ -424,9 +713,11 @@ def _normalize_retract_type(value: Optional[str]) -> str:
     mapping = {
         "line": "Line",
         "lineal": "Line",
+        "arc": "Arc",
+        "arco": "Arc",
     }
     if raw not in mapping:
-        raise ValueError("RetractType invalido. Valores admitidos: Line.")
+        raise ValueError("RetractType invalido. Valores admitidos: Line, Arc.")
     return mapping[raw]
 
 
@@ -465,7 +756,13 @@ def build_milling_depth_spec(
     target_depth: Optional[float] = None,
     extra_depth: Optional[float] = None,
 ) -> MillingDepthSpec:
-    """Construye un `MillingDepthSpec` reutilizable para Pasante/Extra/Profundidad."""
+    """Construye un `MillingDepthSpec` reusable para Pasante/Extra/Profundidad.
+
+    Reglas:
+    - si no se pasa nada, devuelve el default observado en Maestro
+    - si `is_through=True`, `extra_depth` representa `Extra`
+    - si `is_through=False`, `target_depth` es obligatorio y `extra_depth` no aplica
+    """
 
     has_explicit_configuration = any(value is not None for value in (is_through, target_depth, extra_depth))
     if not has_explicit_configuration:
@@ -498,7 +795,11 @@ def build_approach_spec(
     speed: Optional[float] = None,
     arc_side: Optional[str] = None,
 ) -> ApproachSpec:
-    """Construye un `ApproachSpec` con defaults observados en Maestro."""
+    """Construye un `ApproachSpec` con defaults observados en Maestro.
+
+    Si no se pasa ningun parametro, deja el `Approach` deshabilitado.
+    Si se configura cualquier campo, completa el resto con defaults coherentes.
+    """
 
     has_explicit_configuration = any(
         value is not None for value in (enabled, approach_type, mode, radius_multiplier, speed, arc_side)
@@ -530,7 +831,11 @@ def build_retract_spec(
     arc_side: Optional[str] = None,
     overlap: Optional[float] = None,
 ) -> RetractSpec:
-    """Construye un `RetractSpec` con defaults observados en Maestro."""
+    """Construye un `RetractSpec` con defaults observados en Maestro.
+
+    Si no se pasa ningun parametro, deja el `Retract` deshabilitado.
+    Si se configura cualquier campo, completa el resto con defaults coherentes.
+    """
 
     has_explicit_configuration = any(
         value is not None for value in (enabled, retract_type, mode, radius_multiplier, speed, arc_side, overlap)
@@ -736,6 +1041,25 @@ def _format_maestro_number(value: float) -> str:
     return format(number, ".17g")
 
 
+def _format_maestro_orientation_number(value: float) -> str:
+    number = float(value)
+    if number == 0.0:
+        return "-0" if math.copysign(1.0, number) < 0.0 else "0"
+    if number.is_integer():
+        return str(int(number))
+    text = format(number, ".17g")
+    if "e" not in text and "E" not in text:
+        return text
+    mantissa, exponent = text.lower().split("e", 1)
+    sign = exponent[:1]
+    digits = exponent[1:].rjust(3, "0")
+    return f"{mantissa}e{sign}{digits}"
+
+
+def _normalize_curve_serialization_text(text: str) -> str:
+    return "\n".join(line.rstrip() for line in str(text).strip().splitlines())
+
+
 def _build_maestro_line_serialization(
     start_point: tuple[float, float, float],
     end_point: tuple[float, float, float],
@@ -770,6 +1094,366 @@ def _line_unit_direction(start_x: float, start_y: float, end_x: float, end_y: fl
     if length <= 1e-9:
         raise ValueError("No se puede sintetizar un fresado lineal con longitud cero.")
     return (delta_x / length, delta_y / length)
+
+
+def _resolve_toolpath_direction(
+    toolpath_start: tuple[float, float],
+    toolpath_end: tuple[float, float],
+    direction: Optional[tuple[float, float]] = None,
+) -> tuple[float, float]:
+    if direction is not None:
+        return direction
+    return _line_unit_direction(
+        toolpath_start[0],
+        toolpath_start[1],
+        toolpath_end[0],
+        toolpath_end[1],
+    )
+
+
+def _preferred_side_for_arc(side_of_feature: str, arc_side: str) -> str:
+    normalized_side = _normalize_side_of_feature(side_of_feature)
+    if normalized_side != "Center":
+        return normalized_side
+    normalized_arc_side = _normalize_approach_arc_side(arc_side)
+    if normalized_arc_side in {"Left", "Right"}:
+        return normalized_arc_side
+    return "Right"
+
+
+def _side_normal_for_direction(
+    direction_x: float,
+    direction_y: float,
+    side_of_feature: str,
+    arc_side: str,
+) -> tuple[tuple[float, float], float]:
+    right_normal = (direction_y, -direction_x)
+    left_normal = (-right_normal[0], -right_normal[1])
+    preferred_side = _preferred_side_for_arc(side_of_feature, arc_side)
+    if preferred_side == "Left":
+        return left_normal, 1.0
+    return right_normal, -1.0
+
+
+def _build_vertical_toolpath_curve(
+    x_value: float,
+    y_value: float,
+    start_z: float,
+    end_z: float,
+) -> _CurveSpec:
+    # Maestro mantiene un toolpath vertical en Approach/Lift aunque la estrategia este deshabilitada.
+    return _trimmed_curve_spec(
+        _build_toolpath_description(
+            (x_value, y_value, start_z),
+            (x_value, y_value, end_z),
+        )
+    )
+
+
+def _quote_arc_radius(tool_width: float, radius_multiplier: float) -> float:
+    return (tool_width / 2.0) * max(radius_multiplier - 1.0, 0.0)
+
+
+def _linear_lead_distance(tool_width: float, radius_multiplier: float) -> float:
+    return (tool_width / 2.0) * radius_multiplier
+
+
+def _dominant_component_sign_2d(vector: tuple[float, float]) -> float:
+    x_value, y_value = vector
+    if abs(x_value) >= abs(y_value):
+        if not math.isclose(x_value, 0.0, abs_tol=1e-15):
+            return 1.0 if x_value > 0.0 else -1.0
+    if not math.isclose(y_value, 0.0, abs_tol=1e-15):
+        return 1.0 if y_value > 0.0 else -1.0
+    return 1.0
+
+
+def _build_oriented_maestro_arc_basis(
+    direction: tuple[float, float],
+    side_normal: tuple[float, float],
+    normal_z: float,
+) -> tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]:
+    # Maestro serializa estos arcos con una base 3D orientada y pequeños epsilon
+    # en algunos componentes. Mantener esta estructura ayuda a que el XML sintetizado
+    # se parezca mas al guardado manualmente desde Maestro.
+    epsilon = math.ulp(0.5)
+    direction_x, direction_y = direction
+    side_x, side_y = side_normal
+    u_vector = (
+        0.0 if math.isclose(side_x, 0.0, abs_tol=1e-15) else (normal_z * side_x),
+        normal_z * side_y,
+        epsilon * normal_z,
+    )
+    v_vector = (
+        -normal_z * direction_x,
+        0.0 if math.isclose(direction_y, 0.0, abs_tol=1e-15) else (-normal_z * direction_y),
+        0.0,
+    )
+    normal_vector = (
+        (-0.0 if normal_z > 0.0 else 0.0)
+        if math.isclose(direction_y, 0.0, abs_tol=1e-15)
+        else (epsilon * direction_y),
+        0.0 if math.isclose(direction_x, 0.0, abs_tol=1e-15) else (-epsilon * direction_x),
+        normal_z,
+    )
+    return normal_vector, u_vector, v_vector
+
+
+def _build_quote_arc_entry_curve(
+    *,
+    clearance_z: float,
+    cut_z: float,
+    entry_point: tuple[float, float],
+    direction: tuple[float, float],
+    side_of_feature: str,
+    arc_side: str,
+    tool_width: float,
+    radius_multiplier: float,
+) -> _CurveSpec:
+    # Regla validada en Maestro para Arc + Quote:
+    # 1. bajada vertical en el punto inicial del acercamiento
+    # 2. cuarto de arco en la cota de corte hasta el punto de entrada del toolpath
+    arc_radius = _quote_arc_radius(tool_width, radius_multiplier)
+    if arc_radius <= 1e-9:
+        return _build_vertical_toolpath_curve(entry_point[0], entry_point[1], clearance_z, cut_z)
+
+    direction_x, direction_y = direction
+    side_normal, normal_z = _side_normal_for_direction(
+        direction_x,
+        direction_y,
+        side_of_feature,
+        arc_side,
+    )
+    center_x = entry_point[0] + (side_normal[0] * arc_radius)
+    center_y = entry_point[1] + (side_normal[1] * arc_radius)
+    plunge_x = center_x - (direction_x * arc_radius)
+    plunge_y = center_y - (direction_y * arc_radius)
+    normal_vector, u_vector, v_vector = _build_oriented_maestro_arc_basis(
+        (direction_x, direction_y),
+        side_normal,
+        normal_z,
+    )
+    start_angle = (1.5 * math.pi) if normal_z < 0.0 else (0.5 * math.pi)
+    end_angle = (2.0 * math.pi) if normal_z < 0.0 else math.pi
+
+    return _composite_curve_spec(
+        [
+            _build_toolpath_description(
+                (plunge_x, plunge_y, clearance_z),
+                (plunge_x, plunge_y, cut_z),
+            ),
+            _build_oriented_maestro_arc_serialization(
+                start_angle,
+                end_angle,
+                (center_x, center_y),
+                normal_vector,
+                u_vector,
+                v_vector,
+                arc_radius,
+                z_value=cut_z,
+            ),
+        ]
+    )
+
+
+def _build_down_arc_entry_curve(
+    *,
+    clearance_z: float,
+    cut_z: float,
+    entry_point: tuple[float, float],
+    direction: tuple[float, float],
+    tool_width: float,
+    radius_multiplier: float,
+) -> _CurveSpec:
+    # Regla validada en Maestro para Arc + Down:
+    # 1. bajada vertical hasta `cut_z + radio`
+    # 2. cuarto de arco en un plano vertical hasta el punto de entrada del toolpath
+    arc_radius = _quote_arc_radius(tool_width, radius_multiplier)
+    if arc_radius <= 1e-9:
+        return _build_vertical_toolpath_curve(entry_point[0], entry_point[1], clearance_z, cut_z)
+
+    direction_x, direction_y = direction
+    right_normal_x = direction_y
+    right_normal_y = -direction_x
+    pre_entry_z = cut_z + arc_radius
+    plunge_x = entry_point[0] - (direction_x * arc_radius)
+    plunge_y = entry_point[1] - (direction_y * arc_radius)
+
+    return _composite_curve_spec(
+        [
+            _build_toolpath_description(
+                (plunge_x, plunge_y, clearance_z),
+                (plunge_x, plunge_y, pre_entry_z),
+            ),
+            _build_oriented_maestro_arc_serialization(
+                1.5 * math.pi,
+                2.0 * math.pi,
+                (entry_point[0], entry_point[1], pre_entry_z),
+                (right_normal_x, right_normal_y, 0.0),
+                (0.0, 0.0, -1.0),
+                (direction_x, direction_y, 0.0),
+                arc_radius,
+                z_value=pre_entry_z,
+            ),
+        ]
+    )
+
+
+def _build_down_line_entry_curve(
+    *,
+    clearance_z: float,
+    cut_z: float,
+    entry_point: tuple[float, float],
+    direction: tuple[float, float],
+    tool_width: float,
+    radius_multiplier: float,
+) -> _CurveSpec:
+    # Regla validada en Maestro para Line + Down:
+    # una sola bajada oblicua desde un punto previo desplazado
+    # en la direccion opuesta al avance del toolpath.
+    pre_entry_distance = _linear_lead_distance(tool_width, radius_multiplier)
+    direction_x, direction_y = direction
+    pre_entry_x = entry_point[0] - (direction_x * pre_entry_distance)
+    pre_entry_y = entry_point[1] - (direction_y * pre_entry_distance)
+    return _trimmed_curve_spec(
+        _build_toolpath_description(
+            (pre_entry_x, pre_entry_y, clearance_z),
+            (entry_point[0], entry_point[1], cut_z),
+        )
+    )
+
+
+def _build_up_line_exit_curve(
+    *,
+    clearance_z: float,
+    cut_z: float,
+    exit_point: tuple[float, float],
+    direction: tuple[float, float],
+    tool_width: float,
+    radius_multiplier: float,
+) -> _CurveSpec:
+    # Regla validada en Maestro para Line + Up:
+    # una sola subida oblicua hacia un punto final desplazado
+    # sobre la direccion de salida del toolpath.
+    post_exit_distance = _linear_lead_distance(tool_width, radius_multiplier)
+    direction_x, direction_y = direction
+    post_exit_x = exit_point[0] + (direction_x * post_exit_distance)
+    post_exit_y = exit_point[1] + (direction_y * post_exit_distance)
+    return _trimmed_curve_spec(
+        _build_toolpath_description(
+            (exit_point[0], exit_point[1], cut_z),
+            (post_exit_x, post_exit_y, clearance_z),
+        )
+    )
+
+
+def _build_quote_arc_exit_curve(
+    *,
+    clearance_z: float,
+    cut_z: float,
+    exit_point: tuple[float, float],
+    direction: tuple[float, float],
+    side_of_feature: str,
+    arc_side: str,
+    tool_width: float,
+    radius_multiplier: float,
+) -> _CurveSpec:
+    # Regla validada en Maestro para Arc + Quote:
+    # 1. cuarto de arco en la cota de corte desde el punto de salida del toolpath
+    # 2. subida vertical en el punto final del alejamiento
+    arc_radius = _quote_arc_radius(tool_width, radius_multiplier)
+    if arc_radius <= 1e-9:
+        return _build_vertical_toolpath_curve(exit_point[0], exit_point[1], cut_z, clearance_z)
+
+    direction_x, direction_y = direction
+    side_normal, normal_z = _side_normal_for_direction(
+        direction_x,
+        direction_y,
+        side_of_feature,
+        arc_side,
+    )
+    center_x = exit_point[0] + (side_normal[0] * arc_radius)
+    center_y = exit_point[1] + (side_normal[1] * arc_radius)
+    lift_x = center_x + (direction_x * arc_radius)
+    lift_y = center_y + (direction_y * arc_radius)
+    normal_vector, u_vector, v_vector = _build_oriented_maestro_arc_basis(
+        (direction_x, direction_y),
+        side_normal,
+        normal_z,
+    )
+    start_angle = 0.0 if normal_z < 0.0 else math.pi
+    end_angle = (0.5 * math.pi) if normal_z < 0.0 else (1.5 * math.pi)
+
+    return _composite_curve_spec(
+        [
+            _build_oriented_maestro_arc_serialization(
+                start_angle,
+                end_angle,
+                (center_x, center_y),
+                normal_vector,
+                u_vector,
+                v_vector,
+                arc_radius,
+                z_value=cut_z,
+            ),
+            _build_toolpath_description(
+                (lift_x, lift_y, cut_z),
+                (lift_x, lift_y, clearance_z),
+            ),
+        ]
+    )
+
+
+def _build_up_arc_exit_curve(
+    *,
+    clearance_z: float,
+    cut_z: float,
+    exit_point: tuple[float, float],
+    direction: tuple[float, float],
+    tool_width: float,
+    radius_multiplier: float,
+) -> _CurveSpec:
+    # Regla validada en Maestro para Arc + Up:
+    # 1. cuarto de arco en un plano vertical desde la salida del toolpath
+    # 2. subida vertical en el punto final del alejamiento
+    arc_radius = _quote_arc_radius(tool_width, radius_multiplier)
+    if arc_radius <= 1e-9:
+        return _build_vertical_toolpath_curve(exit_point[0], exit_point[1], cut_z, clearance_z)
+
+    direction_x, direction_y = direction
+    plane_normal = (
+        0.0 if math.isclose(direction_y, 0.0, abs_tol=1e-15) else direction_y,
+        0.0 if math.isclose(direction_x, 0.0, abs_tol=1e-15) else (-direction_x),
+    )
+    basis_sign = _dominant_component_sign_2d(plane_normal)
+    center_z = cut_z + arc_radius
+    lift_x = exit_point[0] + (direction_x * arc_radius)
+    lift_y = exit_point[1] + (direction_y * arc_radius)
+    lift_z = center_z
+    tangent_vector = (
+        0.0 if math.isclose(direction_x, 0.0, abs_tol=1e-15) else (-basis_sign * direction_x),
+        0.0 if math.isclose(direction_y, 0.0, abs_tol=1e-15) else (-basis_sign * direction_y),
+        0.0,
+    )
+
+    return _composite_curve_spec(
+        [
+            _build_oriented_maestro_arc_serialization(
+                math.pi if basis_sign > 0.0 else 0.0,
+                (1.5 * math.pi) if basis_sign > 0.0 else (0.5 * math.pi),
+                exit_point,
+                (plane_normal[0], plane_normal[1], 0.0),
+                (0.0, 0.0, basis_sign),
+                tangent_vector,
+                arc_radius,
+                z_value=center_z,
+            ),
+            _build_toolpath_description(
+                (lift_x, lift_y, lift_z),
+                (lift_x, lift_y, clearance_z),
+            ),
+        ]
+    )
 
 
 def _polyline_endpoint_directions(points: Sequence[tuple[float, float]]) -> tuple[tuple[float, float], tuple[float, float]]:
@@ -883,6 +1567,28 @@ def _build_maestro_arc_serialization(
         f"8 {_format_maestro_number(start_angle)} {_format_maestro_number(end_angle)}\n"
         f"2 {_format_maestro_number(center_point[0])} {_format_maestro_number(center_point[1])} {_format_maestro_number(z_value)} "
         f"0 0 {_format_maestro_number(normal_z)} 1 0 0 0 {_format_maestro_number(normal_z)} 0 {_format_maestro_number(radius)} \n"
+    )
+
+
+def _build_oriented_maestro_arc_serialization(
+    start_angle: float,
+    end_angle: float,
+    center_point: tuple[float, float],
+    normal_vector: tuple[float, float, float],
+    u_vector: tuple[float, float, float],
+    v_vector: tuple[float, float, float],
+    radius: float,
+    z_value: float = 0.0,
+) -> str:
+    if radius <= 1e-9:
+        raise ValueError("No se puede serializar un arco de radio cero.")
+    return (
+        f"8 {_format_maestro_number(start_angle)} {_format_maestro_number(end_angle)}\n"
+        f"2 {_format_maestro_number(center_point[0])} {_format_maestro_number(center_point[1])} {_format_maestro_number(z_value)} "
+        f"{_format_maestro_orientation_number(normal_vector[0])} {_format_maestro_orientation_number(normal_vector[1])} {_format_maestro_orientation_number(normal_vector[2])} "
+        f"{_format_maestro_orientation_number(u_vector[0])} {_format_maestro_orientation_number(u_vector[1])} {_format_maestro_orientation_number(u_vector[2])} "
+        f"{_format_maestro_orientation_number(v_vector[0])} {_format_maestro_orientation_number(v_vector[1])} {_format_maestro_orientation_number(v_vector[2])} "
+        f"{_format_maestro_number(radius)} \n"
     )
 
 
@@ -1173,7 +1879,10 @@ def _can_hydrate_exact_polyline_serialization(template: dict[str, object], spec:
 
 
 def _trimmed_curve_spec(serialization: str) -> _CurveSpec:
-    return _CurveSpec(geometry_type="GeomTrimmedCurve", serialization=serialization)
+    return _CurveSpec(
+        geometry_type="GeomTrimmedCurve",
+        serialization=_normalize_curve_serialization_text(serialization),
+    )
 
 
 def _composite_curve_spec(
@@ -1183,7 +1892,7 @@ def _composite_curve_spec(
     return _CurveSpec(
         geometry_type="GeomCompositeCurve",
         member_keys=tuple(member_keys),
-        member_serializations=tuple(member_serializations),
+        member_serializations=tuple(_normalize_curve_serialization_text(serialization) for serialization in member_serializations),
     )
 
 
@@ -1666,22 +2375,12 @@ def _build_generated_approach_curve(
     approach = _normalize_approach_spec(spec.approach)
     clearance_z = state.depth + spec.security_plane
     cut_z = _toolpath_cut_z(state, spec)
+    direction_x, direction_y = _resolve_toolpath_direction(toolpath_start, toolpath_end, direction=direction)
     if not approach.is_enabled:
-        return _trimmed_curve_spec(
-            _build_toolpath_description(
-                (toolpath_start[0], toolpath_start[1], clearance_z),
-                (toolpath_start[0], toolpath_start[1], cut_z),
-            )
-        )
+        return _build_vertical_toolpath_curve(toolpath_start[0], toolpath_start[1], clearance_z, cut_z)
 
     if approach.approach_type == "Line" and approach.mode == "Quote":
-        direction_x, direction_y = direction or _line_unit_direction(
-            toolpath_start[0],
-            toolpath_start[1],
-            toolpath_end[0],
-            toolpath_end[1],
-        )
-        pre_entry_distance = (spec.tool_width / 2.0) * approach.radius_multiplier
+        pre_entry_distance = _linear_lead_distance(spec.tool_width, approach.radius_multiplier)
         pre_entry_x = toolpath_start[0] - (direction_x * pre_entry_distance)
         pre_entry_y = toolpath_start[1] - (direction_y * pre_entry_distance)
         return _composite_curve_spec(
@@ -1698,20 +2397,35 @@ def _build_generated_approach_curve(
         )
 
     if approach.approach_type == "Line" and approach.mode == "Down":
-        direction_x, direction_y = direction or _line_unit_direction(
-            toolpath_start[0],
-            toolpath_start[1],
-            toolpath_end[0],
-            toolpath_end[1],
+        return _build_down_line_entry_curve(
+            clearance_z=clearance_z,
+            cut_z=cut_z,
+            entry_point=toolpath_start,
+            direction=(direction_x, direction_y),
+            tool_width=spec.tool_width,
+            radius_multiplier=approach.radius_multiplier,
         )
-        pre_entry_distance = (spec.tool_width / 2.0) * approach.radius_multiplier
-        pre_entry_x = toolpath_start[0] - (direction_x * pre_entry_distance)
-        pre_entry_y = toolpath_start[1] - (direction_y * pre_entry_distance)
-        return _trimmed_curve_spec(
-            _build_toolpath_description(
-                (pre_entry_x, pre_entry_y, clearance_z),
-                (toolpath_start[0], toolpath_start[1], cut_z),
-            )
+
+    if approach.approach_type == "Arc" and approach.mode == "Quote":
+        return _build_quote_arc_entry_curve(
+            clearance_z=clearance_z,
+            cut_z=cut_z,
+            entry_point=toolpath_start,
+            direction=(direction_x, direction_y),
+            side_of_feature=spec.side_of_feature,
+            arc_side=approach.arc_side,
+            tool_width=spec.tool_width,
+            radius_multiplier=approach.radius_multiplier,
+        )
+
+    if approach.approach_type == "Arc" and approach.mode == "Down":
+        return _build_down_arc_entry_curve(
+            clearance_z=clearance_z,
+            cut_z=cut_z,
+            entry_point=toolpath_start,
+            direction=(direction_x, direction_y),
+            tool_width=spec.tool_width,
+            radius_multiplier=approach.radius_multiplier,
         )
 
     raise ValueError(
@@ -1730,21 +2444,11 @@ def _build_generated_lift_curve(
     retract = _normalize_retract_spec(spec.retract)
     clearance_z = state.depth + spec.security_plane
     cut_z = _toolpath_cut_z(state, spec)
+    direction_x, direction_y = _resolve_toolpath_direction(toolpath_start, toolpath_end, direction=direction)
     if not retract.is_enabled:
-        return _trimmed_curve_spec(
-            _build_toolpath_description(
-                (toolpath_end[0], toolpath_end[1], cut_z),
-                (toolpath_end[0], toolpath_end[1], clearance_z),
-            )
-        )
+        return _build_vertical_toolpath_curve(toolpath_end[0], toolpath_end[1], cut_z, clearance_z)
 
     if retract.retract_type == "Line" and retract.mode == "Quote":
-        direction_x, direction_y = direction or _line_unit_direction(
-            toolpath_start[0],
-            toolpath_start[1],
-            toolpath_end[0],
-            toolpath_end[1],
-        )
         post_exit_distance = (spec.tool_width / 2.0) * retract.radius_multiplier
         post_exit_x = toolpath_end[0] + (direction_x * post_exit_distance)
         post_exit_y = toolpath_end[1] + (direction_y * post_exit_distance)
@@ -1762,20 +2466,35 @@ def _build_generated_lift_curve(
         )
 
     if retract.retract_type == "Line" and retract.mode == "Up":
-        direction_x, direction_y = direction or _line_unit_direction(
-            toolpath_start[0],
-            toolpath_start[1],
-            toolpath_end[0],
-            toolpath_end[1],
+        return _build_up_line_exit_curve(
+            clearance_z=clearance_z,
+            cut_z=cut_z,
+            exit_point=toolpath_end,
+            direction=(direction_x, direction_y),
+            tool_width=spec.tool_width,
+            radius_multiplier=retract.radius_multiplier,
         )
-        post_exit_distance = (spec.tool_width / 2.0) * retract.radius_multiplier
-        post_exit_x = toolpath_end[0] + (direction_x * post_exit_distance)
-        post_exit_y = toolpath_end[1] + (direction_y * post_exit_distance)
-        return _trimmed_curve_spec(
-            _build_toolpath_description(
-                (toolpath_end[0], toolpath_end[1], cut_z),
-                (post_exit_x, post_exit_y, clearance_z),
-            )
+
+    if retract.retract_type == "Arc" and retract.mode == "Quote":
+        return _build_quote_arc_exit_curve(
+            clearance_z=clearance_z,
+            cut_z=cut_z,
+            exit_point=toolpath_end,
+            direction=(direction_x, direction_y),
+            side_of_feature=spec.side_of_feature,
+            arc_side=retract.arc_side,
+            tool_width=spec.tool_width,
+            radius_multiplier=retract.radius_multiplier,
+        )
+
+    if retract.retract_type == "Arc" and retract.mode == "Up":
+        return _build_up_arc_exit_curve(
+            clearance_z=clearance_z,
+            cut_z=cut_z,
+            exit_point=toolpath_end,
+            direction=(direction_x, direction_y),
+            tool_width=spec.tool_width,
+            radius_multiplier=retract.radius_multiplier,
         )
 
     raise ValueError(
@@ -2166,7 +2885,17 @@ def _append_polyline_milling(root: ET.Element, state: PgmxState, spec: _Hydrated
         expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth"))
 
 
+# ============================================================================
+# Public read/build API
+# ============================================================================
+
 def read_pgmx_state(path: Path) -> PgmxState:
+    """Lee un `.pgmx` y devuelve el estado basico de pieza, origen y area.
+
+    No interpreta mecanizados. Sirve para reutilizar dimensiones reales y para
+    tomar un baseline o un `source_pgmx_path` como punto de partida.
+    """
+
     root, _, _ = _load_pgmx_archive(path)
 
     variables = root.find("./{*}Variables")
@@ -2324,6 +3053,10 @@ def _apply_polyline_millings(
         _append_polyline_milling(root, state, polyline_milling)
 
 
+# ============================================================================
+# Public machining builders
+# ============================================================================
+
 def build_line_milling_spec(
     line_x1: Optional[float],
     line_y1: Optional[float],
@@ -2352,6 +3085,13 @@ def build_line_milling_spec(
     line_retract_arc_side: Optional[str] = None,
     line_retract_overlap: Optional[float] = None,
 ) -> Optional[LineMillingSpec]:
+    """Construye un `LineMillingSpec` reusable para un fresado lineal.
+
+    Devuelve `None` si la linea no viene informada, lo que simplifica el uso
+    desde CLI y desde capas superiores que quieren tratar este mecanizado como
+    opcional.
+    """
+
     values = [line_x1, line_y1, line_x2, line_y2]
     if all(value is None for value in values):
         return None
@@ -2418,6 +3158,8 @@ def build_polyline_milling_spec(
     retract_arc_side: Optional[str] = None,
     retract_overlap: Optional[float] = None,
 ) -> PolylineMillingSpec:
+    """Construye un `PolylineMillingSpec` reusable para una polilinea abierta."""
+
     return PolylineMillingSpec(
         points=_normalize_polyline_points(points),
         feature_name=(feature_name or "Fresado").strip() or "Fresado",
@@ -2451,6 +3193,10 @@ def build_polyline_milling_spec(
     )
 
 
+# ============================================================================
+# Public execution API
+# ============================================================================
+
 def build_synthesis_request(
     baseline_path: Path,
     output_path: Path,
@@ -2468,7 +3214,14 @@ def build_synthesis_request(
     line_millings: Optional[Sequence[LineMillingSpec]] = None,
     polyline_millings: Optional[Sequence[PolylineMillingSpec]] = None,
 ) -> PgmxSynthesisRequest:
-    """Arma una solicitud reusable de sintesis para el flujo principal."""
+    """Arma una solicitud reusable de sintesis para el flujo principal.
+
+    Orden recomendado de uso:
+    1. leer o definir la pieza
+    2. construir `LineMillingSpec` y/o `PolylineMillingSpec`
+    3. construir el request
+    4. ejecutar `synthesize_request(...)`
+    """
 
     base_piece = piece or (read_pgmx_state(source_pgmx_path) if source_pgmx_path else read_pgmx_state(baseline_path))
     effective_execution_fields = execution_fields
@@ -2496,7 +3249,10 @@ def build_synthesis_request(
 
 
 def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
-    """Ejecuta una solicitud de sintesis y escribe el `.pgmx` resultante."""
+    """Ejecuta una solicitud de sintesis y escribe el `.pgmx` resultante.
+
+    Esta es la funcion principal para el flujo programatico.
+    """
 
     baseline_root, baseline_entries, _ = _load_pgmx_archive(request.baseline_path)
     hydrated_line_millings = [
@@ -2512,7 +3268,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
     _apply_line_millings(baseline_root, request.piece, hydrated_line_millings)
     _apply_polyline_millings(baseline_root, request.piece, hydrated_polyline_millings)
 
-    xml_bytes = _finalize_pgmx_xml_bytes(
+    xml_bytes = _finalize_synthesized_pgmx_xml_bytes(
         ET.tostring(
             baseline_root,
             encoding="utf-8",
@@ -2549,7 +3305,11 @@ def synthesize_pgmx(
     polyline_milling: Optional[PolylineMillingSpec] = None,
     execution_fields: Optional[str] = None,
 ) -> PgmxState:
-    """Wrapper de compatibilidad para el flujo historico basado en argumentos sueltos."""
+    """Wrapper de compatibilidad para el flujo historico basado en argumentos sueltos.
+
+    Para codigo nuevo conviene preferir `build_synthesis_request(...)` y
+    `synthesize_request(...)`.
+    """
 
     request = build_synthesis_request(
         baseline_path=baseline_path,
@@ -2568,6 +3328,10 @@ def synthesize_pgmx(
     )
     return synthesize_request(request).piece
 
+
+# ============================================================================
+# CLI
+# ============================================================================
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Sintetiza un PGMX base a partir de un baseline sin mecanizados.")
@@ -2625,10 +3389,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             "Si se habilita sin mas parametros, usa los defaults observados en Maestro: Line/Quote/radio 2/speed -1."
         ),
     )
-    parser.add_argument("--line-approach-type", help="Tipo de approach. Actualmente validado: Line.")
+    parser.add_argument("--line-approach-type", help="Tipo de approach. Actualmente validado: Line o Arc.")
     parser.add_argument(
         "--line-approach-mode",
-        help="Modo de approach. Valores utiles: Down o Quote (UI Maestro: En Cota).",
+        help="Modo de approach. Valores utiles: Down o Quote (UI Maestro: En Cota). Para Arc se valido Quote.",
     )
     parser.add_argument(
         "--line-approach-radius-multiplier",
@@ -2653,10 +3417,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             "Si se habilita sin mas parametros, usa los defaults observados en Maestro: Line/Quote/radio 2/speed -1/overlap 0."
         ),
     )
-    parser.add_argument("--line-retract-type", help="Tipo de retract. Actualmente validado: Line.")
+    parser.add_argument("--line-retract-type", help="Tipo de retract. Actualmente validado: Line o Arc.")
     parser.add_argument(
         "--line-retract-mode",
-        help="Modo de retract. Valores utiles: Up o Quote (UI Maestro: En Cota).",
+        help="Modo de retract. Valores utiles: Up o Quote (UI Maestro: En Cota). Para Arc se validaron Quote y Up.",
     )
     parser.add_argument(
         "--line-retract-radius-multiplier",
