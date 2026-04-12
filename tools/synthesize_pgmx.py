@@ -81,7 +81,7 @@ class PgmxState:
     origin_x: float
     origin_y: float
     origin_z: float
-    execution_fields: str = "A"
+    execution_fields: str = "HG"
 
 
 @dataclass(frozen=True)
@@ -352,9 +352,9 @@ def _raw_text(node: Optional[ET.Element], path: str, default: str = "") -> str:
 
 
 def _normalize_execution_fields(value: Optional[str]) -> str:
-    raw = (value or "A").strip().upper().replace(" ", "")
+    raw = (value or "HG").strip().upper().replace(" ", "")
     if not raw:
-        return "A"
+        return "HG"
     if any(letter not in "ABCDEFGH" for letter in raw):
         raise ValueError(
             "ExecutionFields invalido. Use letras entre A y H, por ejemplo: A, EF o HG."
@@ -2197,7 +2197,7 @@ def read_pgmx_state(path: Path) -> PgmxState:
     origin_y = _safe_float(_text(setup_placement, "./{*}_yP"), 0.0)
     origin_z = _safe_float(_text(setup_placement, "./{*}_zP"), 0.0)
     execution_fields = _normalize_execution_fields(
-        _text(root, "./{*}MachiningParameters/{*}ExecutionFields", "A")
+        _text(root, "./{*}MachiningParameters/{*}ExecutionFields", "HG")
     )
 
     return PgmxState(
@@ -2471,6 +2471,9 @@ def build_synthesis_request(
     """Arma una solicitud reusable de sintesis para el flujo principal."""
 
     base_piece = piece or (read_pgmx_state(source_pgmx_path) if source_pgmx_path else read_pgmx_state(baseline_path))
+    effective_execution_fields = execution_fields
+    if effective_execution_fields is None and piece is None:
+        effective_execution_fields = "HG"
     target_piece = _merge_state(
         base_piece,
         piece_name,
@@ -2480,7 +2483,7 @@ def build_synthesis_request(
         origin_x,
         origin_y,
         origin_z,
-        execution_fields,
+        effective_execution_fields,
     )
     return PgmxSynthesisRequest(
         baseline_path=baseline_path,
@@ -2585,7 +2588,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         "--execution-fields",
         "--area",
         dest="execution_fields",
-        help="Area de Parametros de Maquina. Valores observados: A, EF, HG.",
+        help="Area de Parametros de Maquina. Valores observados: A, EF, HG. Si no se indica, la sintesis usa HG.",
     )
     parser.add_argument("--line-x1", type=float, help="Coordenada X inicial de una linea sobre Top para sintetizar su fresado.")
     parser.add_argument("--line-y1", type=float, help="Coordenada Y inicial de una linea sobre Top para sintetizar su fresado.")

@@ -18,7 +18,6 @@ python -m tools.synthesize_pgmx \
 	--baseline "archive/maestro_baselines/baseline_sin_mecanizados.pgmx" \
 	--source-pgmx "archive/maestro_baselines/Pieza.pgmx" \
 	--piece-name "Pieza" \
-	--execution-fields A \
 	--output "archive/maestro_baselines/Pieza_sintetizada.pgmx"
 ```
 
@@ -52,7 +51,7 @@ Nota:
 - Para polilineas abiertas con fresado asociado, la API programatica de `tools.synthesize_pgmx` expone `build_polyline_milling_spec(...)` y ya sintetiza la compensacion lateral via `side_of_feature`; por ahora este caso no tiene flags CLI dedicados.
 - En fresados lineales tambien se puede indicar la correccion de herramienta con `--line-side-of-feature Center|Right|Left`.
 - En fresados lineales tambien se puede controlar la profundidad con `--line-through/--no-line-through`, `--line-extra-depth` y `--line-target-depth`.
-- El parametro `Area` de `Parametros de Maquina` se controla con `--execution-fields` o su alias `--area`. Valores validados hasta ahora: `A`, `EF`, `HG`.
+- El parametro `Area` de `Parametros de Maquina` se controla con `--execution-fields` o su alias `--area`. Si no se indica, la sintesis usa `HG` por defecto. Valores validados hasta ahora: `A`, `EF`, `HG`.
 - Para habilitar el `Approach` con los defaults observados en Maestro (`Entrada=Lineal`, `Acercamiento=En Cota`, `Multipl. radio=2`, `Velocidad` vacia/null), alcanza con `--line-approach-enabled`.
 - Si hace falta ajustar el detalle, tambien estan disponibles `--line-approach-mode`, `--line-approach-radius-multiplier`, `--line-approach-speed` y `--line-approach-arc-side`. Modos validados hasta ahora: `Quote` = `En Cota` y `Down` = `En bajada`.
 - Para habilitar el `Retract` con los defaults observados en Maestro (`Salir=Lineal`, `Alejamiento=En Cota`, `Multipl. radio=2`, `Velocidad` vacia/null, `Sobreposicion=0`), alcanza con `--line-retract-enabled`.

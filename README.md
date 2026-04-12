@@ -39,4 +39,4 @@ python main.py
 - Soporta `--template-pgmx` para usar un baseline local del repo como plantilla de salida.
 - Sintesis de baselines manuales: `python -m tools.synthesize_pgmx`
 - API programática para sintesis: `build_approach_spec(...)`, `build_retract_spec(...)`, `build_milling_depth_spec(...)`, `build_line_milling_spec(...)`, `build_polyline_milling_spec(...)`, `build_synthesis_request(...)` y `synthesize_request(...)` en `tools.synthesize_pgmx`
-- La sintesis de `.pgmx` tambien permite fijar el area de `Parametros de Maquina` mediante `execution_fields` en la API o `--execution-fields/--area` en la CLI.
+- La sintesis de `.pgmx` tambien permite fijar el area de `Parametros de Maquina` mediante `execution_fields` en la API o `--execution-fields/--area` en la CLI; si no se indica, usa `HG` por defecto.
