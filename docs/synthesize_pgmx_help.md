@@ -12,6 +12,8 @@ serializacion.
 
 Casos publicos soportados hoy:
 - lectura de estado basico de pieza (`read_pgmx_state`)
+- lectura y clasificacion de geometria base (`read_pgmx_geometries`)
+- compensacion geometrica reusable (`build_compensated_toolpath_profile`)
 - fresado lineal abierto (`LineMillingSpec`)
 - fresado sobre polilinea abierta (`PolylineMillingSpec`)
 - control de profundidad pasante/no pasante
@@ -20,9 +22,15 @@ Casos publicos soportados hoy:
 
 Casos que no deben asumirse como API publica estable si no estan documentados aqui:
 - escuadrados cerrados como tipo propio
-- perfiles cerrados arbitrarios
 - familias de feature distintas de `GeneralProfileFeature`
 - cualquier mecanizado que no este construido con `LineMillingSpec` o `PolylineMillingSpec`
+
+Importante:
+- la sintesis completa de feature + operation sigue expuesta hoy por `LineMillingSpec`
+  y `PolylineMillingSpec`
+- la nueva capa de compensacion ya sabe resolver lineas, arcos, circulos y curvas
+  compuestas abiertas/cerradas, aunque esas familias todavia no tengan un
+  `...MillingSpec` publico propio
 
 ## 2. Flujo recomendado
 
@@ -40,6 +48,7 @@ Orden recomendado para usar el sintetizador:
 Regla practica:
 - `baseline_path` define el contenedor base.
 - `source_pgmx_path` no reemplaza al baseline: solo aporta serializacion ya observada en Maestro cuando coincide con la familia del mecanizado.
+- la taxonomia de familias geometricas vive en `docs/pgmx_geometry_registry.md`
 
 ## 3. API publica
 
@@ -57,6 +66,71 @@ Usos tipicos:
 - tomar dimensiones reales antes de sintetizar
 - clonar el estado de una pieza manual
 - evitar hardcodear origen y espesor
+
+### `read_pgmx_geometries(path: Path) -> tuple[GeometryProfileSpec, ...]`
+
+Lee la seccion `Geometries` de un `.pgmx` y clasifica cada curva base sin depender
+del nombre del archivo.
+
+Casos identificados hoy:
+- `LineVertical`
+- `LineHorizontal`
+- `Circle_CounterClockwise`
+- `Circle_Clockwise`
+- `OpenPolyline`
+- `ClosedPolylineCornerStart_*`
+- `ClosedPolylineMidEdgeStart_*`
+- `ClosedPolylineMidEdgeStartRounded_*`
+
+Regla importante:
+- para curvas trimadas no hay que asumir `8 0 longitud`
+- en varios casos horarios Maestro serializa con parametros negativos o invertidos
+- la lectura correcta usa `origin + direction * param_start/param_end`
+
+### `build_line_geometry_profile(...)`, `build_circle_geometry_profile(...)`, `build_composite_geometry_profile(...)`
+
+Estas helpers no crean aun un mecanizado completo por si solas, pero dejan lista
+la capa geometrica que va a usarse en futuras familias cerradas y circulares.
+
+Complementos utiles:
+- `build_line_geometry_primitive(...)`
+- `build_arc_geometry_primitive(...)`
+
+Referencia detallada de familias y reglas de identificacion:
+- `docs/pgmx_geometry_registry.md`
+
+### `build_compensated_toolpath_profile(...) -> GeometryProfileSpec`
+
+Firma simplificada:
+
+```python
+build_compensated_toolpath_profile(
+    profile,
+    *,
+    side_of_feature=None,
+    tool_width,
+    z_value=None,
+)
+```
+
+Objetivo:
+- tomar una geometria nominal ya clasificada o construida
+- aplicar la compensacion de `SideOfFeature`
+- devolver el perfil efectivo que debe seguir el centro de la herramienta
+
+Casos ya volcados al codigo:
+- lineas
+- arcos
+- circulos
+- polilineas abiertas
+- polilineas cerradas con esquinas vivas
+- polilineas cerradas con esquinas redondeadas y otras curvas compuestas tangentes
+
+Reglas practicas:
+- no mueve la geometria nominal del feature; construye la trayectoria compensada
+- `z_value` permite bajar la trayectoria a la cota real de mecanizado
+- en circulos, el toolpath sale como `GeomCompositeCurve` de 2 semicircunferencias,
+  que es como Maestro serializa `TrajectoryPath`
 
 ### `build_milling_depth_spec(...) -> MillingDepthSpec`
 
@@ -76,6 +150,21 @@ Reglas:
 - si `is_through=True`, `extra_depth` representa `Extra`
 - si `is_through=False`, hay que indicar `target_depth`
 - `extra_depth` no aplica a fresados no pasantes
+
+Regla validada en Maestro para la serializacion:
+- no pasante:
+  - `BottomCondition = GeneralMillingBottom`
+  - `Depth.StartDepth = target_depth`
+  - `Depth.EndDepth = target_depth`
+  - no agrega expresiones extra sobre el feature
+  - `cut_z = espesor - target_depth`
+- pasante:
+  - `BottomCondition = ThroughMillingBottom`
+  - `Depth.StartDepth = espesor_actual`
+  - `Depth.EndDepth = espesor_actual`
+  - agrega dos expresiones sobre el feature para ligar `StartDepth/EndDepth` al `DepthName` real de la pieza
+  - `OvercutLength = extra_depth`
+  - `cut_z = -extra_depth`
 
 ### `build_approach_spec(...) -> ApproachSpec`
 
@@ -271,6 +360,61 @@ result = synthesize_request(request)
 - `Area` usa `HG` por defecto.
 - Si `Approach.IsEnabled=false`, Maestro conserva un toolpath vertical de entrada.
 - Si `Retract.IsEnabled=false`, Maestro conserva un toolpath vertical de salida.
+- `SideOfFeature` nunca mueve la geometria nominal del feature; solo la trayectoria
+  efectiva de la herramienta.
+
+### Compensacion: lineas
+
+- `Center`: la trayectoria coincide con la linea nominal.
+- `Right`: la trayectoria se desplaza `tool_width / 2` sobre la normal derecha
+  del sentido geometrico de la linea.
+- `Left`: la trayectoria se desplaza `tool_width / 2` sobre la normal izquierda.
+- La regla esta centralizada en `build_compensated_toolpath_profile(...)` y es la
+  misma que hoy usa la sintesis lineal.
+
+### Compensacion: polilineas abiertas
+
+- `Center`: la trayectoria coincide con la polilinea nominal.
+- `Right` / `Left`: cada tramo se offsetea por `tool_width / 2`.
+- En una esquina exterior para el lado elegido, Maestro agrega un arco tangente
+  centrado en el vertice nominal.
+- En una esquina interior para el lado elegido, Maestro recorta y une por
+  interseccion de los segmentos offset.
+- Esta regla ya esta reutilizada por la sintesis actual de `PolylineMillingSpec`.
+
+### Compensacion: polilineas cerradas con esquinas vivas
+
+- `Center`: la trayectoria coincide con el contorno nominal.
+- Si la compensacion cae hacia el interior del contorno:
+  - Maestro offsetea cada lado hacia adentro
+  - resuelve las esquinas por interseccion
+  - no agrega arcos
+- Si la compensacion cae hacia el exterior:
+  - Maestro offsetea hacia afuera
+  - agrega un arco tangente de cuarto de circunferencia en cada vertice convexo
+- La correspondencia interior/exterior depende del winding:
+  - antihorario: `Right = exterior`, `Left = interior`
+  - horario: `Right = interior`, `Left = exterior`
+
+### Compensacion: curvas compuestas con esquinas redondeadas
+
+- Las lineas se desplazan en paralelo como en una polilinea abierta.
+- Los arcos conservan centro y sentido, pero su radio efectivo cambia segun:
+  - `effective_radius = nominal_radius + offset_distance * normal_sign`
+- Si el perfil original es tangente, la compensacion mantiene esa tangencia y no
+  necesita insertar arcos extra.
+- Esta es la regla usada para contornos cerrados redondeados y para futuras
+  curvas compuestas tangentes.
+
+### Compensacion: arcos y circulos
+
+- En un arco simple, el radio efectivo cambia con la misma regla que en las
+  curvas compuestas redondeadas.
+- En un circulo:
+  - antihorario: `Right = exterior`, `Left = interior`
+  - horario: `Right = interior`, `Left = exterior`
+- Maestro serializa `TrajectoryPath` del circulo como `GeomCompositeCurve` de
+  2 semicircunferencias; el helper publica ya devuelve esa forma.
 
 ### `Approach Line + Down`
 
@@ -315,6 +459,26 @@ from tools.synthesize_pgmx import read_pgmx_state
 
 state = read_pgmx_state(Path("archive/maestro_baselines/Pieza.pgmx"))
 ```
+
+### Ejemplo minimo: compensar una geometria nominal
+
+```python
+from tools.synthesize_pgmx import (
+    build_circle_geometry_profile,
+    build_compensated_toolpath_profile,
+)
+
+circulo = build_circle_geometry_profile(200, 200, 200, winding="Antihorario")
+toolpath = build_compensated_toolpath_profile(
+    circulo,
+    side_of_feature="Right",
+    tool_width=17.72,
+    z_value=-2.0,
+)
+```
+
+`toolpath` sale como curva compuesta de 2 semiarcos, lista para serializar como
+`TrajectoryPath`.
 
 ### Ejemplo minimo: linea central pasante
 
@@ -411,6 +575,8 @@ Estas reglas aplican cada vez que se trabaja con esta herramienta:
 - Si el usuario pide solo generar una pieza, no cambiar codigo.
 - Si ya existe un caso manual estudiado, usarlo como `source_pgmx_path` antes de inventar serializacion nueva.
 - No asumir que un caso "parecido" ya quedo resuelto: confirmar si la familia publica es linea o polilinea.
+- Para reglas de correccion geometrica, usar primero `build_compensated_toolpath_profile(...)`
+  y recien despues decidir si hace falta una API publica nueva de mecanizado.
 - Cuando aparezca un fallo de Maestro, revisar primero:
   - serializacion XML final
   - `xsi:type` y namespaces

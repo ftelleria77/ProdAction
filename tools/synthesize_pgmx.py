@@ -7,6 +7,7 @@ Referencia operativa recomendada:
 - `docs/synthesize_pgmx_help.md`
 
 - `read_pgmx_state(...)` lee dimensiones, nombre, origen y area desde un `.pgmx`.
+- `read_pgmx_geometries(...)` clasifica las curvas base guardadas en `Geometries`.
 - `build_synthesis_request(...)` arma una solicitud clara y reusable.
 - `synthesize_request(...)` aplica la solicitud sobre un baseline y escribe el
     `.pgmx` de salida.
@@ -16,6 +17,12 @@ Referencia operativa recomendada:
 Soporte actual de mecanizados sinteticos:
 - `LineMillingSpec`: linea sobre un plano con su fresado asociado.
 - `PolylineMillingSpec`: polilinea abierta con su fresado asociado.
+
+Soporte actual de geometria base reusable:
+- `build_line_geometry_profile(...)`
+- `build_circle_geometry_profile(...)`
+- `build_composite_geometry_profile(...)`
+- `build_compensated_toolpath_profile(...)`
 
 Hallazgos ya volcados en la sintesis:
 - `Area` de `Parametros de Maquina` usa `HG` por defecto si no se indica otro valor.
@@ -65,6 +72,8 @@ __all__ = [
     "ApproachSpec",
     "RetractSpec",
     "MillingDepthSpec",
+    "GeometryPrimitiveSpec",
+    "GeometryProfileSpec",
     "LineMillingSpec",
     "PolylineMillingSpec",
     "PgmxSynthesisRequest",
@@ -72,9 +81,16 @@ __all__ = [
     "build_approach_spec",
     "build_retract_spec",
     "build_milling_depth_spec",
+    "build_line_geometry_primitive",
+    "build_arc_geometry_primitive",
+    "build_line_geometry_profile",
+    "build_circle_geometry_profile",
+    "build_composite_geometry_profile",
+    "build_compensated_toolpath_profile",
     "build_line_milling_spec",
     "build_polyline_milling_spec",
     "read_pgmx_state",
+    "read_pgmx_geometries",
     "build_synthesis_request",
     "synthesize_request",
     "synthesize_pgmx",
@@ -131,6 +147,51 @@ class MillingDepthSpec:
     is_through: bool = True
     target_depth: Optional[float] = None
     extra_depth: float = 0.0
+
+
+@dataclass(frozen=True)
+class GeometryPrimitiveSpec:
+    """Primitiva geometrica 2D/3D reusable para perfiles Maestro."""
+
+    primitive_type: str
+    start_point: tuple[float, float, float]
+    end_point: tuple[float, float, float]
+    parameter_start: float = 0.0
+    parameter_end: float = 0.0
+    center_point: Optional[tuple[float, float, float]] = None
+    radius: Optional[float] = None
+    normal_vector: Optional[tuple[float, float, float]] = None
+    u_vector: Optional[tuple[float, float, float]] = None
+    v_vector: Optional[tuple[float, float, float]] = None
+
+
+@dataclass(frozen=True)
+class GeometryProfileSpec:
+    """Perfil geometrico identificado o construido para futura sintesis."""
+
+    geometry_type: str
+    family: str
+    primitives: tuple[GeometryPrimitiveSpec, ...] = ()
+    is_closed: bool = False
+    winding: Optional[str] = None
+    start_mode: Optional[str] = None
+    has_arcs: bool = False
+    corner_radii: tuple[float, ...] = ()
+    bounding_box: Optional[tuple[float, float, float, float]] = None
+    center_point: Optional[tuple[float, float, float]] = None
+    radius: Optional[float] = None
+    serialization: Optional[str] = None
+    member_serializations: tuple[str, ...] = ()
+
+    @property
+    def classification_key(self) -> str:
+        if self.winding:
+            return f"{self.family}_{self.winding}"
+        return self.family
+
+    @property
+    def primitive_count(self) -> int:
+        return len(self.primitives)
 
 
 @dataclass(frozen=True)
@@ -750,6 +811,21 @@ def _normalize_retract_arc_side(value: Optional[str]) -> str:
     return mapping[raw]
 
 
+def _normalize_geometry_winding(value: Optional[str]) -> str:
+    raw = (value or "CounterClockwise").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+    mapping = {
+        "counterclockwise": "CounterClockwise",
+        "ccw": "CounterClockwise",
+        "antihorario": "CounterClockwise",
+        "clockwise": "Clockwise",
+        "cw": "Clockwise",
+        "horario": "Clockwise",
+    }
+    if raw not in mapping:
+        raise ValueError("Winding invalido. Valores admitidos: CounterClockwise/Antihorario o Clockwise/Horario.")
+    return mapping[raw]
+
+
 def build_milling_depth_spec(
     is_through: Optional[bool] = None,
     *,
@@ -784,6 +860,179 @@ def build_milling_depth_spec(
     if not math.isclose(extra_value, 0.0, abs_tol=1e-9):
         raise ValueError("ExtraDepth solo aplica a fresados pasantes.")
     return MillingDepthSpec(is_through=False, target_depth=target_depth_value, extra_depth=0.0)
+
+
+def build_line_geometry_primitive(
+    start_x: float,
+    start_y: float,
+    end_x: float,
+    end_y: float,
+    *,
+    start_z: float = 0.0,
+    end_z: float = 0.0,
+) -> GeometryPrimitiveSpec:
+    """Construye una primitiva lineal reusable para perfiles Maestro."""
+
+    start_point = (float(start_x), float(start_y), float(start_z))
+    end_point = (float(end_x), float(end_y), float(end_z))
+    length = math.dist(start_point, end_point)
+    if length <= 1e-9:
+        raise ValueError("Una primitiva lineal necesita longitud mayor que cero.")
+    return GeometryPrimitiveSpec(
+        primitive_type="Line",
+        start_point=start_point,
+        end_point=end_point,
+        parameter_start=0.0,
+        parameter_end=length,
+    )
+
+
+def build_arc_geometry_primitive(
+    start_x: float,
+    start_y: float,
+    end_x: float,
+    end_y: float,
+    center_x: float,
+    center_y: float,
+    *,
+    z_value: float = 0.0,
+    winding: Optional[str] = None,
+) -> GeometryPrimitiveSpec:
+    """Construye una primitiva de arco en XY reusable para perfiles Maestro."""
+
+    normalized_winding = _normalize_geometry_winding(winding)
+    normal_z = 1.0 if normalized_winding == "CounterClockwise" else -1.0
+    start_point = (float(start_x), float(start_y), float(z_value))
+    end_point = (float(end_x), float(end_y), float(z_value))
+    center_point = (float(center_x), float(center_y), float(z_value))
+    start_radius = math.dist(start_point, center_point)
+    end_radius = math.dist(end_point, center_point)
+    if start_radius <= 1e-9 or end_radius <= 1e-9:
+        raise ValueError("Una primitiva de arco necesita radio mayor que cero.")
+    if not math.isclose(start_radius, end_radius, abs_tol=1e-6):
+        raise ValueError("Los puntos inicial y final del arco deben estar al mismo radio del centro.")
+    start_angle = _point_to_maestro_basis_angle((center_point[0], center_point[1]), (start_point[0], start_point[1]), normal_z)
+    end_angle = _point_to_maestro_basis_angle((center_point[0], center_point[1]), (end_point[0], end_point[1]), normal_z)
+    end_angle = _unwrap_maestro_arc_end_angle(start_angle, end_angle)
+    return GeometryPrimitiveSpec(
+        primitive_type="Arc",
+        start_point=start_point,
+        end_point=end_point,
+        parameter_start=start_angle,
+        parameter_end=end_angle,
+        center_point=center_point,
+        radius=start_radius,
+        normal_vector=(0.0, 0.0, normal_z),
+        u_vector=(1.0, 0.0, 0.0),
+        v_vector=(0.0, normal_z, 0.0),
+    )
+
+
+def build_line_geometry_profile(
+    start_x: float,
+    start_y: float,
+    end_x: float,
+    end_y: float,
+    *,
+    start_z: float = 0.0,
+    end_z: float = 0.0,
+) -> GeometryProfileSpec:
+    """Construye un perfil geometrico lineal ya serializado para Maestro."""
+
+    primitive = build_line_geometry_primitive(
+        start_x,
+        start_y,
+        end_x,
+        end_y,
+        start_z=start_z,
+        end_z=end_z,
+    )
+    return _build_profile_geometry_spec(
+        geometry_type="GeomTrimmedCurve",
+        primitives=(primitive,),
+    )
+
+
+def build_circle_geometry_profile(
+    center_x: float,
+    center_y: float,
+    radius: float,
+    *,
+    z_value: float = 0.0,
+    winding: Optional[str] = None,
+) -> GeometryProfileSpec:
+    """Construye un perfil circular Maestro listo para futura sintesis."""
+
+    normalized_winding = _normalize_geometry_winding(winding)
+    radius_value = float(radius)
+    if radius_value <= 1e-9:
+        raise ValueError("Un perfil circular necesita radio mayor que cero.")
+    normal_z = 1.0 if normalized_winding == "CounterClockwise" else -1.0
+    serialization = _build_circle_geometry_serialization(
+        center_point=(float(center_x), float(center_y), float(z_value)),
+        radius=radius_value,
+        normal_z=normal_z,
+    )
+    return GeometryProfileSpec(
+        geometry_type="GeomCircle",
+        family="Circle",
+        is_closed=True,
+        winding=normalized_winding,
+        has_arcs=True,
+        corner_radii=(radius_value,),
+        bounding_box=(
+            float(center_x) - radius_value,
+            float(center_y) - radius_value,
+            float(center_x) + radius_value,
+            float(center_y) + radius_value,
+        ),
+        center_point=(float(center_x), float(center_y), float(z_value)),
+        radius=radius_value,
+        serialization=serialization,
+    )
+
+
+def build_composite_geometry_profile(
+    primitives: Sequence[GeometryPrimitiveSpec],
+) -> GeometryProfileSpec:
+    """Construye un perfil compuesto reusable a partir de lineas y arcos."""
+
+    normalized_primitives = tuple(primitives)
+    if not normalized_primitives:
+        raise ValueError("Un perfil compuesto necesita al menos una primitiva.")
+    return _build_profile_geometry_spec(
+        geometry_type="GeomCompositeCurve",
+        primitives=normalized_primitives,
+    )
+
+
+def build_compensated_toolpath_profile(
+    profile: GeometryProfileSpec,
+    *,
+    side_of_feature: Optional[str] = None,
+    tool_width: float,
+    z_value: Optional[float] = None,
+) -> GeometryProfileSpec:
+    """Compensa una geometria nominal segun `SideOfFeature` y el ancho de herramienta.
+
+    Esta helper vuelca en codigo las reglas observadas en Maestro para:
+    - lineas
+    - arcos
+    - circulos
+    - polilineas abiertas
+    - polilineas cerradas con esquinas vivas
+    - polilineas cerradas redondeadas y otras curvas compuestas tangentes
+
+    El resultado es el perfil efectivo que debe seguir el centro de la herramienta.
+    La geometria nominal original no se altera.
+    """
+
+    return _build_compensated_profile_geometry(
+        profile,
+        side_of_feature=_normalize_side_of_feature(side_of_feature),
+        tool_width=float(tool_width),
+        z_value=z_value,
+    )
 
 
 def build_approach_spec(
@@ -905,6 +1154,16 @@ def _normalize_line_milling_spec(line_milling: LineMillingSpec) -> LineMillingSp
     )
 
 
+def _workpiece_depth_name(workpiece: Optional[ET.Element]) -> str:
+    """Devuelve el nombre parametrico de espesor usado por la pieza.
+
+    Maestro suele usar `dz1`, pero conviene leerlo del `WorkPiece` para no
+    fijar la sintesis a un unico baseline.
+    """
+
+    return _text(workpiece, "./{*}DepthName", "dz1") or "dz1"
+
+
 def _normalize_polyline_points(points: Sequence[tuple[float, float]]) -> tuple[tuple[float, float], ...]:
     normalized = tuple((float(point[0]), float(point[1])) for point in points)
     if len(normalized) < 2:
@@ -929,6 +1188,11 @@ def _normalize_polyline_milling_spec(polyline_milling: PolylineMillingSpec) -> P
 
 
 def _feature_depth_value(state: PgmxState, spec) -> float:
+    # En Maestro, un pasante deja `Depth.StartDepth/EndDepth` igual al espesor
+    # actual de la pieza y luego agrega expresiones parametricas hacia `DepthName`.
+    # Por eso, para el feature serializado, el valor numerico base del pasante es
+    # `state.depth`, mientras que la cota real del toolpath se corrige aparte con
+    # `_toolpath_cut_z(...)`.
     depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
     if depth_spec.is_through:
         return state.depth
@@ -940,6 +1204,9 @@ def _feature_depth_value(state: PgmxState, spec) -> float:
 
 
 def _toolpath_cut_z(state: PgmxState, spec) -> float:
+    # Regla validada en Maestro:
+    # - no pasante: `cut_z = espesor - target_depth`
+    # - pasante: `cut_z = -extra_depth`
     depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
     if depth_spec.is_through:
         return -depth_spec.extra_depth
@@ -1022,6 +1289,22 @@ def _build_open_polyline_descriptions(points: Sequence[tuple[float, float]]) -> 
     return tuple(
         _build_line_description(start_point[0], start_point[1], end_point[0], end_point[1])
         for start_point, end_point in zip(normalized_points, normalized_points[1:])
+    )
+
+
+def _build_open_polyline_geometry_profile(
+    points: Sequence[tuple[float, float]],
+    *,
+    z_value: float = 0.0,
+) -> GeometryProfileSpec:
+    """Construye una polilinea abierta plana como `GeometryProfileSpec`."""
+
+    normalized_points = _normalize_polyline_points(points)
+    return build_composite_geometry_profile(
+        tuple(
+            _line_primitive_at_plane(start_point, end_point, z_value=z_value)
+            for start_point, end_point in zip(normalized_points, normalized_points[1:])
+        )
     )
 
 
@@ -1482,15 +1765,67 @@ def _offset_factor(side_of_feature: str) -> float:
     }[normalized]
 
 
-def _offset_line_for_toolpath(spec: _HydratedLineMillingSpec) -> tuple[tuple[float, float], tuple[float, float]]:
-    right_x, right_y = _line_right_normal(spec.start_x, spec.start_y, spec.end_x, spec.end_y)
-    offset_distance = _offset_factor(spec.side_of_feature) * (spec.tool_width / 2.0)
-    offset_x = right_x * offset_distance
-    offset_y = right_y * offset_distance
+def _profile_endpoint_points(profile: GeometryProfileSpec) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Devuelve inicio y fin XY del recorrido efectivo."""
+
+    if profile.geometry_type == "GeomCircle":
+        if profile.center_point is None or profile.radius is None:
+            raise ValueError("El perfil circular necesita centro y radio para exponer sus extremos.")
+        start_point = (profile.center_point[0] + profile.radius, profile.center_point[1])
+        return start_point, start_point
+
+    if not profile.primitives:
+        raise ValueError("El perfil compensado no contiene primitivas.")
+    first_primitive = profile.primitives[0]
+    last_primitive = profile.primitives[-1]
     return (
-        (spec.start_x + offset_x, spec.start_y + offset_y),
-        (spec.end_x + offset_x, spec.end_y + offset_y),
+        (first_primitive.start_point[0], first_primitive.start_point[1]),
+        (last_primitive.end_point[0], last_primitive.end_point[1]),
     )
+
+
+def _profile_endpoint_directions(
+    profile: GeometryProfileSpec,
+) -> tuple[Optional[tuple[float, float]], Optional[tuple[float, float]]]:
+    """Devuelve tangentes XY de entrada y salida del perfil compensado."""
+
+    if profile.geometry_type == "GeomCircle":
+        winding = _normalize_geometry_winding(profile.winding)
+        tangent = (0.0, 1.0 if winding == "CounterClockwise" else -1.0)
+        return tangent, tangent
+
+    if not profile.primitives:
+        return None, None
+    return _primitive_start_tangent_2d(profile.primitives[0]), _primitive_end_tangent_2d(profile.primitives[-1])
+
+
+def _build_line_toolpath_profile(state: PgmxState, spec: _HydratedLineMillingSpec) -> GeometryProfileSpec:
+    """Construye el perfil de trayectoria efectivo para un fresado lineal."""
+
+    cut_z = _toolpath_cut_z(state, spec)
+    nominal_profile = build_line_geometry_profile(
+        spec.start_x,
+        spec.start_y,
+        spec.end_x,
+        spec.end_y,
+        start_z=cut_z,
+        end_z=cut_z,
+    )
+    return build_compensated_toolpath_profile(
+        nominal_profile,
+        side_of_feature=spec.side_of_feature,
+        tool_width=spec.tool_width,
+        z_value=cut_z,
+    )
+
+
+def _offset_line_for_toolpath(spec: _HydratedLineMillingSpec) -> tuple[tuple[float, float], tuple[float, float]]:
+    toolpath_profile = build_compensated_toolpath_profile(
+        build_line_geometry_profile(spec.start_x, spec.start_y, spec.end_x, spec.end_y),
+        side_of_feature=spec.side_of_feature,
+        tool_width=spec.tool_width,
+    )
+    return _profile_endpoint_points(toolpath_profile)
 
 
 def _offset_point(point: tuple[float, float], offset_x: float, offset_y: float) -> tuple[float, float]:
@@ -1530,6 +1865,480 @@ def _cross_2d(vector_a: tuple[float, float], vector_b: tuple[float, float]) -> f
     return (vector_a[0] * vector_b[1]) - (vector_a[1] * vector_b[0])
 
 
+def _tool_offset_distance(side_of_feature: str, tool_width: float) -> float:
+    """Devuelve el offset lateral firmado del centro de herramienta."""
+
+    tool_width_value = float(tool_width)
+    if tool_width_value <= 1e-9:
+        raise ValueError("El ancho de herramienta debe ser mayor que cero para compensar la trayectoria.")
+    return _offset_factor(side_of_feature) * (tool_width_value / 2.0)
+
+
+def _primitive_winding(primitive: GeometryPrimitiveSpec) -> str:
+    """Obtiene el sentido horario/antihorario de una primitiva de arco."""
+
+    if primitive.normal_vector is None or primitive.normal_vector[2] >= 0.0:
+        return "CounterClockwise"
+    return "Clockwise"
+
+
+def _line_primitive_at_plane(
+    start_point: tuple[float, float],
+    end_point: tuple[float, float],
+    *,
+    z_value: float,
+) -> GeometryPrimitiveSpec:
+    """Construye una linea plana lista para serializacion Maestro."""
+
+    return build_line_geometry_primitive(
+        start_point[0],
+        start_point[1],
+        end_point[0],
+        end_point[1],
+        start_z=z_value,
+        end_z=z_value,
+    )
+
+
+def _offset_line_primitive(
+    primitive: GeometryPrimitiveSpec,
+    *,
+    offset_distance: float,
+    z_value: Optional[float] = None,
+) -> GeometryPrimitiveSpec:
+    """Desplaza una linea plana segun `SideOfFeature` sin alterar su direccion."""
+
+    right_x, right_y = _line_right_normal(
+        primitive.start_point[0],
+        primitive.start_point[1],
+        primitive.end_point[0],
+        primitive.end_point[1],
+    )
+    offset_x = right_x * offset_distance
+    offset_y = right_y * offset_distance
+    target_z = primitive.start_point[2] if z_value is None else float(z_value)
+    return _line_primitive_at_plane(
+        (primitive.start_point[0] + offset_x, primitive.start_point[1] + offset_y),
+        (primitive.end_point[0] + offset_x, primitive.end_point[1] + offset_y),
+        z_value=target_z,
+    )
+
+
+def _offset_arc_primitive(
+    primitive: GeometryPrimitiveSpec,
+    *,
+    offset_distance: float,
+    z_value: Optional[float] = None,
+) -> GeometryPrimitiveSpec:
+    """Compensa un arco en XY ajustando su radio segun winding y lado."""
+
+    if (
+        primitive.center_point is None
+        or primitive.radius is None
+        or primitive.u_vector is None
+        or primitive.v_vector is None
+    ):
+        raise ValueError("La primitiva de arco necesita centro, radio y base orientada.")
+
+    winding = _primitive_winding(primitive)
+    normal_sign = 1.0 if winding == "CounterClockwise" else -1.0
+    compensated_radius = primitive.radius + (offset_distance * normal_sign)
+    if compensated_radius <= 1e-9:
+        raise ValueError("La compensacion hace no positivo el radio efectivo del arco.")
+
+    center_z = primitive.center_point[2] if z_value is None else float(z_value)
+    center_point = (primitive.center_point[0], primitive.center_point[1], center_z)
+    start_point = _sample_arc_point(
+        center_point,
+        primitive.u_vector,
+        primitive.v_vector,
+        compensated_radius,
+        primitive.parameter_start,
+    )
+    end_point = _sample_arc_point(
+        center_point,
+        primitive.u_vector,
+        primitive.v_vector,
+        compensated_radius,
+        primitive.parameter_end,
+    )
+    return GeometryPrimitiveSpec(
+        primitive_type="Arc",
+        start_point=start_point,
+        end_point=end_point,
+        parameter_start=primitive.parameter_start,
+        parameter_end=primitive.parameter_end,
+        center_point=center_point,
+        radius=compensated_radius,
+        normal_vector=primitive.normal_vector,
+        u_vector=primitive.u_vector,
+        v_vector=primitive.v_vector,
+    )
+
+
+def _offset_geometry_primitive(
+    primitive: GeometryPrimitiveSpec,
+    *,
+    offset_distance: float,
+    z_value: Optional[float] = None,
+) -> GeometryPrimitiveSpec:
+    """Compensa una primitiva lineal o circular conservando su serializacion base."""
+
+    if primitive.primitive_type == "Line":
+        return _offset_line_primitive(primitive, offset_distance=offset_distance, z_value=z_value)
+    if primitive.primitive_type == "Arc":
+        return _offset_arc_primitive(primitive, offset_distance=offset_distance, z_value=z_value)
+    raise ValueError(f"Tipo de primitiva no soportado para compensacion: {primitive.primitive_type}")
+
+
+def _intersection_or_fallback(
+    point_a: tuple[float, float],
+    direction_a: tuple[float, float],
+    point_b: tuple[float, float],
+    direction_b: tuple[float, float],
+    *,
+    fallback_a: tuple[float, float],
+    fallback_b: tuple[float, float],
+) -> tuple[float, float]:
+    """Resuelve una union interior por interseccion o con un fallback robusto."""
+
+    intersection = _intersect_lines(point_a, direction_a, point_b, direction_b)
+    if intersection is not None:
+        return intersection
+    if _points_close_2d(fallback_a, fallback_b):
+        return fallback_a
+    return ((fallback_a[0] + fallback_b[0]) / 2.0, (fallback_a[1] + fallback_b[1]) / 2.0)
+
+
+def _build_corner_join_arc(
+    start_point: tuple[float, float],
+    end_point: tuple[float, float],
+    center_point: tuple[float, float, float],
+    *,
+    side_sign: float,
+    z_value: float,
+) -> GeometryPrimitiveSpec:
+    """Construye el arco tangente observado en Maestro para una esquina exterior."""
+
+    winding = "CounterClockwise" if side_sign > 0.0 else "Clockwise"
+    return build_arc_geometry_primitive(
+        start_point[0],
+        start_point[1],
+        end_point[0],
+        end_point[1],
+        center_point[0],
+        center_point[1],
+        z_value=z_value,
+        winding=winding,
+    )
+
+
+def _build_compensated_line_only_open_profile(
+    profile: GeometryProfileSpec,
+    *,
+    offset_distance: float,
+    z_value: Optional[float] = None,
+) -> GeometryProfileSpec:
+    """Compensa una polilinea abierta de lineas usando la regla validada en Maestro."""
+
+    offset_primitives = tuple(
+        _offset_line_primitive(primitive, offset_distance=offset_distance, z_value=z_value)
+        for primitive in profile.primitives
+    )
+    if len(offset_primitives) == 1 or math.isclose(offset_distance, 0.0, abs_tol=1e-9):
+        return _build_profile_geometry_spec(
+            geometry_type="GeomCompositeCurve",
+            primitives=offset_primitives,
+        )
+
+    side_sign = 1.0 if offset_distance > 0.0 else -1.0
+    cut_z = offset_primitives[0].start_point[2]
+    member_primitives: list[GeometryPrimitiveSpec] = []
+    current_point = (offset_primitives[0].start_point[0], offset_primitives[0].start_point[1])
+
+    for index, (previous_primitive, next_primitive) in enumerate(zip(offset_primitives, offset_primitives[1:])):
+        previous_start = (previous_primitive.start_point[0], previous_primitive.start_point[1])
+        previous_end = (previous_primitive.end_point[0], previous_primitive.end_point[1])
+        next_start = (next_primitive.start_point[0], next_primitive.start_point[1])
+        previous_direction = _primitive_end_tangent_2d(previous_primitive)
+        next_direction = _primitive_start_tangent_2d(next_primitive)
+        if previous_direction is None or next_direction is None:
+            raise ValueError("No se pudo resolver la tangente de una polilinea abierta compensada.")
+
+        turn_cross = _cross_2d(previous_direction, next_direction)
+        if math.isclose(turn_cross, 0.0, abs_tol=1e-9):
+            if not _points_close_2d(current_point, previous_end):
+                member_primitives.append(_line_primitive_at_plane(current_point, previous_end, z_value=cut_z))
+            current_point = next_start
+            continue
+
+        is_outer_corner = (side_sign * turn_cross) > 0.0
+        if is_outer_corner:
+            if not _points_close_2d(current_point, previous_end):
+                member_primitives.append(_line_primitive_at_plane(current_point, previous_end, z_value=cut_z))
+            member_primitives.append(
+                _build_corner_join_arc(
+                    previous_end,
+                    next_start,
+                    profile.primitives[index].end_point,
+                    side_sign=side_sign,
+                    z_value=cut_z,
+                )
+            )
+            current_point = next_start
+            continue
+
+        intersection = _intersection_or_fallback(
+            previous_start,
+            previous_direction,
+            next_start,
+            next_direction,
+            fallback_a=previous_end,
+            fallback_b=next_start,
+        )
+        if not _points_close_2d(current_point, intersection):
+            member_primitives.append(_line_primitive_at_plane(current_point, intersection, z_value=cut_z))
+        current_point = intersection
+
+    final_point = (offset_primitives[-1].end_point[0], offset_primitives[-1].end_point[1])
+    if not _points_close_2d(current_point, final_point):
+        member_primitives.append(_line_primitive_at_plane(current_point, final_point, z_value=cut_z))
+    return _build_profile_geometry_spec(
+        geometry_type="GeomCompositeCurve",
+        primitives=tuple(member_primitives),
+    )
+
+
+def _build_compensated_line_only_closed_profile(
+    profile: GeometryProfileSpec,
+    *,
+    offset_distance: float,
+    z_value: Optional[float] = None,
+) -> GeometryProfileSpec:
+    """Compensa un contorno cerrado de lineas preservando esquinas vivas o exteriores."""
+
+    offset_primitives = tuple(
+        _offset_line_primitive(primitive, offset_distance=offset_distance, z_value=z_value)
+        for primitive in profile.primitives
+    )
+    if math.isclose(offset_distance, 0.0, abs_tol=1e-9):
+        return _build_profile_geometry_spec(
+            geometry_type="GeomCompositeCurve",
+            primitives=offset_primitives,
+        )
+
+    side_sign = 1.0 if offset_distance > 0.0 else -1.0
+    cut_z = offset_primitives[0].start_point[2]
+    transitions: list[dict[str, object]] = []
+    primitive_count = len(offset_primitives)
+
+    for index in range(primitive_count):
+        previous_primitive = offset_primitives[index]
+        next_primitive = offset_primitives[(index + 1) % primitive_count]
+        previous_start = (previous_primitive.start_point[0], previous_primitive.start_point[1])
+        previous_end = (previous_primitive.end_point[0], previous_primitive.end_point[1])
+        next_start = (next_primitive.start_point[0], next_primitive.start_point[1])
+        previous_direction = _primitive_end_tangent_2d(previous_primitive)
+        next_direction = _primitive_start_tangent_2d(next_primitive)
+        if previous_direction is None or next_direction is None:
+            raise ValueError("No se pudo resolver la tangente de un contorno cerrado compensado.")
+
+        turn_cross = _cross_2d(previous_direction, next_direction)
+        if math.isclose(turn_cross, 0.0, abs_tol=1e-9):
+            transitions.append(
+                {
+                    "kind": "collinear",
+                    "point": previous_end if _points_close_2d(previous_end, next_start) else next_start,
+                }
+            )
+            continue
+
+        is_outer_corner = (side_sign * turn_cross) > 0.0
+        if is_outer_corner:
+            transitions.append(
+                {
+                    "kind": "outer",
+                    "arc": _build_corner_join_arc(
+                        previous_end,
+                        next_start,
+                        profile.primitives[index].end_point,
+                        side_sign=side_sign,
+                        z_value=cut_z,
+                    ),
+                }
+            )
+            continue
+
+        transitions.append(
+            {
+                "kind": "inner",
+                "point": _intersection_or_fallback(
+                    previous_start,
+                    previous_direction,
+                    next_start,
+                    next_direction,
+                    fallback_a=previous_end,
+                    fallback_b=next_start,
+                ),
+            }
+        )
+
+    member_primitives: list[GeometryPrimitiveSpec] = []
+    wrap_transition = transitions[-1]
+    winding = _normalize_geometry_winding(profile.winding)
+    emit_wrap_arc_first = wrap_transition["kind"] == "outer" and winding == "CounterClockwise"
+    if emit_wrap_arc_first:
+        member_primitives.append(wrap_transition["arc"])  # type: ignore[arg-type]
+        current_point = (offset_primitives[0].start_point[0], offset_primitives[0].start_point[1])
+        segment_order = list(range(primitive_count))
+    elif wrap_transition["kind"] == "outer":
+        current_point = (offset_primitives[0].start_point[0], offset_primitives[0].start_point[1])
+        segment_order = list(range(primitive_count))
+    else:
+        current_point = wrap_transition["point"]  # type: ignore[assignment]
+        segment_order = list(range(primitive_count))
+
+    for index in segment_order:
+        primitive = offset_primitives[index]
+        transition = transitions[index]
+        if transition["kind"] == "outer":
+            segment_end = (primitive.end_point[0], primitive.end_point[1])
+        else:
+            segment_end = transition["point"]  # type: ignore[assignment]
+
+        if not _points_close_2d(current_point, segment_end):
+            member_primitives.append(_line_primitive_at_plane(current_point, segment_end, z_value=cut_z))
+
+        if transition["kind"] == "outer":
+            is_wrap_transition = index == (primitive_count - 1)
+            if not (emit_wrap_arc_first and is_wrap_transition):
+                member_primitives.append(transition["arc"])  # type: ignore[arg-type]
+                next_primitive = offset_primitives[(index + 1) % primitive_count]
+                current_point = (next_primitive.start_point[0], next_primitive.start_point[1])
+        else:
+            current_point = transition["point"]  # type: ignore[assignment]
+
+    return _build_profile_geometry_spec(
+        geometry_type="GeomCompositeCurve",
+        primitives=tuple(member_primitives),
+    )
+
+
+def _build_compensated_tangent_composite_profile(
+    profile: GeometryProfileSpec,
+    *,
+    offset_distance: float,
+    z_value: Optional[float] = None,
+) -> GeometryProfileSpec:
+    """Compensa curvas compuestas tangentes, incluyendo esquinas redondeadas."""
+
+    offset_primitives = tuple(
+        _offset_geometry_primitive(primitive, offset_distance=offset_distance, z_value=z_value)
+        for primitive in profile.primitives
+    )
+    for previous_primitive, next_primitive in zip(offset_primitives, offset_primitives[1:]):
+        if not _points_close_3d(previous_primitive.end_point, next_primitive.start_point, tolerance=1e-5):
+            raise ValueError(
+                "La compensacion de una curva compuesta con arcos requiere miembros tangentes y conectados."
+            )
+    if profile.is_closed and not _points_close_3d(
+        offset_primitives[-1].end_point,
+        offset_primitives[0].start_point,
+        tolerance=1e-5,
+    ):
+        raise ValueError(
+            "La compensacion de un contorno cerrado con arcos requiere que el cierre siga siendo tangente."
+        )
+    return _build_profile_geometry_spec(
+        geometry_type="GeomCompositeCurve",
+        primitives=offset_primitives,
+    )
+
+
+def _build_compensated_profile_geometry(
+    profile: GeometryProfileSpec,
+    *,
+    side_of_feature: str,
+    tool_width: float,
+    z_value: Optional[float] = None,
+) -> GeometryProfileSpec:
+    """Motor comun de compensacion geometrica segun las reglas ya validadas."""
+
+    offset_distance = _tool_offset_distance(side_of_feature, tool_width)
+
+    if profile.geometry_type == "GeomCircle":
+        if profile.center_point is None or profile.radius is None:
+            raise ValueError("El perfil circular necesita centro y radio.")
+        winding = _normalize_geometry_winding(profile.winding)
+        normal_sign = 1.0 if winding == "CounterClockwise" else -1.0
+        compensated_radius = profile.radius + (offset_distance * normal_sign)
+        if compensated_radius <= 1e-9:
+            raise ValueError("La compensacion hace no positivo el radio efectivo del circulo.")
+        target_z = profile.center_point[2] if z_value is None else float(z_value)
+        center_x = profile.center_point[0]
+        center_y = profile.center_point[1]
+        start_point = (center_x + compensated_radius, center_y)
+        opposite_point = (center_x - compensated_radius, center_y)
+        return build_composite_geometry_profile(
+            (
+                build_arc_geometry_primitive(
+                    start_point[0],
+                    start_point[1],
+                    opposite_point[0],
+                    opposite_point[1],
+                    center_x,
+                    center_y,
+                    z_value=target_z,
+                    winding=winding,
+                ),
+                build_arc_geometry_primitive(
+                    opposite_point[0],
+                    opposite_point[1],
+                    start_point[0],
+                    start_point[1],
+                    center_x,
+                    center_y,
+                    z_value=target_z,
+                    winding=winding,
+                ),
+            )
+        )
+
+    if profile.geometry_type == "GeomTrimmedCurve":
+        if len(profile.primitives) != 1:
+            raise ValueError("Un GeomTrimmedCurve compensado requiere exactamente una primitiva.")
+        primitive = _offset_geometry_primitive(profile.primitives[0], offset_distance=offset_distance, z_value=z_value)
+        return _build_profile_geometry_spec(
+            geometry_type="GeomTrimmedCurve",
+            primitives=(primitive,),
+        )
+
+    if profile.geometry_type != "GeomCompositeCurve":
+        raise ValueError(f"Tipo de geometria no soportado para compensacion: {profile.geometry_type}")
+
+    if not profile.primitives:
+        raise ValueError("La curva compuesta necesita primitivas para compensarse.")
+
+    if all(primitive.primitive_type == "Line" for primitive in profile.primitives):
+        if profile.is_closed:
+            return _build_compensated_line_only_closed_profile(
+                profile,
+                offset_distance=offset_distance,
+                z_value=z_value,
+            )
+        return _build_compensated_line_only_open_profile(
+            profile,
+            offset_distance=offset_distance,
+            z_value=z_value,
+        )
+
+    return _build_compensated_tangent_composite_profile(
+        profile,
+        offset_distance=offset_distance,
+        z_value=z_value,
+    )
+
+
 def _normalize_positive_angle(angle: float) -> float:
     normalized = math.fmod(angle, 2.0 * math.pi)
     if normalized < 0.0:
@@ -1549,6 +2358,17 @@ def _point_to_maestro_basis_angle(
     return _normalize_positive_angle(math.atan2(relative_y * normal_z, relative_x))
 
 
+def _unwrap_maestro_arc_end_angle(start_angle: float, end_angle: float) -> float:
+    """Desenvuelve el parametro final para preservar el avance real del arco."""
+
+    if math.isclose(start_angle, end_angle, abs_tol=1e-12):
+        return end_angle
+    unwrapped_end = end_angle
+    while unwrapped_end <= start_angle:
+        unwrapped_end += 2.0 * math.pi
+    return unwrapped_end
+
+
 def _build_maestro_arc_serialization(
     start_point: tuple[float, float],
     end_point: tuple[float, float],
@@ -1562,6 +2382,7 @@ def _build_maestro_arc_serialization(
 
     start_angle = _point_to_maestro_basis_angle(center_point, start_point, normal_z)
     end_angle = _point_to_maestro_basis_angle(center_point, end_point, normal_z)
+    end_angle = _unwrap_maestro_arc_end_angle(start_angle, end_angle)
 
     return (
         f"8 {_format_maestro_number(start_angle)} {_format_maestro_number(end_angle)}\n"
@@ -1592,145 +2413,499 @@ def _build_oriented_maestro_arc_serialization(
     )
 
 
-def _build_polyline_offset_segments(
-    spec: _HydratedPolylineMillingSpec,
-) -> tuple[float, list[tuple[tuple[float, float], tuple[float, float], tuple[float, float]]]]:
-    offset_distance = _offset_factor(spec.side_of_feature) * (spec.tool_width / 2.0)
-    offset_segments: list[tuple[tuple[float, float], tuple[float, float], tuple[float, float]]] = []
-    for start_point, end_point in zip(spec.points, spec.points[1:]):
-        direction = _line_unit_direction(start_point[0], start_point[1], end_point[0], end_point[1])
-        right_x, right_y = _line_right_normal(start_point[0], start_point[1], end_point[0], end_point[1])
-        offset_x = right_x * offset_distance
-        offset_y = right_y * offset_distance
-        offset_segments.append(
+def _build_circle_geometry_serialization(
+    *,
+    center_point: tuple[float, float, float],
+    radius: float,
+    normal_z: float,
+) -> str:
+    return (
+        f"2 {_format_maestro_number(center_point[0])} {_format_maestro_number(center_point[1])} {_format_maestro_number(center_point[2])} "
+        f"0 0 {_format_maestro_orientation_number(normal_z)} 1 0 0 0 {_format_maestro_orientation_number(normal_z)} 0 "
+        f"{_format_maestro_number(radius)}\n"
+    )
+
+
+def _points_close_3d(
+    point_a: tuple[float, float, float],
+    point_b: tuple[float, float, float],
+    tolerance: float = 1e-6,
+) -> bool:
+    return (
+        math.isclose(point_a[0], point_b[0], abs_tol=tolerance)
+        and math.isclose(point_a[1], point_b[1], abs_tol=tolerance)
+        and math.isclose(point_a[2], point_b[2], abs_tol=tolerance)
+    )
+
+
+def _normalize_vector_2d(
+    vector: tuple[float, float],
+    tolerance: float = 1e-9,
+) -> Optional[tuple[float, float]]:
+    length = math.hypot(vector[0], vector[1])
+    if length <= tolerance:
+        return None
+    return (vector[0] / length, vector[1] / length)
+
+
+def _vectors_parallel_same_direction_2d(
+    vector_a: tuple[float, float],
+    vector_b: tuple[float, float],
+    tolerance: float = 1e-6,
+) -> bool:
+    normalized_a = _normalize_vector_2d(vector_a, tolerance=tolerance)
+    normalized_b = _normalize_vector_2d(vector_b, tolerance=tolerance)
+    if normalized_a is None or normalized_b is None:
+        return False
+    return math.isclose(normalized_a[0], normalized_b[0], abs_tol=tolerance) and math.isclose(
+        normalized_a[1], normalized_b[1], abs_tol=tolerance
+    )
+
+
+def _sample_arc_point(
+    center_point: tuple[float, float, float],
+    u_vector: tuple[float, float, float],
+    v_vector: tuple[float, float, float],
+    radius: float,
+    angle: float,
+) -> tuple[float, float, float]:
+    cos_angle = math.cos(angle)
+    sin_angle = math.sin(angle)
+    return (
+        center_point[0] + (radius * ((u_vector[0] * cos_angle) + (v_vector[0] * sin_angle))),
+        center_point[1] + (radius * ((u_vector[1] * cos_angle) + (v_vector[1] * sin_angle))),
+        center_point[2] + (radius * ((u_vector[2] * cos_angle) + (v_vector[2] * sin_angle))),
+    )
+
+
+def _arc_tangent_vector(
+    primitive: GeometryPrimitiveSpec,
+    angle: float,
+) -> Optional[tuple[float, float]]:
+    if primitive.radius is None or primitive.u_vector is None or primitive.v_vector is None:
+        return None
+    parameter_delta = primitive.parameter_end - primitive.parameter_start
+    travel_sign = 1.0 if parameter_delta >= 0.0 else -1.0
+    tangent_x = (
+        (-primitive.u_vector[0] * math.sin(angle)) + (primitive.v_vector[0] * math.cos(angle))
+    ) * primitive.radius * travel_sign
+    tangent_y = (
+        (-primitive.u_vector[1] * math.sin(angle)) + (primitive.v_vector[1] * math.cos(angle))
+    ) * primitive.radius * travel_sign
+    return _normalize_vector_2d((tangent_x, tangent_y))
+
+
+def _primitive_start_tangent_2d(primitive: GeometryPrimitiveSpec) -> Optional[tuple[float, float]]:
+    if primitive.primitive_type == "Line":
+        return _normalize_vector_2d(
             (
-                _offset_point(start_point, offset_x, offset_y),
-                _offset_point(end_point, offset_x, offset_y),
-                direction,
+                primitive.end_point[0] - primitive.start_point[0],
+                primitive.end_point[1] - primitive.start_point[1],
             )
         )
+    if primitive.primitive_type == "Arc":
+        return _arc_tangent_vector(primitive, primitive.parameter_start)
+    return None
 
-    return offset_distance, offset_segments
+
+def _primitive_end_tangent_2d(primitive: GeometryPrimitiveSpec) -> Optional[tuple[float, float]]:
+    if primitive.primitive_type == "Line":
+        return _normalize_vector_2d(
+            (
+                primitive.end_point[0] - primitive.start_point[0],
+                primitive.end_point[1] - primitive.start_point[1],
+            )
+        )
+    if primitive.primitive_type == "Arc":
+        return _arc_tangent_vector(primitive, primitive.parameter_end)
+    return None
+
+
+def _primitive_sample_points_2d(primitive: GeometryPrimitiveSpec) -> tuple[tuple[float, float], ...]:
+    if primitive.primitive_type == "Arc":
+        if primitive.center_point is None or primitive.radius is None or primitive.u_vector is None or primitive.v_vector is None:
+            return (
+                (primitive.start_point[0], primitive.start_point[1]),
+                (primitive.end_point[0], primitive.end_point[1]),
+            )
+        midpoint_angle = primitive.parameter_start + ((primitive.parameter_end - primitive.parameter_start) / 2.0)
+        midpoint = _sample_arc_point(
+            primitive.center_point,
+            primitive.u_vector,
+            primitive.v_vector,
+            primitive.radius,
+            midpoint_angle,
+        )
+        return (
+            (primitive.start_point[0], primitive.start_point[1]),
+            (midpoint[0], midpoint[1]),
+            (primitive.end_point[0], primitive.end_point[1]),
+        )
+    return (
+        (primitive.start_point[0], primitive.start_point[1]),
+        (primitive.end_point[0], primitive.end_point[1]),
+    )
+
+
+def _profile_bounding_box(
+    primitives: Sequence[GeometryPrimitiveSpec],
+    *,
+    circle_center: Optional[tuple[float, float, float]] = None,
+    circle_radius: Optional[float] = None,
+) -> Optional[tuple[float, float, float, float]]:
+    if circle_center is not None and circle_radius is not None:
+        return (
+            circle_center[0] - circle_radius,
+            circle_center[1] - circle_radius,
+            circle_center[0] + circle_radius,
+            circle_center[1] + circle_radius,
+        )
+
+    sample_points: list[tuple[float, float]] = []
+    for primitive in primitives:
+        for point in _primitive_sample_points_2d(primitive):
+            sample_points.append(point)
+    if not sample_points:
+        return None
+    xs = [point[0] for point in sample_points]
+    ys = [point[1] for point in sample_points]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _profile_signed_area(primitives: Sequence[GeometryPrimitiveSpec]) -> float:
+    sampled_points: list[tuple[float, float]] = []
+    for primitive in primitives:
+        primitive_points = list(_primitive_sample_points_2d(primitive))
+        if not primitive_points:
+            continue
+        if sampled_points and _points_close_2d(sampled_points[-1], primitive_points[0]):
+            primitive_points = primitive_points[1:]
+        sampled_points.extend(primitive_points)
+    if len(sampled_points) < 3:
+        return 0.0
+    if not _points_close_2d(sampled_points[0], sampled_points[-1]):
+        sampled_points.append(sampled_points[0])
+    double_area = 0.0
+    for start_point, end_point in zip(sampled_points, sampled_points[1:]):
+        double_area += (start_point[0] * end_point[1]) - (end_point[0] * start_point[1])
+    return double_area / 2.0
+
+
+def _primitive_to_serialization(primitive: GeometryPrimitiveSpec) -> str:
+    if primitive.primitive_type == "Line":
+        return _build_maestro_line_serialization(primitive.start_point, primitive.end_point)
+    if primitive.primitive_type != "Arc":
+        raise ValueError(f"Tipo de primitiva no soportado: {primitive.primitive_type}")
+    if (
+        primitive.center_point is None
+        or primitive.radius is None
+        or primitive.normal_vector is None
+        or primitive.u_vector is None
+        or primitive.v_vector is None
+    ):
+        raise ValueError("Una primitiva de arco necesita centro, radio y base orientada.")
+    return _build_oriented_maestro_arc_serialization(
+        primitive.parameter_start,
+        primitive.parameter_end,
+        (primitive.center_point[0], primitive.center_point[1]),
+        primitive.normal_vector,
+        primitive.u_vector,
+        primitive.v_vector,
+        primitive.radius,
+        z_value=primitive.center_point[2],
+    )
+
+
+def _build_profile_geometry_spec(
+    *,
+    geometry_type: str,
+    primitives: Sequence[GeometryPrimitiveSpec],
+    serialization: Optional[str] = None,
+    member_serializations: Sequence[str] = (),
+) -> GeometryProfileSpec:
+    normalized_primitives = tuple(primitives)
+    if geometry_type != "GeomCircle" and not normalized_primitives:
+        raise ValueError("El perfil geometrico necesita al menos una primitiva.")
+
+    normalized_member_serializations = tuple(
+        _normalize_curve_serialization_text(member_serialization)
+        for member_serialization in member_serializations
+    )
+    normalized_serialization = (
+        _normalize_curve_serialization_text(serialization)
+        if serialization is not None
+        else None
+    )
+
+    if geometry_type == "GeomTrimmedCurve":
+        primitive = normalized_primitives[0]
+        if primitive.primitive_type == "Line":
+            delta_x = primitive.end_point[0] - primitive.start_point[0]
+            delta_y = primitive.end_point[1] - primitive.start_point[1]
+            if math.isclose(delta_x, 0.0, abs_tol=1e-6) and not math.isclose(delta_y, 0.0, abs_tol=1e-6):
+                family = "LineVertical"
+            elif math.isclose(delta_y, 0.0, abs_tol=1e-6) and not math.isclose(delta_x, 0.0, abs_tol=1e-6):
+                family = "LineHorizontal"
+            else:
+                family = "Line"
+            winding = None
+            has_arcs = False
+            corner_radii: tuple[float, ...] = ()
+        else:
+            family = "Arc"
+            winding = (
+                "CounterClockwise"
+                if (primitive.normal_vector is None or primitive.normal_vector[2] >= 0.0)
+                else "Clockwise"
+            )
+            has_arcs = True
+            corner_radii = (float(primitive.radius),) if primitive.radius is not None else ()
+        return GeometryProfileSpec(
+            geometry_type="GeomTrimmedCurve",
+            family=family,
+            primitives=normalized_primitives,
+            is_closed=False,
+            winding=winding,
+            start_mode=None,
+            has_arcs=has_arcs,
+            corner_radii=corner_radii,
+            bounding_box=_profile_bounding_box(normalized_primitives),
+            serialization=normalized_serialization or _primitive_to_serialization(primitive),
+        )
+
+    if geometry_type != "GeomCompositeCurve":
+        raise ValueError(f"Tipo de perfil geometrico no soportado: {geometry_type}")
+
+    is_closed = _points_close_3d(
+        normalized_primitives[0].start_point,
+        normalized_primitives[-1].end_point,
+    )
+    has_arcs = any(primitive.primitive_type == "Arc" for primitive in normalized_primitives)
+    start_mode = None
+    if is_closed:
+        first_tangent = _primitive_start_tangent_2d(normalized_primitives[0])
+        last_tangent = _primitive_end_tangent_2d(normalized_primitives[-1])
+        if first_tangent is not None and last_tangent is not None and _vectors_parallel_same_direction_2d(first_tangent, last_tangent):
+            start_mode = "MidEdge"
+        else:
+            start_mode = "Corner"
+
+    if not is_closed:
+        family = "OpenCompositeCurve" if has_arcs else "OpenPolyline"
+        winding = None
+    else:
+        signed_area = _profile_signed_area(normalized_primitives)
+        winding = "CounterClockwise" if signed_area >= 0.0 else "Clockwise"
+        if has_arcs:
+            family = "ClosedPolylineMidEdgeStartRounded" if start_mode == "MidEdge" else "ClosedPolylineRounded"
+        else:
+            family = "ClosedPolylineMidEdgeStart" if start_mode == "MidEdge" else "ClosedPolylineCornerStart"
+
+    return GeometryProfileSpec(
+        geometry_type="GeomCompositeCurve",
+        family=family,
+        primitives=normalized_primitives,
+        is_closed=is_closed,
+        winding=winding,
+        start_mode=start_mode,
+        has_arcs=has_arcs,
+        corner_radii=tuple(
+            sorted(
+                {
+                    round(float(primitive.radius), 6)
+                    for primitive in normalized_primitives
+                    if primitive.radius is not None and primitive.primitive_type == "Arc"
+                }
+            )
+        ),
+        bounding_box=_profile_bounding_box(normalized_primitives),
+        member_serializations=normalized_member_serializations
+        or tuple(_primitive_to_serialization(primitive) for primitive in normalized_primitives),
+    )
+
+
+def _curve_spec_from_profile_geometry(profile: GeometryProfileSpec) -> _CurveSpec:
+    if profile.geometry_type == "GeomTrimmedCurve":
+        if profile.serialization is None:
+            raise ValueError("El perfil lineal/arco necesita serialization para convertirse en curva.")
+        return _trimmed_curve_spec(profile.serialization)
+    if profile.geometry_type == "GeomCircle":
+        if profile.serialization is None:
+            raise ValueError("El perfil circular necesita serialization para convertirse en curva.")
+        return _circle_curve_spec(profile.serialization)
+    if profile.geometry_type == "GeomCompositeCurve":
+        return _composite_curve_spec(profile.member_serializations)
+    raise ValueError(f"Tipo de perfil geometrico no soportado: {profile.geometry_type}")
+
+
+def _parse_trimmed_curve_line(text: str) -> Optional[GeometryPrimitiveSpec]:
+    lines = [line.strip().split() for line in (text or "").splitlines() if line.strip()]
+    if len(lines) < 2:
+        return None
+    header = lines[0]
+    body = lines[1]
+    if len(header) < 3 or len(body) < 7 or header[0] != "8" or body[0] != "1":
+        return None
+    try:
+        parameter_start = float(header[1])
+        parameter_end = float(header[2])
+        origin_x = float(body[1])
+        origin_y = float(body[2])
+        origin_z = float(body[3])
+        direction_x = float(body[4])
+        direction_y = float(body[5])
+        direction_z = float(body[6])
+    except ValueError:
+        return None
+
+    # Maestro puede trimar la misma recta con parametros crecientes o decrecientes.
+    # Para leer horario/antihorario sin perder informacion hay que evaluar ambos
+    # puntos sobre la recta base, en vez de asumir `8 0 longitud`.
+    start_point = (
+        origin_x + (direction_x * parameter_start),
+        origin_y + (direction_y * parameter_start),
+        origin_z + (direction_z * parameter_start),
+    )
+    end_point = (
+        origin_x + (direction_x * parameter_end),
+        origin_y + (direction_y * parameter_end),
+        origin_z + (direction_z * parameter_end),
+    )
+    return GeometryPrimitiveSpec(
+        primitive_type="Line",
+        start_point=start_point,
+        end_point=end_point,
+        parameter_start=parameter_start,
+        parameter_end=parameter_end,
+    )
+
+
+def _parse_trimmed_curve_arc(text: str) -> Optional[GeometryPrimitiveSpec]:
+    lines = [line.strip().split() for line in (text or "").splitlines() if line.strip()]
+    if len(lines) < 2:
+        return None
+    header = lines[0]
+    body = lines[1]
+    if len(header) < 3 or len(body) < 14 or header[0] != "8" or body[0] != "2":
+        return None
+    try:
+        parameter_start = float(header[1])
+        parameter_end = float(header[2])
+        center_x = float(body[1])
+        center_y = float(body[2])
+        center_z = float(body[3])
+        normal_vector = (float(body[4]), float(body[5]), float(body[6]))
+        u_vector = (float(body[7]), float(body[8]), float(body[9]))
+        v_vector = (float(body[10]), float(body[11]), float(body[12]))
+        radius = float(body[13])
+    except ValueError:
+        return None
+    center_point = (center_x, center_y, center_z)
+    start_point = _sample_arc_point(center_point, u_vector, v_vector, radius, parameter_start)
+    end_point = _sample_arc_point(center_point, u_vector, v_vector, radius, parameter_end)
+    return GeometryPrimitiveSpec(
+        primitive_type="Arc",
+        start_point=start_point,
+        end_point=end_point,
+        parameter_start=parameter_start,
+        parameter_end=parameter_end,
+        center_point=center_point,
+        radius=radius,
+        normal_vector=normal_vector,
+        u_vector=u_vector,
+        v_vector=v_vector,
+    )
+
+
+def _parse_geometry_primitive(text: str) -> Optional[GeometryPrimitiveSpec]:
+    return _parse_trimmed_curve_line(text) or _parse_trimmed_curve_arc(text)
+
+
+def _parse_circle_geometry_profile(text: str) -> Optional[GeometryProfileSpec]:
+    parts = (text or "").strip().split()
+    if len(parts) < 14 or parts[0] != "2":
+        return None
+    try:
+        center_x = float(parts[1])
+        center_y = float(parts[2])
+        center_z = float(parts[3])
+        normal_z = float(parts[6])
+        radius = float(parts[13])
+    except ValueError:
+        return None
+    winding = "CounterClockwise" if normal_z >= 0.0 else "Clockwise"
+    return replace(
+        build_circle_geometry_profile(
+            center_x,
+            center_y,
+            radius,
+            z_value=center_z,
+            winding=winding,
+        ),
+        serialization=_normalize_curve_serialization_text(text),
+    )
+
+
+def _extract_geometry_profile(node: ET.Element) -> Optional[GeometryProfileSpec]:
+    geometry_type = _xsi_type(node)
+    if "GeomCircle" in geometry_type:
+        return _parse_circle_geometry_profile(_raw_text(node, "./{*}_serializationGeometryDescription"))
+    if "GeomTrimmedCurve" in geometry_type:
+        serialization = _raw_text(node, "./{*}_serializationGeometryDescription")
+        primitive = _parse_geometry_primitive(serialization)
+        if primitive is None:
+            return None
+        return _build_profile_geometry_spec(
+            geometry_type="GeomTrimmedCurve",
+            primitives=(primitive,),
+            serialization=serialization,
+        )
+    if "GeomCompositeCurve" in geometry_type:
+        member_serializations = [member.text or "" for member in node.findall("./{*}_serializingMembers/{*}string")]
+        primitives = []
+        for member_serialization in member_serializations:
+            primitive = _parse_geometry_primitive(member_serialization)
+            if primitive is None:
+                return None
+            primitives.append(primitive)
+        return _build_profile_geometry_spec(
+            geometry_type="GeomCompositeCurve",
+            primitives=tuple(primitives),
+            member_serializations=member_serializations,
+        )
+    return None
+
+
+def _build_polyline_toolpath_profile(
+    state: PgmxState,
+    spec: _HydratedPolylineMillingSpec,
+) -> GeometryProfileSpec:
+    """Construye la trayectoria compensada para una polilinea abierta."""
+
+    cut_z = _toolpath_cut_z(state, spec)
+    nominal_profile = _build_open_polyline_geometry_profile(spec.points, z_value=cut_z)
+    return build_compensated_toolpath_profile(
+        nominal_profile,
+        side_of_feature=spec.side_of_feature,
+        tool_width=spec.tool_width,
+        z_value=cut_z,
+    )
 
 
 def _build_generated_polyline_trajectory_curve(
     state: PgmxState,
     spec: _HydratedPolylineMillingSpec,
 ) -> tuple[_CurveSpec, tuple[float, float], tuple[float, float]]:
-    offset_distance, offset_segments = _build_polyline_offset_segments(spec)
-    cut_z = _toolpath_cut_z(state, spec)
-    if math.isclose(offset_distance, 0.0, abs_tol=1e-9):
-        return (
-            _composite_curve_spec(
-                [
-                    _build_toolpath_description(
-                        (start_point[0], start_point[1], cut_z),
-                        (end_point[0], end_point[1], cut_z),
-                    )
-                    for start_point, end_point in zip(spec.points, spec.points[1:])
-                ]
-            ),
-            spec.points[0],
-            spec.points[-1],
-        )
-
-    side_sign = 1.0 if offset_distance > 0.0 else -1.0
-    normal_z = side_sign
-    member_serializations: list[str] = []
-    current_point = offset_segments[0][0]
-
-    for index, (previous_segment, next_segment) in enumerate(zip(offset_segments, offset_segments[1:])):
-        previous_start, previous_end, previous_direction = previous_segment
-        next_start, _, next_direction = next_segment
-        turn_cross = _cross_2d(previous_direction, next_direction)
-
-        if math.isclose(turn_cross, 0.0, abs_tol=1e-9):
-            if not _points_close_2d(current_point, previous_end):
-                member_serializations.append(
-                    _build_toolpath_description(
-                        (current_point[0], current_point[1], cut_z),
-                        (previous_end[0], previous_end[1], cut_z),
-                    )
-                )
-            current_point = next_start
-            continue
-
-        is_outer_corner = (side_sign * turn_cross) > 0.0
-        if is_outer_corner:
-            if not _points_close_2d(current_point, previous_end):
-                member_serializations.append(
-                    _build_toolpath_description(
-                        (current_point[0], current_point[1], cut_z),
-                        (previous_end[0], previous_end[1], cut_z),
-                    )
-                )
-            member_serializations.append(
-                _build_maestro_arc_serialization(
-                    previous_end,
-                    next_start,
-                    spec.points[index + 1],
-                    normal_z,
-                    z_value=cut_z,
-                )
-            )
-            current_point = next_start
-            continue
-
-        intersection = _intersect_lines(previous_start, previous_direction, next_start, next_direction)
-        if intersection is None:
-            if _points_close_2d(previous_end, next_start):
-                intersection = previous_end
-            else:
-                intersection = (
-                    (previous_end[0] + next_start[0]) / 2.0,
-                    (previous_end[1] + next_start[1]) / 2.0,
-                )
-
-        if not _points_close_2d(current_point, intersection):
-            member_serializations.append(
-                _build_toolpath_description(
-                    (current_point[0], current_point[1], cut_z),
-                    (intersection[0], intersection[1], cut_z),
-                )
-            )
-        current_point = intersection
-
-    end_point = offset_segments[-1][1]
-    if not _points_close_2d(current_point, end_point):
-        member_serializations.append(
-            _build_toolpath_description(
-                (current_point[0], current_point[1], cut_z),
-                (end_point[0], end_point[1], cut_z),
-            )
-        )
-
-    return _composite_curve_spec(member_serializations), offset_segments[0][0], end_point
+    toolpath_profile = _build_polyline_toolpath_profile(state, spec)
+    start_point, end_point = _profile_endpoint_points(toolpath_profile)
+    return _curve_spec_from_profile_geometry(toolpath_profile), start_point, end_point
 
 
 def _parse_line_serialization(text: str) -> Optional[tuple[tuple[float, float, float], tuple[float, float, float]]]:
-    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
-    if len(lines) < 2:
+    primitive = _parse_trimmed_curve_line(text)
+    if primitive is None:
         return None
-    header = lines[0].split()
-    body = lines[1].split()
-    if len(header) < 3 or len(body) < 7 or body[0] != "1":
-        return None
-    try:
-        length = float(header[2])
-        start_x = float(body[1])
-        start_y = float(body[2])
-        start_z = float(body[3])
-        dir_x = float(body[4])
-        dir_y = float(body[5])
-        dir_z = float(body[6])
-    except ValueError:
-        return None
-    end_point = (
-        start_x + (dir_x * length),
-        start_y + (dir_y * length),
-        start_z + (dir_z * length),
-    )
-    return ((start_x, start_y, start_z), end_point)
+    return (primitive.start_point, primitive.end_point)
 
 
 def _matches_line_geometry(template: dict[str, object], spec: LineMillingSpec, tolerance: float = 1e-6) -> bool:
@@ -1749,23 +2924,35 @@ def _matches_line_geometry(template: dict[str, object], spec: LineMillingSpec, t
 
 
 def _curve_spec_points(curve_spec: _CurveSpec) -> Optional[tuple[tuple[float, float, float], ...]]:
-    if curve_spec.geometry_type == "GeomTrimmedCurve":
+    if curve_spec.geometry_type in {"GeomTrimmedCurve", "GeomCircle"}:
         if curve_spec.serialization is None:
             return None
-        parsed = _parse_line_serialization(curve_spec.serialization)
-        if parsed is None:
+        primitive = _parse_geometry_primitive(curve_spec.serialization)
+        if primitive is not None:
+            return (primitive.start_point, primitive.end_point)
+        circle_profile = _parse_circle_geometry_profile(curve_spec.serialization)
+        if circle_profile is None or circle_profile.center_point is None or circle_profile.radius is None:
             return None
-        return (parsed[0], parsed[1])
+        center_x, center_y, center_z = circle_profile.center_point
+        radius = circle_profile.radius
+        return (
+            (center_x + radius, center_y, center_z),
+            (center_x, center_y + radius, center_z),
+            (center_x - radius, center_y, center_z),
+            (center_x, center_y - radius, center_z),
+            (center_x + radius, center_y, center_z),
+        )
 
     if curve_spec.geometry_type != "GeomCompositeCurve":
         return None
 
     points: list[tuple[float, float, float]] = []
     for member_serialization in curve_spec.member_serializations:
-        parsed = _parse_line_serialization(member_serialization)
-        if parsed is None:
+        primitive = _parse_geometry_primitive(member_serialization)
+        if primitive is None:
             return None
-        start_point, end_point = parsed
+        start_point = primitive.start_point
+        end_point = primitive.end_point
         if not points:
             points.append(start_point)
         points.append(end_point)
@@ -1794,6 +2981,7 @@ def _extract_depth_spec_from_template(
     feature: ET.Element,
     operation: ET.Element,
     matching_expressions: Sequence[ET.Element],
+    depth_variable_name: str,
 ) -> MillingDepthSpec:
     expression_values = {
         _text(node, "./{*}Property/{*}InnerField/{*}Name"): _text(node, "./{*}Value")
@@ -1803,7 +2991,8 @@ def _extract_depth_spec_from_template(
     bottom_condition_type = _xsi_type(feature.find("./{*}BottomCondition"))
     overcut_length = _safe_float(_text(operation, "./{*}OvercutLength"), 0.0)
     if "ThroughMillingBottom" in bottom_condition_type or (
-        expression_values.get("StartDepth") == "dz1" and expression_values.get("EndDepth") == "dz1"
+        expression_values.get("StartDepth") == depth_variable_name
+        and expression_values.get("EndDepth") == depth_variable_name
     ):
         return build_milling_depth_spec(is_through=True, extra_depth=overcut_length)
 
@@ -1885,6 +3074,13 @@ def _trimmed_curve_spec(serialization: str) -> _CurveSpec:
     )
 
 
+def _circle_curve_spec(serialization: str) -> _CurveSpec:
+    return _CurveSpec(
+        geometry_type="GeomCircle",
+        serialization=_normalize_curve_serialization_text(serialization),
+    )
+
+
 def _composite_curve_spec(
     member_serializations: Sequence[str],
     member_keys: Sequence[str] = (),
@@ -1910,9 +3106,9 @@ def _build_curve_holder(
     _append_blank_name(curve)
     _append_node(curve, GEOMETRY_NS, "IsAbsolute", "true")
     _append_object_ref(curve, GEOMETRY_NS, "PlaneID", "0", "System.Object")
-    if curve_spec.geometry_type == "GeomTrimmedCurve":
+    if curve_spec.geometry_type in {"GeomTrimmedCurve", "GeomCircle"}:
         if curve_spec.serialization is None:
-            raise ValueError("La curva GeomTrimmedCurve requiere una serializacion raw.")
+            raise ValueError(f"La curva {curve_spec.geometry_type} requiere una serializacion raw.")
         _append_node(curve, GEOMETRY_NS, "_serializationGeometryDescription", curve_spec.serialization)
         return curve
 
@@ -1931,6 +3127,51 @@ def _build_curve_holder(
         _append_node(keys_group, ARRAYS_NS, "unsignedInt", key_id)
         _append_node(members_group, ARRAYS_NS, "string", member_serialization)
     return curve
+
+
+def _geometry_object_type(geometry_type: str) -> str:
+    mapping = {
+        "GeomTrimmedCurve": "ScmGroup.XCam.MachiningDataModel.Geometry.GeomTrimmedCurve",
+        "GeomCompositeCurve": "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCompositeCurve",
+        "GeomCircle": "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCircle",
+    }
+    if geometry_type not in mapping:
+        raise ValueError(f"Tipo de geometria no soportado: {geometry_type}")
+    return mapping[geometry_type]
+
+
+def _build_geometry_from_curve_spec(
+    geometry_id: str,
+    plane_id: str,
+    plane_object_type: str,
+    curve_spec: _CurveSpec,
+    *,
+    generated_member_keys: Sequence[str] = (),
+) -> ET.Element:
+    geometry = ET.Element(
+        _qname(GEOMETRY_NS, "GeomGeometry"),
+        {f"{{{XSI_NS}}}type": f"a:{curve_spec.geometry_type}"},
+    )
+    _set_xmlns(geometry, "a", GEOMETRY_NS)
+    _append_key(geometry, geometry_id, _geometry_object_type(curve_spec.geometry_type))
+    _append_blank_name(geometry)
+    _append_node(geometry, GEOMETRY_NS, "IsAbsolute", "false")
+    _append_object_ref(geometry, GEOMETRY_NS, "PlaneID", plane_id, plane_object_type)
+    if curve_spec.geometry_type in {"GeomTrimmedCurve", "GeomCircle"}:
+        if curve_spec.serialization is None:
+            raise ValueError(f"La geometria {curve_spec.geometry_type} requiere una serializacion raw.")
+        _append_node(geometry, GEOMETRY_NS, "_serializationGeometryDescription", curve_spec.serialization)
+        return geometry
+
+    member_keys = tuple(curve_spec.member_keys or generated_member_keys)
+    if len(member_keys) != len(curve_spec.member_serializations):
+        raise ValueError("La geometria compuesta requiere una clave por cada miembro serializado.")
+    keys_group = _append_node(geometry, GEOMETRY_NS, "_serializingKeys")
+    members_group = _append_node(geometry, GEOMETRY_NS, "_serializingMembers")
+    for key_id, member_serialization in zip(member_keys, curve_spec.member_serializations):
+        _append_node(keys_group, ARRAYS_NS, "unsignedInt", key_id)
+        _append_node(members_group, ARRAYS_NS, "string", member_serialization)
+    return geometry
 
 
 def _build_vector_holder(local_name: str, x_value: float, y_value: float, z_value: float) -> ET.Element:
@@ -2045,6 +3286,8 @@ def _extract_line_milling_template(source_pgmx_path: Path) -> dict[str, object]:
 
     geometry_id = int(_text(geometry, "./{*}Key/{*}ID", "0") or "0")
     feature_id = _text(feature, "./{*}Key/{*}ID")
+    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
+    depth_variable_name = _workpiece_depth_name(workpiece)
     toolpath_by_type = {
         _text(toolpath, "./{*}Type"): extract_toolpath_curve(toolpath)
         for toolpath in operation.findall("./{*}ToolpathList/{*}Toolpath")
@@ -2059,7 +3302,12 @@ def _extract_line_milling_template(source_pgmx_path: Path) -> dict[str, object]:
 
     return {
         "preferred_id_start": preferred_start,
-        "depth_spec": _extract_depth_spec_from_template(feature, operation, matching_expressions),
+        "depth_spec": _extract_depth_spec_from_template(
+            feature,
+            operation,
+            matching_expressions,
+            depth_variable_name,
+        ),
         "side_of_feature": _normalize_side_of_feature(_text(feature, "./{*}SideOfFeature", "Center")),
         "tool_width": float(_text(feature, "./{*}SweptShape/{*}Width", "0") or "0"),
         "tool_id": _text(operation, "./{*}ToolKey/{*}ID"),
@@ -2153,6 +3401,8 @@ def _extract_polyline_milling_template(source_pgmx_path: Path) -> dict[str, obje
 
     geometry_id = int(_text(geometry, "./{*}Key/{*}ID", "0") or "0")
     feature_id = _text(feature, "./{*}Key/{*}ID")
+    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
+    depth_variable_name = _workpiece_depth_name(workpiece)
     toolpath_by_type = {
         _text(toolpath, "./{*}Type"): extract_toolpath_curve(toolpath)
         for toolpath in operation.findall("./{*}ToolpathList/{*}Toolpath")
@@ -2167,7 +3417,12 @@ def _extract_polyline_milling_template(source_pgmx_path: Path) -> dict[str, obje
 
     return {
         "preferred_id_start": preferred_start,
-        "depth_spec": _extract_depth_spec_from_template(feature, operation, matching_expressions),
+        "depth_spec": _extract_depth_spec_from_template(
+            feature,
+            operation,
+            matching_expressions,
+            depth_variable_name,
+        ),
         "side_of_feature": _normalize_side_of_feature(_text(feature, "./{*}SideOfFeature", "Center")),
         "tool_width": float(_text(feature, "./{*}SweptShape/{*}Width", "0") or "0"),
         "tool_id": _text(operation, "./{*}ToolKey/{*}ID"),
@@ -2222,22 +3477,14 @@ def _build_line_geometry(
     plane_object_type: str,
     spec: _HydratedLineMillingSpec,
 ) -> ET.Element:
-    geometry = ET.Element(
-        _qname(GEOMETRY_NS, "GeomGeometry"),
-        {f"{{{XSI_NS}}}type": "a:GeomTrimmedCurve"},
+    return _build_geometry_from_curve_spec(
+        geometry_id,
+        plane_id,
+        plane_object_type,
+        _trimmed_curve_spec(
+            spec.geometry_serialization or _build_line_description(spec.start_x, spec.start_y, spec.end_x, spec.end_y),
+        ),
     )
-    _set_xmlns(geometry, "a", GEOMETRY_NS)
-    _append_key(geometry, geometry_id, "ScmGroup.XCam.MachiningDataModel.Geometry.GeomTrimmedCurve")
-    _append_blank_name(geometry)
-    _append_node(geometry, GEOMETRY_NS, "IsAbsolute", "false")
-    _append_object_ref(geometry, GEOMETRY_NS, "PlaneID", plane_id, plane_object_type)
-    _append_node(
-        geometry,
-        GEOMETRY_NS,
-        "_serializationGeometryDescription",
-        spec.geometry_serialization or _build_line_description(spec.start_x, spec.start_y, spec.end_x, spec.end_y),
-    )
-    return geometry
 
 
 def _build_polyline_geometry(
@@ -2247,22 +3494,13 @@ def _build_polyline_geometry(
     curve_spec: _CurveSpec,
     generated_member_keys: Sequence[str] = (),
 ) -> ET.Element:
-    geometry = ET.Element(
-        _qname(GEOMETRY_NS, "GeomGeometry"),
-        {f"{{{XSI_NS}}}type": "a:GeomCompositeCurve"},
+    return _build_geometry_from_curve_spec(
+        geometry_id,
+        plane_id,
+        plane_object_type,
+        curve_spec,
+        generated_member_keys=generated_member_keys,
     )
-    _set_xmlns(geometry, "a", GEOMETRY_NS)
-    _append_key(geometry, geometry_id, "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCompositeCurve")
-    _append_blank_name(geometry)
-    _append_node(geometry, GEOMETRY_NS, "IsAbsolute", "false")
-    _append_object_ref(geometry, GEOMETRY_NS, "PlaneID", plane_id, plane_object_type)
-    member_keys = tuple(curve_spec.member_keys or generated_member_keys)
-    keys_group = _append_node(geometry, GEOMETRY_NS, "_serializingKeys")
-    members_group = _append_node(geometry, GEOMETRY_NS, "_serializingMembers")
-    for key_id, member_serialization in zip(member_keys, curve_spec.member_serializations):
-        _append_node(keys_group, ARRAYS_NS, "unsignedInt", key_id)
-        _append_node(members_group, ARRAYS_NS, "string", member_serialization)
-    return geometry
 
 
 def _build_profile_feature(
@@ -2665,7 +3903,12 @@ def _build_working_step(
     return step
 
 
-def _build_depth_expression(expression_id: str, feature_id: str, inner_field_name: str) -> ET.Element:
+def _build_depth_expression(
+    expression_id: str,
+    feature_id: str,
+    inner_field_name: str,
+    depth_variable_name: str,
+) -> ET.Element:
     expression = ET.Element(_qname(PARAMETRIC_NS, "Expression"))
     _append_key(expression, expression_id, "ScmGroup.XCam.MachiningDataModel.Parametrics.Expression")
     _append_blank_name(expression)
@@ -2690,7 +3933,7 @@ def _build_depth_expression(expression_id: str, feature_id: str, inner_field_nam
         feature_id,
         "ScmGroup.XCam.MachiningDataModel.Milling.GeneralProfileFeature",
     )
-    _append_node(expression, PARAMETRIC_NS, "Value", "dz1")
+    _append_node(expression, PARAMETRIC_NS, "Value", depth_variable_name)
     return expression
 
 
@@ -2706,6 +3949,7 @@ def _append_line_milling(root: ET.Element, state: PgmxState, spec: _HydratedLine
 
     workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
     workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
+    depth_variable_name = _workpiece_depth_name(workpiece)
     plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
     uses_depth_expressions = _uses_feature_depth_expressions(spec)
     reserved_ids = _reserve_ids(root, 6 if uses_depth_expressions else 4, spec.preferred_id_start)
@@ -2759,8 +4003,8 @@ def _append_line_milling(root: ET.Element, state: PgmxState, spec: _HydratedLine
     )
     elements.append(_build_working_step(spec.feature_name, step_id, feature_id, operation_id))
     if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
-        expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth"))
-        expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth"))
+        expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
+        expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
 
 
 def _append_polyline_milling(root: ET.Element, state: PgmxState, spec: _HydratedPolylineMillingSpec) -> None:
@@ -2775,6 +4019,7 @@ def _append_polyline_milling(root: ET.Element, state: PgmxState, spec: _Hydrated
 
     workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
     workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
+    depth_variable_name = _workpiece_depth_name(workpiece)
     plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
     uses_depth_expressions = _uses_feature_depth_expressions(spec)
 
@@ -2881,8 +4126,8 @@ def _append_polyline_milling(root: ET.Element, state: PgmxState, spec: _Hydrated
     )
     elements.append(_build_working_step(spec.feature_name, step_id, feature_id, operation_id))
     if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
-        expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth"))
-        expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth"))
+        expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
+        expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
 
 
 # ============================================================================
@@ -2939,6 +4184,22 @@ def read_pgmx_state(path: Path) -> PgmxState:
         origin_z=origin_z,
         execution_fields=execution_fields,
     )
+
+
+def read_pgmx_geometries(path: Path) -> tuple[GeometryProfileSpec, ...]:
+    """Lee y clasifica las geometrías presentes en la seccion `Geometries`.
+
+    Esta API se usa para inventariar familias manuales de Maestro y para dejar
+    una base explicita de sintesis futura sin depender del nombre del archivo.
+    """
+
+    root, _, _ = _load_pgmx_archive(path)
+    profiles: list[GeometryProfileSpec] = []
+    for geometry in root.findall("./{*}Geometries/{*}GeomGeometry"):
+        profile = _extract_geometry_profile(geometry)
+        if profile is not None:
+            profiles.append(profile)
+    return tuple(profiles)
 
 
 def _merge_state(

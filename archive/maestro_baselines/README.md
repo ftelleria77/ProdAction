@@ -1,6 +1,7 @@
 Guardar en esta carpeta los `.pgmx` base exportados y guardados manualmente desde Maestro.
 
 Guia de uso de la API publica del sintetizador: `docs/synthesize_pgmx_help.md`
+Registro de familias geometricas relevadas en estos baselines: `docs/pgmx_geometry_registry.md`
 
 Uso recomendado:
 - Partir de un archivo sin mecanizados o de una variante minima y guardarla aca.
@@ -50,16 +51,28 @@ python -m tools.synthesize_pgmx \
 
 Nota:
 - Para piezas con mecanizados sintetizados, `--source-pgmx` permite hidratar los detalles de serializacion observados en Maestro para el feature/operation/toolpaths, aun cuando la pieza final se siga reconstruyendo sobre `baseline_sin_mecanizados.pgmx`.
+- Para estudiar familias geometricas puras sin mecanizado, usar `read_pgmx_geometries(...)` sobre los `.pgmx` de esta carpeta.
+- Para estudiar o reutilizar la correccion geometrica observada en Maestro, usar `build_compensated_toolpath_profile(...)`.
 - Para polilineas abiertas con fresado asociado, la API programatica de `tools.synthesize_pgmx` expone `build_polyline_milling_spec(...)` y ya sintetiza la compensacion lateral via `side_of_feature`; por ahora este caso no tiene flags CLI dedicados.
 - En fresados lineales tambien se puede indicar la correccion de herramienta con `--line-side-of-feature Center|Right|Left`.
 - En fresados lineales tambien se puede controlar la profundidad con `--line-through/--no-line-through`, `--line-extra-depth` y `--line-target-depth`.
 - El parametro `Area` de `Parametros de Maquina` se controla con `--execution-fields` o su alias `--area`. Si no se indica, la sintesis usa `HG` por defecto. Valores validados hasta ahora: `A`, `EF`, `HG`.
+- Para profundidad:
+- no pasante: `BottomCondition=GeneralMillingBottom`, `Depth.StartDepth/EndDepth=target_depth`
+- pasante: `BottomCondition=ThroughMillingBottom`, `Depth.StartDepth/EndDepth=DepthName` de la pieza y `OvercutLength=Extra`
 - Para habilitar el `Approach` con los defaults observados en Maestro (`Entrada=Lineal`, `Acercamiento=En Cota`, `Multipl. radio=2`, `Velocidad` vacia/null), alcanza con `--line-approach-enabled`.
 - Si hace falta ajustar el detalle, tambien estan disponibles `--line-approach-type`, `--line-approach-mode`, `--line-approach-radius-multiplier`, `--line-approach-speed` y `--line-approach-arc-side`. Tipos validados hasta ahora: `Line` y `Arc`. Modos validados hasta ahora: `Quote` = `En Cota` y `Down` = `En bajada`. Para `Line` se validaron `Quote` y `Down`. Para `Arc` se valido `Quote`.
 - Para habilitar el `Retract` con los defaults observados en Maestro (`Salir=Lineal`, `Alejamiento=En Cota`, `Multipl. radio=2`, `Velocidad` vacia/null, `Sobreposicion=0`), alcanza con `--line-retract-enabled`.
 - Si hace falta ajustar el detalle, tambien estan disponibles `--line-retract-type`, `--line-retract-mode`, `--line-retract-radius-multiplier`, `--line-retract-speed`, `--line-retract-arc-side` y `--line-retract-overlap`. Tipos validados hasta ahora: `Line` y `Arc`. Modos validados hasta ahora: `Quote` = `En Cota` y `Up` = `En subida`. Para `Line` se validaron `Quote` y `Up`. Para `Arc` ya se validaron `Quote` y `Up`.
 
 Hallazgos validados en Maestro al comparar escuadrados manuales:
+- La compensacion por `SideOfFeature` ya quedo centralizada en codigo para:
+- lineas
+- arcos
+- circulos
+- polilineas abiertas
+- polilineas cerradas con esquinas vivas
+- polilineas cerradas con esquinas redondeadas y otras curvas compuestas tangentes
 - Si `Approach.IsEnabled=false`, Maestro conserva un toolpath vertical de `Approach` en la XY del punto de entrada.
 - Si `Retract.IsEnabled=false`, Maestro conserva un toolpath vertical de `Lift` en la XY del punto de salida.
 - Para `Arc + Quote`, el radio efectivo observado es `tool_width / 2 * (radius_multiplier - 1)`.
