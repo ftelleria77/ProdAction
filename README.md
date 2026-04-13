@@ -36,7 +36,8 @@ python main.py
 - Guia completa del sintetizador: `docs/synthesize_pgmx_help.md`
 - Registro de familias geometricas: `docs/pgmx_geometry_registry.md`
 - Nota historica del flujo anterior: `docs/en_juego_pgmx_export.md`
-- Baselines manuales de Maestro: `archive/maestro_baselines/`
+- Baseline principal versionado: `archive/maestro_baselines/Pieza.xml` junto con `Pieza.epl` y `def.tlgx`
+- Ejemplos y estudios manuales para ingeniería inversa: `archive/maestro_examples/`
 - API programática para sintesis: `build_approach_spec(...)`, `build_retract_spec(...)`, `build_milling_depth_spec(...)`, `build_line_milling_spec(...)`, `build_polyline_milling_spec(...)`, `build_synthesis_request(...)` y `synthesize_request(...)` en `tools.synthesize_pgmx`
 - API programatica para inspeccion/construccion geometrica: `read_pgmx_geometries(...)`, `build_line_geometry_profile(...)`, `build_circle_geometry_profile(...)`, `build_composite_geometry_profile(...)` y `build_compensated_toolpath_profile(...)`
 - La sintesis de `.pgmx` permite fijar el area de `Parametros de Maquina` mediante `execution_fields` en la API o `--execution-fields/--area` en la CLI; si no se indica, usa `HG` por defecto.

@@ -1,4 +1,4 @@
-"""Utilidades para sintetizar archivos `.pgmx` a partir de un baseline limpio.
+"""Utilidades para sintetizar archivos `.pgmx` a partir de un baseline Maestro.
 
 La API publica del modulo esta pensada para poder reutilizarla desde el flujo
 principal de la aplicacion, sin depender de la CLI:
@@ -6,11 +6,12 @@ principal de la aplicacion, sin depender de la CLI:
 Referencia operativa recomendada:
 - `docs/synthesize_pgmx_help.md`
 
-- `read_pgmx_state(...)` lee dimensiones, nombre, origen y area desde un `.pgmx`.
+- `read_pgmx_state(...)` lee dimensiones, nombre, origen y area desde un
+    baseline Maestro (`.pgmx`, `Pieza.xml` o carpeta contenedora).
 - `read_pgmx_geometries(...)` clasifica las curvas base guardadas en `Geometries`.
 - `build_synthesis_request(...)` arma una solicitud clara y reusable.
-- `synthesize_request(...)` aplica la solicitud sobre un baseline y escribe el
-    `.pgmx` de salida.
+- `synthesize_request(...)` aplica la solicitud sobre un baseline Maestro y
+    escribe el `.pgmx` de salida.
 - `synthesize_pgmx(...)` se mantiene como wrapper de compatibilidad para los
     scripts y experimentos ya existentes.
 
@@ -434,16 +435,64 @@ def _set_xmlns(element: Optional[ET.Element], prefix: str, uri: str) -> None:
         element.set(f"xmlns:{prefix}", uri)
 
 
-def _load_pgmx_archive(source_path: Path) -> tuple[ET.Element, dict[str, bytes], str]:
-    """Abre un `.pgmx` como ZIP y devuelve root XML, entradas crudas y nombre del XML."""
+def _resolve_exploded_pgmx_xml_path(source_path: Path) -> Path:
+    """Resuelve el XML base cuando el baseline esta desempaquetado en disco."""
 
-    with zipfile.ZipFile(source_path) as zip_file:
-        archive_entries = {name: zip_file.read(name) for name in zip_file.namelist()}
-    xml_entry_name = next((name for name in archive_entries if name.lower().endswith(".xml")), "")
-    if not xml_entry_name:
-        raise ValueError(f"El archivo '{source_path}' no contiene una entrada XML.")
-    xml_root = ET.fromstring(archive_entries[xml_entry_name].decode("utf-8", errors="ignore"))
-    return xml_root, archive_entries, xml_entry_name
+    if source_path.is_file() and source_path.suffix.lower() == ".xml":
+        return source_path
+    if not source_path.is_dir():
+        raise ValueError(
+            "El baseline Maestro desempaquetado debe pasarse como carpeta o como archivo `.xml`."
+        )
+
+    xml_candidates = sorted(
+        (
+            child
+            for child in source_path.iterdir()
+            if child.is_file() and child.suffix.lower() == ".xml"
+        ),
+        key=lambda path: (path.name.lower() != "pieza.xml", path.name.lower()),
+    )
+    if not xml_candidates:
+        raise ValueError(f"La carpeta '{source_path}' no contiene ningun archivo `.xml`.")
+    return xml_candidates[0]
+
+
+def _load_exploded_pgmx_container(source_path: Path) -> tuple[ET.Element, dict[str, bytes], str]:
+    """Carga un baseline Maestro desempaquetado (`Pieza.xml` + extras asociados)."""
+
+    xml_path = _resolve_exploded_pgmx_xml_path(source_path)
+    container_dir = xml_path.parent
+    archive_entries: dict[str, bytes] = {xml_path.name: xml_path.read_bytes()}
+    for child in sorted(container_dir.iterdir(), key=lambda path: path.name.lower()):
+        if not child.is_file() or child == xml_path:
+            continue
+        if child.suffix.lower() not in {".epl", ".tlgx"}:
+            continue
+        archive_entries[child.name] = child.read_bytes()
+
+    xml_root = ET.fromstring(archive_entries[xml_path.name].decode("utf-8", errors="ignore"))
+    return xml_root, archive_entries, xml_path.name
+
+
+def _load_pgmx_container(source_path: Path) -> tuple[ET.Element, dict[str, bytes], str]:
+    """Carga un baseline Maestro desde `.pgmx`, `Pieza.xml` o carpeta contenedora."""
+
+    if not source_path.exists():
+        raise FileNotFoundError(f"No existe el baseline Maestro '{source_path}'.")
+    if source_path.is_file() and source_path.suffix.lower() == ".pgmx":
+        with zipfile.ZipFile(source_path) as zip_file:
+            archive_entries = {name: zip_file.read(name) for name in zip_file.namelist()}
+        xml_entry_name = next((name for name in archive_entries if name.lower().endswith(".xml")), "")
+        if not xml_entry_name:
+            raise ValueError(f"El archivo '{source_path}' no contiene una entrada XML.")
+        xml_root = ET.fromstring(archive_entries[xml_entry_name].decode("utf-8", errors="ignore"))
+        return xml_root, archive_entries, xml_entry_name
+    if source_path.is_dir() or (source_path.is_file() and source_path.suffix.lower() == ".xml"):
+        return _load_exploded_pgmx_container(source_path)
+    raise ValueError(
+        f"El baseline Maestro '{source_path}' debe ser un `.pgmx`, un `.xml` o una carpeta."
+    )
 
 
 def _id_counter(root: ET.Element):
@@ -3235,7 +3284,7 @@ def _reserve_ids(root: ET.Element, count: int, preferred_start: Optional[int] = 
 
 
 def _extract_line_milling_template(source_pgmx_path: Path) -> dict[str, object]:
-    root, _, _ = _load_pgmx_archive(source_pgmx_path)
+    root, _, _ = _load_pgmx_container(source_pgmx_path)
 
     geometry = next(
         (
@@ -3353,7 +3402,7 @@ def _hydrate_line_milling_spec(
 
 
 def _extract_polyline_milling_template(source_pgmx_path: Path) -> dict[str, object]:
-    root, _, _ = _load_pgmx_archive(source_pgmx_path)
+    root, _, _ = _load_pgmx_container(source_pgmx_path)
 
     geometry = next(
         (
@@ -4158,13 +4207,13 @@ def _append_polyline_milling(root: ET.Element, state: PgmxState, spec: _Hydrated
 # ============================================================================
 
 def read_pgmx_state(path: Path) -> PgmxState:
-    """Lee un `.pgmx` y devuelve el estado basico de pieza, origen y area.
+    """Lee un baseline Maestro y devuelve el estado basico de pieza, origen y area.
 
     No interpreta mecanizados. Sirve para reutilizar dimensiones reales y para
     tomar un baseline o un `source_pgmx_path` como punto de partida.
     """
 
-    root, _, _ = _load_pgmx_archive(path)
+    root, _, _ = _load_pgmx_container(path)
 
     variables = root.find("./{*}Variables")
     variable_values: dict[str, float] = {}
@@ -4210,13 +4259,13 @@ def read_pgmx_state(path: Path) -> PgmxState:
 
 
 def read_pgmx_geometries(path: Path) -> tuple[GeometryProfileSpec, ...]:
-    """Lee y clasifica las geometrías presentes en la seccion `Geometries`.
+    """Lee y clasifica las geometrías presentes en la sección `Geometries`.
 
     Esta API se usa para inventariar familias manuales de Maestro y para dejar
     una base explicita de sintesis futura sin depender del nombre del archivo.
     """
 
-    root, _, _ = _load_pgmx_archive(path)
+    root, _, _ = _load_pgmx_container(path)
     profiles: list[GeometryProfileSpec] = []
     for geometry in root.findall("./{*}Geometries/{*}GeomGeometry"):
         profile = _extract_geometry_profile(geometry)
@@ -4505,6 +4554,10 @@ def build_synthesis_request(
     2. construir `LineMillingSpec` y/o `PolylineMillingSpec`
     3. construir el request
     4. ejecutar `synthesize_request(...)`
+
+    Soporte de contenedores baseline:
+    - `baseline_path`: `.pgmx`, `Pieza.xml` o carpeta que contenga `Pieza.xml`
+    - `source_pgmx_path`: `.pgmx`, `Pieza.xml` o carpeta usada como plantilla de serializacion
     """
 
     base_piece = piece or (read_pgmx_state(source_pgmx_path) if source_pgmx_path else read_pgmx_state(baseline_path))
@@ -4538,7 +4591,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
     Esta es la funcion principal para el flujo programatico.
     """
 
-    baseline_root, baseline_entries, _ = _load_pgmx_archive(request.baseline_path)
+    baseline_root, baseline_entries, _ = _load_pgmx_container(request.baseline_path)
     hydrated_line_millings = [
         _hydrate_line_milling_spec(line_milling, request.source_pgmx_path)
         for line_milling in request.line_millings
@@ -4618,12 +4671,23 @@ def synthesize_pgmx(
 # ============================================================================
 
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Sintetiza un PGMX base a partir de un baseline sin mecanizados.")
-    parser.add_argument("--baseline", required=True, help="Ruta al .pgmx baseline sin mecanizados.")
+    parser = argparse.ArgumentParser(
+        description="Sintetiza un PGMX base a partir de un baseline Maestro (.pgmx, Pieza.xml o carpeta)."
+    )
+    parser.add_argument(
+        "--baseline",
+        required=True,
+        help="Ruta al baseline Maestro: `.pgmx`, `Pieza.xml` o carpeta contenedora.",
+    )
     parser.add_argument("--output", required=True, help="Ruta del .pgmx sintetizado de salida.")
     parser.add_argument(
         "--source-pgmx",
-        help="Ruta a un .pgmx editado en Maestro del cual copiar dimensiones y origen ya descubiertos.",
+        "--source-template",
+        dest="source_pgmx",
+        help=(
+            "Ruta a una plantilla manual de Maestro (`.pgmx`, `Pieza.xml` o carpeta) "
+            "desde la cual copiar serializacion ya validada."
+        ),
     )
     parser.add_argument("--piece-name", help="Nombre interno de la pieza dentro del .pgmx.")
     parser.add_argument("--length", type=float, help="Largo final de la pieza (dx1).")

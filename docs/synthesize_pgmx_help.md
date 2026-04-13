@@ -6,9 +6,14 @@ hilo de lo ya validado en Maestro.
 
 ## 1. Alcance actual
 
-La API publica actual sirve para sintetizar `.pgmx` a partir de un baseline limpio
-o a partir de un baseline limpio + un `source_pgmx_path` usado como plantilla de
-serializacion.
+La API publica actual sirve para sintetizar `.pgmx` a partir de un baseline Maestro.
+Ese baseline puede venir en cualquiera de estos formatos:
+- `.pgmx`
+- `Pieza.xml` con sus archivos asociados (`Pieza.epl`, `def.tlgx`)
+- carpeta que contenga `Pieza.xml`
+
+Opcionalmente tambien se puede pasar un `source_pgmx_path` como plantilla de
+serializacion. Ese path acepta los mismos formatos.
 
 Casos publicos soportados hoy:
 - lectura de estado basico de pieza (`read_pgmx_state`)
@@ -49,13 +54,16 @@ Orden recomendado para usar el sintetizador:
 Regla practica:
 - `baseline_path` define el contenedor base.
 - `source_pgmx_path` no reemplaza al baseline: solo aporta serializacion ya observada en Maestro cuando coincide con la familia del mecanizado.
+- En este repo, el baseline principal versionado vive en `archive/maestro_baselines/Pieza.xml`
+  y se completa con `Pieza.epl` y `def.tlgx`.
+- Los `.pgmx` manuales de ingeniería inversa viven en `archive/maestro_examples`.
 - la taxonomia de familias geometricas vive en `docs/pgmx_geometry_registry.md`
 
 ## 3. API publica
 
 ### `read_pgmx_state(path: Path) -> PgmxState`
 
-Lee de un `.pgmx`:
+Lee de un baseline Maestro:
 - nombre de pieza
 - largo
 - ancho
@@ -70,7 +78,7 @@ Usos tipicos:
 
 ### `read_pgmx_geometries(path: Path) -> tuple[GeometryProfileSpec, ...]`
 
-Lee la seccion `Geometries` de un `.pgmx` y clasifica cada curva base sin depender
+Lee la seccion `Geometries` de un baseline Maestro y clasifica cada curva base sin depender
 del nombre del archivo.
 
 Casos identificados hoy:
@@ -329,6 +337,7 @@ Reglas:
 - si no se indica `execution_fields`, usa `HG` por defecto
 - si no se pasa `piece`, toma el estado desde `source_pgmx_path` o desde el baseline
 - se pueden combinar varios mecanizados lineales y por polilinea en un mismo request
+- `baseline_path` y `source_pgmx_path` aceptan `.pgmx`, `Pieza.xml` o carpeta contenedora
 
 ### `synthesize_request(request) -> PgmxSynthesisResult`
 
@@ -470,7 +479,7 @@ result = synthesize_request(request)
 from pathlib import Path
 from tools.synthesize_pgmx import read_pgmx_state
 
-state = read_pgmx_state(Path("archive/maestro_baselines/Pieza.pgmx"))
+state = read_pgmx_state(Path("archive/maestro_baselines/Pieza.xml"))
 ```
 
 ### Ejemplo minimo: compensar una geometria nominal
@@ -519,8 +528,8 @@ line = build_line_milling_spec(
 )
 
 request = build_synthesis_request(
-    baseline_path=Path("archive/maestro_baselines/baseline_sin_mecanizados.pgmx"),
-    output_path=Path("archive/maestro_baselines/Pieza_sintetizada.pgmx"),
+    baseline_path=Path("archive/maestro_baselines/Pieza.xml"),
+    output_path=Path("archive/maestro_examples/Pieza_sintetizada.pgmx"),
     piece_name="Pieza",
     length=400.0,
     width=400.0,
@@ -563,8 +572,8 @@ polyline = build_polyline_milling_spec(
 )
 
 request = build_synthesis_request(
-    baseline_path=Path("archive/maestro_baselines/baseline_sin_mecanizados.pgmx"),
-    output_path=Path("archive/maestro_baselines/Pieza_polilinea.pgmx"),
+    baseline_path=Path("archive/maestro_baselines/Pieza.xml"),
+    output_path=Path("archive/maestro_examples/Pieza_polilinea.pgmx"),
     piece_name="Pieza",
     length=500.0,
     width=500.0,
@@ -585,6 +594,10 @@ Estas reglas aplican cada vez que se trabaja con esta herramienta:
 
 - Antes de inferir una regla nueva, revisar esta guia y los README del repo.
 - Toda la generacion `.pgmx` del repo debe resolverse desde `tools/synthesize_pgmx.py`.
+- El baseline principal versionado del repo es `archive/maestro_baselines/Pieza.xml`
+  junto con `Pieza.epl` y `def.tlgx`.
+- Los estudios manuales y casos de comparación deben guardarse en `archive/maestro_examples`.
+- Las salidas sintéticas de prueba también conviene escribirlas en `archive/maestro_examples`.
 - Si el usuario pide solo generar una pieza, no cambiar codigo.
 - Si ya existe un caso manual estudiado, usarlo como `source_pgmx_path` antes de inventar serializacion nueva.
 - No asumir que un caso "parecido" ya quedo resuelto: confirmar si la familia publica es linea o polilinea.

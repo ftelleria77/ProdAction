@@ -1,7 +1,7 @@
 # Registro de Geometrias PGMX
 
 Esta nota fija como identificar las familias geometricas manuales guardadas en
-`archive/maestro_baselines` y que API usar para leerlas o reconstruirlas.
+`archive/maestro_examples` y que API usar para leerlas o reconstruirlas.
 
 ## API publica nueva
 
@@ -109,7 +109,7 @@ Leer y clasificar un archivo:
 from pathlib import Path
 from tools.synthesize_pgmx import read_pgmx_geometries
 
-profiles = read_pgmx_geometries(Path("archive/maestro_baselines/Pieza_LineaVertical.pgmx"))
+profiles = read_pgmx_geometries(Path("archive/maestro_examples/Pieza_LineaVertical.pgmx"))
 print(profiles[0].classification_key)
 ```
 
