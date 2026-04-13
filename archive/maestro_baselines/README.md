@@ -53,6 +53,11 @@ Nota:
 - Para piezas con mecanizados sintetizados, `--source-pgmx` permite hidratar los detalles de serializacion observados en Maestro para el feature/operation/toolpaths, aun cuando la pieza final se siga reconstruyendo sobre `baseline_sin_mecanizados.pgmx`.
 - Para estudiar familias geometricas puras sin mecanizado, usar `read_pgmx_geometries(...)` sobre los `.pgmx` de esta carpeta.
 - Para estudiar o reutilizar la correccion geometrica observada en Maestro, usar `build_compensated_toolpath_profile(...)`.
+- Las reglas de `Approach` y `Retract` ya quedaron unificadas sobre el toolpath efectivo:
+- `Approach` usa punto/tangente de entrada
+- `Retract` usa punto/tangente de salida
+- por eso las reglas aprendidas en escuadrados ahora se reutilizan como regla general
+  para cualquier geometria compensada
 - Para polilineas abiertas con fresado asociado, la API programatica de `tools.synthesize_pgmx` expone `build_polyline_milling_spec(...)` y ya sintetiza la compensacion lateral via `side_of_feature`; por ahora este caso no tiene flags CLI dedicados.
 - En fresados lineales tambien se puede indicar la correccion de herramienta con `--line-side-of-feature Center|Right|Left`.
 - En fresados lineales tambien se puede controlar la profundidad con `--line-through/--no-line-through`, `--line-extra-depth` y `--line-target-depth`.

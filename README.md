@@ -53,3 +53,4 @@ Estado validado hasta ahora en `tools.synthesize_pgmx`:
 - para `Retract Line + Up` ya esta volcada la regla observada en Maestro: una sola subida oblicua hacia un punto final desplazado segun la direccion de salida
 - para `Arc + Quote` ya esta volcada la regla observada en Maestro para entradas/salidas en sentido horario y antihorario, incluyendo el toolpath vertical cuando la estrategia esta deshabilitada
 - para `Retract Arc + Up` ya esta volcada la regla observada en Maestro: arco en plano vertical segun la direccion de salida, seguido de linea vertical, sin alterar `TrajectoryPath`
+- esas reglas de entrada/salida ya quedaron unificadas sobre la tangente de entrada/salida del toolpath efectivo, no sobre una familia geometrica puntual

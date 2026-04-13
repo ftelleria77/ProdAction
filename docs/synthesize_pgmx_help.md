@@ -17,7 +17,8 @@ Casos publicos soportados hoy:
 - fresado lineal abierto (`LineMillingSpec`)
 - fresado sobre polilinea abierta (`PolylineMillingSpec`)
 - control de profundidad pasante/no pasante
-- `Approach` y `Retract` con reglas ya volcadas desde Maestro
+- `Approach` y `Retract` con reglas ya volcadas desde Maestro y ya unificadas
+  sobre la tangente de entrada/salida del toolpath efectivo
 - `Area` de Parametros de Maquina, con `HG` por defecto
 
 Casos que no deben asumirse como API publica estable si no estan documentados aqui:
@@ -362,6 +363,12 @@ result = synthesize_request(request)
 - Si `Retract.IsEnabled=false`, Maestro conserva un toolpath vertical de salida.
 - `SideOfFeature` nunca mueve la geometria nominal del feature; solo la trayectoria
   efectiva de la herramienta.
+- Las reglas de `Approach` y `Retract` ya quedaron unificadas sobre el toolpath
+  efectivo:
+  - toman `entry_point` y tangente de entrada para `Approach`
+  - toman `exit_point` y tangente de salida para `Retract`
+  - por eso la misma regla sirve para linea, polilinea abierta, escuadrado,
+    contorno cerrado redondeado, arco o circulo compensado
 
 ### Compensacion: lineas
 
@@ -421,18 +428,23 @@ result = synthesize_request(request)
 - usa una sola recta oblicua
 - parte desde `entry_point - direction * (tool_width / 2 * radius_multiplier)`
 - termina en el punto de entrada del toolpath
+- `direction` es la tangente de entrada del toolpath efectivo, no la de la
+  geometria nominal sin compensar
 
 ### `Retract Line + Up`
 
 - usa una sola recta oblicua
 - parte en el punto de salida del toolpath
 - termina en `exit_point + direction * (tool_width / 2 * radius_multiplier)`
+- `direction` es la tangente de salida del toolpath efectivo
 
 ### `Arc + Quote`
 
 - radio efectivo: `tool_width / 2 * (radius_multiplier - 1)`
 - entrada: `linea vertical + arco`
 - salida: `arco + linea vertical`
+- la eleccion del semiplano del arco sale de la tangente de entrada/salida y del
+  `SideOfFeature` ya resuelto sobre la trayectoria efectiva
 - antihorario con `SideOfFeature=Right`:
   - `Approach`: `270 -> 360`
   - `Lift`: `0 -> 90`
@@ -444,6 +456,7 @@ result = synthesize_request(request)
 
 - radio efectivo: `tool_width / 2 * (radius_multiplier - 1)`
 - el arco vive en el plano vertical definido por la direccion de salida y `Z`
+- la direccion usada es la tangente de salida del toolpath efectivo
 - antihorario:
   - arco `0 -> 90`, luego linea vertical
 - horario:

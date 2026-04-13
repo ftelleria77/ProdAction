@@ -29,15 +29,21 @@ Hallazgos ya volcados en la sintesis:
 - `Approach` y `Retract` soportan `Line` y `Arc`.
 - Para `Approach Line + Down` ya se sintetizo la regla observada en Maestro:
     una sola bajada oblicua desde un punto previo desplazado sobre la direccion
-    opuesta al avance, sin alterar `TrajectoryPath`.
+    opuesta al avance, sin alterar `TrajectoryPath`. La regla ya se aplica
+    sobre la tangente de entrada del toolpath efectivo, sin depender de la
+    familia geometrica nominal.
 - Para `Retract Line + Up` ya se sintetizo la regla observada en Maestro:
     una sola subida oblicua hacia un punto final desplazado sobre la direccion
-    de salida, sin alterar `TrajectoryPath`.
+    de salida, sin alterar `TrajectoryPath`. La regla ya se aplica sobre la
+    tangente de salida del toolpath efectivo, sin depender de la familia
+    geometrica nominal.
 - Para `Arc + Quote` ya se sintetizo la regla observada en Maestro para entrada/salida
     sobre perfiles rectos: toolpath vertical cuando la estrategia esta deshabilitada y
     `linea vertical + arco` / `arco + linea vertical` cuando esta habilitada.
+    La construccion ya cuelga del toolpath efectivo y su tangente de entrada/salida.
 - Para `Retract Arc + Up` ya se sintetizo la salida observada en Maestro:
     `arco en un plano vertical + linea vertical`, sin alterar `TrajectoryPath`.
+    La construccion ya cuelga del toolpath efectivo y su tangente de salida.
 """
 
 from __future__ import annotations
@@ -1739,23 +1745,6 @@ def _build_up_arc_exit_curve(
     )
 
 
-def _polyline_endpoint_directions(points: Sequence[tuple[float, float]]) -> tuple[tuple[float, float], tuple[float, float]]:
-    normalized_points = _normalize_polyline_points(points)
-    start_direction = _line_unit_direction(
-        normalized_points[0][0],
-        normalized_points[0][1],
-        normalized_points[1][0],
-        normalized_points[1][1],
-    )
-    end_direction = _line_unit_direction(
-        normalized_points[-2][0],
-        normalized_points[-2][1],
-        normalized_points[-1][0],
-        normalized_points[-1][1],
-    )
-    return start_direction, end_direction
-
-
 def _offset_factor(side_of_feature: str) -> float:
     normalized = _normalize_side_of_feature(side_of_feature)
     return {
@@ -1797,6 +1786,22 @@ def _profile_endpoint_directions(
     if not profile.primitives:
         return None, None
     return _primitive_start_tangent_2d(profile.primitives[0]), _primitive_end_tangent_2d(profile.primitives[-1])
+
+
+def _profile_entry_exit_context(
+    profile: GeometryProfileSpec,
+) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float], tuple[float, float]]:
+    """Resuelve punto y tangente de entrada/salida para cualquier trayectoria compensada."""
+
+    start_point, end_point = _profile_endpoint_points(profile)
+    start_direction, end_direction = _profile_endpoint_directions(profile)
+
+    if start_direction is None:
+        start_direction = _resolve_toolpath_direction(start_point, end_point)
+    if end_direction is None:
+        end_direction = _resolve_toolpath_direction(start_point, end_point)
+
+    return start_point, end_point, start_direction, end_direction
 
 
 def _build_line_toolpath_profile(state: PgmxState, spec: _HydratedLineMillingSpec) -> GeometryProfileSpec:
@@ -2892,15 +2897,6 @@ def _build_polyline_toolpath_profile(
     )
 
 
-def _build_generated_polyline_trajectory_curve(
-    state: PgmxState,
-    spec: _HydratedPolylineMillingSpec,
-) -> tuple[_CurveSpec, tuple[float, float], tuple[float, float]]:
-    toolpath_profile = _build_polyline_toolpath_profile(state, spec)
-    start_point, end_point = _profile_endpoint_points(toolpath_profile)
-    return _curve_spec_from_profile_geometry(toolpath_profile), start_point, end_point
-
-
 def _parse_line_serialization(text: str) -> Optional[tuple[tuple[float, float, float], tuple[float, float, float]]]:
     primitive = _parse_trimmed_curve_line(text)
     if primitive is None:
@@ -3672,6 +3668,23 @@ def _build_generated_approach_curve(
     )
 
 
+def _build_generated_approach_curve_for_profile(
+    state: PgmxState,
+    spec,
+    toolpath_profile: GeometryProfileSpec,
+) -> _CurveSpec:
+    """Construye el approach a partir de una trayectoria efectiva y su tangente de entrada."""
+
+    toolpath_start, toolpath_end, start_direction, _ = _profile_entry_exit_context(toolpath_profile)
+    return _build_generated_approach_curve(
+        state,
+        spec,
+        toolpath_start,
+        toolpath_end,
+        direction=start_direction,
+    )
+
+
 def _build_generated_lift_curve(
     state: PgmxState,
     spec,
@@ -3738,6 +3751,23 @@ def _build_generated_lift_curve(
     raise ValueError(
         "No hay una sintesis generica validada para un retract habilitado con "
         f"type={retract.retract_type} y mode={retract.mode}."
+    )
+
+
+def _build_generated_lift_curve_for_profile(
+    state: PgmxState,
+    spec,
+    toolpath_profile: GeometryProfileSpec,
+) -> _CurveSpec:
+    """Construye el lift a partir de una trayectoria efectiva y su tangente de salida."""
+
+    toolpath_start, toolpath_end, _, end_direction = _profile_entry_exit_context(toolpath_profile)
+    return _build_generated_lift_curve(
+        state,
+        spec,
+        toolpath_start,
+        toolpath_end,
+        direction=end_direction,
     )
 
 
@@ -3956,13 +3986,15 @@ def _append_line_milling(root: ET.Element, state: PgmxState, spec: _HydratedLine
     geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
     start_expression_id = reserved_ids[4] if uses_depth_expressions else None
     end_expression_id = reserved_ids[5] if uses_depth_expressions else None
-    toolpath_start, toolpath_end = _offset_line_for_toolpath(spec)
+    generated_toolpath_profile = _build_line_toolpath_profile(state, spec)
+    toolpath_start, toolpath_end, _, _ = _profile_entry_exit_context(generated_toolpath_profile)
     approach_curve = spec.approach_curve
     if approach_curve is None:
-        approach_curve = _build_generated_approach_curve(state, spec, toolpath_start, toolpath_end)
+        approach_curve = _build_generated_approach_curve_for_profile(state, spec, generated_toolpath_profile)
     lift_curve = spec.lift_curve
     if lift_curve is None:
-        lift_curve = _build_generated_lift_curve(state, spec, toolpath_start, toolpath_end)
+        lift_curve = _build_generated_lift_curve_for_profile(state, spec, generated_toolpath_profile)
+    trajectory_curve = spec.trajectory_curve or _curve_spec_from_profile_geometry(generated_toolpath_profile)
 
     approach_curve_member_keys: tuple[str, ...] = ()
     next_generated_aux_id = int(end_expression_id or step_id) + 1
@@ -3999,6 +4031,9 @@ def _append_line_milling(root: ET.Element, state: PgmxState, spec: _HydratedLine
             approach_curve_member_keys=approach_curve_member_keys,
             lift_curve=lift_curve,
             lift_curve_member_keys=lift_curve_member_keys,
+            trajectory_curve=trajectory_curve,
+            toolpath_start=toolpath_start,
+            toolpath_end=toolpath_end,
         )
     )
     elements.append(_build_working_step(spec.feature_name, step_id, feature_id, operation_id))
@@ -4042,29 +4077,17 @@ def _append_polyline_milling(root: ET.Element, state: PgmxState, spec: _Hydrated
     start_expression_id = reserved_ids[operation_index + 3] if uses_depth_expressions else None
     end_expression_id = reserved_ids[operation_index + 4] if uses_depth_expressions else None
 
-    generated_trajectory_curve, start_point, end_point = _build_generated_polyline_trajectory_curve(state, spec)
+    generated_toolpath_profile = _build_polyline_toolpath_profile(state, spec)
+    generated_trajectory_curve = _curve_spec_from_profile_geometry(generated_toolpath_profile)
     trajectory_curve = spec.trajectory_curve or generated_trajectory_curve
-
-    start_direction, end_direction = _polyline_endpoint_directions(spec.points)
+    start_point, end_point, _, _ = _profile_entry_exit_context(generated_toolpath_profile)
 
     approach_curve = spec.approach_curve
     if approach_curve is None:
-        approach_curve = _build_generated_approach_curve(
-            state,
-            spec,
-            start_point,
-            spec.points[1],
-            direction=start_direction,
-        )
+        approach_curve = _build_generated_approach_curve_for_profile(state, spec, generated_toolpath_profile)
     lift_curve = spec.lift_curve
     if lift_curve is None:
-        lift_curve = _build_generated_lift_curve(
-            state,
-            spec,
-            spec.points[-2],
-            end_point,
-            direction=end_direction,
-        )
+        lift_curve = _build_generated_lift_curve_for_profile(state, spec, generated_toolpath_profile)
 
     next_generated_aux_id = int(end_expression_id or step_id) + 1
     trajectory_curve_member_keys: tuple[str, ...] = ()

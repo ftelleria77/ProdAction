@@ -149,3 +149,5 @@ o polilinea abierta. A partir de ahora:
   - polilineas abiertas
   - polilineas cerradas con esquinas vivas
   - polilineas cerradas redondeadas y otras curvas compuestas tangentes
+- las reglas de `Approach` y `Retract` ya pueden colgar de esa misma capa porque
+  se resuelven desde el punto y la tangente de entrada/salida del toolpath efectivo
