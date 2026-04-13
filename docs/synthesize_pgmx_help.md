@@ -21,19 +21,20 @@ Casos publicos soportados hoy:
 - compensacion geometrica reusable (`build_compensated_toolpath_profile`)
 - fresado lineal abierto (`LineMillingSpec`)
 - fresado sobre polilinea abierta (`PolylineMillingSpec`)
+- escuadrado exterior del contorno de pieza (`SquaringMillingSpec`)
 - control de profundidad pasante/no pasante
 - `Approach` y `Retract` con reglas ya volcadas desde Maestro y ya unificadas
   sobre la tangente de entrada/salida del toolpath efectivo
 - `Area` de Parametros de Maquina, con `HG` por defecto
 
 Casos que no deben asumirse como API publica estable si no estan documentados aqui:
-- escuadrados cerrados como tipo propio
 - familias de feature distintas de `GeneralProfileFeature`
-- cualquier mecanizado que no este construido con `LineMillingSpec` o `PolylineMillingSpec`
+- cualquier mecanizado que no este construido con
+  `LineMillingSpec`, `PolylineMillingSpec` o `SquaringMillingSpec`
 
 Importante:
-- la sintesis completa de feature + operation sigue expuesta hoy por `LineMillingSpec`
-  y `PolylineMillingSpec`
+- la sintesis completa de feature + operation sigue expuesta hoy por
+  `LineMillingSpec`, `PolylineMillingSpec` y `SquaringMillingSpec`
 - la nueva capa de compensacion ya sabe resolver lineas, arcos, circulos y curvas
   compuestas abiertas/cerradas, aunque esas familias todavia no tengan un
   `...MillingSpec` publico propio
@@ -47,7 +48,8 @@ Orden recomendado para usar el sintetizador:
 3. Leer o definir la pieza.
 4. Construir la profundidad.
 5. Construir `Approach` y `Retract`.
-6. Construir uno o mas mecanizados (`LineMillingSpec` y/o `PolylineMillingSpec`).
+6. Construir uno o mas mecanizados (`LineMillingSpec`, `PolylineMillingSpec`
+   y/o `SquaringMillingSpec`).
 7. Construir el `PgmxSynthesisRequest`.
 8. Ejecutar `synthesize_request(...)`.
 
@@ -75,6 +77,12 @@ Usos tipicos:
 - tomar dimensiones reales antes de sintetizar
 - clonar el estado de una pieza manual
 - evitar hardcodear origen y espesor
+
+Nota importante:
+- `origin_x/origin_y/origin_z` corresponde a `WorkpieceSetup/Placement`
+- ese origen posiciona el setup en Maestro, pero no implica que las curvas de
+  `Geometries`, `TrajectoryPath`, `Approach` o `Lift` vengan trasladadas en ese
+  mismo sistema global
 
 ### `read_pgmx_geometries(path: Path) -> tuple[GeometryProfileSpec, ...]`
 
@@ -158,6 +166,9 @@ Reglas:
 - si no se pasa nada, queda pasante con `extra_depth=0`
 - si `is_through=True`, `extra_depth` representa `Extra`
 - si `is_through=False`, hay que indicar `target_depth`
+- en no pasante, `target_depth` puede valer `0` para reflejar el estado manual
+  neutro/default que Maestro guarda cuando un fresado recien creado todavia no
+  tiene profundidad efectiva
 - `extra_depth` no aplica a fresados no pasantes
 - antes de sintetizar, el modulo valida contra `tools/tool_catalog.csv` que la
   profundidad total no supere `sinking_length` de la herramienta:
@@ -171,6 +182,8 @@ Regla validada en Maestro para la serializacion:
   - `Depth.EndDepth = target_depth`
   - no agrega expresiones extra sobre el feature
   - `cut_z = espesor - target_depth`
+  - Maestro tambien puede guardar `target_depth = 0` como estado manual inicial;
+    en ese caso la trayectoria queda en `cut_z = espesor`
 - pasante:
   - `BottomCondition = ThroughMillingBottom`
   - `Depth.StartDepth = espesor_actual`
@@ -311,6 +324,60 @@ Notas:
 - necesita al menos dos puntos
 - no admite segmentos de longitud cero
 
+### `build_squaring_milling_spec(...) -> SquaringMillingSpec`
+
+Construye un escuadrado exterior del contorno real de la pieza.
+
+Firma simplificada:
+
+```python
+build_squaring_milling_spec(
+    *,
+    start_edge=None,
+    winding=None,
+    feature_name=None,
+    tool_id=None,
+    tool_name=None,
+    tool_width=None,
+    security_plane=None,
+    is_through=None,
+    target_depth=None,
+    extra_depth=None,
+    approach_enabled=None,
+    approach_type=None,
+    approach_mode=None,
+    approach_radius_multiplier=None,
+    approach_speed=None,
+    approach_arc_side=None,
+    retract_enabled=None,
+    retract_type=None,
+    retract_mode=None,
+    retract_radius_multiplier=None,
+    retract_speed=None,
+    retract_arc_side=None,
+    retract_overlap=None,
+)
+```
+
+Notas:
+- no recibe puntos: toma el contorno desde `length` y `width` de la pieza del request
+- `start_edge` admite `Bottom/Right/Top/Left` y equivalentes en espanol
+- `winding` admite `CounterClockwise/Antihorario` o `Clockwise/Horario`
+- deriva automaticamente la compensacion exterior:
+  - `CounterClockwise -> SideOfFeature = Right`
+  - `Clockwise -> SideOfFeature = Left`
+- defaults validados si no se pasa nada:
+  - herramienta `E001` / `tool_id = 1900` / `tool_width = 18.36`
+  - pasante con `Extra = 1`
+  - `Approach = Arc + Quote`, radio x2, `Automatic`
+  - `Retract = Arc + Quote`, radio x2, `Automatic`
+- hoy esta validado contra 8 casos manuales:
+  - 4 bordes de arranque `MidEdgeStart`
+  - 2 sentidos de recorrido (`CounterClockwise` y `Clockwise`)
+- la geometria y el mecanizado efectivo coinciden con los casos manuales
+  relevados; la parametrizacion interna de algunas curvas puede no quedar
+  serializada byte a byte igual si no se parte de una plantilla manual
+
 ### `build_synthesis_request(...) -> PgmxSynthesisRequest`
 
 Es el ensamblador del pedido completo.
@@ -334,14 +401,20 @@ build_synthesis_request(
     execution_fields=None,
     line_millings=None,
     polyline_millings=None,
+    squaring_millings=None,
 )
 ```
 
 Reglas:
 - si no se indica `execution_fields`, usa `HG` por defecto
 - si no se pasa `piece`, toma el estado desde `source_pgmx_path` o desde el baseline
-- se pueden combinar varios mecanizados lineales y por polilinea en un mismo request
+- se pueden combinar mecanizados lineales, por polilinea abierta y de escuadrado
+  en un mismo request
 - `baseline_path` y `source_pgmx_path` aceptan `.pgmx`, `Pieza.xml` o carpeta contenedora
+- si se indican `origin_x/origin_y/origin_z`, se actualiza
+  `WorkpieceSetup/Placement`
+- cambiar el origen no traslada automaticamente las curvas internas del `.pgmx`;
+  esas curvas siguen expresadas en coordenadas locales de pieza
 
 ### `synthesize_request(request) -> PgmxSynthesisResult`
 
@@ -441,6 +514,68 @@ result = synthesize_request(request)
 - Maestro serializa `TrajectoryPath` del circulo como `GeomCompositeCurve` de
   2 semicircunferencias; el helper publica ya devuelve esa forma.
 
+### Escuadrado antihorario con E001
+
+Caso manual relevado en Maestro sobre una geometria:
+
+- `ClosedPolylineMidEdgeStart_CounterClockwise`
+- arranque en medio de lado
+- sin arcos nominales
+
+Regla importante:
+
+- la serializacion observada del mecanizado no depende de las dimensiones
+  absolutas de la pieza ni de su origen global
+- depende de la familia geometrica, el winding, la correccion, la herramienta,
+  la configuracion de profundidad/entrada/salida y el borde donde cae el
+  `MidEdgeStart`
+- hoy estan validadas 4 orientaciones equivalentes del mismo patron:
+  - arranque en borde inferior
+  - arranque en borde derecho
+  - arranque en borde superior
+  - arranque en borde izquierdo
+- en las cuatro, la familia geometrica sigue siendo
+  `ClosedPolylineMidEdgeStart_CounterClockwise`
+- lo que rota es la tangente local de entrada/salida del toolpath efectivo
+
+Configuracion relevada:
+
+- herramienta `E001` (`tool_id = 1900`, `tool_width = 18.36`)
+- `SideOfFeature = Right`
+- pasante con `Extra = 1`
+- `Approach = Arc + Quote`, `RadiusMultiplier = 2`, `ArcSide = Automatic`
+- `Retract = Arc + Quote`, `RadiusMultiplier = 2`, `ArcSide = Automatic`
+
+Serializacion observada:
+
+- `BottomCondition = ThroughMillingBottom`
+- `Depth.StartDepth/EndDepth` quedan ligados al `DepthName` real de la pieza
+- `OvercutLength = 1`
+- `TrajectoryPath` sale como `GeomCompositeCurve` con:
+  - `5` tramos lineales
+  - `4` arcos tangentes de cuarto de circunferencia en los vertices convexos
+- para un contorno antihorario con `SideOfFeature = Right`, la compensacion cae
+  al exterior del contorno
+- `Approach` sale como `linea vertical + arco`
+- `Lift` sale como `arco + linea vertical`
+- los cuadrantes absolutos del arco no son fijos:
+  - rotan con la tangente local de entrada/salida
+  - en los 4 casos relevados aparecen dos serializaciones equivalentes:
+    - `Approach 270 -> 360` y `Lift 0 -> 90`
+    - `Approach 90 -> 180` y `Lift 180 -> 270`
+- cambiar `origin_x/origin_y/origin_z` no altera estas curvas; solo mueve
+  `WorkpieceSetup/Placement`
+
+Uso practico:
+
+- este patron ya quedo expuesto por `build_squaring_milling_spec(...)`
+- el builder publico cubre:
+  - `CounterClockwise + Right`
+  - `Clockwise + Left`
+  - los 4 bordes posibles de `MidEdgeStart`
+- si hace falta clonar una serializacion manual puntual, `source_pgmx_path`
+  sigue pudiendo usarse como referencia operativa aparte
+
 ### `Approach Line + Down`
 
 - usa una sola recta oblicua
@@ -463,12 +598,17 @@ result = synthesize_request(request)
 - salida: `arco + linea vertical`
 - la eleccion del semiplano del arco sale de la tangente de entrada/salida y del
   `SideOfFeature` ya resuelto sobre la trayectoria efectiva
-- antihorario con `SideOfFeature=Right`:
-  - `Approach`: `270 -> 360`
-  - `Lift`: `0 -> 90`
-- horario con `SideOfFeature=Left`:
-  - `Approach`: `90 -> 180`
-  - `Lift`: `180 -> 270`
+- el cuadrante absoluto no es fijo:
+  - rota con la tangente local del toolpath efectivo
+  - por eso no conviene documentarlo como borde inferior/derecho/etc. sino como
+    regla local sobre `entry_point`, `exit_point` y sus tangentes
+- en los casos manuales validados de
+  `ClosedPolylineMidEdgeStart_CounterClockwise + SideOfFeature=Right` se
+  observaron dos variantes equivalentes segun la orientacion local:
+  - `Approach 270 -> 360` y `Lift 0 -> 90`
+  - `Approach 90 -> 180` y `Lift 180 -> 270`
+- la misma logica sigue aplicando a otros sentidos (`Clockwise`) y otras
+  correcciones a traves de la tangente local y del lado efectivo ya resuelto
 
 ### `Retract Arc + Up`
 

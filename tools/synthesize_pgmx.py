@@ -18,6 +18,7 @@ Referencia operativa recomendada:
 Soporte actual de mecanizados sinteticos:
 - `LineMillingSpec`: linea sobre un plano con su fresado asociado.
 - `PolylineMillingSpec`: polilinea abierta con su fresado asociado.
+- `SquaringMillingSpec`: escuadrado exterior del contorno de la pieza sobre `Top`.
 
 Soporte actual de geometria base reusable:
 - `build_line_geometry_profile(...)`
@@ -88,6 +89,7 @@ __all__ = [
     "GeometryProfileSpec",
     "LineMillingSpec",
     "PolylineMillingSpec",
+    "SquaringMillingSpec",
     "PgmxSynthesisRequest",
     "PgmxSynthesisResult",
     "build_approach_spec",
@@ -101,6 +103,7 @@ __all__ = [
     "build_compensated_toolpath_profile",
     "build_line_milling_spec",
     "build_polyline_milling_spec",
+    "build_squaring_milling_spec",
     "read_pgmx_state",
     "read_pgmx_geometries",
     "build_synthesis_request",
@@ -244,6 +247,47 @@ class PolylineMillingSpec:
 
 
 @dataclass(frozen=True)
+class SquaringMillingSpec:
+    """Escuadrado exterior del contorno de la pieza sobre el plano `Top`."""
+
+    start_edge: str = "Bottom"
+    winding: str = "CounterClockwise"
+    feature_name: str = "Fresado"
+    plane_name: str = "Top"
+    tool_id: str = "1900"
+    tool_name: str = "E001"
+    tool_width: float = 18.36
+    security_plane: float = 20.0
+    depth_spec: MillingDepthSpec = field(default_factory=lambda: MillingDepthSpec(is_through=True, extra_depth=1.0))
+    approach: ApproachSpec = field(
+        default_factory=lambda: ApproachSpec(
+            is_enabled=True,
+            approach_type="Arc",
+            mode="Quote",
+            radius_multiplier=2.0,
+            speed=-1.0,
+            arc_side="Automatic",
+        )
+    )
+    retract: RetractSpec = field(
+        default_factory=lambda: RetractSpec(
+            is_enabled=True,
+            retract_type="Arc",
+            mode="Quote",
+            radius_multiplier=2.0,
+            speed=-1.0,
+            arc_side="Automatic",
+            overlap=0.0,
+        )
+    )
+
+    @property
+    def side_of_feature(self) -> str:
+        normalized_winding = _normalize_geometry_winding(self.winding)
+        return "Right" if normalized_winding == "CounterClockwise" else "Left"
+
+
+@dataclass(frozen=True)
 class _CurveSpec:
     """Serializacion XML de una curva usada en geometria o toolpaths."""
 
@@ -378,6 +422,66 @@ class _HydratedPolylineMillingSpec:
 
 
 @dataclass(frozen=True)
+class _HydratedSquaringMillingSpec:
+    """Datos internos de serializacion para un `SquaringMillingSpec`."""
+
+    spec: SquaringMillingSpec
+    preferred_id_start: Optional[int] = None
+    geometry_curve: Optional[_CurveSpec] = None
+    approach_curve: Optional[_CurveSpec] = None
+    trajectory_curve: Optional[_CurveSpec] = None
+    lift_curve: Optional[_CurveSpec] = None
+
+    @property
+    def start_edge(self) -> str:
+        return self.spec.start_edge
+
+    @property
+    def winding(self) -> str:
+        return self.spec.winding
+
+    @property
+    def feature_name(self) -> str:
+        return self.spec.feature_name
+
+    @property
+    def plane_name(self) -> str:
+        return self.spec.plane_name
+
+    @property
+    def side_of_feature(self) -> str:
+        return self.spec.side_of_feature
+
+    @property
+    def tool_id(self) -> str:
+        return self.spec.tool_id
+
+    @property
+    def tool_name(self) -> str:
+        return self.spec.tool_name
+
+    @property
+    def tool_width(self) -> float:
+        return self.spec.tool_width
+
+    @property
+    def security_plane(self) -> float:
+        return self.spec.security_plane
+
+    @property
+    def depth_spec(self) -> MillingDepthSpec:
+        return self.spec.depth_spec
+
+    @property
+    def approach(self) -> ApproachSpec:
+        return self.spec.approach
+
+    @property
+    def retract(self) -> RetractSpec:
+        return self.spec.retract
+
+
+@dataclass(frozen=True)
 class PgmxSynthesisRequest:
     """Solicitud completa para sintetizar un `.pgmx` reutilizable desde la app."""
 
@@ -387,6 +491,7 @@ class PgmxSynthesisRequest:
     source_pgmx_path: Optional[Path] = None
     line_millings: tuple[LineMillingSpec, ...] = ()
     polyline_millings: tuple[PolylineMillingSpec, ...] = ()
+    squaring_millings: tuple[SquaringMillingSpec, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -398,6 +503,7 @@ class PgmxSynthesisResult:
     sha256: str
     line_millings: tuple[LineMillingSpec, ...] = ()
     polyline_millings: tuple[PolylineMillingSpec, ...] = ()
+    squaring_millings: tuple[SquaringMillingSpec, ...] = ()
 
 
 # ============================================================================
@@ -886,6 +992,27 @@ def _normalize_geometry_winding(value: Optional[str]) -> str:
     return mapping[raw]
 
 
+def _normalize_squaring_start_edge(value: Optional[str]) -> str:
+    raw = (value or "Bottom").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+    mapping = {
+        "bottom": "Bottom",
+        "inferior": "Bottom",
+        "bordeinferior": "Bottom",
+        "right": "Right",
+        "derecho": "Right",
+        "bordederecho": "Right",
+        "top": "Top",
+        "superior": "Top",
+        "bordesuperior": "Top",
+        "left": "Left",
+        "izquierdo": "Left",
+        "bordeizquierdo": "Left",
+    }
+    if raw not in mapping:
+        raise ValueError("StartEdge invalido. Valores admitidos: Bottom/Inferior, Right/Derecho, Top/Superior o Left/Izquierdo.")
+    return mapping[raw]
+
+
 def build_milling_depth_spec(
     is_through: Optional[bool] = None,
     *,
@@ -898,6 +1025,9 @@ def build_milling_depth_spec(
     - si no se pasa nada, devuelve el default observado en Maestro
     - si `is_through=True`, `extra_depth` representa `Extra`
     - si `is_through=False`, `target_depth` es obligatorio y `extra_depth` no aplica
+    - Maestro permite `target_depth = 0` como estado manual neutro/default para
+      un fresado no pasante recien creado; por eso se admite `0` al leer o
+      construir plantillas
     """
 
     has_explicit_configuration = any(value is not None for value in (is_through, target_depth, extra_depth))
@@ -914,8 +1044,8 @@ def build_milling_depth_spec(
     if target_depth is None:
         raise ValueError("Para un fresado no pasante hay que indicar target_depth.")
     target_depth_value = float(target_depth)
-    if target_depth_value <= 0.0:
-        raise ValueError("La profundidad no pasante debe ser mayor que cero.")
+    if target_depth_value < 0.0:
+        raise ValueError("La profundidad no pasante debe ser mayor o igual a cero.")
     extra_value = 0.0 if extra_depth is None else float(extra_depth)
     if not math.isclose(extra_value, 0.0, abs_tol=1e-9):
         raise ValueError("ExtraDepth solo aplica a fresados pasantes.")
@@ -944,6 +1074,45 @@ def build_line_geometry_primitive(
         end_point=end_point,
         parameter_start=0.0,
         parameter_end=length,
+    )
+
+
+def _build_parameterized_line_geometry_primitive(
+    origin_point: tuple[float, float, float],
+    direction: tuple[float, float, float],
+    parameter_start: float,
+    parameter_end: float,
+) -> GeometryPrimitiveSpec:
+    direction_length = math.sqrt(
+        (direction[0] * direction[0]) + (direction[1] * direction[1]) + (direction[2] * direction[2])
+    )
+    if direction_length <= 1e-9:
+        raise ValueError("La direccion de una linea parametrizada no puede ser nula.")
+    unit_direction = (
+        direction[0] / direction_length,
+        direction[1] / direction_length,
+        direction[2] / direction_length,
+    )
+    start_value = float(parameter_start)
+    end_value = float(parameter_end)
+    if math.isclose(start_value, end_value, abs_tol=1e-9):
+        raise ValueError("Una linea parametrizada necesita un rango no nulo.")
+    start_point = (
+        origin_point[0] + (unit_direction[0] * start_value),
+        origin_point[1] + (unit_direction[1] * start_value),
+        origin_point[2] + (unit_direction[2] * start_value),
+    )
+    end_point = (
+        origin_point[0] + (unit_direction[0] * end_value),
+        origin_point[1] + (unit_direction[1] * end_value),
+        origin_point[2] + (unit_direction[2] * end_value),
+    )
+    return GeometryPrimitiveSpec(
+        primitive_type="Line",
+        start_point=start_point,
+        end_point=end_point,
+        parameter_start=start_value,
+        parameter_end=end_value,
     )
 
 
@@ -1247,6 +1416,17 @@ def _normalize_polyline_milling_spec(polyline_milling: PolylineMillingSpec) -> P
     )
 
 
+def _normalize_squaring_milling_spec(squaring_milling: SquaringMillingSpec) -> SquaringMillingSpec:
+    return replace(
+        squaring_milling,
+        start_edge=_normalize_squaring_start_edge(squaring_milling.start_edge),
+        winding=_normalize_geometry_winding(squaring_milling.winding),
+        depth_spec=_normalize_milling_depth_spec(squaring_milling.depth_spec),
+        approach=_normalize_approach_spec(squaring_milling.approach),
+        retract=_normalize_retract_spec(squaring_milling.retract),
+    )
+
+
 def _load_tool_catalog() -> dict[str, dict[str, str]]:
     """Carga el catalogo plano de herramientas indexado por `tool_id`."""
 
@@ -1329,6 +1509,7 @@ def _validate_tool_sinking_lengths(
     state: PgmxState,
     line_millings: Sequence[_HydratedLineMillingSpec],
     polyline_millings: Sequence[_HydratedPolylineMillingSpec],
+    squaring_millings: Sequence[_HydratedSquaringMillingSpec],
 ) -> None:
     """Aplica la validacion de `sinking_length` a todos los fresados del request."""
 
@@ -1336,6 +1517,8 @@ def _validate_tool_sinking_lengths(
     for spec in line_millings:
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
     for spec in polyline_millings:
+        _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
+    for spec in squaring_millings:
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
 
 
@@ -1444,6 +1627,116 @@ def _build_open_polyline_geometry_profile(
     )
 
 
+def _build_closed_polyline_geometry_profile(
+    points: Sequence[tuple[float, float]],
+    *,
+    z_value: float = 0.0,
+) -> GeometryProfileSpec:
+    """Construye una polilinea cerrada plana como `GeometryProfileSpec`."""
+
+    normalized_points = tuple((float(point[0]), float(point[1])) for point in points)
+    if len(normalized_points) < 4:
+        raise ValueError("Un contorno cerrado necesita al menos 4 puntos incluyendo el cierre.")
+    if not _points_close_2d(normalized_points[0], normalized_points[-1]):
+        raise ValueError("La polilinea cerrada debe terminar en el mismo punto en el que empieza.")
+    return build_composite_geometry_profile(
+        tuple(
+            _line_primitive_at_plane(start_point, end_point, z_value=z_value)
+            for start_point, end_point in zip(normalized_points, normalized_points[1:])
+        )
+    )
+
+
+def _build_squaring_outline_points(
+    length: float,
+    width: float,
+    *,
+    start_edge: str,
+    winding: str,
+) -> tuple[tuple[float, float], ...]:
+    length_value = float(length)
+    width_value = float(width)
+    if length_value <= 1e-9 or width_value <= 1e-9:
+        raise ValueError("El escuadrado necesita una pieza con largo y ancho mayores que cero.")
+
+    bottom_left = (0.0, 0.0)
+    bottom_right = (length_value, 0.0)
+    top_right = (length_value, width_value)
+    top_left = (0.0, width_value)
+    mid_bottom = (length_value / 2.0, 0.0)
+    mid_right = (length_value, width_value / 2.0)
+    mid_top = (length_value / 2.0, width_value)
+    mid_left = (0.0, width_value / 2.0)
+
+    normalized_start_edge = _normalize_squaring_start_edge(start_edge)
+    normalized_winding = _normalize_geometry_winding(winding)
+    if normalized_winding == "CounterClockwise":
+        mapping = {
+            "Bottom": (mid_bottom, bottom_right, top_right, top_left, bottom_left, mid_bottom),
+            "Right": (mid_right, top_right, top_left, bottom_left, bottom_right, mid_right),
+            "Top": (mid_top, top_left, bottom_left, bottom_right, top_right, mid_top),
+            "Left": (mid_left, bottom_left, bottom_right, top_right, top_left, mid_left),
+        }
+    else:
+        mapping = {
+            "Bottom": (mid_bottom, bottom_left, top_left, top_right, bottom_right, mid_bottom),
+            "Right": (mid_right, bottom_right, bottom_left, top_left, top_right, mid_right),
+            "Top": (mid_top, top_right, bottom_right, bottom_left, top_left, mid_top),
+            "Left": (mid_left, top_left, top_right, bottom_right, bottom_left, mid_left),
+        }
+    return mapping[normalized_start_edge]
+
+
+def _build_squaring_geometry_profile(
+    state: PgmxState,
+    spec: _HydratedSquaringMillingSpec,
+    *,
+    z_value: float = 0.0,
+) -> GeometryProfileSpec:
+    points = _build_squaring_outline_points(
+        state.length,
+        state.width,
+        start_edge=spec.start_edge,
+        winding=spec.winding,
+    )
+    length_value = float(state.length)
+    width_value = float(state.width)
+    target_z = float(z_value)
+    edge_length = length_value if spec.start_edge in {"Bottom", "Top"} else width_value
+
+    parameterized_edge_map: dict[tuple[str, str], tuple[tuple[float, float, float], tuple[float, float, float]]] = {
+        ("CounterClockwise", "Bottom"): ((0.0, 0.0, target_z), (1.0, 0.0, 0.0)),
+        ("CounterClockwise", "Right"): ((length_value, 0.0, target_z), (0.0, 1.0, 0.0)),
+        ("CounterClockwise", "Top"): ((length_value, width_value, target_z), (-1.0, 0.0, 0.0)),
+        ("CounterClockwise", "Left"): ((0.0, width_value, target_z), (0.0, -1.0, 0.0)),
+        ("Clockwise", "Bottom"): ((length_value, 0.0, target_z), (-1.0, 0.0, 0.0)),
+        ("Clockwise", "Right"): ((length_value, width_value, target_z), (0.0, -1.0, 0.0)),
+        ("Clockwise", "Top"): ((0.0, width_value, target_z), (1.0, 0.0, 0.0)),
+        ("Clockwise", "Left"): ((0.0, 0.0, target_z), (0.0, 1.0, 0.0)),
+    }
+    edge_origin, edge_direction = parameterized_edge_map[(spec.winding, spec.start_edge)]
+    midpoint_parameter = edge_length / 2.0
+
+    primitives = [
+        _build_parameterized_line_geometry_primitive(
+            edge_origin,
+            edge_direction,
+            midpoint_parameter,
+            edge_length,
+        ),
+        build_line_geometry_primitive(points[1][0], points[1][1], points[2][0], points[2][1], start_z=target_z, end_z=target_z),
+        build_line_geometry_primitive(points[2][0], points[2][1], points[3][0], points[3][1], start_z=target_z, end_z=target_z),
+        build_line_geometry_primitive(points[3][0], points[3][1], points[4][0], points[4][1], start_z=target_z, end_z=target_z),
+        _build_parameterized_line_geometry_primitive(
+            edge_origin,
+            edge_direction,
+            0.0,
+            midpoint_parameter,
+        ),
+    ]
+    return build_composite_geometry_profile(tuple(primitives))
+
+
 def _build_toolpath_description(
     start_point: tuple[float, float, float],
     end_point: tuple[float, float, float],
@@ -1479,6 +1772,20 @@ def _normalize_curve_serialization_text(text: str) -> str:
     return "\n".join(line.rstrip() for line in str(text).strip().splitlines())
 
 
+def _build_parameterized_maestro_line_serialization(
+    *,
+    parameter_start: float,
+    parameter_end: float,
+    origin_point: tuple[float, float, float],
+    direction: tuple[float, float, float],
+) -> str:
+    return (
+        f"8 {_format_maestro_number(parameter_start)} {_format_maestro_number(parameter_end)}\n"
+        f"1 {_format_maestro_number(origin_point[0])} {_format_maestro_number(origin_point[1])} {_format_maestro_number(origin_point[2])} "
+        f"{_format_maestro_number(direction[0])} {_format_maestro_number(direction[1])} {_format_maestro_number(direction[2])} \n"
+    )
+
+
 def _build_maestro_line_serialization(
     start_point: tuple[float, float, float],
     end_point: tuple[float, float, float],
@@ -1490,10 +1797,11 @@ def _build_maestro_line_serialization(
     if length <= 1e-9:
         raise ValueError("No se puede serializar un segmento de longitud cero.")
 
-    return (
-        f"8 0 {_format_maestro_number(length)}\n"
-        f"1 {_format_maestro_number(start_point[0])} {_format_maestro_number(start_point[1])} {_format_maestro_number(start_point[2])} "
-        f"{_format_maestro_number(dx / length)} {_format_maestro_number(dy / length)} {_format_maestro_number(dz / length)} \n"
+    return _build_parameterized_maestro_line_serialization(
+        parameter_start=0.0,
+        parameter_end=length,
+        origin_point=start_point,
+        direction=(dx / length, dy / length, dz / length),
     )
 
 
@@ -2035,6 +2343,20 @@ def _line_primitive_at_plane(
     )
 
 
+def _reuse_line_primitive_or_rebuild(
+    primitive: GeometryPrimitiveSpec,
+    *,
+    start_point: tuple[float, float],
+    end_point: tuple[float, float],
+    z_value: float,
+) -> GeometryPrimitiveSpec:
+    primitive_start = (primitive.start_point[0], primitive.start_point[1])
+    primitive_end = (primitive.end_point[0], primitive.end_point[1])
+    if _points_close_2d(start_point, primitive_start) and _points_close_2d(end_point, primitive_end):
+        return primitive
+    return _line_primitive_at_plane(start_point, end_point, z_value=z_value)
+
+
 def _offset_line_primitive(
     primitive: GeometryPrimitiveSpec,
     *,
@@ -2052,10 +2374,12 @@ def _offset_line_primitive(
     offset_x = right_x * offset_distance
     offset_y = right_y * offset_distance
     target_z = primitive.start_point[2] if z_value is None else float(z_value)
-    return _line_primitive_at_plane(
-        (primitive.start_point[0] + offset_x, primitive.start_point[1] + offset_y),
-        (primitive.end_point[0] + offset_x, primitive.end_point[1] + offset_y),
-        z_value=target_z,
+    return GeometryPrimitiveSpec(
+        primitive_type="Line",
+        start_point=(primitive.start_point[0] + offset_x, primitive.start_point[1] + offset_y, target_z),
+        end_point=(primitive.end_point[0] + offset_x, primitive.end_point[1] + offset_y, target_z),
+        parameter_start=primitive.parameter_start,
+        parameter_end=primitive.parameter_end,
     )
 
 
@@ -2203,14 +2527,28 @@ def _build_compensated_line_only_open_profile(
         turn_cross = _cross_2d(previous_direction, next_direction)
         if math.isclose(turn_cross, 0.0, abs_tol=1e-9):
             if not _points_close_2d(current_point, previous_end):
-                member_primitives.append(_line_primitive_at_plane(current_point, previous_end, z_value=cut_z))
+                member_primitives.append(
+                    _reuse_line_primitive_or_rebuild(
+                        previous_primitive,
+                        start_point=current_point,
+                        end_point=previous_end,
+                        z_value=cut_z,
+                    )
+                )
             current_point = next_start
             continue
 
         is_outer_corner = (side_sign * turn_cross) > 0.0
         if is_outer_corner:
             if not _points_close_2d(current_point, previous_end):
-                member_primitives.append(_line_primitive_at_plane(current_point, previous_end, z_value=cut_z))
+                member_primitives.append(
+                    _reuse_line_primitive_or_rebuild(
+                        previous_primitive,
+                        start_point=current_point,
+                        end_point=previous_end,
+                        z_value=cut_z,
+                    )
+                )
             member_primitives.append(
                 _build_corner_join_arc(
                     previous_end,
@@ -2232,12 +2570,26 @@ def _build_compensated_line_only_open_profile(
             fallback_b=next_start,
         )
         if not _points_close_2d(current_point, intersection):
-            member_primitives.append(_line_primitive_at_plane(current_point, intersection, z_value=cut_z))
+            member_primitives.append(
+                _reuse_line_primitive_or_rebuild(
+                    previous_primitive,
+                    start_point=current_point,
+                    end_point=intersection,
+                    z_value=cut_z,
+                )
+            )
         current_point = intersection
 
     final_point = (offset_primitives[-1].end_point[0], offset_primitives[-1].end_point[1])
     if not _points_close_2d(current_point, final_point):
-        member_primitives.append(_line_primitive_at_plane(current_point, final_point, z_value=cut_z))
+        member_primitives.append(
+            _reuse_line_primitive_or_rebuild(
+                offset_primitives[-1],
+                start_point=current_point,
+                end_point=final_point,
+                z_value=cut_z,
+            )
+        )
     return _build_profile_geometry_spec(
         geometry_type="GeomCompositeCurve",
         primitives=tuple(member_primitives),
@@ -2342,7 +2694,14 @@ def _build_compensated_line_only_closed_profile(
             segment_end = transition["point"]  # type: ignore[assignment]
 
         if not _points_close_2d(current_point, segment_end):
-            member_primitives.append(_line_primitive_at_plane(current_point, segment_end, z_value=cut_z))
+            member_primitives.append(
+                _reuse_line_primitive_or_rebuild(
+                    primitive,
+                    start_point=current_point,
+                    end_point=segment_end,
+                    z_value=cut_z,
+                )
+            )
 
         if transition["kind"] == "outer":
             is_wrap_transition = index == (primitive_count - 1)
@@ -2728,7 +3087,24 @@ def _profile_signed_area(primitives: Sequence[GeometryPrimitiveSpec]) -> float:
 
 def _primitive_to_serialization(primitive: GeometryPrimitiveSpec) -> str:
     if primitive.primitive_type == "Line":
-        return _build_maestro_line_serialization(primitive.start_point, primitive.end_point)
+        dx = primitive.end_point[0] - primitive.start_point[0]
+        dy = primitive.end_point[1] - primitive.start_point[1]
+        dz = primitive.end_point[2] - primitive.start_point[2]
+        length = math.sqrt((dx * dx) + (dy * dy) + (dz * dz))
+        if length <= 1e-9:
+            raise ValueError("No se puede serializar un segmento de longitud cero.")
+        direction = (dx / length, dy / length, dz / length)
+        origin_point = (
+            primitive.start_point[0] - (direction[0] * primitive.parameter_start),
+            primitive.start_point[1] - (direction[1] * primitive.parameter_start),
+            primitive.start_point[2] - (direction[2] * primitive.parameter_start),
+        )
+        return _build_parameterized_maestro_line_serialization(
+            parameter_start=primitive.parameter_start,
+            parameter_end=primitive.parameter_end,
+            origin_point=origin_point,
+            direction=direction,
+        )
     if primitive.primitive_type != "Arc":
         raise ValueError(f"Tipo de primitiva no soportado: {primitive.primitive_type}")
     if (
@@ -3019,6 +3395,22 @@ def _build_polyline_toolpath_profile(
 
     cut_z = _toolpath_cut_z(state, spec)
     nominal_profile = _build_open_polyline_geometry_profile(spec.points, z_value=cut_z)
+    return build_compensated_toolpath_profile(
+        nominal_profile,
+        side_of_feature=spec.side_of_feature,
+        tool_width=spec.tool_width,
+        z_value=cut_z,
+    )
+
+
+def _build_squaring_toolpath_profile(
+    state: PgmxState,
+    spec: _HydratedSquaringMillingSpec,
+) -> GeometryProfileSpec:
+    """Construye la trayectoria compensada para un escuadrado exterior."""
+
+    cut_z = _toolpath_cut_z(state, spec)
+    nominal_profile = _build_squaring_geometry_profile(state, spec, z_value=cut_z)
     return build_compensated_toolpath_profile(
         nominal_profile,
         side_of_feature=spec.side_of_feature,
@@ -3597,6 +3989,14 @@ def _hydrate_polyline_milling_spec(
     )
 
 
+def _hydrate_squaring_milling_spec(
+    squaring_milling: SquaringMillingSpec,
+    source_pgmx_path: Optional[Path],
+) -> _HydratedSquaringMillingSpec:
+    del source_pgmx_path
+    return _HydratedSquaringMillingSpec(spec=_normalize_squaring_milling_spec(squaring_milling))
+
+
 def _build_line_geometry(
     geometry_id: str,
     plane_id: str,
@@ -4172,7 +4572,13 @@ def _append_line_milling(root: ET.Element, state: PgmxState, spec: _HydratedLine
         expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
 
 
-def _append_polyline_milling(root: ET.Element, state: PgmxState, spec: _HydratedPolylineMillingSpec) -> None:
+def _append_curve_profile_milling(
+    root: ET.Element,
+    state: PgmxState,
+    spec,
+    generated_geometry_curve: _CurveSpec,
+    generated_toolpath_profile: GeometryProfileSpec,
+) -> None:
     geometries = root.find("./{*}Geometries")
     features = root.find("./{*}Features")
     operations = root.find("./{*}Operations")
@@ -4188,7 +4594,6 @@ def _append_polyline_milling(root: ET.Element, state: PgmxState, spec: _Hydrated
     plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
     uses_depth_expressions = _uses_feature_depth_expressions(spec)
 
-    generated_geometry_curve = spec.geometry_curve or _composite_curve_spec(_build_open_polyline_descriptions(spec.points))
     geometry_member_count = len(generated_geometry_curve.member_serializations)
     reserved_ids = _reserve_ids(
         root,
@@ -4207,7 +4612,6 @@ def _append_polyline_milling(root: ET.Element, state: PgmxState, spec: _Hydrated
     start_expression_id = reserved_ids[operation_index + 3] if uses_depth_expressions else None
     end_expression_id = reserved_ids[operation_index + 4] if uses_depth_expressions else None
 
-    generated_toolpath_profile = _build_polyline_toolpath_profile(state, spec)
     generated_trajectory_curve = _curve_spec_from_profile_geometry(generated_toolpath_profile)
     trajectory_curve = spec.trajectory_curve or generated_trajectory_curve
     start_point, end_point, _, _ = _profile_entry_exit_context(generated_toolpath_profile)
@@ -4281,6 +4685,30 @@ def _append_polyline_milling(root: ET.Element, state: PgmxState, spec: _Hydrated
     if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
         expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
         expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
+
+
+def _append_polyline_milling(root: ET.Element, state: PgmxState, spec: _HydratedPolylineMillingSpec) -> None:
+    generated_geometry_curve = spec.geometry_curve or _composite_curve_spec(_build_open_polyline_descriptions(spec.points))
+    generated_toolpath_profile = _build_polyline_toolpath_profile(state, spec)
+    _append_curve_profile_milling(
+        root,
+        state,
+        spec,
+        generated_geometry_curve,
+        generated_toolpath_profile,
+    )
+
+
+def _append_squaring_milling(root: ET.Element, state: PgmxState, spec: _HydratedSquaringMillingSpec) -> None:
+    generated_geometry_profile = _build_squaring_geometry_profile(state, spec, z_value=0.0)
+    generated_toolpath_profile = _build_squaring_toolpath_profile(state, spec)
+    _append_curve_profile_milling(
+        root,
+        state,
+        spec,
+        spec.geometry_curve or _curve_spec_from_profile_geometry(generated_geometry_profile),
+        generated_toolpath_profile,
+    )
 
 
 # ============================================================================
@@ -4467,6 +4895,15 @@ def _apply_polyline_millings(
         _append_polyline_milling(root, state, polyline_milling)
 
 
+def _apply_squaring_millings(
+    root: ET.Element,
+    state: PgmxState,
+    squaring_millings: Sequence[_HydratedSquaringMillingSpec],
+) -> None:
+    for squaring_milling in squaring_millings:
+        _append_squaring_milling(root, state, squaring_milling)
+
+
 # ============================================================================
 # Public machining builders
 # ============================================================================
@@ -4607,6 +5044,124 @@ def build_polyline_milling_spec(
     )
 
 
+def build_squaring_milling_spec(
+    *,
+    start_edge: Optional[str] = None,
+    winding: Optional[str] = None,
+    feature_name: Optional[str] = None,
+    tool_id: Optional[str] = None,
+    tool_name: Optional[str] = None,
+    tool_width: Optional[float] = None,
+    security_plane: Optional[float] = None,
+    is_through: Optional[bool] = None,
+    target_depth: Optional[float] = None,
+    extra_depth: Optional[float] = None,
+    approach_enabled: Optional[bool] = None,
+    approach_type: Optional[str] = None,
+    approach_mode: Optional[str] = None,
+    approach_radius_multiplier: Optional[float] = None,
+    approach_speed: Optional[float] = None,
+    approach_arc_side: Optional[str] = None,
+    retract_enabled: Optional[bool] = None,
+    retract_type: Optional[str] = None,
+    retract_mode: Optional[str] = None,
+    retract_radius_multiplier: Optional[float] = None,
+    retract_speed: Optional[float] = None,
+    retract_arc_side: Optional[str] = None,
+    retract_overlap: Optional[float] = None,
+) -> SquaringMillingSpec:
+    """Construye un `SquaringMillingSpec` reusable para escuadrar la pieza."""
+
+    has_explicit_depth = any(value is not None for value in (is_through, target_depth, extra_depth))
+    depth_spec = (
+        build_milling_depth_spec(is_through=True, extra_depth=1.0)
+        if not has_explicit_depth
+        else build_milling_depth_spec(
+            is_through=is_through,
+            target_depth=target_depth,
+            extra_depth=extra_depth,
+        )
+    )
+
+    has_explicit_approach = any(
+        value is not None
+        for value in (
+            approach_enabled,
+            approach_type,
+            approach_mode,
+            approach_radius_multiplier,
+            approach_speed,
+            approach_arc_side,
+        )
+    )
+    approach_spec = (
+        build_approach_spec(
+            enabled=True,
+            approach_type="Arc",
+            mode="Quote",
+            radius_multiplier=2.0,
+            speed=-1.0,
+            arc_side="Automatic",
+        )
+        if not has_explicit_approach
+        else build_approach_spec(
+            enabled=approach_enabled,
+            approach_type=approach_type,
+            mode=approach_mode,
+            radius_multiplier=approach_radius_multiplier,
+            speed=approach_speed,
+            arc_side=approach_arc_side,
+        )
+    )
+
+    has_explicit_retract = any(
+        value is not None
+        for value in (
+            retract_enabled,
+            retract_type,
+            retract_mode,
+            retract_radius_multiplier,
+            retract_speed,
+            retract_arc_side,
+            retract_overlap,
+        )
+    )
+    retract_spec = (
+        build_retract_spec(
+            enabled=True,
+            retract_type="Arc",
+            mode="Quote",
+            radius_multiplier=2.0,
+            speed=-1.0,
+            arc_side="Automatic",
+            overlap=0.0,
+        )
+        if not has_explicit_retract
+        else build_retract_spec(
+            enabled=retract_enabled,
+            retract_type=retract_type,
+            mode=retract_mode,
+            radius_multiplier=retract_radius_multiplier,
+            speed=retract_speed,
+            arc_side=retract_arc_side,
+            overlap=retract_overlap,
+        )
+    )
+
+    return SquaringMillingSpec(
+        start_edge=_normalize_squaring_start_edge(start_edge),
+        winding=_normalize_geometry_winding(winding),
+        feature_name=(feature_name or "Fresado").strip() or "Fresado",
+        tool_id=(tool_id or "1900").strip() or "1900",
+        tool_name=(tool_name or "E001").strip() or "E001",
+        tool_width=18.36 if tool_width is None else float(tool_width),
+        security_plane=20.0 if security_plane is None else float(security_plane),
+        depth_spec=depth_spec,
+        approach=approach_spec,
+        retract=retract_spec,
+    )
+
+
 # ============================================================================
 # Public execution API
 # ============================================================================
@@ -4627,12 +5182,13 @@ def build_synthesis_request(
     execution_fields: Optional[str] = None,
     line_millings: Optional[Sequence[LineMillingSpec]] = None,
     polyline_millings: Optional[Sequence[PolylineMillingSpec]] = None,
+    squaring_millings: Optional[Sequence[SquaringMillingSpec]] = None,
 ) -> PgmxSynthesisRequest:
     """Arma una solicitud reusable de sintesis para el flujo principal.
 
     Orden recomendado de uso:
     1. leer o definir la pieza
-    2. construir `LineMillingSpec` y/o `PolylineMillingSpec`
+    2. construir `LineMillingSpec`, `PolylineMillingSpec` y/o `SquaringMillingSpec`
     3. construir el request
     4. ejecutar `synthesize_request(...)`
 
@@ -4663,6 +5219,7 @@ def build_synthesis_request(
         source_pgmx_path=source_pgmx_path,
         line_millings=tuple(line_millings or ()),
         polyline_millings=tuple(polyline_millings or ()),
+        squaring_millings=tuple(squaring_millings or ()),
     )
 
 
@@ -4681,15 +5238,21 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         _hydrate_polyline_milling_spec(polyline_milling, request.source_pgmx_path)
         for polyline_milling in request.polyline_millings
     ]
+    hydrated_squaring_millings = [
+        _hydrate_squaring_milling_spec(squaring_milling, request.source_pgmx_path)
+        for squaring_milling in request.squaring_millings
+    ]
     _validate_tool_sinking_lengths(
         request.piece,
         hydrated_line_millings,
         hydrated_polyline_millings,
+        hydrated_squaring_millings,
     )
 
     _apply_piece_state(baseline_root, request.piece)
     _apply_line_millings(baseline_root, request.piece, hydrated_line_millings)
     _apply_polyline_millings(baseline_root, request.piece, hydrated_polyline_millings)
+    _apply_squaring_millings(baseline_root, request.piece, hydrated_squaring_millings)
 
     xml_bytes = _finalize_synthesized_pgmx_xml_bytes(
         ET.tostring(
@@ -4710,6 +5273,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         sha256=hashlib.sha256(request.output_path.read_bytes()).hexdigest(),
         line_millings=request.line_millings,
         polyline_millings=request.polyline_millings,
+        squaring_millings=request.squaring_millings,
     )
 
 
@@ -4726,6 +5290,7 @@ def synthesize_pgmx(
     origin_z: Optional[float] = None,
     line_milling: Optional[LineMillingSpec] = None,
     polyline_milling: Optional[PolylineMillingSpec] = None,
+    squaring_milling: Optional[SquaringMillingSpec] = None,
     execution_fields: Optional[str] = None,
 ) -> PgmxState:
     """Wrapper de compatibilidad para el flujo historico basado en argumentos sueltos.
@@ -4748,6 +5313,7 @@ def synthesize_pgmx(
         execution_fields=execution_fields,
         line_millings=[line_milling] if line_milling is not None else (),
         polyline_millings=[polyline_milling] if polyline_milling is not None else (),
+        squaring_millings=[squaring_milling] if squaring_milling is not None else (),
     )
     return synthesize_request(request).piece
 
