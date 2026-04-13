@@ -27,6 +27,9 @@ Soporte actual de geometria base reusable:
 
 Hallazgos ya volcados en la sintesis:
 - `Area` de `Parametros de Maquina` usa `HG` por defecto si no se indica otro valor.
+- La profundidad total del fresado se valida contra `tools/tool_catalog.csv`:
+    `target_depth` en no pasante y `espesor + Extra` en pasante no pueden
+    superar `sinking_length` de la herramienta elegida.
 - `Approach` y `Retract` soportan `Line` y `Arc`.
 - Para `Approach Line + Down` ya se sintetizo la regla observada en Maestro:
     una sola bajada oblicua desde un punto previo desplazado sobre la direccion
@@ -50,6 +53,7 @@ Hallazgos ya volcados en la sintesis:
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import math
@@ -70,6 +74,7 @@ UTILITY_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDat
 XSD_NS = "http://www.w3.org/2001/XMLSchema"
 ARRAYS_NS = "http://schemas.microsoft.com/2003/10/Serialization/Arrays"
 PARAMETRIC_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Parametrics"
+TOOL_CATALOG_PATH = Path(__file__).with_name("tool_catalog.csv")
 
 ET.register_namespace("", PGMX_NS)
 ET.register_namespace("i", XSI_NS)
@@ -1242,6 +1247,22 @@ def _normalize_polyline_milling_spec(polyline_milling: PolylineMillingSpec) -> P
     )
 
 
+def _load_tool_catalog() -> dict[str, dict[str, str]]:
+    """Carga el catalogo plano de herramientas indexado por `tool_id`."""
+
+    if not TOOL_CATALOG_PATH.exists():
+        raise FileNotFoundError(
+            f"No existe el catalogo de herramientas '{TOOL_CATALOG_PATH}'."
+        )
+    with TOOL_CATALOG_PATH.open("r", encoding="utf-8-sig", newline="") as handle:
+        rows = tuple(csv.DictReader(handle))
+    return {
+        str((row.get("tool_id") or "").strip()): row
+        for row in rows
+        if (row.get("tool_id") or "").strip()
+    }
+
+
 def _feature_depth_value(state: PgmxState, spec) -> float:
     # En Maestro, un pasante deja `Depth.StartDepth/EndDepth` igual al espesor
     # actual de la pieza y luego agrega expresiones parametricas hacia `DepthName`.
@@ -1256,6 +1277,66 @@ def _feature_depth_value(state: PgmxState, spec) -> float:
     if depth_spec.target_depth > state.depth + 1e-9:
         raise ValueError("La profundidad del fresado no pasante no puede superar el espesor de la pieza.")
     return depth_spec.target_depth
+
+
+def _tool_total_milling_depth(state: PgmxState, spec) -> float:
+    """Calcula la profundidad total efectiva que debe alcanzar la herramienta."""
+
+    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
+    if depth_spec.is_through:
+        return state.depth + depth_spec.extra_depth
+    if depth_spec.target_depth is None:
+        raise ValueError("La profundidad del fresado no pasante no puede quedar vacia.")
+    return depth_spec.target_depth
+
+
+def _tool_catalog_label(spec) -> str:
+    return f"{spec.tool_name} ({spec.tool_id})"
+
+
+def _validate_tool_sinking_length_for_spec(
+    state: PgmxState,
+    spec,
+    tool_catalog: dict[str, dict[str, str]],
+) -> None:
+    """Valida que la profundidad total no supere el `sinking_length` de la herramienta."""
+
+    catalog_entry = tool_catalog.get(spec.tool_id)
+    if catalog_entry is None:
+        raise ValueError(
+            "No se pudo validar la seguridad de la herramienta "
+            f"{_tool_catalog_label(spec)} porque no existe en '{TOOL_CATALOG_PATH.name}'."
+        )
+
+    sinking_length_text = (catalog_entry.get("sinking_length") or "").strip()
+    sinking_length = float(sinking_length_text or "0")
+    if sinking_length <= 0.0:
+        raise ValueError(
+            "La herramienta "
+            f"{_tool_catalog_label(spec)} no tiene un `sinking_length` valido en '{TOOL_CATALOG_PATH.name}'."
+        )
+
+    total_depth = _tool_total_milling_depth(state, spec)
+    if total_depth > sinking_length + 1e-9:
+        raise ValueError(
+            "La profundidad total del fresado excede el `sinking_length` de la herramienta: "
+            f"{_tool_catalog_label(spec)} permite { _compact_number(sinking_length) } mm, "
+            f"pero la solicitud requiere { _compact_number(total_depth) } mm."
+        )
+
+
+def _validate_tool_sinking_lengths(
+    state: PgmxState,
+    line_millings: Sequence[_HydratedLineMillingSpec],
+    polyline_millings: Sequence[_HydratedPolylineMillingSpec],
+) -> None:
+    """Aplica la validacion de `sinking_length` a todos los fresados del request."""
+
+    tool_catalog = _load_tool_catalog()
+    for spec in line_millings:
+        _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
+    for spec in polyline_millings:
+        _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
 
 
 def _toolpath_cut_z(state: PgmxState, spec) -> float:
@@ -4600,6 +4681,11 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         _hydrate_polyline_milling_spec(polyline_milling, request.source_pgmx_path)
         for polyline_milling in request.polyline_millings
     ]
+    _validate_tool_sinking_lengths(
+        request.piece,
+        hydrated_line_millings,
+        hydrated_polyline_millings,
+    )
 
     _apply_piece_state(baseline_root, request.piece)
     _apply_line_millings(baseline_root, request.piece, hydrated_line_millings)

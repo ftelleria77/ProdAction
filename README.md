@@ -41,6 +41,7 @@ python main.py
 - API programática para sintesis: `build_approach_spec(...)`, `build_retract_spec(...)`, `build_milling_depth_spec(...)`, `build_line_milling_spec(...)`, `build_polyline_milling_spec(...)`, `build_synthesis_request(...)` y `synthesize_request(...)` en `tools.synthesize_pgmx`
 - API programatica para inspeccion/construccion geometrica: `read_pgmx_geometries(...)`, `build_line_geometry_profile(...)`, `build_circle_geometry_profile(...)`, `build_composite_geometry_profile(...)` y `build_compensated_toolpath_profile(...)`
 - La sintesis de `.pgmx` permite fijar el area de `Parametros de Maquina` mediante `execution_fields` en la API o `--execution-fields/--area` en la CLI; si no se indica, usa `HG` por defecto.
+- La seguridad de profundidad usa `tools/tool_catalog.csv`: la profundidad total del fresado no puede superar `sinking_length` de la herramienta.
 Estado validado hasta ahora en `tools.synthesize_pgmx`:
 - fresados lineales y polilineas abiertas
 - lectura y clasificacion de geometria base: lineas, circulos y curvas compuestas abiertas/cerradas

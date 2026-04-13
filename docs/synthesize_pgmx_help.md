@@ -159,6 +159,10 @@ Reglas:
 - si `is_through=True`, `extra_depth` representa `Extra`
 - si `is_through=False`, hay que indicar `target_depth`
 - `extra_depth` no aplica a fresados no pasantes
+- antes de sintetizar, el modulo valida contra `tools/tool_catalog.csv` que la
+  profundidad total no supere `sinking_length` de la herramienta:
+  - no pasante -> `target_depth`
+  - pasante -> `espesor + extra_depth`
 
 Regla validada en Maestro para la serializacion:
 - no pasante:
@@ -368,6 +372,11 @@ result = synthesize_request(request)
 ### Generales
 
 - `Area` usa `HG` por defecto.
+- Antes de escribir el `.pgmx`, la seguridad de profundidad se valida contra
+  `tools/tool_catalog.csv`:
+  - no pasante: `target_depth <= sinking_length`
+  - pasante: `espesor + Extra <= sinking_length`
+  - si la herramienta no existe en el catalogo, la sintesis falla
 - Si `Approach.IsEnabled=false`, Maestro conserva un toolpath vertical de entrada.
 - Si `Retract.IsEnabled=false`, Maestro conserva un toolpath vertical de salida.
 - `SideOfFeature` nunca mueve la geometria nominal del feature; solo la trayectoria
