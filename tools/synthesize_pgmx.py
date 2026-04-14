@@ -178,6 +178,7 @@ class GeometryPrimitiveSpec:
     normal_vector: Optional[tuple[float, float, float]] = None
     u_vector: Optional[tuple[float, float, float]] = None
     v_vector: Optional[tuple[float, float, float]] = None
+    direction_hint: Optional[tuple[float, float, float]] = None
 
 
 @dataclass(frozen=True)
@@ -1131,6 +1132,8 @@ def build_arc_geometry_primitive(
 
     normalized_winding = _normalize_geometry_winding(winding)
     normal_z = 1.0 if normalized_winding == "CounterClockwise" else -1.0
+    normal_y = -0.0 if normalized_winding == "CounterClockwise" else 0.0
+    v_x = -0.0 if normalized_winding == "CounterClockwise" else 0.0
     start_point = (float(start_x), float(start_y), float(z_value))
     end_point = (float(end_x), float(end_y), float(z_value))
     center_point = (float(center_x), float(center_y), float(z_value))
@@ -1151,9 +1154,9 @@ def build_arc_geometry_primitive(
         parameter_end=end_angle,
         center_point=center_point,
         radius=start_radius,
-        normal_vector=(0.0, 0.0, normal_z),
+        normal_vector=(0.0, normal_y, normal_z),
         u_vector=(1.0, 0.0, 0.0),
-        v_vector=(0.0, normal_z, 0.0),
+        v_vector=(v_x, normal_z, 0.0),
     )
 
 
@@ -1746,6 +1749,8 @@ def _build_toolpath_description(
 
 def _format_maestro_number(value: float) -> str:
     number = float(value)
+    if number == 0.0:
+        return "-0" if math.copysign(1.0, number) < 0.0 else "0"
     if math.isclose(number, 0.0, abs_tol=1e-15):
         return "0"
     if number.is_integer():
@@ -1782,7 +1787,7 @@ def _build_parameterized_maestro_line_serialization(
     return (
         f"8 {_format_maestro_number(parameter_start)} {_format_maestro_number(parameter_end)}\n"
         f"1 {_format_maestro_number(origin_point[0])} {_format_maestro_number(origin_point[1])} {_format_maestro_number(origin_point[2])} "
-        f"{_format_maestro_number(direction[0])} {_format_maestro_number(direction[1])} {_format_maestro_number(direction[2])} \n"
+        f"{_format_maestro_orientation_number(direction[0])} {_format_maestro_orientation_number(direction[1])} {_format_maestro_orientation_number(direction[2])} \n"
     )
 
 
@@ -2833,6 +2838,96 @@ def _build_compensated_profile_geometry(
     )
 
 
+def _reparameterize_line_primitive_from_end(primitive: GeometryPrimitiveSpec) -> GeometryPrimitiveSpec:
+    """Reexpresa una linea con origen en su punto final y rango `[-length, 0]`.
+
+    Maestro tiende a reserializar asi los dos tramos partidos del borde inicial
+    en `TrajectoryPath` de escuadrados. La geometria efectiva no cambia; solo
+    cambia la parametrizacion textual de la recta.
+    """
+
+    if primitive.primitive_type != "Line":
+        return primitive
+    length = math.dist(primitive.start_point, primitive.end_point)
+    if length <= 1e-9:
+        return primitive
+    return GeometryPrimitiveSpec(
+        primitive_type="Line",
+        start_point=primitive.start_point,
+        end_point=primitive.end_point,
+        parameter_start=-length,
+        parameter_end=-0.0,
+        direction_hint=primitive.direction_hint,
+    )
+
+
+def _with_line_direction_hint(
+    primitive: GeometryPrimitiveSpec,
+    *,
+    z_negative_zero: bool = False,
+) -> GeometryPrimitiveSpec:
+    """Anota signos preferidos para componentes nulas de direccion en lineas."""
+
+    if primitive.primitive_type != "Line":
+        return primitive
+    dx = primitive.end_point[0] - primitive.start_point[0]
+    dy = primitive.end_point[1] - primitive.start_point[1]
+    dz = primitive.end_point[2] - primitive.start_point[2]
+    length = math.dist(primitive.start_point, primitive.end_point)
+    if length <= 1e-9:
+        return primitive
+    direction_z = -0.0 if z_negative_zero and math.isclose(dz, 0.0, abs_tol=1e-12) else (dz / length)
+    return GeometryPrimitiveSpec(
+        primitive_type="Line",
+        start_point=primitive.start_point,
+        end_point=primitive.end_point,
+        parameter_start=primitive.parameter_start,
+        parameter_end=primitive.parameter_end,
+        direction_hint=(dx / length, dy / length, direction_z),
+    )
+
+
+def _reparameterize_squaring_toolpath_profile(profile: GeometryProfileSpec) -> GeometryProfileSpec:
+    """Alinea parametrizacion y signos de direccion del escuadrado con Maestro."""
+
+    if profile.geometry_type != "GeomCompositeCurve" or len(profile.primitives) < 2:
+        return profile
+    primitives = list(profile.primitives)
+    bbox = profile.bounding_box
+    min_y = bbox[1] if bbox is not None else None
+    max_vertical_length = max(
+        (
+            math.dist(primitive.start_point, primitive.end_point)
+            for primitive in primitives
+            if primitive.primitive_type == "Line"
+            and math.isclose(primitive.start_point[0], primitive.end_point[0], abs_tol=1e-6)
+        ),
+        default=0.0,
+    )
+    if primitives[0].primitive_type == "Line":
+        primitives[0] = _reparameterize_line_primitive_from_end(primitives[0])
+        if min_y is not None and math.isclose(primitives[0].start_point[1], min_y, abs_tol=1e-6):
+            primitives[0] = _with_line_direction_hint(primitives[0], z_negative_zero=True)
+    if primitives[-1].primitive_type == "Line":
+        primitives[-1] = _reparameterize_line_primitive_from_end(primitives[-1])
+        if min_y is not None and math.isclose(primitives[-1].start_point[1], min_y, abs_tol=1e-6):
+            primitives[-1] = _with_line_direction_hint(primitives[-1], z_negative_zero=True)
+    if max_vertical_length > 0.0:
+        for index, primitive in enumerate(primitives):
+            if primitive.primitive_type != "Line":
+                continue
+            dx = primitive.end_point[0] - primitive.start_point[0]
+            dy = primitive.end_point[1] - primitive.start_point[1]
+            length = math.dist(primitive.start_point, primitive.end_point)
+            if (
+                math.isclose(dx, 0.0, abs_tol=1e-6)
+                and dy < 0.0
+                and math.isclose(length, max_vertical_length, abs_tol=1e-6)
+            ):
+                primitives[index] = _with_line_direction_hint(primitive, z_negative_zero=True)
+    return build_composite_geometry_profile(tuple(primitives))
+
+
 def _normalize_positive_angle(angle: float) -> float:
     normalized = math.fmod(angle, 2.0 * math.pi)
     if normalized < 0.0:
@@ -3094,6 +3189,8 @@ def _primitive_to_serialization(primitive: GeometryPrimitiveSpec) -> str:
         if length <= 1e-9:
             raise ValueError("No se puede serializar un segmento de longitud cero.")
         direction = (dx / length, dy / length, dz / length)
+        if primitive.direction_hint is not None:
+            direction = primitive.direction_hint
         origin_point = (
             primitive.start_point[0] - (direction[0] * primitive.parameter_start),
             primitive.start_point[1] - (direction[1] * primitive.parameter_start),
@@ -3411,12 +3508,13 @@ def _build_squaring_toolpath_profile(
 
     cut_z = _toolpath_cut_z(state, spec)
     nominal_profile = _build_squaring_geometry_profile(state, spec, z_value=cut_z)
-    return build_compensated_toolpath_profile(
+    toolpath_profile = build_compensated_toolpath_profile(
         nominal_profile,
         side_of_feature=spec.side_of_feature,
         tool_width=spec.tool_width,
         z_value=cut_z,
     )
+    return _reparameterize_squaring_toolpath_profile(toolpath_profile)
 
 
 def _parse_line_serialization(text: str) -> Optional[tuple[tuple[float, float, float], tuple[float, float, float]]]:
