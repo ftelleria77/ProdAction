@@ -10,7 +10,7 @@ una pieza manual en Maestro para luego ampliar o corregir:
 ## Caso En Curso
 
 - Pieza base: `archive/maestro_examples/Pieza.pgmx`
-- Baseline usado: `archive/maestro_baselines/Pieza.xml`
+- Baseline usado: `tools/maestro_baselines/Pieza.xml`
 - Dimensiones: `300 x 300 x 18`
 - Origen: `0,0,0`
 
@@ -1057,6 +1057,254 @@ Reconstruir paso a paso:
   - ademas, el par trasero no queda ordenado estrictamente por ID numerico
     dentro del `MainWorkplan`
 
+### Ronda 19 - Variantes multicara con `Left/Right` y con origen no nulo
+
+- Estado: completado
+- Archivos relevados:
+  - `archive/maestro_examples/Pieza_Huecos_VariasCaras.pgmx`
+  - `archive/maestro_examples/Pieza_Huecos_VariasCarasV2.pgmx`
+  - `archive/maestro_examples/Pieza_Huecos_VariasCaras_Origen_5_5_25.pgmx`
+- Comparacion `V1` vs `V2`:
+  - `V1` contiene `8` taladros:
+    - `4` en `Top`
+    - `2` en `Front`
+    - `2` en `Back`
+  - `V2` contiene `16` taladros:
+    - `8` en `Top`
+    - `2` en `Front`
+    - `2` en `Back`
+    - `2` en `Left`
+    - `2` en `Right`
+- Hallazgo nuevo para sintesis:
+  - `V2` completa el patron manual de toolpaths para `Left` y `Right`
+  - `Left`:
+    - centro local observado:
+      - `(236, 9, 0)`
+      - `(64, 9, 0)`
+    - `Approach` arranca en `x = -20`
+    - `TrajectoryPath` arranca en `x = 0`
+    - `Lift` arranca en `x = depth`
+    - orientacion:
+      - entrada/corte `(1, 0, 0)`
+      - salida `(-1, 0, 0)`
+  - `Right`:
+    - centro local observado:
+      - `(236, 9, 0)`
+      - `(64, 9, 0)`
+    - `Approach` arranca en `x = dx1 + 20`
+    - `TrajectoryPath` arranca en `x = dx1`
+    - `Lift` arranca en `x = dx1 - depth`
+    - orientacion:
+      - entrada/corte `(-1, 0, 0)`
+      - salida `(1, 0, 0)`
+- Regla generalizada de taladros laterales ahora respaldada manualmente:
+  - caras con avance positivo desde `0`:
+    - `Front`
+    - `Left`
+  - caras con avance negativo desde el extremo opuesto:
+    - `Back`
+    - `Right`
+  - formulas observadas:
+    - `Front`:
+      - seguridad `-20`
+      - entrada `0`
+      - salida `depth`
+    - `Back`:
+      - seguridad `span + 20`
+      - entrada `span`
+      - salida `span - depth`
+    - `Left`:
+      - seguridad `-20`
+      - entrada `0`
+      - salida `depth`
+    - `Right`:
+      - seguridad `span + 20`
+      - entrada `span`
+      - salida `span - depth`
+  - donde `span` vale:
+    - `dy1` para `Front/Back`
+    - `dx1` para `Left/Right`
+- Seleccion de herramienta observada en `V2`:
+  - los `4` taladros superiores iniciales `D15` tienen `ToolKey = 1889 / 002`
+  - los `2` taladros `Front D8` tienen `ToolKey = 1895 / 058`
+  - los `2` taladros `Back D8` tienen `ToolKey = 1896 / 059`
+  - los `4` taladros superiores agregados y los `4` laterales `Left/Right`
+    quedaron con `ToolKey` vacio
+- Implicacion importante:
+  - `ToolKey` es estrictamente por operacion
+  - en un mismo archivo multicara pueden convivir:
+    - taladros equivalentes con herramienta seleccionada
+    - taladros equivalentes con `ToolKey` vacio
+  - por lo tanto, la futura spec debe mantener `tool_resolution` por taladro,
+    no por archivo ni por cara completa
+- Diferencia geometrica entre `V1` y `V2`:
+  - `V2` no solo agrega caras laterales
+  - tambien reubica el primer conjunto de huecos:
+    - de `32/268` a `64/236`
+  - y agrega un segundo marco superior:
+    - `(33,64)`
+    - `(33,236)`
+    - `(267,236)`
+    - `(267,64)`
+  - esto confirma que Maestro no impone una sola convencion de orden o de
+    simetria en el `MainWorkplan`; refleja el orden de creacion manual
+- Comparacion `V1` vs `Origen_5_5_25`:
+  - conservan exactamente:
+    - las `8` geometrías
+    - las `8` features
+    - las `8` operaciones
+    - todos los `ToolpathList`
+    - todos los `ToolKey`
+  - la unica diferencia funcional observada es:
+    - `WorkpieceSetup/Placement._xP = 5`
+    - `WorkpieceSetup/Placement._yP = 5`
+    - `WorkpieceSetup/Placement._zP = 25`
+- Implicacion directa para el sintetizador:
+  - un origen no nulo no traslada:
+    - `GeomCartesianPoint`
+    - `RoundHole`
+    - `ToolpathList`
+  - solo modifica la colocacion de la pieza en
+    `MainWorkplan/Setup/WorkpieceSetup/Placement`
+  - esto refuerza la regla ya observada en otras familias:
+    - el origen afecta el setup, no la geometria local del mecanizado
+
+### Ronda 20 - Correccion del orden multicara en el sintetizador
+
+- Estado: completado
+- Cambio aplicado en `tools/synthesize_pgmx.py`:
+  - `_apply_drillings(...)` ahora ordena los taladros por prioridad de plano
+    antes de escribirlos al `.pgmx`
+- Prioridad aplicada:
+  - `Top`
+  - `Front`
+  - `Back`
+  - `Left`
+  - `Right`
+- Justificacion:
+  - en todos los ejemplos manuales multicara relevados, Maestro agrupa los
+    taladros por cara dentro de un unico `MainWorkplan`
+  - antes, el sintetizador preservaba el orden de entrada del usuario, que
+    podia mezclar caras arbitrariamente
+- Efecto practico:
+  - los `Worksteps`, `Features`, `Operations` y `Geometries` de taladros
+    multicara ahora se escriben siguiendo el patron manual observado
+  - dentro de cada cara se preserva el orden relativo de entrada
+- Regeneracion realizada:
+  - `archive/maestro_examples/Pieza_420x350x18_DobleCamlock_Delantero.pgmx`
+  - el archivo regenerado ahora queda con el orden:
+    - `Top`
+    - `Top`
+    - `Front`
+    - `Front`
+
+### Ronda 21 - Serializacion raw de toolpaths de taladrado
+
+- Estado: completado
+- Hallazgo concreto al comparar el sintetico
+  `Pieza_420x350x18_DobleCamlock_Delantero.pgmx` contra los manuales validos:
+  - los nodos `Operation/ToolpathList/.../_serializationGeometryDescription`
+    sinteticos estaban perdiendo el formato raw exacto de Maestro
+  - el sintetizador recortaba espacios finales y el salto de linea final
+  - ejemplo sintetico previo:
+    - `8 0 20\\n1 32 33 38 0 0 -1`
+  - ejemplo manual valido:
+    - `8 0 20\\n1 64 33 38 0 0 -1 \\n`
+- Causa localizada:
+  - `_normalize_curve_serialization_text(...)` hacia `strip()` y `rstrip()`
+    sobre cada linea
+  - eso alteraba la serializacion exacta generada por
+    `_build_maestro_line_serialization(...)` y
+    `_build_maestro_arc_serialization(...)`
+- Correccion aplicada en `tools/synthesize_pgmx.py`:
+  - ahora se normalizan solo los finales de linea `CRLF/CR -> LF`
+  - se preservan los espacios finales de cada linea
+  - se preserva el salto final cuando el raw original lo trae
+- Resultado inmediato:
+  - el `.pgmx` de doble Camlock fue regenerado con los toolpaths de taladro en
+    formato raw compatible con los ejemplos manuales relevados
+  - `py -3 -m py_compile tools\\synthesize_pgmx.py` sigue pasando
+
+### Ronda 22 - Namespace faltante en ToolpathList al reutilizar un baseline sintetico
+
+- Estado: completado
+- Caso observado:
+  - `archive/maestro_examples/Pieza_320x260x18_EscuadradoAntihorario_DobleCamlockIzquierdo.pgmx`
+  - Maestro rechazaba el archivo al abrirlo con:
+    - `SerializationException`
+    - `Toolpath` con tipo `b:CutterLocationTrajectory`
+    - prefijo `b` no reconocido en ese punto del XML
+- Causa localizada:
+  - `_finalize_pgmx_xml_bytes(...)` solo agregaba `xmlns:b` a `ToolpathList`
+    si no existia ningun `ToolpathList` correcto en todo el documento
+  - en archivos combinados que parten de un baseline ya sintetico, algunos
+    `ToolpathList` quedaban bien y otros no
+  - el caso concreto afectaba al `ToolpathList` del escuadrado heredado del
+    baseline, mientras los taladros nuevos ya traian su declaracion correcta
+- Correccion aplicada en `tools/synthesize_pgmx.py`:
+  - se reemplazo la logica global por una normalizacion por ocurrencia
+  - ahora cada nodo de estos tipos recibe `xmlns:b` si le falta:
+    - `ToolpathList`
+    - `Head`
+    - `MachineFunctions`
+    - `StartPoint`
+    - `ToolKey`
+- Verificacion:
+  - el archivo regenerado ya no contiene ningun `<ToolpathList>` sin
+    `xmlns:b="http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel"`
+  - `py -3 -m py_compile tools\\synthesize_pgmx.py` sigue pasando
+
+### Ronda 23 - Tags autocerrados rotos por la normalizacion de namespaces
+
+- Estado: completado
+- Caso observado en
+  `C:\\Program Files (x86)\\Scm Group\\Maestro\\log\\Log20260415_165037.logx`:
+  - Maestro rechazo el archivo con XML invalido:
+    - `Se esperaba el token '>', pero se encontro ' '`
+  - el error ocurria al deserializar `BottomAndSideFinishMilling`
+- Causa localizada:
+  - la correccion anterior agregaba `xmlns:b` por regex sobre tags como
+    `Head` y `MachineFunctions`
+  - en tags autocerrados, el namespace se insertaba despues de `/`
+  - ejemplo roto observado:
+    - `<Head i:nil="true" / xmlns:b="...">`
+    - `<MachineFunctions / xmlns:b="...">`
+- Correccion aplicada:
+  - la rutina `ensure_prefixed_namespace_attr(...)` ahora detecta
+    autocierre por separado y reconstruye correctamente:
+    - `<Head i:nil="true" xmlns:b="..." />`
+    - `<MachineFunctions xmlns:b="..." />`
+- Conclusión importante para el sintetizador:
+  - en este caso el problema no fue el uso de `DrillingSpec` o
+    `SquaringMillingSpec`
+  - el problema estaba en la capa de serializacion/finalizacion XML del
+    sintetizador
+
+### Ronda 24 - Baseline versionado movido a `tools` y documentacion de specs
+
+- Estado: completado
+- Cambio operativo:
+  - la carpeta `archive/maestro_baselines` se movio a
+    `tools/maestro_baselines`
+  - ese baseline versionado pasa a ser la ubicacion canonica del repo
+- Cambio en codigo:
+  - `tools/synthesize_pgmx.py` ahora expone:
+    - `DEFAULT_BASELINE_DIR`
+    - `DEFAULT_BASELINE_XML_PATH`
+  - `build_synthesis_request(...)` usa `DEFAULT_BASELINE_DIR` si no se indica
+    `baseline_path`
+  - la CLI `python -m tools.synthesize_pgmx` tambien usa
+    `tools/maestro_baselines` por defecto cuando no se pasa `--baseline`
+- Cambio en documentacion:
+  - `README.md` ya resume la nueva ubicacion canonica
+  - `docs/synthesize_pgmx_help.md` ahora deja mas claro el flujo de specs:
+    - pieza en `build_synthesis_request(...)`
+    - escuadrado en `SquaringMillingSpec`
+    - cada hueco en `DrillingSpec`
+    - ejecucion en `synthesize_request(...)`
+  - la guia tambien agrega un ejemplo completo de pieza escuadrada con doble
+    camlock lateral usando el baseline por defecto
+
 ## Discrepancias Acumuladas
 
 - Resuelta: Maestro guarda un estado manual valido de fresado no pasante con
@@ -1093,9 +1341,13 @@ Reconstruir paso a paso:
 - Resuelta: Maestro si admite huecos en varias caras dentro de un unico
   `MainWorkplan`; `Pieza_Huecos_VariasCaras.pgmx` lo demuestra con `Top +
   Front + Back`.
+- Resuelta parcialmente: un origen no nulo por si solo no explica el fallo del
+  archivo sintetizado multicara; `Pieza_Huecos_VariasCaras_Origen_5_5_25.pgmx`
+  muestra un caso manual valido donde solo cambia `WorkpieceSetup/Placement`.
 - Abierta: sigue pendiente aislar que combinacion adicional hizo caer el
-  archivo sintetizado multicara previo; las variables candidatas actuales son
-  origen no nulo y/o `ToolKey` ya resuelto.
+  archivo sintetizado multicara previo; despues de relevar casos manuales, la
+  variable mas sospechosa pasa a ser `ToolKey` ya resuelto en ese contexto, o
+  alguna diferencia secundaria de serializacion XML.
 
 ## Acciones Pendientes Para Codigo/Docs
 

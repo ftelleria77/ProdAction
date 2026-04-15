@@ -14,7 +14,7 @@ Esta carpeta pasa a ser el espacio de trabajo para:
 
 ## Regla de organizacion
 
-- `archive/maestro_baselines` queda reservado para el baseline base del repo:
+- `tools/maestro_baselines` queda reservado para el baseline base del repo:
   `Pieza.xml`, `Pieza.epl` y `def.tlgx`
 - `archive/maestro_examples` concentra el resto de la ingeniería inversa
 

@@ -57,8 +57,10 @@ Orden recomendado para usar el sintetizador:
 Regla practica:
 - `baseline_path` define el contenedor base.
 - `source_pgmx_path` no reemplaza al baseline: solo aporta serializacion ya observada en Maestro cuando coincide con la familia del mecanizado.
-- En este repo, el baseline principal versionado vive en `archive/maestro_baselines/Pieza.xml`
+- En este repo, el baseline principal versionado vive en `tools/maestro_baselines/Pieza.xml`
   y se completa con `Pieza.epl` y `def.tlgx`.
+- `build_synthesis_request(...)` y la CLI usan `tools/maestro_baselines` como
+  baseline por defecto si no se indica otro.
 - Los `.pgmx` manuales de ingeniería inversa viven en `archive/maestro_examples`.
 - la taxonomia de familias geometricas vive en `docs/pgmx_geometry_registry.md`
 
@@ -506,8 +508,8 @@ Firma simplificada:
 
 ```python
 build_synthesis_request(
-    baseline_path,
-    output_path,
+    baseline_path=None,
+    output_path=...,
     *,
     source_pgmx_path=None,
     piece=None,
@@ -527,6 +529,7 @@ build_synthesis_request(
 ```
 
 Reglas:
+- si no se indica `baseline_path`, usa `tools/maestro_baselines`
 - si no se indica `execution_fields`, usa `HG` por defecto
 - si no se pasa `piece`, toma el estado desde `source_pgmx_path` o desde el baseline
 - se pueden combinar mecanizados lineales, por polilinea abierta, de escuadrado
@@ -747,9 +750,9 @@ Uso practico:
 
 ```python
 from pathlib import Path
-from tools.synthesize_pgmx import read_pgmx_state
+from tools.synthesize_pgmx import DEFAULT_BASELINE_XML_PATH, read_pgmx_state
 
-state = read_pgmx_state(Path("archive/maestro_baselines/Pieza.xml"))
+state = read_pgmx_state(DEFAULT_BASELINE_XML_PATH)
 ```
 
 ### Ejemplo minimo: compensar una geometria nominal
@@ -798,7 +801,6 @@ line = build_line_milling_spec(
 )
 
 request = build_synthesis_request(
-    baseline_path=Path("archive/maestro_baselines/Pieza.xml"),
     output_path=Path("archive/maestro_examples/Pieza_sintetizada.pgmx"),
     piece_name="Pieza",
     length=400.0,
@@ -842,7 +844,6 @@ polyline = build_polyline_milling_spec(
 )
 
 request = build_synthesis_request(
-    baseline_path=Path("archive/maestro_baselines/Pieza.xml"),
     output_path=Path("archive/maestro_examples/Pieza_polilinea.pgmx"),
     piece_name="Pieza",
     length=500.0,
@@ -858,13 +859,130 @@ result = synthesize_request(request)
 print(result.output_path)
 ```
 
+### Ejemplo completo: pieza escuadrada con doble camlock lateral
+
+```python
+from pathlib import Path
+from tools.synthesize_pgmx import (
+    build_drilling_spec,
+    build_squaring_milling_spec,
+    build_synthesis_request,
+    synthesize_request,
+)
+
+request = build_synthesis_request(
+    output_path=Path(
+        "archive/maestro_examples/"
+        "Pieza_450x320x18_EscuadradoAntihorario_DobleCamlockIzquierdoDerecho_64.pgmx"
+    ),
+    piece_name="Pieza_450x320x18_EscuadradoAntihorario_DobleCamlockIzquierdoDerecho_64",
+    length=450,
+    width=320,
+    depth=18,
+    origin_x=5,
+    origin_y=5,
+    origin_z=25,
+    squaring_millings=(
+        build_squaring_milling_spec(
+            winding="Antihorario",
+        ),
+    ),
+    drillings=(
+        build_drilling_spec(
+            feature_name="Camlock Superior Izquierdo Delantero",
+            plane_name="Top",
+            center_x=33,
+            center_y=64,
+            diameter=15,
+            target_depth=15,
+            tool_resolution="Auto",
+        ),
+        build_drilling_spec(
+            feature_name="Camlock Superior Izquierdo Trasero",
+            plane_name="Top",
+            center_x=33,
+            center_y=256,
+            diameter=15,
+            target_depth=15,
+            tool_resolution="Auto",
+        ),
+        build_drilling_spec(
+            feature_name="Camlock Superior Derecho Delantero",
+            plane_name="Top",
+            center_x=417,
+            center_y=64,
+            diameter=15,
+            target_depth=15,
+            tool_resolution="Auto",
+        ),
+        build_drilling_spec(
+            feature_name="Camlock Superior Derecho Trasero",
+            plane_name="Top",
+            center_x=417,
+            center_y=256,
+            diameter=15,
+            target_depth=15,
+            tool_resolution="Auto",
+        ),
+        build_drilling_spec(
+            feature_name="Camlock Izquierdo Delantero",
+            plane_name="Left",
+            center_x=64,
+            center_y=9,
+            diameter=8,
+            target_depth=28,
+            tool_resolution="Auto",
+        ),
+        build_drilling_spec(
+            feature_name="Camlock Izquierdo Trasero",
+            plane_name="Left",
+            center_x=256,
+            center_y=9,
+            diameter=8,
+            target_depth=28,
+            tool_resolution="Auto",
+        ),
+        build_drilling_spec(
+            feature_name="Camlock Derecho Delantero",
+            plane_name="Right",
+            center_x=64,
+            center_y=9,
+            diameter=8,
+            target_depth=28,
+            tool_resolution="Auto",
+        ),
+        build_drilling_spec(
+            feature_name="Camlock Derecho Trasero",
+            plane_name="Right",
+            center_x=256,
+            center_y=9,
+            diameter=8,
+            target_depth=28,
+            tool_resolution="Auto",
+        ),
+    ),
+)
+
+result = synthesize_request(request)
+print(result.output_path)
+print(result.sha256)
+```
+
+Lectura conceptual del ejemplo:
+- la pieza se define en el `request`
+- el escuadrado completo vive en un `SquaringMillingSpec`
+- cada hueco vive en un `DrillingSpec`
+- `tool_resolution="Auto"` deja que el sintetizador resuelva la herramienta
+  correcta segun cara, diametro y familia observada
+- como no se indica `baseline_path`, se usa `tools/maestro_baselines`
+
 ## 6. Reglas de trabajo para no perder el hilo
 
 Estas reglas aplican cada vez que se trabaja con esta herramienta:
 
 - Antes de inferir una regla nueva, revisar esta guia y los README del repo.
 - Toda la generacion `.pgmx` del repo debe resolverse desde `tools/synthesize_pgmx.py`.
-- El baseline principal versionado del repo es `archive/maestro_baselines/Pieza.xml`
+- El baseline principal versionado del repo es `tools/maestro_baselines/Pieza.xml`
   junto con `Pieza.epl` y `def.tlgx`.
 - Los estudios manuales y casos de comparación deben guardarse en `archive/maestro_examples`.
 - Las salidas sintéticas de prueba también conviene escribirlas en `archive/maestro_examples`.

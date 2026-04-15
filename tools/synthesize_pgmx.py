@@ -78,12 +78,17 @@ UTILITY_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDat
 XSD_NS = "http://www.w3.org/2001/XMLSchema"
 ARRAYS_NS = "http://schemas.microsoft.com/2003/10/Serialization/Arrays"
 PARAMETRIC_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Parametrics"
+MODULE_DIR = Path(__file__).resolve().parent
+DEFAULT_BASELINE_DIR = MODULE_DIR / "maestro_baselines"
+DEFAULT_BASELINE_XML_PATH = DEFAULT_BASELINE_DIR / "Pieza.xml"
 TOOL_CATALOG_PATH = Path(__file__).with_name("tool_catalog.csv")
 
 ET.register_namespace("", PGMX_NS)
 ET.register_namespace("i", XSI_NS)
 
 __all__ = [
+    "DEFAULT_BASELINE_DIR",
+    "DEFAULT_BASELINE_XML_PATH",
     "PgmxState",
     "ApproachSpec",
     "RetractSpec",
@@ -777,6 +782,28 @@ def _finalize_pgmx_xml_bytes(xml_bytes: bytes) -> bytes:
     approach_decl = f'<Approach i:type="b:BaseApproachStrategy" xmlns:b="{STRATEGY_NS}">'
     retract_decl = f'<Retract i:type="b:BaseRetractStrategy" xmlns:b="{STRATEGY_NS}">'
 
+    def ensure_prefixed_namespace_attr(text: str, element_name: str, prefix: str, namespace: str) -> str:
+        pattern = re.compile(
+            rf'<(?P<tagprefix>[A-Za-z_][\w.-]*:)?{element_name}(?P<attrs>[^<>]*?)(?P<selfclose>\s*/?)>',
+        )
+
+        def replacer(match: re.Match[str]) -> str:
+            attrs = (match.group("attrs") or "").rstrip()
+            selfclose = match.group("selfclose") or ""
+            if f'xmlns:{prefix}="' in attrs:
+                return match.group(0)
+            if attrs:
+                return (
+                    f'<{match.group("tagprefix") or ""}{element_name}'
+                    f'{attrs} xmlns:{prefix}="{namespace}"{selfclose}>'
+                )
+            return (
+                f'<{match.group("tagprefix") or ""}{element_name}'
+                f' xmlns:{prefix}="{namespace}"{selfclose}>'
+            )
+
+        return pattern.sub(replacer, text)
+
     if "<Geometries>" in xml_text and geometry_decl not in xml_text:
         xml_text = xml_text.replace("<Geometries>", geometry_decl, 1)
     if "<GlobalSetup>" in xml_text and global_setup_decl not in xml_text:
@@ -801,16 +828,11 @@ def _finalize_pgmx_xml_bytes(xml_bytes: bytes) -> bytes:
         ),
         xml_text,
     )
-    if "<ToolpathList>" in xml_text and toolpath_list_decl not in xml_text:
-        xml_text = xml_text.replace("<ToolpathList>", toolpath_list_decl)
-    if "<Head>" in xml_text and head_decl not in xml_text:
-        xml_text = xml_text.replace("<Head>", head_decl)
-    if "<MachineFunctions>" in xml_text and machine_functions_decl not in xml_text:
-        xml_text = xml_text.replace("<MachineFunctions>", machine_functions_decl)
-    if "<StartPoint>" in xml_text and start_point_decl not in xml_text:
-        xml_text = xml_text.replace("<StartPoint>", start_point_decl)
-    if "<ToolKey>" in xml_text and tool_key_decl not in xml_text:
-        xml_text = xml_text.replace("<ToolKey>", tool_key_decl)
+    xml_text = ensure_prefixed_namespace_attr(xml_text, "ToolpathList", "b", BASE_MODEL_NS)
+    xml_text = ensure_prefixed_namespace_attr(xml_text, "Head", "b", BASE_MODEL_NS)
+    xml_text = ensure_prefixed_namespace_attr(xml_text, "MachineFunctions", "b", BASE_MODEL_NS)
+    xml_text = ensure_prefixed_namespace_attr(xml_text, "StartPoint", "b", GEOMETRY_NS)
+    xml_text = ensure_prefixed_namespace_attr(xml_text, "ToolKey", "b", UTILITY_NS)
     xml_text = xml_text.replace(
         '<Approach i:type="b:BaseApproachStrategy">',
         approach_decl,
@@ -2262,7 +2284,21 @@ def _format_maestro_orientation_number(value: float) -> str:
 
 
 def _normalize_curve_serialization_text(text: str) -> str:
-    return "\n".join(line.rstrip() for line in str(text).strip().splitlines())
+    raw_text = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    lines = raw_text.split("\n")
+
+    while lines and lines[0] == "":
+        lines.pop(0)
+
+    trailing_newline = raw_text.endswith("\n")
+    while lines and lines[-1] == "":
+        lines.pop()
+        trailing_newline = True
+
+    normalized = "\n".join(lines)
+    if trailing_newline and normalized:
+        return f"{normalized}\n"
+    return normalized
 
 
 def _build_parameterized_maestro_line_serialization(
@@ -5795,7 +5831,21 @@ def _apply_drillings(
     state: PgmxState,
     drillings: Sequence[_HydratedDrillingSpec],
 ) -> None:
-    for drilling in drillings:
+    # Maestro guarda consistentemente los taladros multicara agrupados por
+    # plano. Mantener ese orden reduce diferencias contra los ejemplos manuales
+    # y evita mezclar caras arbitrariamente segun el orden de entrada.
+    plane_priority = {
+        "Top": 0,
+        "Front": 1,
+        "Back": 2,
+        "Left": 3,
+        "Right": 4,
+    }
+    ordered_drillings = sorted(
+        enumerate(drillings),
+        key=lambda item: (plane_priority.get(item[1].plane_name, 99), item[0]),
+    )
+    for _, drilling in ordered_drillings:
         _append_drilling(root, state, drilling)
 
 
@@ -6107,8 +6157,8 @@ def build_drilling_spec(
 # ============================================================================
 
 def build_synthesis_request(
-    baseline_path: Path,
-    output_path: Path,
+    baseline_path: Optional[Path] = None,
+    output_path: Optional[Path] = None,
     *,
     source_pgmx_path: Optional[Path] = None,
     piece: Optional[PgmxState] = None,
@@ -6136,10 +6186,19 @@ def build_synthesis_request(
 
     Soporte de contenedores baseline:
     - `baseline_path`: `.pgmx`, `Pieza.xml` o carpeta que contenga `Pieza.xml`
+      Si no se indica, usa `DEFAULT_BASELINE_DIR`.
     - `source_pgmx_path`: `.pgmx`, `Pieza.xml` o carpeta usada como plantilla de serializacion
     """
 
-    base_piece = piece or (read_pgmx_state(source_pgmx_path) if source_pgmx_path else read_pgmx_state(baseline_path))
+    if output_path is None:
+        raise ValueError("`output_path` es obligatorio para construir un `PgmxSynthesisRequest`.")
+
+    effective_baseline_path = Path(baseline_path) if baseline_path is not None else DEFAULT_BASELINE_DIR
+    effective_output_path = Path(output_path)
+
+    base_piece = piece or (
+        read_pgmx_state(source_pgmx_path) if source_pgmx_path else read_pgmx_state(effective_baseline_path)
+    )
     effective_execution_fields = execution_fields
     if effective_execution_fields is None and piece is None:
         effective_execution_fields = "HG"
@@ -6155,8 +6214,8 @@ def build_synthesis_request(
         effective_execution_fields,
     )
     return PgmxSynthesisRequest(
-        baseline_path=baseline_path,
-        output_path=output_path,
+        baseline_path=effective_baseline_path,
+        output_path=effective_output_path,
         piece=target_piece,
         source_pgmx_path=source_pgmx_path,
         line_millings=tuple(line_millings or ()),
@@ -6228,8 +6287,8 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
 
 
 def synthesize_pgmx(
-    baseline_path: Path,
-    output_path: Path,
+    baseline_path: Optional[Path] = None,
+    output_path: Optional[Path] = None,
     source_pgmx_path: Optional[Path] = None,
     piece_name: Optional[str] = None,
     length: Optional[float] = None,
@@ -6280,8 +6339,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     parser.add_argument(
         "--baseline",
-        required=True,
-        help="Ruta al baseline Maestro: `.pgmx`, `Pieza.xml` o carpeta contenedora.",
+        default=str(DEFAULT_BASELINE_DIR),
+        help=(
+            "Ruta al baseline Maestro: `.pgmx`, `Pieza.xml` o carpeta contenedora. "
+            "Si no se indica, usa `tools/maestro_baselines`."
+        ),
     )
     parser.add_argument("--output", required=True, help="Ruta del .pgmx sintetizado de salida.")
     parser.add_argument(

@@ -15,9 +15,12 @@ La fuente de verdad pasa a ser el baseline desempaquetado:
 Ese conjunto es el que debe usarse para sintetizar nuevas piezas.
 `tools.synthesize_pgmx` ya sabe cargarlo de tres maneras:
 
-- pasando `archive/maestro_baselines/Pieza.xml`
-- pasando la carpeta `archive/maestro_baselines`
+- pasando `tools/maestro_baselines/Pieza.xml`
+- pasando la carpeta `tools/maestro_baselines`
 - pasando un `.pgmx` historico, si hace falta compatibilidad
+
+Ademas, para la API principal y la CLI, esta carpeta ya queda configurada como
+baseline por defecto.
 
 ## Uso recomendado
 
@@ -36,7 +39,6 @@ Ese conjunto es el que debe usarse para sintetizar nuevas piezas.
 ```powershell
 cd C:\Users\fermi\OneDrive\Repoositorios\ProdAction
 python -m tools.synthesize_pgmx \
-    --baseline "archive/maestro_baselines/Pieza.xml" \
     --piece-name "Pieza" \
     --output "archive/maestro_examples/Pieza_sintetizada.pgmx"
 ```
@@ -46,7 +48,6 @@ python -m tools.synthesize_pgmx \
 ```powershell
 cd C:\Users\fermi\OneDrive\Repoositorios\ProdAction
 python -m tools.synthesize_pgmx \
-    --baseline "archive/maestro_baselines/Pieza.xml" \
     --piece-name "Pieza" \
     --length 400 \
     --width 400 \
