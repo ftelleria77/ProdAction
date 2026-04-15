@@ -22,19 +22,20 @@ Casos publicos soportados hoy:
 - fresado lineal abierto (`LineMillingSpec`)
 - fresado sobre polilinea abierta (`PolylineMillingSpec`)
 - escuadrado exterior del contorno de pieza (`SquaringMillingSpec`)
+- taladro puntual sobre punto (`DrillingSpec`)
 - control de profundidad pasante/no pasante
 - `Approach` y `Retract` con reglas ya volcadas desde Maestro y ya unificadas
   sobre la tangente de entrada/salida del toolpath efectivo
 - `Area` de Parametros de Maquina, con `HG` por defecto
 
 Casos que no deben asumirse como API publica estable si no estan documentados aqui:
-- familias de feature distintas de `GeneralProfileFeature`
+- familias de feature distintas de `GeneralProfileFeature` y `RoundHole`
 - cualquier mecanizado que no este construido con
-  `LineMillingSpec`, `PolylineMillingSpec` o `SquaringMillingSpec`
+  `LineMillingSpec`, `PolylineMillingSpec`, `SquaringMillingSpec` o `DrillingSpec`
 
 Importante:
 - la sintesis completa de feature + operation sigue expuesta hoy por
-  `LineMillingSpec`, `PolylineMillingSpec` y `SquaringMillingSpec`
+  `LineMillingSpec`, `PolylineMillingSpec`, `SquaringMillingSpec` y `DrillingSpec`
 - la nueva capa de compensacion ya sabe resolver lineas, arcos, circulos y curvas
   compuestas abiertas/cerradas, aunque esas familias todavia no tengan un
   `...MillingSpec` publico propio
@@ -48,8 +49,8 @@ Orden recomendado para usar el sintetizador:
 3. Leer o definir la pieza.
 4. Construir la profundidad.
 5. Construir `Approach` y `Retract`.
-6. Construir uno o mas mecanizados (`LineMillingSpec`, `PolylineMillingSpec`
-   y/o `SquaringMillingSpec`).
+6. Construir uno o mas mecanizados (`LineMillingSpec`, `PolylineMillingSpec`,
+   `SquaringMillingSpec` y/o `DrillingSpec`).
 7. Construir el `PgmxSynthesisRequest`.
 8. Ejecutar `synthesize_request(...)`.
 
@@ -86,10 +87,11 @@ Nota importante:
 
 ### `read_pgmx_geometries(path: Path) -> tuple[GeometryProfileSpec, ...]`
 
-Lee la seccion `Geometries` de un baseline Maestro y clasifica cada curva base sin depender
+Lee la seccion `Geometries` de un baseline Maestro y clasifica cada geometria base sin depender
 del nombre del archivo.
 
 Casos identificados hoy:
+- `Point`
 - `LineVertical`
 - `LineHorizontal`
 - `Circle_CounterClockwise`
@@ -104,10 +106,10 @@ Regla importante:
 - en varios casos horarios Maestro serializa con parametros negativos o invertidos
 - la lectura correcta usa `origin + direction * param_start/param_end`
 
-### `build_line_geometry_profile(...)`, `build_circle_geometry_profile(...)`, `build_composite_geometry_profile(...)`
+### `build_point_geometry_profile(...)`, `build_line_geometry_profile(...)`, `build_circle_geometry_profile(...)`, `build_composite_geometry_profile(...)`
 
 Estas helpers no crean aun un mecanizado completo por si solas, pero dejan lista
-la capa geometrica que va a usarse en futuras familias cerradas y circulares.
+la capa geometrica que va a usarse en futuras familias puntuales, cerradas y circulares.
 
 Complementos utiles:
 - `build_line_geometry_primitive(...)`
@@ -378,6 +380,124 @@ Notas:
   relevados; la parametrizacion interna de algunas curvas puede no quedar
   serializada byte a byte igual si no se parte de una plantilla manual
 
+### `build_drilling_spec(...) -> DrillingSpec`
+
+Construye un taladro puntual asociado a un `GeomCartesianPoint`.
+
+Firma simplificada:
+
+```python
+build_drilling_spec(
+    *,
+    center_x,
+    center_y,
+    diameter,
+    feature_name=None,
+    plane_name=None,
+    security_plane=None,
+    is_through=None,
+    target_depth=None,
+    extra_depth=None,
+    drill_family=None,
+    tool_resolution=None,
+    tool_id=None,
+    tool_name=None,
+)
+```
+
+Alcance validado hoy:
+- caras soportadas: `Top`, `Front`, `Back`, `Right`, `Left`
+- geometria base: `GeomCartesianPoint`
+- feature: `RoundHole`
+- operacion: `DrillingOperation`
+
+Reglas publicas de la spec:
+- `center_x/center_y` son coordenadas locales al plano indicado
+- `diameter` es obligatorio
+- `target_depth` / `is_through` / `extra_depth` reutilizan la semantica de
+  `build_milling_depth_spec(...)`
+- `feature_name` por defecto queda como `Taladrado`
+- `drill_family` admite:
+  - `Flat`
+  - `Conical`
+- `Countersunk/Abocinado` queda fuera de alcance por ahora porque todavia no hay
+  un caso manual validado
+
+Defaults y reglas derivadas:
+- si no se indica `plane_name`, usa `Top`
+- si no se indica `security_plane`, usa `20`
+- si no se indica `drill_family`, por defecto queda `Flat`
+- excepcion relevante:
+  - si el hueco es pasante sobre `Top` y el diametro es `5`, la helper prefiere
+    `Conical`
+  - para el resto de los casos, si no se indica familia, queda `Flat`
+
+Profundidad efectiva por cara:
+- `Top` usa `dz1`
+- `Front` y `Back` usan `dy1`
+- `Right` y `Left` usan `dx1`
+
+Regla validada en Maestro para la serializacion:
+- no pasante:
+  - `Depth.StartDepth = target_depth`
+  - `Depth.EndDepth = target_depth`
+  - no agrega expresiones si el taladro no es pasante
+- pasante:
+  - `BottomCondition = ThroughHoleBottom`
+  - `Depth.StartDepth/EndDepth` queda igual al espesor util de la cara
+  - agrega 2 expresiones sobre `Depth.StartDepth/EndDepth` hacia la variable
+    correspondiente:
+    - `dz1` en `Top`
+    - `dy1` en `Front/Back`
+    - `dx1` en `Right/Left`
+  - `extra_depth` no aumenta el `Depth` declarado; extiende el `TrajectoryPath`
+    por fuera de la cara opuesta
+
+Familia de broca y `BottomCondition`:
+- `Flat` sin herramienta seleccionada:
+  - `BottomCondition = FlatHoleBottom`
+- `Conical` sin herramienta seleccionada:
+  - `BottomCondition = ConicalHoleBottom`
+  - agrega `TipAngle = 0`
+  - agrega `TipRadius = 0`
+- `through`:
+  - fuerza `BottomCondition = ThroughHoleBottom`
+- caso especial validado:
+  - en `Top + D5 + Conical`, una vez elegida la herramienta `007`, Maestro deja
+    la familia conica expresada por `ToolKey` y por `Feature/Name`, pero
+    normaliza `BottomCondition` a `FlatHoleBottom`
+
+Resolucion de herramienta:
+- `tool_resolution="None"`:
+  - deja `ToolKey` vacio (`ID=0`, `ObjectType=System.Object`, `Name=""`)
+- `tool_resolution="Auto"`:
+  - superior:
+    - `Flat D8 -> 001 / 1888`
+    - `Flat D15 -> 002 / 1889`
+    - `Flat D20 -> 003 / 1890`
+    - `Flat D35 -> 004 / 1891`
+    - `Flat D5 -> 005 / 1892`
+    - `Flat D4 -> 006 / 1893`
+    - `Conical D5 -> 007 / 1894`
+  - laterales:
+    - `Front D8 -> 058 / 1895`
+    - `Back D8 -> 059 / 1896`
+    - `Right D8 -> 060 / 1897`
+    - `Left D8 -> 061 / 1898`
+- `tool_resolution="Explicit"`:
+  - usa `tool_id/tool_name` dados por el usuario
+  - valida que existan en `tools/tool_catalog.csv`
+
+Reglas practicas relevantes:
+- el centro efectivo del taladro vive en `Feature/GeometryID`, no en
+  `Operation/StartPoint`
+- el `Approach` va desde el plano de seguridad hasta la cara de entrada
+- `TrajectoryPath` va desde la cara de entrada hasta la profundidad efectiva
+- `Lift` vuelve desde la profundidad efectiva hasta el mismo plano de seguridad
+- la validacion contra `tools/tool_catalog.csv` aplica solo cuando la
+  herramienta queda resuelta a una herramienta real; si `ToolKey` queda vacio,
+  no hay chequeo de `sinking_length`
+
 ### `build_synthesis_request(...) -> PgmxSynthesisRequest`
 
 Es el ensamblador del pedido completo.
@@ -402,14 +522,15 @@ build_synthesis_request(
     line_millings=None,
     polyline_millings=None,
     squaring_millings=None,
+    drillings=None,
 )
 ```
 
 Reglas:
 - si no se indica `execution_fields`, usa `HG` por defecto
 - si no se pasa `piece`, toma el estado desde `source_pgmx_path` o desde el baseline
-- se pueden combinar mecanizados lineales, por polilinea abierta y de escuadrado
-  en un mismo request
+- se pueden combinar mecanizados lineales, por polilinea abierta, de escuadrado
+  y de taladrado en un mismo request
 - `baseline_path` y `source_pgmx_path` aceptan `.pgmx`, `Pieza.xml` o carpeta contenedora
 - si se indican `origin_x/origin_y/origin_z`, se actualiza
   `WorkpieceSetup/Placement`

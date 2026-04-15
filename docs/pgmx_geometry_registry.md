@@ -10,6 +10,7 @@ En `tools.synthesize_pgmx` quedaron disponibles:
 - `read_pgmx_geometries(path)`
 - `GeometryPrimitiveSpec`
 - `GeometryProfileSpec`
+- `build_point_geometry_profile(...)`
 - `build_line_geometry_primitive(...)`
 - `build_arc_geometry_primitive(...)`
 - `build_line_geometry_profile(...)`
@@ -20,12 +21,25 @@ En `tools.synthesize_pgmx` quedaron disponibles:
 Objetivo:
 - inspeccionar un `.pgmx` sin mirar el nombre del archivo
 - clasificar su geometria con una clave estable
-- dejar serializadores base para `GeomTrimmedCurve`, `GeomCircle` y `GeomCompositeCurve`
+- dejar serializadores base para `GeomCartesianPoint`, `GeomTrimmedCurve`, `GeomCircle` y `GeomCompositeCurve`
 - dejar tambien una capa unica de compensacion geometrica ya alineada con Maestro
 
 ## Reglas de identificacion
 
-### 1. `GeomTrimmedCurve`
+### 1. `GeomCartesianPoint`
+
+Se identifica por `i:type="a:GeomCartesianPoint"` y sus coordenadas locales:
+
+```xml
+<a:_x>150</a:_x>
+<a:_y>150</a:_y>
+<a:_z>0</a:_z>
+```
+
+Clasificacion:
+- `Point`
+
+### 2. `GeomTrimmedCurve`
 
 Se identifica por `i:type="a:GeomTrimmedCurve"` y un bloque raw de dos lineas:
 
@@ -46,7 +60,7 @@ Clasificacion:
 - `LineHorizontal`: `y` constante
 - `Line`: cualquier otra recta
 
-### 2. `GeomCircle`
+### 3. `GeomCircle`
 
 Se identifica por `i:type="a:GeomCircle"` y una sola linea raw:
 
@@ -60,7 +74,7 @@ Reglas:
 - `nz > 0` -> `CounterClockwise`
 - `nz < 0` -> `Clockwise`
 
-### 3. `GeomCompositeCurve`
+### 4. `GeomCompositeCurve`
 
 Se identifica por `i:type="a:GeomCompositeCurve"` y una lista de miembros en
 `_serializingMembers`.
@@ -89,6 +103,7 @@ Reglas auxiliares:
 
 | Archivo | `classification_key` | Observacion |
 | --- | --- | --- |
+| `Pieza_PuntoCentral.pgmx` | `Point` | punto en `(150,150,0)` sobre `Top` |
 | `Pieza_LineaVertical.pgmx` | `LineVertical` | recta vertical simple |
 | `Pieza_LineaHorizontal.pgmx` | `LineHorizontal` | recta horizontal simple |
 | `Pieza_CirculoCentral_200_Antihorario.pgmx` | `Circle_CounterClockwise` | circulo centro `(200,200)` radio `200` |
@@ -122,8 +137,10 @@ from tools.synthesize_pgmx import (
     build_composite_geometry_profile,
     build_line_geometry_primitive,
     build_line_geometry_profile,
+    build_point_geometry_profile,
 )
 
+pto = build_point_geometry_profile(150, 150)
 linea = build_line_geometry_profile(200, 0, 200, 400)
 circulo = build_circle_geometry_profile(200, 200, 200, winding="Antihorario")
 contorno = build_composite_geometry_profile(
@@ -142,6 +159,7 @@ o polilinea abierta. A partir de ahora:
 - la identificacion de geometria vive en codigo, no en los nombres de archivo
 - las curvas horarias y antihorarias se leen con la misma logica
 - ya existe una capa geometrica reusable para futuras familias cerradas y circulares
+- ya existe una capa geometrica reusable tambien para puntos de referencia
 - la compensacion por `SideOfFeature` ya esta centralizada para:
   - lineas
   - arcos

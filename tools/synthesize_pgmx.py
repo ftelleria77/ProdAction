@@ -8,7 +8,7 @@ Referencia operativa recomendada:
 
 - `read_pgmx_state(...)` lee dimensiones, nombre, origen y area desde un
     baseline Maestro (`.pgmx`, `Pieza.xml` o carpeta contenedora).
-- `read_pgmx_geometries(...)` clasifica las curvas base guardadas en `Geometries`.
+- `read_pgmx_geometries(...)` clasifica las geometrías base guardadas en `Geometries`.
 - `build_synthesis_request(...)` arma una solicitud clara y reusable.
 - `synthesize_request(...)` aplica la solicitud sobre un baseline Maestro y
     escribe el `.pgmx` de salida.
@@ -19,8 +19,10 @@ Soporte actual de mecanizados sinteticos:
 - `LineMillingSpec`: linea sobre un plano con su fresado asociado.
 - `PolylineMillingSpec`: polilinea abierta con su fresado asociado.
 - `SquaringMillingSpec`: escuadrado exterior del contorno de la pieza sobre `Top`.
+- `DrillingSpec`: taladro puntual sobre `Top`, `Front`, `Back`, `Right` o `Left`.
 
 Soporte actual de geometria base reusable:
+- `build_point_geometry_profile(...)`
 - `build_line_geometry_profile(...)`
 - `build_circle_geometry_profile(...)`
 - `build_composite_geometry_profile(...)`
@@ -69,6 +71,7 @@ PGMX_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataMo
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
 BASE_MODEL_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel"
 MILLING_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Milling"
+DRILLING_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Drilling"
 GEOMETRY_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Geometry"
 STRATEGY_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Strategy"
 UTILITY_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Utility"
@@ -90,6 +93,7 @@ __all__ = [
     "LineMillingSpec",
     "PolylineMillingSpec",
     "SquaringMillingSpec",
+    "DrillingSpec",
     "PgmxSynthesisRequest",
     "PgmxSynthesisResult",
     "build_approach_spec",
@@ -97,6 +101,7 @@ __all__ = [
     "build_milling_depth_spec",
     "build_line_geometry_primitive",
     "build_arc_geometry_primitive",
+    "build_point_geometry_profile",
     "build_line_geometry_profile",
     "build_circle_geometry_profile",
     "build_composite_geometry_profile",
@@ -104,6 +109,7 @@ __all__ = [
     "build_line_milling_spec",
     "build_polyline_milling_spec",
     "build_squaring_milling_spec",
+    "build_drilling_spec",
     "read_pgmx_state",
     "read_pgmx_geometries",
     "build_synthesis_request",
@@ -286,6 +292,23 @@ class SquaringMillingSpec:
     def side_of_feature(self) -> str:
         normalized_winding = _normalize_geometry_winding(self.winding)
         return "Right" if normalized_winding == "CounterClockwise" else "Left"
+
+
+@dataclass(frozen=True)
+class DrillingSpec:
+    """Descripcion reutilizable de un taladro puntual sobre una cara de la pieza."""
+
+    center_x: float
+    center_y: float
+    diameter: float
+    feature_name: str = "Taladrado"
+    plane_name: str = "Top"
+    security_plane: float = 20.0
+    depth_spec: MillingDepthSpec = field(default_factory=MillingDepthSpec)
+    drill_family: str = "Flat"
+    tool_resolution: str = "Auto"
+    tool_id: str = "0"
+    tool_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -483,6 +506,65 @@ class _HydratedSquaringMillingSpec:
 
 
 @dataclass(frozen=True)
+class _HydratedDrillingSpec:
+    """Datos internos de serializacion y herramienta para `DrillingSpec`."""
+
+    spec: DrillingSpec
+    preferred_id_start: Optional[int] = None
+    resolved_tool_id: str = "0"
+    resolved_tool_name: str = ""
+    resolved_tool_object_type: str = "System.Object"
+
+    @property
+    def center_x(self) -> float:
+        return self.spec.center_x
+
+    @property
+    def center_y(self) -> float:
+        return self.spec.center_y
+
+    @property
+    def diameter(self) -> float:
+        return self.spec.diameter
+
+    @property
+    def feature_name(self) -> str:
+        return self.spec.feature_name
+
+    @property
+    def plane_name(self) -> str:
+        return self.spec.plane_name
+
+    @property
+    def security_plane(self) -> float:
+        return self.spec.security_plane
+
+    @property
+    def depth_spec(self) -> MillingDepthSpec:
+        return self.spec.depth_spec
+
+    @property
+    def drill_family(self) -> str:
+        return self.spec.drill_family
+
+    @property
+    def tool_resolution(self) -> str:
+        return self.spec.tool_resolution
+
+    @property
+    def tool_id(self) -> str:
+        return self.resolved_tool_id
+
+    @property
+    def tool_name(self) -> str:
+        return self.resolved_tool_name
+
+    @property
+    def tool_object_type(self) -> str:
+        return self.resolved_tool_object_type
+
+
+@dataclass(frozen=True)
 class PgmxSynthesisRequest:
     """Solicitud completa para sintetizar un `.pgmx` reutilizable desde la app."""
 
@@ -493,6 +575,7 @@ class PgmxSynthesisRequest:
     line_millings: tuple[LineMillingSpec, ...] = ()
     polyline_millings: tuple[PolylineMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
+    drillings: tuple[DrillingSpec, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -505,6 +588,7 @@ class PgmxSynthesisResult:
     line_millings: tuple[LineMillingSpec, ...] = ()
     polyline_millings: tuple[PolylineMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
+    drillings: tuple[DrillingSpec, ...] = ()
 
 
 # ============================================================================
@@ -827,11 +911,22 @@ def _finalize_synthesized_pgmx_xml_bytes(xml_bytes: bytes) -> bytes:
         ),
         xml_text,
     )
-    for element_name, namespace_uri in (
-        ("ManufacturingFeature", MILLING_NS),
-        ("Operation", MILLING_NS),
-        ("GeomGeometry", GEOMETRY_NS),
-    ):
+    def runtime_type_namespace(element_name: str, dtype: str) -> str:
+        if element_name == "ManufacturingFeature":
+            return {
+                "GeneralProfileFeature": MILLING_NS,
+                "RoundHole": DRILLING_NS,
+            }.get(dtype, MILLING_NS)
+        if element_name == "Operation":
+            return {
+                "BottomAndSideFinishMilling": MILLING_NS,
+                "DrillingOperation": DRILLING_NS,
+            }.get(dtype, MILLING_NS)
+        if element_name == "GeomGeometry":
+            return GEOMETRY_NS
+        return MILLING_NS
+
+    for element_name in ("ManufacturingFeature", "Operation", "GeomGeometry"):
         xml_text = re.sub(
             rf'<(?P<prefix>[A-Za-z_][\w.-]*:)?{element_name}(?P<attrs>[^>]*) i:type="a:(?P<dtype>[^"]+)"(?P<tail>[^>]*)>',
             lambda match: (
@@ -840,11 +935,15 @@ def _finalize_synthesized_pgmx_xml_bytes(xml_bytes: bytes) -> bytes:
                 else (
                     f'<{match.group("prefix") or ""}{element_name}'
                     f'{match.group("attrs")} i:type="a:{match.group("dtype")}"'
-                    f' xmlns:a="{namespace_uri}"{match.group("tail")}>'
+                    f' xmlns:a="{runtime_type_namespace(element_name, match.group("dtype"))}"{match.group("tail")}>'
                 )
             ),
             xml_text,
         )
+    xml_text = xml_text.replace(
+        '<MachiningStrategy i:type="b:SingleStepDrilling">',
+        f'<MachiningStrategy i:type="b:SingleStepDrilling" xmlns:b="{BASE_MODEL_NS}">',
+    )
     return xml_text.encode("utf-8")
 
 
@@ -892,6 +991,75 @@ def _normalize_side_of_feature(value: Optional[str]) -> str:
     }
     if raw not in mapping:
         raise ValueError("SideOfFeature invalido. Valores admitidos: Center, Right, Left.")
+    return mapping[raw]
+
+
+def _normalize_plane_name(value: Optional[str]) -> str:
+    raw = (value or "Top").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+    mapping = {
+        "top": "Top",
+        "superior": "Top",
+        "carasuperior": "Top",
+        "front": "Front",
+        "frontal": "Front",
+        "caradelantera": "Front",
+        "delantera": "Front",
+        "back": "Back",
+        "trasera": "Back",
+        "caratrasera": "Back",
+        "right": "Right",
+        "derecha": "Right",
+        "caraderecha": "Right",
+        "left": "Left",
+        "izquierda": "Left",
+        "caraizquierda": "Left",
+    }
+    if raw not in mapping:
+        raise ValueError(
+            "PlaneName invalido. Valores admitidos: Top/Superior, Front/Delantera, "
+            "Back/Trasera, Right/Derecha o Left/Izquierda."
+        )
+    return mapping[raw]
+
+
+def _normalize_drill_family(value: Optional[str]) -> str:
+    raw = (value or "Flat").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+    mapping = {
+        "flat": "Flat",
+        "plana": "Flat",
+        "plano": "Flat",
+        "conical": "Conical",
+        "conica": "Conical",
+        "conico": "Conical",
+        "lanza": "Conical",
+        "puntadelanza": "Conical",
+        "countersunk": "Countersunk",
+        "abocinado": "Countersunk",
+        "abocinada": "Countersunk",
+    }
+    if raw not in mapping:
+        raise ValueError(
+            "DrillFamily invalido. Valores admitidos: Flat/Plana, Conical/Lanza o Countersunk/Abocinado."
+        )
+    return mapping[raw]
+
+
+def _normalize_tool_resolution(value: Optional[str]) -> str:
+    raw = (value or "Auto").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+    mapping = {
+        "auto": "Auto",
+        "automatic": "Auto",
+        "automatico": "Auto",
+        "none": "None",
+        "sin": "None",
+        "ninguna": "None",
+        "empty": "None",
+        "explicit": "Explicit",
+        "explicita": "Explicit",
+        "manual": "Explicit",
+    }
+    if raw not in mapping:
+        raise ValueError("ToolResolution invalido. Valores admitidos: Auto, None o Explicit.")
     return mapping[raw]
 
 
@@ -1185,6 +1353,26 @@ def build_line_geometry_profile(
     )
 
 
+def build_point_geometry_profile(
+    point_x: float,
+    point_y: float,
+    *,
+    z_value: float = 0.0,
+) -> GeometryProfileSpec:
+    """Construye un punto geometrico Maestro listo para inspeccion o futura sintesis."""
+
+    point = (float(point_x), float(point_y), float(z_value))
+    primitive = GeometryPrimitiveSpec(
+        primitive_type="Point",
+        start_point=point,
+        end_point=point,
+    )
+    return _build_profile_geometry_spec(
+        geometry_type="GeomCartesianPoint",
+        primitives=(primitive,),
+    )
+
+
 def build_circle_geometry_profile(
     center_x: float,
     center_y: float,
@@ -1396,6 +1584,14 @@ def _workpiece_depth_name(workpiece: Optional[ET.Element]) -> str:
     return _text(workpiece, "./{*}DepthName", "dz1") or "dz1"
 
 
+def _workpiece_length_name(workpiece: Optional[ET.Element]) -> str:
+    return _text(workpiece, "./{*}LengthName", "dx1") or "dx1"
+
+
+def _workpiece_width_name(workpiece: Optional[ET.Element]) -> str:
+    return _text(workpiece, "./{*}WidthName", "dy1") or "dy1"
+
+
 def _normalize_polyline_points(points: Sequence[tuple[float, float]]) -> tuple[tuple[float, float], ...]:
     normalized = tuple((float(point[0]), float(point[1])) for point in points)
     if len(normalized) < 2:
@@ -1446,6 +1642,59 @@ def _load_tool_catalog() -> dict[str, dict[str, str]]:
     }
 
 
+_AUTO_VERTICAL_DRILL_TOOLS: dict[tuple[str, str], tuple[str, str]] = {
+    ("Flat", "8"): ("1888", "001"),
+    ("Flat", "15"): ("1889", "002"),
+    ("Flat", "20"): ("1890", "003"),
+    ("Flat", "35"): ("1891", "004"),
+    ("Flat", "5"): ("1892", "005"),
+    ("Flat", "4"): ("1893", "006"),
+    ("Conical", "5"): ("1894", "007"),
+}
+
+_AUTO_LATERAL_DRILL_TOOLS: dict[tuple[str, str], tuple[str, str]] = {
+    ("Front", "8"): ("1895", "058"),
+    ("Back", "8"): ("1896", "059"),
+    ("Right", "8"): ("1897", "060"),
+    ("Left", "8"): ("1898", "061"),
+}
+
+
+def _lookup_tool_catalog_entry(
+    tool_catalog: dict[str, dict[str, str]],
+    *,
+    tool_id: Optional[str] = None,
+    tool_name: Optional[str] = None,
+) -> dict[str, str]:
+    normalized_tool_id = (tool_id or "").strip()
+    normalized_tool_name = (tool_name or "").strip()
+    if normalized_tool_id == "0" and normalized_tool_name:
+        normalized_tool_id = ""
+
+    if normalized_tool_id:
+        row = tool_catalog.get(normalized_tool_id)
+        if row is None:
+            raise ValueError(
+                f"No existe la herramienta '{normalized_tool_id}' en '{TOOL_CATALOG_PATH.name}'."
+            )
+        if normalized_tool_name and (row.get("name") or "").strip() != normalized_tool_name:
+            raise ValueError(
+                "La herramienta explicita no coincide con el catalogo: "
+                f"id={normalized_tool_id} corresponde a '{(row.get('name') or '').strip()}'."
+            )
+        return row
+
+    if normalized_tool_name:
+        for row in tool_catalog.values():
+            if (row.get("name") or "").strip() == normalized_tool_name:
+                return row
+        raise ValueError(
+            f"No existe la herramienta '{normalized_tool_name}' en '{TOOL_CATALOG_PATH.name}'."
+        )
+
+    raise ValueError("La resolucion explicita de herramienta requiere tool_id, tool_name o ambos.")
+
+
 def _feature_depth_value(state: PgmxState, spec) -> float:
     # En Maestro, un pasante deja `Depth.StartDepth/EndDepth` igual al espesor
     # actual de la pieza y luego agrega expresiones parametricas hacia `DepthName`.
@@ -1475,6 +1724,210 @@ def _tool_total_milling_depth(state: PgmxState, spec) -> float:
 
 def _tool_catalog_label(spec) -> str:
     return f"{spec.tool_name} ({spec.tool_id})"
+
+
+def _diameter_key(value: float) -> str:
+    return _compact_number(float(value))
+
+
+def _plane_local_dimensions(state: PgmxState, plane_name: str) -> tuple[float, float]:
+    normalized_plane_name = _normalize_plane_name(plane_name)
+    mapping = {
+        "Top": (state.length, state.width),
+        "Front": (state.length, state.depth),
+        "Back": (state.length, state.depth),
+        "Right": (state.width, state.depth),
+        "Left": (state.width, state.depth),
+    }
+    return mapping[normalized_plane_name]
+
+
+def _drilling_axis_span(state: PgmxState, plane_name: str) -> float:
+    normalized_plane_name = _normalize_plane_name(plane_name)
+    mapping = {
+        "Top": state.depth,
+        "Front": state.width,
+        "Back": state.width,
+        "Right": state.length,
+        "Left": state.length,
+    }
+    return mapping[normalized_plane_name]
+
+
+def _drilling_axis_variable_name(workpiece: Optional[ET.Element], plane_name: str) -> str:
+    normalized_plane_name = _normalize_plane_name(plane_name)
+    if normalized_plane_name == "Top":
+        return _workpiece_depth_name(workpiece)
+    if normalized_plane_name in {"Front", "Back"}:
+        return _workpiece_width_name(workpiece)
+    return _workpiece_length_name(workpiece)
+
+
+def _drilling_entry_point_and_direction(
+    state: PgmxState,
+    spec: _HydratedDrillingSpec,
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    plane_name = spec.plane_name
+    local_x = spec.center_x
+    local_y = spec.center_y
+    if plane_name == "Top":
+        return (local_x, local_y, state.depth), (0.0, 0.0, -1.0)
+    if plane_name == "Front":
+        return (local_x, 0.0, local_y), (0.0, 1.0, 0.0)
+    if plane_name == "Back":
+        return (state.length - local_x, state.width, local_y), (0.0, -1.0, 0.0)
+    if plane_name == "Right":
+        return (state.length, local_x, local_y), (-1.0, 0.0, 0.0)
+    if plane_name == "Left":
+        return (0.0, state.width - local_x, local_y), (1.0, 0.0, 0.0)
+    raise ValueError(f"No hay una transformacion de taladro validada para el plano '{plane_name}'.")
+
+
+def _drilling_feature_depth_value(state: PgmxState, spec: _HydratedDrillingSpec) -> float:
+    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
+    plane_span = _drilling_axis_span(state, spec.plane_name)
+    if depth_spec.is_through:
+        return plane_span
+    if depth_spec.target_depth is None:
+        raise ValueError("La profundidad del taladro no pasante no puede quedar vacia.")
+    if depth_spec.target_depth > plane_span + 1e-9:
+        raise ValueError(
+            "La profundidad del taladro no pasante no puede superar el espesor util de la cara."
+        )
+    return depth_spec.target_depth
+
+
+def _drilling_total_depth(state: PgmxState, spec: _HydratedDrillingSpec) -> float:
+    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
+    if depth_spec.is_through:
+        return _drilling_axis_span(state, spec.plane_name) + depth_spec.extra_depth
+    if depth_spec.target_depth is None:
+        raise ValueError("La profundidad del taladro no pasante no puede quedar vacia.")
+    return depth_spec.target_depth
+
+
+def _drilling_bottom_condition_type(spec: _HydratedDrillingSpec) -> str:
+    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
+    if depth_spec.is_through:
+        return "a:ThroughHoleBottom"
+    if spec.drill_family == "Conical" and spec.tool_object_type == "System.Object":
+        return "a:ConicalHoleBottom"
+    return "a:FlatHoleBottom"
+
+
+def _uses_drilling_depth_expressions(spec: _HydratedDrillingSpec) -> bool:
+    return _normalize_milling_depth_spec(spec.depth_spec).is_through
+
+
+def _validate_drilling_center(state: PgmxState, spec: _HydratedDrillingSpec) -> None:
+    max_x, max_y = _plane_local_dimensions(state, spec.plane_name)
+    if spec.center_x < -1e-9 or spec.center_x > max_x + 1e-9:
+        raise ValueError(
+            f"El centro X del taladro cae fuera del plano '{spec.plane_name}': "
+            f"{_compact_number(spec.center_x)} no pertenece a [0, {_compact_number(max_x)}]."
+        )
+    if spec.center_y < -1e-9 or spec.center_y > max_y + 1e-9:
+        raise ValueError(
+            f"El centro Y del taladro cae fuera del plano '{spec.plane_name}': "
+            f"{_compact_number(spec.center_y)} no pertenece a [0, {_compact_number(max_y)}]."
+        )
+
+
+def _default_drill_family(
+    plane_name: str,
+    diameter: float,
+    depth_spec: MillingDepthSpec,
+    requested_family: Optional[str],
+) -> str:
+    if requested_family is not None:
+        return _normalize_drill_family(requested_family)
+    if depth_spec.is_through and plane_name == "Top" and math.isclose(float(diameter), 5.0, abs_tol=1e-9):
+        return "Conical"
+    return "Flat"
+
+
+def _resolve_drilling_tool(
+    drilling: DrillingSpec,
+    tool_catalog: dict[str, dict[str, str]],
+) -> tuple[str, str, str]:
+    if drilling.tool_resolution == "None":
+        return "0", "", "System.Object"
+
+    if drilling.tool_resolution == "Explicit":
+        row = _lookup_tool_catalog_entry(
+            tool_catalog,
+            tool_id=drilling.tool_id,
+            tool_name=drilling.tool_name,
+        )
+        return (
+            str((row.get("tool_id") or "").strip()),
+            str((row.get("name") or "").strip()),
+            "ScmGroup.XCam.ToolDataModel.Tool.CuttingTool",
+        )
+
+    diameter_key = _diameter_key(drilling.diameter)
+    if drilling.plane_name in {"Front", "Back", "Right", "Left"}:
+        if drilling.drill_family != "Flat":
+            raise ValueError(
+                "La resolucion automatica lateral solo esta validada para broca plana."
+            )
+        tool_key = _AUTO_LATERAL_DRILL_TOOLS.get((drilling.plane_name, diameter_key))
+        if tool_key is None:
+            raise ValueError(
+                "La resolucion automatica lateral solo esta validada para `D8` en las cuatro caras laterales."
+            )
+    else:
+        tool_key = _AUTO_VERTICAL_DRILL_TOOLS.get((drilling.drill_family, diameter_key))
+        if tool_key is None:
+            raise ValueError(
+                "No hay una herramienta vertical auto-resoluble para ese diametro/familia en el toolset relevado."
+            )
+
+    row = _lookup_tool_catalog_entry(
+        tool_catalog,
+        tool_id=tool_key[0],
+        tool_name=tool_key[1],
+    )
+    return (
+        str((row.get("tool_id") or "").strip()),
+        str((row.get("name") or "").strip()),
+        "ScmGroup.XCam.ToolDataModel.Tool.CuttingTool",
+    )
+
+
+def _normalize_drilling_spec(drilling: DrillingSpec) -> DrillingSpec:
+    normalized_plane_name = _normalize_plane_name(drilling.plane_name)
+    normalized_depth_spec = _normalize_milling_depth_spec(drilling.depth_spec)
+    normalized_drill_family = _normalize_drill_family(drilling.drill_family)
+    if normalized_drill_family == "Countersunk":
+        raise ValueError(
+            "La familia `Countersunk/Abocinado` todavia no tiene un caso manual validado en Maestro."
+        )
+    if normalized_drill_family == "Conical":
+        if normalized_plane_name != "Top":
+            raise ValueError("La broca conica solo esta validada por ahora sobre la cara `Top`.")
+        if not math.isclose(float(drilling.diameter), 5.0, abs_tol=1e-9):
+            raise ValueError("La broca conica relevada hasta ahora solo existe en `D5`.")
+    diameter_value = float(drilling.diameter)
+    if diameter_value <= 0.0:
+        raise ValueError("El diametro del taladro debe ser mayor que cero.")
+    security_plane_value = float(drilling.security_plane)
+    if security_plane_value < 0.0:
+        raise ValueError("SecurityPlane no puede ser negativo.")
+    return replace(
+        drilling,
+        center_x=float(drilling.center_x),
+        center_y=float(drilling.center_y),
+        diameter=diameter_value,
+        feature_name=(drilling.feature_name or "Taladrado").strip() or "Taladrado",
+        plane_name=normalized_plane_name,
+        security_plane=security_plane_value,
+        depth_spec=normalized_depth_spec,
+        drill_family=normalized_drill_family,
+        tool_resolution=_normalize_tool_resolution(drilling.tool_resolution),
+        tool_id=(drilling.tool_id or "").strip() or "0",
+        tool_name=(drilling.tool_name or "").strip(),
+    )
 
 
 def _validate_tool_sinking_length_for_spec(
@@ -1508,13 +1961,46 @@ def _validate_tool_sinking_length_for_spec(
         )
 
 
+def _validate_tool_sinking_length_for_drilling_spec(
+    state: PgmxState,
+    spec: _HydratedDrillingSpec,
+    tool_catalog: dict[str, dict[str, str]],
+) -> None:
+    if spec.tool_object_type == "System.Object":
+        return
+
+    catalog_entry = tool_catalog.get(spec.tool_id)
+    if catalog_entry is None:
+        raise ValueError(
+            "No se pudo validar la seguridad de la herramienta "
+            f"{_tool_catalog_label(spec)} porque no existe en '{TOOL_CATALOG_PATH.name}'."
+        )
+
+    sinking_length_text = (catalog_entry.get("sinking_length") or "").strip()
+    sinking_length = float(sinking_length_text or "0")
+    if sinking_length <= 0.0:
+        raise ValueError(
+            "La herramienta "
+            f"{_tool_catalog_label(spec)} no tiene un `sinking_length` valido en '{TOOL_CATALOG_PATH.name}'."
+        )
+
+    total_depth = _drilling_total_depth(state, spec)
+    if total_depth > sinking_length + 1e-9:
+        raise ValueError(
+            "La profundidad total del taladro excede el `sinking_length` de la herramienta: "
+            f"{_tool_catalog_label(spec)} permite { _compact_number(sinking_length) } mm, "
+            f"pero la solicitud requiere { _compact_number(total_depth) } mm."
+        )
+
+
 def _validate_tool_sinking_lengths(
     state: PgmxState,
     line_millings: Sequence[_HydratedLineMillingSpec],
     polyline_millings: Sequence[_HydratedPolylineMillingSpec],
     squaring_millings: Sequence[_HydratedSquaringMillingSpec],
+    drillings: Sequence[_HydratedDrillingSpec],
 ) -> None:
-    """Aplica la validacion de `sinking_length` a todos los fresados del request."""
+    """Aplica la validacion de `sinking_length` a todos los mecanizados del request."""
 
     tool_catalog = _load_tool_catalog()
     for spec in line_millings:
@@ -1523,6 +2009,8 @@ def _validate_tool_sinking_lengths(
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
     for spec in squaring_millings:
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
+    for spec in drillings:
+        _validate_tool_sinking_length_for_drilling_spec(state, spec, tool_catalog)
 
 
 def _toolpath_cut_z(state: PgmxState, spec) -> float:
@@ -3245,6 +3733,25 @@ def _build_profile_geometry_spec(
         else None
     )
 
+    if geometry_type == "GeomCartesianPoint":
+        if len(normalized_primitives) != 1 or normalized_primitives[0].primitive_type != "Point":
+            raise ValueError("Un GeomCartesianPoint requiere exactamente una primitiva Point.")
+        point = normalized_primitives[0].start_point
+        if not _points_close_3d(normalized_primitives[0].start_point, normalized_primitives[0].end_point):
+            raise ValueError("La primitiva Point debe usar el mismo punto como inicio y fin.")
+        return GeometryProfileSpec(
+            geometry_type="GeomCartesianPoint",
+            family="Point",
+            primitives=normalized_primitives,
+            is_closed=False,
+            winding=None,
+            start_mode=None,
+            has_arcs=False,
+            corner_radii=(),
+            bounding_box=(point[0], point[1], point[0], point[1]),
+            center_point=point,
+        )
+
     if geometry_type == "GeomTrimmedCurve":
         primitive = normalized_primitives[0]
         if primitive.primitive_type == "Line":
@@ -3333,6 +3840,8 @@ def _build_profile_geometry_spec(
 
 
 def _curve_spec_from_profile_geometry(profile: GeometryProfileSpec) -> _CurveSpec:
+    if profile.geometry_type == "GeomCartesianPoint":
+        raise ValueError("El perfil Point no puede convertirse en una curva/toolpath.")
     if profile.geometry_type == "GeomTrimmedCurve":
         if profile.serialization is None:
             raise ValueError("El perfil lineal/arco necesita serialization para convertirse en curva.")
@@ -3454,8 +3963,25 @@ def _parse_circle_geometry_profile(text: str) -> Optional[GeometryProfileSpec]:
     )
 
 
+def _parse_cartesian_point_geometry_profile(node: ET.Element) -> Optional[GeometryProfileSpec]:
+    point_x_text = _text(node, "./{*}_x")
+    point_y_text = _text(node, "./{*}_y")
+    point_z_text = _text(node, "./{*}_z", "0")
+    if not point_x_text or not point_y_text:
+        return None
+    try:
+        point_x = float(point_x_text)
+        point_y = float(point_y_text)
+        point_z = float(point_z_text)
+    except ValueError:
+        return None
+    return build_point_geometry_profile(point_x, point_y, z_value=point_z)
+
+
 def _extract_geometry_profile(node: ET.Element) -> Optional[GeometryProfileSpec]:
     geometry_type = _xsi_type(node)
+    if "GeomCartesianPoint" in geometry_type:
+        return _parse_cartesian_point_geometry_profile(node)
     if "GeomCircle" in geometry_type:
         return _parse_circle_geometry_profile(_raw_text(node, "./{*}_serializationGeometryDescription"))
     if "GeomTrimmedCurve" in geometry_type:
@@ -4095,6 +4621,54 @@ def _hydrate_squaring_milling_spec(
     return _HydratedSquaringMillingSpec(spec=_normalize_squaring_milling_spec(squaring_milling))
 
 
+def _hydrate_drilling_spec(
+    drilling: DrillingSpec,
+    source_pgmx_path: Optional[Path],
+) -> _HydratedDrillingSpec:
+    del source_pgmx_path
+    normalized_drilling = _normalize_drilling_spec(drilling)
+    tool_catalog = _load_tool_catalog()
+    resolved_tool_id, resolved_tool_name, resolved_tool_object_type = _resolve_drilling_tool(
+        normalized_drilling,
+        tool_catalog,
+    )
+    return _HydratedDrillingSpec(
+        spec=normalized_drilling,
+        resolved_tool_id=resolved_tool_id,
+        resolved_tool_name=resolved_tool_name,
+        resolved_tool_object_type=resolved_tool_object_type,
+    )
+
+
+def _build_point_geometry(
+    geometry_id: str,
+    plane_id: str,
+    plane_object_type: str,
+    point_x: float,
+    point_y: float,
+    point_z: float = 0.0,
+) -> ET.Element:
+    geometry = ET.Element(
+        _qname(GEOMETRY_NS, "GeomGeometry"),
+        {f"{{{XSI_NS}}}type": "a:GeomCartesianPoint"},
+    )
+    _set_xmlns(geometry, "a", GEOMETRY_NS)
+    _append_key(geometry, geometry_id, "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCartesianPoint")
+    _append_blank_name(geometry)
+    _append_node(geometry, GEOMETRY_NS, "IsAbsolute", "false")
+    _append_object_ref(
+        geometry,
+        GEOMETRY_NS,
+        "PlaneID",
+        plane_id,
+        plane_object_type,
+    )
+    _append_node(geometry, GEOMETRY_NS, "_x", _compact_number(point_x))
+    _append_node(geometry, GEOMETRY_NS, "_y", _compact_number(point_y))
+    _append_node(geometry, GEOMETRY_NS, "_z", _compact_number(point_z))
+    return geometry
+
+
 def _build_line_geometry(
     geometry_id: str,
     plane_id: str,
@@ -4205,6 +4779,141 @@ def _build_profile_feature(
     _append_node(swept_shape, MILLING_NS, "SecondRadius", "0")
     _append_node(swept_shape, MILLING_NS, "Width", _compact_number(spec.tool_width))
     return feature
+
+
+def _build_drilling_feature(
+    state: PgmxState,
+    spec: _HydratedDrillingSpec,
+    feature_id: str,
+    geometry_id: str,
+    operation_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+) -> ET.Element:
+    feature = ET.Element(
+        _qname(PGMX_NS, "ManufacturingFeature"),
+        {f"{{{XSI_NS}}}type": "a:RoundHole"},
+    )
+    _set_xmlns(feature, "a", DRILLING_NS)
+    _append_key(feature, feature_id, "ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole")
+    _append_blank_name(feature).text = spec.feature_name
+    _append_object_ref(
+        feature,
+        PGMX_NS,
+        "GeometryID",
+        geometry_id,
+        "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCartesianPoint",
+    )
+    operation_ids = _append_node(feature, PGMX_NS, "OperationIDs")
+    _append_reference_key(
+        operation_ids,
+        operation_id,
+        "ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation",
+    )
+    _append_object_ref(feature, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
+    bottom_condition = _append_node(
+        feature,
+        PGMX_NS,
+        "BottomCondition",
+        attrib={f"{{{XSI_NS}}}type": _drilling_bottom_condition_type(spec)},
+    )
+    _set_xmlns(bottom_condition, "a", DRILLING_NS)
+    if _drilling_bottom_condition_type(spec) == "a:ConicalHoleBottom":
+        _append_node(bottom_condition, DRILLING_NS, "TipAngle", "0")
+        _append_node(bottom_condition, DRILLING_NS, "TipRadius", "0")
+    depth = _append_node(feature, PGMX_NS, "Depth")
+    depth_value = _compact_number(_drilling_feature_depth_value(state, spec))
+    _append_node(depth, PGMX_NS, "EndDepth", depth_value)
+    _append_node(depth, PGMX_NS, "StartDepth", depth_value)
+    _append_node(feature, DRILLING_NS, "Diameter", _compact_number(spec.diameter))
+    _append_node(feature, DRILLING_NS, "TaperHeight", "0")
+    return feature
+
+
+def _build_drilling_operation(
+    state: PgmxState,
+    spec: _HydratedDrillingSpec,
+    operation_id: str,
+) -> ET.Element:
+    operation = ET.Element(
+        _qname(PGMX_NS, "Operation"),
+        {f"{{{XSI_NS}}}type": "a:DrillingOperation"},
+    )
+    _set_xmlns(operation, "a", DRILLING_NS)
+    _append_key(operation, operation_id, "ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation")
+    _append_blank_name(operation)
+    _append_node(operation, PGMX_NS, "ActivateCNCCorrection", "true")
+    _append_node(operation, PGMX_NS, "Attributes", "")
+    _append_node(operation, PGMX_NS, "ToolDirection", attrib={f"{{{XSI_NS}}}nil": "true"})
+    toolpath_list = _append_node(operation, PGMX_NS, "ToolpathList")
+    _set_xmlns(toolpath_list, "b", BASE_MODEL_NS)
+
+    entry_point, direction = _drilling_entry_point_and_direction(state, spec)
+    total_depth = _drilling_total_depth(state, spec)
+    clearance_point = (
+        entry_point[0] - (direction[0] * spec.security_plane),
+        entry_point[1] - (direction[1] * spec.security_plane),
+        entry_point[2] - (direction[2] * spec.security_plane),
+    )
+    cut_point = (
+        entry_point[0] + (direction[0] * total_depth),
+        entry_point[1] + (direction[1] * total_depth),
+        entry_point[2] + (direction[2] * total_depth),
+    )
+    toolpath_list.append(
+        _build_toolpath(
+            "Approach",
+            _trimmed_curve_spec(_build_toolpath_description(clearance_point, entry_point)),
+        )
+    )
+    toolpath_list.append(
+        _build_toolpath(
+            "TrajectoryPath",
+            _trimmed_curve_spec(_build_toolpath_description(entry_point, cut_point)),
+        )
+    )
+    toolpath_list.append(
+        _build_toolpath(
+            "Lift",
+            _trimmed_curve_spec(_build_toolpath_description(cut_point, clearance_point)),
+        )
+    )
+    _append_node(operation, PGMX_NS, "ToolpathPriority", "true")
+    _append_node(operation, PGMX_NS, "AdditionalToolKeys", "")
+    _append_node(operation, PGMX_NS, "ApproachSecurityPlane", _compact_number(spec.security_plane))
+    _append_node(operation, PGMX_NS, "Head", attrib={f"{{{XSI_NS}}}nil": "true"})
+    _append_node(operation, PGMX_NS, "HeadRotation", "0")
+    _append_node(operation, PGMX_NS, "MachineFunctions", "")
+    _append_node(operation, PGMX_NS, "RetractSecurityPlane", _compact_number(spec.security_plane))
+    operation.append(_build_start_point(0.0, 0.0, 0.0))
+    technology = _append_node(
+        operation,
+        PGMX_NS,
+        "Technology",
+        attrib={f"{{{XSI_NS}}}type": "MillingTechnology"},
+    )
+    _append_node(technology, PGMX_NS, "Feedrate", "0")
+    _append_node(technology, PGMX_NS, "CutSpeed", "0")
+    _append_node(technology, PGMX_NS, "Spindle", "0")
+    _append_object_ref(
+        operation,
+        PGMX_NS,
+        "ToolKey",
+        spec.tool_id,
+        spec.tool_object_type,
+        include_name=True,
+        name_text=spec.tool_name,
+    )
+    _append_node(operation, PGMX_NS, "OvercutLength", "0")
+    _append_node(operation, DRILLING_NS, "CuttingDepth", "0")
+    machining_strategy = _append_node(
+        operation,
+        DRILLING_NS,
+        "MachiningStrategy",
+        attrib={f"{{{XSI_NS}}}type": "b:SingleStepDrilling"},
+    )
+    _set_xmlns(machining_strategy, "b", BASE_MODEL_NS)
+    return operation
 
 
 def _build_toolpath(
@@ -4531,6 +5240,8 @@ def _build_working_step(
     step_id: str,
     feature_id: str,
     operation_id: str,
+    feature_object_type: str = "ScmGroup.XCam.MachiningDataModel.Milling.GeneralProfileFeature",
+    operation_object_type: str = "ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideFinishMilling",
 ) -> ET.Element:
     step = ET.Element(
         _qname(BASE_MODEL_NS, "Executable"),
@@ -4547,14 +5258,14 @@ def _build_working_step(
         PGMX_NS,
         "ManufacturingFeatureID",
         feature_id,
-        "ScmGroup.XCam.MachiningDataModel.Milling.GeneralProfileFeature",
+        feature_object_type,
     )
     operation_ref = _append_object_ref(
         step,
         PGMX_NS,
         "OperationID",
         operation_id,
-        "ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideFinishMilling",
+        operation_object_type,
     )
     _set_xmlns(feature_ref, "b", UTILITY_NS)
     _set_xmlns(operation_ref, "b", UTILITY_NS)
@@ -4566,6 +5277,7 @@ def _build_depth_expression(
     feature_id: str,
     inner_field_name: str,
     depth_variable_name: str,
+    referenced_object_type: str = "ScmGroup.XCam.MachiningDataModel.Milling.GeneralProfileFeature",
 ) -> ET.Element:
     expression = ET.Element(_qname(PARAMETRIC_NS, "Expression"))
     _append_key(expression, expression_id, "ScmGroup.XCam.MachiningDataModel.Parametrics.Expression")
@@ -4589,7 +5301,7 @@ def _build_depth_expression(
         PARAMETRIC_NS,
         "ReferencedObject",
         feature_id,
-        "ScmGroup.XCam.MachiningDataModel.Milling.GeneralProfileFeature",
+        referenced_object_type,
     )
     _append_node(expression, PARAMETRIC_NS, "Value", depth_variable_name)
     return expression
@@ -4809,6 +5521,82 @@ def _append_squaring_milling(root: ET.Element, state: PgmxState, spec: _Hydrated
     )
 
 
+def _append_drilling(root: ET.Element, state: PgmxState, spec: _HydratedDrillingSpec) -> None:
+    geometries = root.find("./{*}Geometries")
+    features = root.find("./{*}Features")
+    operations = root.find("./{*}Operations")
+    expressions = root.find("./{*}Expressions")
+    elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
+    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
+    if any(node is None for node in (geometries, features, operations, expressions, elements, workpiece)):
+        raise ValueError("La plantilla no contiene todas las colecciones requeridas para sintetizar el taladro.")
+
+    _validate_drilling_center(state, spec)
+    _drilling_feature_depth_value(state, spec)
+
+    workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
+    workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
+    depth_variable_name = _drilling_axis_variable_name(workpiece, spec.plane_name)
+    plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
+    uses_depth_expressions = _uses_drilling_depth_expressions(spec)
+    reserved_ids = _reserve_ids(root, 6 if uses_depth_expressions else 4, spec.preferred_id_start)
+    geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
+    start_expression_id = reserved_ids[4] if uses_depth_expressions else None
+    end_expression_id = reserved_ids[5] if uses_depth_expressions else None
+
+    geometries.append(
+        _build_point_geometry(
+            geometry_id,
+            plane_id,
+            plane_object_type,
+            spec.center_x,
+            spec.center_y,
+            0.0,
+        )
+    )
+    features.append(
+        _build_drilling_feature(
+            state,
+            spec,
+            feature_id,
+            geometry_id,
+            operation_id,
+            workpiece_id,
+            workpiece_object_type,
+        )
+    )
+    operations.append(_build_drilling_operation(state, spec, operation_id))
+    elements.append(
+        _build_working_step(
+            spec.feature_name,
+            step_id,
+            feature_id,
+            operation_id,
+            feature_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
+            operation_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation",
+        )
+    )
+    if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
+        expressions.append(
+            _build_depth_expression(
+                start_expression_id,
+                feature_id,
+                "StartDepth",
+                depth_variable_name,
+                referenced_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
+            )
+        )
+        expressions.append(
+            _build_depth_expression(
+                end_expression_id,
+                feature_id,
+                "EndDepth",
+                depth_variable_name,
+                referenced_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
+            )
+        )
+
+
 # ============================================================================
 # Public read/build API
 # ============================================================================
@@ -5000,6 +5788,15 @@ def _apply_squaring_millings(
 ) -> None:
     for squaring_milling in squaring_millings:
         _append_squaring_milling(root, state, squaring_milling)
+
+
+def _apply_drillings(
+    root: ET.Element,
+    state: PgmxState,
+    drillings: Sequence[_HydratedDrillingSpec],
+) -> None:
+    for drilling in drillings:
+        _append_drilling(root, state, drilling)
 
 
 # ============================================================================
@@ -5260,6 +6057,51 @@ def build_squaring_milling_spec(
     )
 
 
+def build_drilling_spec(
+    *,
+    center_x: float,
+    center_y: float,
+    diameter: float,
+    feature_name: Optional[str] = None,
+    plane_name: Optional[str] = None,
+    security_plane: Optional[float] = None,
+    is_through: Optional[bool] = None,
+    target_depth: Optional[float] = None,
+    extra_depth: Optional[float] = None,
+    drill_family: Optional[str] = None,
+    tool_resolution: Optional[str] = None,
+    tool_id: Optional[str] = None,
+    tool_name: Optional[str] = None,
+) -> DrillingSpec:
+    """Construye un `DrillingSpec` reusable para taladros puntuales."""
+
+    normalized_plane_name = _normalize_plane_name(plane_name)
+    depth_spec = build_milling_depth_spec(
+        is_through=is_through,
+        target_depth=target_depth,
+        extra_depth=extra_depth,
+    )
+    effective_drill_family = _default_drill_family(
+        normalized_plane_name,
+        float(diameter),
+        depth_spec,
+        drill_family,
+    )
+    return DrillingSpec(
+        center_x=float(center_x),
+        center_y=float(center_y),
+        diameter=float(diameter),
+        feature_name=(feature_name or "Taladrado").strip() or "Taladrado",
+        plane_name=normalized_plane_name,
+        security_plane=20.0 if security_plane is None else float(security_plane),
+        depth_spec=depth_spec,
+        drill_family=effective_drill_family,
+        tool_resolution=_normalize_tool_resolution(tool_resolution or "Auto"),
+        tool_id=(tool_id or "0").strip() or "0",
+        tool_name=(tool_name or "").strip(),
+    )
+
+
 # ============================================================================
 # Public execution API
 # ============================================================================
@@ -5281,12 +6123,14 @@ def build_synthesis_request(
     line_millings: Optional[Sequence[LineMillingSpec]] = None,
     polyline_millings: Optional[Sequence[PolylineMillingSpec]] = None,
     squaring_millings: Optional[Sequence[SquaringMillingSpec]] = None,
+    drillings: Optional[Sequence[DrillingSpec]] = None,
 ) -> PgmxSynthesisRequest:
     """Arma una solicitud reusable de sintesis para el flujo principal.
 
     Orden recomendado de uso:
     1. leer o definir la pieza
-    2. construir `LineMillingSpec`, `PolylineMillingSpec` y/o `SquaringMillingSpec`
+    2. construir `LineMillingSpec`, `PolylineMillingSpec`, `SquaringMillingSpec`
+       y/o `DrillingSpec`
     3. construir el request
     4. ejecutar `synthesize_request(...)`
 
@@ -5318,6 +6162,7 @@ def build_synthesis_request(
         line_millings=tuple(line_millings or ()),
         polyline_millings=tuple(polyline_millings or ()),
         squaring_millings=tuple(squaring_millings or ()),
+        drillings=tuple(drillings or ()),
     )
 
 
@@ -5340,17 +6185,23 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         _hydrate_squaring_milling_spec(squaring_milling, request.source_pgmx_path)
         for squaring_milling in request.squaring_millings
     ]
+    hydrated_drillings = [
+        _hydrate_drilling_spec(drilling, request.source_pgmx_path)
+        for drilling in request.drillings
+    ]
     _validate_tool_sinking_lengths(
         request.piece,
         hydrated_line_millings,
         hydrated_polyline_millings,
         hydrated_squaring_millings,
+        hydrated_drillings,
     )
 
     _apply_piece_state(baseline_root, request.piece)
     _apply_line_millings(baseline_root, request.piece, hydrated_line_millings)
     _apply_polyline_millings(baseline_root, request.piece, hydrated_polyline_millings)
     _apply_squaring_millings(baseline_root, request.piece, hydrated_squaring_millings)
+    _apply_drillings(baseline_root, request.piece, hydrated_drillings)
 
     xml_bytes = _finalize_synthesized_pgmx_xml_bytes(
         ET.tostring(
@@ -5372,6 +6223,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         line_millings=request.line_millings,
         polyline_millings=request.polyline_millings,
         squaring_millings=request.squaring_millings,
+        drillings=request.drillings,
     )
 
 
@@ -5389,6 +6241,7 @@ def synthesize_pgmx(
     line_milling: Optional[LineMillingSpec] = None,
     polyline_milling: Optional[PolylineMillingSpec] = None,
     squaring_milling: Optional[SquaringMillingSpec] = None,
+    drilling: Optional[DrillingSpec] = None,
     execution_fields: Optional[str] = None,
 ) -> PgmxState:
     """Wrapper de compatibilidad para el flujo historico basado en argumentos sueltos.
@@ -5412,6 +6265,7 @@ def synthesize_pgmx(
         line_millings=[line_milling] if line_milling is not None else (),
         polyline_millings=[polyline_milling] if polyline_milling is not None else (),
         squaring_millings=[squaring_milling] if squaring_milling is not None else (),
+        drillings=[drilling] if drilling is not None else (),
     )
     return synthesize_request(request).piece
 
