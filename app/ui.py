@@ -2507,7 +2507,7 @@ class ProjectDetailWindow(QMainWindow):
                 update_scene_bounds()
                 view.centerOn(scene_item)
 
-            def save_en_juego_layout():
+            def collect_en_juego_layout_data():
                 layout_data = {}
                 for instance_key, scene_item in item_by_instance_id.items():
                     layout_data[instance_key] = {
@@ -2515,11 +2515,66 @@ class ProjectDetailWindow(QMainWindow):
                         "y": round(scene_item.pos().y(), 2),
                         "rotation": round(scene_item.rotation(), 2),
                     }
-                config_data["en_juego_layout"] = layout_data
+                return layout_data
+
+            def save_en_juego_layout():
+                config_data["en_juego_layout"] = collect_en_juego_layout_data()
                 persist_module_config()
                 config_dialog.accept()
 
+            def create_en_juego_pgmx_from_dialog():
+                from core.en_juego_pgmx import create_en_juego_pgmx
+
+                default_name = f"{module_name}_EnJuego.pgmx"
+                default_path = module_path / default_name
+                output_file, _ = QFileDialog.getSaveFileName(
+                    config_dialog,
+                    "Crear En-Juego",
+                    str(default_path),
+                    "Programas PGMX (*.pgmx);;Todos los archivos (*.*)",
+                )
+                if not output_file:
+                    return
+
+                config_data["en_juego_layout"] = collect_en_juego_layout_data()
+                persist_module_config()
+
+                try:
+                    result = create_en_juego_pgmx(
+                        project=self.project,
+                        module_name=module_name,
+                        module_path=module_path,
+                        piece_rows=all_rows,
+                        saved_layout=config_data.get("en_juego_layout", {}),
+                        output_path=Path(output_file),
+                    )
+                except Exception as exc:
+                    QMessageBox.critical(
+                        config_dialog,
+                        "Crear En-Juego",
+                        f"No se pudo generar el archivo En-Juego.\n\n{exc}",
+                    )
+                    return
+
+                details = [
+                    f"Archivo generado: {result.output_path}",
+                    f"Tablero sintetizado: {result.board_width:.2f} x {result.board_height:.2f} x {result.board_thickness:.2f} mm",
+                    f"Piezas ubicadas: {result.instance_count}",
+                    f"Contornos generados: {result.contour_count}",
+                ]
+                if result.fallback_contour_count:
+                    details.append(
+                        "Contornos por rectángulo de respaldo: "
+                        f"{result.fallback_contour_count}"
+                    )
+                QMessageBox.information(
+                    config_dialog,
+                    "Crear En-Juego",
+                    "\n".join(details),
+                )
+
             buttons_layout = QHBoxLayout()
+            create_en_juego_btn = QPushButton("Crear En-Juego")
             fit_view_btn = QPushButton("Ajustar vista")
             rotate_left_btn = QPushButton("Rotar -90°")
             rotate_right_btn = QPushButton("Rotar +90°")
@@ -2528,12 +2583,14 @@ class ProjectDetailWindow(QMainWindow):
             fit_view_btn.clicked.connect(lambda: view.fitInView(scene.itemsBoundingRect().adjusted(-80, -80, 80, 80), Qt.KeepAspectRatio))
             rotate_left_btn.clicked.connect(lambda: rotate_selected_piece(-90.0))
             rotate_right_btn.clicked.connect(lambda: rotate_selected_piece(90.0))
+            create_en_juego_btn.clicked.connect(create_en_juego_pgmx_from_dialog)
             save_layout_btn.clicked.connect(save_en_juego_layout)
             close_layout_btn.clicked.connect(config_dialog.reject)
             buttons_layout.addWidget(fit_view_btn)
             buttons_layout.addWidget(rotate_left_btn)
             buttons_layout.addWidget(rotate_right_btn)
             buttons_layout.addStretch()
+            buttons_layout.addWidget(create_en_juego_btn)
             buttons_layout.addWidget(save_layout_btn)
             buttons_layout.addWidget(close_layout_btn)
             main_layout.addLayout(buttons_layout)
