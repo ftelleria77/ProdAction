@@ -4,6 +4,10 @@ Esta guia deja por escrito como usar la API publica de `tools/synthesize_pgmx.py
 en que orden conviene llamarla y que reglas de trabajo seguimos para no perder el
 hilo de lo ya validado en Maestro.
 
+Estado de hito actual:
+- sintetizador Maestro `v1.0`
+- constante publica de version: `tools.synthesize_pgmx.SYNTHESIZER_VERSION`
+
 ## 1. Alcance actual
 
 La API publica actual sirve para sintetizar `.pgmx` a partir de un baseline Maestro.
@@ -20,10 +24,14 @@ Casos publicos soportados hoy:
 - lectura y clasificacion de geometria base (`read_pgmx_geometries`)
 - compensacion geometrica reusable (`build_compensated_toolpath_profile`)
 - fresado lineal abierto (`LineMillingSpec`)
-- fresado sobre polilinea abierta (`PolylineMillingSpec`)
+- fresado sobre polilinea lineal abierta o cerrada (`PolylineMillingSpec`)
 - escuadrado exterior del contorno de pieza (`SquaringMillingSpec`)
 - taladro puntual sobre punto (`DrillingSpec`)
 - control de profundidad pasante/no pasante
+- estrategias publicas `Unidireccional` y `Bidireccional` para:
+  - linea simple via `LineMillingSpec`
+  - polilinea lineal abierta o cerrada via `PolylineMillingSpec`
+  - escuadrado via `SquaringMillingSpec`
 - `Approach` y `Retract` con reglas ya volcadas desde Maestro y ya unificadas
   sobre la tangente de entrada/salida del toolpath efectivo
 - `Area` de Parametros de Maquina, con `HG` por defecto
@@ -247,6 +255,58 @@ Valores ya validados:
 - `mode`: `Up`, `Quote`
 - `arc_side`: `Automatic`
 
+### `build_unidirectional_milling_strategy_spec(...) -> UnidirectionalMillingStrategySpec`
+
+Construye la estrategia publica `Unidireccional`.
+
+Firma simplificada:
+
+```python
+build_unidirectional_milling_strategy_spec(
+    *,
+    connection_mode=None,
+    allow_multiple_passes=None,
+    axial_cutting_depth=None,
+    axial_finish_cutting_depth=None,
+)
+```
+
+Notas:
+- `connection_mode` admite:
+  - `Automatic`
+  - `SafetyHeight` / `SalidaCota`
+  - `InPiece` / `EnLaPieza`
+- en `LineMillingSpec`, `Automatic` cae en `SafetyHeight`
+- en `PolylineMillingSpec` cerrado y en `SquaringMillingSpec`, `Automatic`
+  cae en `InPiece`
+- si `axial_cutting_depth > 0` o `axial_finish_cutting_depth > 0`, la helper
+  activa `allow_multiple_passes=True` automaticamente
+- si no se indica nada, devuelve una estrategia valida sin multipaso
+
+### `build_bidirectional_milling_strategy_spec(...) -> BidirectionalMillingStrategySpec`
+
+Construye la estrategia publica `Bidireccional`.
+
+Firma simplificada:
+
+```python
+build_bidirectional_milling_strategy_spec(
+    *,
+    allow_multiple_passes=None,
+    axial_cutting_depth=None,
+    axial_finish_cutting_depth=None,
+)
+```
+
+Notas:
+- comparte el mismo par axial:
+  - `axial_cutting_depth` (`PH`)
+  - `axial_finish_cutting_depth` (`UH`)
+- si alguno de los dos es mayor que cero, la helper activa
+  `allow_multiple_passes=True` automaticamente
+- el `StrokeConnectionStrategy` queda fijado por ahora a `Straghtline`, que es
+  lo observado en los casos manuales relevados
+
 ### `build_line_milling_spec(...) -> LineMillingSpec | None`
 
 Construye un fresado lineal de dos puntos.
@@ -281,6 +341,7 @@ build_line_milling_spec(
     line_retract_speed=None,
     line_retract_arc_side=None,
     line_retract_overlap=None,
+    line_milling_strategy=None,
 )
 ```
 
@@ -288,10 +349,17 @@ Notas:
 - si los cuatro puntos llegan en `None`, devuelve `None`
 - si se informa la linea, hay que informar los cuatro valores
 - `line_side_of_feature` admite `Center`, `Right`, `Left`
+- `line_milling_strategy` admite:
+  - `build_unidirectional_milling_strategy_spec(...)`
+  - `build_bidirectional_milling_strategy_spec(...)`
+- la capa publica de estrategias para linea simple ya esta validada en:
+  - `PH/UH`
+  - `Central/Right/Left`
+  - `Approach/Retract` lineales sobre multipaso
 
 ### `build_polyline_milling_spec(...) -> PolylineMillingSpec`
 
-Construye un fresado sobre polilinea abierta.
+Construye un fresado sobre polilinea lineal abierta o cerrada.
 
 Firma simplificada:
 
@@ -320,13 +388,22 @@ build_polyline_milling_spec(
     retract_speed=None,
     retract_arc_side=None,
     retract_overlap=None,
+    milling_strategy=None,
 )
 ```
 
 Notas:
-- la polilinea debe ser abierta
 - necesita al menos dos puntos
 - no admite segmentos de longitud cero
+- si el ultimo punto coincide con el primero, la polilinea se interpreta como
+  contorno cerrado
+- la capa publica de estrategias sobre `PolylineMillingSpec` ya cubre
+  polilineas lineales abiertas y cerradas
+- para una sola recta sigue conviniendo `LineMillingSpec`, porque hace mas
+  explicita la intencion del mecanizado
+- `milling_strategy` admite:
+  - `build_unidirectional_milling_strategy_spec(...)`
+  - `build_bidirectional_milling_strategy_spec(...)`
 
 ### `build_squaring_milling_spec(...) -> SquaringMillingSpec`
 
@@ -360,6 +437,7 @@ build_squaring_milling_spec(
     retract_speed=None,
     retract_arc_side=None,
     retract_overlap=None,
+    milling_strategy=None,
 )
 ```
 
@@ -378,6 +456,14 @@ Notas:
 - hoy esta validado contra 8 casos manuales:
   - 4 bordes de arranque `MidEdgeStart`
   - 2 sentidos de recorrido (`CounterClockwise` y `Clockwise`)
+- `milling_strategy` admite:
+  - `build_unidirectional_milling_strategy_spec(...)`
+  - `build_bidirectional_milling_strategy_spec(...)`
+- decision de diseno actual:
+  - para escuadrados con multipaso, la estrategia preferida es
+    `Unidireccional`
+  - en `Unidireccional` cerrado, el default `Automatic` se resuelve como
+    `EnLaPieza`
 - la geometria y el mecanizado efectivo coinciden con los casos manuales
   relevados; la parametrizacion interna de algunas curvas puede no quedar
   serializada byte a byte igual si no se parte de una plantilla manual
@@ -817,6 +903,53 @@ print(result.output_path)
 print(result.sha256)
 ```
 
+### Ejemplo minimo: linea central con estrategia `Unidireccional`
+
+```python
+from pathlib import Path
+from tools.synthesize_pgmx import (
+    build_line_milling_spec,
+    build_synthesis_request,
+    build_unidirectional_milling_strategy_spec,
+    synthesize_request,
+)
+
+line = build_line_milling_spec(
+    line_x1=400.0,
+    line_y1=0.0,
+    line_x2=400.0,
+    line_y2=760.0,
+    line_feature_name="LINEA_CENTRAL",
+    line_tool_id="1901",
+    line_tool_name="E004",
+    line_tool_width=4.0,
+    line_security_plane=20.0,
+    line_side_of_feature="Center",
+    line_is_through=True,
+    line_extra_depth=1.0,
+    line_milling_strategy=build_unidirectional_milling_strategy_spec(
+        connection_mode="InPiece",
+        axial_cutting_depth=5.0,
+        axial_finish_cutting_depth=10.0,
+    ),
+)
+
+request = build_synthesis_request(
+    output_path=Path("archive/maestro_examples/Pieza_linea_unidireccional.pgmx"),
+    piece_name="Pieza",
+    length=800.0,
+    width=760.0,
+    depth=18.0,
+    origin_x=5.0,
+    origin_y=5.0,
+    origin_z=9.0,
+    line_millings=[line],
+)
+
+result = synthesize_request(request)
+print(result.output_path)
+```
+
 ### Ejemplo minimo: polilinea abierta con tool side compensation
 
 ```python
@@ -853,6 +986,57 @@ request = build_synthesis_request(
     origin_y=5.0,
     origin_z=9.0,
     polyline_millings=[polyline],
+)
+
+result = synthesize_request(request)
+print(result.output_path)
+```
+
+### Ejemplo minimo: polilinea cerrada con estrategia `Bidireccional`
+
+```python
+from pathlib import Path
+from tools.synthesize_pgmx import (
+    build_bidirectional_milling_strategy_spec,
+    build_polyline_milling_spec,
+    build_synthesis_request,
+    synthesize_request,
+)
+
+closed_polyline = build_polyline_milling_spec(
+    points=[
+        (150.0, 0.0),
+        (0.0, 0.0),
+        (0.0, 300.0),
+        (300.0, 300.0),
+        (300.0, 0.0),
+        (150.0, 0.0),
+    ],
+    feature_name="CONTORNO",
+    tool_id="1900",
+    tool_name="E001",
+    tool_width=18.36,
+    side_of_feature="Left",
+    is_through=True,
+    extra_depth=1.0,
+    approach_enabled=False,
+    retract_enabled=False,
+    milling_strategy=build_bidirectional_milling_strategy_spec(
+        axial_cutting_depth=5.0,
+        axial_finish_cutting_depth=10.0,
+    ),
+)
+
+request = build_synthesis_request(
+    output_path=Path("archive/maestro_examples/Pieza_polilinea_cerrada_bidireccional.pgmx"),
+    piece_name="Pieza",
+    length=300.0,
+    width=300.0,
+    depth=18.0,
+    origin_x=5.0,
+    origin_y=5.0,
+    origin_z=25.0,
+    polyline_millings=[closed_polyline],
 )
 
 result = synthesize_request(request)

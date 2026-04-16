@@ -726,3 +726,917 @@ Reconstruir paso a paso:
 - Pendientes:
   - contrastar este mismo cruce sobre la rama `EnLaPieza`
   - pasar luego a `Bidireccional`
+
+### Ronda 17 - `Unidireccional` con correccion `Central`, `Derecha` e `Izquierda`
+
+- Estado: completado
+- Archivos comparados:
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Central_Unidireccional_SalidaCota_MP_Hab_PH0_UH0.pgmx`
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Derecha_Unidireccional_SalidaCota_MP_Hab_PH0_UH0.pgmx`
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Izquierda_Unidireccional_SalidaCota_MP_Hab_PH0_UH0.pgmx`
+- Hallazgo principal:
+  - la correccion lateral no cambia la estrategia `Unidireccional`
+  - tampoco cambia `AllowMultiplePasses`, `PH`, `UH` ni
+    `StrokeConnectionStrategy`
+  - los cambios funcionales observados quedan acotados a:
+    - `Feature/SideOfFeature`
+    - desplazamiento lateral del `ToolpathList`
+- Mapeo observado en la feature:
+  - `Central` serializa:
+    - `SideOfFeature = Center`
+  - `Derecha` serializa:
+    - `SideOfFeature = Right`
+  - `Izquierda` serializa:
+    - `SideOfFeature = Left`
+- Mapeo observado en el `ToolpathList`:
+  - caso `Central`
+    - los tres toolpaths (`Approach`, `TrajectoryPath`, `Lift`) quedan sobre
+      `x = 400`
+  - caso `Derecha`
+    - esos tres toolpaths pasan a `x = 402`
+  - caso `Izquierda`
+    - esos tres toolpaths pasan a `x = 398`
+- Observacion geometrica:
+  - el corrimiento observado es de `2 mm` respecto del eje central
+  - esto es consistente con media herramienta para `E004 = 4 mm`
+  - por lo tanto, la correccion lateral parece expresarse como un offset real del
+    toolpath efectivo, no solo como una bandera semantica
+- Lo que no cambia:
+  - `ActivateCNCCorrection` sigue en `true` en los tres casos
+  - la estructura sigue siendo:
+    - `Approach = GeomTrimmedCurve`
+    - `TrajectoryPath = GeomTrimmedCurve`
+    - `Lift = GeomTrimmedCurve`
+  - la estrategia sigue siendo:
+    - `AllowMultiplePasses = true`
+    - `AxialCuttingDepth = 0`
+    - `AxialFinishCuttingDepth = 0`
+    - `StrokeConnectionStrategy = LiftShiftPlunge`
+- Conclusiones provisionales:
+  - la correccion lateral no vive solo en el toolpath: tambien se declara en la
+    feature mediante `SideOfFeature`
+  - aun asi, el resultado mecanizable se expresa en el desplazamiento efectivo de
+    `Approach`, `TrajectoryPath` y `Lift`
+  - esto sugiere que la futura API de fresado deberia exponer una nocion publica
+    de `side_of_feature` o `cutter_side`
+- Pendientes:
+  - relevar el mismo eje `Central/Derecha/Izquierda` en una variante con multipaso
+    axial real (`PH > 0` o `UH > 0`)
+  - verificar si el mismo corrimiento se observa igual con `Approach` y
+    `Retract` habilitados
+
+### Ronda 18 - Correccion `Central/Derecha/Izquierda` con multipaso real (`PH5_UH1`)
+
+- Estado: completado
+- Archivos comparados:
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Central_Unidireccional_SalidaCota_MP_Hab_PH5_UH1.pgmx`
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Derecha_Unidireccional_SalidaCota_MP_Hab_PH5_UH1.pgmx`
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Izquierda_Unidireccional_SalidaCota_MP_Hab_PH5_UH1.pgmx`
+- Hallazgo principal:
+  - la correccion lateral mantiene el mismo patron semantico que en `PH0_UH0`,
+    pero ahora sobre un `TrajectoryPath` compuesto real
+  - se conservan:
+    - `AllowMultiplePasses = true`
+    - `AxialCuttingDepth = 5`
+    - `AxialFinishCuttingDepth = 1`
+    - `StrokeConnectionStrategy = LiftShiftPlunge`
+    - `ActivateCNCCorrection = false`
+- Estructura observada:
+  - `Approach = GeomTrimmedCurve`
+  - `TrajectoryPath = GeomCompositeCurve`
+  - `Lift = GeomTrimmedCurve`
+  - `TrajectoryPath` contiene `17` miembros serializados y `4`
+    `OperationAttribute` en los tres casos
+- Patron de correccion observado:
+  - caso `Central`
+    - todos los segmentos quedan sobre `x = 400`
+  - caso `Derecha`
+    - todos los segmentos equivalentes pasan a `x = 402`
+  - caso `Izquierda`
+    - todos los segmentos equivalentes pasan a `x = 398`
+- Alcance del desplazamiento:
+  - no se desplaza solo la pasada final
+  - se desplazan:
+    - `Approach`
+    - cada uno de los miembros del `TrajectoryPath` compuesto
+    - `Lift`
+  - por lo tanto, la correccion lateral afecta la trayectoria completa del
+    mecanizado axialmente escalonado
+- Conclusiones provisionales:
+  - la correccion lateral es transversal a la estrategia axial
+  - una vez resuelto el toolpath multipaso base, Maestro aplica el mismo offset
+    lateral a toda la familia de segmentos resultante
+  - el offset sigue siendo de `±2 mm`, consistente con media herramienta de
+    `E004`
+- Implicacion para la futura API:
+  - la futura spec de fresado deberia permitir combinar:
+    - estrategia axial (`PH`, `UH`, conexion entre pasadas)
+    - lado de correccion (`Center`, `Right`, `Left`)
+  - el sintetizador tendra que desplazar no solo la geometria simple, sino
+    tambien todos los segmentos del `TrajectoryPath` compuesto cuando haya
+    multipaso
+- Pendientes:
+  - verificar esta misma combinacion con `Approach` y `Retract` habilitados
+  - usar estos hallazgos para pasar luego a `Bidireccional` con una base mas
+    estable
+
+### Ronda 19 - Correccion `Central/Derecha/Izquierda` con multipaso real (`PH5_UH1`) y `AcL4B_AlL4S`
+
+- Estado: completado
+- Archivos comparados:
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Central_Unidireccional_SalidaCota_MP_Hab_PH5_UH1_AcL4B_AlL4S.pgmx`
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Derecha_Unidireccional_SalidaCota_MP_Hab_PH5_UH1_AcL4B_AlL4S.pgmx`
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Izquierda_Unidireccional_SalidaCota_MP_Hab_PH5_UH1_AcL4B_AlL4S.pgmx`
+- Hallazgo principal:
+  - la correccion lateral se mantiene plenamente compatible con:
+    - multipaso axial real (`PH5_UH1`)
+    - `Approach` lineal habilitado
+    - `Retract` lineal habilitado
+  - los parametros de entrada/salida se conservan en los tres casos:
+    - `Approach.IsEnabled = true`
+    - `Approach.RadiusMultiplier = 4`
+    - `Approach.Speed = -1`
+    - `Retract.IsEnabled = true`
+    - `Retract.RadiusMultiplier = 4`
+    - `Retract.Speed = -1`
+- Estrategia axial conservada:
+  - `AllowMultiplePasses = true`
+  - `AxialCuttingDepth = 5`
+  - `AxialFinishCuttingDepth = 1`
+  - `StrokeConnectionStrategy = LiftShiftPlunge`
+  - `ActivateCNCCorrection = false`
+- Patron de correccion observado:
+  - `Central`
+    - `Approach`, `TrajectoryPath` y `Lift` quedan sobre `x = 400`
+  - `Derecha`
+    - esos mismos toolpaths quedan sobre `x = 402`
+  - `Izquierda`
+    - esos mismos toolpaths quedan sobre `x = 398`
+- Alcance del desplazamiento:
+  - el offset lateral afecta:
+    - el `Approach` inclinado
+    - los `17` miembros serializados del `TrajectoryPath`
+    - el `Lift` inclinado
+  - la correccion no altera:
+    - angulos
+    - radios multiplicadores
+    - cantidad de miembros del `TrajectoryPath`
+    - ni la estructura axial del multipaso
+- Observacion geometrica:
+  - el desplazamiento lateral sigue siendo de `±2 mm`
+  - esto vuelve a coincidir con media herramienta para `E004 = 4 mm`
+  - por lo tanto, el offset lateral parece aplicarse despues de resolver la
+    forma completa del toolpath, incluyendo entrada, desbaste, pasada final y
+    salida
+- Conclusiones provisionales:
+  - la correccion lateral es transversal no solo a la estrategia axial, sino
+    tambien a `Approach` y `Retract`
+  - el modelo mental mas estable hasta ahora es:
+    1. Maestro resuelve la estrategia de fresado
+    2. compone `Approach`, `TrajectoryPath` y `Lift`
+    3. aplica el offset lateral completo segun `SideOfFeature`
+- Implicacion para la futura API:
+  - `side_of_feature` debe poder combinarse limpiamente con:
+    - estrategia axial
+    - `Approach`
+    - `Retract`
+  - el sintetizador debera poder desplazar toda la familia de toolpaths ya
+    resueltos, no solo la geometria nominal
+- Pendientes:
+  - con este eje ya bastante cerrado, el siguiente paso natural sigue siendo
+    pasar a `Bidireccional`
+
+### Ronda 20 - Primera serializacion real de `Bidireccional`
+
+- Estado: completado
+- Archivos comparados:
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Central_Unidireccional_SalidaCota_MP_Hab_PH0_UH0.pgmx`
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Central_Bidireccional_PH0_UH0.pgmx`
+- Hallazgo principal:
+  - `Bidireccional` se serializa como:
+    - `MachiningStrategy i:type="b:BidirectionalMilling"`
+  - la familia de campos es muy parecida a `Unidireccional`
+  - correccion posterior importante:
+    - en estos archivos, los valores de `Approach` y `Retract` no deben
+      interpretarse automaticamente como defaults propios de `Bidireccional`
+    - el usuario confirmo que habia habilitado `Approach` y `Retract`,
+      modificado sus parametros y luego vuelto a deshabilitarlos
+    - por lo tanto, esos nodos pueden conservar valores editados aun estando en
+      `IsEnabled = false`
+- Mapeo observado respecto del caso unidireccional equivalente:
+  - `MachiningStrategy`
+    - `b:UnidirectionalMilling` -> `b:BidirectionalMilling`
+  - `StrokeConnectionStrategy`
+    - `LiftShiftPlunge` -> `Straghtline`
+  - `ActivateCNCCorrection`
+    - `true` -> `false`
+  - `Approach`
+    - en esta muestra observada:
+      - `RadiusMultiplier: 1.2 -> 3`
+      - `Speed: 0 -> -1`
+      - `IsEnabled` se mantiene en `false`
+      - `ApproachType = Line`
+      - `ApproachMode = Down`
+    - pero esos valores no quedan validados todavia como default real de la
+      estrategia
+  - `Retract`
+    - en esta muestra observada:
+      - `RadiusMultiplier: 1.2 -> 3`
+      - `Speed: 0 -> -1`
+      - `IsEnabled` se mantiene en `false`
+      - `RetractType = Line`
+      - `RetractMode = Up`
+    - pero esos valores no quedan validados todavia como default real de la
+      estrategia
+- Valores observados en el primer caso `Bidireccional PH0_UH0`:
+  - `AllowMultiplePasses = true`
+  - `Overlap = 0`
+  - `AxialCuttingDepth = 0`
+  - `AxialFinishCuttingDepth = 0`
+  - `Cutmode = Climb`
+  - `RadialCuttingDepth = 0`
+  - `RadialFinishCuttingDepth = 0`
+  - `StrokeConnectionStrategy = Straghtline`
+  - `ActivateCNCCorrection = false`
+  - `Approach.IsEnabled = false`, `RadiusMultiplier = 3`, `Speed = -1`
+  - `Retract.IsEnabled = false`, `RadiusMultiplier = 3`, `Speed = -1`
+- Nota metodologica:
+  - por la historia de edicion de estos archivos, hoy solo podemos afirmar que
+    esos son los valores presentes en la muestra
+  - todavia no alcanzan para declarar que sean defaults nativos de
+    `Bidireccional`
+- Toolpaths base observados:
+  - `Approach`
+    - `8 0 39`
+    - `1 400 0 38 0 0 -1`
+  - `TrajectoryPath`
+    - `8 0 760`
+    - `1 400 0 -1 0 1 0`
+  - `Lift`
+    - `8 0 39`
+    - `1 400 760 -1 0 0 1`
+- Conclusiones provisionales:
+  - `Bidireccional` no es solo otro enum; trae al menos una politica de
+    conexion propia (`Straghtline`) y un estado observado distinto en
+    `ActivateCNCCorrection`
+  - aun con `Approach` y `Retract` deshabilitados, esos nodos quedan
+    explicitamente parametrizados, pero todavia no podemos afirmar que esos
+    valores sean defaults nativos de la estrategia
+- Pendientes:
+  - relevar como cambian `PH` y `UH` dentro de `Bidireccional`
+  - luego cruzarlo con correccion lateral y `Approach/Retract` habilitados
+
+### Ronda 21 - `PH/UH` en `Bidireccional`
+
+- Estado: completado
+- Archivos comparados:
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Central_Bidireccional_PH0_UH0.pgmx`
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Central_Bidireccional_PH5_UH0.pgmx`
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Central_Bidireccional_PH5_UH1.pgmx`
+  - `archive/maestro_examples/Pieza_800x760x18_LineaCentral_Central_Bidireccional_PH5_UH10.pgmx`
+- Parametros estrategicos constantes en los cuatro casos:
+  - `MachiningStrategy = b:BidirectionalMilling`
+  - `AllowMultiplePasses = true`
+  - `Overlap = 0`
+  - `Cutmode = Climb`
+  - `RadialCuttingDepth = 0`
+  - `RadialFinishCuttingDepth = 0`
+  - `StrokeConnectionStrategy = Straghtline`
+  - `ActivateCNCCorrection = false`
+- Parametros de `Approach/Retract` constantes en estas cuatro muestras:
+  - `Approach.IsEnabled = false`
+  - `Approach.RadiusMultiplier = 3`
+  - `Approach.Speed = -1`
+  - `Retract.IsEnabled = false`
+  - `Retract.RadiusMultiplier = 3`
+  - `Retract.Speed = -1`
+- Nota metodologica:
+  - estos valores de `Approach/Retract` quedaron contaminados por historia de
+    edicion previa del archivo
+  - por eso deben tratarse como constantes observadas en la muestra, no como
+    defaults validados de `Bidireccional`
+- Caso `PH0_UH0`:
+  - `AxialCuttingDepth = 0`
+  - `AxialFinishCuttingDepth = 0`
+  - `TrajectoryPath` sigue siendo simple (`GeomTrimmedCurve`)
+- Caso `PH5_UH0`:
+  - `AxialCuttingDepth = 5`
+  - `AxialFinishCuttingDepth = 0`
+  - el `Approach` baja de `z = 39` a `z = 25`
+  - `TrajectoryPath` pasa a `GeomCompositeCurve` con `7` miembros
+  - el `Lift` termina en:
+    - `1 400 0 -1 0 0 1`
+- Caso `PH5_UH1`:
+  - `AxialCuttingDepth = 5`
+  - `AxialFinishCuttingDepth = 1`
+  - `TrajectoryPath` compuesto con `9` miembros
+  - el `Lift` termina en:
+    - `1 400 760 -1 0 0 1`
+- Caso `PH5_UH10`:
+  - `AxialCuttingDepth = 5`
+  - `AxialFinishCuttingDepth = 10`
+  - `TrajectoryPath` compuesto con `5` miembros
+  - el `Lift` termina en:
+    - `1 400 760 -1 0 0 1`
+- Patron axial observado:
+  - `PH > 0` vuelve compuesto el `TrajectoryPath`, igual que en
+    `Unidireccional`
+  - `UH` no solo cambia la estrategia declarada; tambien recompone la cantidad
+    de miembros del `TrajectoryPath`
+  - con el mismo `PH = 5`:
+    - `UH0` -> `7` miembros
+    - `UH1` -> `9` miembros
+    - `UH10` -> `5` miembros
+- Diferencias relevantes respecto de `Unidireccional`:
+  - en estos primeros casos no aparecen `RapidSpeedAttribute`
+  - tampoco aparecen `OperationAttribute` dentro del `TrajectoryPath`
+  - la topologia alterna el sentido de avance sobre la misma linea, en vez de
+    modelar reconexiones altas separadas como en `SalidaCota`
+  - `PH5_UH0` deja el `Lift` en `y = 0`, mientras que `PH5_UH1` y `PH5_UH10`
+    lo dejan en `y = 760`
+- Conclusiones provisionales:
+  - `Bidireccional` comparte la misma pareja de parametros axiales (`PH`, `UH`)
+    pero los aplica sobre una topologia de trayectoria distinta
+  - la futura spec publica probablemente podra reutilizar `PH` y `UH`, pero la
+    serializacion y generacion de toolpaths tendra que ser especifica por
+    estrategia
+- Pendientes:
+  - relevar `Bidireccional` con correccion `Derecha/Izquierda`
+  - relevar `Bidireccional` con `Approach` y `Retract` habilitados
+
+### Nota metodologica - `Approach` y `Retract`
+
+- Estado: vigente
+- Aclaracion:
+  - para esta linea de trabajo, los defaults de UI de `Approach` y `Retract`
+    se consideran de baja prioridad
+  - incluso pueden terminar siendo reemplazados en el sintetizador por defaults
+    propios definidos por familia de herramienta o por tipo de operacion
+- Lo que si importa relevar:
+  - cuando `Approach` esta habilitado, cambia la geometria real del toolpath de
+    entrada
+  - cuando `Retract` esta habilitado, cambia la geometria real del toolpath de
+    salida
+  - en particular, aparecen o cambian segmentos inclinados de entrada/salida
+  - esos segmentos se combinan con:
+    - la estrategia axial
+    - la correccion lateral (`Center`, `Right`, `Left`)
+    - y la posicion efectiva de inicio/fin del mecanizado
+- Implicacion para la futura API:
+  - `Approach` y `Retract` deben modelarse principalmente por su efecto
+    geometrico sobre `ToolpathList`
+  - no es necesario reconstruir ni respetar ciegamente los defaults de Maestro
+    si mas adelante decidimos usar defaults propios del sintetizador
+
+### Ronda 22 - Primer `Unidireccional` sobre escuadrado horario sin `Ac/Al`
+
+- Estado: completado
+- Archivos comparados:
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_SinEstrategia_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_SalidaCota_MP_Hab_PH0_UH0_SinAcAl.pgmx`
+- Hallazgo principal:
+  - sobre el escuadrado horario, `Unidireccional PH0_UH0` agrega la
+    `MachiningStrategy` pero todavia no dispara multipaso axial real
+- Mapeo observado:
+  - `MachiningStrategy`
+    - `i:nil="true"` -> `b:UnidirectionalMilling`
+  - `AllowMultiplePasses = true`
+  - `AxialCuttingDepth = 0`
+  - `AxialFinishCuttingDepth = 0`
+  - `StrokeConnectionStrategy = LiftShiftPlunge`
+  - `ActivateCNCCorrection` se mantiene en `true`
+  - `Approach` y `Lift` quedan iguales al caso sin estrategia
+- Geometria y compensacion:
+  - `SideOfFeature` se mantiene en `Left` en toda la familia de escuadrados
+    horarios relevada
+  - el `TrajectoryPath` sigue teniendo `9` miembros y no aparecen:
+    - `RapidSpeedAttribute`
+    - `OperationAttribute`
+- Observacion importante:
+  - aunque el numero de miembros se conserva (`9 -> 9`), el `TrajectoryPath` no
+    queda byte a byte identico al caso sin estrategia
+  - Maestro reparametriza el primer y ultimo tramo del contorno, pero sin
+    cambiar todavia la topologia general del recorrido
+- Conclusiones provisionales:
+  - para contorno cerrado, `PH0_UH0` funciona como una activacion semantica de
+    estrategia, no como una activacion de capas
+  - la forma axial fuerte aparece recien cuando `PH > 0` o cuando `UH` obliga a
+    descomponer el recorrido
+
+### Ronda 23 - `PH/UH` en `Unidireccional` sobre escuadrado horario sin `Ac/Al`
+
+- Estado: completado
+- Archivos comparados:
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_SalidaCota_MP_Hab_PH0_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_SalidaCota_MP_Hab_PH5_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_SalidaCota_MP_Hab_PH5_UH1_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_SalidaCota_MP_Hab_PH5_UH10_SinAcAl.pgmx`
+- Parametros estrategicos constantes en los cuatro casos con estrategia:
+  - `MachiningStrategy = b:UnidirectionalMilling`
+  - `AllowMultiplePasses = true`
+  - `StrokeConnectionStrategy = LiftShiftPlunge`
+  - `SideOfFeature = Left`
+  - no aparecen:
+    - `RapidSpeedAttribute`
+    - `OperationAttribute`
+- Caso `PH5_UH0`:
+  - `ActivateCNCCorrection: true -> false`
+  - `AxialCuttingDepth = 5`
+  - `AxialFinishCuttingDepth = 0`
+  - el `Approach` baja de `z = 39` a `z = 25`
+  - `Lift` se mantiene igual
+  - `TrajectoryPath` pasa de `9` a `39` miembros
+- Caso `PH5_UH1`:
+  - `AxialCuttingDepth = 5`
+  - `AxialFinishCuttingDepth = 1`
+  - `TrajectoryPath` pasa a `49` miembros
+  - `Approach` y `Lift` se mantienen iguales al caso `PH5_UH0`
+- Caso `PH5_UH10`:
+  - `AxialCuttingDepth = 5`
+  - `AxialFinishCuttingDepth = 10`
+  - `TrajectoryPath` pasa a `29` miembros
+  - `Approach` y `Lift` se mantienen iguales al caso `PH5_UH0`
+- Patron topologico observado:
+  - el contorno base del escuadrado horario ocupa `9` miembros:
+    - medio tramo inicial
+    - 4 arcos de esquina
+    - 3 tramos rectos completos
+    - medio tramo final
+  - cuando `PH > 0`, Maestro apila vueltas completas del perimetro y agrega
+    entre ellas segmentos verticales de bajada
+- Descomposicion observada:
+  - `PH5_UH0`
+    - `39 = 9 + 1 + 9 + 1 + 9 + 1 + 9`
+    - capas observadas en `z = 13`, `8`, `3`, `-1`
+    - bajadas intermedias de `5`, `5` y `4`
+  - `PH5_UH1`
+    - `49 = 9 + 1 + 9 + 1 + 9 + 1 + 9 + 1 + 9`
+    - capas observadas en `z = 13`, `8`, `3`, `0`, `-1`
+    - bajadas intermedias de `5`, `5`, `3` y `1`
+  - `PH5_UH10`
+    - `29 = 9 + 1 + 9 + 1 + 9`
+    - capas observadas en `z = 13`, `9`, `-1`
+    - bajadas intermedias de `4` y `10`
+- Observacion fuerte:
+  - para escuadrado cerrado, `UH` no cambia ni el `Approach` ni el `Lift`
+  - su efecto visible cae en la cantidad de vueltas completas del perimetro y
+    en las bajadas verticales que conectan esas vueltas
+- Conclusiones provisionales:
+  - en contorno cerrado, `Unidireccional` parece construirse como:
+    1. una vuelta base del perimetro (`9` miembros)
+    2. repeticion por capas axiales
+    3. segmentos verticales de enlace entre capas
+  - esto es distinto del caso lineal abierto, donde la topologia observada se
+    organizaba alrededor de un recorrido ida/reconexion
+- Pendientes:
+  - relevar el mismo patron para escuadrado antihorario
+  - comparar luego contra `Bidireccional` sobre escuadrado
+
+### Ronda 24 - `EnLaPieza` vs `SalidaCota` en `Unidireccional` sobre escuadrado horario sin `Ac/Al`
+
+- Estado: completado
+- Archivos comparados:
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_SalidaCota_MP_Hab_PH0_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_EnLaPieza_MP_Hab_PH0_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_SalidaCota_MP_Hab_PH5_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_EnLaPieza_MP_Hab_PH5_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_SalidaCota_MP_Hab_PH5_UH1_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_EnLaPieza_MP_Hab_PH5_UH1_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_SalidaCota_MP_Hab_PH5_UH10_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_EnLaPieza_MP_Hab_PH5_UH10_SinAcAl.pgmx`
+- Hallazgo principal:
+  - en esta familia de escuadrados horarios, cambiar `Conexion entre huecos`
+    de `SalidaCota` a `EnLaPieza` solo cambia el campo de estrategia:
+    - `StrokeConnectionStrategy: LiftShiftPlunge -> Straghtline`
+- Lo que no cambia:
+  - `MachiningStrategy` sigue siendo `b:UnidirectionalMilling`
+  - `AllowMultiplePasses`
+  - `AxialCuttingDepth`
+  - `AxialFinishCuttingDepth`
+  - `ActivateCNCCorrection`
+  - `Approach`
+  - `Lift`
+  - `TrajectoryPath`
+  - cantidad de miembros del `TrajectoryPath`
+  - ausencia de:
+    - `RapidSpeedAttribute`
+    - `OperationAttribute`
+- Validacion importante:
+  - comparando los miembros serializados del `TrajectoryPath`, los toolpaths
+    efectivos quedan identicos en los cuatro pares:
+    - `PH0_UH0`
+    - `PH5_UH0`
+    - `PH5_UH1`
+    - `PH5_UH10`
+  - los hashes crudos del bloque XML cambian por detalles internos de
+    serializacion, pero no por diferencia geometrica efectiva
+- Conclusiones provisionales:
+  - para el escuadrado horario sin `Ac/Al`, `SalidaCota` y `EnLaPieza` quedan
+    indistinguibles a nivel de `ToolpathList`
+  - en esta familia, la diferencia entre ambas opciones parece quedar solo como
+    declaracion semantica en `MachiningStrategy`
+- Pendientes:
+  - verificar si esta equivalencia tambien se conserva en:
+    - escuadrado antihorario
+    - `Approach` / `Retract` habilitados
+    - otras estrategias como `Bidireccional`
+
+### Decision provisional - default de conexion en polilinea cerrada `Unidireccional`
+
+- Estado: vigente
+- Regla acordada:
+  - para fresados de `polilinea cerrada`
+  - si la estrategia es `Unidireccional`
+  - el default del sintetizador debe ser:
+    - `Conexion entre huecos = EnLaPieza`
+    - es decir: `StrokeConnectionStrategy = Straghtline`
+- Justificacion:
+  - en los escuadrados horario y antihorario sin `Ac/Al` relevados hasta ahora,
+    `SalidaCota` y `EnLaPieza` no cambian el `ToolpathList` efectivo
+  - por lo tanto, conviene fijar un default estable y simple del lado del
+    sintetizador
+  - `SalidaCota` queda reservado como opcion explicita cuando el usuario la
+    solicite
+- Alcance actual:
+  - esta decision ya queda sustentada por los casos relevados de escuadrado
+    horario y antihorario
+  - todavia conviene verificar si el mismo criterio se mantiene en:
+    - polilineas cerradas no rectangulares
+    - casos con `Approach` y `Retract` habilitados
+
+### Ronda 25 - `Unidireccional` sobre escuadrado antihorario sin `Ac/Al`
+
+- Estado: completado
+- Archivos comparados:
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_SinEstrategia_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidireccional_SalidaCota_MP_Hab_PH0_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidireccional_SalidaCota_MP_Hab_PH5_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidireccional_SalidaCota_MP_Hab_PH5_UH1_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidireccional_SalidaCota_MP_Hab_PH5_UH10_SinAcAl.pgmx`
+- Hallazgo principal:
+  - el patron axial de `Unidireccional` sobre escuadrado antihorario espeja al
+    caso horario con la misma topologia de capas
+- Mapeo observado:
+  - `SideOfFeature = Right` en toda la familia antihoraria
+  - `PH0_UH0`
+    - agrega `MachiningStrategy = b:UnidirectionalMilling`
+    - `AllowMultiplePasses = true`
+    - `AxialCuttingDepth = 0`
+    - `AxialFinishCuttingDepth = 0`
+    - `StrokeConnectionStrategy = LiftShiftPlunge`
+    - `ActivateCNCCorrection` se mantiene en `true`
+    - `TrajectoryPath` sigue teniendo `9` miembros
+  - `PH5_UH0`
+    - `ActivateCNCCorrection: true -> false`
+    - `AxialCuttingDepth = 5`
+    - `TrajectoryPath` pasa a `39` miembros
+    - el `Approach` baja de `z = 39` a `z = 25`
+  - `PH5_UH1`
+    - `AxialFinishCuttingDepth = 1`
+    - `TrajectoryPath` pasa a `49` miembros
+  - `PH5_UH10`
+    - `AxialFinishCuttingDepth = 10`
+    - `TrajectoryPath` pasa a `29` miembros
+- Patron topologico observado:
+  - igual que en horario, el contorno base ocupa `9` miembros
+  - cuando `PH > 0`, Maestro apila vueltas completas del perimetro y agrega
+    segmentos verticales de bajada entre capas
+  - las capas observadas vuelven a ser:
+    - `PH5_UH0` -> `z = 13`, `8`, `3`, `-1`
+    - `PH5_UH1` -> `z = 13`, `8`, `3`, `0`, `-1`
+    - `PH5_UH10` -> `z = 13`, `9`, `-1`
+- Diferencia respecto del horario:
+  - la geometria del perimetro queda espejada:
+    - cambia el lado de compensacion (`Right` en vez de `Left`)
+    - cambian los signos/direcciones de los tramos y arcos
+  - pero no cambia la logica de conteo de miembros ni la descomposicion axial
+- Conclusiones provisionales:
+  - el modelo de `Unidireccional` sobre escuadrado cerrado parece estable en
+    ambos sentidos:
+    1. vuelta base de `9` miembros
+    2. repeticion por capas
+    3. bajadas verticales entre vueltas
+
+### Ronda 26 - `EnLaPieza` vs `SalidaCota` en `Unidireccional` sobre escuadrado antihorario sin `Ac/Al`
+
+- Estado: completado
+- Archivos comparados:
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidireccional_SalidaCota_MP_Hab_PH0_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidireccional_EnLaPieza_MP_Hab_PH0_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidireccional_SalidaCota_MP_Hab_PH5_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidireccional_EnLaPieza_MP_Hab_PH5_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidireccional_SalidaCota_MP_Hab_PH5_UH1_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidireccional_EnLaPieza_MP_Hab_PH5_UH1_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidireccional_SalidaCota_MP_Hab_PH5_UH10_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidireccional_EnLaPieza_MP_Hab_PH5_UH10_SinAcAl.pgmx`
+- Hallazgo principal:
+  - igual que en el escuadrado horario, `EnLaPieza` y `SalidaCota` dejan el
+    `ToolpathList` efectivo identico en los cuatro pares comparados
+- Cambio firme observado:
+  - `StrokeConnectionStrategy: LiftShiftPlunge -> Straghtline`
+- Lo que no cambia en los cuatro pares:
+  - `Approach`
+  - `TrajectoryPath`
+  - `Lift`
+  - cantidad de miembros del `TrajectoryPath`
+  - ausencia de:
+    - `RapidSpeedAttribute`
+    - `OperationAttribute`
+- Observacion puntual:
+  - en `PH0_UH0`, la muestra `EnLaPieza` tambien quedo con:
+    - `ActivateCNCCorrection: true -> false`
+  - aun asi, el `ToolpathList` efectivo sigue siendo identico al de
+    `SalidaCota`
+  - por ahora conviene tratar esto como hallazgo puntual de la muestra, no como
+    regla general
+- Conclusiones provisionales:
+  - la equivalencia geometrica entre `EnLaPieza` y `SalidaCota` ya se sostiene
+    tanto en escuadrado horario como en antihorario, al menos sin `Ac/Al`
+  - esto fortalece la decision provisional de usar `EnLaPieza` como default en
+    `polilinea cerrada + Unidireccional`
+
+### Ronda 27 - `Bidireccional` sobre escuadrado cerrado sin `Ac/Al`
+
+- Estado: completado
+- Archivos comparados:
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Bidireccional_PH0_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Bidireccional_PH5_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Bidireccional_PH5_UH1_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Bidireccional_PH5_UH10_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Bidireccional_PH0_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Bidireccional_PH5_UH0_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Bidireccional_PH5_UH1_SinAcAl.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Bidireccional_PH5_UH10_SinAcAl.pgmx`
+- Hallazgo principal:
+  - `Bidireccional` sobre escuadrado cerrado conserva la misma grilla axial de
+    capas que `Unidireccional`, pero cambia la forma en que se recorre cada
+    vuelta del perimetro
+- Mapeo observado en ambos sentidos:
+  - `MachiningStrategy = b:BidirectionalMilling`
+  - `AllowMultiplePasses = true`
+  - `StrokeConnectionStrategy = Straghtline`
+  - `PH0_UH0`
+    - `AxialCuttingDepth = 0`
+    - `AxialFinishCuttingDepth = 0`
+    - `ActivateCNCCorrection = true`
+    - `TrajectoryPath` con `9` miembros
+  - `PH5_UH0`
+    - `AxialCuttingDepth = 5`
+    - `AxialFinishCuttingDepth = 0`
+    - `ActivateCNCCorrection = false`
+    - `Approach` baja de `z = 39` a `z = 25`
+    - `TrajectoryPath` con `39` miembros
+  - `PH5_UH1`
+    - `AxialFinishCuttingDepth = 1`
+    - `TrajectoryPath` con `49` miembros
+  - `PH5_UH10`
+    - `AxialFinishCuttingDepth = 10`
+    - `TrajectoryPath` con `29` miembros
+- Patron de miembros:
+  - igual que en `Unidireccional` cerrado:
+    - base `9` miembros por vuelta
+    - mas segmentos verticales entre capas
+  - por lo tanto, se repite la misma descomposicion de conteo:
+    - `PH5_UH0` -> `39 = 9 + 1 + 9 + 1 + 9 + 1 + 9`
+    - `PH5_UH1` -> `49 = 9 + 1 + 9 + 1 + 9 + 1 + 9 + 1 + 9`
+    - `PH5_UH10` -> `29 = 9 + 1 + 9 + 1 + 9`
+- Hallazgo topologico fuerte:
+  - la diferencia real respecto de `Unidireccional + EnLaPieza` aparece cuando
+    `PH > 0`
+  - en `Bidireccional`, las vueltas completas del perimetro alternan su sentido
+    de recorrido entre capa y capa
+  - en cambio, en `Unidireccional`, todas las vueltas mantienen el mismo
+    sentido geometrico y solo cambian de cota
+- Interpretacion operativa:
+  - en contorno cerrado, `Bidireccional` parece significar:
+    1. construir una vuelta completa del perimetro
+    2. bajar en Z
+    3. recorrer la siguiente vuelta en el sentido opuesto
+    4. repetir alternando hasta llegar a la pasada final
+- Diferencia respecto del caso lineal abierto:
+  - en la linea abierta, `Bidireccional` alternaba el sentido sobre la misma
+    linea recta
+  - en contorno cerrado, la alternancia se da por vueltas completas del
+    perimetro, no por tramos parciales del contorno
+- Observacion sobre sentidos:
+  - `Horario` y `Antihorario` siguen espejandose limpiamente:
+    - `Horario` -> `SideOfFeature = Left`
+    - `Antihorario` -> `SideOfFeature = Right`
+  - la cuenta de miembros y la logica axial son identicas en ambos
+  - lo que cambia es la orientacion de cada vuelta
+
+### Ronda 28 - `Bidireccional` vs `Unidireccional + EnLaPieza` sobre escuadrado cerrado
+
+- Estado: completado
+- Archivos comparados:
+  - familias `Horario` y `Antihorario`
+  - para `PH0_UH0`, `PH5_UH0`, `PH5_UH1` y `PH5_UH10`
+- Hallazgo principal:
+  - en `PH0_UH0`, `Bidireccional` y `Unidireccional + EnLaPieza` dejan
+    `ToolpathList` identico a nivel geometrico
+  - la diferencia real entre ambas estrategias aparece recien cuando `PH > 0`
+- Coincidencias observadas:
+  - `AllowMultiplePasses`
+  - `AxialCuttingDepth`
+  - `AxialFinishCuttingDepth`
+  - `StrokeConnectionStrategy = Straghtline`
+  - `Approach`
+  - `Lift`
+  - cantidad total de miembros del `TrajectoryPath`
+- Diferencia estructural con `PH > 0`:
+  - `Unidireccional + EnLaPieza`
+    - mantiene el mismo sentido de vuelta en todas las capas
+  - `Bidireccional`
+    - invierte el sentido de la vuelta siguiente despues de cada bajada axial
+- Observacion puntual:
+  - en `Antihorario + PH0_UH0`, la muestra relevada de `Unidireccional +
+    EnLaPieza` tenia `ActivateCNCCorrection = false`, mientras que
+    `Bidireccional PH0_UH0` quedo con `true`
+  - aun asi, el `ToolpathList` sigue siendo identico
+  - esto conviene tratarlo como diferencia puntual de la muestra, no como regla
+    de implementacion
+- Conclusiones provisionales:
+  - para contorno cerrado, `Bidireccional` no necesita una regla axial nueva de
+    conteo de capas
+  - lo que necesita es una regla topologica distinta:
+    - alternar el winding efectivo de cada vuelta completa del perimetro
+
+### Decision provisional - estrategia preferida para escuadrados con multiples pasadas
+
+- Estado: vigente
+- Regla acordada:
+  - para `escuadrados`
+  - si hay `multiples pasadas`:
+    - `PH > 0`
+    - o `UH > 0`
+  - la estrategia preferida del sintetizador debe ser `Unidireccional`
+- Justificacion:
+  - en contorno cerrado, `Unidireccional` ya quedo bien caracterizado:
+    - misma vuelta base
+    - repeticion clara por capas
+    - enlazado vertical simple entre capas
+  - ademas, para `polilinea cerrada + Unidireccional`, ya adoptamos como
+    default `EnLaPieza`
+  - `Bidireccional` queda como variante soportada, pero con una topologia mas
+    especifica:
+    - alterna el sentido de cada vuelta completa del perimetro
+- Implicacion para la futura API:
+  - si el usuario no especifica estrategia en un escuadrado con multiples
+    pasadas, el sintetizador deberia preferir `Unidireccional`
+  - `Bidireccional` queda reservado como opcion explicita
+
+### Ronda 29 - `Unidireccional` sobre escuadrado con `Acercamiento/Alejamiento Arco 2 En Cota`
+
+- Estado: completado
+- Archivos comparados:
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_PH0_UH0_AcA2C_AlA2C.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_PH5_UH0_AcA2C_AlA2C.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_PH5_UH1_AcA2C_AlA2C.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Horario_Unidireccional_PH5_UH10_AcA2C_AlA2C.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidirecional_PH0_UH0_AcA2C_AlA2C.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidirecional_PH5_UH0_AcA2C_AlA2C.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidirecional_PH5_UH1_AcA2C_AlA2C.pgmx`
+  - `archive/maestro_examples/Pieza_300x300x18_Escuadrado_Antihorario_Unidirecional_PH5_UH10_AcA2C_AlA2C.pgmx`
+- Observacion de nomenclatura:
+  - los cuatro archivos `Antihorario` quedaron guardados como
+    `Unidirecional` sin la segunda `c`
+  - para el relevamiento vamos a tomarlos como parte de la misma familia
+- Hallazgo principal:
+  - estos archivos quedaron sobre la rama `EnLaPieza`
+  - es decir:
+    - `StrokeConnectionStrategy = Straghtline`
+  - comparados contra sus pares `EnLaPieza` sin `Ac/Al`, el
+    `TrajectoryPath` queda identico en los ocho casos
+- Parametros observados:
+  - `Approach.IsEnabled = true`
+  - `ApproachType = Arc`
+  - `ApproachMode = Quote`
+  - `Approach.RadiusMultiplier = 2`
+  - `Approach.Speed = -1`
+  - `Retract.IsEnabled = true`
+  - `RetractType = Arc`
+  - `RetractMode = Quote`
+  - `Retract.RadiusMultiplier = 2`
+  - `Retract.Speed = -1`
+  - `Retract.OverLap = 0`
+- ArcSide observado:
+  - `Horario`
+    - `ApproachArcSide = Left`
+    - `RetractArcSide = Left`
+  - `Antihorario`
+    - `ApproachArcSide = Right`
+    - `RetractArcSide = Right`
+- Efecto geometrico observado:
+  - `Approach` deja de ser `GeomTrimmedCurve` y pasa a `GeomCompositeCurve`
+    con `2` miembros
+  - `Lift` deja de ser `GeomTrimmedCurve` y pasa a `GeomCompositeCurve`
+    con `2` miembros
+  - `TrajectoryPath` no cambia
+- Estructura observada de `Approach/Lift`:
+  - `Approach`
+    1. un tramo lineal exterior
+    2. un arco de cuarto de vuelta que enlaza con el primer punto del mecanizado
+  - `Lift`
+    1. el arco complementario de salida
+    2. un tramo lineal exterior de retirada
+- Patron espacial:
+  - los segmentos exteriores se apoyan sobre `y = -18.36`
+  - esto coincide con un desplazamiento de `2 * 9.18`, donde:
+    - `9.18 = tool_width / 2` para `E001`
+  - el centro del arco queda sobre `x = 150`, `y = -18.36`
+  - en `Horario`, la entrada/salida exterior se corre hacia `x = 159.18` y
+    `x = 140.82`
+  - en `Antihorario`, ese corrimiento se espeja
+- Independencia respecto de `PH/UH`:
+  - el patron de `Approach/Lift` es el mismo para:
+    - `PH0_UH0`
+    - `PH5_UH0`
+    - `PH5_UH1`
+    - `PH5_UH10`
+  - lo unico que sigue variando con `PH/UH` es la cota de entrada a la primera
+    vuelta, igual que en los casos sin `Ac/Al`
+- Conclusiones provisionales:
+  - en escuadrado `Unidireccional + EnLaPieza`, habilitar `AcA2C_AlA2C` no
+    altera la estrategia axial ni la topologia del `TrajectoryPath`
+  - su efecto cae exclusivamente en los toolpaths de entrada/salida
+  - el sentido del escuadrado se refleja limpiamente en el `ArcSide` de
+    `Approach` y `Retract`
+
+### Ronda 30 - Formalizacion de la API publica para estrategias de fresado
+
+- Estado: completado
+- Cambios volcados al codigo:
+  - se agregaron las specs publicas:
+    - `UnidirectionalMillingStrategySpec`
+    - `BidirectionalMillingStrategySpec`
+  - se agregaron las builders publicas:
+    - `build_unidirectional_milling_strategy_spec(...)`
+    - `build_bidirectional_milling_strategy_spec(...)`
+  - `LineMillingSpec`, `PolylineMillingSpec` y `SquaringMillingSpec` ahora
+    aceptan `milling_strategy`
+- Alcance implementado:
+  - linea simple:
+    - `Unidireccional`
+    - `Bidireccional`
+  - polilinea lineal abierta o cerrada:
+    - `Unidireccional`
+    - `Bidireccional`
+  - escuadrado:
+    - `Unidireccional`
+    - `Bidireccional`
+- Reglas volcadas:
+  - `Unidireccional`
+    - `connection_mode = Automatic`
+      - linea simple -> `SafetyHeight`
+      - polilinea cerrada / escuadrado -> `InPiece`
+  - si `PH > 0` o `UH > 0`, la builder publica activa
+    `AllowMultiplePasses = true` automaticamente
+  - si `PH = 0` y `UH = 0`, la estrategia se serializa pero el
+    `TrajectoryPath` sigue siendo de una sola pasada
+  - si hay multipaso real:
+    - `ActivateCNCCorrection = false`
+- Topologia implementada:
+  - linea simple `Unidireccional`
+    - misma pasada efectiva en el mismo sentido
+    - retornos entre capas segun `SafetyHeight` o `InPiece`
+  - linea simple `Bidireccional`
+    - alternancia del sentido de cada pasada
+  - polilinea abierta `Unidireccional`
+    - recorre el perfil abierto completo
+    - retorno entre capas por el perfil invertido a cota de reconexion
+  - polilinea abierta `Bidireccional`
+    - alternancia del sentido del perfil abierto completo entre pasada y pasada
+  - contorno cerrado `Unidireccional`
+    - misma vuelta completa repetida a distintas cotas
+  - contorno cerrado `Bidireccional`
+    - alternancia del winding efectivo entre vuelta y vuelta
+- Integracion con `Approach/Retract`:
+  - el `TrajectoryPath` ahora se sintetiza en 3D con la cota real de la
+    primera y ultima pasada
+  - `Approach` y `Lift` ya toman esas cotas reales, en vez de depender siempre
+    de `cut_z` final
+- Verificaciones realizadas:
+  - compilacion: `py -3 -m py_compile tools\\synthesize_pgmx.py`
+  - linea simple `Unidireccional InPiece PH5_UH0`
+  - linea simple `Bidireccional PH5_UH1`
+  - escuadrado `Unidireccional Automatic PH5_UH10`
+  - polilinea cerrada lineal `Bidireccional PH5_UH0`
+- Documentacion formal actualizada:
+  - `docs/synthesize_pgmx_help.md`
+  - `README.md`
+
+### Decision de cierre - Sintetizador Maestro `v1.0`
+
+- Estado: vigente
+- Se establece esta etapa del sintetizador como `v1.0`
+- Alcance consolidado del hito:
+  - baseline versionado por defecto
+  - taladros puntuales multicara
+  - linea simple
+  - polilinea lineal abierta/cerrada
+  - escuadrado
+  - estrategias publicas `Unidireccional` y `Bidireccional`
+  - `Approach` y `Retract` ya desacoplados de la estrategia axial
+- Criterio operativo:
+  - nuevos hallazgos y nuevas familias deben considerarse ampliaciones sobre
+    `v1.0`, no redefiniciones del alcance ya estabilizado
