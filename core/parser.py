@@ -3,12 +3,22 @@
 import csv
 import logging
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from core.model import ModuleData, Piece
+from core.model import LocaleData, ModuleData, Piece
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+
+SUMMARY_FILE_SUFFIXES = {".csv", ".scv"}
+MODULE_SOURCE_EXTENSIONS = {".pgmx", ".csv", ".scv", ".nc", ".gcode", ".txt"}
+
+
+@dataclass
+class ProjectFolderLayout:
+    locale_dirs: list[Path] = field(default_factory=list)
+    loose_module_dirs: list[Path] = field(default_factory=list)
 
 
 def parse_cnc_file(file_path: Path, metadata: Optional[Dict[str, dict]] = None) -> List[Piece]:
@@ -162,7 +172,13 @@ def load_module_summary(module_dir: Path) -> Dict[str, dict]:
     possible_grain = {normalize(x) for x in ["grain_direction", "sentido_veta", "veta", "veta_sentido", "sentido"]}
     possible_quantity = {normalize(x) for x in ["quantity", "cantidad", "qty", "cant"]}
 
-    for summary_file in module_dir.rglob("*.csv"):
+    summary_files = [
+        summary_file
+        for summary_file in module_dir.rglob("*")
+        if summary_file.is_file() and summary_file.suffix.lower() in SUMMARY_FILE_SUFFIXES
+    ]
+
+    for summary_file in summary_files:
         logging.info("Evaluando CSV %s para módulo %s", summary_file, module_dir.name)
         text = summary_file.read_text(encoding="utf-8", errors="ignore")
         if not text.strip():
@@ -410,3 +426,87 @@ def scan_project(root_path: Path) -> List[ModuleData]:
         logging.info("Módulo %s procesado: %d piezas", module.name, len(module.pieces))
 
     return modules
+
+
+def _has_module_source_files(path: Path) -> bool:
+    if not path.is_dir():
+        return False
+    if (path / "module_config.json").exists():
+        return True
+    for file_path in path.rglob("*"):
+        if file_path.is_file() and file_path.suffix.lower() in MODULE_SOURCE_EXTENSIONS:
+            return True
+    return False
+
+
+def _find_direct_module_dirs(parent_dir: Path) -> list[Path]:
+    module_dirs: list[Path] = []
+    for child in parent_dir.iterdir():
+        if not child.is_dir():
+            continue
+        if _has_module_source_files(child):
+            module_dirs.append(child)
+    return module_dirs
+
+
+def inspect_project_layout(root_path: Path) -> ProjectFolderLayout:
+    """Clasifica carpetas de primer nivel en locales y módulos sueltos."""
+    layout = ProjectFolderLayout()
+
+    for child in root_path.iterdir():
+        if not child.is_dir():
+            continue
+
+        direct_module_dirs = _find_direct_module_dirs(child)
+        if direct_module_dirs:
+            layout.locale_dirs.append(child)
+            continue
+
+        if _has_module_source_files(child):
+            layout.loose_module_dirs.append(child)
+
+    layout.locale_dirs.sort(key=lambda path: path.name.lower())
+    layout.loose_module_dirs.sort(key=lambda path: path.name.lower())
+    return layout
+
+
+def _scan_module_from_locale(root_path: Path, locale_dir: Path, module_dir: Path) -> ModuleData:
+    """Escanea un único módulo ubicado dentro de una carpeta de local."""
+    modules = scan_project(module_dir.parent)
+    for module in modules:
+        if Path(module.path).resolve() != module_dir.resolve():
+            continue
+        module.locale_name = locale_dir.name
+        module.relative_path = str(module_dir.relative_to(root_path)).replace("\\", "/")
+        return module
+
+    return ModuleData(
+        name=module_dir.name,
+        path=str(module_dir),
+        locale_name=locale_dir.name,
+        relative_path=str(module_dir.relative_to(root_path)).replace("\\", "/"),
+        pieces=[],
+    )
+
+
+def scan_project_structure(root_path: Path) -> tuple[list[LocaleData], list[ModuleData]]:
+    """Escanea una estructura proyecto/local/módulo ya normalizada."""
+    layout = inspect_project_layout(root_path)
+    locales: list[LocaleData] = []
+    modules: list[ModuleData] = []
+
+    for locale_dir in layout.locale_dirs:
+        locale_modules: list[ModuleData] = []
+        for module_dir in sorted(_find_direct_module_dirs(locale_dir), key=lambda path: path.name.lower()):
+            locale_modules.append(_scan_module_from_locale(root_path, locale_dir, module_dir))
+
+        locales.append(
+            LocaleData(
+                name=locale_dir.name,
+                path=str(locale_dir.relative_to(root_path)).replace("\\", "/"),
+                modules_count=len(locale_modules),
+            )
+        )
+        modules.extend(locale_modules)
+
+    return locales, modules

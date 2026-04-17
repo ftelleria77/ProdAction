@@ -1,7 +1,6 @@
-"""Definiciones de modelo de datos para piezas, módulos y proyectos."""
+"""Definiciones de modelo de datos para piezas, locales, módulos y proyectos."""
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import List, Optional
 
 
@@ -33,38 +32,50 @@ class Piece:
 class ModuleData:
     name: str
     path: str
+    locale_name: str = ""
+    relative_path: str = ""
     pieces: List[Piece] = field(default_factory=list)
     is_manual: bool = False
+
+
+@dataclass
+class LocaleData:
+    name: str
+    path: str
+    modules_count: int = 0
 
 
 @dataclass
 class Project:
     name: str
     root_directory: str
+    project_data_file: str = "project.json"
     client: str = ""
-    local: str = ""
     created_at: str = ""
+    locales: List[LocaleData] = field(default_factory=list)
     modules: List[ModuleData] = field(default_factory=list)
     output_directory: Optional[str] = None
 
-    def to_dict(self):
-        """Convertir objeto de proyecto a diccionario.
+    @property
+    def local(self) -> str:
+        return self.locales[0].name if self.locales else ""
 
-        Este método es usado para serializar y guardar en JSON.
-        """
+    @property
+    def locales_count(self) -> int:
+        return len(self.locales)
+
+    def to_dict(self):
+        """Convierte el proyecto al formato persistido en disco."""
         return {
-            "name": self.name,
-            "root_directory": self.root_directory,
-            "client": self.client,
-            "local": self.local,
+            "project_name": self.name,
+            "client_name": self.client,
             "created_at": self.created_at,
-            "output_directory": self.output_directory,
-            "modules": [
+            "locales": [
                 {
-                    "name": m.name,
-                    "path": m.path,
-                    "pieces": [p.__dict__ for p in m.pieces],
+                    "name": locale.name,
+                    "path": locale.path,
+                    "modules_count": locale.modules_count,
                 }
-                for m in self.modules
+                for locale in self.locales
             ],
         }
