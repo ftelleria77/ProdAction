@@ -9,10 +9,10 @@ from typing import Dict, List, Optional
 
 from core.model import LocaleData, ModuleData, Piece
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logger = logging.getLogger(__name__)
 
-SUMMARY_FILE_SUFFIXES = {".csv", ".scv"}
-MODULE_SOURCE_EXTENSIONS = {".pgmx", ".csv", ".scv", ".nc", ".gcode", ".txt"}
+SUMMARY_FILE_SUFFIXES = {".csv"}
+MODULE_SOURCE_EXTENSIONS = {".pgmx", ".csv"}
 
 
 @dataclass
@@ -179,10 +179,10 @@ def load_module_summary(module_dir: Path) -> Dict[str, dict]:
     ]
 
     for summary_file in summary_files:
-        logging.info("Evaluando CSV %s para módulo %s", summary_file, module_dir.name)
+        logger.debug("Evaluando CSV %s para módulo %s", summary_file, module_dir.name)
         text = summary_file.read_text(encoding="utf-8", errors="ignore")
         if not text.strip():
-            logging.info("CSV vacío en %s", summary_file)
+            logger.debug("CSV vacío en %s", summary_file)
             continue
 
         lines = text.strip().split("\n")
@@ -193,7 +193,7 @@ def load_module_summary(module_dir: Path) -> Dict[str, dict]:
         delimiter = ";"
         if ";" not in lines[0]:
             delimiter = ","
-        logging.info("Delimitador detectado en línea 1: %r", delimiter)
+        logger.debug("Delimitador detectado en línea 1: %r", delimiter)
 
         # Heurística: si primer valor parece ID de pieza (contiene letras y números), probablemente no hay encabezados
         first_row_values = lines[0].split(delimiter)
@@ -204,10 +204,10 @@ def load_module_summary(module_dir: Path) -> Dict[str, dict]:
             # Si empieza con número+letra (tipo "1FSX", "2FDX") es probablemente una pieza, no encabezado
             if re.match(r"^[0-9]+[A-Za-z]", first_val):
                 has_headers = False
-                logging.info("CSV detectado SIN encabezados (formato posicional, primer valor: %s)", first_val)
+                logger.debug("CSV detectado SIN encabezados (formato posicional, primer valor: %s)", first_val)
             else:
                 has_headers = True
-                logging.info("CSV detectado CON encabezados (primer valor: %s)", first_val)
+                logger.debug("CSV detectado CON encabezados (primer valor: %s)", first_val)
 
         # Intentar procesar como CSV sin encabezados primero (formato posicional).
         rows_count = 0
@@ -219,12 +219,12 @@ def load_module_summary(module_dir: Path) -> Dict[str, dict]:
             rows_count += 1
 
             if len(cols) < 10:
-                logging.debug("Fila %d: columnas insuficientes (%d < 10), saltando", rows_count, len(cols))
+                logger.debug("Fila %d: columnas insuficientes (%d < 10), saltando", rows_count, len(cols))
                 continue
 
             piece_id = cols[0].strip()
             if not piece_id:
-                logging.debug("Fila %d: ID vacío, saltando", rows_count)
+                logger.debug("Fila %d: ID vacío, saltando", rows_count)
                 continue
 
             piece_type = cols[1].strip() if len(cols) > 1 else None
@@ -240,7 +240,7 @@ def load_module_summary(module_dir: Path) -> Dict[str, dict]:
             source_file = cols[10].strip() if len(cols) > 10 else None
 
             if not largo and not ancho:
-                logging.debug("Fila %d: no dimension valida, saltando", rows_count)
+                logger.debug("Fila %d: no dimension valida, saltando", rows_count)
                 continue
 
             qty_num = parse_quantity(quantity_str)
@@ -262,20 +262,20 @@ def load_module_summary(module_dir: Path) -> Dict[str, dict]:
                 "source": source_file,
                 "piece_type": piece_type or None,
             }
-            logging.debug("Fila %d: parseada sin encabezados %s", rows_count, piece_id)
+            logger.debug("Fila %d: parseada sin encabezados %s", rows_count, piece_id)
 
         if no_header_lookup:
             lookup = no_header_lookup
-            logging.info("CSV sin encabezados detectado: %d piezas capturadas", len(lookup))
+            logger.debug("CSV sin encabezados detectado: %d piezas capturadas", len(lookup))
         else:
             # Procesamiento con encabezados (DictReader)
             with summary_file.open("r", encoding="utf-8", errors="ignore") as f:
                 reader = csv.DictReader(f, delimiter=delimiter)
                 if not reader.fieldnames:
-                    logging.warning("CSV sin encabezados detectados en %s", summary_file)
+                    logger.warning("CSV sin encabezados detectados en %s", summary_file)
                     continue
 
-                logging.info("Encabezados detectados: %s", reader.fieldnames[:10])
+                logger.debug("Encabezados detectados: %s", reader.fieldnames[:10])
                 rows_count = 0
                 normalized_keys = {normalize(k): k for k in reader.fieldnames if k}
 
@@ -325,16 +325,16 @@ def load_module_summary(module_dir: Path) -> Dict[str, dict]:
                         "source": row_norm.get("source") if "source" in row_norm else None,
                         "name": row_norm.get("name") if "name" in row_norm else piece_id,
                     }
-                    logging.info("Fila %d: pieza '%s' (w=%s, h=%s, qty=%s)", rows_count, piece_id, width, height, quantity)
+                    logger.debug("Fila %d: pieza '%s' (w=%s, h=%s, qty=%s)", rows_count, piece_id, width, height, quantity)
 
-                logging.info("Total filas: %d, piezas capturadas: %d", rows_count, len(lookup))
+                logger.debug("Total filas: %d, piezas capturadas: %d", rows_count, len(lookup))
 
         if lookup:
-            logging.info("✓ Cargado CSV de módulo %s -> %d piezas", module_dir.name, len(lookup))
+            logger.debug("✓ Cargado CSV de módulo %s -> %d piezas", module_dir.name, len(lookup))
             break
 
     if not lookup:
-        logging.info("✗ No se encontró resumen CSV válido para módulo %s", module_dir.name)
+        logger.debug("✗ No se encontró resumen CSV válido para módulo %s", module_dir.name)
     return lookup
 
 
@@ -369,12 +369,12 @@ def scan_project(root_path: Path) -> List[ModuleData]:
         pgmx_files = [p for p in module_dir.rglob("*.pgmx") if p.is_file()]
         associated_map: Dict[str, str] = {}
 
-        # Parsear todos los archivos CNC/PGMX en subcarpetas también
-        valid_extensions = {".pgmx", ".nc", ".gcode", ".txt"}
+        # Parsear únicamente archivos PGMX como programas de pieza.
+        valid_extensions = {".pgmx"}
         for file_path in module_dir.rglob("*"):
             if not file_path.is_file() or file_path.suffix.lower() not in valid_extensions:
                 continue
-            logging.info("Parseando archivo %s del módulo %s", file_path, module_dir.name)
+            logger.debug("Parseando archivo %s del módulo %s", file_path, module_dir.name)
             for piece in parse_cnc_file(file_path, metadata=metadata):
                 if not piece.name and piece.id in metadata:
                     piece.name = metadata[piece.id].get("name") or piece.id
@@ -383,7 +383,7 @@ def scan_project(root_path: Path) -> List[ModuleData]:
                 original_source = piece.cnc_source
                 if piece.id in metadata and metadata[piece.id].get("source"):
                     piece.cnc_source = metadata[piece.id].get("source")
-                    logging.info("Pieza %s: usando source del CSV '%s' (en lugar de '%s')", piece.id, piece.cnc_source, original_source)
+                    logger.debug("Pieza %s: usando source del CSV '%s' (en lugar de '%s')", piece.id, piece.cnc_source, original_source)
                 
                 piece.module_name = module.name
                 piece_map[piece.id] = piece
@@ -423,7 +423,7 @@ def scan_project(root_path: Path) -> List[ModuleData]:
 
         module.pieces = list(piece_map.values())
         modules.append(module)
-        logging.info("Módulo %s procesado: %d piezas", module.name, len(module.pieces))
+        logger.debug("Módulo %s procesado: %d piezas", module.name, len(module.pieces))
 
     return modules
 

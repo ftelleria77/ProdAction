@@ -44,6 +44,9 @@ APP_SETTINGS_FILE = BASE_DIR / "app_settings.json"
 ARCHIVE_DIR = BASE_DIR / "archive"
 ARCHIVE_DIR.mkdir(exist_ok=True)
 
+MAIN_ACTION_BUTTON_WIDTH = 96
+MAIN_ACTION_BUTTON_HEIGHT = 40
+
 BOARD_GRAIN_OPTIONS = [
     "0 - Sin Veta",
     "1 - Longitudinal",
@@ -345,6 +348,214 @@ def _coerce_optional_piece_float_fields(piece_data: dict, field_names: tuple[str
             piece_data[field_name] = None
 
 
+def _read_json_file(path: Path):
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _coerce_required_piece_float_fields(piece_data: dict, field_names: tuple[str, ...]) -> None:
+    for field_name in field_names:
+        raw_value = piece_data.get(field_name)
+        if raw_value == "" or raw_value is None:
+            piece_data[field_name] = 0.0
+            continue
+        try:
+            piece_data[field_name] = float(raw_value)
+        except (ValueError, TypeError):
+            piece_data[field_name] = 0.0
+
+
+def _coerce_piece_quantity_field(piece_data: dict, field_name: str = "quantity") -> None:
+    raw_value = piece_data.get(field_name)
+    if raw_value == "" or raw_value is None:
+        piece_data[field_name] = 1
+        return
+    try:
+        quantity = int(float(raw_value))
+    except (ValueError, TypeError):
+        quantity = 1
+    piece_data[field_name] = quantity if quantity > 0 else 1
+
+
+def _load_pieces_from_config_rows(piece_rows, module_name: str) -> list[Piece]:
+    pieces: list[Piece] = []
+    if not isinstance(piece_rows, list):
+        return pieces
+
+    piece_fields = {
+        "id", "width", "height", "thickness", "quantity",
+        "color", "grain_direction", "name", "module_name",
+        "cnc_source", "f6_source", "piece_type", "program_width", "program_height", "program_thickness",
+    }
+
+    for piece_row in piece_rows:
+        if not isinstance(piece_row, dict):
+            continue
+
+        normalized_row = dict(piece_row)
+        if "source" in normalized_row and "cnc_source" not in normalized_row:
+            normalized_row["cnc_source"] = normalized_row.get("source")
+        if not str(normalized_row.get("module_name") or "").strip():
+            normalized_row["module_name"] = module_name
+
+        filtered_row = {key: value for key, value in normalized_row.items() if key in piece_fields}
+        _coerce_required_piece_float_fields(filtered_row, ("width", "height"))
+        _coerce_optional_piece_float_fields(
+            filtered_row,
+            ("thickness", "program_width", "program_height", "program_thickness"),
+        )
+        _coerce_piece_quantity_field(filtered_row)
+
+        piece_id = str(filtered_row.get("id") or "").strip()
+        if not piece_id:
+            continue
+        filtered_row["id"] = piece_id
+
+        try:
+            pieces.append(Piece(**filtered_row))
+        except Exception:
+            continue
+
+    return pieces
+
+
+def _module_relative_path(project_root: Path, module_path: Path, fallback: str = "") -> str:
+    try:
+        return str(module_path.relative_to(project_root)).replace("\\", "/")
+    except ValueError:
+        return fallback
+
+
+def _load_module_from_saved_config(
+    *,
+    project_root: Path,
+    module_path: Path,
+    locale_name: str = "",
+    module_name_hint: str = "",
+    relative_path_hint: str = "",
+) -> ModuleData:
+    config_path = module_path / "module_config.json"
+    config_data = _read_json_file(config_path)
+    if not isinstance(config_data, dict):
+        config_data = {}
+
+    module_name = str(config_data.get("module") or module_name_hint or module_path.name).strip() or module_path.name
+    relative_path = _module_relative_path(project_root, module_path, relative_path_hint) or relative_path_hint
+    pieces = _load_pieces_from_config_rows(config_data.get("pieces", []), module_name)
+
+    return ModuleData(
+        name=module_name,
+        path=str(module_path),
+        locale_name=locale_name,
+        relative_path=relative_path,
+        pieces=pieces,
+    )
+
+
+def _load_saved_modules_for_locale(project_root: Path, locale: LocaleData) -> list[ModuleData]:
+    locale_path = project_root / locale.path
+    modules_by_key: dict[str, ModuleData] = {}
+
+    local_config_data = _read_json_file(locale_path / "local_config.json")
+    if isinstance(local_config_data, dict):
+        saved_modules = local_config_data.get("modules", [])
+        if isinstance(saved_modules, list):
+            for module_row in saved_modules:
+                if not isinstance(module_row, dict):
+                    continue
+                module_name = str(module_row.get("name") or "").strip()
+                module_relative_from_locale = str(module_row.get("path") or module_name).strip()
+                if not module_relative_from_locale:
+                    continue
+
+                module_path = locale_path / module_relative_from_locale
+                relative_path_hint = str((Path(locale.path) / module_relative_from_locale)).replace("\\", "/")
+                module = _load_module_from_saved_config(
+                    project_root=project_root,
+                    module_path=module_path,
+                    locale_name=locale.name,
+                    module_name_hint=module_name,
+                    relative_path_hint=relative_path_hint,
+                )
+                module_key = (module.relative_path or str(module.path)).lower()
+                modules_by_key[module_key] = module
+
+    if locale_path.exists():
+        for child in sorted(locale_path.iterdir(), key=lambda item: item.name.lower()):
+            if not child.is_dir() or not (child / "module_config.json").exists():
+                continue
+            module = _load_module_from_saved_config(
+                project_root=project_root,
+                module_path=child,
+                locale_name=locale.name,
+            )
+            module_key = (module.relative_path or str(module.path)).lower()
+            modules_by_key.setdefault(module_key, module)
+
+    return sorted(
+        modules_by_key.values(),
+        key=lambda module: ((module.locale_name or "").lower(), module.name.lower()),
+    )
+
+
+def _discover_saved_locales(project_root: Path, locales: list[LocaleData]) -> list[LocaleData]:
+    locale_map: dict[str, LocaleData] = {}
+
+    for locale in _normalize_project_locales(locales):
+        locale_key = str(locale.path or locale.name).strip().lower()
+        if not locale_key:
+            continue
+        locale_map[locale_key] = locale
+
+    if project_root.exists():
+        for child in sorted(project_root.iterdir(), key=lambda item: item.name.lower()):
+            if not child.is_dir():
+                continue
+            has_local_config = (child / "local_config.json").exists()
+            has_saved_modules = any(
+                grandchild.is_dir() and (grandchild / "module_config.json").exists()
+                for grandchild in child.iterdir()
+            )
+            if not has_local_config and not has_saved_modules:
+                continue
+
+            locale_path = str(child.relative_to(project_root)).replace("\\", "/")
+            locale_key = locale_path.lower()
+            if locale_key not in locale_map:
+                locale_map[locale_key] = LocaleData(name=child.name, path=locale_path, modules_count=0)
+
+    return sorted(locale_map.values(), key=lambda locale: locale.name.lower())
+
+
+def _load_saved_modules(project_root: Path, locales: list[LocaleData]) -> tuple[list[LocaleData], list[ModuleData]]:
+    resolved_locales = _discover_saved_locales(project_root, locales)
+    modules: list[ModuleData] = []
+
+    for locale in resolved_locales:
+        locale_modules = _load_saved_modules_for_locale(project_root, locale)
+        locale.modules_count = len(locale_modules)
+        modules.extend(locale_modules)
+
+    if not resolved_locales and project_root.exists():
+        loose_modules: list[ModuleData] = []
+        for child in sorted(project_root.iterdir(), key=lambda item: item.name.lower()):
+            if not child.is_dir() or not (child / "module_config.json").exists():
+                continue
+            loose_modules.append(
+                _load_module_from_saved_config(
+                    project_root=project_root,
+                    module_path=child,
+                )
+            )
+        return resolved_locales, loose_modules
+
+    return resolved_locales, modules
+
+
 def _load_project(name: str) -> Project:
     """Cargar proyecto desde su archivo JSON en disco usando el registro global."""
     registry_entry = _find_registry_entry(name)
@@ -372,34 +583,32 @@ def _load_project(name: str) -> Project:
         modules=[],
     )
 
-    try:
-        from core.parser import scan_project_structure
-
-        scanned_locales, scanned_modules = scan_project_structure(Path(project.root_directory))
-        if scanned_locales:
-            project.locales = scanned_locales
-        project.modules = scanned_modules
-    except Exception:
-        project.modules = []
+    saved_locales, saved_modules = _load_saved_modules(Path(project.root_directory), project.locales)
+    if saved_locales:
+        project.locales = saved_locales
+    project.modules = saved_modules
 
     return project
 
 
 class ProjectDetailWindow(QMainWindow):
-    def __init__(self, project: Project):
+    def __init__(self, project: Project, return_window=None):
         super().__init__()
         self.project = project
+        self.return_window = return_window
         self.setWindowTitle(f"Proyecto: {project.name}")
-        self.setGeometry(120, 120, 580, 260)
+        self.setGeometry(120, 120, 640, 420)
 
         layout = QVBoxLayout()
         self.lbl_name = QLabel()
         self.lbl_client = QLabel()
-        self.lbl_locales = QLabel()
-        self.lbl_locales_count = QLabel()
         self.lbl_root = QLabel()
-        self.lbl_dates = QLabel()
-        self.lbl_modules_count = QLabel()
+        self.lbl_root.setWordWrap(True)
+        self.lbl_created = QLabel()
+        self.lbl_modified = QLabel()
+        self.lbl_locales_count = QLabel()
+        self.locales_list = QListWidget()
+        self.locales_list.setMinimumHeight(120)
 
         header_row = QHBoxLayout()
         self.lbl_client.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -407,32 +616,55 @@ class ProjectDetailWindow(QMainWindow):
         header_row.addStretch(1)
         header_row.addWidget(self.lbl_client)
 
-        layout.addLayout(header_row)
-        layout.addWidget(self.lbl_locales)
-        layout.addWidget(self.lbl_locales_count)
-        layout.addWidget(self.lbl_root)
-        layout.addWidget(self.lbl_dates)
-        layout.addWidget(self.lbl_modules_count)
+        dates_row = QHBoxLayout()
+        dates_row.addWidget(self.lbl_created)
+        dates_row.addStretch(1)
+        dates_row.addWidget(self.lbl_modified)
 
-        # Primera fila: Editar, Procesar, Módulos
-        button_row1 = QHBoxLayout()
         btn_edit = QPushButton("Editar")
         btn_process = QPushButton("Procesar")
-        btn_modules = QPushButton("Módulos")
-        button_row1.addWidget(btn_edit)
-        button_row1.addWidget(btn_process)
-        button_row1.addWidget(btn_modules)
-        layout.addLayout(button_row1)
+        btn_modules = QPushButton("Ver\nmódulos")
+        btn_drawings = QPushButton("Generar\nImágenes")
+        btn_sheets = QPushButton("Generar\nPlanillas")
+        btn_cuts = QPushButton("Diagramas\nde Corte")
+        btn_close = QPushButton("Cerrar")
 
-        # Segunda fila: Generar Planillas, Diagramas de Cortes, Generar Imágenes
-        button_row2 = QHBoxLayout()
-        btn_sheets = QPushButton("Generar Planillas")
-        btn_cuts = QPushButton("Diagramas de Cortes")
-        btn_drawings = QPushButton("Generar imágenes")
-        button_row2.addWidget(btn_sheets)
-        button_row2.addWidget(btn_cuts)
-        button_row2.addWidget(btn_drawings)
-        layout.addLayout(button_row2)
+        for button in (
+            btn_edit,
+            btn_process,
+            btn_modules,
+            btn_sheets,
+            btn_cuts,
+            btn_drawings,
+            btn_close,
+        ):
+            button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+
+        top_action_row = QHBoxLayout()
+        top_action_row.addWidget(btn_edit)
+        top_action_row.addWidget(btn_process)
+        top_action_row.addStretch(1)
+
+        layout.addLayout(header_row)
+        layout.addWidget(self.lbl_root)
+        layout.addLayout(dates_row)
+        layout.addLayout(top_action_row)
+        layout.addWidget(self.lbl_locales_count)
+
+        locales_and_actions_row = QHBoxLayout()
+        locales_and_actions_row.addWidget(self.locales_list, 1)
+
+        actions_column = QVBoxLayout()
+        actions_column.setContentsMargins(0, 0, 0, 0)
+        actions_column.addWidget(btn_modules)
+        actions_column.addWidget(btn_drawings)
+        actions_column.addWidget(btn_sheets)
+        actions_column.addWidget(btn_cuts)
+        actions_column.addStretch(1)
+        actions_column.addWidget(btn_close)
+
+        locales_and_actions_row.addLayout(actions_column)
+        layout.addLayout(locales_and_actions_row, 1)
 
         container = QWidget()
         container.setLayout(layout)
@@ -440,32 +672,36 @@ class ProjectDetailWindow(QMainWindow):
 
         self.btn_modules = btn_modules
         self.btn_modules.clicked.connect(self.show_modules)
+        self.locales_list.itemDoubleClicked.connect(lambda *_: self.show_modules())
 
         btn_edit.clicked.connect(self.edit_project)
         btn_process.clicked.connect(self.process_project)
         btn_sheets.clicked.connect(self.generate_sheets)
         btn_cuts.clicked.connect(self.show_cuts)
         btn_drawings.clicked.connect(self.generate_drawings_only)
+        btn_close.clicked.connect(self.close)
 
         self.refresh_project_header_info()
         self.update_modules_button()
+
+    def _show_return_window(self):
+        if self.return_window is None:
+            return
+        self.return_window.show()
+        self.return_window.raise_()
+        self.return_window.activateWindow()
+
+    def closeEvent(self, event):
+        self._show_return_window()
+        super().closeEvent(event)
 
     def refresh_project_header_info(self):
         """Actualizar los campos de cabecera de la ventana de proyecto."""
         self.lbl_name.setText(f"Proyecto: {self.project.name}")
         self.lbl_client.setText(f"Cliente: {self.project.client or '-'}")
         locales = _normalize_project_locales(getattr(self.project, "locales", []), getattr(self.project, "local", ""))
-        if locales:
-            preview = ", ".join(locale.name for locale in locales[:3])
-            if len(locales) > 3:
-                preview = f"{preview}..."
-        else:
-            preview = "-"
-        self.lbl_locales.setText(f"Locales: {preview}")
         locales_count = len(locales) if locales else (self.project.locales_count or 0)
-        self.lbl_locales_count.setText(
-            f"Cantidad de locales: {locales_count}"
-        )
+        self.lbl_locales_count.setText(f"Cantidad de locales: {locales_count}")
         self.lbl_root.setText(f"Carpeta de proyecto: {self.project.root_directory}")
 
         project_file = _project_data_path(self.project)
@@ -475,12 +711,94 @@ class ProjectDetailWindow(QMainWindow):
             modified = "-"
 
         created = self.project.created_at or "-"
-        self.lbl_dates.setText(f"Creado: {created} - Modificado: {modified}")
+        self.lbl_created.setText(f"Creado: {created}")
+        self.lbl_modified.setText(f"Modificado: {modified}")
 
-        if self.project.modules:
-            self.lbl_modules_count.setText(f"Cantidad de módulos: {len(self.project.modules)}")
+        self.locales_list.clear()
+        if locales:
+            for locale in locales:
+                modules_count = len(
+                    [
+                        module
+                        for module in self.project.modules
+                        if str(module.locale_name or "").strip().lower() == locale.name.strip().lower()
+                    ]
+                )
+                if modules_count <= 0:
+                    try:
+                        modules_count = int(locale.modules_count or 0)
+                    except (TypeError, ValueError):
+                        modules_count = 0
+
+                item = QListWidgetItem(f"{locale.name} ({modules_count} módulo(s))")
+                item.setData(Qt.UserRole, locale.name)
+                item.setFlags(
+                    Qt.ItemIsEnabled
+                    | Qt.ItemIsSelectable
+                    | Qt.ItemIsUserCheckable
+                )
+                item.setCheckState(Qt.Checked)
+                self.locales_list.addItem(item)
         else:
-            self.lbl_modules_count.setText("Cantidad de módulos: - (sin procesar)")
+            placeholder_item = QListWidgetItem("sin procesar")
+            placeholder_item.setFlags(Qt.NoItemFlags)
+            placeholder_item.setTextAlignment(Qt.AlignCenter)
+            placeholder_item.setForeground(QColor("#777777"))
+            self.locales_list.addItem(placeholder_item)
+
+    def _selected_locale_names(self) -> list[str]:
+        selected_locales: list[str] = []
+        for index in range(self.locales_list.count()):
+            item = self.locales_list.item(index)
+            if item is None:
+                continue
+            locale_name = str(item.data(Qt.UserRole) or "").strip()
+            if not locale_name:
+                continue
+            if item.checkState() == Qt.Checked:
+                selected_locales.append(locale_name)
+        return selected_locales
+
+    def _project_for_selected_locales(self, action_title: str) -> Project | None:
+        selected_locale_names = self._selected_locale_names()
+        if not selected_locale_names:
+            QMessageBox.warning(
+                self,
+                action_title,
+                "Seleccione al menos un local en la lista para continuar.",
+            )
+            return None
+
+        selected_locale_keys = {locale_name.strip().lower() for locale_name in selected_locale_names}
+        filtered_locales = [
+            locale
+            for locale in _normalize_project_locales(getattr(self.project, "locales", []), getattr(self.project, "local", ""))
+            if locale.name.strip().lower() in selected_locale_keys
+        ]
+        filtered_modules = [
+            module
+            for module in self.project.modules
+            if str(module.locale_name or "").strip().lower() in selected_locale_keys
+        ]
+
+        if not filtered_modules:
+            QMessageBox.warning(
+                self,
+                action_title,
+                "No hay módulos cargados para los locales seleccionados.",
+            )
+            return None
+
+        return Project(
+            name=self.project.name,
+            root_directory=self.project.root_directory,
+            project_data_file=self.project.project_data_file,
+            client=self.project.client,
+            created_at=self.project.created_at,
+            locales=filtered_locales,
+            modules=filtered_modules,
+            output_directory=self.project.output_directory,
+        )
 
     def _normalize_module_piece_thickness(self, module: ModuleData) -> None:
         """Normaliza el espesor de todas las piezas en un módulo.
@@ -3022,6 +3340,10 @@ class ProjectDetailWindow(QMainWindow):
             QMessageBox.warning(self, "Diagramas de Cortes", "No hay módulos cargados. Procese el proyecto primero.")
             return
 
+        selected_project = self._project_for_selected_locales("Diagramas de Cortes")
+        if selected_project is None:
+            return
+
         settings = _read_app_settings()
         board_width = float(settings.get("cut_board_width") or 1830)
         board_height = float(settings.get("cut_board_height") or 2750)
@@ -3036,7 +3358,7 @@ class ProjectDetailWindow(QMainWindow):
             from core.nesting import generate_cut_diagrams
 
             result = generate_cut_diagrams(
-                self.project,
+                selected_project,
                 pdf_output_path,
                 board_width=board_width,
                 board_height=board_height,
@@ -3085,6 +3407,10 @@ class ProjectDetailWindow(QMainWindow):
             QMessageBox.warning(self, "Generar Planillas", "No hay módulos cargados. Procese el proyecto primero.")
             return
 
+        selected_project = self._project_for_selected_locales("Generar Planillas")
+        if selected_project is None:
+            return
+
         default_name = f"{self.project.name} - {self.project.client}.xlsx"
         default_output = str(Path(self.project.root_directory) / default_name)
         output_file, _ = QFileDialog.getSaveFileName(
@@ -3102,7 +3428,7 @@ class ProjectDetailWindow(QMainWindow):
                 from core.summary import export_production_sheet
 
                 generated_path = export_production_sheet(
-                    self.project,
+                    selected_project,
                     Path(output_file),
                 )
                 QMessageBox.information(
@@ -3149,11 +3475,15 @@ class ProjectDetailWindow(QMainWindow):
             QMessageBox.warning(self, "Generar imágenes", "No hay módulos cargados. Procese el proyecto primero.")
             return
 
+        selected_project = self._project_for_selected_locales("Generar imágenes")
+        if selected_project is None:
+            return
+
         try:
             from core.pgmx_processing import generate_project_piece_drawings
 
             generated_drawings, skipped_drawings, pieces_with_machining = generate_project_piece_drawings(
-                self.project,
+                selected_project,
             )
 
             detail_text = (
@@ -3320,46 +3650,130 @@ class EditProjectWindow(QMainWindow):
         self.close()
 
 
+class NewProjectDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Nuevo proyecto")
+        self.setModal(True)
+        self.setMinimumWidth(520)
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Complete los datos del proyecto."))
+
+        project_row = QHBoxLayout()
+        project_row.addWidget(QLabel("Proyecto"))
+        self.name_field = QLineEdit()
+        project_row.addWidget(self.name_field)
+        layout.addLayout(project_row)
+
+        client_row = QHBoxLayout()
+        client_row.addWidget(QLabel("Cliente"))
+        self.client_field = QLineEdit()
+        client_row.addWidget(self.client_field)
+        layout.addLayout(client_row)
+
+        folder_row = QHBoxLayout()
+        folder_row.addWidget(QLabel("Carpeta"))
+        self.root_field = QLineEdit()
+        folder_row.addWidget(self.root_field, 1)
+        self.select_folder_button = QPushButton("Seleccionar")
+        folder_row.addWidget(self.select_folder_button)
+        layout.addLayout(folder_row)
+
+        buttons_row = QHBoxLayout()
+        buttons_row.addStretch()
+        self.accept_button = QPushButton("Aceptar")
+        self.cancel_button = QPushButton("Cancelar")
+        self.accept_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        self.cancel_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        buttons_row.addWidget(self.accept_button)
+        buttons_row.addWidget(self.cancel_button)
+        layout.addLayout(buttons_row)
+
+        self.setLayout(layout)
+
+        self.select_folder_button.clicked.connect(self.select_folder)
+        self.accept_button.clicked.connect(self.accept)
+        self.cancel_button.clicked.connect(self.reject)
+
+    def select_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Seleccionar carpeta del proyecto")
+        if folder:
+            self.root_field.setText(folder)
+
+    def accept(self):
+        project_name = self.name_field.text().strip()
+        project_root = self.root_field.text().strip()
+
+        if not project_name:
+            QMessageBox.warning(self, "Error", "Ingrese un nombre de proyecto")
+            return
+        if not project_root or not os.path.isdir(project_root):
+            QMessageBox.warning(self, "Error", "Seleccione una carpeta de proyecto válida")
+            return
+
+        super().accept()
+
+    def project_data(self) -> dict:
+        return {
+            "name": self.name_field.text().strip(),
+            "client": self.client_field.text().strip(),
+            "root_directory": self.root_field.text().strip(),
+        }
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("CNC Furniture Project Manager")
+        self.setWindowTitle("ProdAction")
         self.setGeometry(100, 100, 640, 420)
         self.current_project = None
 
         layout = QVBoxLayout()
 
+        top_row = QHBoxLayout()
+        top_row.addStretch()
+        self.btn_options = QPushButton("\u2699")
+        self.btn_options.setToolTip("Opciones")
+        self.btn_options.setFixedSize(40, 40)
+        top_row.addWidget(self.btn_options)
+        layout.addLayout(top_row)
+
+        content_column = QVBoxLayout()
+        content_column.setContentsMargins(0, 0, 0, 0)
         title = QLabel("Proyectos")
-        title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
+        title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        content_column.addWidget(title)
 
+        content_row = QHBoxLayout()
+        content_row.setContentsMargins(0, 0, 0, 0)
         self.project_list = QListWidget()
-        layout.addWidget(self.project_list)
+        content_row.addWidget(self.project_list, 1)
 
-        first_button_row = QHBoxLayout()
+        buttons_column = QVBoxLayout()
+        buttons_column.setContentsMargins(0, 0, 0, 0)
         self.btn_new = QPushButton("Nuevo")
         self.btn_open = QPushButton("Abrir")
         self.btn_delete = QPushButton("Eliminar")
-        first_button_row.addWidget(self.btn_new)
-        first_button_row.addWidget(self.btn_open)
-        first_button_row.addWidget(self.btn_delete)
-        layout.addLayout(first_button_row)
-
-        second_button_row = QHBoxLayout()
-        self.btn_options = QPushButton("Opciones")
         self.btn_close = QPushButton("Cerrar")
-        second_button_row.addWidget(self.btn_options)
-        second_button_row.addWidget(self.btn_close)
-        layout.addLayout(second_button_row)
+
+        buttons_column.addWidget(self.btn_new)
+        buttons_column.addWidget(self.btn_open)
+        buttons_column.addWidget(self.btn_delete)
+        buttons_column.addStretch()
+        buttons_column.addWidget(self.btn_close)
+
+        content_row.addLayout(buttons_column)
+        content_column.addLayout(content_row, 1)
+        layout.addLayout(content_column, 1)
 
         for button in (
             self.btn_new,
             self.btn_open,
             self.btn_delete,
-            self.btn_options,
             self.btn_close,
         ):
-            button.setMinimumSize(120, 40)
+            button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
 
         container = QWidget()
         container.setLayout(layout)
@@ -3394,25 +3808,23 @@ class MainWindow(QMainWindow):
             self.project_list.addItem(item)
 
     def create_project(self):
-        project_name, ok_name = QInputDialog.getText(self, "Nuevo proyecto", "Proyecto:")
-        if not ok_name or not project_name.strip():
-            return
-        project_name = project_name.strip()
+        dialog = NewProjectDialog(self)
+        while True:
+            if dialog.exec() != QDialog.Accepted:
+                return
 
-        project_client, ok_client = QInputDialog.getText(self, "Nuevo proyecto", "Cliente:")
-        if not ok_client:
-            return
+            project_data = dialog.project_data()
+            project_name = project_data["name"]
+            project_client = project_data["client"]
+            project_root = project_data["root_directory"]
 
-        project_root = QFileDialog.getExistingDirectory(self, "Seleccionar carpeta raíz")
-        if not project_root:
-            return
-
-        if any(
-            str(entry.get("project_name") or "").strip().lower() == project_name.lower()
-            for entry in _read_registry()
-        ):
-            QMessageBox.warning(self, "Error", "Proyecto ya existe")
-            return
+            if any(
+                str(entry.get("project_name") or "").strip().lower() == project_name.lower()
+                for entry in _read_registry()
+            ):
+                QMessageBox.warning(dialog, "Error", "Proyecto ya existe")
+                continue
+            break
 
         created_at = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
         project = Project(
@@ -3437,9 +3849,10 @@ class MainWindow(QMainWindow):
         try:
             project = _load_project(project_name)
             self.current_project = project
-            detail_window = ProjectDetailWindow(project)
+            detail_window = ProjectDetailWindow(project, return_window=self)
             detail_window.show()
             self.detail_window = detail_window
+            self.hide()
         except Exception as exc:
             QMessageBox.warning(self, "Error", f"No se pudo abrir el proyecto: {exc}")
 
