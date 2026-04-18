@@ -38,6 +38,14 @@
       "thickness": 18,
       "grain": "1 - Longitudinal",
       "margin": 10
+    },
+    {
+      "color": "Haya18",
+      "length": 1795,
+      "width": 835,
+      "thickness": 18,
+      "grain": "0 - Sin Veta",
+      "margin": 0
     }
   ],
   "available_herrajes": [

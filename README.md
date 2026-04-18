@@ -35,6 +35,8 @@ python main.py
 - Estado actual del sintetizador Maestro: `v1.0`
 - Flujo unico de generacion `.pgmx`: `python -m tools.synthesize_pgmx`
 - Guia completa del sintetizador: `docs/synthesize_pgmx_help.md`
+- Guia del snapshot integral de `.pgmx`: `docs/pgmx_snapshot_help.md`
+- Guia de adaptacion de `.pgmx` existentes hacia specs publicos: `docs/pgmx_adapters_help.md`
 - Registro de familias geometricas: `docs/pgmx_geometry_registry.md`
 - Nota historica del flujo anterior: `docs/en_juego_pgmx_export.md`
 - Baseline principal versionado: `tools/maestro_baselines/Pieza.xml` junto con `Pieza.epl` y `def.tlgx`
@@ -42,6 +44,9 @@ python main.py
 - Ejemplos y estudios manuales para ingeniería inversa: `archive/maestro_examples/`
 - API programática para sintesis: `build_approach_spec(...)`, `build_retract_spec(...)`, `build_milling_depth_spec(...)`, `build_unidirectional_milling_strategy_spec(...)`, `build_bidirectional_milling_strategy_spec(...)`, `build_line_milling_spec(...)`, `build_polyline_milling_spec(...)`, `build_squaring_milling_spec(...)`, `build_drilling_spec(...)`, `build_synthesis_request(...)` y `synthesize_request(...)` en `tools.synthesize_pgmx`
 - API programatica para inspeccion/construccion geometrica: `read_pgmx_geometries(...)`, `build_point_geometry_profile(...)`, `build_line_geometry_profile(...)`, `build_circle_geometry_profile(...)`, `build_composite_geometry_profile(...)` y `build_compensated_toolpath_profile(...)`
+- API programatica para snapshot integral de un `.pgmx`: `read_pgmx_snapshot(...)`, `snapshot_to_dict(...)` y `write_pgmx_snapshot_json(...)` en `tools.pgmx_snapshot`
+- API programatica para adaptar `.pgmx` existentes al subset publico del sintetizador: `adapt_pgmx_snapshot(...)`, `adapt_pgmx_path(...)`, `adaptation_to_dict(...)` y `write_pgmx_adaptation_json(...)` en `tools.pgmx_adapters`
+- `PgmxAdaptationResult.build_synthesis_request(...)` convierte el material adaptable a un `PgmxSynthesisRequest`; hoy preserva el orden dentro de cada familia soportada, pero la re-sintesis publica sigue agrupada por `line`, `polyline`, `squaring` y `drilling`
 - La sintesis de `.pgmx` permite fijar el area de `Parametros de Maquina` mediante `execution_fields` en la API o `--execution-fields/--area` en la CLI; si no se indica, usa `HG` por defecto.
 - La seguridad de profundidad usa `tools/tool_catalog.csv`: la profundidad total del fresado o del taladro no puede superar `sinking_length` de la herramienta cuando `ToolKey` queda resuelto.
 - Constante publica de version: `tools.synthesize_pgmx.SYNTHESIZER_VERSION`
