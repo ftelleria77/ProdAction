@@ -5,7 +5,7 @@ en que orden conviene llamarla y que reglas de trabajo seguimos para no perder e
 hilo de lo ya validado en Maestro.
 
 Estado de hito actual:
-- sintetizador Maestro `v1.0`
+- sintetizador Maestro `v1.2`
 - constante publica de version: `tools.synthesize_pgmx.SYNTHESIZER_VERSION`
 
 ## 1. Alcance actual
@@ -25,13 +25,17 @@ Casos publicos soportados hoy:
 - compensacion geometrica reusable (`build_compensated_toolpath_profile`)
 - fresado lineal abierto (`LineMillingSpec`)
 - fresado sobre polilinea lineal abierta o cerrada (`PolylineMillingSpec`)
+- fresado circular cerrado (`CircleMillingSpec`)
 - escuadrado exterior del contorno de pieza (`SquaringMillingSpec`)
 - taladro puntual sobre punto (`DrillingSpec`)
 - control de profundidad pasante/no pasante
 - estrategias publicas `Unidireccional` y `Bidireccional` para:
   - linea simple via `LineMillingSpec`
   - polilinea lineal abierta o cerrada via `PolylineMillingSpec`
+  - circulo cerrado via `CircleMillingSpec`
   - escuadrado via `SquaringMillingSpec`
+- estrategia publica `Helicoidal` para:
+  - circulo cerrado via `CircleMillingSpec`
 - `Approach` y `Retract` con reglas ya volcadas desde Maestro y ya unificadas
   sobre la tangente de entrada/salida del toolpath efectivo
 - `Area` de Parametros de Maquina, con `HG` por defecto
@@ -39,14 +43,15 @@ Casos publicos soportados hoy:
 Casos que no deben asumirse como API publica estable si no estan documentados aqui:
 - familias de feature distintas de `GeneralProfileFeature` y `RoundHole`
 - cualquier mecanizado que no este construido con
-  `LineMillingSpec`, `PolylineMillingSpec`, `SquaringMillingSpec` o `DrillingSpec`
+  `LineMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec`,
+  `SquaringMillingSpec` o `DrillingSpec`
 
 Importante:
 - la sintesis completa de feature + operation sigue expuesta hoy por
-  `LineMillingSpec`, `PolylineMillingSpec`, `SquaringMillingSpec` y `DrillingSpec`
-- la nueva capa de compensacion ya sabe resolver lineas, arcos, circulos y curvas
-  compuestas abiertas/cerradas, aunque esas familias todavia no tengan un
-  `...MillingSpec` publico propio
+  `LineMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec`,
+  `SquaringMillingSpec` y `DrillingSpec`
+- la capa de compensacion sigue resolviendo lineas, arcos, circulos y curvas
+  compuestas abiertas/cerradas como base de estas familias publicas
 
 ## 2. Flujo recomendado
 
@@ -58,7 +63,7 @@ Orden recomendado para usar el sintetizador:
 4. Construir la profundidad.
 5. Construir `Approach` y `Retract`.
 6. Construir uno o mas mecanizados (`LineMillingSpec`, `PolylineMillingSpec`,
-   `SquaringMillingSpec` y/o `DrillingSpec`).
+   `CircleMillingSpec`, `SquaringMillingSpec` y/o `DrillingSpec`).
 7. Construir el `PgmxSynthesisRequest`.
 8. Ejecutar `synthesize_request(...)`.
 
@@ -307,6 +312,62 @@ Notas:
 - el `StrokeConnectionStrategy` queda fijado por ahora a `Straghtline`, que es
   lo observado en los casos manuales relevados
 
+### `build_helical_milling_strategy_spec(...) -> HelicalMillingStrategySpec`
+
+Construye la estrategia publica `Helicoidal`.
+
+Firma simplificada:
+
+```python
+build_helical_milling_strategy_spec(
+    *,
+    axial_cutting_depth=None,
+    allows_finish_cutting=None,
+    axial_finish_cutting_depth=None,
+)
+```
+
+Notas:
+- por ahora esta familia queda validada solo para `CircleMillingSpec`
+- `axial_cutting_depth` mapea a `PH`
+- `allows_finish_cutting` mapea a `Habilitar pasada final`
+- `axial_finish_cutting_depth` mapea a `UH`
+- si no se indica nada:
+  - `axial_cutting_depth = 0`
+  - `allows_finish_cutting = True`
+  - `axial_finish_cutting_depth = 0`
+- si `allows_finish_cutting = False`, no se admite
+  `axial_finish_cutting_depth > 0`
+- en XML Maestro esta familia se serializa como `b:HelicMilling`
+
+### `build_xn_spec(...) -> XnSpec`
+
+Construye la spec publica `Xn`.
+
+Firma simplificada:
+
+```python
+build_xn_spec(
+    *,
+    reference=None,
+    x=None,
+    y=None,
+)
+```
+
+Notas:
+- representa la operacion nula final del workplan
+- no crea ni `feature` ni `operation`; solo agrega un `Executable i:type="Xn"`
+- `reference` admite `Absolute/Absoluto` o `Relative/Relativo`
+- si no se indica nada, usa los defaults operativos:
+  - `reference = Absolute`
+  - `x = -3700`
+  - `y = nil`
+- cuando `y = nil`, el sintetizador serializa
+  `GeometryID = {ID=0, ObjectType=nil}`
+- cuando `y` tiene valor, el sintetizador serializa `GeometryID = nil`
+- el `Xn` sintetizado se escribe al final de `MainWorkplan/Elements`
+
 ### `build_line_milling_spec(...) -> LineMillingSpec | None`
 
 Construye un fresado lineal de dos puntos.
@@ -352,6 +413,7 @@ Notas:
 - `line_milling_strategy` admite:
   - `build_unidirectional_milling_strategy_spec(...)`
   - `build_bidirectional_milling_strategy_spec(...)`
+  - `Helicoidal` no queda validada para linea simple
 - la capa publica de estrategias para linea simple ya esta validada en:
   - `PH/UH`
   - `Central/Right/Left`
@@ -404,6 +466,63 @@ Notas:
 - `milling_strategy` admite:
   - `build_unidirectional_milling_strategy_spec(...)`
   - `build_bidirectional_milling_strategy_spec(...)`
+  - `Helicoidal` no queda validada para polilinea lineal
+
+### `build_circle_milling_spec(...) -> CircleMillingSpec`
+
+Construye un fresado circular cerrado sobre `Top`.
+
+Firma simplificada:
+
+```python
+build_circle_milling_spec(
+    *,
+    center_x,
+    center_y,
+    radius,
+    winding=None,
+    feature_name=None,
+    tool_id=None,
+    tool_name=None,
+    tool_width=None,
+    security_plane=None,
+    side_of_feature=None,
+    is_through=None,
+    target_depth=None,
+    extra_depth=None,
+    approach_enabled=None,
+    approach_type=None,
+    approach_mode=None,
+    approach_radius_multiplier=None,
+    approach_speed=None,
+    approach_arc_side=None,
+    retract_enabled=None,
+    retract_type=None,
+    retract_mode=None,
+    retract_radius_multiplier=None,
+    retract_speed=None,
+    retract_arc_side=None,
+    retract_overlap=None,
+    milling_strategy=None,
+)
+```
+
+Notas:
+- `center_x`, `center_y` y `radius` son obligatorios
+- `radius` debe ser mayor que cero
+- `winding` admite `CounterClockwise/Antihorario` o `Clockwise/Horario`
+- `side_of_feature` admite `Center`, `Right`, `Left`
+- en `CircleMillingSpec`, `side_of_feature` no reescribe la geometria nominal:
+  conserva el circulo base y desplaza el radio efectivo del toolpath segun
+  winding + `tool_width / 2`
+- la capa publica de estrategias sobre `CircleMillingSpec` ya cubre:
+  - contornos cerrados con multipaso `Unidireccional`
+  - contornos cerrados con multipaso `Bidireccional`
+  - desbaste `Helicoidal` con vuelta final opcional
+- `milling_strategy` admite:
+  - `build_unidirectional_milling_strategy_spec(...)`
+  - `build_bidirectional_milling_strategy_spec(...)`
+  - `build_helical_milling_strategy_spec(...)`
 
 ### `build_squaring_milling_spec(...) -> SquaringMillingSpec`
 
@@ -459,6 +578,7 @@ Notas:
 - `milling_strategy` admite:
   - `build_unidirectional_milling_strategy_spec(...)`
   - `build_bidirectional_milling_strategy_spec(...)`
+  - `Helicoidal` no queda validada para escuadrado
 - decision de diseno actual:
   - para escuadrados con multipaso, la estrategia preferida es
     `Unidireccional`
@@ -609,8 +729,10 @@ build_synthesis_request(
     execution_fields=None,
     line_millings=None,
     polyline_millings=None,
+    circle_millings=None,
     squaring_millings=None,
     drillings=None,
+    xn=None,
 )
 ```
 
@@ -618,8 +740,10 @@ Reglas:
 - si no se indica `baseline_path`, usa `tools/maestro_baselines`
 - si no se indica `execution_fields`, usa `HG` por defecto
 - si no se pasa `piece`, toma el estado desde `source_pgmx_path` o desde el baseline
-- se pueden combinar mecanizados lineales, por polilinea abierta, de escuadrado
-  y de taladrado en un mismo request
+- se pueden combinar mecanizados lineales, por polilinea abierta, circulares,
+  de escuadrado y de taladrado en un mismo request
+- `xn` permite configurar el `Xn` final del workplan
+- si no se indica `xn`, la request usa `build_xn_spec()` por defecto
 - `baseline_path` y `source_pgmx_path` aceptan `.pgmx`, `Pieza.xml` o carpeta contenedora
 - si se indican `origin_x/origin_y/origin_z`, se actualiza
   `WorkpieceSetup/Placement`
@@ -635,6 +759,8 @@ Hace:
 - hidrata mecanizados si hay `source_pgmx_path`
 - aplica el estado de pieza
 - inserta features, operaciones, worksteps y toolpaths
+- inserta o reemplaza el `Xn` final en `MainWorkplan/Elements`
+- si la request no trae `xn`, usa `build_xn_spec()` por defecto
 - escribe el `.pgmx`
 - devuelve `output_path`, `piece`, `sha256` y el resumen de mecanizados pedidos
 

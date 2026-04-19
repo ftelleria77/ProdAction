@@ -1572,13 +1572,16 @@ Reconstruir paso a paso:
   - se agregaron las builders publicas:
     - `build_unidirectional_milling_strategy_spec(...)`
     - `build_bidirectional_milling_strategy_spec(...)`
-  - `LineMillingSpec`, `PolylineMillingSpec` y `SquaringMillingSpec` ahora
-    aceptan `milling_strategy`
+  - `LineMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec` y
+    `SquaringMillingSpec` ahora aceptan `milling_strategy`
 - Alcance implementado:
   - linea simple:
     - `Unidireccional`
     - `Bidireccional`
   - polilinea lineal abierta o cerrada:
+    - `Unidireccional`
+    - `Bidireccional`
+  - circulo cerrado:
     - `Unidireccional`
     - `Bidireccional`
   - escuadrado:
@@ -1619,11 +1622,107 @@ Reconstruir paso a paso:
   - compilacion: `py -3 -m py_compile tools\\synthesize_pgmx.py`
   - linea simple `Unidireccional InPiece PH5_UH0`
   - linea simple `Bidireccional PH5_UH1`
+  - circulo cerrado `Unidireccional InPiece PH5_UH10`
   - escuadrado `Unidireccional Automatic PH5_UH10`
   - polilinea cerrada lineal `Bidireccional PH5_UH0`
 - Documentacion formal actualizada:
   - `docs/synthesize_pgmx_help.md`
   - `README.md`
+
+### Ronda 31 - `Unidireccional + EnLaPieza` sobre la `Tapa` sintetizada
+
+- Estado: completado
+- Archivos revisados:
+  - `archive/maestro_examples/Tapa_v11_sintetizada_Unidireccional_EnLaPieza_PH0_UH0.pgmx`
+  - `archive/maestro_examples/Tapa_v11_sintetizada_Unidireccional_EnLaPieza_PH5_UH0.pgmx`
+  - `archive/maestro_examples/Tapa_v11_sintetizada_Unidireccional_EnLaPieza_PH5_UH1.pgmx`
+  - `archive/maestro_examples/Tapa_v11_sintetizada_Unidireccional_EnLaPieza_PH5_UH10.pgmx`
+- Referencia base usada para contrastar:
+  - `archive/maestro_examples/Tapa_v11_sintetizada.pgmx`
+- Hallazgo principal:
+  - en esta familia, la estrategia `Unidireccional + EnLaPieza` se activo solo
+    sobre el fresado circular interior `Fresado`
+  - el escuadrado `LAV_1` queda sin estrategia en los cuatro archivos
+  - los `8` taladros tampoco cambian
+- Parametros estrategicos constantes en los cuatro casos del circulo:
+  - `MachiningStrategy = b:UnidirectionalMilling`
+  - `AllowMultiplePasses = true`
+  - `StrokeConnectionStrategy = Straghtline`
+  - `SideOfFeature = Left`
+  - `Approach.IsEnabled = false`
+  - `Retract.IsEnabled = false`
+- Cambio estructural inmediato respecto del archivo base:
+  - en `Tapa_v11_sintetizada.pgmx`, el circulo ya tenia:
+    - `TrajectoryPath = GeomCompositeCurve` con `2` semicircunferencias
+    - `Approach = GeomTrimmedCurve`
+    - `Lift = GeomTrimmedCurve`
+    - `ActivateCNCCorrection = true`
+  - al activar `Unidireccional + EnLaPieza`, el `Approach` y el `Lift` se
+    mantienen como `GeomTrimmedCurve`, pero:
+    - `ActivateCNCCorrection: true -> false`
+- Patron topologico observado en el circulo:
+  - una vuelta completa del contorno circular ocupa `2` miembros:
+    - semicircunferencia 1
+    - semicircunferencia 2
+  - cada reconexion entre capas agrega `1` miembro lineal vertical
+  - por eso, para el circulo cerrado:
+    - `PH0_UH0` -> `2`
+    - `PH5_UH0` -> `11 = 2 + 1 + 2 + 1 + 2 + 1 + 2`
+    - `PH5_UH1` -> `14 = 2 + 1 + 2 + 1 + 2 + 1 + 2 + 1 + 2`
+    - `PH5_UH10` -> `8 = 2 + 1 + 2 + 1 + 2`
+- Capas observadas en `TrajectoryPath` del circulo:
+  - `PH0_UH0`
+    - niveles: `z = 0`
+    - sin conectores verticales intermedios
+  - `PH5_UH0`
+    - niveles: `z = 13`, `8`, `3`, `0`
+    - conectores verticales: `5`, `5`, `3`
+  - `PH5_UH1`
+    - niveles: `z = 13`, `8`, `3`, `1`, `0`
+    - conectores verticales: `5`, `5`, `2`, `1`
+  - `PH5_UH10`
+    - niveles: `z = 13`, `10`, `0`
+    - conectores verticales: `3`, `10`
+- Patron espacial observado:
+  - todos los enlaces entre capas del circulo caen en el mismo punto XY
+  - ese punto es el arranque del circulo compensado:
+    - `x = 281.32`
+    - `y = 200`
+  - esto coincide con:
+    - centro nominal `(200, 200)`
+    - radio nominal `90.5`
+    - compensacion `Left` con `E001` (`tool_width = 18.36`)
+    - radio efectivo `90.5 - 9.18 = 81.32`
+  - como el perfil circular cerrado empieza y termina en el mismo punto,
+    `EnLaPieza` no necesita segmentos horizontales de reconexion:
+    alcanza con bajadas verticales puras entre una vuelta y la siguiente
+- `Approach` y `Lift` del circulo:
+  - siguen siendo segmentos verticales simples
+  - `PH0_UH0`
+    - `Approach` baja de `z = 38` a `z = 0`
+    - `Lift` sube de `z = 0` a `z = 38`
+  - `PH5_UH0`, `PH5_UH1`, `PH5_UH10`
+    - `Approach` baja de `z = 38` a `z = 13`
+    - `Lift` sube de `z = 0` a `z = 38`
+- Lo que no cambia en `LAV_1`:
+  - `MachiningStrategy` sigue en `nil`
+  - `Approach` sigue como `GeomCompositeCurve` de `2` miembros
+  - `TrajectoryPath` sigue como `GeomCompositeCurve` de `9` miembros
+  - `Lift` sigue como `GeomCompositeCurve` de `2` miembros
+- Conclusiones provisionales:
+  - el modelo de `Unidireccional` para contorno cerrado tambien se sostiene en
+    un `GeomCircle`, no solo en escuadrados/polilineas cerradas
+  - cambia la unidad base del lazo:
+    - escuadrado cerrado -> `9` miembros por vuelta
+    - circulo cerrado -> `2` miembros por vuelta
+  - `PH` y `UH` siguen determinando:
+    - cantidad de vueltas
+    - cotas intermedias
+    - magnitud de las bajadas entre vueltas
+  - en un circulo cerrado, `EnLaPieza` se degrada geometricamente a una
+    secuencia de conectores verticales en el mismo XY de arranque/cierre
+  - para esta familia puntual, activar la estrategia sobre el circulo no arrastra
+    cambios colaterales al escuadrado ni a los taladros
 
 ### Decision de cierre - Sintetizador Maestro `v1.0`
 
@@ -1640,3 +1739,223 @@ Reconstruir paso a paso:
 - Criterio operativo:
   - nuevos hallazgos y nuevas familias deben considerarse ampliaciones sobre
     `v1.0`, no redefiniciones del alcance ya estabilizado
+
+### Ronda 32 - `Helicoidal` sobre el circulo de la `Tapa` sintetizada
+
+- Estado: completado
+- Archivos revisados:
+  - `archive/maestro_examples/Tapa_v11_sintetizada_Helicoidal_PH0_PasadaFinal_Deshabilitada.pgmx`
+  - `archive/maestro_examples/Tapa_v11_sintetizada_Helicoidal_PH5_PasadaFinal_Deshabilitada.pgmx`
+  - `archive/maestro_examples/Tapa_v11_sintetizada_Helicoidal_PH0_PasadaFinal_Habilitada_UH0.pgmx`
+  - `archive/maestro_examples/Tapa_v11_sintetizada_Helicoidal_PH5_PasadaFinal_Habilitada_UH0.pgmx`
+  - `archive/maestro_examples/Tapa_v11_sintetizada_Helicoidal_PH5_PasadaFinal_Habilitada_UH1.pgmx`
+  - `archive/maestro_examples/Tapa_v11_sintetizada_Helicoidal_PH5_PasadaFinal_Habilitada_UH10.pgmx`
+- Referencia base usada para contrastar:
+  - `archive/maestro_examples/Tapa_v11_sintetizada.pgmx`
+- Hallazgo principal:
+  - en esta familia, la estrategia `Helicoidal` se activa solo sobre el
+    fresado circular interior `Fresado`
+  - el escuadrado `LAV_1` queda sin estrategia en los seis archivos
+  - los `8` taladros tampoco cambian
+- Mapeo UI -> XML observado:
+  - `Helicoidal` se serializa como `MachiningStrategy = b:HelicMilling`
+  - `Profundidad hueco` -> `AxialCuttingDepth`
+  - `Habilitar pasada final` -> `AllowsFinishCutting`
+  - `Ultimo hueco` -> `AxialFinishCuttingDepth`
+- Parametros estrategicos constantes en los seis casos del circulo:
+  - `AllowMultiplePasses = false`
+  - `Overlap = 0`
+  - `Cutmode = Climb`
+  - `RadialCuttingDepth = 0`
+  - `RadialFinishCuttingDepth = 0`
+  - `StrokeConnectionStrategy = Straghtline`
+  - `SideOfFeature = Left`
+  - `Approach.IsEnabled = false`
+  - `Retract.IsEnabled = false`
+  - `ActivateCNCCorrection = false`
+- Cambio estructural inmediato respecto del archivo base:
+  - en `Tapa_v11_sintetizada.pgmx`, el circulo tenia:
+    - `TrajectoryPath = GeomCompositeCurve` con `2` semicircunferencias planas
+      a `z = 0`
+    - `Approach = GeomTrimmedCurve`
+    - `Lift = GeomTrimmedCurve`
+    - `ActivateCNCCorrection = true`
+  - al activar `Helicoidal`, el `Approach` y el `Lift` se mantienen como
+    `GeomTrimmedCurve`, pero:
+    - `ActivateCNCCorrection: true -> false`
+    - el `TrajectoryPath` pasa a contener una helice 3D continua y, si
+      corresponde, una vuelta final plana a `z = 0`
+- Patron topologico observado en el circulo:
+  - una vuelta helicoidal completa ocupa `2` miembros curvos
+  - cada semicircunferencia helicoidal baja `PH / 2`
+  - con `pasada final deshabilitada`, el toolpath termina cuando la helice
+    alcanza `z = 0`
+  - con `pasada final habilitada` y `UH = 0`, Maestro agrega `1` vuelta plana
+    final a `z = 0`, compuesta por `2` miembros curvos
+  - con `pasada final habilitada` y `UH > 0`, Maestro:
+    - detiene la helice en `z = UH`
+    - agrega `1` conector lineal vertical hasta `z = 0`
+    - agrega `1` vuelta plana final a `z = 0`
+- Conteos y cotas observadas:
+  - `PH0_PasadaFinal_Deshabilitada`
+    - `TrajectoryPath` con `2` miembros
+    - cotas muestreadas: `18`, `9`, `0`
+  - `PH5_PasadaFinal_Deshabilitada`
+    - `TrajectoryPath` con `8` miembros
+    - descomposicion: `8 = 2 + 2 + 2 + 2`
+    - cotas muestreadas: `18`, `15.5`, `13`, `10.5`, `8`, `5.5`, `3`, `1.5`,
+      `0`
+  - `PH0_PasadaFinal_Habilitada_UH0`
+    - `TrajectoryPath` con `4` miembros
+    - descomposicion: `4 = 2 helicoidales + 2 planos finales`
+    - cotas muestreadas: `18`, `9`, `0`, `0`, `0`
+  - `PH5_PasadaFinal_Habilitada_UH0`
+    - `TrajectoryPath` con `10` miembros
+    - descomposicion: `10 = 8 helicoidales + 2 planos finales`
+    - cotas muestreadas: `18`, `15.5`, `13`, `10.5`, `8`, `5.5`, `3`, `1.5`,
+      `0`, `0`, `0`
+  - `PH5_PasadaFinal_Habilitada_UH1`
+    - `TrajectoryPath` con `11` miembros
+    - descomposicion: `11 = 8 helicoidales + 1 vertical + 2 planos finales`
+    - cotas muestreadas: `18`, `15.5`, `13`, `10.5`, `8`, `5.5`, `3`, `2`,
+      `1`, `0`, `0`, `0`
+  - `PH5_PasadaFinal_Habilitada_UH10`
+    - `TrajectoryPath` con `7` miembros
+    - descomposicion: `7 = 4 helicoidales + 1 vertical + 2 planos finales`
+    - cotas muestreadas: `18`, `15.5`, `13`, `11.5`, `10`, `0`, `0`, `0`
+- Patron espacial observado:
+  - el arranque del circulo helicoidal sigue cayendo en el mismo punto XY del
+    circulo compensado:
+    - `x = 281.32`
+    - `y = 200`
+  - esto sigue coincidiendo con:
+    - centro nominal `(200, 200)`
+    - radio nominal `90.5`
+    - compensacion `Left` con `E001` (`tool_width = 18.36`)
+    - radio efectivo `90.5 - 9.18 = 81.32`
+  - cuando `UH > 0`, el conector vertical de terminacion tambien cae en ese
+    mismo XY
+- `Approach` y `Lift` del circulo:
+  - se mantienen constantes en los seis archivos
+  - `Approach` baja siempre de `z = 38` a `z = 18`
+  - `Lift` sube siempre de `z = 0` a `z = 38`
+  - a diferencia de `Unidireccional + EnLaPieza`, la estrategia helicoidal no
+    modifica la cota final del `Approach`
+- Lo que no cambia en `LAV_1`:
+  - `MachiningStrategy` sigue en `nil`
+  - `Approach` sigue como `GeomCompositeCurve` de `2` miembros
+  - `TrajectoryPath` sigue como `GeomCompositeCurve` de `9` miembros
+  - `Lift` sigue como `GeomCompositeCurve` de `2` miembros
+- Conclusiones provisionales:
+  - para un circulo cerrado, `Helicoidal` no se modela como una secuencia de
+    vueltas 2D a distintas cotas enlazadas por conectores explicitos
+  - el desbaste queda serializado como una helice 3D continua, compuesta por
+    semicircunferencias con descenso axial incorporado
+  - `AxialCuttingDepth` controla el descenso total por vuelta completa:
+    - cada semicircunferencia baja `PH / 2`
+  - `AllowsFinishCutting` no altera el paso de la helice:
+    - solo decide si se agrega o no una vuelta plana final a `z = 0`
+  - `AxialFinishCuttingDepth` solo se vuelve visible cuando la pasada final
+    esta habilitada:
+    - fija la cota donde termina la helice de desbaste
+    - y determina la bajada vertical restante hasta `z = 0`
+  - `AllowMultiplePasses` permanece en `false` incluso cuando hay varias
+    vueltas helicoidales, asi que no debe reutilizarse como indicador de
+    multipaso real para esta familia
+
+### Ronda 33 - Circulo `Antihorario` con correccion `Central/Derecha/Izquierda`
+
+- Estado: completado
+- Archivos revisados:
+  - `archive/maestro_examples/Tapa_v11_sintetizada_Circulo_Antihorario_Correccion_Central.pgmx`
+  - `archive/maestro_examples/Tapa_v11_sintetizada_Circulo_Antihorario_Correccion_Derecha.pgmx`
+  - `archive/maestro_examples/Tapa_v11_sintetizada_Circulo_Antihorario_Correccion_Izquierda.pgmx`
+- Referencia base usada para contrastar:
+  - `archive/maestro_examples/Tapa_v11_sintetizada.pgmx`
+- Hallazgo principal:
+  - en esta familia, la variacion `Central/Derecha/Izquierda` no cambia ni la
+    geometria nominal del circulo ni la ausencia de estrategia
+  - lo que cambia es:
+    - `Feature.SideOfFeature`
+    - el radio efectivo del `Toolpath`
+    - y por arrastre el punto XY de `Approach`, `TrajectoryPath` y `Lift`
+- Parametros constantes en los tres archivos del circulo:
+  - `Geometry = GeomCircle`
+  - `Winding = CounterClockwise`
+  - centro nominal `(200, 200)`
+  - radio nominal `90.5`
+  - `ActivateCNCCorrection = true`
+  - `MachiningStrategy = nil`
+  - `Approach.IsEnabled = false`
+  - `Retract.IsEnabled = false`
+  - `TrajectoryPath = GeomCompositeCurve` con `2` semicircunferencias planas
+    a `z = 0`
+  - `Approach` y `Lift` siguen como `GeomTrimmedCurve` verticales
+- Mapeo observado de correccion:
+  - `Central`
+    - `SideOfFeature = Center`
+    - radio efectivo del toolpath: `90.5`
+    - punto de arranque: `(290.5, 200)`
+  - `Derecha`
+    - `SideOfFeature = Right`
+    - radio efectivo del toolpath: `99.68 = 90.5 + 9.18`
+    - punto de arranque: `(299.68, 200)`
+  - `Izquierda`
+    - `SideOfFeature = Left`
+    - radio efectivo del toolpath: `81.32 = 90.5 - 9.18`
+    - punto de arranque: `(281.32, 200)`
+- Regla observada para circulo antihorario:
+  - con `Winding = CounterClockwise`:
+    - `Right` expande el radio
+    - `Left` contrae el radio
+    - `Center` conserva el radio nominal
+- Hallazgo estructural importante:
+  - la geometria declarada del circulo no se reescribe
+  - en los tres archivos, el nodo geometrico sigue declarando:
+    - centro `(200, 200)`
+    - radio `90.5`
+  - la correccion lateral aparece entonces como:
+    1. declaracion semantica en `Feature.SideOfFeature`
+    2. desplazamiento real en el `Toolpath`
+- Topologia observada del circulo en los tres casos:
+  - `TrajectoryPath` siempre ocupa `2` miembros:
+    - semicircunferencia `0 -> pi`
+    - semicircunferencia `pi -> 2pi`
+  - por lo tanto, la correccion lateral no altera:
+    - el conteo de miembros
+    - el winding
+    - la descomposicion topologica del contorno
+  - solo altera el radio al que esas mismas semicircunferencias son ejecutadas
+- `Approach` y `Lift` del circulo:
+  - `Central`
+    - `Approach`: `(290.5, 200, 38) -> (290.5, 200, 0)`
+    - `Lift`: `(290.5, 200, 0) -> (290.5, 200, 38)`
+  - `Derecha`
+    - `Approach`: `(299.68, 200, 38) -> (299.68, 200, 0)`
+    - `Lift`: `(299.68, 200, 0) -> (299.68, 200, 38)`
+  - `Izquierda`
+    - `Approach`: `(281.32, 200, 38) -> (281.32, 200, 0)`
+    - `Lift`: `(281.32, 200, 0) -> (281.32, 200, 38)`
+- Relacion con la pieza base actual:
+  - el `Fresado` de `Tapa_v11_sintetizada.pgmx` ya coincide con el caso
+    `Antihorario + Izquierda`
+  - es decir:
+    - `SideOfFeature = Left`
+    - `Winding = CounterClockwise`
+    - radio efectivo `81.32`
+- Lo que no cambia en `LAV_1`:
+  - `SideOfFeature` sigue en `Left`
+  - `MachiningStrategy` sigue en `nil`
+  - `Approach`, `TrajectoryPath` y `Lift` no cambian
+- Conclusiones provisionales:
+  - para un circulo cerrado sin estrategia axial, la correccion lateral sigue
+    el mismo esquema conceptual ya observado en fresados lineales:
+    - `Center` = nominal
+    - `Right/Left` = offset real de `tool_width / 2`
+  - en un circulo antihorario, el signo del offset queda fijado por el winding:
+    - `Right` hacia afuera
+    - `Left` hacia adentro
+  - la futura API publica no deberia modelar esta correccion como un cambio de
+    geometria nominal
+  - la geometria debe seguir siendo el circulo nominal, y la correccion debe
+    expresarse aparte mediante `SideOfFeature`

@@ -7,7 +7,7 @@ sintetizador actual.
 Objetivos:
 
 - refactorizar casos manuales hacia `LineMillingSpec`, `PolylineMillingSpec`,
-  `SquaringMillingSpec` y `DrillingSpec`
+  `CircleMillingSpec`, `SquaringMillingSpec` y `DrillingSpec`
 - informar con claridad cuando una feature o working step no puede adaptarse
 - construir rapido un `PgmxSynthesisRequest` con el material soportado
 
@@ -41,6 +41,7 @@ from tools.pgmx_snapshot import (
 SupportedSynthesisSpec = (
     sp.LineMillingSpec
     | sp.PolylineMillingSpec
+    | sp.CircleMillingSpec
     | sp.SquaringMillingSpec
     | sp.DrillingSpec
 )
@@ -131,6 +132,14 @@ class PgmxAdaptationResult:
         )
 
     @property
+    def circle_millings(self) -> tuple[sp.CircleMillingSpec, ...]:
+        return tuple(
+            entry.spec
+            for entry in self.adapted_entries
+            if isinstance(entry.spec, sp.CircleMillingSpec)
+        )
+
+    @property
     def squaring_millings(self) -> tuple[sp.SquaringMillingSpec, ...]:
         return tuple(
             entry.spec
@@ -162,7 +171,7 @@ class PgmxAdaptationResult:
 
         Nota: el request conserva el orden relativo dentro de cada familia
         soportada, pero la API publica del sintetizador sigue agrupando por
-        tipo de mecanizado (`line`, `polyline`, `squaring`, `drilling`).
+        tipo de mecanizado (`line`, `polyline`, `circle`, `squaring`, `drilling`).
         """
 
         if strict and self.unsupported_entries:
@@ -183,6 +192,7 @@ class PgmxAdaptationResult:
             piece=self.snapshot.state,
             line_millings=self.line_millings,
             polyline_millings=self.polyline_millings,
+            circle_millings=self.circle_millings,
             squaring_millings=self.squaring_millings,
             drillings=self.drillings,
         )
@@ -830,15 +840,61 @@ def _adapt_milling(
         )
 
     if profile.geometry_type == "GeomCircle":
-        return _unsupported_entry(
+        if profile.center_point is None or profile.radius is None:
+            return _unsupported_entry(
+                feature,
+                operation,
+                step,
+                order_index=order_index,
+                reasons=["La geometria circular no expone centro/radio resolubles en el snapshot."],
+                warnings=warnings,
+            )
+        try:
+            spec = sp.build_circle_milling_spec(
+                center_x=profile.center_point[0],
+                center_y=profile.center_point[1],
+                radius=profile.radius,
+                winding=profile.winding,
+                feature_name=feature_name,
+                tool_id=tool_key.id,
+                tool_name=tool_key.name,
+                tool_width=_effective_tool_width(feature.tool_width, 9.52),
+                security_plane=float(operation.approach_security_plane),
+                side_of_feature=feature.side_of_feature or "Center",
+                is_through=bool(depth_kwargs["is_through"]),
+                target_depth=depth_kwargs["target_depth"],
+                extra_depth=depth_kwargs["extra_depth"],
+                approach_enabled=approach.is_enabled,
+                approach_type=approach.approach_type,
+                approach_mode=approach.mode,
+                approach_radius_multiplier=approach.radius_multiplier,
+                approach_speed=approach.speed,
+                approach_arc_side=approach.arc_side,
+                retract_enabled=retract.is_enabled,
+                retract_type=retract.retract_type,
+                retract_mode=retract.mode,
+                retract_radius_multiplier=retract.radius_multiplier,
+                retract_speed=retract.speed,
+                retract_arc_side=retract.arc_side,
+                retract_overlap=retract.overlap,
+                milling_strategy=operation.milling_strategy,
+            )
+        except Exception as exc:
+            return _unsupported_entry(
+                feature,
+                operation,
+                step,
+                order_index=order_index,
+                reasons=[_builder_error("No se pudo construir el `CircleMillingSpec`", exc)],
+                warnings=warnings,
+            )
+        return _adapted_entry(
             feature,
             operation,
             step,
             order_index=order_index,
-            reasons=[
-                "La feature es circular y todavia no existe un "
-                "`CircleMillingSpec` publico en el sintetizador."
-            ],
+            spec_kind="circle_milling",
+            spec=spec,
             warnings=warnings,
         )
 
@@ -994,6 +1050,7 @@ def adaptation_to_dict(result: PgmxAdaptationResult) -> dict[str, Any]:
             "orphan_feature_entries": len(result.orphan_feature_entries),
             "line_millings": len(result.line_millings),
             "polyline_millings": len(result.polyline_millings),
+            "circle_millings": len(result.circle_millings),
             "squaring_millings": len(result.squaring_millings),
             "drillings": len(result.drillings),
         },

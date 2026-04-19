@@ -18,11 +18,13 @@ Referencia operativa recomendada:
 Soporte actual de mecanizados sinteticos:
 - `LineMillingSpec`: linea sobre un plano con su fresado asociado.
 - `PolylineMillingSpec`: polilinea lineal abierta o cerrada con su fresado asociado.
+- `CircleMillingSpec`: circulo sobre `Top` con su fresado asociado.
 - `SquaringMillingSpec`: escuadrado exterior del contorno de la pieza sobre `Top`.
 - `DrillingSpec`: taladro puntual sobre `Top`, `Front`, `Back`, `Right` o `Left`.
+- `XnSpec`: operacion nula final para mover la herramienta sin mecanizar.
 
 Estado de hito:
-- la API publica del sintetizador queda establecida como `v1.0`
+- la API publica del sintetizador queda establecida como `v1.2`
 
 Soporte actual de geometria base reusable:
 - `build_point_geometry_profile(...)`
@@ -85,7 +87,7 @@ MODULE_DIR = Path(__file__).resolve().parent
 DEFAULT_BASELINE_DIR = MODULE_DIR / "maestro_baselines"
 DEFAULT_BASELINE_XML_PATH = DEFAULT_BASELINE_DIR / "Pieza.xml"
 TOOL_CATALOG_PATH = Path(__file__).with_name("tool_catalog.csv")
-SYNTHESIZER_VERSION = "1.0"
+SYNTHESIZER_VERSION = "1.2"
 
 ET.register_namespace("", PGMX_NS)
 ET.register_namespace("i", XSI_NS)
@@ -100,12 +102,15 @@ __all__ = [
     "MillingDepthSpec",
     "UnidirectionalMillingStrategySpec",
     "BidirectionalMillingStrategySpec",
+    "HelicalMillingStrategySpec",
     "GeometryPrimitiveSpec",
     "GeometryProfileSpec",
     "LineMillingSpec",
     "PolylineMillingSpec",
+    "CircleMillingSpec",
     "SquaringMillingSpec",
     "DrillingSpec",
+    "XnSpec",
     "PgmxSynthesisRequest",
     "PgmxSynthesisResult",
     "build_approach_spec",
@@ -113,6 +118,7 @@ __all__ = [
     "build_milling_depth_spec",
     "build_unidirectional_milling_strategy_spec",
     "build_bidirectional_milling_strategy_spec",
+    "build_helical_milling_strategy_spec",
     "build_line_geometry_primitive",
     "build_arc_geometry_primitive",
     "build_point_geometry_profile",
@@ -122,8 +128,10 @@ __all__ = [
     "build_compensated_toolpath_profile",
     "build_line_milling_spec",
     "build_polyline_milling_spec",
+    "build_circle_milling_spec",
     "build_squaring_milling_spec",
     "build_drilling_spec",
+    "build_xn_spec",
     "read_pgmx_state",
     "read_pgmx_geometries",
     "build_synthesis_request",
@@ -203,7 +211,20 @@ class BidirectionalMillingStrategySpec:
     axial_finish_cutting_depth: float = 0.0
 
 
-MillingStrategySpec = UnidirectionalMillingStrategySpec | BidirectionalMillingStrategySpec
+@dataclass(frozen=True)
+class HelicalMillingStrategySpec:
+    """Estrategia `Helicoidal` observada en Maestro para fresados circulares."""
+
+    axial_cutting_depth: float = 0.0
+    allows_finish_cutting: bool = True
+    axial_finish_cutting_depth: float = 0.0
+
+
+MillingStrategySpec = (
+    UnidirectionalMillingStrategySpec
+    | BidirectionalMillingStrategySpec
+    | HelicalMillingStrategySpec
+)
 
 
 @dataclass(frozen=True)
@@ -296,6 +317,27 @@ class PolylineMillingSpec:
 
 
 @dataclass(frozen=True)
+class CircleMillingSpec:
+    """Descripcion reutilizable de un fresado circular sobre el plano `Top`."""
+
+    center_x: float
+    center_y: float
+    radius: float
+    winding: str = "CounterClockwise"
+    feature_name: str = "Fresado"
+    plane_name: str = "Top"
+    side_of_feature: str = "Center"
+    tool_id: str = "1902"
+    tool_name: str = "E003"
+    tool_width: float = 9.52
+    security_plane: float = 20.0
+    depth_spec: MillingDepthSpec = field(default_factory=MillingDepthSpec)
+    approach: ApproachSpec = field(default_factory=ApproachSpec)
+    retract: RetractSpec = field(default_factory=RetractSpec)
+    milling_strategy: Optional[MillingStrategySpec] = None
+
+
+@dataclass(frozen=True)
 class SquaringMillingSpec:
     """Escuadrado exterior del contorno de la pieza sobre el plano `Top`."""
 
@@ -352,6 +394,15 @@ class DrillingSpec:
     tool_resolution: str = "Auto"
     tool_id: str = "0"
     tool_name: str = ""
+
+
+@dataclass(frozen=True)
+class XnSpec:
+    """Configuracion publica de `Xn`, la operacion nula final del workplan."""
+
+    reference: str = "Absolute"
+    x: float = -3700.0
+    y: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -450,6 +501,78 @@ class _HydratedPolylineMillingSpec:
     @property
     def points(self) -> tuple[tuple[float, float], ...]:
         return self.spec.points
+
+    @property
+    def feature_name(self) -> str:
+        return self.spec.feature_name
+
+    @property
+    def plane_name(self) -> str:
+        return self.spec.plane_name
+
+    @property
+    def side_of_feature(self) -> str:
+        return self.spec.side_of_feature
+
+    @property
+    def tool_id(self) -> str:
+        return self.spec.tool_id
+
+    @property
+    def tool_name(self) -> str:
+        return self.spec.tool_name
+
+    @property
+    def tool_width(self) -> float:
+        return self.spec.tool_width
+
+    @property
+    def security_plane(self) -> float:
+        return self.spec.security_plane
+
+    @property
+    def depth_spec(self) -> MillingDepthSpec:
+        return self.spec.depth_spec
+
+    @property
+    def approach(self) -> ApproachSpec:
+        return self.spec.approach
+
+    @property
+    def retract(self) -> RetractSpec:
+        return self.spec.retract
+
+    @property
+    def milling_strategy(self) -> Optional[MillingStrategySpec]:
+        return self.spec.milling_strategy
+
+
+@dataclass(frozen=True)
+class _HydratedCircleMillingSpec:
+    """Datos internos de serializacion que complementan un `CircleMillingSpec`."""
+
+    spec: CircleMillingSpec
+    preferred_id_start: Optional[int] = None
+    geometry_curve: Optional[_CurveSpec] = None
+    approach_curve: Optional[_CurveSpec] = None
+    trajectory_curve: Optional[_CurveSpec] = None
+    lift_curve: Optional[_CurveSpec] = None
+
+    @property
+    def center_x(self) -> float:
+        return self.spec.center_x
+
+    @property
+    def center_y(self) -> float:
+        return self.spec.center_y
+
+    @property
+    def radius(self) -> float:
+        return self.spec.radius
+
+    @property
+    def winding(self) -> str:
+        return self.spec.winding
 
     @property
     def feature_name(self) -> str:
@@ -629,8 +752,10 @@ class PgmxSynthesisRequest:
     source_pgmx_path: Optional[Path] = None
     line_millings: tuple[LineMillingSpec, ...] = ()
     polyline_millings: tuple[PolylineMillingSpec, ...] = ()
+    circle_millings: tuple[CircleMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
     drillings: tuple[DrillingSpec, ...] = ()
+    xn: XnSpec = field(default_factory=XnSpec)
 
 
 @dataclass(frozen=True)
@@ -642,8 +767,10 @@ class PgmxSynthesisResult:
     sha256: str
     line_millings: tuple[LineMillingSpec, ...] = ()
     polyline_millings: tuple[PolylineMillingSpec, ...] = ()
+    circle_millings: tuple[CircleMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
     drillings: tuple[DrillingSpec, ...] = ()
+    xn: XnSpec = field(default_factory=XnSpec)
 
 
 # ============================================================================
@@ -1359,6 +1486,76 @@ def build_bidirectional_milling_strategy_spec(
     )
 
 
+def build_helical_milling_strategy_spec(
+    *,
+    axial_cutting_depth: Optional[float] = None,
+    allows_finish_cutting: Optional[bool] = None,
+    axial_finish_cutting_depth: Optional[float] = None,
+) -> HelicalMillingStrategySpec:
+    """Construye una estrategia publica `Helicoidal`.
+
+    Por ahora esta familia queda validada solo para `CircleMillingSpec`.
+    """
+
+    normalized_axial_cutting_depth = _normalize_nonnegative_strategy_depth(
+        axial_cutting_depth,
+        "AxialCuttingDepth",
+    )
+    normalized_axial_finish_cutting_depth = _normalize_nonnegative_strategy_depth(
+        axial_finish_cutting_depth,
+        "AxialFinishCuttingDepth",
+    )
+    normalized_allows_finish_cutting = True if allows_finish_cutting is None else bool(allows_finish_cutting)
+    if not normalized_allows_finish_cutting and normalized_axial_finish_cutting_depth > 0.0:
+        raise ValueError(
+            "No se puede definir AxialFinishCuttingDepth mayor que cero si AllowsFinishCutting esta deshabilitado."
+        )
+    return HelicalMillingStrategySpec(
+        axial_cutting_depth=normalized_axial_cutting_depth,
+        allows_finish_cutting=normalized_allows_finish_cutting,
+        axial_finish_cutting_depth=normalized_axial_finish_cutting_depth,
+    )
+
+
+def _normalize_xn_reference(value: Optional[str]) -> str:
+    raw = (value or "Absolute").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+    mapping = {
+        "absolute": "Absolute",
+        "absoluto": "Absolute",
+        "relative": "Relative",
+        "relativo": "Relative",
+    }
+    normalized = mapping.get(raw)
+    if normalized is None:
+        raise ValueError("Reference invalido para Xn. Valores admitidos: Absolute/Absoluto o Relative/Relativo.")
+    return normalized
+
+
+def build_xn_spec(
+    *,
+    reference: Optional[str] = None,
+    x: Optional[float] = None,
+    y: Optional[float] = None,
+) -> XnSpec:
+    """Construye la spec publica `Xn` con defaults observados en Maestro."""
+
+    return XnSpec(
+        reference=_normalize_xn_reference(reference),
+        x=-3700.0 if x is None else float(x),
+        y=None if y is None else float(y),
+    )
+
+
+def _normalize_xn_spec(xn: Optional[XnSpec]) -> XnSpec:
+    if xn is None:
+        return build_xn_spec()
+    return build_xn_spec(
+        reference=xn.reference,
+        x=xn.x,
+        y=xn.y,
+    )
+
+
 def _normalize_milling_strategy_spec(
     strategy: Optional[MillingStrategySpec],
 ) -> Optional[MillingStrategySpec]:
@@ -1377,7 +1574,30 @@ def _normalize_milling_strategy_spec(
             axial_cutting_depth=strategy.axial_cutting_depth,
             axial_finish_cutting_depth=strategy.axial_finish_cutting_depth,
         )
+    if isinstance(strategy, HelicalMillingStrategySpec):
+        return build_helical_milling_strategy_spec(
+            axial_cutting_depth=strategy.axial_cutting_depth,
+            allows_finish_cutting=strategy.allows_finish_cutting,
+            axial_finish_cutting_depth=strategy.axial_finish_cutting_depth,
+        )
     raise ValueError(f"Tipo de estrategia de fresado no soportado: {type(strategy)!r}")
+
+
+def _ensure_milling_strategy_allowed(
+    strategy: Optional[MillingStrategySpec],
+    *,
+    allowed_types: tuple[type, ...],
+    context: str,
+) -> Optional[MillingStrategySpec]:
+    if strategy is None:
+        return None
+    if isinstance(strategy, allowed_types):
+        return strategy
+    admitted = ", ".join(sorted(strategy_type.__name__ for strategy_type in allowed_types))
+    raise ValueError(
+        f"La estrategia {type(strategy).__name__} no esta validada para {context}. "
+        f"Estrategias admitidas: {admitted}."
+    )
 
 
 def build_milling_depth_spec(
@@ -1763,13 +1983,18 @@ def _normalize_milling_depth_spec(depth_spec: Optional[MillingDepthSpec]) -> Mil
 
 
 def _normalize_line_milling_spec(line_milling: LineMillingSpec) -> LineMillingSpec:
+    normalized_strategy = _ensure_milling_strategy_allowed(
+        _normalize_milling_strategy_spec(line_milling.milling_strategy),
+        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
+        context="LineMillingSpec",
+    )
     return replace(
         line_milling,
         side_of_feature=_normalize_side_of_feature(line_milling.side_of_feature),
         depth_spec=_normalize_milling_depth_spec(line_milling.depth_spec),
         approach=_normalize_approach_spec(line_milling.approach),
         retract=_normalize_retract_spec(line_milling.retract),
-        milling_strategy=_normalize_milling_strategy_spec(line_milling.milling_strategy),
+        milling_strategy=normalized_strategy,
     )
 
 
@@ -1809,6 +2034,11 @@ def _is_closed_polyline_points(points: Sequence[tuple[float, float]]) -> bool:
 
 
 def _normalize_polyline_milling_spec(polyline_milling: PolylineMillingSpec) -> PolylineMillingSpec:
+    normalized_strategy = _ensure_milling_strategy_allowed(
+        _normalize_milling_strategy_spec(polyline_milling.milling_strategy),
+        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
+        context="PolylineMillingSpec",
+    )
     return replace(
         polyline_milling,
         points=_normalize_polyline_points(polyline_milling.points),
@@ -1816,11 +2046,43 @@ def _normalize_polyline_milling_spec(polyline_milling: PolylineMillingSpec) -> P
         depth_spec=_normalize_milling_depth_spec(polyline_milling.depth_spec),
         approach=_normalize_approach_spec(polyline_milling.approach),
         retract=_normalize_retract_spec(polyline_milling.retract),
-        milling_strategy=_normalize_milling_strategy_spec(polyline_milling.milling_strategy),
+        milling_strategy=normalized_strategy,
+    )
+
+
+def _normalize_circle_milling_spec(circle_milling: CircleMillingSpec) -> CircleMillingSpec:
+    radius_value = float(circle_milling.radius)
+    if radius_value <= 1e-9:
+        raise ValueError("El radio del fresado circular debe ser mayor que cero.")
+    normalized_strategy = _ensure_milling_strategy_allowed(
+        _normalize_milling_strategy_spec(circle_milling.milling_strategy),
+        allowed_types=(
+            UnidirectionalMillingStrategySpec,
+            BidirectionalMillingStrategySpec,
+            HelicalMillingStrategySpec,
+        ),
+        context="CircleMillingSpec",
+    )
+    return replace(
+        circle_milling,
+        center_x=float(circle_milling.center_x),
+        center_y=float(circle_milling.center_y),
+        radius=radius_value,
+        winding=_normalize_geometry_winding(circle_milling.winding),
+        side_of_feature=_normalize_side_of_feature(circle_milling.side_of_feature),
+        depth_spec=_normalize_milling_depth_spec(circle_milling.depth_spec),
+        approach=_normalize_approach_spec(circle_milling.approach),
+        retract=_normalize_retract_spec(circle_milling.retract),
+        milling_strategy=normalized_strategy,
     )
 
 
 def _normalize_squaring_milling_spec(squaring_milling: SquaringMillingSpec) -> SquaringMillingSpec:
+    normalized_strategy = _ensure_milling_strategy_allowed(
+        _normalize_milling_strategy_spec(squaring_milling.milling_strategy),
+        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
+        context="SquaringMillingSpec",
+    )
     return replace(
         squaring_milling,
         start_edge=_normalize_squaring_start_edge(squaring_milling.start_edge),
@@ -1828,7 +2090,7 @@ def _normalize_squaring_milling_spec(squaring_milling: SquaringMillingSpec) -> S
         depth_spec=_normalize_milling_depth_spec(squaring_milling.depth_spec),
         approach=_normalize_approach_spec(squaring_milling.approach),
         retract=_normalize_retract_spec(squaring_milling.retract),
-        milling_strategy=_normalize_milling_strategy_spec(squaring_milling.milling_strategy),
+        milling_strategy=normalized_strategy,
     )
 
 
@@ -2203,6 +2465,7 @@ def _validate_tool_sinking_lengths(
     state: PgmxState,
     line_millings: Sequence[_HydratedLineMillingSpec],
     polyline_millings: Sequence[_HydratedPolylineMillingSpec],
+    circle_millings: Sequence[_HydratedCircleMillingSpec],
     squaring_millings: Sequence[_HydratedSquaringMillingSpec],
     drillings: Sequence[_HydratedDrillingSpec],
 ) -> None:
@@ -2212,6 +2475,8 @@ def _validate_tool_sinking_lengths(
     for spec in line_millings:
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
     for spec in polyline_millings:
+        _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
+    for spec in circle_millings:
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
     for spec in squaring_millings:
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
@@ -2974,7 +3239,11 @@ def _profile_endpoint_points_3d(
 
 def _strategy_is_multilevel(strategy: Optional[MillingStrategySpec]) -> bool:
     normalized_strategy = _normalize_milling_strategy_spec(strategy)
-    if normalized_strategy is None or not normalized_strategy.allow_multiple_passes:
+    if normalized_strategy is None:
+        return False
+    if isinstance(normalized_strategy, HelicalMillingStrategySpec):
+        return True
+    if not normalized_strategy.allow_multiple_passes:
         return False
     return (
         normalized_strategy.axial_cutting_depth > 0.0
@@ -3004,7 +3273,7 @@ def _serialize_unidirectional_connection_mode(connection_mode: str) -> str:
 def _strategy_pass_levels(
     state: PgmxState,
     spec,
-    strategy: MillingStrategySpec,
+    strategy: UnidirectionalMillingStrategySpec | BidirectionalMillingStrategySpec,
 ) -> tuple[float, ...]:
     final_level = _toolpath_cut_z(state, spec)
     if not strategy.allow_multiple_passes:
@@ -3029,6 +3298,31 @@ def _strategy_pass_levels(
 
     if not levels or not math.isclose(levels[-1], final_level, abs_tol=1e-9):
         levels.append(final_level)
+    return tuple(levels)
+
+
+def _helical_rough_end_levels(
+    state: PgmxState,
+    spec,
+    strategy: HelicalMillingStrategySpec,
+) -> tuple[float, ...]:
+    final_level = _toolpath_cut_z(state, spec)
+    top_level = float(state.depth)
+    rough_step = float(strategy.axial_cutting_depth)
+    finish_step = float(strategy.axial_finish_cutting_depth)
+    helical_end_level = final_level
+    if strategy.allows_finish_cutting and finish_step > 0.0:
+        helical_end_level = final_level + finish_step
+
+    levels: list[float] = []
+    if rough_step > 0.0:
+        current_level = top_level - rough_step
+        while current_level > helical_end_level + 1e-9:
+            levels.append(current_level)
+            current_level -= rough_step
+
+    if not levels or not math.isclose(levels[-1], helical_end_level, abs_tol=1e-9):
+        levels.append(helical_end_level)
     return tuple(levels)
 
 
@@ -3354,6 +3648,123 @@ def _build_closed_profile_strategy_toolpath(
                 pass_levels[index + 1],
             )
         )
+    return build_composite_geometry_profile(tuple(primitives))
+
+
+def _build_helical_arc_primitive(
+    flat_arc: GeometryPrimitiveSpec,
+    *,
+    start_z: float,
+    end_z: float,
+) -> GeometryPrimitiveSpec:
+    if (
+        flat_arc.primitive_type != "Arc"
+        or flat_arc.center_point is None
+        or flat_arc.radius is None
+    ):
+        raise ValueError("La estrategia helicoidal sobre circulo requiere primitivas de arco planas.")
+
+    tangent_xy = _primitive_start_tangent_2d(flat_arc)
+    if tangent_xy is None:
+        raise ValueError("No se pudo resolver la tangente de arranque del arco helicoidal.")
+
+    center_x = flat_arc.center_point[0]
+    center_y = flat_arc.center_point[1]
+    center_z = (float(start_z) + float(end_z)) / 2.0
+    radius_3d = math.hypot(float(flat_arc.radius), (float(start_z) - float(end_z)) / 2.0)
+    if radius_3d <= 1e-9:
+        raise ValueError("El arco helicoidal requiere radio 3D positivo.")
+
+    start_angle = float(flat_arc.parameter_start)
+    start_point = (flat_arc.start_point[0], flat_arc.start_point[1], float(start_z))
+    end_point = (flat_arc.end_point[0], flat_arc.end_point[1], float(end_z))
+    radial_start = (
+        (start_point[0] - center_x) / radius_3d,
+        (start_point[1] - center_y) / radius_3d,
+        (start_point[2] - center_z) / radius_3d,
+    )
+    tangent_start = (tangent_xy[0], tangent_xy[1], 0.0)
+    cos_start = math.cos(start_angle)
+    sin_start = math.sin(start_angle)
+    u_vector = (
+        (radial_start[0] * cos_start) - (tangent_start[0] * sin_start),
+        (radial_start[1] * cos_start) - (tangent_start[1] * sin_start),
+        (radial_start[2] * cos_start) - (tangent_start[2] * sin_start),
+    )
+    v_vector = (
+        (radial_start[0] * sin_start) + (tangent_start[0] * cos_start),
+        (radial_start[1] * sin_start) + (tangent_start[1] * cos_start),
+        (radial_start[2] * sin_start) + (tangent_start[2] * cos_start),
+    )
+    normal_vector = (
+        (u_vector[1] * v_vector[2]) - (u_vector[2] * v_vector[1]),
+        (u_vector[2] * v_vector[0]) - (u_vector[0] * v_vector[2]),
+        (u_vector[0] * v_vector[1]) - (u_vector[1] * v_vector[0]),
+    )
+    return GeometryPrimitiveSpec(
+        primitive_type="Arc",
+        start_point=start_point,
+        end_point=end_point,
+        parameter_start=flat_arc.parameter_start,
+        parameter_end=flat_arc.parameter_end,
+        center_point=(center_x, center_y, center_z),
+        radius=radius_3d,
+        normal_vector=normal_vector,
+        u_vector=u_vector,
+        v_vector=v_vector,
+    )
+
+
+def _build_helical_circle_strategy_toolpath(
+    state: PgmxState,
+    spec,
+    base_profile: GeometryProfileSpec,
+    strategy: HelicalMillingStrategySpec,
+) -> GeometryProfileSpec:
+    if (
+        base_profile.geometry_type != "GeomCompositeCurve"
+        or len(base_profile.primitives) != 2
+        or any(primitive.primitive_type != "Arc" for primitive in base_profile.primitives)
+    ):
+        raise ValueError(
+            "La estrategia Helicoidal hoy espera un circulo compensado compuesto por dos semicircunferencias."
+        )
+
+    rough_end_levels = _helical_rough_end_levels(state, spec, strategy)
+    final_level = _toolpath_cut_z(state, spec)
+    current_level = float(state.depth)
+    primitives: list[GeometryPrimitiveSpec] = []
+
+    for rough_end_level in rough_end_levels:
+        midpoint_level = (current_level + rough_end_level) / 2.0
+        primitives.append(
+            _build_helical_arc_primitive(
+                base_profile.primitives[0],
+                start_z=current_level,
+                end_z=midpoint_level,
+            )
+        )
+        primitives.append(
+            _build_helical_arc_primitive(
+                base_profile.primitives[1],
+                start_z=midpoint_level,
+                end_z=rough_end_level,
+            )
+        )
+        current_level = rough_end_level
+
+    if strategy.allows_finish_cutting:
+        loop_end_point = primitives[-1].end_point
+        if not math.isclose(current_level, final_level, abs_tol=1e-9):
+            primitives.append(
+                _vertical_transition_primitive(
+                    (loop_end_point[0], loop_end_point[1]),
+                    current_level,
+                    final_level,
+                )
+            )
+        primitives.extend(_profile_at_z(base_profile, final_level).primitives)
+
     return build_composite_geometry_profile(tuple(primitives))
 
 
@@ -4665,6 +5076,34 @@ def _build_polyline_toolpath_profile(
     return _build_bidirectional_open_profile_strategy_toolpath(state, spec, base_profile, strategy)
 
 
+def _build_circle_toolpath_profile(
+    state: PgmxState,
+    spec: _HydratedCircleMillingSpec,
+) -> GeometryProfileSpec:
+    """Construye la trayectoria compensada para un fresado circular cerrado."""
+
+    cut_z = _toolpath_cut_z(state, spec)
+    nominal_profile = build_circle_geometry_profile(
+        spec.center_x,
+        spec.center_y,
+        spec.radius,
+        z_value=cut_z,
+        winding=spec.winding,
+    )
+    base_profile = build_compensated_toolpath_profile(
+        nominal_profile,
+        side_of_feature=spec.side_of_feature,
+        tool_width=spec.tool_width,
+        z_value=cut_z,
+    )
+    strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
+    if strategy is None:
+        return base_profile
+    if isinstance(strategy, HelicalMillingStrategySpec):
+        return _build_helical_circle_strategy_toolpath(state, spec, base_profile, strategy)
+    return _build_closed_profile_strategy_toolpath(state, spec, base_profile, strategy)
+
+
 def _build_squaring_toolpath_profile(
     state: PgmxState,
     spec: _HydratedSquaringMillingSpec,
@@ -4762,6 +5201,24 @@ def _matches_polyline_geometry(template: dict[str, object], spec: PolylineMillin
     )
 
 
+def _matches_circle_geometry(template: dict[str, object], spec: CircleMillingSpec, tolerance: float = 1e-6) -> bool:
+    geometry_curve = template.get("geometry_curve")
+    if not isinstance(geometry_curve, _CurveSpec):
+        return False
+    if geometry_curve.geometry_type != "GeomCircle" or geometry_curve.serialization is None:
+        return False
+    parsed_profile = _parse_circle_geometry_profile(geometry_curve.serialization)
+    if parsed_profile is None or parsed_profile.center_point is None or parsed_profile.radius is None:
+        return False
+    return (
+        math.isclose(parsed_profile.center_point[0], spec.center_x, abs_tol=tolerance)
+        and math.isclose(parsed_profile.center_point[1], spec.center_y, abs_tol=tolerance)
+        and math.isclose(parsed_profile.center_point[2], 0.0, abs_tol=tolerance)
+        and math.isclose(parsed_profile.radius, spec.radius, abs_tol=tolerance)
+        and _normalize_geometry_winding(parsed_profile.winding) == _normalize_geometry_winding(spec.winding)
+    )
+
+
 def _extract_depth_spec_from_template(
     feature: ET.Element,
     operation: ET.Element,
@@ -4799,6 +5256,7 @@ def _extract_milling_strategy_spec_from_operation(
 
     strategy_type = _xsi_type(strategy_node)
     allow_multiple_passes = _safe_bool(_text(strategy_node, "./{*}AllowMultiplePasses"), False)
+    allows_finish_cutting = _safe_bool(_text(strategy_node, "./{*}AllowsFinishCutting"), True)
     axial_cutting_depth = _safe_float(_text(strategy_node, "./{*}AxialCuttingDepth"), 0.0)
     axial_finish_cutting_depth = _safe_float(_text(strategy_node, "./{*}AxialFinishCuttingDepth"), 0.0)
     stroke_connection_strategy = _text(strategy_node, "./{*}StrokeConnectionStrategy", "Automatic")
@@ -4814,6 +5272,12 @@ def _extract_milling_strategy_spec_from_operation(
         return build_bidirectional_milling_strategy_spec(
             allow_multiple_passes=allow_multiple_passes,
             axial_cutting_depth=axial_cutting_depth,
+            axial_finish_cutting_depth=axial_finish_cutting_depth,
+        )
+    if "HelicMilling" in strategy_type:
+        return build_helical_milling_strategy_spec(
+            axial_cutting_depth=axial_cutting_depth,
+            allows_finish_cutting=allows_finish_cutting,
             axial_finish_cutting_depth=axial_finish_cutting_depth,
         )
     return None
@@ -4838,6 +5302,13 @@ def _strategy_comparison_key(
             normalized_strategy.axial_cutting_depth,
             normalized_strategy.axial_finish_cutting_depth,
         )
+    if isinstance(normalized_strategy, HelicalMillingStrategySpec):
+        return (
+            "Helical",
+            normalized_strategy.allows_finish_cutting,
+            normalized_strategy.axial_cutting_depth,
+            normalized_strategy.axial_finish_cutting_depth,
+        )
     return (
         "Bidirectional",
         normalized_strategy.allow_multiple_passes,
@@ -4853,7 +5324,11 @@ def _can_hydrate_exact_serialization(template: dict[str, object], spec: LineMill
         return False
     source_strategy = template.get("milling_strategy") if isinstance(
         template.get("milling_strategy"),
-        (UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
+        (
+            UnidirectionalMillingStrategySpec,
+            BidirectionalMillingStrategySpec,
+            HelicalMillingStrategySpec,
+        ),
     ) else None
     if _strategy_comparison_key(source_strategy, is_closed_profile=False) != _strategy_comparison_key(
         spec.milling_strategy,
@@ -4894,7 +5369,11 @@ def _can_hydrate_exact_polyline_serialization(template: dict[str, object], spec:
         return False
     source_strategy = template.get("milling_strategy") if isinstance(
         template.get("milling_strategy"),
-        (UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
+        (
+            UnidirectionalMillingStrategySpec,
+            BidirectionalMillingStrategySpec,
+            HelicalMillingStrategySpec,
+        ),
     ) else None
     is_closed_profile = _is_closed_polyline_points(spec.points)
     if _strategy_comparison_key(source_strategy, is_closed_profile=is_closed_profile) != _strategy_comparison_key(
@@ -4915,6 +5394,51 @@ def _can_hydrate_exact_polyline_serialization(template: dict[str, object], spec:
     if source_retract != requested_retract:
         return False
     if not _matches_polyline_geometry(template, spec):
+        return False
+    if requested_side == "Center":
+        return True
+
+    source_tool_width = float(template["tool_width"])
+    source_tool_id = str(template["tool_id"])
+    source_tool_name = str(template["tool_name"])
+    return (
+        math.isclose(spec.tool_width, source_tool_width, abs_tol=1e-6)
+        and spec.tool_id == source_tool_id
+        and spec.tool_name == source_tool_name
+    )
+
+
+def _can_hydrate_exact_circle_serialization(template: dict[str, object], spec: CircleMillingSpec) -> bool:
+    source_depth_spec = template.get("depth_spec") if isinstance(template.get("depth_spec"), MillingDepthSpec) else None
+    requested_depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
+    if source_depth_spec is None or _normalize_milling_depth_spec(source_depth_spec) != requested_depth_spec:
+        return False
+    source_strategy = template.get("milling_strategy") if isinstance(
+        template.get("milling_strategy"),
+        (
+            UnidirectionalMillingStrategySpec,
+            BidirectionalMillingStrategySpec,
+            HelicalMillingStrategySpec,
+        ),
+    ) else None
+    if _strategy_comparison_key(source_strategy, is_closed_profile=True) != _strategy_comparison_key(
+        spec.milling_strategy,
+        is_closed_profile=True,
+    ):
+        return False
+    requested_side = _normalize_side_of_feature(spec.side_of_feature)
+    source_side = str(template["side_of_feature"])
+    if requested_side != source_side:
+        return False
+    source_approach = _normalize_approach_spec(template.get("approach") if isinstance(template.get("approach"), ApproachSpec) else None)
+    requested_approach = _normalize_approach_spec(spec.approach)
+    if source_approach != requested_approach:
+        return False
+    source_retract = _normalize_retract_spec(template.get("retract") if isinstance(template.get("retract"), RetractSpec) else None)
+    requested_retract = _normalize_retract_spec(spec.retract)
+    if source_retract != requested_retract:
+        return False
+    if not _matches_circle_geometry(template, spec):
         return False
     if requested_side == "Center":
         return True
@@ -5327,6 +5851,125 @@ def _hydrate_polyline_milling_spec(
         return _HydratedPolylineMillingSpec(spec=normalized_polyline_milling)
     return _HydratedPolylineMillingSpec(
         spec=normalized_polyline_milling,
+        preferred_id_start=int(template["preferred_id_start"]),
+        geometry_curve=template.get("geometry_curve") if isinstance(template.get("geometry_curve"), _CurveSpec) else None,
+        approach_curve=template.get("approach_curve") if isinstance(template.get("approach_curve"), _CurveSpec) else None,
+        trajectory_curve=template.get("trajectory_curve") if isinstance(template.get("trajectory_curve"), _CurveSpec) else None,
+        lift_curve=template.get("lift_curve") if isinstance(template.get("lift_curve"), _CurveSpec) else None,
+    )
+
+
+def _extract_circle_milling_template(source_pgmx_path: Path) -> dict[str, object]:
+    root, _, _ = _load_pgmx_container(source_pgmx_path)
+
+    geometry = next(
+        (
+            node
+            for node in root.findall("./{*}Geometries/{*}GeomGeometry")
+            if "GeomCircle" in _xsi_type(node)
+        ),
+        None,
+    )
+    geometry_id_text = _text(geometry, "./{*}Key/{*}ID") if geometry is not None else ""
+    feature = next(
+        (
+            node
+            for node in root.findall("./{*}Features/{*}ManufacturingFeature")
+            if "GeneralProfileFeature" in _xsi_type(node)
+            and _text(node, "./{*}GeometryID/{*}ID") == geometry_id_text
+        ),
+        None,
+    )
+    operation_id_text = _text(feature, "./{*}OperationIDs/{*}UtilityObject/{*}ID") if feature is not None else ""
+    operation = next(
+        (
+            node
+            for node in root.findall("./{*}Operations/{*}Operation")
+            if "BottomAndSideFinishMilling" in _xsi_type(node)
+            and _text(node, "./{*}Key/{*}ID") == operation_id_text
+        ),
+        None,
+    )
+    if geometry is None or feature is None or operation is None:
+        raise ValueError(f"El archivo '{source_pgmx_path}' no contiene una plantilla de fresado circular compatible.")
+
+    def extract_toolpath_curve(toolpath: ET.Element) -> _CurveSpec:
+        basic_curve = toolpath.find("./{*}BasicCurve")
+        curve_type = _xsi_type(basic_curve)
+        if "GeomCompositeCurve" in curve_type:
+            return _composite_curve_spec(
+                [member.text or "" for member in basic_curve.findall("./{*}_serializingMembers/{*}string")],
+                [(key.text or "").strip() for key in basic_curve.findall("./{*}_serializingKeys/{*}unsignedInt")],
+            )
+        if "GeomCircle" in curve_type:
+            return _circle_curve_spec(_raw_text(basic_curve, "./{*}_serializationGeometryDescription"))
+        return _trimmed_curve_spec(_raw_text(basic_curve, "./{*}_serializationGeometryDescription"))
+
+    geometry_id = int(_text(geometry, "./{*}Key/{*}ID", "0") or "0")
+    feature_id = _text(feature, "./{*}Key/{*}ID")
+    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
+    depth_variable_name = _workpiece_depth_name(workpiece)
+    toolpath_by_type = {
+        _text(toolpath, "./{*}Type"): extract_toolpath_curve(toolpath)
+        for toolpath in operation.findall("./{*}ToolpathList/{*}Toolpath")
+    }
+    matching_expressions = [
+        node
+        for node in root.findall("./{*}Expressions/{*}Expression")
+        if _text(node, "./{*}ReferencedObject/{*}ID") == feature_id
+    ]
+    expression_ids = [int(_text(node, "./{*}Key/{*}ID", "0") or "0") for node in matching_expressions]
+    preferred_start = min([geometry_id] + expression_ids) if expression_ids else geometry_id
+
+    return {
+        "preferred_id_start": preferred_start,
+        "depth_spec": _extract_depth_spec_from_template(
+            feature,
+            operation,
+            matching_expressions,
+            depth_variable_name,
+        ),
+        "side_of_feature": _normalize_side_of_feature(_text(feature, "./{*}SideOfFeature", "Center")),
+        "tool_width": float(_text(feature, "./{*}SweptShape/{*}Width", "0") or "0"),
+        "tool_id": _text(operation, "./{*}ToolKey/{*}ID"),
+        "tool_name": _text(operation, "./{*}ToolKey/{*}Name"),
+        "milling_strategy": _extract_milling_strategy_spec_from_operation(operation),
+        "approach": build_approach_spec(
+            enabled=_safe_bool(_text(operation, "./{*}Approach/{*}IsEnabled"), False),
+            approach_type=_text(operation, "./{*}Approach/{*}ApproachType", "Line"),
+            mode=_text(operation, "./{*}Approach/{*}ApproachMode", "Down"),
+            radius_multiplier=_safe_float(_text(operation, "./{*}Approach/{*}RadiusMultiplier"), 1.2),
+            speed=_safe_float(_text(operation, "./{*}Approach/{*}Speed"), 0.0),
+            arc_side=_text(operation, "./{*}Approach/{*}ApproachArcSide", "Automatic"),
+        ),
+        "retract": build_retract_spec(
+            enabled=_safe_bool(_text(operation, "./{*}Retract/{*}IsEnabled"), False),
+            retract_type=_text(operation, "./{*}Retract/{*}RetractType", "Line"),
+            mode=_text(operation, "./{*}Retract/{*}RetractMode", "Up"),
+            radius_multiplier=_safe_float(_text(operation, "./{*}Retract/{*}RadiusMultiplier"), 1.2),
+            speed=_safe_float(_text(operation, "./{*}Retract/{*}Speed"), 0.0),
+            arc_side=_text(operation, "./{*}Retract/{*}RetractArcSide", "Automatic"),
+            overlap=_safe_float(_text(operation, "./{*}Retract/{*}OverLap"), 0.0),
+        ),
+        "geometry_curve": _circle_curve_spec(_raw_text(geometry, "./{*}_serializationGeometryDescription")),
+        "approach_curve": toolpath_by_type.get("Approach"),
+        "trajectory_curve": toolpath_by_type.get("TrajectoryPath"),
+        "lift_curve": toolpath_by_type.get("Lift"),
+    }
+
+
+def _hydrate_circle_milling_spec(
+    circle_milling: CircleMillingSpec,
+    source_pgmx_path: Optional[Path],
+) -> _HydratedCircleMillingSpec:
+    normalized_circle_milling = _normalize_circle_milling_spec(circle_milling)
+    if source_pgmx_path is None:
+        return _HydratedCircleMillingSpec(spec=normalized_circle_milling)
+    template = _extract_circle_milling_template(source_pgmx_path)
+    if not _can_hydrate_exact_circle_serialization(template, normalized_circle_milling):
+        return _HydratedCircleMillingSpec(spec=normalized_circle_milling)
+    return _HydratedCircleMillingSpec(
+        spec=normalized_circle_milling,
         preferred_id_start=int(template["preferred_id_start"]),
         geometry_curve=template.get("geometry_curve") if isinstance(template.get("geometry_curve"), _CurveSpec) else None,
         approach_curve=template.get("approach_curve") if isinstance(template.get("approach_curve"), _CurveSpec) else None,
@@ -5845,7 +6488,7 @@ def _should_activate_cnc_correction(spec) -> bool:
 
 
 def _spec_uses_closed_profile(spec) -> bool:
-    if isinstance(spec, (_HydratedSquaringMillingSpec, SquaringMillingSpec)):
+    if isinstance(spec, (_HydratedCircleMillingSpec, CircleMillingSpec, _HydratedSquaringMillingSpec, SquaringMillingSpec)):
         return True
     points = getattr(spec, "points", None)
     if points is None:
@@ -5866,8 +6509,11 @@ def _build_milling_strategy_node(spec) -> ET.Element:
                 is_closed_profile=_spec_uses_closed_profile(spec),
             )
         )
-    else:
+    elif isinstance(strategy, BidirectionalMillingStrategySpec):
         strategy_type = "b:BidirectionalMilling"
+        stroke_connection_strategy = "Straghtline"
+    else:
+        strategy_type = "b:HelicMilling"
         stroke_connection_strategy = "Straghtline"
 
     node = ET.Element(
@@ -5875,8 +6521,13 @@ def _build_milling_strategy_node(spec) -> ET.Element:
         {f"{{{XSI_NS}}}type": strategy_type},
     )
     _set_xmlns(node, "b", STRATEGY_NS)
-    _append_node(node, PGMX_NS, "AllowMultiplePasses", "true" if strategy.allow_multiple_passes else "false")
+    if isinstance(strategy, HelicalMillingStrategySpec):
+        _append_node(node, PGMX_NS, "AllowMultiplePasses", "false")
+    else:
+        _append_node(node, PGMX_NS, "AllowMultiplePasses", "true" if strategy.allow_multiple_passes else "false")
     _append_node(node, PGMX_NS, "Overlap", "0")
+    if isinstance(strategy, HelicalMillingStrategySpec):
+        _append_node(node, STRATEGY_NS, "AllowsFinishCutting", "true" if strategy.allows_finish_cutting else "false")
     _append_node(node, STRATEGY_NS, "AxialCuttingDepth", _compact_number(strategy.axial_cutting_depth))
     _append_node(node, STRATEGY_NS, "AxialFinishCuttingDepth", _compact_number(strategy.axial_finish_cutting_depth))
     _append_node(node, STRATEGY_NS, "Cutmode", "Climb")
@@ -6052,6 +6703,62 @@ def _build_working_step(
     )
     _set_xmlns(feature_ref, "b", UTILITY_NS)
     _set_xmlns(operation_ref, "b", UTILITY_NS)
+    return step
+
+
+def _build_xn_step(
+    step_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+    spec: XnSpec,
+) -> ET.Element:
+    step = ET.Element(
+        _qname(BASE_MODEL_NS, "Executable"),
+        {f"{{{XSI_NS}}}type": "Xn"},
+    )
+    _append_key(step, step_id, "ScmGroup.XCam.MachiningDataModel.Xn")
+    _append_blank_name(step).text = "Xn"
+    _append_node(step, BASE_MODEL_NS, "Description", "")
+    _append_node(step, BASE_MODEL_NS, "IsEnabled", "true")
+    _append_node(step, BASE_MODEL_NS, "Priority", "0")
+
+    if spec.y is None:
+        geometry_ref = _append_node(step, BASE_MODEL_NS, "GeometryID")
+        _append_node(geometry_ref, UTILITY_NS, "ID", "0")
+        _append_node(geometry_ref, UTILITY_NS, "ObjectType", attrib={f"{{{XSI_NS}}}nil": "true"})
+        _set_xmlns(geometry_ref, "a", UTILITY_NS)
+    else:
+        _append_node(step, BASE_MODEL_NS, "GeometryID", attrib={f"{{{XSI_NS}}}nil": "true"})
+
+    workpiece_ref = _append_object_ref(
+        step,
+        BASE_MODEL_NS,
+        "WorkpieceID",
+        workpiece_id,
+        workpiece_object_type,
+    )
+    _set_xmlns(workpiece_ref, "a", UTILITY_NS)
+
+    _append_node(step, BASE_MODEL_NS, "Reference", spec.reference)
+    _append_node(step, BASE_MODEL_NS, "Speed", "0")
+    _append_node(step, BASE_MODEL_NS, "SpindleEnable", "Off")
+
+    tool_ref = _append_object_ref(
+        step,
+        BASE_MODEL_NS,
+        "Tool",
+        "0",
+        "System.Object",
+        include_name=True,
+        name_text="",
+    )
+    _set_xmlns(tool_ref, "a", UTILITY_NS)
+
+    _append_node(step, BASE_MODEL_NS, "X", _compact_number(spec.x))
+    if spec.y is None:
+        _append_node(step, BASE_MODEL_NS, "Y", attrib={f"{{{XSI_NS}}}nil": "true"})
+    else:
+        _append_node(step, BASE_MODEL_NS, "Y", _compact_number(spec.y))
     return step
 
 
@@ -6263,7 +6970,7 @@ def _append_curve_profile_milling(
             operation_id,
             workpiece_id,
             workpiece_object_type,
-            "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCompositeCurve",
+            _geometry_object_type(generated_geometry_curve.geometry_type),
         )
     )
     operations.append(
@@ -6297,6 +7004,26 @@ def _append_polyline_milling(root: ET.Element, state: PgmxState, spec: _Hydrated
     else:
         generated_geometry_curve = _composite_curve_spec(_build_open_polyline_descriptions(spec.points))
     generated_toolpath_profile = _build_polyline_toolpath_profile(state, spec)
+    _append_curve_profile_milling(
+        root,
+        state,
+        spec,
+        generated_geometry_curve,
+        generated_toolpath_profile,
+    )
+
+
+def _append_circle_milling(root: ET.Element, state: PgmxState, spec: _HydratedCircleMillingSpec) -> None:
+    generated_geometry_curve = spec.geometry_curve or _curve_spec_from_profile_geometry(
+        build_circle_geometry_profile(
+            spec.center_x,
+            spec.center_y,
+            spec.radius,
+            z_value=0.0,
+            winding=spec.winding,
+        )
+    )
+    generated_toolpath_profile = _build_circle_toolpath_profile(state, spec)
     _append_curve_profile_milling(
         root,
         state,
@@ -6578,6 +7305,15 @@ def _apply_polyline_millings(
         _append_polyline_milling(root, state, polyline_milling)
 
 
+def _apply_circle_millings(
+    root: ET.Element,
+    state: PgmxState,
+    circle_millings: Sequence[_HydratedCircleMillingSpec],
+) -> None:
+    for circle_milling in circle_millings:
+        _append_circle_milling(root, state, circle_milling)
+
+
 def _apply_squaring_millings(
     root: ET.Element,
     state: PgmxState,
@@ -6608,6 +7344,22 @@ def _apply_drillings(
     )
     for _, drilling in ordered_drillings:
         _append_drilling(root, state, drilling)
+
+
+def _ensure_xn_step(root: ET.Element, xn: XnSpec) -> None:
+    elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
+    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
+    if elements is None or workpiece is None:
+        raise ValueError("La plantilla no contiene MainWorkplan/Elements o WorkPiece para sintetizar Xn.")
+
+    for executable in list(elements):
+        if _xsi_type(executable) == "Xn":
+            elements.remove(executable)
+
+    workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
+    workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
+    [step_id] = _reserve_ids(root, 1)
+    elements.append(_build_xn_step(step_id, workpiece_id, workpiece_object_type, _normalize_xn_spec(xn)))
 
 
 # ============================================================================
@@ -6655,6 +7407,11 @@ def build_line_milling_spec(
         return None
     if any(value is None for value in values):
         raise ValueError("Para sintetizar el fresado lineal hay que indicar x1, y1, x2 e y2.")
+    normalized_strategy = _ensure_milling_strategy_allowed(
+        _normalize_milling_strategy_spec(line_milling_strategy),
+        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
+        context="LineMillingSpec",
+    )
     return LineMillingSpec(
         start_x=float(line_x1),
         start_y=float(line_y1),
@@ -6688,7 +7445,7 @@ def build_line_milling_spec(
             arc_side=line_retract_arc_side,
             overlap=line_retract_overlap,
         ),
-        milling_strategy=_normalize_milling_strategy_spec(line_milling_strategy),
+        milling_strategy=normalized_strategy,
     )
 
 
@@ -6724,6 +7481,11 @@ def build_polyline_milling_spec(
     contorno cerrado.
     """
 
+    normalized_strategy = _ensure_milling_strategy_allowed(
+        _normalize_milling_strategy_spec(milling_strategy),
+        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
+        context="PolylineMillingSpec",
+    )
     return PolylineMillingSpec(
         points=_normalize_polyline_points(points),
         feature_name=(feature_name or "Fresado").strip() or "Fresado",
@@ -6754,7 +7516,78 @@ def build_polyline_milling_spec(
             arc_side=retract_arc_side,
             overlap=retract_overlap,
         ),
-        milling_strategy=_normalize_milling_strategy_spec(milling_strategy),
+        milling_strategy=normalized_strategy,
+    )
+
+
+def build_circle_milling_spec(
+    *,
+    center_x: float,
+    center_y: float,
+    radius: float,
+    winding: Optional[str] = None,
+    feature_name: Optional[str] = None,
+    tool_id: Optional[str] = None,
+    tool_name: Optional[str] = None,
+    tool_width: Optional[float] = None,
+    security_plane: Optional[float] = None,
+    side_of_feature: Optional[str] = None,
+    is_through: Optional[bool] = None,
+    target_depth: Optional[float] = None,
+    extra_depth: Optional[float] = None,
+    approach_enabled: Optional[bool] = None,
+    approach_type: Optional[str] = None,
+    approach_mode: Optional[str] = None,
+    approach_radius_multiplier: Optional[float] = None,
+    approach_speed: Optional[float] = None,
+    approach_arc_side: Optional[str] = None,
+    retract_enabled: Optional[bool] = None,
+    retract_type: Optional[str] = None,
+    retract_mode: Optional[str] = None,
+    retract_radius_multiplier: Optional[float] = None,
+    retract_speed: Optional[float] = None,
+    retract_arc_side: Optional[str] = None,
+    retract_overlap: Optional[float] = None,
+    milling_strategy: Optional[MillingStrategySpec] = None,
+) -> CircleMillingSpec:
+    """Construye un `CircleMillingSpec` reusable para un fresado circular."""
+
+    return _normalize_circle_milling_spec(
+        CircleMillingSpec(
+            center_x=float(center_x),
+            center_y=float(center_y),
+            radius=float(radius),
+            winding=_normalize_geometry_winding(winding),
+            feature_name=(feature_name or "Fresado").strip() or "Fresado",
+            side_of_feature=_normalize_side_of_feature(side_of_feature),
+            tool_id=(tool_id or "1902").strip() or "1902",
+            tool_name=(tool_name or "E003").strip() or "E003",
+            tool_width=9.52 if tool_width is None else float(tool_width),
+            security_plane=20.0 if security_plane is None else float(security_plane),
+            depth_spec=build_milling_depth_spec(
+                is_through=is_through,
+                target_depth=target_depth,
+                extra_depth=extra_depth,
+            ),
+            approach=build_approach_spec(
+                enabled=approach_enabled,
+                approach_type=approach_type,
+                mode=approach_mode,
+                radius_multiplier=approach_radius_multiplier,
+                speed=approach_speed,
+                arc_side=approach_arc_side,
+            ),
+            retract=build_retract_spec(
+                enabled=retract_enabled,
+                retract_type=retract_type,
+                mode=retract_mode,
+                radius_multiplier=retract_radius_multiplier,
+                speed=retract_speed,
+                arc_side=retract_arc_side,
+                overlap=retract_overlap,
+            ),
+            milling_strategy=_normalize_milling_strategy_spec(milling_strategy),
+        )
     )
 
 
@@ -6863,6 +7696,11 @@ def build_squaring_milling_spec(
         )
     )
 
+    normalized_strategy = _ensure_milling_strategy_allowed(
+        _normalize_milling_strategy_spec(milling_strategy),
+        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
+        context="SquaringMillingSpec",
+    )
     return SquaringMillingSpec(
         start_edge=_normalize_squaring_start_edge(start_edge),
         winding=_normalize_geometry_winding(winding),
@@ -6874,7 +7712,7 @@ def build_squaring_milling_spec(
         depth_spec=depth_spec,
         approach=approach_spec,
         retract=retract_spec,
-        milling_strategy=_normalize_milling_strategy_spec(milling_strategy),
+        milling_strategy=normalized_strategy,
     )
 
 
@@ -6943,15 +7781,17 @@ def build_synthesis_request(
     execution_fields: Optional[str] = None,
     line_millings: Optional[Sequence[LineMillingSpec]] = None,
     polyline_millings: Optional[Sequence[PolylineMillingSpec]] = None,
+    circle_millings: Optional[Sequence[CircleMillingSpec]] = None,
     squaring_millings: Optional[Sequence[SquaringMillingSpec]] = None,
     drillings: Optional[Sequence[DrillingSpec]] = None,
+    xn: Optional[XnSpec] = None,
 ) -> PgmxSynthesisRequest:
     """Arma una solicitud reusable de sintesis para el flujo principal.
 
     Orden recomendado de uso:
     1. leer o definir la pieza
-    2. construir `LineMillingSpec`, `PolylineMillingSpec`, `SquaringMillingSpec`
-       y/o `DrillingSpec`
+    2. construir `LineMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec`,
+       `SquaringMillingSpec`, `DrillingSpec` y opcionalmente `XnSpec`
     3. construir el request
     4. ejecutar `synthesize_request(...)`
 
@@ -6991,8 +7831,10 @@ def build_synthesis_request(
         source_pgmx_path=source_pgmx_path,
         line_millings=tuple(line_millings or ()),
         polyline_millings=tuple(polyline_millings or ()),
+        circle_millings=tuple(circle_millings or ()),
         squaring_millings=tuple(squaring_millings or ()),
         drillings=tuple(drillings or ()),
+        xn=_normalize_xn_spec(xn),
     )
 
 
@@ -7011,6 +7853,10 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         _hydrate_polyline_milling_spec(polyline_milling, request.source_pgmx_path)
         for polyline_milling in request.polyline_millings
     ]
+    hydrated_circle_millings = [
+        _hydrate_circle_milling_spec(circle_milling, request.source_pgmx_path)
+        for circle_milling in request.circle_millings
+    ]
     hydrated_squaring_millings = [
         _hydrate_squaring_milling_spec(squaring_milling, request.source_pgmx_path)
         for squaring_milling in request.squaring_millings
@@ -7019,10 +7865,12 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         _hydrate_drilling_spec(drilling, request.source_pgmx_path)
         for drilling in request.drillings
     ]
+    normalized_xn = _normalize_xn_spec(request.xn)
     _validate_tool_sinking_lengths(
         request.piece,
         hydrated_line_millings,
         hydrated_polyline_millings,
+        hydrated_circle_millings,
         hydrated_squaring_millings,
         hydrated_drillings,
     )
@@ -7030,8 +7878,10 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
     _apply_piece_state(baseline_root, request.piece)
     _apply_line_millings(baseline_root, request.piece, hydrated_line_millings)
     _apply_polyline_millings(baseline_root, request.piece, hydrated_polyline_millings)
+    _apply_circle_millings(baseline_root, request.piece, hydrated_circle_millings)
     _apply_squaring_millings(baseline_root, request.piece, hydrated_squaring_millings)
     _apply_drillings(baseline_root, request.piece, hydrated_drillings)
+    _ensure_xn_step(baseline_root, normalized_xn)
 
     xml_bytes = _finalize_synthesized_pgmx_xml_bytes(
         ET.tostring(
@@ -7052,8 +7902,10 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         sha256=hashlib.sha256(request.output_path.read_bytes()).hexdigest(),
         line_millings=request.line_millings,
         polyline_millings=request.polyline_millings,
+        circle_millings=request.circle_millings,
         squaring_millings=request.squaring_millings,
         drillings=request.drillings,
+        xn=normalized_xn,
     )
 
 
@@ -7070,8 +7922,10 @@ def synthesize_pgmx(
     origin_z: Optional[float] = None,
     line_milling: Optional[LineMillingSpec] = None,
     polyline_milling: Optional[PolylineMillingSpec] = None,
+    circle_milling: Optional[CircleMillingSpec] = None,
     squaring_milling: Optional[SquaringMillingSpec] = None,
     drilling: Optional[DrillingSpec] = None,
+    xn: Optional[XnSpec] = None,
     execution_fields: Optional[str] = None,
 ) -> PgmxState:
     """Wrapper de compatibilidad para el flujo historico basado en argumentos sueltos.
@@ -7094,8 +7948,10 @@ def synthesize_pgmx(
         execution_fields=execution_fields,
         line_millings=[line_milling] if line_milling is not None else (),
         polyline_millings=[polyline_milling] if polyline_milling is not None else (),
+        circle_millings=[circle_milling] if circle_milling is not None else (),
         squaring_millings=[squaring_milling] if squaring_milling is not None else (),
         drillings=[drilling] if drilling is not None else (),
+        xn=xn,
     )
     return synthesize_request(request).piece
 
@@ -7226,6 +8082,93 @@ def main(argv: Optional[list[str]] = None) -> int:
         type=float,
         help="Sobreposicion del retract lineal.",
     )
+    parser.add_argument("--circle-center-x", type=float, help="Coordenada X del centro del circulo sobre Top.")
+    parser.add_argument("--circle-center-y", type=float, help="Coordenada Y del centro del circulo sobre Top.")
+    parser.add_argument("--circle-radius", type=float, help="Radio del circulo a fresar sobre Top.")
+    parser.add_argument("--circle-winding", help="Sentido del circulo: CounterClockwise/Antihorario o Clockwise/Horario.")
+    parser.add_argument("--circle-feature-name", help="Nombre del feature/working step del fresado circular.")
+    parser.add_argument("--circle-side-of-feature", help="Correccion de herramienta del fresado circular: Center, Right o Left.")
+    parser.add_argument("--circle-tool-id", help="ID de herramienta para el fresado circular.")
+    parser.add_argument("--circle-tool-name", help="Nombre de herramienta para el fresado circular.")
+    parser.add_argument("--circle-tool-width", type=float, help="Ancho del perfil barrido para el fresado circular.")
+    parser.add_argument("--circle-security-plane", type=float, help="Plano de seguridad usado en approach/retract del circulo.")
+    parser.add_argument(
+        "--circle-through",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Configura Pasante activado/desactivado del fresado circular. Por defecto queda activado.",
+    )
+    parser.add_argument(
+        "--circle-target-depth",
+        type=float,
+        help="Profundidad fija del fresado circular cuando Pasante esta desactivado.",
+    )
+    parser.add_argument(
+        "--circle-extra-depth",
+        type=float,
+        help="Extra del fresado circular cuando Pasante esta activado.",
+    )
+    parser.add_argument(
+        "--circle-approach-enabled",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Habilita/deshabilita el approach del fresado circular. "
+            "Si se habilita sin mas parametros, usa los defaults observados en Maestro."
+        ),
+    )
+    parser.add_argument("--circle-approach-type", help="Tipo de approach del circulo. Actualmente validado: Line o Arc.")
+    parser.add_argument(
+        "--circle-approach-mode",
+        help="Modo de approach del circulo. Valores utiles: Down o Quote (UI Maestro: En Cota).",
+    )
+    parser.add_argument(
+        "--circle-approach-radius-multiplier",
+        type=float,
+        help="Multiplicador de radio del approach circular.",
+    )
+    parser.add_argument(
+        "--circle-approach-speed",
+        type=float,
+        help="Velocidad del approach del circulo. Use -1 para el valor vacio/null que guarda Maestro.",
+    )
+    parser.add_argument(
+        "--circle-approach-arc-side",
+        help="Lado del arco del approach circular. Actualmente validado: Automatic.",
+    )
+    parser.add_argument(
+        "--circle-retract-enabled",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Habilita/deshabilita el retract del fresado circular. "
+            "Si se habilita sin mas parametros, usa los defaults observados en Maestro."
+        ),
+    )
+    parser.add_argument("--circle-retract-type", help="Tipo de retract del circulo. Actualmente validado: Line o Arc.")
+    parser.add_argument(
+        "--circle-retract-mode",
+        help="Modo de retract del circulo. Valores utiles: Up o Quote (UI Maestro: En Cota).",
+    )
+    parser.add_argument(
+        "--circle-retract-radius-multiplier",
+        type=float,
+        help="Multiplicador de radio del retract circular.",
+    )
+    parser.add_argument(
+        "--circle-retract-speed",
+        type=float,
+        help="Velocidad del retract del circulo. Use -1 para el valor vacio/null que guarda Maestro.",
+    )
+    parser.add_argument(
+        "--circle-retract-arc-side",
+        help="Lado del arco del retract circular. Actualmente validado: Automatic.",
+    )
+    parser.add_argument(
+        "--circle-retract-overlap",
+        type=float,
+        help="Sobreposicion del retract circular.",
+    )
     args = parser.parse_args(argv)
 
     output_path = Path(args.output)
@@ -7257,6 +8200,42 @@ def main(argv: Optional[list[str]] = None) -> int:
         line_retract_arc_side=args.line_retract_arc_side,
         line_retract_overlap=args.line_retract_overlap,
     )
+    circle_args = (args.circle_center_x, args.circle_center_y, args.circle_radius)
+    if all(value is None for value in circle_args):
+        circle_milling = None
+    elif any(value is None for value in circle_args):
+        raise ValueError(
+            "Para sintetizar el fresado circular hay que indicar center_x, center_y y radius."
+        )
+    else:
+        circle_milling = build_circle_milling_spec(
+            center_x=float(args.circle_center_x),
+            center_y=float(args.circle_center_y),
+            radius=float(args.circle_radius),
+            winding=args.circle_winding,
+            feature_name=args.circle_feature_name,
+            tool_id=args.circle_tool_id,
+            tool_name=args.circle_tool_name,
+            tool_width=args.circle_tool_width,
+            security_plane=args.circle_security_plane,
+            side_of_feature=args.circle_side_of_feature,
+            is_through=args.circle_through,
+            target_depth=args.circle_target_depth,
+            extra_depth=args.circle_extra_depth,
+            approach_enabled=args.circle_approach_enabled,
+            approach_type=args.circle_approach_type,
+            approach_mode=args.circle_approach_mode,
+            approach_radius_multiplier=args.circle_approach_radius_multiplier,
+            approach_speed=args.circle_approach_speed,
+            approach_arc_side=args.circle_approach_arc_side,
+            retract_enabled=args.circle_retract_enabled,
+            retract_type=args.circle_retract_type,
+            retract_mode=args.circle_retract_mode,
+            retract_radius_multiplier=args.circle_retract_radius_multiplier,
+            retract_speed=args.circle_retract_speed,
+            retract_arc_side=args.circle_retract_arc_side,
+            retract_overlap=args.circle_retract_overlap,
+        )
     request = build_synthesis_request(
         baseline_path=Path(args.baseline),
         output_path=output_path,
@@ -7270,6 +8249,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         origin_z=args.origin_z,
         execution_fields=args.execution_fields,
         line_millings=[line_milling] if line_milling is not None else (),
+        circle_millings=[circle_milling] if circle_milling is not None else (),
     )
     result = synthesize_request(request)
 
@@ -7311,6 +8291,35 @@ def main(argv: Optional[list[str]] = None) -> int:
                 "speed": _compact_number(line_milling.retract.speed),
                 "arc_side": line_milling.retract.arc_side,
                 "overlap": _compact_number(line_milling.retract.overlap),
+            },
+        }
+    if circle_milling is not None:
+        summary["circle_milling"] = {
+            "feature_name": circle_milling.feature_name,
+            "center": [_compact_number(circle_milling.center_x), _compact_number(circle_milling.center_y)],
+            "radius": _compact_number(circle_milling.radius),
+            "winding": circle_milling.winding,
+            "side_of_feature": circle_milling.side_of_feature,
+            "tool_id": circle_milling.tool_id,
+            "tool_name": circle_milling.tool_name,
+            "tool_width": _compact_number(circle_milling.tool_width),
+            "security_plane": _compact_number(circle_milling.security_plane),
+            "approach": {
+                "is_enabled": circle_milling.approach.is_enabled,
+                "approach_type": circle_milling.approach.approach_type,
+                "mode": circle_milling.approach.mode,
+                "radius_multiplier": _compact_number(circle_milling.approach.radius_multiplier),
+                "speed": _compact_number(circle_milling.approach.speed),
+                "arc_side": circle_milling.approach.arc_side,
+            },
+            "retract": {
+                "is_enabled": circle_milling.retract.is_enabled,
+                "retract_type": circle_milling.retract.retract_type,
+                "mode": circle_milling.retract.mode,
+                "radius_multiplier": _compact_number(circle_milling.retract.radius_multiplier),
+                "speed": _compact_number(circle_milling.retract.speed),
+                "arc_side": circle_milling.retract.arc_side,
+                "overlap": _compact_number(circle_milling.retract.overlap),
             },
         }
     print(json.dumps(summary, ensure_ascii=True, indent=2))

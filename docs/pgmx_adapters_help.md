@@ -26,6 +26,7 @@ Ademas, `PgmxAdaptationResult` expone:
 - `orphan_feature_entries`
 - `line_millings`
 - `polyline_millings`
+- `circle_millings`
 - `squaring_millings`
 - `drillings`
 - `build_synthesis_request(output_path, baseline_path=None, source_pgmx_path=None, strict=False)`
@@ -59,14 +60,17 @@ describen un mecanizado publico reutilizable. No bloquean
   cuando la geometria es una recta simple
 - `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `PolylineMillingSpec`
   cuando la geometria es una curva compuesta sin arcos
+- `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `CircleMillingSpec`
+  cuando la geometria es un `GeomCircle`
+  - hoy preserva `SideOfFeature = Center|Right|Left`
+  - y tambien la estrategia `Helicoidal` cuando aparece en el `.pgmx`
 - `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `SquaringMillingSpec`
   cuando el contorno coincide con el perimetro completo de la pieza sobre `Top`
 
 ## Limitaciones actuales
 
-- el fresado publico soportado sigue limitado a `Top` para linea, polilinea y
-  escuadrado
-- no existe todavia `CircleMillingSpec`
+- el fresado publico soportado sigue limitado a `Top` para linea, polilinea,
+  circulo y escuadrado
 - curvas con arcos dentro de un perfil compuesto quedan marcadas como
   `unsupported`
 - allowances distintos de cero no tienen representacion publica
@@ -118,6 +122,7 @@ arma el request en las cuatro familias publicas del sintetizador:
 
 - `line_millings`
 - `polyline_millings`
+- `circle_millings`
 - `squaring_millings`
 - `drillings`
 
