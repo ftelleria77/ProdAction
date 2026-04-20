@@ -11,8 +11,8 @@ import os
 import shutil
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtGui import QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QLabel,
@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QComboBox,
+    QCheckBox,
+    QRadioButton,
 )
 from PySide6.QtSvgWidgets import QSvgWidget
 
@@ -285,6 +287,94 @@ def _project_data_path(project: Project) -> Path:
 
 def _project_data_path_from_registry_entry(entry: dict) -> Path:
     return Path(str(entry.get("source_folder") or "").strip()) / str(entry.get("project_data_file") or "").strip()
+
+
+def _registry_entry_is_accessible(entry: dict) -> bool:
+    source_folder = str(entry.get("source_folder") or "").strip()
+    if not source_folder:
+        return False
+    try:
+        return Path(source_folder).exists()
+    except OSError:
+        return False
+
+
+def _window_available_geometry(widget: QWidget):
+    screen = None
+    try:
+        screen = widget.screen()
+    except Exception:
+        screen = None
+
+    if screen is None:
+        try:
+            parent_widget = widget.parentWidget()
+        except Exception:
+            parent_widget = None
+        if parent_widget is not None:
+            try:
+                screen = parent_widget.screen()
+            except Exception:
+                screen = None
+
+    if screen is None:
+        try:
+            handle = widget.windowHandle()
+        except Exception:
+            handle = None
+        if handle is not None:
+            screen = handle.screen()
+
+    if screen is None:
+        app = QApplication.instance()
+        if app is not None:
+            screen = app.primaryScreen()
+
+    return None if screen is None else screen.availableGeometry()
+
+
+def _scaled_int(value: int | float, scale: float, minimum: int | None = None) -> int:
+    scaled_value = int(round(float(value) * float(scale)))
+    if minimum is not None:
+        return max(int(minimum), scaled_value)
+    return scaled_value
+
+
+def _apply_responsive_window_size(
+    widget: QWidget,
+    desired_width: int,
+    desired_height: int,
+    *,
+    width_ratio: float = 0.94,
+    height_ratio: float = 0.90,
+    min_font_size: float = 8.0,
+) -> tuple[float, int, int]:
+    available = _window_available_geometry(widget)
+    target_width = int(desired_width)
+    target_height = int(desired_height)
+    if available is not None:
+        target_width = min(target_width, max(360, int(available.width() * width_ratio)))
+        target_height = min(target_height, max(280, int(available.height() * height_ratio)))
+
+    scale = min(
+        target_width / max(1, int(desired_width)),
+        target_height / max(1, int(desired_height)),
+        1.0,
+    )
+
+    current_font = widget.font()
+    current_size = current_font.pointSizeF()
+    if current_size <= 0:
+        current_size = float(current_font.pointSize() if current_font.pointSize() > 0 else 9.0)
+
+    font_scale = max(scale, 0.82)
+    scaled_font_size = max(float(min_font_size), round(current_size * font_scale, 1))
+    if scaled_font_size < current_size:
+        current_font.setPointSizeF(scaled_font_size)
+        widget.setFont(current_font)
+
+    widget.resize(target_width, target_height)
+    return scale, target_width, target_height
 
 
 def _register_project(project: Project):
@@ -759,6 +849,17 @@ class ProjectDetailWindow(QMainWindow):
                 selected_locales.append(locale_name)
         return selected_locales
 
+    def _listed_locale_names(self) -> list[str]:
+        locale_names: list[str] = []
+        for index in range(self.locales_list.count()):
+            item = self.locales_list.item(index)
+            if item is None:
+                continue
+            locale_name = str(item.data(Qt.UserRole) or "").strip()
+            if locale_name:
+                locale_names.append(locale_name)
+        return locale_names
+
     def _project_for_selected_locales(self, action_title: str) -> Project | None:
         selected_locale_names = self._selected_locale_names()
         if not selected_locale_names:
@@ -911,12 +1012,13 @@ class ProjectDetailWindow(QMainWindow):
             return "✓"
         return "✗"
 
-    def _write_module_config_files(self):
+    def _write_module_config_files(self, modules: list[ModuleData] | None = None):
         """Crear archivo de configuración por módulo con piezas y validación PGMX."""
         from core.pgmx_processing import persist_piece_program_dimensions
 
         program_dimensions_cache: dict[tuple[str, str], tuple[float | None, float | None, float | None]] = {}
-        for module in self.project.modules:
+        target_modules = modules if modules is not None else self.project.modules
+        for module in target_modules:
             module_path = Path(module.path)
             pgmx_names, pgmx_relpaths = self._build_pgmx_index(module_path)
             previous_config = self._read_module_config(module)
@@ -1081,8 +1183,9 @@ class ProjectDetailWindow(QMainWindow):
             "z": z_value,
         }
 
-    def _write_locale_config_files(self):
-        for locale in self.project.locales:
+    def _write_locale_config_files(self, locales: list[LocaleData] | None = None):
+        target_locales = locales if locales is not None else self.project.locales
+        for locale in target_locales:
             locale_path = Path(self.project.root_directory) / locale.path
             locale_path.mkdir(parents=True, exist_ok=True)
 
@@ -1206,7 +1309,7 @@ class ProjectDetailWindow(QMainWindow):
     def process_project(self):
         """Procesar el proyecto: escanear subcarpetas y extraer piezas de archivos PGMX."""
         from pathlib import Path
-        from core.parser import scan_project_structure
+        from core.parser import inspect_project_layout, scan_project, scan_project_structure
         from core.pgmx_processing import generate_project_piece_drawings
 
         try:
@@ -1218,37 +1321,115 @@ class ProjectDetailWindow(QMainWindow):
             if not self._ensure_project_structure_ready(root_path):
                 return
 
-            self.project.locales, self.project.modules = scan_project_structure(root_path)
-            
-            # Normalizar thickness de todas las piezas
-            for module in self.project.modules:
+            listed_locale_names = self._listed_locale_names()
+            selected_locale_names = self._selected_locale_names()
+            processed_locales: list[LocaleData]
+            processed_modules: list[ModuleData]
+
+            if listed_locale_names:
+                if not selected_locale_names:
+                    QMessageBox.warning(
+                        self,
+                        "Procesar",
+                        "Seleccione al menos un local en la lista para procesar.",
+                    )
+                    return
+
+                layout = inspect_project_layout(root_path)
+                selected_locale_keys = {locale_name.strip().lower() for locale_name in selected_locale_names}
+                locale_dirs = [
+                    locale_dir
+                    for locale_dir in layout.locale_dirs
+                    if locale_dir.name.strip().lower() in selected_locale_keys
+                ]
+                if not locale_dirs:
+                    QMessageBox.warning(
+                        self,
+                        "Procesar",
+                        "No se encontraron carpetas disponibles para los locales seleccionados.",
+                    )
+                    return
+
+                rescanned_locale_keys = {locale_dir.name.strip().lower() for locale_dir in locale_dirs}
+                processed_locales = []
+                processed_modules = []
+                for locale_dir in locale_dirs:
+                    locale_modules = scan_project(locale_dir)
+                    for module in locale_modules:
+                        module.locale_name = locale_dir.name
+                        module.relative_path = str(Path(module.path).relative_to(root_path)).replace("\\", "/")
+                    processed_locales.append(
+                        LocaleData(
+                            name=locale_dir.name,
+                            path=str(locale_dir.relative_to(root_path)).replace("\\", "/"),
+                            modules_count=len(locale_modules),
+                        )
+                    )
+                    processed_modules.extend(locale_modules)
+
+                preserved_locales = [
+                    locale
+                    for locale in _normalize_project_locales(getattr(self.project, "locales", []), getattr(self.project, "local", ""))
+                    if locale.name.strip().lower() not in rescanned_locale_keys
+                ]
+                preserved_modules = [
+                    module
+                    for module in self.project.modules
+                    if str(module.locale_name or "").strip().lower() not in rescanned_locale_keys
+                ]
+
+                self.project.locales = sorted(
+                    preserved_locales + processed_locales,
+                    key=lambda locale: locale.name.lower(),
+                )
+                self.project.modules = sorted(
+                    preserved_modules + processed_modules,
+                    key=lambda module: (str(module.locale_name or "").lower(), module.name.lower()),
+                )
+            else:
+                self.project.locales, self.project.modules = scan_project_structure(root_path)
+                processed_locales = list(self.project.locales)
+                processed_modules = list(self.project.modules)
+
+            # Normalizar thickness de todas las piezas procesadas
+            for module in processed_modules:
                 self._normalize_module_piece_thickness(module)
             
-            self._write_module_config_files()
-            self._write_locale_config_files()
+            self._write_module_config_files(processed_modules)
+            self._write_locale_config_files(processed_locales)
             
             # Recargar piezas desde los module_config.json recién generados
-            for module in self.project.modules:
+            for module in processed_modules:
                 self._reload_module_pieces_from_config(module)
             
-            self._write_locale_config_files()
+            self._write_locale_config_files(processed_locales)
             _save_project(self.project)
 
             from core.summary import export_summary
             summary_csv_path = root_path / "resumen_piezas.csv"
             export_summary(self.project, summary_csv_path)
 
+            processed_project = Project(
+                name=self.project.name,
+                root_directory=self.project.root_directory,
+                project_data_file=self.project.project_data_file,
+                client=self.project.client,
+                created_at=self.project.created_at,
+                locales=processed_locales,
+                modules=processed_modules,
+                output_directory=self.project.output_directory,
+            )
             generated_drawings, skipped_drawings, pieces_with_machining = generate_project_piece_drawings(
-                self.project,
+                processed_project,
             )
 
-            total_pieces = sum(self._valid_piece_count_in_module(module) for module in self.project.modules)
+            total_pieces = sum(self._valid_piece_count_in_module(module) for module in processed_modules)
             module_breakdown = "\n".join([
                 f"{module.name}: {self._valid_piece_count_in_module(module)}"
-                for module in self.project.modules
+                for module in processed_modules
             ])
             warning_parts = []
-            for module in self.project.modules:
+            for module in processed_modules:
                 if self._valid_piece_count_in_module(module) == 0:
                     warning_parts.append(module.name)
 
@@ -1256,7 +1437,8 @@ class ProjectDetailWindow(QMainWindow):
             self.update_modules_button()
 
             detail_text = (
-                f"Módulos encontrados: {len(self.project.modules)}\n"
+                f"Locales procesados: {len(processed_locales)}\n"
+                f"Módulos procesados: {len(processed_modules)}\n"
                 f"Piezas totales: {total_pieces}\n"
                 f"Detalle:\n{module_breakdown}\n"
                 f"Resumen guardado en: {summary_csv_path}\n"
@@ -1461,8 +1643,14 @@ class ProjectDetailWindow(QMainWindow):
         # Crear ventana de inspección
         inspect_dialog = QDialog(parent_dialog)
         inspect_dialog.setWindowTitle(f"Piezas - {module_name}")
-        inspect_dialog.resize(1600, 640)
-        inspect_dialog.setMinimumWidth(1600)
+        inspect_scale, inspect_width, _ = _apply_responsive_window_size(
+            inspect_dialog,
+            1600,
+            640,
+            width_ratio=0.96,
+            height_ratio=0.90,
+        )
+        compact_scale = max(inspect_scale, 0.82)
 
         config_path = self._module_config_path(selected_module)
         if not config_path.exists():
@@ -1497,9 +1685,10 @@ class ProjectDetailWindow(QMainWindow):
         dim_x_field = QLineEdit(str(settings.get("x", "") or ""))
         dim_y_field = QLineEdit(str(settings.get("y", "") or ""))
         dim_z_field = QLineEdit(str(settings.get("z", "") or ""))
-        dim_x_field.setFixedWidth(100)
-        dim_y_field.setFixedWidth(100)
-        dim_z_field.setFixedWidth(100)
+        field_width = _scaled_int(100, compact_scale, 72)
+        dim_x_field.setFixedWidth(field_width)
+        dim_y_field.setFixedWidth(field_width)
+        dim_z_field.setFixedWidth(field_width)
 
         xyz_layout = QHBoxLayout()
         xyz_layout.setAlignment(Qt.AlignLeft)
@@ -2174,7 +2363,7 @@ class ProjectDetailWindow(QMainWindow):
         layout.addWidget(pieces_title)
 
         pieces_table = QTableWidget()
-        pieces_table.setColumnCount(12)
+        pieces_table.setColumnCount(11)
         pieces_table.setHorizontalHeaderLabels([
             "ID",
             "Nombre",
@@ -2184,7 +2373,6 @@ class ProjectDetailWindow(QMainWindow):
             "Espesor",
             "Color",
             "Programa",
-            "PGMX",
             "Observaciones",
             "En juego",
             "Excel",
@@ -2253,6 +2441,72 @@ class ProjectDetailWindow(QMainWindow):
                 piece_row["program_height"] = piece_obj.program_height
                 piece_row["program_thickness"] = piece_obj.program_thickness
 
+        def parse_optional_piece_float(raw_value: str):
+            raw_text = (raw_value or "").strip().replace(",", ".")
+            if not raw_text:
+                return None
+            try:
+                return float(raw_text)
+            except ValueError:
+                return None
+
+        def selected_piece_all_index(warning_title: str | None = None):
+            current_row = pieces_table.currentRow()
+            if current_row < 0:
+                if warning_title:
+                    QMessageBox.warning(inspect_dialog, warning_title, "Seleccione una pieza de la lista.")
+                return None
+            if current_row >= len(visible_row_indexes):
+                return None
+            return visible_row_indexes[current_row]
+
+        def select_visible_piece_by_id(piece_id: str, fallback_row: int | None = None):
+            normalized_id = str(piece_id or "").strip()
+            if normalized_id:
+                for row_idx, all_idx in enumerate(visible_row_indexes):
+                    if str(all_rows[all_idx].get("id") or "").strip() == normalized_id:
+                        pieces_table.selectRow(row_idx)
+                        return
+
+            if fallback_row is not None and pieces_table.rowCount() > 0:
+                pieces_table.selectRow(max(0, min(fallback_row, pieces_table.rowCount() - 1)))
+
+        def infer_companion_f6_source(source_value: str):
+            normalized_source = str(source_value or "").strip()
+            if not normalized_source:
+                return None
+
+            source_path = Path(normalized_source)
+            if not source_path.is_absolute():
+                source_path = module_path / source_path
+
+            if source_path.stem.lower().endswith("f6"):
+                return None
+
+            f6_candidate = source_path.with_name(f"{source_path.stem}F6{source_path.suffix}")
+            if f6_candidate.is_file():
+                return normalize_source_path(str(f6_candidate))
+            return None
+
+        def create_centered_checkbox(checked: bool, on_changed):
+            container = QWidget()
+            checkbox_layout = QHBoxLayout(container)
+            checkbox_layout.setContentsMargins(0, 0, 0, 0)
+            checkbox_layout.setSpacing(0)
+            checkbox = QCheckBox(container)
+            checkbox.setChecked(bool(checked))
+            checkbox_layout.addStretch(1)
+            checkbox_layout.addWidget(checkbox, 0, Qt.AlignCenter)
+            checkbox_layout.addStretch(1)
+            checkbox.stateChanged.connect(on_changed)
+            return container
+
+        def update_piece_flag(all_idx: int, field_name: str, state: int):
+            if refreshing_pieces_table:
+                return
+            all_rows[all_idx][field_name] = state == Qt.Checked
+            persist_module_config()
+
         def refresh_pieces_table():
             nonlocal refreshing_pieces_table
             from core.model import PIECE_TYPE_ORDER
@@ -2301,77 +2555,68 @@ class ProjectDetailWindow(QMainWindow):
                 pieces_table.setItem(row_idx, 4, QTableWidgetItem(str(piece_row.get("width", ""))))
                 pieces_table.setItem(row_idx, 5, QTableWidgetItem(str(piece_row.get("thickness", ""))))
                 pieces_table.setItem(row_idx, 6, QTableWidgetItem(str(piece_row.get("color", ""))))
-                pieces_table.setItem(row_idx, 7, QTableWidgetItem(source_value or "(ninguno)"))
-
-                status_item = QTableWidgetItem(pgmx_status)
-                status_item.setTextAlignment(Qt.AlignCenter)
+                program_filename = Path(source_value).name if source_value else "(ninguno)"
+                program_item = QTableWidgetItem(f"{pgmx_status} {program_filename}")
                 if pgmx_status == "✓":
-                    status_item.setForeground(QColor("#4CAF50"))
+                    program_item.setForeground(QColor("#4CAF50"))
                 else:
-                    status_item.setForeground(QColor("#B71C1C"))
-                pieces_table.setItem(row_idx, 8, status_item)
+                    program_item.setForeground(QColor("#B71C1C"))
+                program_item.setToolTip(source_value or "(ninguno)")
+                pieces_table.setItem(row_idx, 7, program_item)
 
                 dimension_item = QTableWidgetItem(program_dimension_note)
                 dimension_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                 if program_dimension_note:
                     dimension_item.setForeground(QColor("#B71C1C"))
-                pieces_table.setItem(row_idx, 9, dimension_item)
+                pieces_table.setItem(row_idx, 8, dimension_item)
 
-                en_juego_item = QTableWidgetItem("")
-                en_juego_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsUserCheckable)
-                en_juego_item.setCheckState(Qt.Checked if en_juego else Qt.Unchecked)
-                en_juego_item.setTextAlignment(Qt.AlignCenter)
-                pieces_table.setItem(row_idx, 10, en_juego_item)
+                pieces_table.setCellWidget(
+                    row_idx,
+                    9,
+                    create_centered_checkbox(
+                        en_juego,
+                        lambda state, idx=all_idx: update_piece_flag(idx, "en_juego", state),
+                    ),
+                )
 
-                include_item = QTableWidgetItem("")
-                include_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsUserCheckable)
-                include_item.setCheckState(Qt.Checked if include_in_sheet else Qt.Unchecked)
-                include_item.setTextAlignment(Qt.AlignCenter)
-                pieces_table.setItem(row_idx, 11, include_item)
+                pieces_table.setCellWidget(
+                    row_idx,
+                    10,
+                    create_centered_checkbox(
+                        include_in_sheet,
+                        lambda state, idx=all_idx: update_piece_flag(idx, "include_in_sheet", state),
+                    ),
+                )
 
             refreshing_pieces_table = False
 
         refresh_pieces_table()
 
-        # Anchos fijos para lectura consistente
-        pieces_table.setColumnWidth(0, 110)
-        pieces_table.setColumnWidth(1, 180)
-        pieces_table.setColumnWidth(2, 80)
-        pieces_table.setColumnWidth(3, 90)
-        pieces_table.setColumnWidth(4, 90)
-        pieces_table.setColumnWidth(5, 90)
-        pieces_table.setColumnWidth(6, 110)
-        pieces_table.setColumnWidth(7, 250)
-        pieces_table.setColumnWidth(8, 70)
-        pieces_table.setColumnWidth(9, 320)
-        pieces_table.setColumnWidth(10, 90)
-        pieces_table.setColumnWidth(11, 70)
-        pieces_table.setMinimumWidth(1560)
+        header = pieces_table.horizontalHeader()
+        auto_columns = {0, 2, 3, 4, 5}
+        fixed_column_widths = {
+            1: _scaled_int(180, compact_scale, 120),
+            6: _scaled_int(110, compact_scale, 90),
+            7: _scaled_int(250, compact_scale, 170),
+            8: _scaled_int(320, compact_scale, 180),
+            9: _scaled_int(90, compact_scale, 68),
+            10: _scaled_int(70, compact_scale, 60),
+        }
+        for column_idx in range(pieces_table.columnCount()):
+            if column_idx in auto_columns:
+                header.setSectionResizeMode(column_idx, QHeaderView.ResizeToContents)
+            else:
+                header.setSectionResizeMode(column_idx, QHeaderView.Fixed)
+                pieces_table.setColumnWidth(column_idx, fixed_column_widths[column_idx])
+        actions_column_reserved_width = MAIN_ACTION_BUTTON_WIDTH + 36
+        pieces_table.setMinimumWidth(
+            max(320, min(sum(fixed_column_widths.values()) + 520, inspect_width - actions_column_reserved_width))
+        )
+        pieces_table.verticalHeader().setDefaultSectionSize(_scaled_int(30, compact_scale, 22))
 
         pieces_table.setAlternatingRowColors(True)
         pieces_table.setEditTriggers(QTableWidget.NoEditTriggers)
         pieces_table.setSelectionBehavior(QTableWidget.SelectRows)
-
-        layout.addWidget(pieces_table)
-
-        def on_piece_item_changed(item):
-            if refreshing_pieces_table:
-                return
-            if item is None or item.column() not in {10, 11}:
-                return
-
-            row_idx = item.row()
-            if row_idx < 0 or row_idx >= len(visible_row_indexes):
-                return
-
-            all_idx = visible_row_indexes[row_idx]
-            if item.column() == 10:
-                all_rows[all_idx]["en_juego"] = item.checkState() == Qt.Checked
-            else:
-                all_rows[all_idx]["include_in_sheet"] = item.checkState() == Qt.Checked
-            persist_module_config()
-
-        pieces_table.itemChanged.connect(on_piece_item_changed)
 
         def persist_module_config():
             nonlocal has_unsaved_changes
@@ -2480,10 +2725,18 @@ class ProjectDetailWindow(QMainWindow):
             drawing_layout.addWidget(close_drawing_btn)
 
             drawing_dialog.setLayout(drawing_layout)
-            drawing_dialog.resize(1000, 800)
+            drawing_scale, _, _ = _apply_responsive_window_size(
+                drawing_dialog,
+                1000,
+                800,
+                width_ratio=0.92,
+                height_ratio=0.92,
+            )
+            svg_min = _scaled_int(300, max(drawing_scale, 0.82), 220)
+            svg_widget.setMinimumSize(svg_min, svg_min)
             drawing_dialog.exec()
 
-        def ensure_piece_drawing(piece_row, force_regenerate=False):
+        def ensure_piece_drawing(piece_row, force_regenerate=False, show_warning=True):
             from core.pgmx_processing import build_piece_svg, parse_pgmx_for_piece
 
             drawing_path = drawing_path_for_piece_row(piece_row)
@@ -2492,11 +2745,12 @@ class ProjectDetailWindow(QMainWindow):
             if force_regenerate or not drawing_path.is_file():
                 drawing_data = parse_pgmx_for_piece(self.project, piece_obj, module_path)
                 if drawing_data is None:
-                    QMessageBox.warning(
-                        inspect_dialog,
-                        "Ver Dibujo",
-                        "No se pudo generar el dibujo para la pieza seleccionada. Verifique el PGMX asociado.",
-                    )
+                    if show_warning:
+                        QMessageBox.warning(
+                            inspect_dialog,
+                            "Ver Dibujo",
+                            "No se pudo generar el dibujo para la pieza seleccionada. Verifique el PGMX asociado.",
+                        )
                     return None
                 build_piece_svg(piece_obj, drawing_data, drawing_path)
 
@@ -2558,116 +2812,253 @@ class ProjectDetailWindow(QMainWindow):
             refresh_pieces_table()
             pieces_table.selectRow(current_row)
 
-        def add_manual_piece():
-            add_dialog = QDialog(inspect_dialog)
-            add_dialog.setWindowTitle("Agregar pieza manual")
-            add_dialog.resize(520, 430)
-            add_layout = QVBoxLayout()
+        def open_piece_editor(piece_row=None, row_index=None):
+            is_new_piece = piece_row is None
+            base_piece_row = dict(piece_row or {})
+            editor_dialog = QDialog(inspect_dialog)
+            editor_dialog.setWindowTitle("Agregar pieza manual" if is_new_piece else "Editar pieza")
+            editor_scale, _, _ = _apply_responsive_window_size(
+                editor_dialog,
+                1100,
+                620,
+                width_ratio=0.94,
+                height_ratio=0.92,
+            )
+            editor_inline_button_width = _scaled_int(110, max(editor_scale, 0.82), 90)
 
-            id_field = QLineEdit()
-            name_field = QLineEdit()
-            qty_field = QLineEdit("1")
-            height_field = QLineEdit()
-            width_field = QLineEdit()
-            thickness_field = QLineEdit()
-            color_field = QLineEdit()
-            grain_field = QLineEdit()
-            source_field = QLineEdit()
+            editor_layout = QVBoxLayout()
+            content_layout = QHBoxLayout()
+            content_layout.setSpacing(16)
 
-            add_layout.addWidget(QLabel("ID:"))
-            add_layout.addWidget(id_field)
-            add_layout.addWidget(QLabel("Nombre:"))
-            add_layout.addWidget(name_field)
-            add_layout.addWidget(QLabel("Cantidad:"))
-            add_layout.addWidget(qty_field)
-            add_layout.addWidget(QLabel("Alto:"))
-            add_layout.addWidget(height_field)
-            add_layout.addWidget(QLabel("Ancho:"))
-            add_layout.addWidget(width_field)
-            add_layout.addWidget(QLabel("Espesor:"))
-            add_layout.addWidget(thickness_field)
-            add_layout.addWidget(QLabel("Color:"))
-            add_layout.addWidget(color_field)
-            add_layout.addWidget(QLabel("Veta / Grain direction:"))
-            add_layout.addWidget(grain_field)
-            add_layout.addWidget(QLabel("Source (opcional):"))
-            add_layout.addWidget(source_field)
+            form_layout = QVBoxLayout()
+            form_layout.setSpacing(6)
 
-            def parse_float_or_none(raw: str):
-                raw = (raw or "").strip().replace(",", ".")
-                if not raw:
-                    return None
-                try:
-                    return float(raw)
-                except ValueError:
-                    return None
+            id_field = QLineEdit(str(base_piece_row.get("id") or ""))
+            name_field = QLineEdit(str(base_piece_row.get("name") or ""))
+            qty_field = QLineEdit(str(base_piece_row.get("quantity") or "1"))
+            height_field = QLineEdit(str(base_piece_row.get("height") or ""))
+            width_field = QLineEdit(str(base_piece_row.get("width") or ""))
+            thickness_field = QLineEdit(str(base_piece_row.get("thickness") or ""))
+            color_field = QLineEdit(str(base_piece_row.get("color") or ""))
+            grain_field = QLineEdit(str(base_piece_row.get("grain_direction") or ""))
+            source_field = QLineEdit(str(base_piece_row.get("source") or ""))
 
-            def save_manual_piece():
+            for label_text, field in (
+                ("ID:", id_field),
+                ("Nombre:", name_field),
+                ("Cantidad:", qty_field),
+                ("Alto:", height_field),
+                ("Ancho:", width_field),
+                ("Espesor:", thickness_field),
+                ("Veta / Grain direction:", grain_field),
+            ):
+                form_layout.addWidget(QLabel(label_text))
+                form_layout.addWidget(field)
+
+            form_layout.addWidget(QLabel("Color:"))
+            color_row = QHBoxLayout()
+            color_row.addWidget(color_field, 1)
+            apply_color_btn = None
+            if not is_new_piece:
+                apply_color_btn = QPushButton("Cambiar")
+                apply_color_btn.setFixedSize(editor_inline_button_width, MAIN_ACTION_BUTTON_HEIGHT)
+                color_row.addWidget(apply_color_btn)
+            form_layout.addLayout(color_row)
+
+            form_layout.addWidget(QLabel("Programa asociado (opcional):"))
+            source_row = QHBoxLayout()
+            select_source_btn = QPushButton("Seleccionar")
+            select_source_btn.setFixedSize(editor_inline_button_width, MAIN_ACTION_BUTTON_HEIGHT)
+            source_row.addWidget(source_field, 1)
+            source_row.addWidget(select_source_btn)
+            form_layout.addLayout(source_row)
+
+            content_layout.addLayout(form_layout, 1)
+
+            preview_layout = QVBoxLayout()
+            preview_layout.setSpacing(8)
+            preview_layout.addWidget(QLabel("Vista previa del programa asociado:"))
+
+            preview_info_label = QLabel("")
+            preview_info_label.setWordWrap(True)
+            preview_layout.addWidget(preview_info_label)
+
+            preview_svg = QSvgWidget()
+            preview_svg.renderer().setAspectRatioMode(Qt.KeepAspectRatio)
+            preview_min_size = _scaled_int(360, max(editor_scale, 0.82), 220)
+            preview_svg.setMinimumSize(preview_min_size, preview_min_size)
+            preview_layout.addWidget(preview_svg, 1)
+
+            preview_placeholder = QLabel("Sin dibujo disponible para esta pieza.")
+            preview_placeholder.setAlignment(Qt.AlignCenter)
+            preview_placeholder.setWordWrap(True)
+            preview_placeholder.setStyleSheet("color: #666; border: 1px dashed #999; padding: 12px;")
+            preview_layout.addWidget(preview_placeholder, 1)
+
+            refresh_preview_btn = QPushButton("Actualizar Vista")
+            refresh_preview_btn.setFixedHeight(MAIN_ACTION_BUTTON_HEIGHT)
+            preview_layout.addWidget(refresh_preview_btn)
+
+            content_layout.addLayout(preview_layout, 1)
+            editor_layout.addLayout(content_layout, 1)
+
+            def build_editor_piece_row():
                 piece_id = id_field.text().strip()
-                if not piece_id:
-                    QMessageBox.warning(add_dialog, "Agregar pieza", "El campo ID es obligatorio.")
-                    return
-
                 source_value = source_field.text().strip()
                 normalized_source = normalize_source_path(source_value) if source_value else ""
 
-                new_piece = {
-                    "id": piece_id,
-                    "name": name_field.text().strip() or piece_id,
-                    "quantity": int(qty_field.text().strip()) if qty_field.text().strip().isdigit() else 1,
-                    "height": parse_float_or_none(height_field.text()),
-                    "width": parse_float_or_none(width_field.text()),
-                    "thickness": parse_float_or_none(thickness_field.text()),
-                    "color": color_field.text().strip() or None,
-                    "grain_direction": grain_field.text().strip() or None,
-                    "source": normalized_source,
-                    "f6_source": None,
-                    "pgmx": self._get_pgmx_status(normalized_source, pgmx_names, pgmx_relpaths),
-                    "program_width": None,
-                    "program_height": None,
-                    "program_thickness": None,
-                    "en_juego": False,
-                    "include_in_sheet": False,
-                }
-                all_rows.append(new_piece)
+                updated_piece = dict(base_piece_row)
+                updated_piece.update(
+                    {
+                        "id": piece_id,
+                        "name": name_field.text().strip() or piece_id,
+                        "quantity": int(qty_field.text().strip()) if qty_field.text().strip().isdigit() else 1,
+                        "height": parse_optional_piece_float(height_field.text()),
+                        "width": parse_optional_piece_float(width_field.text()),
+                        "thickness": parse_optional_piece_float(thickness_field.text()),
+                        "color": color_field.text().strip() or None,
+                        "grain_direction": grain_field.text().strip() or None,
+                        "source": normalized_source,
+                        "f6_source": infer_companion_f6_source(normalized_source),
+                        "pgmx": self._get_pgmx_status(normalized_source, pgmx_names, pgmx_relpaths),
+                        "program_width": base_piece_row.get("program_width"),
+                        "program_height": base_piece_row.get("program_height"),
+                        "program_thickness": base_piece_row.get("program_thickness"),
+                        "en_juego": bool(base_piece_row.get("en_juego", False)),
+                        "include_in_sheet": bool(base_piece_row.get("include_in_sheet", False)),
+                    }
+                )
+                return updated_piece
+
+            def refresh_piece_preview():
+                preview_piece_row = build_editor_piece_row()
+                preview_source = str(preview_piece_row.get("source") or "").strip()
+                preview_info_label.setText(
+                    f"Programa asociado: {preview_source or '(ninguno)'}"
+                )
+
+                preview_svg.hide()
+                preview_placeholder.show()
+
+                if not preview_source:
+                    preview_placeholder.setText("La pieza no tiene un programa PGMX asociado.")
+                    return
+
+                drawing_path = ensure_piece_drawing(
+                    preview_piece_row,
+                    force_regenerate=True,
+                    show_warning=False,
+                )
+                if drawing_path is None or not drawing_path.is_file():
+                    preview_placeholder.setText(
+                        "No se pudo generar la imagen del PGMX asociado. Verifique el archivo seleccionado."
+                    )
+                    return
+
+                preview_svg.load(str(drawing_path))
+                preview_placeholder.hide()
+                preview_svg.show()
+
+            def select_source_from_editor():
+                source_file, _ = QFileDialog.getOpenFileName(
+                    editor_dialog,
+                    "Seleccionar programa asociado",
+                    str(module_path),
+                    "Programas PGMX (*.pgmx);;Todos los archivos (*.*)",
+                )
+                if not source_file:
+                    return
+                source_field.setText(normalize_source_path(source_file))
+                refresh_piece_preview()
+
+            def apply_color_from_editor():
+                if is_new_piece or row_index is None:
+                    return
+                current_color = str(base_piece_row.get("color") or "")
+                preferred_color = color_field.text().strip() or None
+                piece_thickness = parse_optional_piece_float(thickness_field.text())
+                new_color_val = apply_color_change(
+                    current_color,
+                    target_row_index=row_index,
+                    preferred_color=preferred_color,
+                    piece_thickness=piece_thickness,
+                )
+                if new_color_val is None:
+                    return
+                base_piece_row["color"] = new_color_val
+                color_field.setText(new_color_val or "")
+
+            def save_piece_changes():
+                piece_id = id_field.text().strip()
+                if not piece_id:
+                    QMessageBox.warning(editor_dialog, "Editar pieza", "El campo ID es obligatorio.")
+                    return
+
+                updated_piece = build_editor_piece_row()
+                fallback_row = pieces_table.currentRow()
+                if is_new_piece:
+                    all_rows.append(updated_piece)
+                else:
+                    all_rows[row_index] = updated_piece
+
                 persist_module_config()
                 refresh_pieces_table()
-                add_dialog.accept()
+                select_visible_piece_by_id(updated_piece["id"], fallback_row=fallback_row)
+                editor_dialog.accept()
 
-            add_buttons = QHBoxLayout()
-            btn_save_piece = QPushButton("Guardar pieza")
+            editor_buttons = QHBoxLayout()
+            editor_buttons.addStretch(1)
+            btn_save_piece = QPushButton("Guardar")
             btn_cancel_piece = QPushButton("Cancelar")
-            btn_save_piece.clicked.connect(save_manual_piece)
-            btn_cancel_piece.clicked.connect(add_dialog.reject)
-            add_buttons.addWidget(btn_save_piece)
-            add_buttons.addWidget(btn_cancel_piece)
-            add_layout.addLayout(add_buttons)
+            btn_save_piece.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+            btn_cancel_piece.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+            btn_save_piece.clicked.connect(save_piece_changes)
+            btn_cancel_piece.clicked.connect(editor_dialog.reject)
+            editor_buttons.addWidget(btn_save_piece)
+            editor_buttons.addWidget(btn_cancel_piece)
+            editor_layout.addLayout(editor_buttons)
 
-            add_dialog.setLayout(add_layout)
-            add_dialog.exec()
+            select_source_btn.clicked.connect(select_source_from_editor)
+            if apply_color_btn is not None:
+                apply_color_btn.clicked.connect(apply_color_from_editor)
+            refresh_preview_btn.clicked.connect(refresh_piece_preview)
+            editor_dialog.setLayout(editor_layout)
+            refresh_piece_preview()
+            editor_dialog.exec()
 
-        def change_color_for_selected_piece():
+        def add_manual_piece():
+            open_piece_editor()
+
+        def edit_selected_piece():
+            all_idx = selected_piece_all_index("Editar pieza")
+            if all_idx is None:
+                return
+            open_piece_editor(all_rows[all_idx], row_index=all_idx)
+
+        def remove_selected_piece():
             current_row = pieces_table.currentRow()
-            if current_row < 0:
-                QMessageBox.warning(inspect_dialog, "Cambiar color", "Seleccione una pieza de la lista.")
-                return
-            if current_row >= len(visible_row_indexes):
+            all_idx = selected_piece_all_index("Eliminar pieza")
+            if all_idx is None:
                 return
 
-            all_idx = visible_row_indexes[current_row]
-            current_color = str(all_rows[all_idx].get("color") or "")
-
-            new_color, ok = QInputDialog.getText(
+            piece_row = all_rows[all_idx]
+            piece_display_name = str(piece_row.get("name") or piece_row.get("id") or "pieza").strip()
+            answer = QMessageBox.question(
                 inspect_dialog,
-                "Cambiar color",
-                "Nuevo color:",
-                text=current_color,
+                "Eliminar pieza",
+                f'¿Desea eliminar la pieza "{piece_display_name}"?',
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
             )
-            if not ok:
+            if answer != QMessageBox.Yes:
                 return
-            new_color_val = (new_color or "").strip() or None
 
-            # Consultar el alcance del cambio
+            all_rows.pop(all_idx)
+            persist_module_config()
+            refresh_pieces_table()
+            select_visible_piece_by_id("", fallback_row=current_row)
+
+        def _legacy_apply_color_change_unused(current_color: str, new_color_val, target_row_index: int | None = None) -> bool:
             scope_box = QMessageBox(inspect_dialog)
             scope_box.setWindowTitle("Cambiar color")
             scope_box.setText(
@@ -2683,10 +3074,12 @@ class ProjectDetailWindow(QMainWindow):
             clicked = scope_box.clickedButton()
 
             if clicked is None or clicked not in (btn_solo, btn_modulo, btn_proyecto):
-                return
+                return False
 
             if clicked == btn_solo:
-                all_rows[all_idx]["color"] = new_color_val
+                if target_row_index is None or target_row_index >= len(all_rows):
+                    return False
+                all_rows[target_row_index]["color"] = new_color_val
                 persist_module_config()
 
             elif clicked == btn_modulo:
@@ -2725,6 +3118,224 @@ class ProjectDetailWindow(QMainWindow):
                         pass
 
             refresh_pieces_table()
+            return True
+
+        def _configured_board_colors(piece_thickness: float | None = None) -> list[str]:
+            colors: list[str] = []
+            seen: set[str] = set()
+            for board in _read_app_settings().get("available_boards", []):
+                color = str(board.get("color") or "").strip()
+                if not color:
+                    continue
+                if piece_thickness is not None:
+                    try:
+                        board_thickness = float(board.get("thickness"))
+                    except (TypeError, ValueError):
+                        continue
+                    if abs(board_thickness - piece_thickness) > 0.001:
+                        continue
+                color_key = color.lower()
+                if color_key in seen:
+                    continue
+                seen.add(color_key)
+                colors.append(color)
+            return colors
+
+        def _module_locale_key(module: ModuleData) -> str:
+            locale_name = str(module.locale_name or "").strip()
+            if locale_name:
+                return locale_name.lower()
+
+            relative_path = str(module.relative_path or "").strip()
+            if relative_path:
+                relative_parts = Path(relative_path).parts
+                if relative_parts:
+                    return str(relative_parts[0]).strip().lower()
+
+            try:
+                root_path = Path(self.project.root_directory).resolve()
+                module_relative = Path(module.path).resolve().relative_to(root_path)
+                if module_relative.parts:
+                    return str(module_relative.parts[0]).strip().lower()
+            except Exception:
+                pass
+
+            return ""
+
+        def _prompt_color_change(
+            current_color: str,
+            preferred_color: str | None = None,
+            piece_thickness: float | None = None,
+        ):
+            available_colors = _configured_board_colors(piece_thickness=piece_thickness)
+            if not available_colors:
+                thickness_label = (
+                    f" para espesor {int(piece_thickness) if float(piece_thickness).is_integer() else piece_thickness} mm"
+                    if piece_thickness is not None
+                    else ""
+                )
+                QMessageBox.warning(
+                    inspect_dialog,
+                    "Cambiar color",
+                    f"No hay colores disponibles en los tableros configurados{thickness_label}.",
+                )
+                return None
+
+            color_dialog = QDialog(inspect_dialog)
+            color_dialog.setWindowTitle("Cambiar color")
+            color_layout = QVBoxLayout()
+            color_layout.addWidget(
+                QLabel(
+                    "Seleccione el nuevo color para la pieza.\n"
+                    f"Color actual: {current_color or '(sin color)'}"
+                )
+            )
+
+            colors_list = QListWidget()
+            for color in available_colors:
+                colors_list.addItem(color)
+            color_layout.addWidget(colors_list)
+
+            locale_key = _module_locale_key(selected_module)
+            scope_layout = QVBoxLayout()
+            scope_layout.addWidget(QLabel("Aplicar a:"))
+            only_piece_option = QRadioButton("Solo esta pieza")
+            module_option = QRadioButton("Todas las piezas del mismo color de este modulo")
+            locale_option = QRadioButton("Todas las piezas del mismo color de este local")
+            only_piece_option.setChecked(True)
+            locale_option.setEnabled(bool(locale_key))
+            scope_layout.addWidget(only_piece_option)
+            scope_layout.addWidget(module_option)
+            scope_layout.addWidget(locale_option)
+            color_layout.addLayout(scope_layout)
+
+            buttons_layout = QHBoxLayout()
+            buttons_layout.addStretch(1)
+            accept_button = QPushButton("Aceptar")
+            cancel_button = QPushButton("Cancelar")
+            accept_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+            cancel_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+            buttons_layout.addWidget(accept_button)
+            buttons_layout.addWidget(cancel_button)
+            color_layout.addLayout(buttons_layout)
+
+            preferred_candidates = [
+                str(preferred_color or "").strip(),
+                str(current_color or "").strip(),
+            ]
+            selected_row = 0
+            for candidate in preferred_candidates:
+                if not candidate:
+                    continue
+                for row_idx in range(colors_list.count()):
+                    item = colors_list.item(row_idx)
+                    if item is not None and item.text().strip().lower() == candidate.lower():
+                        selected_row = row_idx
+                        break
+                else:
+                    continue
+                break
+            if colors_list.count() > 0:
+                colors_list.setCurrentRow(selected_row)
+
+            def accept_color_selection():
+                if colors_list.currentItem() is None:
+                    QMessageBox.warning(color_dialog, "Cambiar color", "Seleccione un color.")
+                    return
+                color_dialog.accept()
+
+            accept_button.clicked.connect(accept_color_selection)
+            cancel_button.clicked.connect(color_dialog.reject)
+            colors_list.itemDoubleClicked.connect(lambda _item: accept_color_selection())
+
+            color_dialog.setLayout(color_layout)
+            if color_dialog.exec() != QDialog.Accepted or colors_list.currentItem() is None:
+                return None
+
+            if locale_option.isChecked() and locale_option.isEnabled():
+                scope = "locale"
+            elif module_option.isChecked():
+                scope = "module"
+            else:
+                scope = "piece"
+
+            return colors_list.currentItem().text().strip() or None, scope
+
+        def apply_color_change(
+            current_color: str,
+            target_row_index: int | None = None,
+            preferred_color: str | None = None,
+            piece_thickness: float | None = None,
+        ):
+            selection = _prompt_color_change(
+                current_color,
+                preferred_color=preferred_color,
+                piece_thickness=piece_thickness,
+            )
+            if selection is None:
+                return None
+
+            new_color_val, scope = selection
+            selected_piece_id = ""
+            fallback_row = pieces_table.currentRow()
+            if target_row_index is not None and 0 <= target_row_index < len(all_rows):
+                selected_piece_id = str(all_rows[target_row_index].get("id") or "").strip()
+
+            if scope == "piece":
+                if target_row_index is None or target_row_index >= len(all_rows):
+                    return None
+                all_rows[target_row_index]["color"] = new_color_val
+                persist_module_config()
+
+            elif scope == "module":
+                for row in all_rows:
+                    if str(row.get("color") or "") == current_color:
+                        row["color"] = new_color_val
+                persist_module_config()
+
+            else:
+                for row in all_rows:
+                    if str(row.get("color") or "") == current_color:
+                        row["color"] = new_color_val
+                persist_module_config()
+
+                current_locale_key = _module_locale_key(selected_module)
+                for mod in self.project.modules:
+                    if (mod.relative_path or mod.path) == (selected_module.relative_path or selected_module.path):
+                        continue
+                    if _module_locale_key(mod) != current_locale_key:
+                        continue
+
+                    for piece in getattr(mod, "pieces", []):
+                        if str(piece.color or "") == current_color:
+                            piece.color = new_color_val
+
+                    other_config_path = self._module_config_path(mod)
+                    if not other_config_path.exists():
+                        continue
+                    try:
+                        other_config = json.loads(other_config_path.read_text(encoding="utf-8"))
+                        changed = False
+                        for row in other_config.get("pieces", []):
+                            if str(row.get("color") or "") == current_color:
+                                row["color"] = new_color_val
+                                changed = True
+                        if changed:
+                            other_config["generated_at"] = datetime.datetime.now().isoformat(
+                                sep=" ",
+                                timespec="seconds",
+                            )
+                            other_config_path.write_text(
+                                json.dumps(other_config, indent=2, ensure_ascii=False),
+                                encoding="utf-8",
+                            )
+                    except Exception:
+                        pass
+
+            refresh_pieces_table()
+            if selected_piece_id:
+                select_visible_piece_by_id(selected_piece_id, fallback_row=fallback_row)
+            return new_color_val
 
         def view_drawing_for_selected_piece():
             current_row = pieces_table.currentRow()
@@ -2810,8 +3421,13 @@ class ProjectDetailWindow(QMainWindow):
 
             config_dialog = QDialog(inspect_dialog)
             config_dialog.setWindowTitle(f"Configurar En Juego - {module_name}")
-            config_dialog.resize(1500, 900)
-            config_dialog.setMinimumWidth(1400)
+            config_scale, _, _ = _apply_responsive_window_size(
+                config_dialog,
+                1500,
+                900,
+                width_ratio=0.96,
+                height_ratio=0.92,
+            )
 
             main_layout = QVBoxLayout()
             main_layout.addWidget(
@@ -2824,7 +3440,7 @@ class ProjectDetailWindow(QMainWindow):
 
             content_layout = QHBoxLayout()
             pieces_list = QListWidget()
-            pieces_list.setMinimumWidth(320)
+            pieces_list.setMinimumWidth(_scaled_int(320, max(config_scale, 0.82), 220))
             content_layout.addWidget(pieces_list)
 
             scene = QGraphicsScene(config_dialog)
@@ -3264,26 +3880,48 @@ class ProjectDetailWindow(QMainWindow):
             config_dialog.setLayout(main_layout)
             config_dialog.exec()
 
-        action_layout = QHBoxLayout()
-        pick_source_btn = QPushButton("Seleccionar Programa")
-        add_piece_btn = QPushButton("Nueva Pieza")
-        change_color_btn = QPushButton("Cambiar Color")
-        remove_source_btn = QPushButton("Quitar programa")
-        view_drawing_btn = QPushButton("Ver Dibujo")
-        configure_en_juego_btn = QPushButton("Configurar En Juego")
-        action_layout.addWidget(add_piece_btn)
-        action_layout.addWidget(change_color_btn)
-        action_layout.addWidget(pick_source_btn)
-        action_layout.addWidget(remove_source_btn)
-        action_layout.addWidget(view_drawing_btn)
-        action_layout.addWidget(configure_en_juego_btn)
-        layout.addLayout(action_layout)
+        content_row = QHBoxLayout()
+        content_row.setContentsMargins(0, 0, 0, 0)
+        content_row.addWidget(pieces_table, 1)
 
-        pick_source_btn.clicked.connect(select_source_for_selected_piece)
+        actions_column = QVBoxLayout()
+        actions_column.setContentsMargins(0, 0, 0, 0)
+        actions_column.setSpacing(8)
+
+        add_piece_btn = QPushButton("Nueva\nPieza")
+        add_piece_btn.setToolTip("Nueva Pieza")
+        edit_piece_btn = QPushButton("Editar\nPieza")
+        edit_piece_btn.setToolTip("Editar Pieza")
+        delete_piece_btn = QPushButton("Eliminar\nPieza")
+        delete_piece_btn.setToolTip("Eliminar Pieza")
+        remove_source_btn = QPushButton("Quitar\nPrograma")
+        remove_source_btn.setToolTip("Quitar programa")
+        configure_en_juego_btn = QPushButton("Configurar\nEn Juego")
+        configure_en_juego_btn.setToolTip("Configurar En Juego")
+
+        for button in (
+            add_piece_btn,
+            edit_piece_btn,
+            delete_piece_btn,
+            configure_en_juego_btn,
+            remove_source_btn,
+        ):
+            button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+
+        actions_column.addWidget(add_piece_btn)
+        actions_column.addWidget(edit_piece_btn)
+        actions_column.addWidget(delete_piece_btn)
+        actions_column.addWidget(remove_source_btn)
+        actions_column.addWidget(configure_en_juego_btn)
+        actions_column.addStretch(1)
+
+        content_row.addLayout(actions_column)
+        layout.addLayout(content_row, 1)
+
         add_piece_btn.clicked.connect(add_manual_piece)
-        change_color_btn.clicked.connect(change_color_for_selected_piece)
+        edit_piece_btn.clicked.connect(edit_selected_piece)
+        delete_piece_btn.clicked.connect(remove_selected_piece)
         remove_source_btn.clicked.connect(remove_source_for_selected_piece)
-        view_drawing_btn.clicked.connect(view_drawing_for_selected_piece)
         configure_en_juego_btn.clicked.connect(open_en_juego_configuration_dialog)
 
         def save_module_settings(show_feedback=True):
@@ -3785,8 +4423,30 @@ class MainWindow(QMainWindow):
         self.btn_options.clicked.connect(self.open_options)
         self.btn_close.clicked.connect(self.close_application)
         self.project_list.itemDoubleClicked.connect(lambda _: self.open_project())
+        self.refresh_shortcut = QShortcut(QKeySequence("F5"), self)
+        self.refresh_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self.refresh_shortcut.activated.connect(self.refresh_project_list)
+        self.project_list.installEventFilter(self)
 
         self.refresh_project_list()
+
+    def eventFilter(self, watched, event):
+        if (
+            watched is self.project_list
+            and event.type() == QEvent.KeyPress
+            and event.key() == Qt.Key_F5
+        ):
+            self.refresh_project_list()
+            event.accept()
+            return True
+        return super().eventFilter(watched, event)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_F5:
+            self.refresh_project_list()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def open_options(self):
         dialog = OptionsDialog(self)
@@ -3798,6 +4458,11 @@ class MainWindow(QMainWindow):
             app.quit()
 
     def refresh_project_list(self):
+        selected_project_name = None
+        current_item = self.project_list.currentItem()
+        if current_item is not None:
+            selected_project_name = current_item.data(Qt.UserRole)
+
         self.project_list.clear()
         registry = _read_registry()
         for entry in sorted(registry, key=lambda item: str(item.get("project_name") or "").lower()):
@@ -3805,7 +4470,22 @@ class MainWindow(QMainWindow):
             client_name = str(entry.get("client_name") or "-").strip() or "-"
             item = QListWidgetItem(f"{project_name} - {client_name}")
             item.setData(Qt.UserRole, project_name)
+            item.setData(Qt.UserRole + 1, _registry_entry_is_accessible(entry))
+            if not item.data(Qt.UserRole + 1):
+                item.setForeground(QColor("#777777"))
+                item.setToolTip("Proyecto temporalmente inaccesible")
             self.project_list.addItem(item)
+            if selected_project_name and project_name == selected_project_name:
+                self.project_list.setCurrentItem(item)
+
+    def _select_project_list_item(self, project_name: str):
+        normalized_name = str(project_name or "").strip().lower()
+        for index in range(self.project_list.count()):
+            item = self.project_list.item(index)
+            if str(item.data(Qt.UserRole) or "").strip().lower() == normalized_name:
+                self.project_list.setCurrentItem(item)
+                return item
+        return None
 
     def create_project(self):
         dialog = NewProjectDialog(self)
@@ -3846,6 +4526,18 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Error", "Seleccione un proyecto")
             return
         project_name = item.data(Qt.UserRole) or item.text().split(" - ")[0]
+        self.refresh_project_list()
+        item = self._select_project_list_item(project_name)
+        if not item:
+            QMessageBox.warning(self, "Error", "Proyecto no encontrado")
+            return
+        if item.data(Qt.UserRole + 1) is False:
+            QMessageBox.warning(
+                self,
+                "Proyecto inaccesible",
+                "La carpeta principal de este proyecto no está disponible en este momento.",
+            )
+            return
         try:
             project = _load_project(project_name)
             self.current_project = project
@@ -3854,6 +4546,7 @@ class MainWindow(QMainWindow):
             self.detail_window = detail_window
             self.hide()
         except Exception as exc:
+            self.refresh_project_list()
             QMessageBox.warning(self, "Error", f"No se pudo abrir el proyecto: {exc}")
 
     def delete_project(self):
