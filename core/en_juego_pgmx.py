@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Sequence
 
-from core.model import Piece, Project
+from core.model import Piece, Project, normalize_piece_grain_direction
 from core.pgmx_processing import PieceDrawingData, parse_pgmx_for_piece
 from tools.synthesize_pgmx import (
     build_polyline_milling_spec,
@@ -79,7 +79,7 @@ def _build_piece_from_row(module_name: str, piece_row: dict) -> Piece:
         width=_parse_dimension(piece_row.get("width")),
         thickness=thickness,
         color=piece_row.get("color"),
-        grain_direction=piece_row.get("grain_direction"),
+        grain_direction=normalize_piece_grain_direction(piece_row.get("grain_direction")),
         module_name=module_name,
         cnc_source=str(piece_row.get("source") or "").strip() or None,
         f6_source=str(piece_row.get("f6_source") or "").strip() or None,

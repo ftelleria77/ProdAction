@@ -6,12 +6,6 @@
     "project_data_file": "project.json"
   },
   {
-    "project_name": "Mobile 2026-04",
-    "client_name": "Mobile",
-    "source_folder": "S:/Maestro/Projects/Mobile/Fermín/CajaAspirador",
-    "project_data_file": "project.json"
-  },
-  {
     "project_name": "Prod 2026-02",
     "client_name": "Vargas",
     "source_folder": "C:/Proyectos/Prod 01-2026 - Vargas",
@@ -21,6 +15,18 @@
     "project_name": "CajaAspirador",
     "client_name": "Mobile",
     "source_folder": "C:/Proyectos/CajaAspirador",
+    "project_data_file": "project.json"
+  },
+  {
+    "project_name": "Prod 2026 - 01",
+    "client_name": "Vargas",
+    "source_folder": "S:/Maestro/Projects/Prod 01-2026 - Vargas",
+    "project_data_file": "project.json"
+  },
+  {
+    "project_name": "Mobile 2026-04",
+    "client_name": "Mobile",
+    "source_folder": "S:/Maestro/Projects/Mobile/Fermín/CajaAspirador",
     "project_data_file": "project.json"
   }
 ]

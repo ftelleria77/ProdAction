@@ -37,7 +37,7 @@ except Exception:  # pragma: no cover - entorno sin dependencia opcional
 
 _QT_APP_REF = None
 
-from core.model import Piece, Project
+from core.model import Piece, Project, normalize_piece_grain_direction
 
 
 def export_summary(project: Project, output_csv: Path):
@@ -65,7 +65,7 @@ def export_summary(project: Project, output_csv: Path):
                 "width": piece.width,
                 "thickness": piece.thickness,
                 "color": piece.color,
-                "grain_direction": piece.grain_direction,
+                "grain_direction": normalize_piece_grain_direction(piece.grain_direction),
                 "source": piece.cnc_source,
             })
     df = pd.DataFrame(rows, columns=["module", "piece_id", "piece_name", "quantity", "height", "width", "thickness", "color", "grain_direction", "source"])
@@ -122,7 +122,7 @@ def _piece_from_sheet_row(module_name: str, piece_row: dict) -> Piece:
         height=_safe_float(piece_row.get("height")) or 0.0,
         thickness=thickness,
         color=piece_row.get("color"),
-        grain_direction=piece_row.get("grain_direction"),
+        grain_direction=normalize_piece_grain_direction(piece_row.get("grain_direction")),
         module_name=module_name,
         cnc_source=str(piece_row.get("source") or "").strip() or None,
         f6_source=str(piece_row.get("f6_source") or "").strip() or None,
@@ -470,7 +470,7 @@ def export_production_sheet(project: Project, output_xlsx: Path):
                         "height": piece.height,
                         "thickness": piece.thickness,
                         "color": piece.color,
-                        "grain_direction": piece.grain_direction,
+                        "grain_direction": normalize_piece_grain_direction(piece.grain_direction),
                         "source": piece.cnc_source,
                         "f6_source": piece.f6_source,
                         "program_width": piece.program_width,

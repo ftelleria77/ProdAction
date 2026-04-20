@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from core.model import LocaleData, ModuleData, Piece
+from core.model import LocaleData, ModuleData, Piece, normalize_piece_grain_direction
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,9 @@ def parse_cnc_file(file_path: Path, metadata: Optional[Dict[str, dict]] = None) 
                     data = metadata[piece_id]
                     piece.name = data.get("name") or piece.id
                     piece.color = data.get("color")
-                    piece.grain_direction = data.get("grain_direction") or data.get("sentido_veta") or data.get("veta")
+                    piece.grain_direction = normalize_piece_grain_direction(
+                        data.get("grain_direction") or data.get("sentido_veta") or data.get("veta")
+                    )
                     piece.piece_type = data.get("piece_type")
                     if (not piece.width or piece.width == 0) and data.get("width"):
                         piece.width = float(data.get("width"))
@@ -95,7 +97,9 @@ def parse_cnc_file(file_path: Path, metadata: Optional[Dict[str, dict]] = None) 
                         data = metadata[piece_id]
                         piece.name = data.get("name") or piece.id
                         piece.color = data.get("color")
-                        piece.grain_direction = data.get("grain_direction") or data.get("sentido_veta") or data.get("veta")
+                        piece.grain_direction = normalize_piece_grain_direction(
+                            data.get("grain_direction") or data.get("sentido_veta") or data.get("veta")
+                        )
                         piece.piece_type = data.get("piece_type")
                         if (not piece.width or piece.width == 0) and data.get("width"):
                             piece.width = float(data.get("width"))
@@ -117,7 +121,9 @@ def parse_cnc_file(file_path: Path, metadata: Optional[Dict[str, dict]] = None) 
                 thickness=float(data.get("thickness")) if data.get("thickness") else None,
                 quantity=1,
                 color=data.get("color"),
-                grain_direction=data.get("grain_direction") or data.get("sentido_veta") or data.get("veta"),
+                grain_direction=normalize_piece_grain_direction(
+                    data.get("grain_direction") or data.get("sentido_veta") or data.get("veta")
+                ),
                 name=data.get("name") or piece_id,
                 module_name="",
                 cnc_source=data.get("source"),
@@ -234,8 +240,7 @@ def load_module_summary(module_dir: Path) -> Dict[str, dict]:
             espesor = parse_dimension(cols[7].strip()) if len(cols) > 7 else None
             color = cols[8].strip() if len(cols) > 8 else None
             veta_str = cols[9].strip() if len(cols) > 9 else "0"
-            veta_map = {"0": "sin veta", "1": "a lo largo", "2": "a lo ancho"}
-            grain_direction = veta_map.get(veta_str, veta_str)
+            grain_direction = normalize_piece_grain_direction(veta_str)
             piece_name = cols[2].strip() if len(cols) > 2 else piece_id
             source_file = cols[10].strip() if len(cols) > 10 else None
 
@@ -307,7 +312,7 @@ def load_module_summary(module_dir: Path) -> Dict[str, dict]:
                     width = find_value(possible_widths)
                     height = find_value(possible_heights)
                     color = find_value(possible_color)
-                    grain_direction = find_value(possible_grain)
+                    grain_direction = normalize_piece_grain_direction(find_value(possible_grain))
                     quantity = find_value(possible_quantity) or "1"
 
                     qty_num = parse_quantity(quantity)
@@ -408,7 +413,9 @@ def scan_project(root_path: Path) -> List[ModuleData]:
                     thickness=float(data.get("thickness")) if data.get("thickness") else None,
                     quantity=int(data.get("quantity", 1)) if data.get("quantity") else 1,
                     color=data.get("color"),
-                    grain_direction=data.get("grain_direction") or data.get("sentido_veta") or data.get("veta"),
+                    grain_direction=normalize_piece_grain_direction(
+                        data.get("grain_direction") or data.get("sentido_veta") or data.get("veta")
+                    ),
                     name=data.get("name") or piece_id,
                     module_name=module.name,
                     cnc_source=cnc_source,

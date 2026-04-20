@@ -8,6 +8,38 @@ PIECE_TYPE_ORDER: list = [
     "F1", "F2", "T", "B", "R", "A1", "A2", "D1", "D2", "S", "H", "Q", "G", "C1", "C2", "E",
 ]
 
+PIECE_GRAIN_CODE_NONE = "0"
+PIECE_GRAIN_CODE_HEIGHT = "1"
+PIECE_GRAIN_CODE_WIDTH = "2"
+
+PIECE_GRAIN_CODE_LABELS = {
+    PIECE_GRAIN_CODE_NONE: "Sin veta",
+    PIECE_GRAIN_CODE_HEIGHT: "Alto",
+    PIECE_GRAIN_CODE_WIDTH: "Ancho",
+}
+
+
+def normalize_piece_grain_direction(value) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {"0", "0 - sin veta", "sin veta", "no veta"}:
+        return PIECE_GRAIN_CODE_NONE
+    if raw in {"1", "1 - longitudinal", "a lo largo", "longitudinal", "alto"}:
+        return PIECE_GRAIN_CODE_HEIGHT
+    if raw in {"2", "2 - transversal", "a lo ancho", "transversal", "ancho"}:
+        return PIECE_GRAIN_CODE_WIDTH
+    if "sin veta" in raw or "no veta" in raw:
+        return PIECE_GRAIN_CODE_NONE
+    if "a lo largo" in raw or "longitudinal" in raw:
+        return PIECE_GRAIN_CODE_HEIGHT
+    if "a lo ancho" in raw or "transversal" in raw:
+        return PIECE_GRAIN_CODE_WIDTH
+    return PIECE_GRAIN_CODE_NONE
+
+
+def piece_grain_direction_label(value) -> str:
+    normalized = normalize_piece_grain_direction(value)
+    return PIECE_GRAIN_CODE_LABELS.get(normalized, PIECE_GRAIN_CODE_LABELS[PIECE_GRAIN_CODE_NONE])
+
 
 @dataclass
 class Piece:

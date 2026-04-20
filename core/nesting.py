@@ -6,7 +6,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import List
 
-from core.model import PIECE_TYPE_ORDER, Piece, Project
+from core.model import PIECE_TYPE_ORDER, Piece, Project, normalize_piece_grain_direction
 
 
 CUT_OPTIMIZATION_NONE = 'none'
@@ -17,8 +17,8 @@ CUT_GUILLOTINE_ALGORITHM_CURRENT = 'current'
 CUT_GUILLOTINE_ALGORITHM_DIMENSION_SCAN = 'dimension-scan'
 
 PIECE_GRAIN_NONE = 'none'
-PIECE_GRAIN_LONG_SIDE = 'long_side'
-PIECE_GRAIN_SHORT_SIDE = 'short_side'
+PIECE_GRAIN_HEIGHT_AXIS = 'height_axis'
+PIECE_GRAIN_WIDTH_AXIS = 'width_axis'
 PIECE_GRAIN_LOCKED = 'locked'
 
 BOARD_GRAIN_NONE = 'none'
@@ -126,19 +126,14 @@ def _has_valid_cut_dimensions(width: float, height: float, thickness: float) -> 
 
 def _normalize_piece_grain_mode(value) -> str:
     raw = str(value or '').strip().lower()
-    if not raw or raw in {'0', '0 - sin veta', 'sin veta', 'no veta'}:
+    if not raw:
         return PIECE_GRAIN_NONE
-    if raw in {'1', '1 - longitudinal', 'a lo largo', 'longitudinal'}:
-        return PIECE_GRAIN_LONG_SIDE
-    if raw in {'2', '2 - transversal', 'a lo ancho', 'transversal'}:
-        return PIECE_GRAIN_SHORT_SIDE
-    if 'sin veta' in raw or 'no veta' in raw:
-        return PIECE_GRAIN_NONE
-    if 'a lo largo' in raw or 'longitudinal' in raw:
-        return PIECE_GRAIN_LONG_SIDE
-    if 'a lo ancho' in raw or 'transversal' in raw:
-        return PIECE_GRAIN_SHORT_SIDE
-    if 'veta' in raw:
+    normalized = normalize_piece_grain_direction(raw)
+    if normalized == '1':
+        return PIECE_GRAIN_HEIGHT_AXIS
+    if normalized == '2':
+        return PIECE_GRAIN_WIDTH_AXIS
+    if 'veta' in raw and raw not in {'0', '0 - sin veta', 'sin veta', 'no veta'}:
         return PIECE_GRAIN_LOCKED
     return PIECE_GRAIN_NONE
 
@@ -341,10 +336,10 @@ def _orientation_options(
     if cut_piece.grain_mode != PIECE_GRAIN_NONE and board_grain_axis != BOARD_GRAIN_NONE:
         filtered_options: list[tuple[float, float, bool]] = []
         for width, height, rotated in options:
-            if cut_piece.grain_mode == PIECE_GRAIN_LONG_SIDE:
-                aligned = height >= width if board_grain_axis == BOARD_GRAIN_LENGTH else width >= height
-            elif cut_piece.grain_mode == PIECE_GRAIN_SHORT_SIDE:
-                aligned = height <= width if board_grain_axis == BOARD_GRAIN_LENGTH else width <= height
+            if cut_piece.grain_mode == PIECE_GRAIN_HEIGHT_AXIS:
+                aligned = (not rotated) if board_grain_axis == BOARD_GRAIN_LENGTH else rotated
+            elif cut_piece.grain_mode == PIECE_GRAIN_WIDTH_AXIS:
+                aligned = rotated if board_grain_axis == BOARD_GRAIN_LENGTH else (not rotated)
             else:
                 aligned = not rotated
             if aligned:

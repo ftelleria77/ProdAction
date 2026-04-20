@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QVBoxLayout,
     QHBoxLayout,
+    QGridLayout,
     QWidget,
     QFileDialog,
     QInputDialog,
@@ -35,10 +36,18 @@ from PySide6.QtWidgets import (
     QComboBox,
     QCheckBox,
     QRadioButton,
+    QSizePolicy,
 )
 from PySide6.QtSvgWidgets import QSvgWidget
 
-from core.model import LocaleData, Project, ModuleData, Piece
+from core.model import (
+    LocaleData,
+    Project,
+    ModuleData,
+    Piece,
+    normalize_piece_grain_direction,
+    piece_grain_direction_label,
+)
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 PROJECT_REGISTRY = BASE_DIR / "projects_list.json"
@@ -493,6 +502,7 @@ def _load_pieces_from_config_rows(piece_rows, module_name: str) -> list[Piece]:
             normalized_row["module_name"] = module_name
 
         filtered_row = {key: value for key, value in normalized_row.items() if key in piece_fields}
+        filtered_row["grain_direction"] = normalize_piece_grain_direction(filtered_row.get("grain_direction"))
         _coerce_required_piece_float_fields(filtered_row, ("width", "height"))
         _coerce_optional_piece_float_fields(
             filtered_row,
@@ -711,8 +721,7 @@ class ProjectDetailWindow(QMainWindow):
         dates_row.addStretch(1)
         dates_row.addWidget(self.lbl_modified)
 
-        btn_edit = QPushButton("Editar")
-        btn_process = QPushButton("Procesar")
+        btn_process = QPushButton("Procesar\nSelección")
         btn_modules = QPushButton("Ver\nmódulos")
         btn_drawings = QPushButton("Generar\nImágenes")
         btn_sheets = QPushButton("Generar\nPlanillas")
@@ -720,7 +729,6 @@ class ProjectDetailWindow(QMainWindow):
         btn_close = QPushButton("Cerrar")
 
         for button in (
-            btn_edit,
             btn_process,
             btn_modules,
             btn_sheets,
@@ -730,15 +738,9 @@ class ProjectDetailWindow(QMainWindow):
         ):
             button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
 
-        top_action_row = QHBoxLayout()
-        top_action_row.addWidget(btn_edit)
-        top_action_row.addWidget(btn_process)
-        top_action_row.addStretch(1)
-
         layout.addLayout(header_row)
         layout.addWidget(self.lbl_root)
         layout.addLayout(dates_row)
-        layout.addLayout(top_action_row)
         layout.addWidget(self.lbl_locales_count)
 
         locales_and_actions_row = QHBoxLayout()
@@ -746,6 +748,7 @@ class ProjectDetailWindow(QMainWindow):
 
         actions_column = QVBoxLayout()
         actions_column.setContentsMargins(0, 0, 0, 0)
+        actions_column.addWidget(btn_process)
         actions_column.addWidget(btn_modules)
         actions_column.addWidget(btn_drawings)
         actions_column.addWidget(btn_sheets)
@@ -764,7 +767,6 @@ class ProjectDetailWindow(QMainWindow):
         self.btn_modules.clicked.connect(self.show_modules)
         self.locales_list.itemDoubleClicked.connect(lambda *_: self.show_modules())
 
-        btn_edit.clicked.connect(self.edit_project)
         btn_process.clicked.connect(self.process_project)
         btn_sheets.clicked.connect(self.generate_sheets)
         btn_cuts.clicked.connect(self.show_cuts)
@@ -946,6 +948,7 @@ class ProjectDetailWindow(QMainWindow):
                     'cnc_source', 'f6_source', 'piece_type', 'program_width', 'program_height', 'program_thickness'
                 }
                 filtered_dict = {k: v for k, v in piece_dict.items() if k in piece_fields}
+                filtered_dict["grain_direction"] = normalize_piece_grain_direction(filtered_dict.get("grain_direction"))
                 
                 _coerce_optional_piece_float_fields(
                     filtered_dict,
@@ -1045,7 +1048,7 @@ class ProjectDetailWindow(QMainWindow):
                         "width": piece.width,
                         "thickness": piece.thickness,
                         "color": piece.color,
-                        "grain_direction": piece.grain_direction,
+                        "grain_direction": normalize_piece_grain_direction(piece.grain_direction),
                         "source": source_value,
                         "f6_source": piece.f6_source or previous_row.get("f6_source"),
                         "pgmx": pgmx_status,
@@ -1054,7 +1057,7 @@ class ProjectDetailWindow(QMainWindow):
                         "program_height": piece.program_height,
                         "program_thickness": piece.program_thickness,
                         "en_juego": bool(previous_row.get("en_juego", False)),
-                        "include_in_sheet": bool(previous_row.get("include_in_sheet", False)),
+                        "include_in_sheet": bool(previous_row.get("include_in_sheet", previous_row.get("excel", False))),
                     }
                 )
 
@@ -1470,7 +1473,7 @@ class ProjectDetailWindow(QMainWindow):
 
         dialog = QDialog(self)
         dialog.setWindowTitle(f"Módulos - {self.project.name}")
-        dialog.resize(500, 400)
+        dialog.resize(620, 400)
 
         dlg_layout = QVBoxLayout()
         self.modules_list = QListWidget()
@@ -1492,17 +1495,24 @@ class ProjectDetailWindow(QMainWindow):
         refresh_modules_list_view()
 
         dlg_layout.addWidget(QLabel("Módulos encontrados:"))
-        dlg_layout.addWidget(self.modules_list)
+        modules_and_actions_row = QHBoxLayout()
+        modules_and_actions_row.addWidget(self.modules_list, 1)
 
-        button_layout = QHBoxLayout()
         new_btn = QPushButton("Nuevo")
-        inspect_btn = QPushButton("Inspeccionar")
+        inspect_btn = QPushButton("Abrir")
         close_btn = QPushButton("Cerrar")
-        button_layout.addWidget(new_btn)
-        button_layout.addWidget(inspect_btn)
-        button_layout.addWidget(close_btn)
+        for button in (new_btn, inspect_btn, close_btn):
+            button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
 
-        dlg_layout.addLayout(button_layout)
+        actions_column = QVBoxLayout()
+        actions_column.setContentsMargins(0, 0, 0, 0)
+        actions_column.addWidget(new_btn)
+        actions_column.addWidget(inspect_btn)
+        actions_column.addStretch(1)
+        actions_column.addWidget(close_btn)
+
+        modules_and_actions_row.addLayout(actions_column)
+        dlg_layout.addLayout(modules_and_actions_row, 1)
 
         dialog.setLayout(dlg_layout)
 
@@ -1665,7 +1675,35 @@ class ProjectDetailWindow(QMainWindow):
         if not isinstance(config_data.get("en_juego_layout"), dict):
             config_data["en_juego_layout"] = {}
         settings = config_data.get("settings", {})
-        all_rows = config_data.get("pieces", [])
+        raw_rows = config_data.get("pieces", [])
+        if not isinstance(raw_rows, list):
+            raw_rows = []
+
+        def _coerce_saved_flag(value) -> bool:
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, (int, float)):
+                return bool(value)
+            raw = str(value or "").strip().lower()
+            return raw in {"1", "true", "yes", "si", "sí", "x"}
+
+        def _normalize_piece_row_flags(piece_row: dict) -> dict:
+            normalized_row = dict(piece_row)
+            en_juego_value = _coerce_saved_flag(normalized_row.get("en_juego", False))
+            excel_value = _coerce_saved_flag(
+                normalized_row.get("include_in_sheet", normalized_row.get("excel", False))
+            )
+            normalized_row["en_juego"] = en_juego_value
+            normalized_row["include_in_sheet"] = excel_value
+            normalized_row["grain_direction"] = normalize_piece_grain_direction(normalized_row.get("grain_direction"))
+            normalized_row.pop("excel", None)
+            return normalized_row
+
+        all_rows = [
+            _normalize_piece_row_flags(piece_row)
+            for piece_row in raw_rows
+            if isinstance(piece_row, dict)
+        ]
         module_path = Path(selected_module.path)
         pgmx_names, pgmx_relpaths = self._build_pgmx_index(module_path)
 
@@ -2362,16 +2400,32 @@ class ProjectDetailWindow(QMainWindow):
         pieces_title = QLabel("")
         layout.addWidget(pieces_title)
 
+        PIECES_COL_ID = 0
+        PIECES_COL_NAME = 1
+        PIECES_COL_QUANTITY = 2
+        PIECES_COL_HEIGHT = 3
+        PIECES_COL_SWAP = 4
+        PIECES_COL_WIDTH = 5
+        PIECES_COL_THICKNESS = 6
+        PIECES_COL_COLOR = 7
+        PIECES_COL_GRAIN = 8
+        PIECES_COL_PROGRAM = 9
+        PIECES_COL_NOTES = 10
+        PIECES_COL_EN_JUEGO = 11
+        PIECES_COL_EXCEL = 12
+
         pieces_table = QTableWidget()
-        pieces_table.setColumnCount(11)
+        pieces_table.setColumnCount(13)
         pieces_table.setHorizontalHeaderLabels([
             "ID",
             "Nombre",
             "Cantidad",
             "Alto",
+            "",
             "Ancho",
             "Espesor",
             "Color",
+            "Veta",
             "Programa",
             "Observaciones",
             "En juego",
@@ -2421,7 +2475,7 @@ class ProjectDetailWindow(QMainWindow):
                 width=parse_dimension(piece_row.get("width")),
                 thickness=thickness,
                 color=piece_row.get("color"),
-                grain_direction=piece_row.get("grain_direction"),
+                grain_direction=normalize_piece_grain_direction(piece_row.get("grain_direction")),
                 module_name=selected_module.name,
                 cnc_source=str(piece_row.get("source") or "").strip() or None,
                 f6_source=str(piece_row.get("f6_source") or "").strip() or None,
@@ -2501,11 +2555,60 @@ class ProjectDetailWindow(QMainWindow):
             checkbox.stateChanged.connect(on_changed)
             return container
 
+        swap_button_width = _scaled_int(14, compact_scale, 11)
+        swap_button_height = _scaled_int(20, compact_scale, 16)
+        swap_button_font_size = _scaled_int(8, compact_scale, 6)
+
+        def create_centered_swap_button(on_clicked, tooltip: str):
+            container = QWidget()
+            button_layout = QHBoxLayout(container)
+            button_layout.setContentsMargins(0, 0, 0, 0)
+            button_layout.setSpacing(0)
+            swap_button = QPushButton("↔", container)
+            swap_button.setToolTip(tooltip)
+            swap_button.setFixedSize(swap_button_width, swap_button_height)
+            swap_button.setContentsMargins(0, 0, 0, 0)
+            swap_button.setStyleSheet(
+                "QPushButton {"
+                f"font-size: {swap_button_font_size}px;"
+                "padding: 0px;"
+                "margin: 0px;"
+                "text-align: center;"
+                "}"
+            )
+            swap_button.clicked.connect(on_clicked)
+            button_layout.addStretch(1)
+            button_layout.addWidget(swap_button, 0, Qt.AlignCenter)
+            button_layout.addStretch(1)
+            return container
+
+        def swap_piece_dimensions(all_idx: int, visible_row: int | None = None):
+            if all_idx < 0 or all_idx >= len(all_rows):
+                return
+            piece_row = all_rows[all_idx]
+            piece_row["height"], piece_row["width"] = piece_row.get("width"), piece_row.get("height")
+            mark_unsaved_changes()
+            refresh_pieces_table()
+            if visible_row is not None and pieces_table.rowCount() > 0:
+                pieces_table.selectRow(max(0, min(visible_row, pieces_table.rowCount() - 1)))
+
+        def swap_all_piece_dimensions():
+            if not all_rows:
+                return
+            current_row = pieces_table.currentRow()
+            for piece_row in all_rows:
+                piece_row["height"], piece_row["width"] = piece_row.get("width"), piece_row.get("height")
+            mark_unsaved_changes()
+            refresh_pieces_table()
+            if current_row >= 0 and pieces_table.rowCount() > 0:
+                pieces_table.selectRow(max(0, min(current_row, pieces_table.rowCount() - 1)))
+
         def update_piece_flag(all_idx: int, field_name: str, state: int):
             if refreshing_pieces_table:
                 return
-            all_rows[all_idx][field_name] = state == Qt.Checked
-            persist_module_config()
+            normalized_state = Qt.CheckState(state) == Qt.CheckState.Checked
+            all_rows[all_idx][field_name] = normalized_state
+            mark_unsaved_changes()
 
         def refresh_pieces_table():
             nonlocal refreshing_pieces_table
@@ -2545,16 +2648,29 @@ class ProjectDetailWindow(QMainWindow):
                 piece_row["pgmx"] = pgmx_status
                 en_juego = bool(piece_row.get("en_juego", False))
                 piece_row["en_juego"] = en_juego
-                include_in_sheet = bool(piece_row.get("include_in_sheet", False))
+                include_in_sheet = bool(piece_row.get("include_in_sheet", piece_row.get("excel", False)))
                 piece_row["include_in_sheet"] = include_in_sheet
 
-                pieces_table.setItem(row_idx, 0, QTableWidgetItem(str(piece_row.get("id", ""))))
-                pieces_table.setItem(row_idx, 1, QTableWidgetItem(str(piece_row.get("name", ""))))
-                pieces_table.setItem(row_idx, 2, QTableWidgetItem(str(piece_row.get("quantity", ""))))
-                pieces_table.setItem(row_idx, 3, QTableWidgetItem(str(piece_row.get("height", ""))))
-                pieces_table.setItem(row_idx, 4, QTableWidgetItem(str(piece_row.get("width", ""))))
-                pieces_table.setItem(row_idx, 5, QTableWidgetItem(str(piece_row.get("thickness", ""))))
-                pieces_table.setItem(row_idx, 6, QTableWidgetItem(str(piece_row.get("color", ""))))
+                pieces_table.setItem(row_idx, PIECES_COL_ID, QTableWidgetItem(str(piece_row.get("id", ""))))
+                pieces_table.setItem(row_idx, PIECES_COL_NAME, QTableWidgetItem(str(piece_row.get("name", ""))))
+                pieces_table.setItem(row_idx, PIECES_COL_QUANTITY, QTableWidgetItem(str(piece_row.get("quantity", ""))))
+                pieces_table.setItem(row_idx, PIECES_COL_HEIGHT, QTableWidgetItem(str(piece_row.get("height", ""))))
+                pieces_table.setCellWidget(
+                    row_idx,
+                    PIECES_COL_SWAP,
+                    create_centered_swap_button(
+                        lambda _checked=False, idx=all_idx, visible_idx=row_idx: swap_piece_dimensions(idx, visible_idx),
+                        "Intercambiar alto y ancho de esta pieza",
+                    ),
+                )
+                pieces_table.setItem(row_idx, PIECES_COL_WIDTH, QTableWidgetItem(str(piece_row.get("width", ""))))
+                pieces_table.setItem(row_idx, PIECES_COL_THICKNESS, QTableWidgetItem(str(piece_row.get("thickness", ""))))
+                pieces_table.setItem(row_idx, PIECES_COL_COLOR, QTableWidgetItem(str(piece_row.get("color", ""))))
+                pieces_table.setItem(
+                    row_idx,
+                    PIECES_COL_GRAIN,
+                    QTableWidgetItem(piece_grain_direction_label(piece_row.get("grain_direction"))),
+                )
                 program_filename = Path(source_value).name if source_value else "(ninguno)"
                 program_item = QTableWidgetItem(f"{pgmx_status} {program_filename}")
                 if pgmx_status == "✓":
@@ -2562,17 +2678,17 @@ class ProjectDetailWindow(QMainWindow):
                 else:
                     program_item.setForeground(QColor("#B71C1C"))
                 program_item.setToolTip(source_value or "(ninguno)")
-                pieces_table.setItem(row_idx, 7, program_item)
+                pieces_table.setItem(row_idx, PIECES_COL_PROGRAM, program_item)
 
                 dimension_item = QTableWidgetItem(program_dimension_note)
                 dimension_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                 if program_dimension_note:
                     dimension_item.setForeground(QColor("#B71C1C"))
-                pieces_table.setItem(row_idx, 8, dimension_item)
+                pieces_table.setItem(row_idx, PIECES_COL_NOTES, dimension_item)
 
                 pieces_table.setCellWidget(
                     row_idx,
-                    9,
+                    PIECES_COL_EN_JUEGO,
                     create_centered_checkbox(
                         en_juego,
                         lambda state, idx=all_idx: update_piece_flag(idx, "en_juego", state),
@@ -2581,7 +2697,7 @@ class ProjectDetailWindow(QMainWindow):
 
                 pieces_table.setCellWidget(
                     row_idx,
-                    10,
+                    PIECES_COL_EXCEL,
                     create_centered_checkbox(
                         include_in_sheet,
                         lambda state, idx=all_idx: update_piece_flag(idx, "include_in_sheet", state),
@@ -2593,14 +2709,22 @@ class ProjectDetailWindow(QMainWindow):
         refresh_pieces_table()
 
         header = pieces_table.horizontalHeader()
-        auto_columns = {0, 2, 3, 4, 5}
+        auto_columns = {
+            PIECES_COL_ID,
+            PIECES_COL_QUANTITY,
+            PIECES_COL_HEIGHT,
+            PIECES_COL_WIDTH,
+            PIECES_COL_THICKNESS,
+        }
         fixed_column_widths = {
-            1: _scaled_int(180, compact_scale, 120),
-            6: _scaled_int(110, compact_scale, 90),
-            7: _scaled_int(250, compact_scale, 170),
-            8: _scaled_int(320, compact_scale, 180),
-            9: _scaled_int(90, compact_scale, 68),
-            10: _scaled_int(70, compact_scale, 60),
+            PIECES_COL_NAME: _scaled_int(180, compact_scale, 120),
+            PIECES_COL_SWAP: _scaled_int(18, compact_scale, 14),
+            PIECES_COL_COLOR: _scaled_int(110, compact_scale, 90),
+            PIECES_COL_GRAIN: _scaled_int(110, compact_scale, 90),
+            PIECES_COL_PROGRAM: _scaled_int(250, compact_scale, 170),
+            PIECES_COL_NOTES: _scaled_int(320, compact_scale, 180),
+            PIECES_COL_EN_JUEGO: _scaled_int(90, compact_scale, 68),
+            PIECES_COL_EXCEL: _scaled_int(70, compact_scale, 60),
         }
         for column_idx in range(pieces_table.columnCount()):
             if column_idx in auto_columns:
@@ -2608,6 +2732,39 @@ class ProjectDetailWindow(QMainWindow):
             else:
                 header.setSectionResizeMode(column_idx, QHeaderView.Fixed)
                 pieces_table.setColumnWidth(column_idx, fixed_column_widths[column_idx])
+
+        swap_all_dimensions_btn = QPushButton("↔", header)
+        swap_all_dimensions_btn.setToolTip("Intercambiar alto y ancho de todas las piezas")
+        swap_all_dimensions_btn.setFixedHeight(swap_button_height)
+        swap_all_dimensions_btn.setContentsMargins(0, 0, 0, 0)
+        swap_all_dimensions_btn.setStyleSheet(
+            "QPushButton {"
+            f"font-size: {swap_button_font_size}px;"
+            "padding: 0px;"
+            "margin: 0px;"
+            "text-align: center;"
+            "}"
+        )
+        swap_all_dimensions_btn.clicked.connect(swap_all_piece_dimensions)
+
+        def position_swap_all_dimensions_button(*_):
+            section_width = header.sectionSize(PIECES_COL_SWAP)
+            if section_width <= 0:
+                swap_all_dimensions_btn.hide()
+                return
+            button_width = max(9, min(swap_button_width, section_width - 2))
+            button_height = max(16, min(swap_button_height, header.height() - 2))
+            x_position = header.sectionViewportPosition(PIECES_COL_SWAP) + max(0, (section_width - button_width) // 2)
+            y_position = max(0, (header.height() - button_height) // 2)
+            swap_all_dimensions_btn.setGeometry(x_position, y_position, button_width, button_height)
+            swap_all_dimensions_btn.show()
+            swap_all_dimensions_btn.raise_()
+
+        header.sectionResized.connect(position_swap_all_dimensions_button)
+        header.geometriesChanged.connect(position_swap_all_dimensions_button)
+        pieces_table.horizontalScrollBar().valueChanged.connect(position_swap_all_dimensions_button)
+        position_swap_all_dimensions_button()
+
         actions_column_reserved_width = MAIN_ACTION_BUTTON_WIDTH + 36
         pieces_table.setMinimumWidth(
             max(320, min(sum(fixed_column_widths.values()) + 520, inspect_width - actions_column_reserved_width))
@@ -2640,7 +2797,17 @@ class ProjectDetailWindow(QMainWindow):
                 "detalles_de_obra": detalles_field.text().strip(),
             }
             sync_program_dimensions_from_rows()
-            config_data["pieces"] = all_rows
+            serialized_rows = []
+            for row in all_rows:
+                serialized_row = dict(row)
+                serialized_row["en_juego"] = bool(serialized_row.get("en_juego", False))
+                include_in_sheet = bool(serialized_row.get("include_in_sheet", serialized_row.get("excel", False)))
+                serialized_row["include_in_sheet"] = include_in_sheet
+                serialized_row["grain_direction"] = normalize_piece_grain_direction(serialized_row.get("grain_direction"))
+                serialized_row.pop("excel", None)
+                serialized_rows.append(serialized_row)
+            all_rows[:] = serialized_rows
+            config_data["pieces"] = serialized_rows
             config_data["generated_at"] = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
             config_path.write_text(json.dumps(config_data, indent=2, ensure_ascii=False), encoding="utf-8")
             # Actualizar el objeto ModuleData en memoria para que refleje las piezas guardadas
@@ -2657,6 +2824,7 @@ class ProjectDetailWindow(QMainWindow):
                 piece_dict.pop("pgmx", None)
                 piece_dict.pop("en_juego", None)
                 piece_dict.pop("include_in_sheet", None)
+                piece_dict.pop("excel", None)
                 
                 # Validar y procesar thickness: convertir string vacío a None
                 thickness_val = piece_dict.get("thickness")
@@ -2824,14 +2992,16 @@ class ProjectDetailWindow(QMainWindow):
                 width_ratio=0.94,
                 height_ratio=0.92,
             )
-            editor_inline_button_width = _scaled_int(110, max(editor_scale, 0.82), 90)
+            editor_inline_button_width = MAIN_ACTION_BUTTON_WIDTH
 
             editor_layout = QVBoxLayout()
-            content_layout = QHBoxLayout()
-            content_layout.setSpacing(16)
+            content_layout = QVBoxLayout()
+            content_layout.setSpacing(8)
+            content_layout.setContentsMargins(0, 0, 0, 0)
 
             form_layout = QVBoxLayout()
             form_layout.setSpacing(6)
+            form_layout.setContentsMargins(0, 0, 0, 0)
 
             id_field = QLineEdit(str(base_piece_row.get("id") or ""))
             name_field = QLineEdit(str(base_piece_row.get("name") or ""))
@@ -2840,67 +3010,169 @@ class ProjectDetailWindow(QMainWindow):
             width_field = QLineEdit(str(base_piece_row.get("width") or ""))
             thickness_field = QLineEdit(str(base_piece_row.get("thickness") or ""))
             color_field = QLineEdit(str(base_piece_row.get("color") or ""))
-            grain_field = QLineEdit(str(base_piece_row.get("grain_direction") or ""))
+            grain_field = QComboBox()
             source_field = QLineEdit(str(base_piece_row.get("source") or ""))
+            id_field.setFixedWidth(_scaled_int(120, max(editor_scale, 0.82), 90))
+            qty_field.setFixedWidth(_scaled_int(80, max(editor_scale, 0.82), 60))
+            dimension_field_width = _scaled_int(90, max(editor_scale, 0.82), 68)
+            color_grain_field_width = _scaled_int(104, max(editor_scale, 0.82), 82)
+            top_fields_spacing = 8
+            editor_inline_button_height = MAIN_ACTION_BUTTON_HEIGHT
+            editor_field_block_spacing = 2
+            editor_label_height = QLabel("X").sizeHint().height()
+            editor_grid_row_height = editor_label_height + editor_field_block_spacing + editor_inline_button_height
+            name_field.setFixedWidth((dimension_field_width * 3) + (top_fields_spacing * 2))
+            height_field.setFixedWidth(dimension_field_width)
+            width_field.setFixedWidth(dimension_field_width)
+            thickness_field.setFixedWidth(dimension_field_width)
+            color_field.setMinimumWidth(color_grain_field_width)
+            grain_field.setMinimumWidth(color_grain_field_width)
+            color_field.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            grain_field.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            source_field.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-            for label_text, field in (
-                ("ID:", id_field),
-                ("Nombre:", name_field),
-                ("Cantidad:", qty_field),
-                ("Alto:", height_field),
-                ("Ancho:", width_field),
-                ("Espesor:", thickness_field),
-                ("Veta / Grain direction:", grain_field),
-            ):
-                form_layout.addWidget(QLabel(label_text))
-                form_layout.addWidget(field)
+            grain_field.addItem("Sin veta", "0")
+            grain_field.addItem("Alto", "1")
+            grain_field.addItem("Ancho", "2")
+            current_grain_code = normalize_piece_grain_direction(base_piece_row.get("grain_direction"))
+            if current_grain_code == "1":
+                grain_field.setCurrentIndex(1)
+            elif current_grain_code == "2":
+                grain_field.setCurrentIndex(2)
+            else:
+                grain_field.setCurrentIndex(0)
 
-            form_layout.addWidget(QLabel("Color:"))
-            color_row = QHBoxLayout()
-            color_row.addWidget(color_field, 1)
+            def build_labeled_field_widget(label_text: str, field: QWidget) -> QWidget:
+                label = QLabel(label_text)
+                label.setFixedHeight(editor_label_height)
+                column_layout = QVBoxLayout()
+                column_layout.setSpacing(editor_field_block_spacing)
+                column_layout.setContentsMargins(0, 0, 0, 0)
+                column_layout.addStretch(1)
+                column_layout.addWidget(label)
+                column_layout.addWidget(field)
+                column_widget = QWidget()
+                column_widget.setFixedHeight(editor_grid_row_height)
+                column_widget.setLayout(column_layout)
+                return column_widget
+
+            top_fields_grid = QGridLayout()
+            top_fields_grid.setHorizontalSpacing(top_fields_spacing)
+            top_fields_grid.setVerticalSpacing(4)
+            top_fields_grid.setContentsMargins(0, 0, 0, 0)
+
+            id_column = build_labeled_field_widget("ID:", id_field)
+            name_column = build_labeled_field_widget("Nombre:", name_field)
+            height_column = build_labeled_field_widget("Alto:", height_field)
+            width_column = build_labeled_field_widget("Ancho:", width_field)
+            thickness_column = build_labeled_field_widget("Espesor:", thickness_field)
+            qty_column = build_labeled_field_widget("Cantidad:", qty_field)
+
+            top_fields_grid.addWidget(id_column, 0, 0)
+            top_fields_grid.addWidget(name_column, 0, 1, 1, 3)
+            top_fields_grid.addWidget(qty_column, 1, 0)
+            top_fields_grid.addWidget(height_column, 1, 1)
+            top_fields_grid.addWidget(width_column, 1, 2)
+            top_fields_grid.addWidget(thickness_column, 1, 3)
+            top_fields_grid.setColumnStretch(4, 1)
+            for top_fields_row in range(4):
+                top_fields_grid.setRowMinimumHeight(top_fields_row, editor_grid_row_height)
+
+            form_layout.insertLayout(0, top_fields_grid)
+
             apply_color_btn = None
             if not is_new_piece:
                 apply_color_btn = QPushButton("Cambiar")
-                apply_color_btn.setFixedSize(editor_inline_button_width, MAIN_ACTION_BUTTON_HEIGHT)
-                color_row.addWidget(apply_color_btn)
-            form_layout.addLayout(color_row)
+                apply_color_btn.setFixedSize(editor_inline_button_width, editor_inline_button_height)
 
-            form_layout.addWidget(QLabel("Programa asociado (opcional):"))
-            source_row = QHBoxLayout()
+            color_column = build_labeled_field_widget("Color:", color_field)
+            grain_column = build_labeled_field_widget("Veta:", grain_field)
+            color_column.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            grain_column.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            color_grain_row = QHBoxLayout()
+            color_grain_row.setSpacing(top_fields_spacing)
+            color_grain_row.setContentsMargins(0, 0, 0, 0)
+            color_grain_row.addWidget(color_column, 1, Qt.AlignTop)
+            color_grain_row.addWidget(grain_column, 1, Qt.AlignTop)
+            if apply_color_btn is not None:
+                change_button_label = QLabel("")
+                change_button_label.setFixedHeight(editor_label_height)
+                change_button_column = QVBoxLayout()
+                change_button_column.setSpacing(editor_field_block_spacing)
+                change_button_column.setContentsMargins(0, 0, 0, 0)
+                change_button_column.addWidget(change_button_label)
+                change_button_column.addWidget(apply_color_btn, 0, Qt.AlignRight)
+                change_button_widget = QWidget()
+                change_button_widget.setFixedWidth(editor_inline_button_width)
+                change_button_widget.setFixedHeight(editor_grid_row_height)
+                change_button_widget.setLayout(change_button_column)
+                color_grain_row.addWidget(change_button_widget, 0, Qt.AlignTop | Qt.AlignRight)
+            color_grain_widget = QWidget()
+            color_grain_widget.setFixedHeight(editor_grid_row_height)
+            color_grain_widget.setLayout(color_grain_row)
+            top_fields_grid.addWidget(color_grain_widget, 2, 0, 1, 4)
+
+            source_field_widget = build_labeled_field_widget("Programa asociado (opcional):", source_field)
+            source_field_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             select_source_btn = QPushButton("Seleccionar")
-            select_source_btn.setFixedSize(editor_inline_button_width, MAIN_ACTION_BUTTON_HEIGHT)
-            source_row.addWidget(source_field, 1)
-            source_row.addWidget(select_source_btn)
-            form_layout.addLayout(source_row)
+            select_source_btn.setFixedSize(editor_inline_button_width, editor_inline_button_height)
+            source_row = QHBoxLayout()
+            source_row.setSpacing(top_fields_spacing)
+            source_row.setContentsMargins(0, 0, 0, 0)
+            source_row.addWidget(source_field_widget, 1, Qt.AlignTop)
+            source_button_label = QLabel("")
+            source_button_label.setFixedHeight(editor_label_height)
+            source_button_column = QVBoxLayout()
+            source_button_column.setSpacing(editor_field_block_spacing)
+            source_button_column.setContentsMargins(0, 0, 0, 0)
+            source_button_column.addWidget(source_button_label)
+            source_button_column.addWidget(select_source_btn, 0, Qt.AlignRight)
+            source_button_widget = QWidget()
+            source_button_widget.setFixedWidth(editor_inline_button_width)
+            source_button_widget.setFixedHeight(editor_grid_row_height)
+            source_button_widget.setLayout(source_button_column)
+            source_row.addWidget(source_button_widget, 0, Qt.AlignTop | Qt.AlignRight)
+            source_widget = QWidget()
+            source_widget.setFixedHeight(editor_grid_row_height)
+            source_widget.setLayout(source_row)
+            top_fields_grid.addWidget(source_widget, 3, 0, 1, 4)
 
-            content_layout.addLayout(form_layout, 1)
+            form_panel = QWidget()
+            form_panel_layout = QVBoxLayout()
+            form_panel_layout.setContentsMargins(4, 4, 4, 4)
+            form_panel_layout.setSpacing(0)
+            form_panel_layout.addLayout(form_layout)
+            form_panel.setLayout(form_panel_layout)
+            form_panel_width_hint = form_panel.sizeHint().width()
+            form_panel.setFixedWidth(form_panel_width_hint)
+            preview_panel_width = form_panel_width_hint
 
             preview_layout = QVBoxLayout()
-            preview_layout.setSpacing(8)
-            preview_layout.addWidget(QLabel("Vista previa del programa asociado:"))
-
-            preview_info_label = QLabel("")
-            preview_info_label.setWordWrap(True)
-            preview_layout.addWidget(preview_info_label)
+            preview_layout.setSpacing(6)
+            preview_layout.setContentsMargins(0, 0, 0, 0)
+            preview_title_label = QLabel("Vista previa: (ninguno)")
+            preview_title_label.setWordWrap(True)
+            preview_layout.addWidget(preview_title_label)
 
             preview_svg = QSvgWidget()
             preview_svg.renderer().setAspectRatioMode(Qt.KeepAspectRatio)
-            preview_min_size = _scaled_int(360, max(editor_scale, 0.82), 220)
-            preview_svg.setMinimumSize(preview_min_size, preview_min_size)
+            preview_svg.setFixedSize(preview_panel_width, preview_panel_width)
             preview_layout.addWidget(preview_svg, 1)
 
             preview_placeholder = QLabel("Sin dibujo disponible para esta pieza.")
             preview_placeholder.setAlignment(Qt.AlignCenter)
             preview_placeholder.setWordWrap(True)
             preview_placeholder.setStyleSheet("color: #666; border: 1px dashed #999; padding: 12px;")
+            preview_placeholder.setFixedWidth(preview_panel_width)
             preview_layout.addWidget(preview_placeholder, 1)
 
-            refresh_preview_btn = QPushButton("Actualizar Vista")
-            refresh_preview_btn.setFixedHeight(MAIN_ACTION_BUTTON_HEIGHT)
-            preview_layout.addWidget(refresh_preview_btn)
+            preview_panel = QWidget()
+            preview_panel.setFixedWidth(preview_panel_width)
+            preview_panel.setLayout(preview_layout)
 
-            content_layout.addLayout(preview_layout, 1)
-            editor_layout.addLayout(content_layout, 1)
+            content_layout.addWidget(form_panel, 0, Qt.AlignTop | Qt.AlignLeft)
+            content_layout.addWidget(preview_panel, 0, Qt.AlignTop | Qt.AlignLeft)
+            editor_layout.addLayout(content_layout, 0)
 
             def build_editor_piece_row():
                 piece_id = id_field.text().strip()
@@ -2917,7 +3189,7 @@ class ProjectDetailWindow(QMainWindow):
                         "width": parse_optional_piece_float(width_field.text()),
                         "thickness": parse_optional_piece_float(thickness_field.text()),
                         "color": color_field.text().strip() or None,
-                        "grain_direction": grain_field.text().strip() or None,
+                        "grain_direction": grain_field.currentData(),
                         "source": normalized_source,
                         "f6_source": infer_companion_f6_source(normalized_source),
                         "pgmx": self._get_pgmx_status(normalized_source, pgmx_names, pgmx_relpaths),
@@ -2925,7 +3197,7 @@ class ProjectDetailWindow(QMainWindow):
                         "program_height": base_piece_row.get("program_height"),
                         "program_thickness": base_piece_row.get("program_thickness"),
                         "en_juego": bool(base_piece_row.get("en_juego", False)),
-                        "include_in_sheet": bool(base_piece_row.get("include_in_sheet", False)),
+                        "include_in_sheet": bool(base_piece_row.get("include_in_sheet", base_piece_row.get("excel", False))),
                     }
                 )
                 return updated_piece
@@ -2933,8 +3205,8 @@ class ProjectDetailWindow(QMainWindow):
             def refresh_piece_preview():
                 preview_piece_row = build_editor_piece_row()
                 preview_source = str(preview_piece_row.get("source") or "").strip()
-                preview_info_label.setText(
-                    f"Programa asociado: {preview_source or '(ninguno)'}"
+                preview_title_label.setText(
+                    f"Vista previa: {Path(preview_source).name if preview_source else '(ninguno)'}"
                 )
 
                 preview_svg.hide()
@@ -3016,13 +3288,22 @@ class ProjectDetailWindow(QMainWindow):
             btn_cancel_piece.clicked.connect(editor_dialog.reject)
             editor_buttons.addWidget(btn_save_piece)
             editor_buttons.addWidget(btn_cancel_piece)
+            editor_layout.addStretch(1)
             editor_layout.addLayout(editor_buttons)
 
             select_source_btn.clicked.connect(select_source_from_editor)
+            source_field.editingFinished.connect(refresh_piece_preview)
             if apply_color_btn is not None:
                 apply_color_btn.clicked.connect(apply_color_from_editor)
-            refresh_preview_btn.clicked.connect(refresh_piece_preview)
             editor_dialog.setLayout(editor_layout)
+            compact_editor_width = editor_dialog.sizeHint().width()
+            available_editor_geometry = _window_available_geometry(editor_dialog)
+            if available_editor_geometry is not None:
+                compact_editor_width = min(
+                    compact_editor_width,
+                    max(420, int(available_editor_geometry.width() * 0.94)),
+                )
+            editor_dialog.resize(compact_editor_width, editor_dialog.height())
             refresh_piece_preview()
             editor_dialog.exec()
 
@@ -3034,6 +3315,12 @@ class ProjectDetailWindow(QMainWindow):
             if all_idx is None:
                 return
             open_piece_editor(all_rows[all_idx], row_index=all_idx)
+
+        def edit_piece_from_table_double_click(row: int, _column: int):
+            if row < 0 or row >= pieces_table.rowCount():
+                return
+            pieces_table.selectRow(row)
+            edit_selected_piece()
 
         def remove_selected_piece():
             current_row = pieces_table.currentRow()
@@ -3888,11 +4175,11 @@ class ProjectDetailWindow(QMainWindow):
         actions_column.setContentsMargins(0, 0, 0, 0)
         actions_column.setSpacing(8)
 
-        add_piece_btn = QPushButton("Nueva\nPieza")
+        add_piece_btn = QPushButton("Nueva")
         add_piece_btn.setToolTip("Nueva Pieza")
-        edit_piece_btn = QPushButton("Editar\nPieza")
+        edit_piece_btn = QPushButton("Editar")
         edit_piece_btn.setToolTip("Editar Pieza")
-        delete_piece_btn = QPushButton("Eliminar\nPieza")
+        delete_piece_btn = QPushButton("Eliminar")
         delete_piece_btn.setToolTip("Eliminar Pieza")
         remove_source_btn = QPushButton("Quitar\nPrograma")
         remove_source_btn.setToolTip("Quitar programa")
@@ -3913,13 +4200,13 @@ class ProjectDetailWindow(QMainWindow):
         actions_column.addWidget(delete_piece_btn)
         actions_column.addWidget(remove_source_btn)
         actions_column.addWidget(configure_en_juego_btn)
-        actions_column.addStretch(1)
 
         content_row.addLayout(actions_column)
         layout.addLayout(content_row, 1)
 
         add_piece_btn.clicked.connect(add_manual_piece)
         edit_piece_btn.clicked.connect(edit_selected_piece)
+        pieces_table.cellDoubleClicked.connect(edit_piece_from_table_double_click)
         delete_piece_btn.clicked.connect(remove_selected_piece)
         remove_source_btn.clicked.connect(remove_source_for_selected_piece)
         configure_en_juego_btn.clicked.connect(open_en_juego_configuration_dialog)
@@ -3960,15 +4247,18 @@ class ProjectDetailWindow(QMainWindow):
 
         inspect_dialog.reject = reject_with_confirmation
 
-        footer_buttons = QHBoxLayout()
-        save_btn = QPushButton("Guardar Configuración")
+        actions_column.addStretch(1)
+
+        save_btn = QPushButton("Guardar")
+        save_btn.setToolTip("Guardar Configuración")
+        save_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
         save_btn.clicked.connect(save_module_settings)
         close_btn = QPushButton("Cerrar")
+        close_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
         close_btn.clicked.connect(request_close_dialog)
 
-        footer_buttons.addWidget(save_btn)
-        footer_buttons.addWidget(close_btn)
-        layout.addLayout(footer_buttons)
+        actions_column.addWidget(save_btn)
+        actions_column.addWidget(close_btn)
 
         inspect_dialog.setLayout(layout)
         inspect_dialog.exec()
