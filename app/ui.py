@@ -2995,7 +2995,7 @@ class ProjectDetailWindow(QMainWindow):
             editor_inline_button_width = MAIN_ACTION_BUTTON_WIDTH
 
             editor_layout = QVBoxLayout()
-            content_layout = QVBoxLayout()
+            content_layout = QHBoxLayout()
             content_layout.setSpacing(8)
             content_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -3139,12 +3139,15 @@ class ProjectDetailWindow(QMainWindow):
 
             form_panel = QWidget()
             form_panel_layout = QVBoxLayout()
-            form_panel_layout.setContentsMargins(4, 4, 4, 4)
+            form_panel_layout.setContentsMargins(4, 0, 4, 0)
             form_panel_layout.setSpacing(0)
             form_panel_layout.addLayout(form_layout)
             form_panel.setLayout(form_panel_layout)
             form_panel_width_hint = form_panel.sizeHint().width()
+            form_panel_height_hint = form_panel.minimumSizeHint().height()
             form_panel.setFixedWidth(form_panel_width_hint)
+            form_panel.setFixedHeight(form_panel_height_hint)
+            form_panel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             preview_panel_width = form_panel_width_hint
 
             preview_layout = QVBoxLayout()
@@ -3169,10 +3172,6 @@ class ProjectDetailWindow(QMainWindow):
             preview_panel = QWidget()
             preview_panel.setFixedWidth(preview_panel_width)
             preview_panel.setLayout(preview_layout)
-
-            content_layout.addWidget(form_panel, 0, Qt.AlignTop | Qt.AlignLeft)
-            content_layout.addWidget(preview_panel, 0, Qt.AlignTop | Qt.AlignLeft)
-            editor_layout.addLayout(content_layout, 0)
 
             def build_editor_piece_row():
                 piece_id = id_field.text().strip()
@@ -3231,6 +3230,13 @@ class ProjectDetailWindow(QMainWindow):
                 preview_placeholder.hide()
                 preview_svg.show()
 
+            def sync_editor_panel_heights():
+                editor_dialog.layout().activate()
+                preview_height = preview_panel.sizeHint().height()
+                right_panel.setFixedHeight(preview_height)
+                right_panel.updateGeometry()
+                content_panel.updateGeometry()
+
             def select_source_from_editor():
                 source_file, _ = QFileDialog.getOpenFileName(
                     editor_dialog,
@@ -3242,6 +3248,7 @@ class ProjectDetailWindow(QMainWindow):
                     return
                 source_field.setText(normalize_source_path(source_file))
                 refresh_piece_preview()
+                sync_editor_panel_heights()
 
             def apply_color_from_editor():
                 if is_new_piece or row_index is None:
@@ -3279,6 +3286,8 @@ class ProjectDetailWindow(QMainWindow):
                 editor_dialog.accept()
 
             editor_buttons = QHBoxLayout()
+            editor_buttons.setContentsMargins(0, 0, 0, 0)
+            editor_buttons.setSpacing(8)
             editor_buttons.addStretch(1)
             btn_save_piece = QPushButton("Guardar")
             btn_cancel_piece = QPushButton("Cancelar")
@@ -3288,23 +3297,48 @@ class ProjectDetailWindow(QMainWindow):
             btn_cancel_piece.clicked.connect(editor_dialog.reject)
             editor_buttons.addWidget(btn_save_piece)
             editor_buttons.addWidget(btn_cancel_piece)
-            editor_layout.addStretch(1)
-            editor_layout.addLayout(editor_buttons)
+
+            buttons_widget = QWidget()
+            buttons_widget.setFixedWidth(form_panel_width_hint)
+            buttons_widget.setContentsMargins(0, 0, 0, 0)
+            buttons_widget.setLayout(editor_buttons)
+            buttons_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+            right_panel = QWidget()
+            right_panel.setFixedWidth(form_panel_width_hint)
+            right_panel_layout = QVBoxLayout()
+            right_panel_layout.setContentsMargins(0, 0, 0, 0)
+            right_panel_layout.setSpacing(8)
+            right_panel_layout.addWidget(form_panel, 0, Qt.AlignTop | Qt.AlignLeft)
+            right_panel_layout.addStretch(1)
+            right_panel_layout.addWidget(buttons_widget, 0, Qt.AlignBottom | Qt.AlignRight)
+            right_panel.setLayout(right_panel_layout)
+
+            content_layout.addWidget(preview_panel, 0, Qt.AlignTop | Qt.AlignLeft)
+            content_layout.addWidget(right_panel, 0, Qt.AlignTop | Qt.AlignLeft)
+            content_panel = QWidget()
+            content_panel.setLayout(content_layout)
+            editor_layout.addWidget(content_panel, 0)
 
             select_source_btn.clicked.connect(select_source_from_editor)
             source_field.editingFinished.connect(refresh_piece_preview)
             if apply_color_btn is not None:
                 apply_color_btn.clicked.connect(apply_color_from_editor)
             editor_dialog.setLayout(editor_layout)
+            refresh_piece_preview()
+            sync_editor_panel_heights()
+            editor_dialog.layout().activate()
             compact_editor_width = editor_dialog.sizeHint().width()
+            compact_editor_height = editor_dialog.minimumSizeHint().height()
             available_editor_geometry = _window_available_geometry(editor_dialog)
             if available_editor_geometry is not None:
                 compact_editor_width = min(
                     compact_editor_width,
                     max(420, int(available_editor_geometry.width() * 0.94)),
                 )
-            editor_dialog.resize(compact_editor_width, editor_dialog.height())
-            refresh_piece_preview()
+            editor_dialog.setMinimumHeight(compact_editor_height)
+            editor_dialog.setMaximumHeight(compact_editor_height)
+            editor_dialog.resize(compact_editor_width, compact_editor_height)
             editor_dialog.exec()
 
         def add_manual_piece():
