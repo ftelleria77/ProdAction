@@ -3149,6 +3149,7 @@ class ProjectDetailWindow(QMainWindow):
             form_panel.setFixedHeight(form_panel_height_hint)
             form_panel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             preview_panel_width = form_panel_width_hint
+            preview_canvas_min_height = preview_panel_width
 
             preview_layout = QVBoxLayout()
             preview_layout.setSpacing(6)
@@ -3167,10 +3168,16 @@ class ProjectDetailWindow(QMainWindow):
             preview_placeholder.setWordWrap(True)
             preview_placeholder.setStyleSheet("color: #666; border: 1px dashed #999; padding: 12px;")
             preview_placeholder.setFixedWidth(preview_panel_width)
+            preview_placeholder.setMinimumHeight(preview_canvas_min_height)
             preview_layout.addWidget(preview_placeholder, 1)
 
             preview_panel = QWidget()
             preview_panel.setFixedWidth(preview_panel_width)
+            preview_panel.setMinimumHeight(
+                preview_title_label.sizeHint().height()
+                + preview_layout.spacing()
+                + preview_canvas_min_height
+            )
             preview_panel.setLayout(preview_layout)
 
             def build_editor_piece_row():
@@ -3230,10 +3237,15 @@ class ProjectDetailWindow(QMainWindow):
                 preview_placeholder.hide()
                 preview_svg.show()
 
+            def refresh_piece_preview_and_layout(*_args):
+                refresh_piece_preview()
+                sync_editor_panel_heights()
+
             def sync_editor_panel_heights():
                 editor_dialog.layout().activate()
-                preview_height = preview_panel.sizeHint().height()
-                right_panel.setFixedHeight(preview_height)
+                preview_height = max(preview_panel.sizeHint().height(), preview_panel.minimumSizeHint().height())
+                right_panel_height = max(preview_height, right_panel.minimumSizeHint().height())
+                right_panel.setFixedHeight(right_panel_height)
                 right_panel.updateGeometry()
                 content_panel.updateGeometry()
 
@@ -3247,8 +3259,7 @@ class ProjectDetailWindow(QMainWindow):
                 if not source_file:
                     return
                 source_field.setText(normalize_source_path(source_file))
-                refresh_piece_preview()
-                sync_editor_panel_heights()
+                refresh_piece_preview_and_layout()
 
             def apply_color_from_editor():
                 if is_new_piece or row_index is None:
@@ -3321,12 +3332,12 @@ class ProjectDetailWindow(QMainWindow):
             editor_layout.addWidget(content_panel, 0)
 
             select_source_btn.clicked.connect(select_source_from_editor)
-            source_field.editingFinished.connect(refresh_piece_preview)
+            source_field.editingFinished.connect(refresh_piece_preview_and_layout)
+            grain_field.currentIndexChanged.connect(refresh_piece_preview_and_layout)
             if apply_color_btn is not None:
                 apply_color_btn.clicked.connect(apply_color_from_editor)
             editor_dialog.setLayout(editor_layout)
-            refresh_piece_preview()
-            sync_editor_panel_heights()
+            refresh_piece_preview_and_layout()
             editor_dialog.layout().activate()
             compact_editor_width = editor_dialog.sizeHint().width()
             compact_editor_height = editor_dialog.minimumSizeHint().height()
@@ -3846,6 +3857,79 @@ class ProjectDetailWindow(QMainWindow):
             def to_scene_y(y_mm: float, piece_height_mm: float) -> float:
                 return piece_height_mm - y_mm
 
+            def draw_chevron_marker(rect_item, marker, piece_height_mm: float, color: str, offset_mm: float = 0.0):
+                if marker is None:
+                    return
+                dx = float(getattr(marker, "dx", 0.0) or 0.0)
+                dy = float(getattr(marker, "dy", 0.0) or 0.0)
+                length = (dx * dx + dy * dy) ** 0.5
+                if length <= 1e-9:
+                    return
+                unit_x = dx / length
+                unit_y = -dy / length
+
+                anchor_x = float(getattr(marker, "x", 0.0) or 0.0)
+                anchor_y = to_scene_y(float(getattr(marker, "y", 0.0) or 0.0), piece_height_mm)
+                if abs(offset_mm) > 1e-9:
+                    anchor_x += (-unit_y) * offset_mm
+                    anchor_y += unit_x * offset_mm
+
+                chevron_length = 4.0
+                chevron_half_width = 2.25
+                back_x = anchor_x - (unit_x * chevron_length)
+                back_y = anchor_y - (unit_y * chevron_length)
+                left_x = back_x + ((-unit_y) * chevron_half_width)
+                left_y = back_y + (unit_x * chevron_half_width)
+                right_x = back_x - ((-unit_y) * chevron_half_width)
+                right_y = back_y - (unit_x * chevron_half_width)
+
+                left_segment = QGraphicsLineItem(left_x, left_y, anchor_x, anchor_y, rect_item)
+                left_segment.setPen(make_pen(color, 1.3))
+                left_segment.setAcceptedMouseButtons(QtCoreQt.NoButton)
+
+                right_segment = QGraphicsLineItem(right_x, right_y, anchor_x, anchor_y, rect_item)
+                right_segment.setPen(make_pen(color, 1.3))
+                right_segment.setAcceptedMouseButtons(QtCoreQt.NoButton)
+
+            def draw_entry_marker(rect_item, entry_marker, piece_height_mm: float, color: str):
+                draw_chevron_marker(rect_item, entry_marker, piece_height_mm, color)
+
+            def draw_grain_hatching(rect_item, piece_row: dict, width_mm: float, height_mm: float):
+                from core.pgmx_processing import resolve_piece_grain_hatch_axis
+
+                hatch_axis = resolve_piece_grain_hatch_axis(
+                    piece_row.get("grain_direction"),
+                    safe_float(piece_row.get("width")),
+                    safe_float(piece_row.get("height")),
+                    width_mm,
+                    height_mm,
+                )
+                if hatch_axis not in {"vertical", "horizontal"}:
+                    return
+
+                hatch_color = "#D8D2C7"
+                hatch_spacing = 10.0
+                hatch_margin = 0.0
+                hatch_pen = make_pen(hatch_color, 0.7)
+
+                if hatch_axis == "vertical":
+                    current_x = hatch_margin
+                    while current_x <= (width_mm - hatch_margin):
+                        hatch_line = QGraphicsLineItem(current_x, hatch_margin, current_x, height_mm - hatch_margin, rect_item)
+                        hatch_line.setPen(hatch_pen)
+                        hatch_line.setZValue(-1.0)
+                        hatch_line.setAcceptedMouseButtons(QtCoreQt.NoButton)
+                        current_x += hatch_spacing
+                    return
+
+                current_y = hatch_margin
+                while current_y <= (height_mm - hatch_margin):
+                    hatch_line = QGraphicsLineItem(hatch_margin, current_y, width_mm - hatch_margin, current_y, rect_item)
+                    hatch_line.setPen(hatch_pen)
+                    hatch_line.setZValue(-1.0)
+                    hatch_line.setAcceptedMouseButtons(QtCoreQt.NoButton)
+                    current_y += hatch_spacing
+
             class EnJuegoPieceItem(QGraphicsRectItem):
                 def itemChange(self, change, value):
                     if change == QGraphicsItem.ItemPositionChange and self.scene() is not None:
@@ -3930,6 +4014,7 @@ class ProjectDetailWindow(QMainWindow):
                 title_item.setScale(4.0)
                 title_item.setPos(6.0, 6.0)
                 title_item.setAcceptedMouseButtons(QtCoreQt.NoButton)
+                title_item.setZValue(2.0)
 
                 if drawing_data is None:
                     empty_item = QGraphicsSimpleTextItem("(sin dibujo)", rect_item)
@@ -3937,7 +4022,11 @@ class ProjectDetailWindow(QMainWindow):
                     empty_item.setScale(4.0)
                     empty_item.setPos(6.0, 26.0)
                     empty_item.setAcceptedMouseButtons(QtCoreQt.NoButton)
+                    empty_item.setZValue(2.0)
+                    draw_grain_hatching(rect_item, piece_row, width_mm, height_mm)
                     return rect_item, width_mm, height_mm
+
+                draw_grain_hatching(rect_item, piece_row, width_mm, height_mm)
 
                 for path in drawing_data.milling_paths:
                     if (path.face or "Top").strip().lower() != "top":
@@ -3950,8 +4039,31 @@ class ProjectDetailWindow(QMainWindow):
                     for point_x, point_y in path.points[1:]:
                         painter_path.lineTo(point_x, to_scene_y(point_y, height_mm))
                     path_item = QGraphicsPathItem(painter_path, rect_item)
-                    path_item.setPen(make_pen("#0B7A75", 1.0))
+                    path_color = "#C0392B" if path.points[0] != path.points[-1] else "#0B7A75"
+                    path_item.setPen(make_pen(path_color, 1.0))
                     path_item.setAcceptedMouseButtons(QtCoreQt.NoButton)
+                    draw_entry_marker(rect_item, path.entry_arrow, height_mm, path_color)
+
+                for circle in drawing_data.milling_circles:
+                    face = (circle.face or "Top").strip().lower()
+                    if face not in {"top", "bottom"}:
+                        continue
+                    radius = max(1.0, float(circle.radius or 0.0))
+                    center_x = clamp(float(circle.center_x or 0.0), 0.0, width_mm)
+                    center_y = clamp(float(circle.center_y or 0.0), 0.0, height_mm)
+                    scene_y = to_scene_y(center_y, height_mm)
+                    ellipse_item = QGraphicsEllipseItem(
+                        center_x - radius,
+                        scene_y - radius,
+                        radius * 2.0,
+                        radius * 2.0,
+                        rect_item,
+                    )
+                    ellipse_item.setPen(make_pen("#0B7A75" if face == "top" else "#1F78B4", 1.0, dashed=(face == "bottom")))
+                    ellipse_item.setBrush(QBrush(QtCoreQt.transparent))
+                    ellipse_item.setAcceptedMouseButtons(QtCoreQt.NoButton)
+                    if face == "top":
+                        draw_entry_marker(rect_item, circle.entry_arrow, height_mm, "#0B7A75")
 
                 for operation in drawing_data.operations:
                     face = (operation.face or "Top").strip().lower()

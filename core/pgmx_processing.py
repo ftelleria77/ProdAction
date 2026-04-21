@@ -1,14 +1,23 @@
 """Interpretación básica de archivos PGMX y generación de dibujos por pieza."""
 
-import html
+import math
 import re
 import zipfile
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
-from core.model import Piece, Project
+from core.model import Piece, Project, normalize_piece_grain_direction
+from tools import synthesize_pgmx as sp
+from tools.pgmx_snapshot import (
+    PgmxFeatureSnapshot,
+    PgmxGeometrySnapshot,
+    PgmxOperationSnapshot,
+    PgmxSnapshot,
+    PgmxWorkingStepSnapshot,
+    read_pgmx_snapshot,
+)
 
 
 @dataclass
@@ -31,6 +40,31 @@ class MillingPath:
 
     face: str
     points: List[tuple[float, float]]
+    entry_arrow: Optional["MillingArrow"] = None
+    exit_arrow: Optional["MillingArrow"] = None
+
+
+@dataclass
+class MillingArrow:
+    """Marca de sentido de avance en entrada o salida."""
+
+    x: float
+    y: float
+    dx: float
+    dy: float
+
+
+@dataclass
+class MillingCircle:
+    """Fresado circular detectable y dibujable de forma explicita."""
+
+    face: str
+    center_x: float
+    center_y: float
+    radius: float
+    winding: str = "CounterClockwise"
+    entry_arrow: Optional[MillingArrow] = None
+    exit_arrow: Optional[MillingArrow] = None
 
 
 @dataclass
@@ -43,6 +77,7 @@ class PieceDrawingData:
     source_path: Path
     operations: List[MachiningOperation]
     milling_paths: List[MillingPath] = field(default_factory=list)
+    milling_circles: List[MillingCircle] = field(default_factory=list)
     face_dimensions: dict[str, tuple[float, float]] = field(default_factory=dict)
 
 
@@ -847,8 +882,9 @@ def _best_program_dimension_alignment(
     program_height: Optional[float],
 ) -> tuple[Optional[float], Optional[float], int, list[float], float]:
     alignments = []
-    for aligned_width, aligned_height, differing_values in (
+    for is_swapped, aligned_width, aligned_height, differing_values in (
         (
+            False,
             program_width,
             program_height,
             [
@@ -858,6 +894,7 @@ def _best_program_dimension_alignment(
             ],
         ),
         (
+            True,
             program_height,
             program_width,
             [
@@ -872,9 +909,82 @@ def _best_program_dimension_alignment(
             if piece_value is None or candidate_value is None:
                 continue
             total_delta += abs(piece_value - candidate_value)
-        alignments.append((aligned_width, aligned_height, len(differing_values), differing_values, total_delta))
+        alignments.append((is_swapped, aligned_width, aligned_height, len(differing_values), differing_values, total_delta))
 
-    return min(alignments, key=lambda item: (item[2], item[4]))
+    _, aligned_width, aligned_height, difference_count, differing_values, total_delta = min(
+        alignments,
+        key=lambda item: (item[3], item[5], int(item[0])),
+    )
+    return aligned_width, aligned_height, difference_count, differing_values, total_delta
+
+
+def _program_axes_are_swapped(
+    piece_width: Optional[float],
+    piece_height: Optional[float],
+    program_width: Optional[float],
+    program_height: Optional[float],
+) -> bool:
+    alignments = []
+    for is_swapped, aligned_width, aligned_height, differing_values in (
+        (
+            False,
+            program_width,
+            program_height,
+            [
+                value
+                for piece_value, value in ((piece_width, program_width), (piece_height, program_height))
+                if not _dimensions_match(piece_value, value)
+            ],
+        ),
+        (
+            True,
+            program_height,
+            program_width,
+            [
+                value
+                for piece_value, value in ((piece_width, program_height), (piece_height, program_width))
+                if not _dimensions_match(piece_value, value)
+            ],
+        ),
+    ):
+        total_delta = 0.0
+        for piece_value, candidate_value in ((piece_width, aligned_width), (piece_height, aligned_height)):
+            if piece_value is None or candidate_value is None:
+                continue
+            total_delta += abs(piece_value - candidate_value)
+        alignments.append((is_swapped, len(differing_values), total_delta))
+
+    best_alignment = min(alignments, key=lambda item: (item[1], item[2], int(item[0])))
+    return bool(best_alignment[0])
+
+
+def resolve_piece_grain_hatch_axis(
+    grain_direction,
+    piece_width: Optional[float],
+    piece_height: Optional[float],
+    drawn_width: Optional[float],
+    drawn_height: Optional[float],
+) -> Optional[str]:
+    """Devuelve el eje visual del rayado de veta segun como quedo dibujada la pieza."""
+
+    grain_code = normalize_piece_grain_direction(grain_direction)
+    if grain_code not in {"1", "2"}:
+        return None
+
+    normalized_piece_width = float(piece_width) if piece_width is not None and piece_width > 0 else None
+    normalized_piece_height = float(piece_height) if piece_height is not None and piece_height > 0 else None
+    normalized_drawn_width = float(drawn_width) if drawn_width is not None and drawn_width > 0 else None
+    normalized_drawn_height = float(drawn_height) if drawn_height is not None and drawn_height > 0 else None
+
+    axes_swapped = _program_axes_are_swapped(
+        normalized_piece_width,
+        normalized_piece_height,
+        normalized_drawn_width,
+        normalized_drawn_height,
+    )
+    if grain_code == "1":
+        return "horizontal" if axes_swapped else "vertical"
+    return "vertical" if axes_swapped else "horizontal"
 
 
 def _program_dimension_difference_summary(
@@ -1084,6 +1194,474 @@ def get_pgmx_program_dimension_note(
     return str(info["note"])
 
 
+def _normalize_face_name(value: Optional[str], default: str = "Top") -> str:
+    raw = str(value or default).strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+    mapping = {
+        "top": "Top",
+        "superior": "Top",
+        "carasuperior": "Top",
+        "bottom": "Bottom",
+        "inferior": "Bottom",
+        "carainferior": "Bottom",
+        "front": "Front",
+        "frontal": "Front",
+        "delantera": "Front",
+        "back": "Back",
+        "trasera": "Back",
+        "right": "Right",
+        "derecha": "Right",
+        "left": "Left",
+        "izquierda": "Left",
+    }
+    return mapping.get(raw, default)
+
+
+def _points_close_2d(
+    left: tuple[float, float],
+    right: tuple[float, float],
+    tolerance: float = 1e-6,
+) -> bool:
+    return abs(left[0] - right[0]) <= tolerance and abs(left[1] - right[1]) <= tolerance
+
+
+def _deduplicate_points_2d(points: Sequence[tuple[float, float]]) -> list[tuple[float, float]]:
+    deduplicated: list[tuple[float, float]] = []
+    for point in points:
+        normalized = (float(point[0]), float(point[1]))
+        if deduplicated and _points_close_2d(deduplicated[-1], normalized):
+            continue
+        deduplicated.append(normalized)
+    return deduplicated
+
+
+def _linked_snapshot_operation(
+    snapshot: PgmxSnapshot,
+    feature: PgmxFeatureSnapshot,
+    step: Optional[PgmxWorkingStepSnapshot],
+) -> Optional[PgmxOperationSnapshot]:
+    if step is not None and step.operation_ref is not None and step.operation_ref.id:
+        return snapshot.operation_by_id.get(step.operation_ref.id)
+    for operation_ref in feature.operation_refs:
+        if not operation_ref.id:
+            continue
+        operation = snapshot.operation_by_id.get(operation_ref.id)
+        if operation is not None:
+            return operation
+    return None
+
+
+def _ordered_snapshot_features(
+    snapshot: PgmxSnapshot,
+) -> list[tuple[PgmxFeatureSnapshot, Optional[PgmxOperationSnapshot], Optional[PgmxWorkingStepSnapshot]]]:
+    features_by_id = snapshot.feature_by_id
+    ordered_entries: list[tuple[PgmxFeatureSnapshot, Optional[PgmxOperationSnapshot], Optional[PgmxWorkingStepSnapshot]]] = []
+    seen_feature_ids: set[str] = set()
+    has_workplan_features = False
+
+    for step in snapshot.working_steps:
+        if not step.is_enabled:
+            continue
+        feature_ref = step.manufacturing_feature_ref
+        if feature_ref is None or not feature_ref.id:
+            continue
+        feature = features_by_id.get(feature_ref.id)
+        if feature is None:
+            continue
+        ordered_entries.append((feature, _linked_snapshot_operation(snapshot, feature, step), step))
+        seen_feature_ids.add(feature.id)
+        has_workplan_features = True
+
+    if not has_workplan_features:
+        for feature in snapshot.features:
+            if feature.id in seen_feature_ids:
+                continue
+            ordered_entries.append((feature, _linked_snapshot_operation(snapshot, feature, None), None))
+
+    return ordered_entries
+
+
+def _primitive_points_2d(primitive: sp.GeometryPrimitiveSpec) -> list[tuple[float, float]]:
+    if primitive.primitive_type == "Line":
+        return [
+            (float(primitive.start_point[0]), float(primitive.start_point[1])),
+            (float(primitive.end_point[0]), float(primitive.end_point[1])),
+        ]
+
+    if (
+        primitive.primitive_type != "Arc"
+        or primitive.center_point is None
+        or primitive.radius is None
+        or primitive.u_vector is None
+        or primitive.v_vector is None
+    ):
+        return [
+            (float(primitive.start_point[0]), float(primitive.start_point[1])),
+            (float(primitive.end_point[0]), float(primitive.end_point[1])),
+        ]
+
+    sweep = float(primitive.parameter_end) - float(primitive.parameter_start)
+    if math.isclose(sweep, 0.0, abs_tol=1e-9):
+        return [
+            (float(primitive.start_point[0]), float(primitive.start_point[1])),
+            (float(primitive.end_point[0]), float(primitive.end_point[1])),
+        ]
+
+    segment_count = max(8, int(math.ceil(abs(math.degrees(sweep)) / 12.0)))
+    sampled_points: list[tuple[float, float]] = []
+    for index in range(segment_count + 1):
+        parameter = float(primitive.parameter_start) + (sweep * (index / segment_count))
+        point = sp._sample_arc_point(
+            primitive.center_point,
+            primitive.u_vector,
+            primitive.v_vector,
+            float(primitive.radius),
+            parameter,
+        )
+        sampled_points.append((float(point[0]), float(point[1])))
+    return sampled_points
+
+
+def _profile_points_2d(profile: sp.GeometryProfileSpec) -> list[tuple[float, float]]:
+    if profile.geometry_type == "GeomTrimmedCurve":
+        if not profile.primitives:
+            return []
+        return _deduplicate_points_2d(_primitive_points_2d(profile.primitives[0]))
+
+    if profile.geometry_type != "GeomCompositeCurve":
+        return []
+
+    path_points: list[tuple[float, float]] = []
+    for primitive in profile.primitives:
+        primitive_points = _primitive_points_2d(primitive)
+        if not primitive_points:
+            continue
+        if path_points and _points_close_2d(path_points[-1], primitive_points[0]):
+            path_points.extend(primitive_points[1:])
+        else:
+            path_points.extend(primitive_points)
+
+    deduplicated = _deduplicate_points_2d(path_points)
+    if profile.is_closed and deduplicated and not _points_close_2d(deduplicated[0], deduplicated[-1]):
+        deduplicated.append(deduplicated[0])
+    return deduplicated
+
+
+def _curve_sampled_points_2d(geometry: PgmxGeometrySnapshot) -> list[tuple[float, float]]:
+    curve = geometry.curve
+    if curve is None or not curve.sampled_points:
+        return []
+    return _deduplicate_points_2d(
+        [(float(point[0]), float(point[1])) for point in curve.sampled_points]
+    )
+
+
+def _normalize_toolpath_type(value: Optional[str]) -> str:
+    return str(value or "").strip().lower().replace(" ", "").replace("_", "")
+
+
+def _toolpath_points_2d(operation: Optional[PgmxOperationSnapshot]) -> list[tuple[float, float]]:
+    if operation is None:
+        return []
+
+    preferred_points: list[tuple[float, float]] = []
+    fallback_points: list[tuple[float, float]] = []
+
+    for toolpath in operation.toolpaths:
+        curve = toolpath.curve
+        if curve is None or not curve.sampled_points:
+            continue
+        points = _deduplicate_points_2d(
+            [(float(point[0]), float(point[1])) for point in curve.sampled_points]
+        )
+        if len(points) < 2:
+            continue
+        if not toolpath.direction:
+            points = list(reversed(points))
+
+        toolpath_type = _normalize_toolpath_type(toolpath.path_type)
+        if toolpath_type == "trajectorypath":
+            preferred_points = points
+            break
+        if not fallback_points and toolpath_type not in {"approach", "lift"}:
+            fallback_points = points
+        elif not fallback_points:
+            fallback_points = points
+
+    return preferred_points or fallback_points
+
+
+def _normalize_vector_2d(dx: float, dy: float) -> Optional[tuple[float, float]]:
+    length = math.hypot(dx, dy)
+    if length <= 1e-9:
+        return None
+    return (dx / length, dy / length)
+
+
+def _entry_exit_arrows_from_points(
+    points: Sequence[tuple[float, float]],
+) -> tuple[Optional[MillingArrow], Optional[MillingArrow]]:
+    normalized_points = _deduplicate_points_2d(points)
+    if len(normalized_points) < 2:
+        return None, None
+
+    start_point = normalized_points[0]
+    end_point = normalized_points[-1]
+
+    entry_arrow: Optional[MillingArrow] = None
+    for next_point in normalized_points[1:]:
+        direction = _normalize_vector_2d(next_point[0] - start_point[0], next_point[1] - start_point[1])
+        if direction is None:
+            continue
+        entry_arrow = MillingArrow(
+            x=float(start_point[0]),
+            y=float(start_point[1]),
+            dx=float(direction[0]),
+            dy=float(direction[1]),
+        )
+        break
+
+    exit_arrow: Optional[MillingArrow] = None
+    for previous_point in reversed(normalized_points[:-1]):
+        direction = _normalize_vector_2d(end_point[0] - previous_point[0], end_point[1] - previous_point[1])
+        if direction is None:
+            continue
+        exit_arrow = MillingArrow(
+            x=float(end_point[0]),
+            y=float(end_point[1]),
+            dx=float(direction[0]),
+            dy=float(direction[1]),
+        )
+        break
+
+    return entry_arrow, exit_arrow
+
+
+def _snapshot_feature_depth(feature: PgmxFeatureSnapshot) -> Optional[float]:
+    depth_spec = feature.depth_spec
+    if depth_spec is not None:
+        if depth_spec.target_depth is not None:
+            return float(depth_spec.target_depth)
+        if depth_spec.extra_depth and depth_spec.extra_depth > 0:
+            return float(depth_spec.extra_depth)
+
+    depth_candidates = [feature.depth_start, feature.depth_end]
+    positive_depths = [float(value) for value in depth_candidates if value is not None and value > 0]
+    return positive_depths[0] if positive_depths else None
+
+
+def _snapshot_face_dimensions(
+    snapshot: PgmxSnapshot,
+    fallback_width: float,
+    fallback_height: float,
+    fallback_thickness: Optional[float],
+) -> dict[str, tuple[float, float]]:
+    face_dimensions: dict[str, tuple[float, float]] = {}
+
+    for plane in snapshot.planes:
+        face_name = _normalize_face_name(plane.plane_type or plane.name)
+        if plane.x_dimension > 0 and plane.y_dimension > 0:
+            face_dimensions[face_name] = (float(plane.x_dimension), float(plane.y_dimension))
+
+    state_length = float(snapshot.state.length or 0.0)
+    state_width = float(snapshot.state.width or 0.0)
+    state_depth = float(snapshot.state.depth or 0.0)
+
+    if state_length > 0 and state_width > 0:
+        face_dimensions.setdefault("Top", (state_length, state_width))
+        face_dimensions.setdefault("Bottom", (state_length, state_width))
+    if state_length > 0 and state_depth > 0:
+        face_dimensions.setdefault("Front", (state_length, state_depth))
+        face_dimensions.setdefault("Back", (state_length, state_depth))
+    if state_width > 0 and state_depth > 0:
+        face_dimensions.setdefault("Right", (state_width, state_depth))
+        face_dimensions.setdefault("Left", (state_width, state_depth))
+
+    thickness_value = float(fallback_thickness) if fallback_thickness is not None else 0.0
+    if fallback_width > 0 and fallback_height > 0:
+        face_dimensions.setdefault("Top", (float(fallback_width), float(fallback_height)))
+        face_dimensions.setdefault("Bottom", (float(fallback_width), float(fallback_height)))
+    if fallback_width > 0 and thickness_value > 0:
+        face_dimensions.setdefault("Front", (float(fallback_width), thickness_value))
+        face_dimensions.setdefault("Back", (float(fallback_width), thickness_value))
+    if fallback_height > 0 and thickness_value > 0:
+        face_dimensions.setdefault("Right", (float(fallback_height), thickness_value))
+        face_dimensions.setdefault("Left", (float(fallback_height), thickness_value))
+
+    return face_dimensions
+
+
+def _operation_merge_key(operation: MachiningOperation) -> tuple[object, ...]:
+    return (
+        operation.op_type,
+        round(float(operation.x), 4),
+        round(float(operation.y), 4),
+        round(float(operation.diameter), 4) if operation.diameter is not None else None,
+        round(float(operation.width), 4) if operation.width is not None else None,
+        round(float(operation.height), 4) if operation.height is not None else None,
+        _normalize_face_name(operation.face),
+    )
+
+
+def _merge_operations(
+    base_operations: Sequence[MachiningOperation],
+    extra_operations: Sequence[MachiningOperation],
+) -> list[MachiningOperation]:
+    merged = list(base_operations)
+    seen = {_operation_merge_key(operation) for operation in merged}
+    for operation in extra_operations:
+        key = _operation_merge_key(operation)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(operation)
+    return merged
+
+
+def _path_merge_key(path: MillingPath) -> tuple[object, ...]:
+    normalized_points = tuple((round(float(x), 4), round(float(y), 4)) for x, y in path.points)
+    return (_normalize_face_name(path.face), normalized_points)
+
+
+def _merge_milling_paths(
+    base_paths: Sequence[MillingPath],
+    extra_paths: Sequence[MillingPath],
+) -> list[MillingPath]:
+    merged = list(base_paths)
+    seen = {_path_merge_key(path) for path in merged}
+    for path in extra_paths:
+        key = _path_merge_key(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(path)
+    return merged
+
+
+def _build_piece_drawing_from_snapshot(
+    snapshot: PgmxSnapshot,
+    source_path: Path,
+    piece: Piece,
+) -> Optional[PieceDrawingData]:
+    width = float(snapshot.state.length or 0.0)
+    height = float(snapshot.state.width or 0.0)
+    thickness = float(snapshot.state.depth) if snapshot.state.depth > 0 else piece.thickness
+
+    if width <= 0:
+        width = float(piece.width or 0.0)
+    if height <= 0:
+        height = float(piece.height or 0.0)
+    if width <= 0 or height <= 0:
+        return None
+
+    operations: list[MachiningOperation] = []
+    milling_paths: list[MillingPath] = []
+    milling_circles: list[MillingCircle] = []
+
+    for feature, operation, _step in _ordered_snapshot_features(snapshot):
+        geometry: Optional[PgmxGeometrySnapshot] = None
+        if feature.geometry_ref is not None and feature.geometry_ref.id:
+            geometry = snapshot.geometry_by_id.get(feature.geometry_ref.id)
+
+        face_name = _normalize_face_name(feature.plane_name)
+        feature_type = feature.feature_type or ""
+        operation_type = operation.operation_type if operation is not None else ""
+        trajectory_points = _toolpath_points_2d(operation)
+
+        if (
+            geometry is not None
+            and geometry.point is not None
+            and (
+                "RoundHole" in feature_type
+                or "DrillingOperation" in operation_type
+            )
+        ):
+            operations.append(
+                MachiningOperation(
+                    op_type="drill",
+                    x=float(geometry.point[0]),
+                    y=float(geometry.point[1]),
+                    diameter=float(feature.diameter) if feature.diameter is not None else None,
+                    face=face_name,
+                    depth=_snapshot_feature_depth(feature),
+                )
+            )
+            continue
+
+        if geometry is None:
+            continue
+
+        profile = geometry.profile
+        if profile is not None and (
+            "GeneralProfileFeature" in feature_type
+            or "BottomAndSideFinishMilling" in operation_type
+        ):
+            if (
+                profile.geometry_type == "GeomCircle"
+                and profile.center_point is not None
+                and profile.radius is not None
+            ):
+                entry_arrow, exit_arrow = _entry_exit_arrows_from_points(trajectory_points)
+                milling_circles.append(
+                    MillingCircle(
+                        face=face_name,
+                        center_x=float(profile.center_point[0]),
+                        center_y=float(profile.center_point[1]),
+                        radius=float(profile.radius),
+                        winding=profile.winding or "CounterClockwise",
+                        entry_arrow=entry_arrow,
+                        exit_arrow=exit_arrow,
+                    )
+                )
+                continue
+
+            points = _profile_points_2d(profile)
+            if len(points) >= 2:
+                direction_points = trajectory_points or points
+                if not trajectory_points and feature.is_geom_same_direction is False:
+                    direction_points = list(reversed(direction_points))
+                entry_arrow, exit_arrow = _entry_exit_arrows_from_points(direction_points)
+                milling_paths.append(
+                    MillingPath(
+                        face=face_name,
+                        points=points,
+                        entry_arrow=entry_arrow,
+                        exit_arrow=exit_arrow,
+                    )
+                )
+                continue
+
+        sampled_points = _curve_sampled_points_2d(geometry)
+        if len(sampled_points) >= 2:
+            direction_points = trajectory_points or sampled_points
+            if not trajectory_points and feature.is_geom_same_direction is False:
+                direction_points = list(reversed(direction_points))
+            entry_arrow, exit_arrow = _entry_exit_arrows_from_points(direction_points)
+            milling_paths.append(
+                MillingPath(
+                    face=face_name,
+                    points=sampled_points,
+                    entry_arrow=entry_arrow,
+                    exit_arrow=exit_arrow,
+                )
+            )
+
+    face_dimensions = _snapshot_face_dimensions(snapshot, width, height, thickness)
+    top_dimensions = face_dimensions.get("Top")
+    if top_dimensions and top_dimensions[0] > 0 and top_dimensions[1] > 0:
+        width, height = float(top_dimensions[0]), float(top_dimensions[1])
+
+    return PieceDrawingData(
+        width=width,
+        height=height,
+        thickness=thickness,
+        source_path=source_path,
+        operations=operations,
+        milling_paths=milling_paths,
+        milling_circles=milling_circles,
+        face_dimensions=face_dimensions,
+    )
+
+
 def parse_pgmx_for_piece(project: Project, piece: Piece, module_path: Path) -> Optional[PieceDrawingData]:
     """Lee PGMX de una pieza y devuelve datos para dibujo."""
 
@@ -1091,7 +1669,52 @@ def parse_pgmx_for_piece(project: Project, piece: Piece, module_path: Path) -> O
     if source_path is None:
         return None
 
-    text = _read_pgmx_text(source_path)
+    try:
+        snapshot = read_pgmx_snapshot(source_path)
+    except Exception:
+        snapshot = None
+
+    text: Optional[str] = None
+    try:
+        text = _read_pgmx_text(source_path)
+    except OSError:
+        text = None
+
+    if snapshot is not None:
+        snapshot_drawing = _build_piece_drawing_from_snapshot(snapshot, source_path, piece)
+        if snapshot_drawing is not None:
+            if text:
+                legacy_operations, legacy_face_dims_ops = _extract_operations_from_xcam_xml(text)
+                if not legacy_operations:
+                    legacy_operations = [
+                        MachiningOperation(
+                            op_type=operation.op_type,
+                            x=operation.x,
+                            y=operation.y,
+                            diameter=operation.diameter,
+                            width=operation.width,
+                            height=operation.height,
+                            face="Top",
+                        )
+                        for operation in _extract_operations(text)
+                    ]
+                snapshot_drawing.operations = _merge_operations(snapshot_drawing.operations, legacy_operations)
+
+                legacy_paths, legacy_face_dims_milling = _extract_milling_paths_from_xcam_xml(text)
+                if legacy_paths:
+                    snapshot_drawing.milling_paths = _merge_milling_paths(snapshot_drawing.milling_paths, legacy_paths)
+                snapshot_drawing.face_dimensions.update(
+                    {
+                        face_name: dims
+                        for face_name, dims in {**legacy_face_dims_ops, **legacy_face_dims_milling}.items()
+                        if face_name not in snapshot_drawing.face_dimensions
+                    }
+                )
+            return snapshot_drawing
+
+    if text is None:
+        return None
+
     width_txt, height_txt, thickness_txt = _extract_dimensions(text)
 
     width = width_txt if width_txt and width_txt > 0 else float(piece.width or 0)
@@ -1198,6 +1821,68 @@ def build_piece_svg(piece: Piece, drawing: PieceDrawingData, output_path: Path):
         x1, y1 = points[-1]
         return abs(x0 - x1) <= tolerance_mm and abs(y0 - y1) <= tolerance_mm
 
+    def append_chevron(marker: Optional[MillingArrow], color: str, offset_px: float = 0.0) -> None:
+        if marker is None:
+            return
+        canvas_direction = _normalize_vector_2d(float(marker.dx), -float(marker.dy))
+        if canvas_direction is None:
+            return
+
+        unit_x, unit_y = canvas_direction
+        perp_x = -unit_y
+        perp_y = unit_x
+        anchor_x = to_canvas_x(clamp(float(marker.x), 0.0, top_w))
+        anchor_y = to_canvas_y(clamp(float(marker.y), 0.0, top_h))
+        if not math.isclose(offset_px, 0.0, abs_tol=1e-9):
+            anchor_x += perp_x * offset_px
+            anchor_y += perp_y * offset_px
+
+        chevron_length = 4.0
+        chevron_half_width = 2.25
+        back_x = anchor_x - (unit_x * chevron_length)
+        back_y = anchor_y - (unit_y * chevron_length)
+        left_x = back_x + (perp_x * chevron_half_width)
+        left_y = back_y + (perp_y * chevron_half_width)
+        right_x = back_x - (perp_x * chevron_half_width)
+        right_y = back_y - (perp_y * chevron_half_width)
+
+        lines.append(
+            f'<line x1="{left_x:.2f}" y1="{left_y:.2f}" x2="{anchor_x:.2f}" y2="{anchor_y:.2f}" stroke="{color}" stroke-width="1.5" stroke-linecap="round"/>'
+        )
+        lines.append(
+            f'<line x1="{right_x:.2f}" y1="{right_y:.2f}" x2="{anchor_x:.2f}" y2="{anchor_y:.2f}" stroke="{color}" stroke-width="1.5" stroke-linecap="round"/>'
+        )
+
+    def append_entry_marker(entry_marker: Optional[MillingArrow], color: str) -> None:
+        append_chevron(entry_marker, color)
+
+    def append_grain_hatching(hatch_axis: Optional[str]) -> None:
+        hatch_color = "#d8d2c7"
+        hatch_spacing = 10.0
+        hatch_margin = 0.0
+        hatch_stroke_width = 0.7
+
+        if hatch_axis == "vertical":
+            current_x = piece_x + hatch_margin
+            hatch_end_y = piece_y + piece_h_px - hatch_margin
+            hatch_start_y = piece_y + hatch_margin
+            while current_x <= (piece_x + piece_w_px - hatch_margin):
+                lines.append(
+                    f'<line x1="{current_x:.2f}" y1="{hatch_start_y:.2f}" x2="{current_x:.2f}" y2="{hatch_end_y:.2f}" stroke="{hatch_color}" stroke-width="{hatch_stroke_width}" clip-path="url(#piece-clip)"/>'
+                )
+                current_x += hatch_spacing
+            return
+
+        if hatch_axis == "horizontal":
+            current_y = piece_y + hatch_margin
+            hatch_start_x = piece_x + hatch_margin
+            hatch_end_x = piece_x + piece_w_px - hatch_margin
+            while current_y <= (piece_y + piece_h_px - hatch_margin):
+                lines.append(
+                    f'<line x1="{hatch_start_x:.2f}" y1="{current_y:.2f}" x2="{hatch_end_x:.2f}" y2="{current_y:.2f}" stroke="{hatch_color}" stroke-width="{hatch_stroke_width}" clip-path="url(#piece-clip)"/>'
+                )
+                current_y += hatch_spacing
+
     def side_projection_for_operation(op: MachiningOperation):
         face = (op.face or "").strip().lower()
         diameter = op.diameter if op.diameter and op.diameter > 0 else 5.0
@@ -1224,6 +1909,16 @@ def build_piece_svg(piece: Piece, drawing: PieceDrawingData, output_path: Path):
         f'<defs><clipPath id="piece-clip"><rect x="{piece_x:.2f}" y="{piece_y:.2f}" width="{piece_w_px:.2f}" height="{piece_h_px:.2f}"/></clipPath></defs>',
     ]
 
+    append_grain_hatching(
+        resolve_piece_grain_hatch_axis(
+            piece.grain_direction,
+            piece.width,
+            piece.height,
+            top_w,
+            top_h,
+        )
+    )
+
     # Fresados visibles de la cara superior (clip-path recorta lo que sale del borde).
     for path in drawing.milling_paths:
         if (path.face or "Top").strip().lower() != "top":
@@ -1239,6 +1934,22 @@ def build_piece_svg(piece: Piece, drawing: PieceDrawingData, output_path: Path):
         if len(svg_points) >= 2:
             lines.append(
                 f'<polyline points="{" ".join(svg_points)}" fill="none" stroke="{stroke_color}" stroke-width="{stroke_width}" clip-path="url(#piece-clip)"/>'
+            )
+            append_entry_marker(path.entry_arrow, stroke_color)
+
+    for circle in drawing.milling_circles:
+        face = (circle.face or "Top").strip().lower()
+        circle_x = to_canvas_x(clamp(circle.center_x, 0.0, top_w))
+        circle_y = to_canvas_y(clamp(circle.center_y, 0.0, top_h))
+        circle_radius = max(1.0, float(circle.radius) * scale)
+        if face == "top":
+            lines.append(
+                f'<circle cx="{circle_x:.2f}" cy="{circle_y:.2f}" r="{circle_radius:.2f}" fill="none" stroke="#0b7a75" stroke-width="1.0" clip-path="url(#piece-clip)"/>'
+            )
+            append_entry_marker(circle.entry_arrow, "#0b7a75")
+        elif face == "bottom":
+            lines.append(
+                f'<circle cx="{circle_x:.2f}" cy="{circle_y:.2f}" r="{circle_radius:.2f}" fill="none" stroke="#1f78b4" stroke-width="1.1" stroke-dasharray="4,3" clip-path="url(#piece-clip)"/>'
             )
 
     top_ops = 0
@@ -1317,7 +2028,7 @@ def generate_project_piece_drawings(project: Project) -> tuple[int, int, int]:
                 skipped += 1
                 continue
 
-            if drawing_data.operations or drawing_data.milling_paths:
+            if drawing_data.operations or drawing_data.milling_paths or drawing_data.milling_circles:
                 with_machining += 1
 
             piece_slug = _sanitize_filename(piece.name or piece.id)
