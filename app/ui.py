@@ -265,6 +265,8 @@ def _normalize_en_juego_cut_mode(value) -> str:
     raw = str(value or "").strip().lower()
     if raw in {"nesting", "corte nesting", "cut nesting"}:
         return "nesting"
+    if raw in {"manual", "corte manual", "cut manual"}:
+        return "manual"
     return "manual"
 
 
@@ -581,9 +583,9 @@ def _default_en_juego_settings() -> dict:
     default_tool = _default_en_juego_cutting_tool()
     return {
         "cut_mode": "manual",
-        "origin_x": 0,
-        "origin_y": 0,
-        "origin_z": 0,
+        "origin_x": 5,
+        "origin_y": 5,
+        "origin_z": 9,
         "cutting_is_through": True,
         "cutting_depth_value": 1.0,
         "approach_enabled": False,
@@ -594,6 +596,26 @@ def _default_en_juego_settings() -> dict:
         "retract_type": "Arc",
         "retract_radius_multiplier": 2.0,
         "retract_mode": "Quote",
+        "squaring_is_through": True,
+        "squaring_depth_value": 1.0,
+        "squaring_approach_enabled": False,
+        "squaring_approach_type": "Arc",
+        "squaring_approach_radius_multiplier": 2.0,
+        "squaring_approach_mode": "Quote",
+        "squaring_retract_enabled": False,
+        "squaring_retract_type": "Arc",
+        "squaring_retract_radius_multiplier": 2.0,
+        "squaring_retract_mode": "Quote",
+        "squaring_direction": "CW",
+        "squaring_unidirectional_multipass": False,
+        "squaring_pocket_depth": 0.0,
+        "squaring_last_pocket": 0.0,
+        "squaring_tool_id": str(default_tool.get("tool_id") or "").strip(),
+        "squaring_tool_code": str(default_tool.get("tool_code") or "").strip(),
+        "squaring_tool_name": str(default_tool.get("tool_name") or "").strip(),
+        "squaring_tool_diameter": _compact_number(
+            _coerce_setting_number(default_tool.get("diameter"), 0.0, minimum=0.0)
+        ),
         "cutting_tool_id": str(default_tool.get("tool_id") or "").strip(),
         "cutting_tool_code": str(default_tool.get("tool_code") or "").strip(),
         "cutting_tool_name": str(default_tool.get("tool_name") or "").strip(),
@@ -612,6 +634,14 @@ def _normalize_en_juego_settings(value) -> dict:
     fallback_diameter = _coerce_setting_number(
         resolved_tool.get("diameter"),
         float(defaults["cutting_tool_diameter"]),
+        minimum=0.0,
+    )
+    squaring_tool = _resolve_en_juego_cutting_tool(
+        value.get("squaring_tool_id") or defaults.get("squaring_tool_id")
+    )
+    squaring_fallback_diameter = _coerce_setting_number(
+        squaring_tool.get("diameter"),
+        float(defaults["squaring_tool_diameter"]),
         minimum=0.0,
     )
 
@@ -671,6 +701,102 @@ def _normalize_en_juego_settings(value) -> dict:
         "retract_mode": "Quote"
         if str(value.get("retract_mode") or defaults["retract_mode"]).strip().lower() == "quote"
         else "Up",
+        "squaring_is_through": _coerce_setting_bool(
+            value.get("squaring_is_through"),
+            bool(defaults["squaring_is_through"]),
+        ),
+        "squaring_depth_value": _compact_number(
+            _coerce_setting_number(
+                value.get("squaring_depth_value"),
+                float(defaults["squaring_depth_value"]),
+                minimum=0.0,
+            )
+        ),
+        "squaring_approach_enabled": _coerce_setting_bool(
+            value.get("squaring_approach_enabled"),
+            bool(defaults["squaring_approach_enabled"]),
+        ),
+        "squaring_approach_type": "Arc"
+        if str(value.get("squaring_approach_type") or defaults["squaring_approach_type"]).strip().lower() == "arc"
+        else "Line",
+        "squaring_approach_radius_multiplier": _compact_number(
+            _coerce_setting_number(
+                value.get("squaring_approach_radius_multiplier"),
+                float(defaults["squaring_approach_radius_multiplier"]),
+                minimum=0.0,
+            )
+        ),
+        "squaring_approach_mode": "Quote"
+        if str(value.get("squaring_approach_mode") or defaults["squaring_approach_mode"]).strip().lower() == "quote"
+        else "Down",
+        "squaring_retract_enabled": _coerce_setting_bool(
+            value.get("squaring_retract_enabled"),
+            bool(defaults["squaring_retract_enabled"]),
+        ),
+        "squaring_retract_type": "Arc"
+        if str(value.get("squaring_retract_type") or defaults["squaring_retract_type"]).strip().lower() == "arc"
+        else "Line",
+        "squaring_retract_radius_multiplier": _compact_number(
+            _coerce_setting_number(
+                value.get("squaring_retract_radius_multiplier"),
+                float(defaults["squaring_retract_radius_multiplier"]),
+                minimum=0.0,
+            )
+        ),
+        "squaring_retract_mode": "Quote"
+        if str(value.get("squaring_retract_mode") or defaults["squaring_retract_mode"]).strip().lower() == "quote"
+        else "Up",
+        "squaring_direction": "CCW"
+        if str(value.get("squaring_direction") or defaults["squaring_direction"]).strip().lower() in {
+            "ccw",
+            "antihorario",
+            "anti horario",
+            "anti-horario",
+        }
+        else "CW",
+        "squaring_unidirectional_multipass": _coerce_setting_bool(
+            value.get("squaring_unidirectional_multipass"),
+            bool(defaults["squaring_unidirectional_multipass"]),
+        ),
+        "squaring_pocket_depth": _compact_number(
+            _coerce_setting_number(
+                value.get("squaring_pocket_depth"),
+                float(defaults["squaring_pocket_depth"]),
+                minimum=0.0,
+            )
+        ),
+        "squaring_last_pocket": _compact_number(
+            _coerce_setting_number(
+                value.get("squaring_last_pocket"),
+                float(defaults["squaring_last_pocket"]),
+                minimum=0.0,
+            )
+        ),
+        "squaring_tool_id": str(
+            value.get("squaring_tool_id")
+            or squaring_tool.get("tool_id")
+            or defaults.get("squaring_tool_id")
+            or ""
+        ).strip(),
+        "squaring_tool_code": str(
+            value.get("squaring_tool_code")
+            or squaring_tool.get("tool_code")
+            or defaults.get("squaring_tool_code")
+            or ""
+        ).strip(),
+        "squaring_tool_name": str(
+            value.get("squaring_tool_name")
+            or squaring_tool.get("tool_name")
+            or defaults.get("squaring_tool_name")
+            or ""
+        ).strip(),
+        "squaring_tool_diameter": _compact_number(
+            _coerce_setting_number(
+                value.get("squaring_tool_diameter"),
+                squaring_fallback_diameter,
+                minimum=0.0,
+            )
+        ),
         "cutting_tool_id": str(
             value.get("cutting_tool_id")
             or resolved_tool.get("tool_id")
@@ -990,16 +1116,35 @@ def _coerce_required_piece_float_fields(piece_data: dict, field_names: tuple[str
             piece_data[field_name] = 0.0
 
 
-def _coerce_piece_quantity_field(piece_data: dict, field_name: str = "quantity") -> None:
-    raw_value = piece_data.get(field_name)
+PIECE_QUANTITY_STEP_FIELD = "quantity_step"
+
+
+def _parse_piece_quantity_value(raw_value, default: int = 1, minimum: int = 0) -> int:
+    try:
+        fallback_value = max(minimum, int(float(default)))
+    except (TypeError, ValueError):
+        fallback_value = minimum
     if raw_value == "" or raw_value is None:
-        piece_data[field_name] = 1
-        return
+        return fallback_value
     try:
         quantity = int(float(raw_value))
     except (ValueError, TypeError):
-        quantity = 1
-    piece_data[field_name] = quantity if quantity > 0 else 1
+        return fallback_value
+    return quantity if quantity >= minimum else minimum
+
+
+def _coerce_piece_quantity_field(
+    piece_data: dict,
+    field_name: str = "quantity",
+    *,
+    default: int = 1,
+    minimum: int = 0,
+) -> None:
+    piece_data[field_name] = _parse_piece_quantity_value(
+        piece_data.get(field_name),
+        default=default,
+        minimum=minimum,
+    )
 
 
 def _load_pieces_from_config_rows(piece_rows, module_name: str) -> list[Piece]:
@@ -1476,6 +1621,7 @@ class ProjectDetailWindow(QMainWindow):
                     filtered_dict,
                     ("thickness", "program_width", "program_height", "program_thickness"),
                 )
+                _coerce_piece_quantity_field(filtered_dict, minimum=0)
                 
                 try:
                     piece = Piece(**filtered_dict)
@@ -1561,11 +1707,13 @@ class ProjectDetailWindow(QMainWindow):
                 previous_row = previous_rows_by_id.get(str(piece.id or "").strip(), {})
                 source_value = piece.cnc_source or ""
                 pgmx_status = self._get_pgmx_status(source_value, pgmx_names, pgmx_relpaths)
+                piece_quantity = _parse_piece_quantity_value(piece.quantity, default=1, minimum=0)
                 rows.append(
                     {
                         "id": piece.id,
                         "name": piece.name or piece.id,
-                        "quantity": piece.quantity,
+                        "quantity": piece_quantity,
+                        PIECE_QUANTITY_STEP_FIELD: piece_quantity,
                         "height": piece.height,
                         "width": piece.width,
                         "thickness": piece.thickness,
@@ -1792,11 +1940,11 @@ class ProjectDetailWindow(QMainWindow):
                 )
                 group["pieces"].append(piece)
                 group["piece_count"] += 1
-                try:
-                    quantity = int(piece.quantity or 1)
-                except (TypeError, ValueError):
-                    quantity = 1
-                group["units_count"] += quantity if quantity > 0 else 1
+                group["units_count"] += _parse_piece_quantity_value(
+                    getattr(piece, "quantity", None),
+                    default=1,
+                    minimum=0,
+                )
 
         if not unresolved_groups:
             return True
@@ -1963,12 +2111,8 @@ class ProjectDetailWindow(QMainWindow):
         return [piece for piece in module.pieces if self._is_valid_piece_for_count(piece)]
 
     def _piece_quantity(self, piece) -> int:
-        """Cantidad numérica de la pieza, con fallback seguro a 1."""
-        try:
-            qty = int(piece.quantity)
-            return qty if qty > 0 else 1
-        except (TypeError, ValueError):
-            return 1
+        """Cantidad numérica de la pieza, admitiendo 0 como mínimo."""
+        return _parse_piece_quantity_value(getattr(piece, "quantity", None), default=1, minimum=0)
 
     def _valid_piece_count_in_module(self, module) -> int:
         """Total de piezas (unidades) válidas en el módulo."""
@@ -2235,21 +2379,70 @@ class ProjectDetailWindow(QMainWindow):
             QMessageBox.warning(self, "Módulos", "No hay módulos cargados. Procese el proyecto primero.")
             return
 
+        selected_locale_names: list[str] = []
+        seen_locale_keys: set[str] = set()
+        for item in self.locales_list.selectedItems():
+            locale_name = str(item.data(Qt.UserRole) or "").strip()
+            locale_key = locale_name.lower()
+            if not locale_name or locale_key in seen_locale_keys:
+                continue
+            seen_locale_keys.add(locale_key)
+            selected_locale_names.append(locale_name)
+
+        if not selected_locale_names:
+            current_locale_item = self.locales_list.currentItem()
+            current_locale_name = str(current_locale_item.data(Qt.UserRole) or "").strip() if current_locale_item else ""
+            if current_locale_name:
+                selected_locale_names.append(current_locale_name)
+
+        available_locale_names = self._listed_locale_names()
+        if available_locale_names and not selected_locale_names:
+            if len(available_locale_names) == 1:
+                selected_locale_names = list(available_locale_names)
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Módulos",
+                    "Seleccione un local en la lista para ver sus módulos.",
+                )
+                return
+
+        selected_locale_keys = {locale_name.strip().lower() for locale_name in selected_locale_names if locale_name.strip()}
+        def filtered_modules_for_dialog() -> list[ModuleData]:
+            return [
+                module
+                for module in self.project.modules
+                if not selected_locale_keys or str(module.locale_name or "").strip().lower() in selected_locale_keys
+            ]
+
+        visible_modules = filtered_modules_for_dialog()
+        if not visible_modules:
+            QMessageBox.warning(
+                self,
+                "Módulos",
+                "No hay módulos cargados para el local seleccionado.",
+            )
+            return
+
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"Módulos - {self.project.name}")
+        if len(selected_locale_names) == 1:
+            dialog.setWindowTitle(f"Módulos - {self.project.name} - {selected_locale_names[0]}")
+        else:
+            dialog.setWindowTitle(f"Módulos - {self.project.name}")
         dialog.resize(620, 400)
 
         dlg_layout = QVBoxLayout()
         self.modules_list = QListWidget()
 
         def refresh_modules_list_view():
+            current_visible_modules = filtered_modules_for_dialog()
             # Recargar piezas desde module_config.json y normalizar thickness
-            for module in self.project.modules:
+            for module in current_visible_modules:
                 self._reload_module_pieces_from_config(module)
                 self._normalize_module_piece_thickness(module)
             
             self.modules_list.clear()
-            for module in self.project.modules:
+            for module in current_visible_modules:
                 valid_count = self._valid_piece_count_in_module(module)
                 module_label = f"{module.locale_name} / {module.name}" if module.locale_name else module.name
                 item = QListWidgetItem(f"{module_label} ({valid_count} piezas)")
@@ -2295,7 +2488,14 @@ class ProjectDetailWindow(QMainWindow):
                 QMessageBox.warning(dialog, "Nuevo módulo", "Ingrese un nombre de módulo válido.")
                 return
 
-            locale_options = [locale.name for locale in self.project.locales]
+            if selected_locale_keys:
+                locale_options = [
+                    locale.name
+                    for locale in self.project.locales
+                    if locale.name.strip().lower() in selected_locale_keys
+                ]
+            else:
+                locale_options = [locale.name for locale in self.project.locales]
             if not locale_options:
                 locale_name = self._prompt_new_locale_name(
                     Path(self.project.root_directory),
@@ -2461,6 +2661,16 @@ class ProjectDetailWindow(QMainWindow):
             )
             normalized_row["en_juego"] = en_juego_value
             normalized_row["include_in_sheet"] = excel_value
+            normalized_row["quantity"] = _parse_piece_quantity_value(
+                normalized_row.get("quantity"),
+                default=1,
+                minimum=0,
+            )
+            normalized_row[PIECE_QUANTITY_STEP_FIELD] = _parse_piece_quantity_value(
+                normalized_row.get(PIECE_QUANTITY_STEP_FIELD),
+                default=normalized_row["quantity"],
+                minimum=0,
+            )
             normalized_row["grain_direction"] = normalize_piece_grain_direction(normalized_row.get("grain_direction"))
             normalized_row["observations"] = normalize_piece_observations(normalized_row.get("observations"))
             normalized_row.pop("excel", None)
@@ -3198,6 +3408,9 @@ class ProjectDetailWindow(QMainWindow):
             "En juego",
             "Excel",
         ])
+        quantity_header_item = pieces_table.horizontalHeaderItem(PIECES_COL_QUANTITY)
+        if quantity_header_item is not None:
+            quantity_header_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         visible_row_indexes = []
         refreshing_pieces_table = False
         program_dimensions_cache = {}
@@ -3212,8 +3425,7 @@ class ProjectDetailWindow(QMainWindow):
                 except (ValueError, TypeError):
                     thickness = None
 
-            quantity_raw = str(piece_row.get("quantity") or "").strip()
-            quantity = int(quantity_raw) if quantity_raw.isdigit() else 1
+            quantity = _parse_piece_quantity_value(piece_row.get("quantity"), default=1, minimum=0)
 
             def parse_dimension(raw_value):
                 raw_text = "" if raw_value is None else str(raw_value).strip().replace(",", ".")
@@ -3325,6 +3537,21 @@ class ProjectDetailWindow(QMainWindow):
         swap_button_width = _scaled_int(14, compact_scale, 11)
         swap_button_height = _scaled_int(20, compact_scale, 16)
         swap_button_font_size = _scaled_int(8, compact_scale, 6)
+        quantity_button_width = _scaled_int(14, compact_scale, 11)
+        quantity_button_height = _scaled_int(10, compact_scale, 8)
+        quantity_button_font_size = _scaled_int(7, compact_scale, 6)
+        quantity_label_min_width = _scaled_int(26, compact_scale, 20)
+
+        def style_micro_button(button: QPushButton) -> None:
+            button.setContentsMargins(0, 0, 0, 0)
+            button.setStyleSheet(
+                "QPushButton {"
+                f"font-size: {quantity_button_font_size}px;"
+                "padding: 0px;"
+                "margin: 0px;"
+                "text-align: center;"
+                "}"
+            )
 
         def create_centered_swap_button(on_clicked, tooltip: str):
             container = QWidget()
@@ -3348,6 +3575,95 @@ class ProjectDetailWindow(QMainWindow):
             button_layout.addWidget(swap_button, 0, Qt.AlignCenter)
             button_layout.addStretch(1)
             return container
+
+        def create_quantity_cell_widget(
+            quantity_value: int,
+            on_increment,
+            on_decrement,
+            *,
+            increment_tooltip: str,
+            decrement_tooltip: str,
+        ) -> QWidget:
+            container = QWidget()
+            quantity_layout = QHBoxLayout(container)
+            quantity_layout.setContentsMargins(0, 0, 0, 0)
+            quantity_layout.setSpacing(2)
+
+            quantity_label = QLabel(str(quantity_value))
+            quantity_label.setAlignment(Qt.AlignCenter)
+            quantity_label.setMinimumWidth(quantity_label_min_width)
+            quantity_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+            buttons_widget = QWidget(container)
+            buttons_layout = QVBoxLayout(buttons_widget)
+            buttons_layout.setContentsMargins(0, 0, 0, 0)
+            buttons_layout.setSpacing(0)
+
+            plus_button = QPushButton("+", buttons_widget)
+            plus_button.setToolTip(increment_tooltip)
+            plus_button.setFixedSize(quantity_button_width, quantity_button_height)
+            style_micro_button(plus_button)
+            plus_button.clicked.connect(on_increment)
+
+            minus_button = QPushButton("-", buttons_widget)
+            minus_button.setToolTip(decrement_tooltip)
+            minus_button.setFixedSize(quantity_button_width, quantity_button_height)
+            style_micro_button(minus_button)
+            minus_button.clicked.connect(on_decrement)
+
+            buttons_layout.addWidget(plus_button)
+            buttons_layout.addWidget(minus_button)
+            buttons_widget.setFixedSize(quantity_button_width, quantity_button_height * 2)
+
+            quantity_layout.addStretch(1)
+            quantity_layout.addWidget(quantity_label, 0, Qt.AlignCenter)
+            quantity_layout.addWidget(buttons_widget, 0, Qt.AlignVCenter)
+            quantity_layout.addStretch(1)
+            return container
+
+        def update_single_piece_quantity(all_idx: int, delta: int, visible_row: int | None = None):
+            if all_idx < 0 or all_idx >= len(all_rows):
+                return
+            piece_row = all_rows[all_idx]
+            current_quantity = _parse_piece_quantity_value(piece_row.get("quantity"), default=1, minimum=0)
+            target_quantity = max(0, current_quantity + int(delta))
+            if target_quantity == current_quantity:
+                if visible_row is not None and pieces_table.rowCount() > 0:
+                    pieces_table.selectRow(max(0, min(visible_row, pieces_table.rowCount() - 1)))
+                return
+            piece_row["quantity"] = target_quantity
+            mark_unsaved_changes()
+            refresh_pieces_table()
+            if visible_row is not None and pieces_table.rowCount() > 0:
+                pieces_table.selectRow(max(0, min(visible_row, pieces_table.rowCount() - 1)))
+
+        def update_all_piece_quantities_by_step(direction: int):
+            if not all_rows:
+                return
+            current_row = pieces_table.currentRow()
+            changed = False
+            for piece_row in all_rows:
+                current_quantity = _parse_piece_quantity_value(piece_row.get("quantity"), default=1, minimum=0)
+                quantity_step = _parse_piece_quantity_value(
+                    piece_row.get(PIECE_QUANTITY_STEP_FIELD),
+                    default=current_quantity,
+                    minimum=0,
+                )
+                target_quantity = max(0, current_quantity + (int(direction) * quantity_step))
+                if target_quantity == current_quantity:
+                    continue
+                piece_row["quantity"] = target_quantity
+                changed = True
+
+            if not changed:
+                if current_row >= 0 and pieces_table.rowCount() > 0:
+                    pieces_table.selectRow(max(0, min(current_row, pieces_table.rowCount() - 1)))
+                return
+
+            mark_unsaved_changes()
+            refresh_pieces_table()
+            if current_row >= 0 and pieces_table.rowCount() > 0:
+                pieces_table.selectRow(max(0, min(current_row, pieces_table.rowCount() - 1)))
 
         def swap_piece_dimensions(all_idx: int, visible_row: int | None = None):
             if all_idx < 0 or all_idx >= len(all_rows):
@@ -3420,6 +3736,12 @@ class ProjectDetailWindow(QMainWindow):
                 pgmx_status = self._get_pgmx_status(source_value, pgmx_names, pgmx_relpaths)
                 program_dimension_note = filtered_program_notes[row_idx]
                 piece_row["pgmx"] = pgmx_status
+                piece_row["quantity"] = _parse_piece_quantity_value(piece_row.get("quantity"), default=1, minimum=0)
+                piece_row[PIECE_QUANTITY_STEP_FIELD] = _parse_piece_quantity_value(
+                    piece_row.get(PIECE_QUANTITY_STEP_FIELD),
+                    default=piece_row["quantity"],
+                    minimum=0,
+                )
                 en_juego = bool(piece_row.get("en_juego", False))
                 piece_row["en_juego"] = en_juego
                 include_in_sheet = bool(piece_row.get("include_in_sheet", piece_row.get("excel", False)))
@@ -3427,7 +3749,25 @@ class ProjectDetailWindow(QMainWindow):
 
                 pieces_table.setItem(row_idx, PIECES_COL_ID, QTableWidgetItem(str(piece_row.get("id", ""))))
                 pieces_table.setItem(row_idx, PIECES_COL_NAME, QTableWidgetItem(str(piece_row.get("name", ""))))
-                pieces_table.setItem(row_idx, PIECES_COL_QUANTITY, QTableWidgetItem(str(piece_row.get("quantity", ""))))
+                pieces_table.setCellWidget(
+                    row_idx,
+                    PIECES_COL_QUANTITY,
+                    create_quantity_cell_widget(
+                        int(piece_row["quantity"]),
+                        lambda _checked=False, idx=all_idx, visible_idx=row_idx: update_single_piece_quantity(
+                            idx,
+                            +1,
+                            visible_idx,
+                        ),
+                        lambda _checked=False, idx=all_idx, visible_idx=row_idx: update_single_piece_quantity(
+                            idx,
+                            -1,
+                            visible_idx,
+                        ),
+                        increment_tooltip="Incrementar cantidad de esta pieza",
+                        decrement_tooltip="Disminuir cantidad de esta pieza",
+                    ),
+                )
                 pieces_table.setItem(row_idx, PIECES_COL_HEIGHT, QTableWidgetItem(str(piece_row.get("height", ""))))
                 pieces_table.setCellWidget(
                     row_idx,
@@ -3490,13 +3830,13 @@ class ProjectDetailWindow(QMainWindow):
         header = pieces_table.horizontalHeader()
         auto_columns = {
             PIECES_COL_ID,
-            PIECES_COL_QUANTITY,
             PIECES_COL_HEIGHT,
             PIECES_COL_WIDTH,
             PIECES_COL_THICKNESS,
         }
         fixed_column_widths = {
             PIECES_COL_NAME: _scaled_int(180, compact_scale, 120),
+            PIECES_COL_QUANTITY: _scaled_int(72, compact_scale, 58),
             PIECES_COL_SWAP: _scaled_int(18, compact_scale, 14),
             PIECES_COL_COLOR: _scaled_int(110, compact_scale, 90),
             PIECES_COL_GRAIN: _scaled_int(110, compact_scale, 90),
@@ -3525,6 +3865,23 @@ class ProjectDetailWindow(QMainWindow):
             "}"
         )
         swap_all_dimensions_btn.clicked.connect(swap_all_piece_dimensions)
+        quantity_header_controls = QWidget(header)
+        quantity_header_layout = QVBoxLayout(quantity_header_controls)
+        quantity_header_layout.setContentsMargins(0, 0, 0, 0)
+        quantity_header_layout.setSpacing(0)
+        quantity_all_plus_btn = QPushButton("+", quantity_header_controls)
+        quantity_all_plus_btn.setToolTip("Incrementar cantidades según la cantidad base de cada pieza")
+        quantity_all_plus_btn.setFixedSize(quantity_button_width, quantity_button_height)
+        style_micro_button(quantity_all_plus_btn)
+        quantity_all_plus_btn.clicked.connect(lambda: update_all_piece_quantities_by_step(+1))
+        quantity_all_minus_btn = QPushButton("-", quantity_header_controls)
+        quantity_all_minus_btn.setToolTip("Disminuir cantidades según la cantidad base de cada pieza")
+        quantity_all_minus_btn.setFixedSize(quantity_button_width, quantity_button_height)
+        style_micro_button(quantity_all_minus_btn)
+        quantity_all_minus_btn.clicked.connect(lambda: update_all_piece_quantities_by_step(-1))
+        quantity_header_layout.addWidget(quantity_all_plus_btn)
+        quantity_header_layout.addWidget(quantity_all_minus_btn)
+        quantity_header_controls.setFixedSize(quantity_button_width, quantity_button_height * 2)
 
         def position_swap_all_dimensions_button(*_):
             section_width = header.sectionSize(PIECES_COL_SWAP)
@@ -3539,10 +3896,30 @@ class ProjectDetailWindow(QMainWindow):
             swap_all_dimensions_btn.show()
             swap_all_dimensions_btn.raise_()
 
+        def position_quantity_header_controls(*_):
+            section_width = header.sectionSize(PIECES_COL_QUANTITY)
+            if section_width <= 0:
+                quantity_header_controls.hide()
+                return
+            controls_width = quantity_header_controls.width()
+            controls_height = quantity_header_controls.height()
+            x_position = (
+                header.sectionViewportPosition(PIECES_COL_QUANTITY)
+                + max(0, section_width - controls_width - 2)
+            )
+            y_position = max(0, (header.height() - controls_height) // 2)
+            quantity_header_controls.setGeometry(x_position, y_position, controls_width, controls_height)
+            quantity_header_controls.show()
+            quantity_header_controls.raise_()
+
         header.sectionResized.connect(position_swap_all_dimensions_button)
         header.geometriesChanged.connect(position_swap_all_dimensions_button)
+        header.sectionResized.connect(position_quantity_header_controls)
+        header.geometriesChanged.connect(position_quantity_header_controls)
         pieces_table.horizontalScrollBar().valueChanged.connect(position_swap_all_dimensions_button)
+        pieces_table.horizontalScrollBar().valueChanged.connect(position_quantity_header_controls)
         position_swap_all_dimensions_button()
+        position_quantity_header_controls()
 
         actions_column_reserved_width = MAIN_ACTION_BUTTON_WIDTH + 36
         pieces_table.setMinimumWidth(
@@ -3579,6 +3956,16 @@ class ProjectDetailWindow(QMainWindow):
             serialized_rows = []
             for row in all_rows:
                 serialized_row = dict(row)
+                serialized_row["quantity"] = _parse_piece_quantity_value(
+                    serialized_row.get("quantity"),
+                    default=1,
+                    minimum=0,
+                )
+                serialized_row[PIECE_QUANTITY_STEP_FIELD] = _parse_piece_quantity_value(
+                    serialized_row.get(PIECE_QUANTITY_STEP_FIELD),
+                    default=serialized_row["quantity"],
+                    minimum=0,
+                )
                 serialized_row["en_juego"] = bool(serialized_row.get("en_juego", False))
                 include_in_sheet = bool(serialized_row.get("include_in_sheet", serialized_row.get("excel", False)))
                 serialized_row["include_in_sheet"] = include_in_sheet
@@ -3606,6 +3993,7 @@ class ProjectDetailWindow(QMainWindow):
                 piece_dict.pop("include_in_sheet", None)
                 piece_dict.pop("excel", None)
                 piece_dict.pop("observations", None)
+                piece_dict.pop(PIECE_QUANTITY_STEP_FIELD, None)
                 
                 # Validar y procesar thickness: convertir string vacío a None
                 thickness_val = piece_dict.get("thickness")
@@ -3786,7 +4174,13 @@ class ProjectDetailWindow(QMainWindow):
 
             id_field = QLineEdit(str(base_piece_row.get("id") or ""))
             name_field = QLineEdit(str(base_piece_row.get("name") or ""))
-            qty_field = QLineEdit(str(base_piece_row.get("quantity") or "1"))
+            base_piece_quantity = _parse_piece_quantity_value(base_piece_row.get("quantity"), default=1, minimum=0)
+            base_piece_quantity_step = _parse_piece_quantity_value(
+                base_piece_row.get(PIECE_QUANTITY_STEP_FIELD),
+                default=base_piece_quantity,
+                minimum=0,
+            )
+            qty_field = QLineEdit(str(base_piece_quantity))
             height_field = QLineEdit(str(base_piece_row.get("height") or ""))
             width_field = QLineEdit(str(base_piece_row.get("width") or ""))
             thickness_field = QLineEdit(str(base_piece_row.get("thickness") or ""))
@@ -3965,13 +4359,20 @@ class ProjectDetailWindow(QMainWindow):
                 piece_id = id_field.text().strip()
                 source_value = source_field.text().strip()
                 normalized_source = normalize_source_path(source_value) if source_value else ""
+                updated_quantity = _parse_piece_quantity_value(qty_field.text().strip(), default=1, minimum=0)
+                updated_quantity_step = (
+                    updated_quantity
+                    if is_new_piece or updated_quantity != base_piece_quantity
+                    else base_piece_quantity_step
+                )
 
                 updated_piece = dict(base_piece_row)
                 updated_piece.update(
                     {
                         "id": piece_id,
                         "name": name_field.text().strip() or piece_id,
-                        "quantity": int(qty_field.text().strip()) if qty_field.text().strip().isdigit() else 1,
+                        "quantity": updated_quantity,
+                        PIECE_QUANTITY_STEP_FIELD: updated_quantity_step,
                         "height": parse_optional_piece_float(height_field.text()),
                         "width": parse_optional_piece_float(width_field.text()),
                         "thickness": parse_optional_piece_float(thickness_field.text()),
@@ -4616,6 +5017,22 @@ class ProjectDetailWindow(QMainWindow):
             pieces_list.setFixedHeight(_scaled_int(220, max(config_scale, 0.82), 170))
             left_panel_layout.addWidget(pieces_list, 0)
 
+            origin_group = QGroupBox("Origen")
+            origin_layout = QGridLayout()
+            origin_layout.setContentsMargins(8, 8, 8, 8)
+            origin_layout.setHorizontalSpacing(8)
+            origin_layout.setVerticalSpacing(6)
+            origin_x_field = QLineEdit(str(en_juego_settings.get("origin_x", 0)))
+            origin_y_field = QLineEdit(str(en_juego_settings.get("origin_y", 0)))
+            origin_z_field = QLineEdit(str(en_juego_settings.get("origin_z", 0)))
+            origin_layout.addWidget(QLabel("Origen X"), 0, 0)
+            origin_layout.addWidget(origin_x_field, 0, 1)
+            origin_layout.addWidget(QLabel("Origen Y"), 1, 0)
+            origin_layout.addWidget(origin_y_field, 1, 1)
+            origin_layout.addWidget(QLabel("Origen Z"), 2, 0)
+            origin_layout.addWidget(origin_z_field, 2, 1)
+            origin_group.setLayout(origin_layout)
+
             options_group = QGroupBox("Opciones")
             options_group.setFixedWidth(left_panel_width)
             options_layout = QVBoxLayout()
@@ -4627,12 +5044,22 @@ class ProjectDetailWindow(QMainWindow):
             nesting_cut_radio.setChecked(not manual_cut_radio.isChecked())
             spacing_hint_label = QLabel()
             spacing_hint_label.setWordWrap(True)
-            configure_en_juego_btn = QPushButton("Configurar")
-            configure_en_juego_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+            configure_division_btn = QPushButton("Configurar\nDivisiones")
+            configure_squaring_btn = QPushButton("Configurar\nEscuadrado")
+            configure_division_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+            configure_squaring_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+            configure_buttons_row = QHBoxLayout()
+            configure_buttons_row.setContentsMargins(0, 0, 0, 0)
+            configure_buttons_row.setSpacing(8)
+            configure_buttons_row.addStretch(1)
+            configure_buttons_row.addWidget(configure_squaring_btn)
+            configure_buttons_row.addWidget(configure_division_btn)
+            configure_buttons_row.addStretch(1)
             options_layout.addWidget(manual_cut_radio)
             options_layout.addWidget(nesting_cut_radio)
             options_layout.addWidget(spacing_hint_label)
-            options_layout.addWidget(configure_en_juego_btn, 0, Qt.AlignRight)
+            options_layout.addWidget(origin_group)
+            options_layout.addLayout(configure_buttons_row)
             options_group.setLayout(options_layout)
             left_panel_layout.addWidget(options_group, 0)
             left_panel_layout.addStretch(1)
@@ -4660,12 +5087,7 @@ class ProjectDetailWindow(QMainWindow):
                     return None
 
             def en_juego_quantity(piece_row: dict) -> int:
-                quantity_raw = str(piece_row.get("quantity") or "").strip()
-                try:
-                    quantity = int(quantity_raw)
-                except (TypeError, ValueError):
-                    return 1
-                return quantity if quantity > 0 else 1
+                return _parse_piece_quantity_value(piece_row.get("quantity"), default=1, minimum=0)
 
             def en_juego_instance_key(piece_id: str, copy_index: int) -> str:
                 return f"{piece_id}#{copy_index}"
@@ -4917,16 +5339,18 @@ class ProjectDetailWindow(QMainWindow):
                         continue
                     if len(path.points) < 2:
                         continue
+                    is_closed_path = len(path.points) >= 3 and path.points[0] == path.points[-1]
                     painter_path = QPainterPath()
                     first_x, first_y = path.points[0]
                     painter_path.moveTo(first_x, to_scene_y(first_y, height_mm))
                     for point_x, point_y in path.points[1:]:
                         painter_path.lineTo(point_x, to_scene_y(point_y, height_mm))
                     path_item = QGraphicsPathItem(painter_path, rect_item)
-                    path_color = "#C0392B" if path.points[0] != path.points[-1] else "#0B7A75"
+                    path_color = "#C0392B" if not is_closed_path else "#0B7A75"
                     path_item.setPen(make_pen(path_color, 1.0))
                     path_item.setAcceptedMouseButtons(QtCoreQt.NoButton)
-                    draw_entry_marker(rect_item, path.entry_arrow, height_mm, path_color)
+                    if not is_closed_path:
+                        draw_entry_marker(rect_item, path.entry_arrow, height_mm, path_color)
 
                 for circle in drawing_data.milling_circles:
                     face = (circle.face or "Top").strip().lower()
@@ -5193,13 +5617,13 @@ class ProjectDetailWindow(QMainWindow):
                 en_juego_settings["cut_mode"] = "nesting" if nesting_cut_radio.isChecked() else "manual"
                 resolved_tool = _resolve_en_juego_cutting_tool(en_juego_settings.get("cutting_tool_id"))
                 en_juego_settings["origin_x"] = _compact_number(
-                    _coerce_setting_number(en_juego_settings.get("origin_x"), 0.0)
+                    _coerce_setting_number(origin_x_field.text().strip(), en_juego_settings.get("origin_x", 0.0))
                 )
                 en_juego_settings["origin_y"] = _compact_number(
-                    _coerce_setting_number(en_juego_settings.get("origin_y"), 0.0)
+                    _coerce_setting_number(origin_y_field.text().strip(), en_juego_settings.get("origin_y", 0.0))
                 )
                 en_juego_settings["origin_z"] = _compact_number(
-                    _coerce_setting_number(en_juego_settings.get("origin_z"), 0.0)
+                    _coerce_setting_number(origin_z_field.text().strip(), en_juego_settings.get("origin_z", 0.0))
                 )
                 en_juego_settings["cutting_is_through"] = _coerce_setting_bool(
                     en_juego_settings.get("cutting_is_through"),
@@ -5254,6 +5678,82 @@ class ProjectDetailWindow(QMainWindow):
                     if str(en_juego_settings.get("retract_mode") or "Quote").strip().lower() == "quote"
                     else "Up"
                 )
+                en_juego_settings["squaring_is_through"] = _coerce_setting_bool(
+                    en_juego_settings.get("squaring_is_through"),
+                    True,
+                )
+                en_juego_settings["squaring_depth_value"] = _compact_number(
+                    _coerce_setting_number(
+                        en_juego_settings.get("squaring_depth_value"),
+                        1.0,
+                        minimum=0.0,
+                    )
+                )
+                en_juego_settings["squaring_approach_enabled"] = _coerce_setting_bool(
+                    en_juego_settings.get("squaring_approach_enabled"),
+                    False,
+                )
+                en_juego_settings["squaring_approach_type"] = (
+                    "Arc"
+                    if str(en_juego_settings.get("squaring_approach_type") or "Arc").strip().lower() == "arc"
+                    else "Line"
+                )
+                en_juego_settings["squaring_approach_radius_multiplier"] = _compact_number(
+                    _coerce_setting_number(
+                        en_juego_settings.get("squaring_approach_radius_multiplier"),
+                        2.0,
+                        minimum=0.0,
+                    )
+                )
+                en_juego_settings["squaring_approach_mode"] = (
+                    "Quote"
+                    if str(en_juego_settings.get("squaring_approach_mode") or "Quote").strip().lower() == "quote"
+                    else "Down"
+                )
+                en_juego_settings["squaring_retract_enabled"] = _coerce_setting_bool(
+                    en_juego_settings.get("squaring_retract_enabled"),
+                    False,
+                )
+                en_juego_settings["squaring_retract_type"] = (
+                    "Arc"
+                    if str(en_juego_settings.get("squaring_retract_type") or "Arc").strip().lower() == "arc"
+                    else "Line"
+                )
+                en_juego_settings["squaring_retract_radius_multiplier"] = _compact_number(
+                    _coerce_setting_number(
+                        en_juego_settings.get("squaring_retract_radius_multiplier"),
+                        2.0,
+                        minimum=0.0,
+                    )
+                )
+                en_juego_settings["squaring_retract_mode"] = (
+                    "Quote"
+                    if str(en_juego_settings.get("squaring_retract_mode") or "Quote").strip().lower() == "quote"
+                    else "Up"
+                )
+                squaring_tool = _resolve_en_juego_cutting_tool(en_juego_settings.get("squaring_tool_id"))
+                en_juego_settings["squaring_tool_id"] = str(
+                    en_juego_settings.get("squaring_tool_id")
+                    or squaring_tool.get("tool_id")
+                    or ""
+                ).strip()
+                en_juego_settings["squaring_tool_code"] = str(
+                    en_juego_settings.get("squaring_tool_code")
+                    or squaring_tool.get("tool_code")
+                    or ""
+                ).strip()
+                en_juego_settings["squaring_tool_name"] = str(
+                    en_juego_settings.get("squaring_tool_name")
+                    or squaring_tool.get("tool_name")
+                    or ""
+                ).strip()
+                en_juego_settings["squaring_tool_diameter"] = _compact_number(
+                    _coerce_setting_number(
+                        en_juego_settings.get("squaring_tool_diameter"),
+                        _coerce_setting_number(squaring_tool.get("diameter"), 0.0, minimum=0.0),
+                        minimum=0.0,
+                    )
+                )
                 en_juego_settings["cutting_tool_id"] = str(
                     en_juego_settings.get("cutting_tool_id")
                     or resolved_tool.get("tool_id")
@@ -5284,13 +5784,13 @@ class ProjectDetailWindow(QMainWindow):
 
             def open_en_juego_settings_dialog():
                 settings_dialog = QDialog(config_dialog)
-                settings_dialog.setWindowTitle("Configuración En-Juego")
+                settings_dialog.setWindowTitle("Configurar Divisiones")
                 settings_layout = QVBoxLayout()
                 settings_layout.setContentsMargins(12, 12, 12, 12)
                 settings_layout.setSpacing(10)
                 settings_layout.addWidget(
                     QLabel(
-                        "Defina las opciones del En-Juego para este módulo.\n"
+                        "Defina las opciones de divisiones del En-Juego para este módulo.\n"
                         "El modo Nesting todavía no genera el programa automáticamente."
                     )
                 )
@@ -5349,7 +5849,7 @@ class ProjectDetailWindow(QMainWindow):
                     return
 
                 settings_dialog = QDialog(config_dialog)
-                settings_dialog.setWindowTitle("Configuración En-Juego")
+                settings_dialog.setWindowTitle("Configurar Divisiones")
                 _apply_responsive_window_size(
                     settings_dialog,
                     780,
@@ -5362,7 +5862,7 @@ class ProjectDetailWindow(QMainWindow):
                 settings_layout.setSpacing(10)
                 settings_layout.addWidget(
                     QLabel(
-                        "Defina las opciones del En-Juego para este módulo.\n"
+                        "Defina las opciones de divisiones del En-Juego para este módulo.\n"
                         "Por ahora, la herramienta elegida define la separación mínima en el panel."
                     )
                 )
@@ -5397,9 +5897,9 @@ class ProjectDetailWindow(QMainWindow):
 
                 depth_group = QGroupBox("Profundidad de división")
                 depth_layout = QGridLayout()
-                depth_layout.setContentsMargins(8, 8, 8, 8)
+                depth_layout.setContentsMargins(8, 6, 8, 6)
                 depth_layout.setHorizontalSpacing(8)
-                depth_layout.setVerticalSpacing(6)
+                depth_layout.setVerticalSpacing(4)
                 through_checkbox = QCheckBox("Pasante")
                 through_checkbox.setChecked(
                     _coerce_setting_bool(en_juego_settings.get("cutting_is_through"), True)
@@ -5410,6 +5910,7 @@ class ProjectDetailWindow(QMainWindow):
                 depth_layout.addWidget(depth_role_label, 1, 0)
                 depth_layout.addWidget(depth_value_field, 1, 1)
                 depth_group.setLayout(depth_layout)
+                depth_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
 
                 lead_group = QGroupBox("Acercamiento y Alejamiento")
                 lead_layout = QGridLayout()
@@ -5472,26 +5973,9 @@ class ProjectDetailWindow(QMainWindow):
                 depth_and_lead_row = QHBoxLayout()
                 depth_and_lead_row.setContentsMargins(0, 0, 0, 0)
                 depth_and_lead_row.setSpacing(8)
-                depth_and_lead_row.addWidget(depth_group, 1)
+                depth_and_lead_row.addWidget(depth_group, 1, Qt.AlignTop)
                 depth_and_lead_row.addWidget(lead_group, 1)
                 settings_layout.addLayout(depth_and_lead_row)
-
-                origin_group = QGroupBox("Origen para síntesis")
-                origin_layout = QGridLayout()
-                origin_layout.setContentsMargins(8, 8, 8, 8)
-                origin_layout.setHorizontalSpacing(8)
-                origin_layout.setVerticalSpacing(6)
-                origin_x_field = QLineEdit(str(en_juego_settings.get("origin_x", 0)))
-                origin_y_field = QLineEdit(str(en_juego_settings.get("origin_y", 0)))
-                origin_z_field = QLineEdit(str(en_juego_settings.get("origin_z", 0)))
-                origin_layout.addWidget(QLabel("Origen X"), 0, 0)
-                origin_layout.addWidget(origin_x_field, 0, 1)
-                origin_layout.addWidget(QLabel("Origen Y"), 1, 0)
-                origin_layout.addWidget(origin_y_field, 1, 1)
-                origin_layout.addWidget(QLabel("Origen Z"), 2, 0)
-                origin_layout.addWidget(origin_z_field, 2, 1)
-                origin_group.setLayout(origin_layout)
-                settings_layout.addWidget(origin_group)
 
                 buttons_row = QHBoxLayout()
                 buttons_row.addStretch(1)
@@ -5649,6 +6133,292 @@ class ProjectDetailWindow(QMainWindow):
                 cancel_settings_btn.clicked.connect(settings_dialog.reject)
                 _exec_centered(settings_dialog, config_dialog)
 
+            def open_en_juego_squaring_settings_dialog_v2():
+                if not nesting_cut_radio.isChecked():
+                    return
+
+                settings_dialog = QDialog(config_dialog)
+                settings_dialog.setWindowTitle("Configurar Escuadrado")
+                _apply_responsive_window_size(
+                    settings_dialog,
+                    780,
+                    420,
+                    width_ratio=0.64,
+                    height_ratio=0.58,
+                )
+                settings_layout = QVBoxLayout()
+                settings_layout.setContentsMargins(12, 12, 12, 12)
+                settings_layout.setSpacing(10)
+                settings_layout.addWidget(
+                    QLabel(
+                        "Defina las opciones de escuadrado del En-Juego para este módulo.\n"
+                        "Estas opciones se guardan junto con la disposición del módulo."
+                    )
+                )
+
+                tool_group = QGroupBox("Herramienta de escuadrado")
+                tool_layout = QVBoxLayout()
+                tool_layout.setContentsMargins(8, 8, 8, 8)
+                tool_layout.setSpacing(6)
+                tool_combo = QComboBox()
+                for tool_data in available_cutting_tools:
+                    tool_combo.addItem(tool_data["label"], tool_data["tool_id"])
+                selected_tool_id = str(en_juego_settings.get("squaring_tool_id") or "").strip()
+                selected_index = next(
+                    (
+                        index
+                        for index, tool_data in enumerate(available_cutting_tools)
+                        if str(tool_data.get("tool_id") or "").strip() == selected_tool_id
+                    ),
+                    0,
+                )
+                if tool_combo.count() > 0:
+                    tool_combo.setCurrentIndex(selected_index)
+                else:
+                    tool_combo.addItem("(sin herramientas disponibles)", "")
+                    tool_combo.setEnabled(False)
+                tool_hint_label = QLabel()
+                tool_hint_label.setWordWrap(True)
+                tool_layout.addWidget(tool_combo)
+                tool_layout.addWidget(tool_hint_label)
+                tool_group.setLayout(tool_layout)
+                settings_layout.addWidget(tool_group)
+
+                depth_group = QGroupBox("Profundidad de escuadrado")
+                depth_layout = QGridLayout()
+                depth_layout.setContentsMargins(8, 6, 8, 6)
+                depth_layout.setHorizontalSpacing(8)
+                depth_layout.setVerticalSpacing(4)
+                through_checkbox = QCheckBox("Pasante")
+                through_checkbox.setChecked(
+                    _coerce_setting_bool(en_juego_settings.get("squaring_is_through"), True)
+                )
+                depth_role_label = QLabel()
+                depth_value_field = QLineEdit(str(en_juego_settings.get("squaring_depth_value", 1.0)))
+                depth_layout.addWidget(through_checkbox, 0, 0, 1, 2)
+                depth_layout.addWidget(depth_role_label, 1, 0)
+                depth_layout.addWidget(depth_value_field, 1, 1)
+                depth_group.setLayout(depth_layout)
+                depth_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+
+                strategy_group = QGroupBox("Estrategia")
+                strategy_layout = QGridLayout()
+                strategy_layout.setContentsMargins(8, 8, 8, 8)
+                strategy_layout.setSpacing(6)
+                strategy_layout.setHorizontalSpacing(8)
+                strategy_layout.setVerticalSpacing(6)
+                direction_combo = QComboBox()
+                direction_combo.addItem("Horario", "CW")
+                direction_combo.addItem("Antihorario", "CCW")
+                direction_combo.setCurrentIndex(
+                    1 if str(en_juego_settings.get("squaring_direction") or "CW") == "CCW" else 0
+                )
+                unidirectional_multipass_checkbox = QCheckBox("Multipasada Unidireccional")
+                unidirectional_multipass_checkbox.setChecked(
+                    _coerce_setting_bool(
+                        en_juego_settings.get("squaring_unidirectional_multipass"),
+                        False,
+                    )
+                )
+                pocket_depth_field = QLineEdit(str(en_juego_settings.get("squaring_pocket_depth", 0.0)))
+                last_pocket_field = QLineEdit(str(en_juego_settings.get("squaring_last_pocket", 0.0)))
+                strategy_layout.addWidget(QLabel("Sentido"), 0, 0)
+                strategy_layout.addWidget(direction_combo, 0, 1)
+                strategy_layout.addWidget(unidirectional_multipass_checkbox, 1, 0, 1, 2)
+                strategy_layout.addWidget(QLabel("Profundidad de Hueco"), 2, 0)
+                strategy_layout.addWidget(pocket_depth_field, 2, 1)
+                strategy_layout.addWidget(QLabel("Último Hueco"), 3, 0)
+                strategy_layout.addWidget(last_pocket_field, 3, 1)
+                strategy_group.setLayout(strategy_layout)
+                strategy_group.setMinimumHeight(_scaled_int(138, compact_scale, 108))
+
+                lead_group = QGroupBox("Acercamiento y Alejamiento")
+                lead_layout = QGridLayout()
+                lead_layout.setContentsMargins(8, 8, 8, 8)
+                lead_layout.setHorizontalSpacing(8)
+                lead_layout.setVerticalSpacing(6)
+
+                approach_checkbox = QCheckBox("Acercamiento")
+                approach_checkbox.setChecked(
+                    _coerce_setting_bool(en_juego_settings.get("squaring_approach_enabled"), False)
+                )
+                approach_type_combo = QComboBox()
+                approach_type_combo.addItem("Arco", "Arc")
+                approach_type_combo.addItem("Lineal", "Line")
+                approach_type_combo.setCurrentIndex(
+                    0 if str(en_juego_settings.get("squaring_approach_type") or "Arc") == "Arc" else 1
+                )
+                approach_radius_field = QLineEdit(
+                    str(en_juego_settings.get("squaring_approach_radius_multiplier", 2.0))
+                )
+                approach_mode_combo = QComboBox()
+                approach_mode_combo.addItem("En cota", "Quote")
+                approach_mode_combo.addItem("En bajada", "Down")
+                approach_mode_combo.setCurrentIndex(
+                    0 if str(en_juego_settings.get("squaring_approach_mode") or "Quote") == "Quote" else 1
+                )
+
+                retract_checkbox = QCheckBox("Alejamiento")
+                retract_checkbox.setChecked(
+                    _coerce_setting_bool(en_juego_settings.get("squaring_retract_enabled"), False)
+                )
+                retract_type_combo = QComboBox()
+                retract_type_combo.addItem("Arco", "Arc")
+                retract_type_combo.addItem("Lineal", "Line")
+                retract_type_combo.setCurrentIndex(
+                    0 if str(en_juego_settings.get("squaring_retract_type") or "Arc") == "Arc" else 1
+                )
+                retract_radius_field = QLineEdit(
+                    str(en_juego_settings.get("squaring_retract_radius_multiplier", 2.0))
+                )
+                retract_mode_combo = QComboBox()
+                retract_mode_combo.addItem("En cota", "Quote")
+                retract_mode_combo.addItem("En subida", "Up")
+                retract_mode_combo.setCurrentIndex(
+                    0 if str(en_juego_settings.get("squaring_retract_mode") or "Quote") == "Quote" else 1
+                )
+
+                lead_layout.addWidget(approach_checkbox, 0, 0, 1, 2)
+                lead_layout.addWidget(QLabel("Entrada"), 1, 0)
+                lead_layout.addWidget(approach_type_combo, 1, 1)
+                lead_layout.addWidget(QLabel("Multipl radio"), 2, 0)
+                lead_layout.addWidget(approach_radius_field, 2, 1)
+                lead_layout.addWidget(QLabel("Acercamiento"), 3, 0)
+                lead_layout.addWidget(approach_mode_combo, 3, 1)
+                lead_layout.addWidget(retract_checkbox, 4, 0, 1, 2)
+                lead_layout.addWidget(QLabel("Salida"), 5, 0)
+                lead_layout.addWidget(retract_type_combo, 5, 1)
+                lead_layout.addWidget(QLabel("Multipl radio"), 6, 0)
+                lead_layout.addWidget(retract_radius_field, 6, 1)
+                lead_layout.addWidget(QLabel("Alejamiento"), 7, 0)
+                lead_layout.addWidget(retract_mode_combo, 7, 1)
+                lead_group.setLayout(lead_layout)
+
+                left_column_layout = QVBoxLayout()
+                left_column_layout.setContentsMargins(0, 0, 0, 0)
+                left_column_layout.setSpacing(8)
+                left_column_layout.addWidget(depth_group, 0, Qt.AlignTop)
+                left_column_layout.addWidget(strategy_group, 1)
+                left_column_widget = QWidget()
+                left_column_widget.setLayout(left_column_layout)
+
+                depth_and_lead_row = QHBoxLayout()
+                depth_and_lead_row.setContentsMargins(0, 0, 0, 0)
+                depth_and_lead_row.setSpacing(8)
+                depth_and_lead_row.addWidget(left_column_widget, 1)
+                depth_and_lead_row.addWidget(lead_group, 1)
+                settings_layout.addLayout(depth_and_lead_row)
+
+                buttons_row = QHBoxLayout()
+                buttons_row.addStretch(1)
+                save_settings_btn = QPushButton("Guardar")
+                cancel_settings_btn = QPushButton("Cancelar")
+                save_settings_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+                cancel_settings_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+                buttons_row.addWidget(save_settings_btn)
+                buttons_row.addWidget(cancel_settings_btn)
+                settings_layout.addLayout(buttons_row)
+                settings_dialog.setLayout(settings_layout)
+
+                def refresh_squaring_tool_hint():
+                    current_tool = _resolve_en_juego_cutting_tool(tool_combo.currentData())
+                    diameter_value = _coerce_setting_number(current_tool.get("diameter"), 0.0, minimum=0.0)
+                    depth_role_label.setText(
+                        "Profundidad extra" if through_checkbox.isChecked() else "Profundidad de escuadrado"
+                    )
+                    if diameter_value > 0:
+                        tool_hint_label.setText(
+                            "Herramienta de escuadrado seleccionada: "
+                            f"Ø {_compact_number(diameter_value)} mm."
+                        )
+                    else:
+                        tool_hint_label.setText(
+                            "No hay una herramienta disponible para el escuadrado."
+                        )
+
+                def refresh_squaring_lead_controls():
+                    for widget in (approach_type_combo, approach_radius_field, approach_mode_combo):
+                        widget.setEnabled(approach_checkbox.isChecked())
+                    for widget in (retract_type_combo, retract_radius_field, retract_mode_combo):
+                        widget.setEnabled(retract_checkbox.isChecked())
+                    multipass_enabled = unidirectional_multipass_checkbox.isChecked()
+                    for widget in (pocket_depth_field, last_pocket_field):
+                        widget.setEnabled(multipass_enabled)
+                    depth_role_label.setText(
+                        "Profundidad extra" if through_checkbox.isChecked() else "Profundidad de escuadrado"
+                    )
+
+                refresh_squaring_lead_controls()
+                refresh_squaring_tool_hint()
+                tool_combo.currentIndexChanged.connect(lambda *_: refresh_squaring_tool_hint())
+                through_checkbox.toggled.connect(lambda *_: refresh_squaring_tool_hint())
+                through_checkbox.toggled.connect(lambda *_: refresh_squaring_lead_controls())
+                approach_checkbox.toggled.connect(lambda *_: refresh_squaring_lead_controls())
+                retract_checkbox.toggled.connect(lambda *_: refresh_squaring_lead_controls())
+                unidirectional_multipass_checkbox.toggled.connect(lambda *_: refresh_squaring_lead_controls())
+
+                def save_en_juego_squaring_settings_dialog_v2():
+                    selected_tool = _resolve_en_juego_cutting_tool(tool_combo.currentData())
+                    en_juego_settings["squaring_tool_id"] = str(selected_tool.get("tool_id") or "").strip()
+                    en_juego_settings["squaring_tool_code"] = str(selected_tool.get("tool_code") or "").strip()
+                    en_juego_settings["squaring_tool_name"] = str(selected_tool.get("tool_name") or "").strip()
+                    en_juego_settings["squaring_tool_diameter"] = _compact_number(
+                        _coerce_setting_number(selected_tool.get("diameter"), 0.0, minimum=0.0)
+                    )
+                    en_juego_settings["squaring_is_through"] = through_checkbox.isChecked()
+                    en_juego_settings["squaring_depth_value"] = _compact_number(
+                        _coerce_setting_number(
+                            depth_value_field.text().strip(),
+                            en_juego_settings.get("squaring_depth_value", 1.0),
+                            minimum=0.0,
+                        )
+                    )
+                    en_juego_settings["squaring_approach_enabled"] = approach_checkbox.isChecked()
+                    en_juego_settings["squaring_approach_type"] = str(approach_type_combo.currentData() or "Arc")
+                    en_juego_settings["squaring_approach_radius_multiplier"] = _compact_number(
+                        _coerce_setting_number(
+                            approach_radius_field.text().strip(),
+                            en_juego_settings.get("squaring_approach_radius_multiplier", 2.0),
+                            minimum=0.0,
+                        )
+                    )
+                    en_juego_settings["squaring_approach_mode"] = str(approach_mode_combo.currentData() or "Quote")
+                    en_juego_settings["squaring_retract_enabled"] = retract_checkbox.isChecked()
+                    en_juego_settings["squaring_retract_type"] = str(retract_type_combo.currentData() or "Arc")
+                    en_juego_settings["squaring_retract_radius_multiplier"] = _compact_number(
+                        _coerce_setting_number(
+                            retract_radius_field.text().strip(),
+                            en_juego_settings.get("squaring_retract_radius_multiplier", 2.0),
+                            minimum=0.0,
+                        )
+                    )
+                    en_juego_settings["squaring_retract_mode"] = str(retract_mode_combo.currentData() or "Quote")
+                    en_juego_settings["squaring_direction"] = str(direction_combo.currentData() or "CW")
+                    en_juego_settings["squaring_unidirectional_multipass"] = (
+                        unidirectional_multipass_checkbox.isChecked()
+                    )
+                    en_juego_settings["squaring_pocket_depth"] = _compact_number(
+                        _coerce_setting_number(
+                            pocket_depth_field.text().strip(),
+                            en_juego_settings.get("squaring_pocket_depth", 0.0),
+                            minimum=0.0,
+                        )
+                    )
+                    en_juego_settings["squaring_last_pocket"] = _compact_number(
+                        _coerce_setting_number(
+                            last_pocket_field.text().strip(),
+                            en_juego_settings.get("squaring_last_pocket", 0.0),
+                            minimum=0.0,
+                        )
+                    )
+                    persist_en_juego_settings()
+                    refresh_cut_mode_controls()
+                    settings_dialog.accept()
+
+                save_settings_btn.clicked.connect(save_en_juego_squaring_settings_dialog_v2)
+                cancel_settings_btn.clicked.connect(settings_dialog.reject)
+                _exec_centered(settings_dialog, config_dialog)
+
             def collect_en_juego_layout_data():
                 layout_data = {}
                 for instance_key, scene_item in item_by_instance_id.items():
@@ -5771,7 +6541,8 @@ class ProjectDetailWindow(QMainWindow):
             create_en_juego_btn.clicked.connect(create_en_juego_pgmx_from_dialog)
             save_layout_btn.clicked.connect(save_en_juego_layout)
             close_layout_btn.clicked.connect(config_dialog.reject)
-            configure_en_juego_btn.clicked.connect(open_en_juego_settings_dialog_v2)
+            configure_division_btn.clicked.connect(open_en_juego_settings_dialog_v2)
+            configure_squaring_btn.clicked.connect(open_en_juego_squaring_settings_dialog_v2)
             view_buttons_layout.addStretch()
             view_buttons_layout.addWidget(create_en_juego_btn)
             view_buttons_layout.addWidget(save_layout_btn)
@@ -5781,7 +6552,9 @@ class ProjectDetailWindow(QMainWindow):
             def refresh_cut_mode_controls():
                 sync_en_juego_settings_from_controls()
                 is_nesting_mode = en_juego_settings.get("cut_mode") == "nesting"
-                configure_en_juego_btn.setEnabled(is_nesting_mode)
+                origin_group.setEnabled(is_nesting_mode)
+                configure_division_btn.setEnabled(is_nesting_mode)
+                configure_squaring_btn.setEnabled(is_nesting_mode)
                 create_en_juego_btn.setEnabled(is_nesting_mode)
                 spacing_hint_label.setText(
                     "Separación mínima actual: "
@@ -6873,6 +7646,105 @@ class ToolsDialog(QDialog):
             self.tools_table.selectRow(0)
 
 
+class CutsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Cortes")
+        self.setModal(True)
+        self.setMinimumWidth(400)
+        self.settings = _read_app_settings()
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Configuración de cortes y separación."))
+
+        label_width = 170
+        field_width = 160
+
+        form_grid = QGridLayout()
+        form_grid.setContentsMargins(0, 0, 0, 0)
+        form_grid.setHorizontalSpacing(8)
+        form_grid.setVerticalSpacing(8)
+
+        optimization_label = QLabel("Optimización de cortes")
+        optimization_label.setFixedWidth(label_width)
+        self.cut_optimization_field = QComboBox()
+        self.cut_optimization_field.addItems(CUT_OPTIMIZATION_OPTIONS)
+        self.cut_optimization_field.setCurrentText(
+            _normalize_cut_optimization_option(self.settings.get("cut_optimization_mode"))
+        )
+        self.cut_optimization_field.setFixedWidth(field_width)
+        form_grid.addWidget(optimization_label, 0, 0)
+        form_grid.addWidget(self.cut_optimization_field, 0, 1, alignment=Qt.AlignLeft)
+
+        squaring_label = QLabel("Adicional para escuadrado")
+        squaring_label.setFixedWidth(label_width)
+        self.cut_squaring_field = QLineEdit(
+            str(_compact_number(self.settings.get("cut_squaring_allowance", 10)))
+        )
+        self.cut_squaring_field.setPlaceholderText("10")
+        self.cut_squaring_field.setFixedWidth(field_width)
+        form_grid.addWidget(squaring_label, 1, 0)
+        form_grid.addWidget(self.cut_squaring_field, 1, 1, alignment=Qt.AlignLeft)
+
+        saw_kerf_label = QLabel("Espesor de Sierra")
+        saw_kerf_label.setFixedWidth(label_width)
+        self.cut_saw_kerf_field = QLineEdit(
+            str(_compact_number(self.settings.get("cut_saw_kerf", 4)))
+        )
+        self.cut_saw_kerf_field.setPlaceholderText("4")
+        self.cut_saw_kerf_field.setFixedWidth(field_width)
+        form_grid.addWidget(saw_kerf_label, 2, 0)
+        form_grid.addWidget(self.cut_saw_kerf_field, 2, 1, alignment=Qt.AlignLeft)
+
+        layout.addLayout(form_grid)
+
+        buttons_row = QHBoxLayout()
+        save_button = QPushButton("Guardar")
+        close_button = QPushButton("Cerrar")
+        save_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        close_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        save_button.clicked.connect(self.save_settings)
+        close_button.clicked.connect(self.accept)
+        buttons_row.addWidget(save_button)
+        buttons_row.addWidget(close_button)
+        layout.addLayout(buttons_row)
+
+        self.setLayout(layout)
+
+    def save_settings(self):
+        squaring_raw = self.cut_squaring_field.text().strip() or "10"
+        saw_kerf_raw = self.cut_saw_kerf_field.text().strip() or "4"
+
+        def parse_non_negative_measure(raw_value: str, field_name: str) -> float | None:
+            try:
+                value = float(raw_value.replace(",", "."))
+            except ValueError:
+                QMessageBox.warning(self, "Cortes", f"{field_name} debe ser un número.")
+                return None
+            if value < 0:
+                QMessageBox.warning(self, "Cortes", f"{field_name} debe ser mayor o igual a cero.")
+                return None
+            return value
+
+        squaring_allowance = parse_non_negative_measure(squaring_raw, "El adicional para escuadrado")
+        if squaring_allowance is None:
+            return
+
+        saw_kerf = parse_non_negative_measure(saw_kerf_raw, "El espesor de sierra")
+        if saw_kerf is None:
+            return
+
+        current_settings = _read_app_settings()
+        current_settings["cut_squaring_allowance"] = _compact_number(squaring_allowance)
+        current_settings["cut_saw_kerf"] = _compact_number(saw_kerf)
+        current_settings["cut_optimization_mode"] = _normalize_cut_optimization_option(
+            self.cut_optimization_field.currentText()
+        )
+        _write_app_settings(current_settings)
+        self.settings = current_settings
+        QMessageBox.information(self, "Cortes", "Configuración guardada.")
+
+
 class OptionsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -6894,33 +7766,13 @@ class OptionsDialog(QDialog):
         minimum_dimension_row.addWidget(self.minimum_dimension_field)
         layout.addLayout(minimum_dimension_row)
 
-        optimization_row = QHBoxLayout()
-        optimization_row.addWidget(QLabel("Optimización de cortes"))
-        self.cut_optimization_field = QComboBox()
-        self.cut_optimization_field.addItems(CUT_OPTIMIZATION_OPTIONS)
-        self.cut_optimization_field.setCurrentText(
-            _normalize_cut_optimization_option(self.settings.get("cut_optimization_mode"))
-        )
-        optimization_row.addWidget(self.cut_optimization_field)
-        layout.addLayout(optimization_row)
-
-        squaring_row = QHBoxLayout()
-        squaring_row.addWidget(QLabel("Adicional para escuadrado"))
-        self.cut_squaring_field = QLineEdit(
-            str(_compact_number(self.settings.get("cut_squaring_allowance", 10)))
-        )
-        self.cut_squaring_field.setPlaceholderText("10")
-        squaring_row.addWidget(self.cut_squaring_field)
-        layout.addLayout(squaring_row)
-
-        saw_kerf_row = QHBoxLayout()
-        saw_kerf_row.addWidget(QLabel("Espesor de Sierra"))
-        self.cut_saw_kerf_field = QLineEdit(
-            str(_compact_number(self.settings.get("cut_saw_kerf", 4)))
-        )
-        self.cut_saw_kerf_field.setPlaceholderText("4")
-        saw_kerf_row.addWidget(self.cut_saw_kerf_field)
-        layout.addLayout(saw_kerf_row)
+        cuts_row = QHBoxLayout()
+        cuts_row.addWidget(QLabel("Configuración de cortes"))
+        cuts_button = QPushButton("Cortes")
+        cuts_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        cuts_button.clicked.connect(self.open_cuts_dialog)
+        cuts_row.addWidget(cuts_button)
+        layout.addLayout(cuts_row)
 
         boards_row = QHBoxLayout()
         boards_row.addWidget(QLabel("Tableros disponibles"))
@@ -6956,12 +7808,10 @@ class OptionsDialog(QDialog):
         _exec_centered(dialog, self)
         self.settings = _read_app_settings()
 
-    def open_tools_dialog(self):
-        QMessageBox.information(
-            self,
-            "Herramientas",
-            "La gestión de herramientas la armaremos en el siguiente paso.",
-        )
+    def open_cuts_dialog(self):
+        dialog = CutsDialog(self)
+        _exec_centered(dialog, self)
+        self.settings = _read_app_settings()
 
     def open_tools_dialog(self):
         dialog = ToolsDialog(self)
@@ -6969,19 +7819,6 @@ class OptionsDialog(QDialog):
 
     def save_settings(self):
         minimum_dimension_raw = self.minimum_dimension_field.text().strip() or "150"
-        squaring_raw = self.cut_squaring_field.text().strip() or "10"
-        saw_kerf_raw = self.cut_saw_kerf_field.text().strip() or "4"
-
-        def parse_non_negative_measure(raw_value: str, field_name: str) -> float | None:
-            try:
-                value = float(raw_value.replace(",", "."))
-            except ValueError:
-                QMessageBox.warning(self, "Opciones", f"{field_name} debe ser un número.")
-                return None
-            if value < 0:
-                QMessageBox.warning(self, "Opciones", f"{field_name} debe ser mayor o igual a cero.")
-                return None
-            return value
 
         try:
             minimum_dimension = int(minimum_dimension_raw)
@@ -6993,21 +7830,8 @@ class OptionsDialog(QDialog):
             QMessageBox.warning(self, "Opciones", "La mínima dimensión mecanizable debe ser mayor que cero.")
             return
 
-        squaring_allowance = parse_non_negative_measure(squaring_raw, "El adicional para escuadrado")
-        if squaring_allowance is None:
-            return
-
-        saw_kerf = parse_non_negative_measure(saw_kerf_raw, "El espesor de sierra")
-        if saw_kerf is None:
-            return
-
         current_settings = _read_app_settings()
         current_settings["minimum_machinable_dimension"] = minimum_dimension
-        current_settings["cut_squaring_allowance"] = _compact_number(squaring_allowance)
-        current_settings["cut_saw_kerf"] = _compact_number(saw_kerf)
-        current_settings["cut_optimization_mode"] = _normalize_cut_optimization_option(
-            self.cut_optimization_field.currentText()
-        )
         _write_app_settings(current_settings)
         self.settings = current_settings
         QMessageBox.information(self, "Opciones", "Configuración guardada.")

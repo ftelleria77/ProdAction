@@ -63,13 +63,13 @@ def _parse_optional_dimension(raw_value) -> Optional[float]:
 
 def _build_piece_from_row(module_name: str, piece_row: dict) -> Piece:
     thickness = _safe_float(piece_row.get("thickness"))
-    quantity_raw = str(piece_row.get("quantity") or "").strip()
+    quantity_raw = "" if piece_row.get("quantity") is None else str(piece_row.get("quantity")).strip()
     try:
         quantity = int(quantity_raw)
     except (TypeError, ValueError):
         quantity = 1
-    if quantity <= 0:
-        quantity = 1
+    if quantity < 0:
+        quantity = 0
 
     return Piece(
         id=str(piece_row.get("id") or "").strip() or str(piece_row.get("name") or "pieza").strip(),
@@ -91,12 +91,12 @@ def _build_piece_from_row(module_name: str, piece_row: dict) -> Piece:
 
 
 def _en_juego_quantity(piece_row: dict) -> int:
-    quantity_raw = str(piece_row.get("quantity") or "").strip()
+    quantity_raw = "" if piece_row.get("quantity") is None else str(piece_row.get("quantity")).strip()
     try:
         quantity = int(quantity_raw)
     except (TypeError, ValueError):
         return 1
-    return quantity if quantity > 0 else 1
+    return quantity if quantity >= 0 else 0
 
 
 def _preview_dimensions_mm(piece_row: dict, drawing_data: Optional[PieceDrawingData]) -> tuple[float, float]:
