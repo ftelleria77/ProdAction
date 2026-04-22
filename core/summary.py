@@ -37,7 +37,19 @@ except Exception:  # pragma: no cover - entorno sin dependencia opcional
 
 _QT_APP_REF = None
 
-from core.model import Piece, Project, normalize_piece_grain_direction
+from core.model import (
+    Piece,
+    Project,
+    build_piece_observations_display,
+    normalize_piece_grain_direction,
+    normalize_piece_observations,
+)
+
+
+def _excel_image_embedding_available() -> bool:
+    """openpyxl requiere Pillow incluso para insertar PNG ya existentes."""
+
+    return PILImage is not None
 
 
 def export_summary(project: Project, output_csv: Path):
@@ -138,6 +150,30 @@ def _px_to_excel_width(px: int) -> float:
     if px <= 12:
         return 1.0
     return round((px - 5) / 7, 2)
+
+
+def _excel_width_for_text_values(
+    values,
+    *,
+    minimum_width: float,
+    maximum_width: float,
+    padding_chars: float = 2.0,
+) -> float:
+    longest_line_length = 0
+    for value in values:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        longest_line_length = max(
+            longest_line_length,
+            max(len(line.strip()) for line in text.splitlines() if line.strip()) if text.splitlines() else len(text),
+        )
+
+    if longest_line_length <= 0:
+        return minimum_width
+
+    estimated_width = round((longest_line_length * 0.92) + padding_chars, 2)
+    return max(minimum_width, min(maximum_width, estimated_width))
 
 
 def _sanitize_filename(value: str) -> str:
@@ -371,6 +407,11 @@ def export_production_sheet(project: Project, output_xlsx: Path):
     ws = wb.active
     ws.title = "Planilla"
     program_dimensions_cache: dict[tuple[str, str], tuple[float | None, float | None, float | None]] = {}
+    excel_images_supported = _excel_image_embedding_available()
+    observations_min_width = _px_to_excel_width(120)
+    observations_max_width = _px_to_excel_width(280)
+    observations_font = Font(name="Calibri", size=9, bold=True, color="FFFF0000")
+    observations_values: list[str] = []
 
     # Configurar formato de impresión
     # Tamaño A4 (paperSize=9)
@@ -477,6 +518,7 @@ def export_production_sheet(project: Project, output_xlsx: Path):
                         "program_height": piece.program_height,
                         "program_thickness": piece.program_thickness,
                         "include_in_sheet": False,
+                        "observations": "",
                     }
                     for piece in module.pieces
                     if _is_valid_thickness(piece.thickness)
@@ -491,6 +533,7 @@ def export_production_sheet(project: Project, output_xlsx: Path):
             )
             for piece, program_note in zip(pieces, program_notes):
                 piece["program_dimension_note"] = program_note
+                piece["observations"] = normalize_piece_observations(piece.get("observations"))
 
             x_inferred, y_inferred, z_inferred = _derive_module_dimensions(module.name, pieces)
             x_val = _confirmed_dimension(module_settings.get("x")) or x_inferred
@@ -545,39 +588,40 @@ def export_production_sheet(project: Project, output_xlsx: Path):
 
             # Insert drawings immediately after details: up to 3 per row, max height 4cm (150px).
             prepared_images: list[tuple[Path, int, int, str]] = []
-            for idx, piece in enumerate(pieces):
-                if not bool(piece.get("include_in_sheet", False)):
-                    continue
+            if excel_images_supported:
+                for idx, piece in enumerate(pieces):
+                    if not bool(piece.get("include_in_sheet", False)):
+                        continue
 
-                piece_display_name = str(piece.get("name") or piece.get("id") or "pieza").strip()
-                piece_slug = _sanitize_filename(piece_display_name)
-                svg_path = Path(module.path) / f"{piece_slug}.svg"
-                if not svg_path.is_file():
-                    continue
+                    piece_display_name = str(piece.get("name") or piece.get("id") or "pieza").strip()
+                    piece_slug = _sanitize_filename(piece_display_name)
+                    svg_path = Path(module.path) / f"{piece_slug}.svg"
+                    if not svg_path.is_file():
+                        continue
 
-                # Max 4cm height (150px at 96 DPI)
-                png_path = temp_dir / f"{_sanitize_filename(module.name)}_{idx}_{piece_slug}.png"
-                size = _svg_to_png_for_excel(svg_path, png_path, max_width_px=150)
-                if not size:
-                    continue
+                    # Max 4cm height (150px at 96 DPI)
+                    png_path = temp_dir / f"{_sanitize_filename(module.name)}_{idx}_{piece_slug}.png"
+                    size = _svg_to_png_for_excel(svg_path, png_path, max_width_px=150)
+                    if not size:
+                        continue
 
-                src_w, src_h = size
-                if src_w <= 0 or src_h <= 0:
-                    continue
+                    src_w, src_h = size
+                    if src_w <= 0 or src_h <= 0:
+                        continue
 
-                # Calcular altura manteniendo aspectratio con máximo de 150px
-                if src_h > 150:
-                    ratio = 150.0 / float(src_h)
-                    target_w = int(round(src_w * ratio))
-                    target_h = 150
-                else:
-                    target_w = src_w
-                    target_h = src_h
-                
-                # Agregar nombre de la pieza a la imagen (texto centrado, no cambia dimensiones)
-                _add_text_to_png(png_path, piece_display_name, font_size=10)
-                
-                prepared_images.append((png_path, target_w, target_h, piece_display_name))
+                    # Calcular altura manteniendo aspectratio con máximo de 150px
+                    if src_h > 150:
+                        ratio = 150.0 / float(src_h)
+                        target_w = int(round(src_w * ratio))
+                        target_h = 150
+                    else:
+                        target_w = src_w
+                        target_h = src_h
+
+                    # Agregar nombre de la pieza a la imagen (texto centrado, no cambia dimensiones)
+                    _add_text_to_png(png_path, piece_display_name, font_size=10)
+
+                    prepared_images.append((png_path, target_w, target_h, piece_display_name))
 
             # Insertar imágenes: 3 por fila
             if prepared_images:
@@ -610,7 +654,10 @@ def export_production_sheet(project: Project, output_xlsx: Path):
                         # Centrar imagen en su bloque asignado
                         centered_x = col_offset_start + max(0.0, (block_w - img_w) / 2.0)
                         
-                        image = XLImage(str(png_path))
+                        try:
+                            image = XLImage(str(png_path))
+                        except Exception:
+                            continue
                         image.width = int(img_w)
                         image.height = int(img_h)
 
@@ -656,8 +703,13 @@ def export_production_sheet(project: Project, output_xlsx: Path):
                 ws.cell(row=row, column=4, value=_safe_float(piece.get("height")))
                 ws.cell(row=row, column=5, value=_safe_float(piece.get("thickness")))
                 ws.cell(row=row, column=6, value=piece.get("color") or "")
-                col_g_cell = ws.cell(row=row, column=7, value=piece.get("program_dimension_note") or "")
-                col_g_cell.font = Font(name="Calibri", size=11, bold=True, color="FFFF0000")
+                note_value = build_piece_observations_display(
+                    piece.get("observations"),
+                    piece.get("program_dimension_note"),
+                )
+                col_g_cell = ws.cell(row=row, column=7, value=note_value)
+                col_g_cell.font = observations_font
+                observations_values.append(str(note_value))
 
                 # Insertar fila vacía después de la última pieza tipo "H" si hay más piezas
                 if offset == last_h_index and (pieces_without_type or offset < len(pieces_with_type) - 1):
@@ -676,8 +728,13 @@ def export_production_sheet(project: Project, output_xlsx: Path):
                 ws.cell(row=row, column=4, value=_safe_float(piece.get("height")))
                 ws.cell(row=row, column=5, value=_safe_float(piece.get("thickness")))
                 ws.cell(row=row, column=6, value=piece.get("color") or "")
-                col_g_cell = ws.cell(row=row, column=7, value=piece.get("program_dimension_note") or "")
-                col_g_cell.font = Font(name="Calibri", size=11, bold=True, color="FFFF0000")
+                note_value = build_piece_observations_display(
+                    piece.get("observations"),
+                    piece.get("program_dimension_note"),
+                )
+                col_g_cell = ws.cell(row=row, column=7, value=note_value)
+                col_g_cell.font = observations_font
+                observations_values.append(str(note_value))
 
             module_last_piece_row = pieces_start + len(pieces_with_type) + len(pieces_without_type) + extra_rows - 1
             content_end_row = max(module_last_piece_row, images_end_row)
@@ -685,6 +742,12 @@ def export_production_sheet(project: Project, output_xlsx: Path):
 
             # Leave two blank rows between framed module blocks.
             current_row = content_end_row + 3
+
+        ws.column_dimensions["G"].width = _excel_width_for_text_values(
+            observations_values,
+            minimum_width=observations_min_width,
+            maximum_width=observations_max_width,
+        )
 
         output_xlsx.parent.mkdir(parents=True, exist_ok=True)
         wb.save(output_xlsx)

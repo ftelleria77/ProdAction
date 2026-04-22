@@ -17,6 +17,7 @@ PIECE_GRAIN_CODE_LABELS = {
     PIECE_GRAIN_CODE_HEIGHT: "Alto",
     PIECE_GRAIN_CODE_WIDTH: "Ancho",
 }
+PIECE_EN_JUEGO_OBSERVATION = "En-Juego"
 
 
 def normalize_piece_grain_direction(value) -> str:
@@ -39,6 +40,42 @@ def normalize_piece_grain_direction(value) -> str:
 def piece_grain_direction_label(value) -> str:
     normalized = normalize_piece_grain_direction(value)
     return PIECE_GRAIN_CODE_LABELS.get(normalized, PIECE_GRAIN_CODE_LABELS[PIECE_GRAIN_CODE_NONE])
+
+
+def normalize_piece_observations(value) -> str:
+    raw_text = str(value or "").replace("\r", "\n")
+    parts: list[str] = []
+    seen: set[str] = set()
+    for raw_part in raw_text.replace("|", "\n").split("\n"):
+        cleaned = raw_part.strip()
+        if not cleaned:
+            continue
+        normalized_key = cleaned.casefold()
+        if normalized_key in seen:
+            continue
+        seen.add(normalized_key)
+        parts.append(cleaned)
+    return " | ".join(parts)
+
+
+def set_piece_en_juego_observation(observations, enabled: bool) -> str:
+    normalized = normalize_piece_observations(observations)
+    entries = [entry.strip() for entry in normalized.split("|") if entry.strip()]
+    entries = [entry for entry in entries if entry.casefold() != PIECE_EN_JUEGO_OBSERVATION.casefold()]
+    if enabled:
+        entries.append(PIECE_EN_JUEGO_OBSERVATION)
+    return normalize_piece_observations(" | ".join(entries))
+
+
+def build_piece_observations_display(observations, program_note=None) -> str:
+    values = []
+    normalized_observations = normalize_piece_observations(observations)
+    normalized_program_note = str(program_note or "").strip()
+    if normalized_observations:
+        values.append(normalized_observations)
+    if normalized_program_note:
+        values.append(normalized_program_note)
+    return " | ".join(values)
 
 
 @dataclass

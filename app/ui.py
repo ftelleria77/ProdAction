@@ -5,6 +5,7 @@ archivado y selección de carpeta raíz de proyecto.
 Incluye ventana de detalle de proyecto con edición.
 """
 
+import csv
 import datetime
 import json
 import os
@@ -36,6 +37,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QCheckBox,
     QRadioButton,
+    QGroupBox,
     QSizePolicy,
 )
 from PySide6.QtSvgWidgets import QSvgWidget
@@ -45,8 +47,11 @@ from core.model import (
     Project,
     ModuleData,
     Piece,
+    build_piece_observations_display,
     normalize_piece_grain_direction,
+    normalize_piece_observations,
     piece_grain_direction_label,
+    set_piece_en_juego_observation,
 )
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -57,6 +62,8 @@ ARCHIVE_DIR.mkdir(exist_ok=True)
 
 MAIN_ACTION_BUTTON_WIDTH = 96
 MAIN_ACTION_BUTTON_HEIGHT = 40
+_TOOL_CATALOG_ROWS_CACHE: list[dict] | None = None
+_EN_JUEGO_CUTTING_TOOLS_CACHE: list[dict] | None = None
 
 BOARD_GRAIN_OPTIONS = [
     "0 - Sin Veta",
@@ -254,6 +261,444 @@ def _write_app_settings(settings: dict):
     )
 
 
+def _normalize_en_juego_cut_mode(value) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {"nesting", "corte nesting", "cut nesting"}:
+        return "nesting"
+    return "manual"
+
+
+def _load_tool_catalog_rows() -> list[dict]:
+    global _TOOL_CATALOG_ROWS_CACHE
+
+    if _TOOL_CATALOG_ROWS_CACHE is not None:
+        return [dict(tool_data) for tool_data in _TOOL_CATALOG_ROWS_CACHE]
+
+    catalog_path = BASE_DIR / "tools" / "tool_catalog.csv"
+    if not catalog_path.exists():
+        return []
+
+    rows: list[dict] = []
+    try:
+        with catalog_path.open("r", encoding="utf-8-sig", newline="") as csv_file:
+            reader = csv.DictReader(csv_file)
+            for row in reader:
+                tool_id = str(row.get("tool_id") or "").strip()
+                if not tool_id:
+                    continue
+                rows.append(
+                    {
+                        "tool_id": tool_id,
+                        "name": str(row.get("name") or "").strip(),
+                        "description": str(row.get("description") or "").strip(),
+                        "type": str(row.get("type") or "").strip(),
+                        "holder_key": str(row.get("holder_key") or "").strip(),
+                        "diameter": _compact_number(
+                            _coerce_setting_number(row.get("diameter"), 0.0, minimum=0.0)
+                        ),
+                        "sinking_length": _compact_number(
+                            _coerce_setting_number(row.get("sinking_length"), 0.0, minimum=0.0)
+                        ),
+                        "tool_offset_length": _compact_number(
+                            _coerce_setting_number(row.get("tool_offset_length"), 0.0, minimum=0.0)
+                        ),
+                    }
+                )
+    except Exception:
+        return []
+
+    _TOOL_CATALOG_ROWS_CACHE = [dict(tool_data) for tool_data in rows]
+    return [dict(tool_data) for tool_data in rows]
+
+
+def _load_en_juego_cutting_tools() -> list[dict]:
+    global _EN_JUEGO_CUTTING_TOOLS_CACHE
+
+    if _EN_JUEGO_CUTTING_TOOLS_CACHE is not None:
+        return [dict(tool_data) for tool_data in _EN_JUEGO_CUTTING_TOOLS_CACHE]
+
+    catalog_path = BASE_DIR / "tools" / "tool_catalog.csv"
+    if not catalog_path.exists():
+        return []
+
+    tools: list[dict] = []
+    try:
+        with catalog_path.open("r", encoding="utf-8-sig", newline="") as csv_file:
+            reader = csv.DictReader(csv_file)
+            for row in reader:
+                tool_id = str(row.get("tool_id") or "").strip()
+                tool_code = str(row.get("name") or "").strip()
+                tool_name = str(row.get("description") or "").strip()
+                tool_type = str(row.get("type") or "").strip()
+                search_text = " ".join((tool_code, tool_name, tool_type)).lower()
+                diameter = _coerce_setting_number(row.get("diameter"), 0.0, minimum=0.0)
+                if not tool_id or diameter <= 0:
+                    continue
+                if "fresa" not in search_text and "freza" not in search_text:
+                    continue
+                label_parts = [part for part in (tool_code, tool_name) if part]
+                label = " - ".join(label_parts) if label_parts else tool_id
+                tools.append(
+                    {
+                        "tool_id": tool_id,
+                        "tool_code": tool_code,
+                        "tool_name": tool_name,
+                        "tool_type": tool_type,
+                        "diameter": _compact_number(diameter),
+                        "label": f"{label} (Ø{_compact_number(diameter)} mm)",
+                    }
+                )
+    except Exception:
+        return []
+
+    _EN_JUEGO_CUTTING_TOOLS_CACHE = [dict(tool_data) for tool_data in tools]
+    return [dict(tool_data) for tool_data in tools]
+
+
+def _load_en_juego_cutting_tools() -> list[dict]:
+    global _EN_JUEGO_CUTTING_TOOLS_CACHE
+
+    if _EN_JUEGO_CUTTING_TOOLS_CACHE is not None:
+        return [dict(tool_data) for tool_data in _EN_JUEGO_CUTTING_TOOLS_CACHE]
+
+    tools: list[dict] = []
+    for row in _load_tool_catalog_rows():
+        tool_id = str(row.get("tool_id") or "").strip()
+        tool_code = str(row.get("name") or "").strip()
+        tool_name = str(row.get("description") or "").strip()
+        tool_type = str(row.get("type") or "").strip()
+        search_text = " ".join((tool_code, tool_name, tool_type)).lower()
+        diameter = _coerce_setting_number(row.get("diameter"), 0.0, minimum=0.0)
+        if not tool_id or diameter <= 0:
+            continue
+        if "fresa" not in search_text and "freza" not in search_text:
+            continue
+        label_parts = [part for part in (tool_code, tool_name) if part]
+        label = " - ".join(label_parts) if label_parts else tool_id
+        tools.append(
+            {
+                "tool_id": tool_id,
+                "tool_code": tool_code,
+                "tool_name": tool_name,
+                "tool_type": tool_type,
+                "diameter": _compact_number(diameter),
+                "label": f"{label} (Ø{_compact_number(diameter)} mm)",
+            }
+        )
+
+    _EN_JUEGO_CUTTING_TOOLS_CACHE = [dict(tool_data) for tool_data in tools]
+    return [dict(tool_data) for tool_data in tools]
+
+def _normalize_tool_usage_group(tool_type) -> str:
+    normalized = str(tool_type or "").strip().lower()
+    if normalized.startswith("broca"):
+        return "drilling"
+    if normalized.startswith("fresa") or normalized.startswith("freza"):
+        return "milling"
+    if normalized.startswith("sierra"):
+        return "saw"
+    return "other"
+
+
+def _tool_usage_family_label(tool_type) -> str:
+    usage_group = _normalize_tool_usage_group(tool_type)
+    if usage_group == "drilling":
+        return "Broca"
+    if usage_group == "milling":
+        return "Fresa"
+    if usage_group == "saw":
+        return "Sierra"
+    return "Otro"
+
+
+def _is_helical_tool_type(tool_type) -> bool:
+    normalized = str(tool_type or "").strip().lower()
+    return "compres" in normalized or "helic" in normalized
+
+
+def _is_zero_degree_milling_tool(tool_type) -> bool:
+    normalized = str(tool_type or "").strip().lower()
+    return normalized.startswith("fresa 0") or normalized.startswith("freza 0")
+
+
+def _is_forty_five_degree_milling_tool(tool_type) -> bool:
+    normalized = str(tool_type or "").strip().lower()
+    return normalized.startswith("fresa 45") or normalized.startswith("freza 45")
+
+
+def _is_horizontal_saw_tool(tool_type) -> bool:
+    normalized = str(tool_type or "").strip().lower()
+    return normalized == "sierra horizontal"
+
+
+def _coerce_setting_bool(value, default: bool = False) -> bool:
+    if value is None:
+        return bool(default)
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "t", "yes", "si", "sí", "on"}:
+        return True
+    if normalized in {"0", "false", "f", "no", "off"}:
+        return False
+    return bool(default)
+
+
+def _tool_usage_label(tool_type) -> str:
+    normalized_type = str(tool_type or "").strip().lower()
+    if normalized_type == "sierra vertical x":
+        return "Ranurado recto horizontal no pasante"
+    if _is_horizontal_saw_tool(tool_type):
+        return "No apta para dividir En-Juego"
+    if _is_forty_five_degree_milling_tool(tool_type):
+        return "Divide En-Juego segun profundidad; 2 mm por cada 1 mm extra"
+    if _is_zero_degree_milling_tool(tool_type):
+        return "No apta para dividir En-Juego"
+    if _is_helical_tool_type(tool_type):
+        return "Preferente para dividir En-Juego; su diametro define la separacion"
+    usage_group = _normalize_tool_usage_group(tool_type)
+    if usage_group == "drilling":
+        return "Taladrado"
+    if usage_group == "milling":
+        return "Fresado, escuadrado y corte Nesting"
+    if usage_group == "saw":
+        return "Corte con sierra"
+    return "Sin regla definida"
+
+
+def _tool_allows_en_juego_cutting(tool_row: dict) -> bool:
+    tool_type = tool_row.get("type")
+    if _is_horizontal_saw_tool(tool_type):
+        return False
+    if _is_zero_degree_milling_tool(tool_type):
+        return False
+    return _normalize_tool_usage_group(tool_type) == "milling"
+
+
+def _en_juego_cutting_tool_priority(tool_row: dict) -> tuple[int, float, str]:
+    diameter = _coerce_setting_number(tool_row.get("diameter"), 0.0, minimum=0.0)
+    tool_code = str(tool_row.get("name") or tool_row.get("tool_code") or "").strip()
+    return (
+        0 if _is_helical_tool_type(tool_row.get("type")) else 1,
+        -float(diameter),
+        tool_code,
+    )
+
+
+def _load_en_juego_cutting_tools() -> list[dict]:
+    global _EN_JUEGO_CUTTING_TOOLS_CACHE
+
+    if _EN_JUEGO_CUTTING_TOOLS_CACHE is not None:
+        return [dict(tool_data) for tool_data in _EN_JUEGO_CUTTING_TOOLS_CACHE]
+
+    tools: list[dict] = []
+    for row in _load_tool_catalog_rows():
+        if not _tool_allows_en_juego_cutting(row):
+            continue
+        tool_id = str(row.get("tool_id") or "").strip()
+        tool_code = str(row.get("name") or "").strip()
+        tool_name = str(row.get("description") or "").strip()
+        tool_type = str(row.get("type") or "").strip()
+        diameter = _coerce_setting_number(row.get("diameter"), 0.0, minimum=0.0)
+        if not tool_id or diameter <= 0:
+            continue
+        label_parts = [part for part in (tool_code, tool_name) if part]
+        label = " - ".join(label_parts) if label_parts else tool_id
+        tools.append(
+            {
+                "tool_id": tool_id,
+                "tool_code": tool_code,
+                "tool_name": tool_name,
+                "tool_type": tool_type,
+                "diameter": _compact_number(diameter),
+                "label": f"{label} (Ø{_compact_number(diameter)} mm)",
+            }
+        )
+
+    tools.sort(key=_en_juego_cutting_tool_priority)
+    _EN_JUEGO_CUTTING_TOOLS_CACHE = [dict(tool_data) for tool_data in tools]
+    return [dict(tool_data) for tool_data in tools]
+
+
+def _default_en_juego_cutting_tool() -> dict:
+    tools = _load_en_juego_cutting_tools()
+    for tool in tools:
+        if _is_helical_tool_type(tool.get("tool_type")):
+            return dict(tool)
+    for tool in tools:
+        if str(tool.get("tool_id") or "").strip() == "1902":
+            return dict(tool)
+    if tools:
+        return dict(tools[0])
+    return {
+        "tool_id": "",
+        "tool_code": "",
+        "tool_name": "",
+        "tool_type": "",
+        "diameter": 0,
+        "label": "",
+    }
+
+
+def _resolve_en_juego_cutting_tool(tool_id) -> dict:
+    normalized_id = str(tool_id or "").strip()
+    for tool in _load_en_juego_cutting_tools():
+        if str(tool.get("tool_id") or "").strip() == normalized_id:
+            return dict(tool)
+    return _default_en_juego_cutting_tool()
+
+
+def _resolve_en_juego_nesting_spacing_mm(
+    settings: dict,
+    *,
+    material_thickness_mm: float = 0.0,
+) -> float:
+    tool_data = _resolve_en_juego_cutting_tool(settings.get("cutting_tool_id"))
+    tool_type = tool_data.get("tool_type")
+    if _is_forty_five_degree_milling_tool(tool_type):
+        depth_value = _coerce_setting_number(
+            settings.get("cutting_depth_value"),
+            1.0,
+            minimum=0.0,
+        )
+        if _coerce_setting_bool(settings.get("cutting_is_through"), True):
+            extra_depth = depth_value
+        else:
+            extra_depth = max(0.0, depth_value - max(0.0, float(material_thickness_mm)))
+        return max(0.0, extra_depth * 2.0)
+
+    return max(
+        0.0,
+        _coerce_setting_number(
+            settings.get("cutting_tool_diameter"),
+            _coerce_setting_number(tool_data.get("diameter"), 0.0, minimum=0.0),
+            minimum=0.0,
+        ),
+    )
+
+
+def _default_en_juego_settings() -> dict:
+    default_tool = _default_en_juego_cutting_tool()
+    return {
+        "cut_mode": "manual",
+        "origin_x": 0,
+        "origin_y": 0,
+        "origin_z": 0,
+        "cutting_is_through": True,
+        "cutting_depth_value": 1.0,
+        "approach_enabled": False,
+        "approach_type": "Arc",
+        "approach_radius_multiplier": 2.0,
+        "approach_mode": "Quote",
+        "retract_enabled": False,
+        "retract_type": "Arc",
+        "retract_radius_multiplier": 2.0,
+        "retract_mode": "Quote",
+        "cutting_tool_id": str(default_tool.get("tool_id") or "").strip(),
+        "cutting_tool_code": str(default_tool.get("tool_code") or "").strip(),
+        "cutting_tool_name": str(default_tool.get("tool_name") or "").strip(),
+        "cutting_tool_diameter": _compact_number(
+            _coerce_setting_number(default_tool.get("diameter"), 0.0, minimum=0.0)
+        ),
+    }
+
+
+def _normalize_en_juego_settings(value) -> dict:
+    defaults = _default_en_juego_settings()
+    if not isinstance(value, dict):
+        return defaults
+
+    resolved_tool = _resolve_en_juego_cutting_tool(value.get("cutting_tool_id") or defaults.get("cutting_tool_id"))
+    fallback_diameter = _coerce_setting_number(
+        resolved_tool.get("diameter"),
+        float(defaults["cutting_tool_diameter"]),
+        minimum=0.0,
+    )
+
+    return {
+        "cut_mode": _normalize_en_juego_cut_mode(value.get("cut_mode")),
+        "origin_x": _compact_number(
+            _coerce_setting_number(value.get("origin_x"), float(defaults["origin_x"]))
+        ),
+        "origin_y": _compact_number(
+            _coerce_setting_number(value.get("origin_y"), float(defaults["origin_y"]))
+        ),
+        "origin_z": _compact_number(
+            _coerce_setting_number(value.get("origin_z"), float(defaults["origin_z"]))
+        ),
+        "cutting_is_through": _coerce_setting_bool(
+            value.get("cutting_is_through"),
+            bool(defaults["cutting_is_through"]),
+        ),
+        "cutting_depth_value": _compact_number(
+            _coerce_setting_number(
+                value.get("cutting_depth_value"),
+                float(defaults["cutting_depth_value"]),
+                minimum=0.0,
+            )
+        ),
+        "approach_enabled": _coerce_setting_bool(
+            value.get("approach_enabled"),
+            bool(defaults["approach_enabled"]),
+        ),
+        "approach_type": "Arc"
+        if str(value.get("approach_type") or defaults["approach_type"]).strip().lower() == "arc"
+        else "Line",
+        "approach_radius_multiplier": _compact_number(
+            _coerce_setting_number(
+                value.get("approach_radius_multiplier"),
+                float(defaults["approach_radius_multiplier"]),
+                minimum=0.0,
+            )
+        ),
+        "approach_mode": "Quote"
+        if str(value.get("approach_mode") or defaults["approach_mode"]).strip().lower() == "quote"
+        else "Down",
+        "retract_enabled": _coerce_setting_bool(
+            value.get("retract_enabled"),
+            bool(defaults["retract_enabled"]),
+        ),
+        "retract_type": "Arc"
+        if str(value.get("retract_type") or defaults["retract_type"]).strip().lower() == "arc"
+        else "Line",
+        "retract_radius_multiplier": _compact_number(
+            _coerce_setting_number(
+                value.get("retract_radius_multiplier"),
+                float(defaults["retract_radius_multiplier"]),
+                minimum=0.0,
+            )
+        ),
+        "retract_mode": "Quote"
+        if str(value.get("retract_mode") or defaults["retract_mode"]).strip().lower() == "quote"
+        else "Up",
+        "cutting_tool_id": str(
+            value.get("cutting_tool_id")
+            or resolved_tool.get("tool_id")
+            or defaults.get("cutting_tool_id")
+            or ""
+        ).strip(),
+        "cutting_tool_code": str(
+            value.get("cutting_tool_code")
+            or resolved_tool.get("tool_code")
+            or defaults.get("cutting_tool_code")
+            or ""
+        ).strip(),
+        "cutting_tool_name": str(
+            value.get("cutting_tool_name")
+            or resolved_tool.get("tool_name")
+            or defaults.get("cutting_tool_name")
+            or ""
+        ).strip(),
+        "cutting_tool_diameter": _compact_number(
+            _coerce_setting_number(
+                value.get("cutting_tool_diameter"),
+                fallback_diameter,
+                minimum=0.0,
+            )
+        ),
+    }
+
+
 def _normalize_project_locales(value, legacy_local: str = "") -> list[LocaleData]:
     locales: list[LocaleData] = []
 
@@ -384,6 +829,83 @@ def _apply_responsive_window_size(
 
     widget.resize(target_width, target_height)
     return scale, target_width, target_height
+
+
+def _center_window_on_screen(widget: QWidget) -> None:
+    available = _window_available_geometry(widget)
+    if available is None:
+        return
+
+    frame_rect = widget.frameGeometry()
+    target_width = frame_rect.width() if frame_rect.width() > 0 else widget.width()
+    target_height = frame_rect.height() if frame_rect.height() > 0 else widget.height()
+    if target_width <= 0 or target_height <= 0:
+        return
+
+    target_x = available.x() + max(0, int((available.width() - target_width) / 2))
+    target_y = available.y() + max(0, int((available.height() - target_height) / 2))
+    widget.move(target_x, target_y)
+
+
+def _center_window_on_origin(widget: QWidget, origin: QWidget | None = None) -> None:
+    origin_widget = origin
+    if origin_widget is None:
+        try:
+            origin_widget = widget.parentWidget()
+        except Exception:
+            origin_widget = None
+
+    if origin_widget is not None:
+        try:
+            origin_widget = origin_widget.window()
+        except Exception:
+            pass
+
+    origin_rect = None
+    if origin_widget is not None:
+        try:
+            candidate_rect = origin_widget.frameGeometry()
+        except Exception:
+            candidate_rect = None
+        if candidate_rect is not None and candidate_rect.width() > 0 and candidate_rect.height() > 0:
+            origin_rect = candidate_rect
+
+    if origin_rect is None:
+        _center_window_on_screen(widget)
+        return
+
+    available = _window_available_geometry(origin_widget) or _window_available_geometry(widget)
+    frame_rect = widget.frameGeometry()
+    target_width = frame_rect.width() if frame_rect.width() > 0 else max(widget.width(), widget.sizeHint().width())
+    target_height = frame_rect.height() if frame_rect.height() > 0 else max(widget.height(), widget.sizeHint().height())
+    if target_width <= 0 or target_height <= 0:
+        return
+
+    target_x = origin_rect.x() + int((origin_rect.width() - target_width) / 2)
+    target_y = origin_rect.y() + int((origin_rect.height() - target_height) / 2)
+
+    if available is not None:
+        min_x = available.x()
+        min_y = available.y()
+        max_x = available.x() + max(0, available.width() - target_width)
+        max_y = available.y() + max(0, available.height() - target_height)
+        target_x = min(max(target_x, min_x), max_x)
+        target_y = min(max(target_y, min_y), max_y)
+
+    widget.move(target_x, target_y)
+
+
+def _show_centered(widget: QWidget, origin: QWidget | None = None) -> None:
+    widget.show()
+    app = QApplication.instance()
+    if app is not None:
+        app.processEvents()
+    _center_window_on_origin(widget, origin)
+
+
+def _exec_centered(dialog: QDialog, origin: QWidget | None = None) -> int:
+    _center_window_on_origin(dialog, origin)
+    return dialog.exec()
 
 
 def _register_project(project: Project):
@@ -1058,6 +1580,7 @@ class ProjectDetailWindow(QMainWindow):
                         "program_thickness": piece.program_thickness,
                         "en_juego": bool(previous_row.get("en_juego", False)),
                         "include_in_sheet": bool(previous_row.get("include_in_sheet", previous_row.get("excel", False))),
+                        "observations": normalize_piece_observations(previous_row.get("observations")),
                     }
                 )
 
@@ -1066,6 +1589,7 @@ class ProjectDetailWindow(QMainWindow):
                 "path": str(module_path),
                 "generated_at": datetime.datetime.now().isoformat(sep=" ", timespec="seconds"),
                 "en_juego_layout": previous_config.get("en_juego_layout", {}),
+                "en_juego_settings": _normalize_en_juego_settings(previous_config.get("en_juego_settings")),
                 "settings": {
                     "x": previous_settings.get("x", ""),
                     "y": previous_settings.get("y", ""),
@@ -1168,6 +1692,145 @@ class ProjectDetailWindow(QMainWindow):
             self._compact_dimension_value(z_val),
         )
 
+    def _configured_board_colors(self, piece_thickness: float | None = None) -> list[str]:
+        colors: list[str] = []
+        seen: set[str] = set()
+        for board in _read_app_settings().get("available_boards", []):
+            color = str(board.get("color") or "").strip()
+            if not color:
+                continue
+            if piece_thickness is not None:
+                try:
+                    board_thickness = float(board.get("thickness"))
+                except (TypeError, ValueError):
+                    continue
+                if abs(board_thickness - piece_thickness) > 0.001:
+                    continue
+            color_key = color.lower()
+            if color_key in seen:
+                continue
+            seen.add(color_key)
+            colors.append(color)
+        return colors
+
+    def _prompt_processing_color_replacement(
+        self,
+        original_color: str,
+        available_colors: list[str],
+        affected_piece_count: int,
+        affected_units_count: int,
+    ) -> str | None:
+        color_dialog = QDialog(self)
+        color_dialog.setWindowTitle("Procesar proyecto")
+        color_layout = QVBoxLayout()
+        color_layout.addWidget(
+            QLabel(
+                "Se encontraron piezas con un color no configurado en los tableros.\n"
+                f"Color detectado: {original_color or '(sin color)'}\n"
+                f"Piezas afectadas: {affected_piece_count} | Unidades: {affected_units_count}\n"
+                "Seleccione el color de tablero que se aplicará a todas ellas."
+            )
+        )
+
+        colors_list = QListWidget()
+        for color in available_colors:
+            colors_list.addItem(color)
+        color_layout.addWidget(colors_list)
+
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addStretch(1)
+        accept_button = QPushButton("Aceptar")
+        cancel_button = QPushButton("Cancelar")
+        accept_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        cancel_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        buttons_layout.addWidget(accept_button)
+        buttons_layout.addWidget(cancel_button)
+        color_layout.addLayout(buttons_layout)
+
+        if colors_list.count() > 0:
+            colors_list.setCurrentRow(0)
+
+        def accept_color_selection():
+            if colors_list.currentItem() is None:
+                QMessageBox.warning(color_dialog, "Procesar proyecto", "Seleccione un color.")
+                return
+            color_dialog.accept()
+
+        accept_button.clicked.connect(accept_color_selection)
+        cancel_button.clicked.connect(color_dialog.reject)
+        colors_list.itemDoubleClicked.connect(lambda _item: accept_color_selection())
+        color_dialog.setLayout(color_layout)
+
+        if _exec_centered(color_dialog, self) != QDialog.Accepted or colors_list.currentItem() is None:
+            return None
+        return colors_list.currentItem().text().strip() or None
+
+    def _resolve_processed_piece_colors(self, processed_modules: list[ModuleData]) -> bool:
+        available_colors = self._configured_board_colors()
+        available_color_map = {color.strip().lower(): color for color in available_colors if str(color).strip()}
+
+        unresolved_groups: dict[str, dict] = {}
+        for module in processed_modules:
+            for piece in getattr(module, "pieces", []):
+                if not self._is_valid_piece_for_count(piece):
+                    continue
+
+                raw_color = str(piece.color or "").strip()
+                color_key = raw_color.lower()
+                if color_key in available_color_map:
+                    piece.color = available_color_map[color_key]
+                    continue
+
+                group = unresolved_groups.setdefault(
+                    color_key,
+                    {
+                        "display": raw_color,
+                        "pieces": [],
+                        "piece_count": 0,
+                        "units_count": 0,
+                    },
+                )
+                group["pieces"].append(piece)
+                group["piece_count"] += 1
+                try:
+                    quantity = int(piece.quantity or 1)
+                except (TypeError, ValueError):
+                    quantity = 1
+                group["units_count"] += quantity if quantity > 0 else 1
+
+        if not unresolved_groups:
+            return True
+
+        if not available_colors:
+            missing_labels = ", ".join(
+                sorted(group["display"] or "(sin color)" for group in unresolved_groups.values())
+            )
+            QMessageBox.warning(
+                self,
+                "Procesar",
+                "Hay piezas con colores que no coinciden con ningún tablero configurado,\n"
+                "pero no hay colores disponibles para reasignar.\n\n"
+                f"Colores detectados: {missing_labels}",
+            )
+            return False
+
+        for group in sorted(
+            unresolved_groups.values(),
+            key=lambda item: (str(item["display"] or "").strip().lower(), item["piece_count"]),
+        ):
+            selected_color = self._prompt_processing_color_replacement(
+                str(group["display"] or "").strip(),
+                available_colors,
+                int(group["piece_count"] or 0),
+                int(group["units_count"] or 0),
+            )
+            if not selected_color:
+                return False
+            for piece in group["pieces"]:
+                piece.color = selected_color
+
+        return True
+
     def _resolve_module_nominal_dimensions(self, module: ModuleData) -> dict:
         config_data = self._read_module_config(module)
         settings = config_data.get("settings", {}) if isinstance(config_data, dict) else {}
@@ -1185,6 +1848,76 @@ class ProjectDetailWindow(QMainWindow):
             "y": y_value,
             "z": z_value,
         }
+
+    def _module_path_processing_key(self, module: ModuleData) -> str:
+        try:
+            return str(Path(module.path).resolve()).lower()
+        except Exception:
+            return str(module.path or "").strip().lower()
+
+    def _resolve_modules_for_processing(
+        self,
+        scanned_modules: list[ModuleData],
+    ) -> tuple[list[ModuleData], list[ModuleData]] | None:
+        existing_modules_by_path = {
+            self._module_path_processing_key(module): module
+            for module in getattr(self.project, "modules", [])
+        }
+
+        resolved_modules: list[ModuleData] = []
+        modules_to_reprocess: list[ModuleData] = []
+
+        for scanned_module in scanned_modules:
+            config_path = self._module_config_path(scanned_module)
+            if not config_path.exists():
+                resolved_modules.append(scanned_module)
+                modules_to_reprocess.append(scanned_module)
+                continue
+
+            module_label = (
+                f"{scanned_module.locale_name} / {scanned_module.name}"
+                if str(scanned_module.locale_name or "").strip()
+                else scanned_module.name
+            )
+            answer = QMessageBox.question(
+                self,
+                "Procesar",
+                (
+                    f"El módulo '{module_label}' ya tiene una configuración previa.\n\n"
+                    "¿Desea reprocesarlo?"
+                ),
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+                QMessageBox.No,
+            )
+            if answer == QMessageBox.Cancel:
+                return None
+            if answer == QMessageBox.Yes:
+                resolved_modules.append(scanned_module)
+                modules_to_reprocess.append(scanned_module)
+                continue
+
+            existing_module = existing_modules_by_path.get(self._module_path_processing_key(scanned_module))
+            if existing_module is None:
+                existing_module = ModuleData(
+                    name=scanned_module.name,
+                    path=scanned_module.path,
+                    locale_name=scanned_module.locale_name,
+                    relative_path=scanned_module.relative_path,
+                    is_manual=scanned_module.is_manual,
+                    pieces=[],
+                )
+            else:
+                existing_module.name = scanned_module.name
+                existing_module.path = scanned_module.path
+                existing_module.locale_name = scanned_module.locale_name
+                existing_module.relative_path = scanned_module.relative_path
+                existing_module.is_manual = scanned_module.is_manual
+
+            self._reload_module_pieces_from_config(existing_module)
+            self._normalize_module_piece_thickness(existing_module)
+            resolved_modules.append(existing_module)
+
+        return resolved_modules, modules_to_reprocess
 
     def _write_locale_config_files(self, locales: list[LocaleData] | None = None):
         target_locales = locales if locales is not None else self.project.locales
@@ -1244,7 +1977,7 @@ class ProjectDetailWindow(QMainWindow):
     def edit_project(self):
         """Abrir ventana de edición del proyecto."""
         edit_window = EditProjectWindow(self.project)
-        edit_window.show()
+        _show_centered(edit_window, self)
         self.edit_window = edit_window
 
     def _prompt_new_locale_name(self, root_path: Path, title: str, prompt: str) -> str | None:
@@ -1328,6 +2061,7 @@ class ProjectDetailWindow(QMainWindow):
             selected_locale_names = self._selected_locale_names()
             processed_locales: list[LocaleData]
             processed_modules: list[ModuleData]
+            reprocessed_modules: list[ModuleData] = []
 
             if listed_locale_names:
                 if not selected_locale_names:
@@ -1361,6 +2095,10 @@ class ProjectDetailWindow(QMainWindow):
                     for module in locale_modules:
                         module.locale_name = locale_dir.name
                         module.relative_path = str(Path(module.path).relative_to(root_path)).replace("\\", "/")
+                    resolved_modules = self._resolve_modules_for_processing(locale_modules)
+                    if resolved_modules is None:
+                        return
+                    locale_modules, locale_reprocessed_modules = resolved_modules
                     processed_locales.append(
                         LocaleData(
                             name=locale_dir.name,
@@ -1369,6 +2107,7 @@ class ProjectDetailWindow(QMainWindow):
                         )
                     )
                     processed_modules.extend(locale_modules)
+                    reprocessed_modules.extend(locale_reprocessed_modules)
 
                 preserved_locales = [
                     locale
@@ -1390,19 +2129,41 @@ class ProjectDetailWindow(QMainWindow):
                     key=lambda module: (str(module.locale_name or "").lower(), module.name.lower()),
                 )
             else:
-                self.project.locales, self.project.modules = scan_project_structure(root_path)
-                processed_locales = list(self.project.locales)
-                processed_modules = list(self.project.modules)
+                scanned_locales, scanned_modules = scan_project_structure(root_path)
+                scanned_modules_by_locale: dict[str, list[ModuleData]] = {}
+                for module in scanned_modules:
+                    locale_key = str(module.locale_name or "").strip().lower()
+                    scanned_modules_by_locale.setdefault(locale_key, []).append(module)
+
+                processed_locales = []
+                processed_modules = []
+                for locale in scanned_locales:
+                    locale_key = locale.name.strip().lower()
+                    locale_modules = scanned_modules_by_locale.get(locale_key, [])
+                    resolved_modules = self._resolve_modules_for_processing(locale_modules)
+                    if resolved_modules is None:
+                        return
+                    locale_modules, locale_reprocessed_modules = resolved_modules
+                    locale.modules_count = len(locale_modules)
+                    processed_locales.append(locale)
+                    processed_modules.extend(locale_modules)
+                    reprocessed_modules.extend(locale_reprocessed_modules)
+
+                self.project.locales = processed_locales
+                self.project.modules = processed_modules
 
             # Normalizar thickness de todas las piezas procesadas
-            for module in processed_modules:
+            for module in reprocessed_modules:
                 self._normalize_module_piece_thickness(module)
+
+            if not self._resolve_processed_piece_colors(reprocessed_modules):
+                return
             
-            self._write_module_config_files(processed_modules)
+            self._write_module_config_files(reprocessed_modules)
             self._write_locale_config_files(processed_locales)
             
             # Recargar piezas desde los module_config.json recién generados
-            for module in processed_modules:
+            for module in reprocessed_modules:
                 self._reload_module_pieces_from_config(module)
             
             self._write_locale_config_files(processed_locales)
@@ -1419,20 +2180,22 @@ class ProjectDetailWindow(QMainWindow):
                 client=self.project.client,
                 created_at=self.project.created_at,
                 locales=processed_locales,
-                modules=processed_modules,
+                modules=reprocessed_modules,
                 output_directory=self.project.output_directory,
             )
             generated_drawings, skipped_drawings, pieces_with_machining = generate_project_piece_drawings(
                 processed_project,
             )
 
-            total_pieces = sum(self._valid_piece_count_in_module(module) for module in processed_modules)
+            total_pieces = sum(self._valid_piece_count_in_module(module) for module in reprocessed_modules)
             module_breakdown = "\n".join([
                 f"{module.name}: {self._valid_piece_count_in_module(module)}"
-                for module in processed_modules
+                for module in reprocessed_modules
             ])
+            if not module_breakdown:
+                module_breakdown = "(sin módulos reprocesados)"
             warning_parts = []
-            for module in processed_modules:
+            for module in reprocessed_modules:
                 if self._valid_piece_count_in_module(module) == 0:
                     warning_parts.append(module.name)
 
@@ -1441,7 +2204,8 @@ class ProjectDetailWindow(QMainWindow):
 
             detail_text = (
                 f"Locales procesados: {len(processed_locales)}\n"
-                f"Módulos procesados: {len(processed_modules)}\n"
+                f"Módulos reprocesados: {len(reprocessed_modules)}\n"
+                f"Módulos conservados desde configuración previa: {len(processed_modules) - len(reprocessed_modules)}\n"
                 f"Piezas totales: {total_pieces}\n"
                 f"Detalle:\n{module_breakdown}\n"
                 f"Resumen guardado en: {summary_csv_path}\n"
@@ -1602,6 +2366,7 @@ class ProjectDetailWindow(QMainWindow):
                 "path": str(module_path),
                 "generated_at": datetime.datetime.now().isoformat(sep=" ", timespec="seconds"),
                 "en_juego_layout": {},
+                "en_juego_settings": _default_en_juego_settings(),
                 "settings": {
                     "x": "",
                     "y": "",
@@ -1624,7 +2389,7 @@ class ProjectDetailWindow(QMainWindow):
         self.modules_list.itemDoubleClicked.connect(lambda _: self.inspect_module(dialog, refresh_modules_list_view))
         close_btn.clicked.connect(dialog.accept)
 
-        dialog.exec()
+        _exec_centered(dialog, self)
 
     def inspect_module(self, parent_dialog, on_module_updated=None):
         """Mostrar piezas del módulo seleccionado"""
@@ -1674,6 +2439,7 @@ class ProjectDetailWindow(QMainWindow):
         config_data = json.loads(config_path.read_text(encoding="utf-8"))
         if not isinstance(config_data.get("en_juego_layout"), dict):
             config_data["en_juego_layout"] = {}
+        config_data["en_juego_settings"] = _normalize_en_juego_settings(config_data.get("en_juego_settings"))
         settings = config_data.get("settings", {})
         raw_rows = config_data.get("pieces", [])
         if not isinstance(raw_rows, list):
@@ -1696,6 +2462,7 @@ class ProjectDetailWindow(QMainWindow):
             normalized_row["en_juego"] = en_juego_value
             normalized_row["include_in_sheet"] = excel_value
             normalized_row["grain_direction"] = normalize_piece_grain_direction(normalized_row.get("grain_direction"))
+            normalized_row["observations"] = normalize_piece_observations(normalized_row.get("observations"))
             normalized_row.pop("excel", None)
             return normalized_row
 
@@ -1962,7 +2729,7 @@ class ProjectDetailWindow(QMainWindow):
             ok_btn.clicked.connect(apply_selection)
             cancel_btn.clicked.connect(dialog.reject)
             
-            dialog.exec()
+            _exec_centered(dialog, inspect_dialog)
         
         btn_select_herrajes = QPushButton("...")
         btn_select_herrajes.setMaximumWidth(50)
@@ -2172,7 +2939,7 @@ class ProjectDetailWindow(QMainWindow):
             ok_btn.clicked.connect(apply_selection)
             cancel_btn.clicked.connect(dialog.reject)
             
-            dialog.exec()
+            _exec_centered(dialog, inspect_dialog)
         
         layout.addWidget(QLabel("Guías y bisagras:"))
         guias_layout = QHBoxLayout()
@@ -2386,7 +3153,7 @@ class ProjectDetailWindow(QMainWindow):
             ok_btn.clicked.connect(apply_selection)
             cancel_btn.clicked.connect(dialog.reject)
             
-            dialog.exec()
+            _exec_centered(dialog, inspect_dialog)
         
         layout.addWidget(QLabel("Detalles de Obra:"))
         detalles_layout = QHBoxLayout()
@@ -2610,6 +3377,13 @@ class ProjectDetailWindow(QMainWindow):
             all_rows[all_idx][field_name] = normalized_state
             mark_unsaved_changes()
 
+        def sync_en_juego_observations():
+            for piece_row in all_rows:
+                piece_row["observations"] = set_piece_en_juego_observation(
+                    piece_row.get("observations"),
+                    bool(piece_row.get("en_juego", False)),
+                )
+
         def refresh_pieces_table():
             nonlocal refreshing_pieces_table
             from core.model import PIECE_TYPE_ORDER
@@ -2680,9 +3454,14 @@ class ProjectDetailWindow(QMainWindow):
                 program_item.setToolTip(source_value or "(ninguno)")
                 pieces_table.setItem(row_idx, PIECES_COL_PROGRAM, program_item)
 
-                dimension_item = QTableWidgetItem(program_dimension_note)
+                observations_text = build_piece_observations_display(
+                    piece_row.get("observations"),
+                    program_dimension_note,
+                )
+                dimension_item = QTableWidgetItem(observations_text)
                 dimension_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-                if program_dimension_note:
+                dimension_item.setToolTip(observations_text)
+                if observations_text:
                     dimension_item.setForeground(QColor("#B71C1C"))
                 pieces_table.setItem(row_idx, PIECES_COL_NOTES, dimension_item)
 
@@ -2804,6 +3583,7 @@ class ProjectDetailWindow(QMainWindow):
                 include_in_sheet = bool(serialized_row.get("include_in_sheet", serialized_row.get("excel", False)))
                 serialized_row["include_in_sheet"] = include_in_sheet
                 serialized_row["grain_direction"] = normalize_piece_grain_direction(serialized_row.get("grain_direction"))
+                serialized_row["observations"] = normalize_piece_observations(serialized_row.get("observations"))
                 serialized_row.pop("excel", None)
                 serialized_rows.append(serialized_row)
             all_rows[:] = serialized_rows
@@ -2825,6 +3605,7 @@ class ProjectDetailWindow(QMainWindow):
                 piece_dict.pop("en_juego", None)
                 piece_dict.pop("include_in_sheet", None)
                 piece_dict.pop("excel", None)
+                piece_dict.pop("observations", None)
                 
                 # Validar y procesar thickness: convertir string vacío a None
                 thickness_val = piece_dict.get("thickness")
@@ -2902,7 +3683,7 @@ class ProjectDetailWindow(QMainWindow):
             )
             svg_min = _scaled_int(300, max(drawing_scale, 0.82), 220)
             svg_widget.setMinimumSize(svg_min, svg_min)
-            drawing_dialog.exec()
+            _exec_centered(drawing_dialog, inspect_dialog)
 
         def ensure_piece_drawing(piece_row, force_regenerate=False, show_warning=True):
             from core.pgmx_processing import build_piece_svg, parse_pgmx_for_piece
@@ -3160,15 +3941,15 @@ class ProjectDetailWindow(QMainWindow):
 
             preview_svg = QSvgWidget()
             preview_svg.renderer().setAspectRatioMode(Qt.KeepAspectRatio)
-            preview_svg.setFixedSize(preview_panel_width, preview_panel_width)
+            preview_svg.setFixedSize(preview_panel_width, preview_canvas_min_height)
+            preview_svg.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             preview_layout.addWidget(preview_svg, 1)
 
             preview_placeholder = QLabel("Sin dibujo disponible para esta pieza.")
             preview_placeholder.setAlignment(Qt.AlignCenter)
             preview_placeholder.setWordWrap(True)
             preview_placeholder.setStyleSheet("color: #666; border: 1px dashed #999; padding: 12px;")
-            preview_placeholder.setFixedWidth(preview_panel_width)
-            preview_placeholder.setMinimumHeight(preview_canvas_min_height)
+            preview_placeholder.setFixedSize(preview_panel_width, preview_canvas_min_height)
             preview_layout.addWidget(preview_placeholder, 1)
 
             preview_panel = QWidget()
@@ -3208,6 +3989,16 @@ class ProjectDetailWindow(QMainWindow):
                 )
                 return updated_piece
 
+            def set_preview_canvas_height(canvas_height: int) -> None:
+                normalized_height = max(int(round(canvas_height)), 1)
+                preview_svg.setFixedSize(preview_panel_width, normalized_height)
+                preview_placeholder.setFixedSize(preview_panel_width, normalized_height)
+                preview_panel.setMinimumHeight(
+                    preview_title_label.sizeHint().height()
+                    + preview_layout.spacing()
+                    + normalized_height
+                )
+
             def refresh_piece_preview():
                 preview_piece_row = build_editor_piece_row()
                 preview_source = str(preview_piece_row.get("source") or "").strip()
@@ -3215,6 +4006,7 @@ class ProjectDetailWindow(QMainWindow):
                     f"Vista previa: {Path(preview_source).name if preview_source else '(ninguno)'}"
                 )
 
+                set_preview_canvas_height(preview_canvas_min_height)
                 preview_svg.hide()
                 preview_placeholder.show()
 
@@ -3234,12 +4026,17 @@ class ProjectDetailWindow(QMainWindow):
                     return
 
                 preview_svg.load(str(drawing_path))
+                svg_default_size = preview_svg.renderer().defaultSize()
+                if svg_default_size.width() > 0 and svg_default_size.height() > 0:
+                    aspect_height = round(preview_panel_width * (svg_default_size.height() / svg_default_size.width()))
+                    set_preview_canvas_height(aspect_height)
                 preview_placeholder.hide()
                 preview_svg.show()
 
             def refresh_piece_preview_and_layout(*_args):
                 refresh_piece_preview()
                 sync_editor_panel_heights()
+                sync_editor_dialog_height()
 
             def sync_editor_panel_heights():
                 editor_dialog.layout().activate()
@@ -3248,6 +4045,18 @@ class ProjectDetailWindow(QMainWindow):
                 right_panel.setFixedHeight(right_panel_height)
                 right_panel.updateGeometry()
                 content_panel.updateGeometry()
+
+            def sync_editor_dialog_height():
+                editor_dialog.layout().activate()
+                target_height = max(editor_dialog.minimumHeight(), editor_dialog.sizeHint().height())
+                available_editor_geometry = _window_available_geometry(editor_dialog)
+                if available_editor_geometry is not None:
+                    target_height = min(
+                        target_height,
+                        max(editor_dialog.minimumHeight(), int(available_editor_geometry.height() * 0.92)),
+                    )
+                if target_height > 0 and editor_dialog.height() != target_height:
+                    editor_dialog.resize(editor_dialog.width(), target_height)
 
             def select_source_from_editor():
                 source_file, _ = QFileDialog.getOpenFileName(
@@ -3315,14 +4124,16 @@ class ProjectDetailWindow(QMainWindow):
             buttons_widget.setLayout(editor_buttons)
             buttons_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
+            editor_buttons_top_gap = _scaled_int(155, max(editor_scale, 0.82), 96)
             right_panel = QWidget()
             right_panel.setFixedWidth(form_panel_width_hint)
             right_panel_layout = QVBoxLayout()
             right_panel_layout.setContentsMargins(0, 0, 0, 0)
             right_panel_layout.setSpacing(8)
             right_panel_layout.addWidget(form_panel, 0, Qt.AlignTop | Qt.AlignLeft)
+            right_panel_layout.addSpacing(editor_buttons_top_gap)
+            right_panel_layout.addWidget(buttons_widget, 0, Qt.AlignTop | Qt.AlignRight)
             right_panel_layout.addStretch(1)
-            right_panel_layout.addWidget(buttons_widget, 0, Qt.AlignBottom | Qt.AlignRight)
             right_panel.setLayout(right_panel_layout)
 
             content_layout.addWidget(preview_panel, 0, Qt.AlignTop | Qt.AlignLeft)
@@ -3348,9 +4159,8 @@ class ProjectDetailWindow(QMainWindow):
                     max(420, int(available_editor_geometry.width() * 0.94)),
                 )
             editor_dialog.setMinimumHeight(compact_editor_height)
-            editor_dialog.setMaximumHeight(compact_editor_height)
             editor_dialog.resize(compact_editor_width, compact_editor_height)
-            editor_dialog.exec()
+            _exec_centered(editor_dialog, inspect_dialog)
 
         def add_manual_piece():
             open_piece_editor()
@@ -3402,7 +4212,7 @@ class ProjectDetailWindow(QMainWindow):
             btn_modulo = scope_box.addButton("Todas en este módulo", QMessageBox.ActionRole)
             btn_proyecto = scope_box.addButton("Todas en el proyecto", QMessageBox.ActionRole)
             scope_box.addButton("Cancelar", QMessageBox.RejectRole)
-            scope_box.exec()
+            _exec_centered(scope_box, inspect_dialog)
             clicked = scope_box.clickedButton()
 
             if clicked is None or clicked not in (btn_solo, btn_modulo, btn_proyecto):
@@ -3581,7 +4391,7 @@ class ProjectDetailWindow(QMainWindow):
             colors_list.itemDoubleClicked.connect(lambda _item: accept_color_selection())
 
             color_dialog.setLayout(color_layout)
-            if color_dialog.exec() != QDialog.Accepted or colors_list.currentItem() is None:
+            if _exec_centered(color_dialog, inspect_dialog) != QDialog.Accepted or colors_list.currentItem() is None:
                 return None
 
             if locale_option.isChecked() and locale_option.isEnabled():
@@ -3723,17 +4533,42 @@ class ProjectDetailWindow(QMainWindow):
                 QGraphicsView,
             )
 
-            preview_gap_mm = 120.0
+            app_cut_settings = _read_app_settings()
             scene_padding_mm = 400.0
             snap_distance_mm = 18.0
-            en_juego_saw_kerf_mm = _coerce_setting_number(
-                _read_app_settings().get("cut_saw_kerf"),
-                4.0,
-                minimum=0.0,
+            en_juego_settings = dict(_normalize_en_juego_settings(config_data.get("en_juego_settings")))
+            en_juego_saw_kerf_mm = 0.0
+            available_cutting_tools = _load_en_juego_cutting_tools()
+            en_juego_material_thickness_mm = max(
+                (
+                    _coerce_setting_number(row.get("thickness"), 0.0, minimum=0.0)
+                    for row in en_juego_rows
+                ),
+                default=0.0,
             )
+
+            def effective_piece_spacing_mm() -> float:
+                try:
+                    cut_mode = "nesting" if nesting_cut_radio.isChecked() else "manual"
+                except NameError:
+                    cut_mode = _normalize_en_juego_cut_mode(en_juego_settings.get("cut_mode"))
+                if cut_mode == "manual":
+                    return max(
+                        0.0,
+                        _coerce_setting_number(app_cut_settings.get("cut_squaring_allowance"), 10.0, minimum=0.0)
+                        + _coerce_setting_number(app_cut_settings.get("cut_saw_kerf"), 4.0, minimum=0.0),
+                    )
+
+                return _resolve_en_juego_nesting_spacing_mm(
+                    en_juego_settings,
+                    material_thickness_mm=en_juego_material_thickness_mm,
+                )
+
+            preview_gap_mm = effective_piece_spacing_mm()
             saved_layout = config_data.get("en_juego_layout", {})
             if not isinstance(saved_layout, dict):
                 saved_layout = {}
+            auto_spacing_adjustment_state = {"active": False}
 
             class EnJuegoGraphicsView(QGraphicsView):
                 def __init__(self, graphics_scene, parent=None):
@@ -3755,8 +4590,8 @@ class ProjectDetailWindow(QMainWindow):
             config_dialog.setWindowTitle(f"Configurar En Juego - {module_name}")
             config_scale, _, _ = _apply_responsive_window_size(
                 config_dialog,
-                1500,
-                900,
+                1320,
+                760,
                 width_ratio=0.96,
                 height_ratio=0.92,
             )
@@ -3771,13 +4606,49 @@ class ProjectDetailWindow(QMainWindow):
             )
 
             content_layout = QHBoxLayout()
+            left_panel = QWidget()
+            left_panel_layout = QVBoxLayout()
+            left_panel_layout.setContentsMargins(0, 0, 0, 0)
+            left_panel_layout.setSpacing(8)
             pieces_list = QListWidget()
-            pieces_list.setMinimumWidth(_scaled_int(320, max(config_scale, 0.82), 220))
-            content_layout.addWidget(pieces_list)
+            left_panel_width = _scaled_int(250, max(config_scale, 0.82), 180)
+            pieces_list.setFixedWidth(left_panel_width)
+            pieces_list.setFixedHeight(_scaled_int(220, max(config_scale, 0.82), 170))
+            left_panel_layout.addWidget(pieces_list, 0)
+
+            options_group = QGroupBox("Opciones")
+            options_group.setFixedWidth(left_panel_width)
+            options_layout = QVBoxLayout()
+            options_layout.setContentsMargins(8, 8, 8, 8)
+            options_layout.setSpacing(8)
+            manual_cut_radio = QRadioButton("Corte Manual")
+            nesting_cut_radio = QRadioButton("Corte Nesting")
+            manual_cut_radio.setChecked(_normalize_en_juego_cut_mode(en_juego_settings.get("cut_mode")) == "manual")
+            nesting_cut_radio.setChecked(not manual_cut_radio.isChecked())
+            spacing_hint_label = QLabel()
+            spacing_hint_label.setWordWrap(True)
+            configure_en_juego_btn = QPushButton("Configurar")
+            configure_en_juego_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+            options_layout.addWidget(manual_cut_radio)
+            options_layout.addWidget(nesting_cut_radio)
+            options_layout.addWidget(spacing_hint_label)
+            options_layout.addWidget(configure_en_juego_btn, 0, Qt.AlignRight)
+            options_group.setLayout(options_layout)
+            left_panel_layout.addWidget(options_group, 0)
+            left_panel_layout.addStretch(1)
+            left_panel.setFixedWidth(left_panel_width)
+            left_panel.setLayout(left_panel_layout)
+            content_layout.addWidget(left_panel, 0, Qt.AlignTop)
 
             scene = QGraphicsScene(config_dialog)
             view = EnJuegoGraphicsView(scene)
-            content_layout.addWidget(view, 1)
+            view_panel = QWidget()
+            view_panel_layout = QVBoxLayout()
+            view_panel_layout.setContentsMargins(0, 0, 0, 0)
+            view_panel_layout.setSpacing(8)
+            view_panel_layout.addWidget(view, 1)
+            view_panel.setLayout(view_panel_layout)
+            content_layout.addWidget(view_panel, 1)
             main_layout.addLayout(content_layout)
 
             def safe_float(value):
@@ -3932,6 +4803,9 @@ class ProjectDetailWindow(QMainWindow):
 
             class EnJuegoPieceItem(QGraphicsRectItem):
                 def itemChange(self, change, value):
+                    if change == QGraphicsItem.ItemPositionChange and auto_spacing_adjustment_state["active"]:
+                        return QPointF(value)
+
                     if change == QGraphicsItem.ItemPositionChange and self.scene() is not None:
                         proposed_pos = QPointF(value)
                         current_pos = self.pos()
@@ -3946,17 +4820,18 @@ class ProjectDetailWindow(QMainWindow):
                             if other_item is self or not str(other_item.data(0) or "").strip():
                                 continue
                             other_rect = other_item.sceneBoundingRect()
+                            spacing_mm = effective_piece_spacing_mm()
                             target_xs.extend([
                                 other_rect.left() - candidate_rect.left(),
                                 other_rect.right() - candidate_rect.right(),
-                                other_rect.right() + en_juego_saw_kerf_mm - candidate_rect.left(),
-                                other_rect.left() - en_juego_saw_kerf_mm - candidate_rect.right(),
+                                other_rect.right() + spacing_mm - candidate_rect.left(),
+                                other_rect.left() - spacing_mm - candidate_rect.right(),
                             ])
                             target_ys.extend([
                                 other_rect.top() - candidate_rect.top(),
                                 other_rect.bottom() - candidate_rect.bottom(),
-                                other_rect.bottom() + en_juego_saw_kerf_mm - candidate_rect.top(),
-                                other_rect.top() - en_juego_saw_kerf_mm - candidate_rect.bottom(),
+                                other_rect.bottom() + spacing_mm - candidate_rect.top(),
+                                other_rect.top() - spacing_mm - candidate_rect.bottom(),
                             ])
 
                         snapped_delta_x = None
@@ -3999,6 +4874,15 @@ class ProjectDetailWindow(QMainWindow):
                 width_mm = max(width_mm, 1.0)
                 height_mm = max(height_mm, 1.0)
 
+                def center_text_item(text_item, *, vertical_offset_mm: float = 0.0):
+                    scale_value = text_item.scale() if text_item.scale() > 0 else 1.0
+                    bounds = text_item.boundingRect()
+                    text_width = bounds.width() * scale_value
+                    text_height = bounds.height() * scale_value
+                    pos_x = (width_mm - text_width) / 2.0
+                    pos_y = ((height_mm - text_height) / 2.0) + vertical_offset_mm
+                    text_item.setPos(pos_x, pos_y)
+
                 rect_item = EnJuegoPieceItem(0, 0, width_mm, height_mm)
                 rect_item.setPen(make_pen("#2F4F4F", 1.3))
                 rect_item.setBrush(QBrush(QColorGui("#FFFDF8")))
@@ -4012,17 +4896,17 @@ class ProjectDetailWindow(QMainWindow):
                 title_item = QGraphicsSimpleTextItem(title_text, rect_item)
                 title_item.setBrush(QBrush(QColorGui("#111111")))
                 title_item.setScale(4.0)
-                title_item.setPos(6.0, 6.0)
                 title_item.setAcceptedMouseButtons(QtCoreQt.NoButton)
                 title_item.setZValue(2.0)
+                center_text_item(title_item)
 
                 if drawing_data is None:
                     empty_item = QGraphicsSimpleTextItem("(sin dibujo)", rect_item)
                     empty_item.setBrush(QBrush(QColorGui("#666666")))
                     empty_item.setScale(4.0)
-                    empty_item.setPos(6.0, 26.0)
                     empty_item.setAcceptedMouseButtons(QtCoreQt.NoButton)
                     empty_item.setZValue(2.0)
+                    center_text_item(empty_item, vertical_offset_mm=18.0)
                     draw_grain_hatching(rect_item, piece_row, width_mm, height_mm)
                     return rect_item, width_mm, height_mm
 
@@ -4106,14 +4990,15 @@ class ProjectDetailWindow(QMainWindow):
                 if not piece_id:
                     continue
                 base_title = str(piece_row.get("name") or piece_id).strip() or piece_id
-                for copy_index in range(1, en_juego_quantity(piece_row) + 1):
+                piece_copy_count = en_juego_quantity(piece_row)
+                for copy_index in range(1, piece_copy_count + 1):
                     en_juego_instances.append(
                         {
                             "piece_id": piece_id,
                             "piece_row": piece_row,
                             "copy_index": copy_index,
                             "instance_key": en_juego_instance_key(piece_id, copy_index),
-                            "title_text": f"{base_title} #{copy_index}",
+                            "title_text": f"{base_title} #{copy_index}" if piece_copy_count > 1 else base_title,
                         }
                     )
 
@@ -4174,12 +5059,94 @@ class ProjectDetailWindow(QMainWindow):
                 pieces_list.addItem(list_item)
                 item_by_instance_id[instance_key] = rect_item
 
+            def scene_piece_items_in_layout_order():
+                return sorted(
+                    item_by_instance_id.values(),
+                    key=lambda scene_item: (
+                        round(scene_item.sceneBoundingRect().top(), 3),
+                        round(scene_item.sceneBoundingRect().left(), 3),
+                        str(scene_item.data(0) or ""),
+                    ),
+                )
+
             def update_scene_bounds():
                 items_rect = scene.itemsBoundingRect()
                 if items_rect.isNull():
                     return
                 padded_rect = items_rect.adjusted(-scene_padding_mm, -scene_padding_mm, scene_padding_mm, scene_padding_mm)
                 scene.setSceneRect(padded_rect)
+
+            def enforce_minimum_piece_spacing(*, fit_view_after: bool = True):
+                spacing_mm = effective_piece_spacing_mm()
+                if spacing_mm <= 0:
+                    return
+
+                selected_instance_key = None
+                selected_items = [item for item in scene.selectedItems() if str(item.data(0) or "").strip()]
+                if selected_items:
+                    selected_instance_key = str(selected_items[0].data(0) or "")
+
+                moved_any = False
+                auto_spacing_adjustment_state["active"] = True
+                try:
+                    for _ in range(max(1, len(item_by_instance_id) * 2)):
+                        pass_moved = False
+                        ordered_items = scene_piece_items_in_layout_order()
+                        for current_index, current_item in enumerate(ordered_items):
+                            current_rect = current_item.sceneBoundingRect()
+                            for previous_item in ordered_items[:current_index]:
+                                previous_rect = previous_item.sceneBoundingRect()
+                                overlap_height = min(previous_rect.bottom(), current_rect.bottom()) - max(previous_rect.top(), current_rect.top())
+                                overlap_width = min(previous_rect.right(), current_rect.right()) - max(previous_rect.left(), current_rect.left())
+
+                                push_right_mm = (
+                                    (previous_rect.right() + spacing_mm) - current_rect.left()
+                                    if overlap_height > 0
+                                    else 0.0
+                                )
+                                push_down_mm = (
+                                    (previous_rect.bottom() + spacing_mm) - current_rect.top()
+                                    if overlap_width > 0
+                                    else 0.0
+                                )
+
+                                candidate_pushes = [
+                                    (axis_name, delta_value)
+                                    for axis_name, delta_value in (("x", push_right_mm), ("y", push_down_mm))
+                                    if delta_value > 0.001
+                                ]
+                                if not candidate_pushes:
+                                    continue
+
+                                axis_name, delta_value = min(candidate_pushes, key=lambda item: item[1])
+                                current_pos = current_item.pos()
+                                if axis_name == "x":
+                                    current_item.setPos(current_pos.x() + delta_value, current_pos.y())
+                                else:
+                                    current_item.setPos(current_pos.x(), current_pos.y() + delta_value)
+                                current_rect = current_item.sceneBoundingRect()
+                                moved_any = True
+                                pass_moved = True
+
+                        if not pass_moved:
+                            break
+                finally:
+                    auto_spacing_adjustment_state["active"] = False
+
+                if not moved_any:
+                    return
+
+                update_scene_bounds()
+                if fit_view_after:
+                    items_rect = scene.itemsBoundingRect()
+                    if not items_rect.isNull():
+                        view.fitInView(items_rect.adjusted(-80, -80, 80, 80), Qt.KeepAspectRatio)
+
+                if selected_instance_key:
+                    restored_item = item_by_instance_id.get(selected_instance_key)
+                    if restored_item is not None:
+                        scene.clearSelection()
+                        restored_item.setSelected(True)
 
             def focus_selected_piece():
                 current_item = pieces_list.currentItem()
@@ -4222,6 +5189,466 @@ class ProjectDetailWindow(QMainWindow):
                 update_scene_bounds()
                 view.centerOn(scene_item)
 
+            def sync_en_juego_settings_from_controls():
+                en_juego_settings["cut_mode"] = "nesting" if nesting_cut_radio.isChecked() else "manual"
+                resolved_tool = _resolve_en_juego_cutting_tool(en_juego_settings.get("cutting_tool_id"))
+                en_juego_settings["origin_x"] = _compact_number(
+                    _coerce_setting_number(en_juego_settings.get("origin_x"), 0.0)
+                )
+                en_juego_settings["origin_y"] = _compact_number(
+                    _coerce_setting_number(en_juego_settings.get("origin_y"), 0.0)
+                )
+                en_juego_settings["origin_z"] = _compact_number(
+                    _coerce_setting_number(en_juego_settings.get("origin_z"), 0.0)
+                )
+                en_juego_settings["cutting_is_through"] = _coerce_setting_bool(
+                    en_juego_settings.get("cutting_is_through"),
+                    True,
+                )
+                en_juego_settings["cutting_depth_value"] = _compact_number(
+                    _coerce_setting_number(
+                        en_juego_settings.get("cutting_depth_value"),
+                        1.0,
+                        minimum=0.0,
+                    )
+                )
+                en_juego_settings["approach_enabled"] = _coerce_setting_bool(
+                    en_juego_settings.get("approach_enabled"),
+                    False,
+                )
+                en_juego_settings["approach_type"] = (
+                    "Arc"
+                    if str(en_juego_settings.get("approach_type") or "Arc").strip().lower() == "arc"
+                    else "Line"
+                )
+                en_juego_settings["approach_radius_multiplier"] = _compact_number(
+                    _coerce_setting_number(
+                        en_juego_settings.get("approach_radius_multiplier"),
+                        2.0,
+                        minimum=0.0,
+                    )
+                )
+                en_juego_settings["approach_mode"] = (
+                    "Quote"
+                    if str(en_juego_settings.get("approach_mode") or "Quote").strip().lower() == "quote"
+                    else "Down"
+                )
+                en_juego_settings["retract_enabled"] = _coerce_setting_bool(
+                    en_juego_settings.get("retract_enabled"),
+                    False,
+                )
+                en_juego_settings["retract_type"] = (
+                    "Arc"
+                    if str(en_juego_settings.get("retract_type") or "Arc").strip().lower() == "arc"
+                    else "Line"
+                )
+                en_juego_settings["retract_radius_multiplier"] = _compact_number(
+                    _coerce_setting_number(
+                        en_juego_settings.get("retract_radius_multiplier"),
+                        2.0,
+                        minimum=0.0,
+                    )
+                )
+                en_juego_settings["retract_mode"] = (
+                    "Quote"
+                    if str(en_juego_settings.get("retract_mode") or "Quote").strip().lower() == "quote"
+                    else "Up"
+                )
+                en_juego_settings["cutting_tool_id"] = str(
+                    en_juego_settings.get("cutting_tool_id")
+                    or resolved_tool.get("tool_id")
+                    or ""
+                ).strip()
+                en_juego_settings["cutting_tool_code"] = str(
+                    en_juego_settings.get("cutting_tool_code")
+                    or resolved_tool.get("tool_code")
+                    or ""
+                ).strip()
+                en_juego_settings["cutting_tool_name"] = str(
+                    en_juego_settings.get("cutting_tool_name")
+                    or resolved_tool.get("tool_name")
+                    or ""
+                ).strip()
+                en_juego_settings["cutting_tool_diameter"] = _compact_number(
+                    _coerce_setting_number(
+                        en_juego_settings.get("cutting_tool_diameter"),
+                        _coerce_setting_number(resolved_tool.get("diameter"), 0.0, minimum=0.0),
+                        minimum=0.0,
+                    )
+                )
+
+            def persist_en_juego_settings():
+                sync_en_juego_settings_from_controls()
+                config_data["en_juego_settings"] = dict(en_juego_settings)
+                persist_module_config()
+
+            def open_en_juego_settings_dialog():
+                settings_dialog = QDialog(config_dialog)
+                settings_dialog.setWindowTitle("Configuración En-Juego")
+                settings_layout = QVBoxLayout()
+                settings_layout.setContentsMargins(12, 12, 12, 12)
+                settings_layout.setSpacing(10)
+                settings_layout.addWidget(
+                    QLabel(
+                        "Defina las opciones del En-Juego para este módulo.\n"
+                        "El modo Nesting todavía no genera el programa automáticamente."
+                    )
+                )
+
+                mode_group = QGroupBox("Modo de Corte")
+                mode_group_layout = QVBoxLayout()
+                mode_group_layout.setContentsMargins(8, 8, 8, 8)
+                mode_group_layout.setSpacing(6)
+                manual_mode_radio = QRadioButton("Corte Manual")
+                nesting_mode_radio = QRadioButton("Corte Nesting")
+                manual_mode_radio.setChecked(manual_cut_radio.isChecked())
+                nesting_mode_radio.setChecked(nesting_cut_radio.isChecked())
+                mode_group_layout.addWidget(manual_mode_radio)
+                mode_group_layout.addWidget(nesting_mode_radio)
+                mode_group.setLayout(mode_group_layout)
+                settings_layout.addWidget(mode_group)
+
+                saw_kerf_row = QHBoxLayout()
+                saw_kerf_row.addWidget(QLabel("Espesor de Sierra"))
+                saw_kerf_field = QLineEdit(str(en_juego_settings.get("saw_kerf", 4)))
+                saw_kerf_row.addWidget(saw_kerf_field)
+                settings_layout.addLayout(saw_kerf_row)
+
+                buttons_row = QHBoxLayout()
+                buttons_row.addStretch(1)
+                save_settings_btn = QPushButton("Guardar")
+                cancel_settings_btn = QPushButton("Cancelar")
+                save_settings_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+                cancel_settings_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+                buttons_row.addWidget(save_settings_btn)
+                buttons_row.addWidget(cancel_settings_btn)
+                settings_layout.addLayout(buttons_row)
+                settings_dialog.setLayout(settings_layout)
+
+                def save_en_juego_settings_dialog():
+                    saw_kerf_value = _coerce_setting_number(
+                        saw_kerf_field.text().strip() or en_juego_settings.get("saw_kerf"),
+                        en_juego_settings.get("saw_kerf", 4.0),
+                        minimum=0.0,
+                    )
+                    en_juego_settings["cut_mode"] = "nesting" if nesting_mode_radio.isChecked() else "manual"
+                    en_juego_settings["saw_kerf"] = _compact_number(saw_kerf_value)
+                    manual_cut_radio.setChecked(en_juego_settings["cut_mode"] == "manual")
+                    nesting_cut_radio.setChecked(en_juego_settings["cut_mode"] == "nesting")
+                    nonlocal en_juego_saw_kerf_mm
+                    en_juego_saw_kerf_mm = float(saw_kerf_value)
+                    persist_en_juego_settings()
+                    settings_dialog.accept()
+
+                save_settings_btn.clicked.connect(save_en_juego_settings_dialog)
+                cancel_settings_btn.clicked.connect(settings_dialog.reject)
+                _exec_centered(settings_dialog, config_dialog)
+
+            def open_en_juego_settings_dialog_v2():
+                if not nesting_cut_radio.isChecked():
+                    return
+
+                settings_dialog = QDialog(config_dialog)
+                settings_dialog.setWindowTitle("Configuración En-Juego")
+                _apply_responsive_window_size(
+                    settings_dialog,
+                    780,
+                    460,
+                    width_ratio=0.66,
+                    height_ratio=0.6,
+                )
+                settings_layout = QVBoxLayout()
+                settings_layout.setContentsMargins(12, 12, 12, 12)
+                settings_layout.setSpacing(10)
+                settings_layout.addWidget(
+                    QLabel(
+                        "Defina las opciones del En-Juego para este módulo.\n"
+                        "Por ahora, la herramienta elegida define la separación mínima en el panel."
+                    )
+                )
+
+                tool_group = QGroupBox("Herramienta de corte")
+                tool_layout = QVBoxLayout()
+                tool_layout.setContentsMargins(8, 8, 8, 8)
+                tool_layout.setSpacing(6)
+                tool_combo = QComboBox()
+                for tool_data in available_cutting_tools:
+                    tool_combo.addItem(tool_data["label"], tool_data["tool_id"])
+                selected_tool_id = str(en_juego_settings.get("cutting_tool_id") or "").strip()
+                selected_index = next(
+                    (
+                        index
+                        for index, tool_data in enumerate(available_cutting_tools)
+                        if str(tool_data.get("tool_id") or "").strip() == selected_tool_id
+                    ),
+                    0,
+                )
+                if tool_combo.count() > 0:
+                    tool_combo.setCurrentIndex(selected_index)
+                else:
+                    tool_combo.addItem("(sin herramientas disponibles)", "")
+                    tool_combo.setEnabled(False)
+                tool_hint_label = QLabel()
+                tool_hint_label.setWordWrap(True)
+                tool_layout.addWidget(tool_combo)
+                tool_layout.addWidget(tool_hint_label)
+                tool_group.setLayout(tool_layout)
+                settings_layout.addWidget(tool_group)
+
+                depth_group = QGroupBox("Profundidad de división")
+                depth_layout = QGridLayout()
+                depth_layout.setContentsMargins(8, 8, 8, 8)
+                depth_layout.setHorizontalSpacing(8)
+                depth_layout.setVerticalSpacing(6)
+                through_checkbox = QCheckBox("Pasante")
+                through_checkbox.setChecked(
+                    _coerce_setting_bool(en_juego_settings.get("cutting_is_through"), True)
+                )
+                depth_role_label = QLabel()
+                depth_value_field = QLineEdit(str(en_juego_settings.get("cutting_depth_value", 1.0)))
+                depth_layout.addWidget(through_checkbox, 0, 0, 1, 2)
+                depth_layout.addWidget(depth_role_label, 1, 0)
+                depth_layout.addWidget(depth_value_field, 1, 1)
+                depth_group.setLayout(depth_layout)
+
+                lead_group = QGroupBox("Acercamiento y Alejamiento")
+                lead_layout = QGridLayout()
+                lead_layout.setContentsMargins(8, 8, 8, 8)
+                lead_layout.setHorizontalSpacing(8)
+                lead_layout.setVerticalSpacing(6)
+
+                approach_checkbox = QCheckBox("Acercamiento")
+                approach_checkbox.setChecked(
+                    _coerce_setting_bool(en_juego_settings.get("approach_enabled"), False)
+                )
+                approach_type_combo = QComboBox()
+                approach_type_combo.addItem("Arco", "Arc")
+                approach_type_combo.addItem("Lineal", "Line")
+                approach_type_combo.setCurrentIndex(
+                    0 if str(en_juego_settings.get("approach_type") or "Arc") == "Arc" else 1
+                )
+                approach_radius_field = QLineEdit(str(en_juego_settings.get("approach_radius_multiplier", 2.0)))
+                approach_mode_combo = QComboBox()
+                approach_mode_combo.addItem("En cota", "Quote")
+                approach_mode_combo.addItem("En bajada", "Down")
+                approach_mode_combo.setCurrentIndex(
+                    0 if str(en_juego_settings.get("approach_mode") or "Quote") == "Quote" else 1
+                )
+
+                retract_checkbox = QCheckBox("Alejamiento")
+                retract_checkbox.setChecked(
+                    _coerce_setting_bool(en_juego_settings.get("retract_enabled"), False)
+                )
+                retract_type_combo = QComboBox()
+                retract_type_combo.addItem("Arco", "Arc")
+                retract_type_combo.addItem("Lineal", "Line")
+                retract_type_combo.setCurrentIndex(
+                    0 if str(en_juego_settings.get("retract_type") or "Arc") == "Arc" else 1
+                )
+                retract_radius_field = QLineEdit(str(en_juego_settings.get("retract_radius_multiplier", 2.0)))
+                retract_mode_combo = QComboBox()
+                retract_mode_combo.addItem("En cota", "Quote")
+                retract_mode_combo.addItem("En subida", "Up")
+                retract_mode_combo.setCurrentIndex(
+                    0 if str(en_juego_settings.get("retract_mode") or "Quote") == "Quote" else 1
+                )
+
+                lead_layout.addWidget(approach_checkbox, 0, 0, 1, 2)
+                lead_layout.addWidget(QLabel("Entrada"), 1, 0)
+                lead_layout.addWidget(approach_type_combo, 1, 1)
+                lead_layout.addWidget(QLabel("Multipl radio"), 2, 0)
+                lead_layout.addWidget(approach_radius_field, 2, 1)
+                lead_layout.addWidget(QLabel("Acercamiento"), 3, 0)
+                lead_layout.addWidget(approach_mode_combo, 3, 1)
+                lead_layout.addWidget(retract_checkbox, 4, 0, 1, 2)
+                lead_layout.addWidget(QLabel("Salida"), 5, 0)
+                lead_layout.addWidget(retract_type_combo, 5, 1)
+                lead_layout.addWidget(QLabel("Multipl radio"), 6, 0)
+                lead_layout.addWidget(retract_radius_field, 6, 1)
+                lead_layout.addWidget(QLabel("Alejamiento"), 7, 0)
+                lead_layout.addWidget(retract_mode_combo, 7, 1)
+                lead_group.setLayout(lead_layout)
+
+                depth_and_lead_row = QHBoxLayout()
+                depth_and_lead_row.setContentsMargins(0, 0, 0, 0)
+                depth_and_lead_row.setSpacing(8)
+                depth_and_lead_row.addWidget(depth_group, 1)
+                depth_and_lead_row.addWidget(lead_group, 1)
+                settings_layout.addLayout(depth_and_lead_row)
+
+                origin_group = QGroupBox("Origen para síntesis")
+                origin_layout = QGridLayout()
+                origin_layout.setContentsMargins(8, 8, 8, 8)
+                origin_layout.setHorizontalSpacing(8)
+                origin_layout.setVerticalSpacing(6)
+                origin_x_field = QLineEdit(str(en_juego_settings.get("origin_x", 0)))
+                origin_y_field = QLineEdit(str(en_juego_settings.get("origin_y", 0)))
+                origin_z_field = QLineEdit(str(en_juego_settings.get("origin_z", 0)))
+                origin_layout.addWidget(QLabel("Origen X"), 0, 0)
+                origin_layout.addWidget(origin_x_field, 0, 1)
+                origin_layout.addWidget(QLabel("Origen Y"), 1, 0)
+                origin_layout.addWidget(origin_y_field, 1, 1)
+                origin_layout.addWidget(QLabel("Origen Z"), 2, 0)
+                origin_layout.addWidget(origin_z_field, 2, 1)
+                origin_group.setLayout(origin_layout)
+                settings_layout.addWidget(origin_group)
+
+                buttons_row = QHBoxLayout()
+                buttons_row.addStretch(1)
+                save_settings_btn = QPushButton("Guardar")
+                cancel_settings_btn = QPushButton("Cancelar")
+                save_settings_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+                cancel_settings_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+                buttons_row.addWidget(save_settings_btn)
+                buttons_row.addWidget(cancel_settings_btn)
+                settings_layout.addLayout(buttons_row)
+                settings_dialog.setLayout(settings_layout)
+
+                def refresh_tool_hint():
+                    current_tool = _resolve_en_juego_cutting_tool(tool_combo.currentData())
+                    diameter_value = _coerce_setting_number(current_tool.get("diameter"), 0.0, minimum=0.0)
+                    if diameter_value > 0:
+                        tool_hint_label.setText(
+                            "Separación mínima en Nesting: "
+                            f"{_compact_number(diameter_value)} mm"
+                        )
+                    else:
+                        tool_hint_label.setText(
+                            "No hay una herramienta de corte disponible para definir la separación."
+                        )
+
+                refresh_tool_hint()
+                tool_combo.currentIndexChanged.connect(lambda *_: refresh_tool_hint())
+
+                def refresh_tool_hint_v2():
+                    current_tool = _resolve_en_juego_cutting_tool(tool_combo.currentData())
+                    current_settings = dict(en_juego_settings)
+                    current_settings["cutting_tool_id"] = str(current_tool.get("tool_id") or "").strip()
+                    current_settings["cutting_tool_diameter"] = _compact_number(
+                        _coerce_setting_number(current_tool.get("diameter"), 0.0, minimum=0.0)
+                    )
+                    current_settings["cutting_is_through"] = through_checkbox.isChecked()
+                    current_settings["cutting_depth_value"] = _compact_number(
+                        _coerce_setting_number(
+                            depth_value_field.text().strip(),
+                            en_juego_settings.get("cutting_depth_value", 1.0),
+                            minimum=0.0,
+                        )
+                    )
+                    depth_role_label.setText(
+                        "Profundidad extra"
+                        if current_settings["cutting_is_through"]
+                        else "Profundidad de división"
+                    )
+                    spacing_value = _resolve_en_juego_nesting_spacing_mm(
+                        current_settings,
+                        material_thickness_mm=en_juego_material_thickness_mm,
+                    )
+                    if spacing_value > 0:
+                        if _is_forty_five_degree_milling_tool(current_tool.get("tool_type")):
+                            if current_settings["cutting_is_through"]:
+                                tool_hint_label.setText(
+                                    "Con Fresa 45º, la separacion minima entre piezas contiguas sera de "
+                                    f"{_compact_number(spacing_value)} mm, a razon de 2 mm por cada 1 mm "
+                                    "de profundidad extra."
+                                )
+                            else:
+                                tool_hint_label.setText(
+                                    "Con Fresa 45º, la separacion minima entre piezas contiguas sera de "
+                                    f"{_compact_number(spacing_value)} mm, calculada respecto del espesor "
+                                    f"de { _compact_number(en_juego_material_thickness_mm) } mm."
+                                )
+                        elif _is_helical_tool_type(current_tool.get("tool_type")):
+                            tool_hint_label.setText(
+                                "Herramienta preferente para dividir En-Juego. "
+                                "La separacion minima entre piezas contiguas sera de "
+                                f"{_compact_number(spacing_value)} mm."
+                            )
+                        else:
+                            tool_hint_label.setText(
+                                "La separacion minima entre piezas contiguas sera de "
+                                f"{_compact_number(spacing_value)} mm."
+                            )
+                    else:
+                        tool_hint_label.setText(
+                            "No hay una herramienta de corte disponible para definir la separacion."
+                        )
+
+                def refresh_lead_controls():
+                    approach_enabled = approach_checkbox.isChecked()
+                    for widget in (approach_type_combo, approach_radius_field, approach_mode_combo):
+                        widget.setEnabled(approach_enabled)
+
+                    retract_enabled = retract_checkbox.isChecked()
+                    for widget in (retract_type_combo, retract_radius_field, retract_mode_combo):
+                        widget.setEnabled(retract_enabled)
+
+                    depth_role_label.setText(
+                        "Profundidad extra" if through_checkbox.isChecked() else "Profundidad de división"
+                    )
+
+                refresh_lead_controls()
+                refresh_tool_hint_v2()
+                tool_combo.currentIndexChanged.connect(lambda *_: refresh_tool_hint_v2())
+                through_checkbox.toggled.connect(lambda *_: refresh_tool_hint_v2())
+                depth_value_field.textChanged.connect(lambda *_: refresh_tool_hint_v2())
+                through_checkbox.toggled.connect(lambda *_: refresh_lead_controls())
+                approach_checkbox.toggled.connect(lambda *_: refresh_lead_controls())
+                retract_checkbox.toggled.connect(lambda *_: refresh_lead_controls())
+
+                def save_en_juego_settings_dialog_v2():
+                    selected_tool = _resolve_en_juego_cutting_tool(tool_combo.currentData())
+                    en_juego_settings["origin_x"] = _compact_number(
+                        _coerce_setting_number(origin_x_field.text().strip(), en_juego_settings.get("origin_x", 0.0))
+                    )
+                    en_juego_settings["origin_y"] = _compact_number(
+                        _coerce_setting_number(origin_y_field.text().strip(), en_juego_settings.get("origin_y", 0.0))
+                    )
+                    en_juego_settings["origin_z"] = _compact_number(
+                        _coerce_setting_number(origin_z_field.text().strip(), en_juego_settings.get("origin_z", 0.0))
+                    )
+                    en_juego_settings["cutting_tool_id"] = str(selected_tool.get("tool_id") or "").strip()
+                    en_juego_settings["cutting_tool_code"] = str(selected_tool.get("tool_code") or "").strip()
+                    en_juego_settings["cutting_tool_name"] = str(selected_tool.get("tool_name") or "").strip()
+                    en_juego_settings["cutting_tool_diameter"] = _compact_number(
+                        _coerce_setting_number(selected_tool.get("diameter"), 0.0, minimum=0.0)
+                    )
+                    en_juego_settings["cutting_is_through"] = through_checkbox.isChecked()
+                    en_juego_settings["cutting_depth_value"] = _compact_number(
+                        _coerce_setting_number(
+                            depth_value_field.text().strip(),
+                            en_juego_settings.get("cutting_depth_value", 1.0),
+                            minimum=0.0,
+                        )
+                    )
+                    en_juego_settings["approach_enabled"] = approach_checkbox.isChecked()
+                    en_juego_settings["approach_type"] = str(approach_type_combo.currentData() or "Arc")
+                    en_juego_settings["approach_radius_multiplier"] = _compact_number(
+                        _coerce_setting_number(
+                            approach_radius_field.text().strip(),
+                            en_juego_settings.get("approach_radius_multiplier", 2.0),
+                            minimum=0.0,
+                        )
+                    )
+                    en_juego_settings["approach_mode"] = str(approach_mode_combo.currentData() or "Quote")
+                    en_juego_settings["retract_enabled"] = retract_checkbox.isChecked()
+                    en_juego_settings["retract_type"] = str(retract_type_combo.currentData() or "Arc")
+                    en_juego_settings["retract_radius_multiplier"] = _compact_number(
+                        _coerce_setting_number(
+                            retract_radius_field.text().strip(),
+                            en_juego_settings.get("retract_radius_multiplier", 2.0),
+                            minimum=0.0,
+                        )
+                    )
+                    en_juego_settings["retract_mode"] = str(retract_mode_combo.currentData() or "Quote")
+                    persist_en_juego_settings()
+                    refresh_cut_mode_controls()
+                    settings_dialog.accept()
+
+                save_settings_btn.clicked.connect(save_en_juego_settings_dialog_v2)
+                cancel_settings_btn.clicked.connect(settings_dialog.reject)
+                _exec_centered(settings_dialog, config_dialog)
+
             def collect_en_juego_layout_data():
                 layout_data = {}
                 for instance_key, scene_item in item_by_instance_id.items():
@@ -4233,11 +5660,30 @@ class ProjectDetailWindow(QMainWindow):
                 return layout_data
 
             def save_en_juego_layout():
+                sync_en_juego_settings_from_controls()
                 config_data["en_juego_layout"] = collect_en_juego_layout_data()
+                config_data["en_juego_settings"] = dict(en_juego_settings)
                 persist_module_config()
                 config_dialog.accept()
 
             def create_en_juego_pgmx_from_dialog():
+                sync_en_juego_settings_from_controls()
+                if en_juego_settings.get("cut_mode") != "nesting":
+                    QMessageBox.information(
+                        config_dialog,
+                        "Crear En-Juego",
+                        "La generación del En-Juego automático solo está disponible con 'Corte Nesting'.",
+                    )
+                    return
+
+                QMessageBox.information(
+                    config_dialog,
+                    "Crear En-Juego",
+                    "La interfaz y la separación por herramienta ya quedaron preparadas.\n"
+                    "La síntesis del En-Juego para 'Corte Nesting' la corregiremos en el siguiente paso.",
+                )
+                return
+
                 from core.en_juego_pgmx import create_en_juego_pgmx
 
                 default_name = f"{module_name}_EnJuego.pgmx"
@@ -4251,7 +5697,18 @@ class ProjectDetailWindow(QMainWindow):
                 if not output_file:
                     return
 
+                sync_en_juego_settings_from_controls()
+                if en_juego_settings.get("cut_mode") == "nesting":
+                    QMessageBox.information(
+                        config_dialog,
+                        "Crear En-Juego",
+                        "El modo 'Corte Nesting' todavía no está implementado para generar el En-Juego.\n"
+                        "Use 'Corte Manual' para continuar.",
+                    )
+                    return
+
                 config_data["en_juego_layout"] = collect_en_juego_layout_data()
+                config_data["en_juego_settings"] = dict(en_juego_settings)
                 persist_module_config()
 
                 try:
@@ -4271,6 +5728,10 @@ class ProjectDetailWindow(QMainWindow):
                     )
                     return
 
+                sync_en_juego_observations()
+                persist_module_config()
+                refresh_pieces_table()
+
                 details = [
                     f"Archivo generado: {result.output_path}",
                     f"Tablero sintetizado: {result.board_width:.2f} x {result.board_height:.2f} x {result.board_thickness:.2f} mm",
@@ -4288,30 +5749,52 @@ class ProjectDetailWindow(QMainWindow):
                     "\n".join(details),
                 )
 
-            buttons_layout = QHBoxLayout()
-            create_en_juego_btn = QPushButton("Crear En-Juego")
-            fit_view_btn = QPushButton("Ajustar vista")
-            rotate_left_btn = QPushButton("Rotar -90°")
-            rotate_right_btn = QPushButton("Rotar +90°")
-            save_layout_btn = QPushButton("Guardar disposición")
-            close_layout_btn = QPushButton("Cerrar")
+            view_buttons_layout = QHBoxLayout()
+            view_buttons_layout.setContentsMargins(0, 0, 0, 0)
+            view_buttons_layout.setSpacing(8)
+            fit_view_btn = QPushButton("Ajustar\nVista")
+            rotate_left_btn = QPushButton("Rotar\n-90°")
+            rotate_right_btn = QPushButton("Rotar\n+90°")
+            for button in (fit_view_btn, rotate_left_btn, rotate_right_btn):
+                button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
             fit_view_btn.clicked.connect(lambda: view.fitInView(scene.itemsBoundingRect().adjusted(-80, -80, 80, 80), Qt.KeepAspectRatio))
             rotate_left_btn.clicked.connect(lambda: rotate_selected_piece(-90.0))
             rotate_right_btn.clicked.connect(lambda: rotate_selected_piece(90.0))
+            view_buttons_layout.addWidget(fit_view_btn)
+            view_buttons_layout.addWidget(rotate_left_btn)
+            view_buttons_layout.addWidget(rotate_right_btn)
+            create_en_juego_btn = QPushButton("Crear\nEn-Juego")
+            save_layout_btn = QPushButton("Guardar\nDisposición")
+            close_layout_btn = QPushButton("Cerrar")
+            for button in (create_en_juego_btn, save_layout_btn, close_layout_btn):
+                button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
             create_en_juego_btn.clicked.connect(create_en_juego_pgmx_from_dialog)
             save_layout_btn.clicked.connect(save_en_juego_layout)
             close_layout_btn.clicked.connect(config_dialog.reject)
-            buttons_layout.addWidget(fit_view_btn)
-            buttons_layout.addWidget(rotate_left_btn)
-            buttons_layout.addWidget(rotate_right_btn)
-            buttons_layout.addStretch()
-            buttons_layout.addWidget(create_en_juego_btn)
-            buttons_layout.addWidget(save_layout_btn)
-            buttons_layout.addWidget(close_layout_btn)
-            main_layout.addLayout(buttons_layout)
+            configure_en_juego_btn.clicked.connect(open_en_juego_settings_dialog_v2)
+            view_buttons_layout.addStretch()
+            view_buttons_layout.addWidget(create_en_juego_btn)
+            view_buttons_layout.addWidget(save_layout_btn)
+            view_buttons_layout.addWidget(close_layout_btn)
+            view_panel_layout.addLayout(view_buttons_layout)
+
+            def refresh_cut_mode_controls():
+                sync_en_juego_settings_from_controls()
+                is_nesting_mode = en_juego_settings.get("cut_mode") == "nesting"
+                configure_en_juego_btn.setEnabled(is_nesting_mode)
+                create_en_juego_btn.setEnabled(is_nesting_mode)
+                spacing_hint_label.setText(
+                    "Separación mínima actual: "
+                    f"{_compact_number(effective_piece_spacing_mm())} mm"
+                )
+                enforce_minimum_piece_spacing()
+
+            manual_cut_radio.toggled.connect(lambda *_: refresh_cut_mode_controls())
+            nesting_cut_radio.toggled.connect(lambda *_: refresh_cut_mode_controls())
+            refresh_cut_mode_controls()
 
             config_dialog.setLayout(main_layout)
-            config_dialog.exec()
+            _exec_centered(config_dialog, inspect_dialog)
 
         content_row = QHBoxLayout()
         content_row.setContentsMargins(0, 0, 0, 0)
@@ -4407,7 +5890,7 @@ class ProjectDetailWindow(QMainWindow):
         actions_column.addWidget(close_btn)
 
         inspect_dialog.setLayout(layout)
-        inspect_dialog.exec()
+        _exec_centered(inspect_dialog, parent_dialog)
 
     def show_cuts(self):
         if not self.project.modules:
@@ -4525,7 +6008,7 @@ class ProjectDetailWindow(QMainWindow):
                 change_location_btn = dlg.addButton("Guardar en otro lugar", QMessageBox.ActionRole)
                 cancel_btn = dlg.addButton("Cancelar", QMessageBox.RejectRole)
                 
-                dlg.exec()
+                _exec_centered(dlg, self)
                 
                 if dlg.clickedButton() == cancel_btn:
                     break  # Usuario cancela, salir del loop
@@ -4669,7 +6152,7 @@ class EditProjectWindow(QMainWindow):
 
     def edit_locales(self):
         dialog = EditLocalesDialog(self.locales, self)
-        dialog.exec()
+        _exec_centered(dialog, self)
 
     def select_folder(self):
         """Seleccionar nueva carpeta raíz."""
@@ -4734,20 +6217,32 @@ class NewProjectDialog(QDialog):
         layout = QVBoxLayout()
         layout.addWidget(QLabel("Complete los datos del proyecto."))
 
+        label_width = max(
+            QLabel("Proyecto").sizeHint().width(),
+            QLabel("Cliente").sizeHint().width(),
+            QLabel("Carpeta").sizeHint().width(),
+        )
+
         project_row = QHBoxLayout()
-        project_row.addWidget(QLabel("Proyecto"))
+        project_label = QLabel("Proyecto")
+        project_label.setFixedWidth(label_width)
+        project_row.addWidget(project_label)
         self.name_field = QLineEdit()
-        project_row.addWidget(self.name_field)
+        project_row.addWidget(self.name_field, 1)
         layout.addLayout(project_row)
 
         client_row = QHBoxLayout()
-        client_row.addWidget(QLabel("Cliente"))
+        client_label = QLabel("Cliente")
+        client_label.setFixedWidth(label_width)
+        client_row.addWidget(client_label)
         self.client_field = QLineEdit()
-        client_row.addWidget(self.client_field)
+        client_row.addWidget(self.client_field, 1)
         layout.addLayout(client_row)
 
         folder_row = QHBoxLayout()
-        folder_row.addWidget(QLabel("Carpeta"))
+        folder_label = QLabel("Carpeta")
+        folder_label.setFixedWidth(label_width)
+        folder_row.addWidget(folder_label)
         self.root_field = QLineEdit()
         folder_row.addWidget(self.root_field, 1)
         self.select_folder_button = QPushButton("Seleccionar")
@@ -4886,7 +6381,7 @@ class MainWindow(QMainWindow):
 
     def open_options(self):
         dialog = OptionsDialog(self)
-        dialog.exec()
+        _exec_centered(dialog, self)
 
     def close_application(self):
         app = QApplication.instance()
@@ -4926,7 +6421,7 @@ class MainWindow(QMainWindow):
     def create_project(self):
         dialog = NewProjectDialog(self)
         while True:
-            if dialog.exec() != QDialog.Accepted:
+            if _exec_centered(dialog, self) != QDialog.Accepted:
                 return
 
             project_data = dialog.project_data()
@@ -4978,7 +6473,7 @@ class MainWindow(QMainWindow):
             project = _load_project(project_name)
             self.current_project = project
             detail_window = ProjectDetailWindow(project, return_window=self)
-            detail_window.show()
+            _show_centered(detail_window, self)
             self.detail_window = detail_window
             self.hide()
         except Exception as exc:
@@ -5122,28 +6617,37 @@ class BoardsDialog(QDialog):
         self.boards_table.setAlternatingRowColors(True)
         self.boards_table.horizontalHeader().setStretchLastSection(True)
         self.boards_table.setColumnWidth(0, 180)
-        self.boards_table.setColumnWidth(1, 100)
-        self.boards_table.setColumnWidth(2, 100)
-        self.boards_table.setColumnWidth(3, 100)
-        self.boards_table.setColumnWidth(4, 90)
+        self.boards_table.setColumnWidth(1, 84)
+        self.boards_table.setColumnWidth(2, 84)
+        self.boards_table.setColumnWidth(3, 84)
+        self.boards_table.setColumnWidth(4, 72)
         self.boards_table.itemDoubleClicked.connect(lambda _item: self.edit_board())
-        layout.addWidget(self.boards_table)
 
-        buttons_row = QHBoxLayout()
+        content_row = QHBoxLayout()
+        content_row.setContentsMargins(0, 0, 0, 0)
+        content_row.setSpacing(8)
+        content_row.addWidget(self.boards_table, 1)
+
+        buttons_column = QVBoxLayout()
+        buttons_column.setContentsMargins(0, 0, 0, 0)
+        buttons_column.setSpacing(8)
         new_button = QPushButton("Nuevo")
         edit_button = QPushButton("Editar")
         delete_button = QPushButton("Eliminar")
         close_button = QPushButton("Cerrar")
+        for button in (new_button, edit_button, delete_button, close_button):
+            button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
         new_button.clicked.connect(self.add_board)
         edit_button.clicked.connect(self.edit_board)
         delete_button.clicked.connect(self.delete_board)
         close_button.clicked.connect(self.accept)
-        buttons_row.addWidget(new_button)
-        buttons_row.addWidget(edit_button)
-        buttons_row.addWidget(delete_button)
-        buttons_row.addStretch(1)
-        buttons_row.addWidget(close_button)
-        layout.addLayout(buttons_row)
+        buttons_column.addWidget(new_button)
+        buttons_column.addWidget(edit_button)
+        buttons_column.addWidget(delete_button)
+        buttons_column.addStretch(1)
+        buttons_column.addWidget(close_button)
+        content_row.addLayout(buttons_column)
+        layout.addLayout(content_row, 1)
 
         self.setLayout(layout)
         self.refresh_boards_table()
@@ -5169,7 +6673,7 @@ class BoardsDialog(QDialog):
 
     def add_board(self):
         dialog = BoardEditDialog(parent=self)
-        if dialog.exec() != QDialog.Accepted or dialog.board_data is None:
+        if _exec_centered(dialog, self) != QDialog.Accepted or dialog.board_data is None:
             return
 
         self.boards.append(dialog.board_data)
@@ -5184,7 +6688,7 @@ class BoardsDialog(QDialog):
             return
 
         dialog = BoardEditDialog(board=self.boards[row_idx], parent=self)
-        if dialog.exec() != QDialog.Accepted or dialog.board_data is None:
+        if _exec_centered(dialog, self) != QDialog.Accepted or dialog.board_data is None:
             return
 
         self.boards[row_idx] = dialog.board_data
@@ -5212,6 +6716,161 @@ class BoardsDialog(QDialog):
         del self.boards[row_idx]
         self._persist_boards()
         self.refresh_boards_table()
+
+
+class ToolsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Herramientas")
+        self.setModal(True)
+        self.resize(920, 460)
+        self.tools = _load_tool_catalog_rows()
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Herramientas disponibles en el catálogo."))
+
+        self.tools_table = QTableWidget()
+        self.tools_table.setColumnCount(8)
+        self.tools_table.setHorizontalHeaderLabels(
+            [
+                "ID",
+                "Código",
+                "Descripción",
+                "Tipo",
+                "Porta",
+                "Ø",
+                "L. hund.",
+                "Offset",
+            ]
+        )
+        self.tools_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tools_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.tools_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tools_table.setAlternatingRowColors(True)
+        self.tools_table.verticalHeader().setVisible(False)
+        header = self.tools_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        layout.addWidget(self.tools_table, 1)
+
+        buttons_row = QHBoxLayout()
+        buttons_row.addStretch(1)
+        close_button = QPushButton("Cerrar")
+        close_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        close_button.clicked.connect(self.accept)
+        buttons_row.addWidget(close_button)
+        layout.addLayout(buttons_row)
+
+        self.setLayout(layout)
+        self.refresh_tools_table()
+
+    def refresh_tools_table(self):
+        self.tools = _load_tool_catalog_rows()
+        self.tools_table.setRowCount(len(self.tools))
+        for row_idx, tool in enumerate(self.tools):
+            row_values = [
+                str(tool.get("tool_id") or ""),
+                str(tool.get("name") or ""),
+                str(tool.get("description") or ""),
+                str(tool.get("type") or ""),
+                str(tool.get("holder_key") or ""),
+                str(tool.get("diameter") or ""),
+                str(tool.get("sinking_length") or ""),
+                str(tool.get("tool_offset_length") or ""),
+            ]
+            for column_idx, value in enumerate(row_values):
+                item = QTableWidgetItem(value)
+                if column_idx in {0, 5, 6, 7}:
+                    item.setTextAlignment(Qt.AlignCenter)
+                self.tools_table.setItem(row_idx, column_idx, item)
+        if self.tools:
+            self.tools_table.selectRow(0)
+
+class ToolsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Herramientas")
+        self.setModal(True)
+        self.resize(1080, 480)
+        self.tools = _load_tool_catalog_rows()
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Herramientas disponibles en el catálogo y regla de uso por tipo."))
+
+        self.tools_table = QTableWidget()
+        self.tools_table.setColumnCount(10)
+        self.tools_table.setHorizontalHeaderLabels(
+            [
+                "ID",
+                "Código",
+                "Descripción",
+                "Tipo",
+                "Familia",
+                "Uso permitido",
+                "Porta",
+                "Ø",
+                "L. hund.",
+                "Offset",
+            ]
+        )
+        self.tools_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tools_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.tools_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tools_table.setAlternatingRowColors(True)
+        self.tools_table.verticalHeader().setVisible(False)
+        header = self.tools_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.Stretch)
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(9, QHeaderView.ResizeToContents)
+        layout.addWidget(self.tools_table, 1)
+
+        buttons_row = QHBoxLayout()
+        buttons_row.addStretch(1)
+        close_button = QPushButton("Cerrar")
+        close_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        close_button.clicked.connect(self.accept)
+        buttons_row.addWidget(close_button)
+        layout.addLayout(buttons_row)
+
+        self.setLayout(layout)
+        self.refresh_tools_table()
+
+    def refresh_tools_table(self):
+        self.tools = _load_tool_catalog_rows()
+        self.tools_table.setRowCount(len(self.tools))
+        for row_idx, tool in enumerate(self.tools):
+            row_values = [
+                str(tool.get("tool_id") or ""),
+                str(tool.get("name") or ""),
+                str(tool.get("description") or ""),
+                str(tool.get("type") or ""),
+                _tool_usage_family_label(tool.get("type")),
+                _tool_usage_label(tool.get("type")),
+                str(tool.get("holder_key") or ""),
+                str(tool.get("diameter") or ""),
+                str(tool.get("sinking_length") or ""),
+                str(tool.get("tool_offset_length") or ""),
+            ]
+            for column_idx, value in enumerate(row_values):
+                item = QTableWidgetItem(value)
+                if column_idx in {0, 7, 8, 9}:
+                    item.setTextAlignment(Qt.AlignCenter)
+                self.tools_table.setItem(row_idx, column_idx, item)
+        if self.tools:
+            self.tools_table.selectRow(0)
 
 
 class OptionsDialog(QDialog):
@@ -5266,13 +6925,24 @@ class OptionsDialog(QDialog):
         boards_row = QHBoxLayout()
         boards_row.addWidget(QLabel("Tableros disponibles"))
         boards_button = QPushButton("Tableros")
+        boards_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
         boards_button.clicked.connect(self.open_boards_dialog)
         boards_row.addWidget(boards_button)
         layout.addLayout(boards_row)
 
+        tools_row = QHBoxLayout()
+        tools_row.addWidget(QLabel("Herramientas de corte"))
+        tools_button = QPushButton("Herramientas")
+        tools_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        tools_button.clicked.connect(self.open_tools_dialog)
+        tools_row.addWidget(tools_button)
+        layout.addLayout(tools_row)
+
         buttons_row = QHBoxLayout()
         save_button = QPushButton("Guardar")
         close_button = QPushButton("Cerrar")
+        save_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        close_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
         save_button.clicked.connect(self.save_settings)
         close_button.clicked.connect(self.accept)
         buttons_row.addWidget(save_button)
@@ -5283,8 +6953,19 @@ class OptionsDialog(QDialog):
 
     def open_boards_dialog(self):
         dialog = BoardsDialog(self)
-        dialog.exec()
+        _exec_centered(dialog, self)
         self.settings = _read_app_settings()
+
+    def open_tools_dialog(self):
+        QMessageBox.information(
+            self,
+            "Herramientas",
+            "La gestión de herramientas la armaremos en el siguiente paso.",
+        )
+
+    def open_tools_dialog(self):
+        dialog = ToolsDialog(self)
+        _exec_centered(dialog, self)
 
     def save_settings(self):
         minimum_dimension_raw = self.minimum_dimension_field.text().strip() or "150"
@@ -5335,5 +7016,5 @@ class OptionsDialog(QDialog):
 def run_app():
     app = QApplication([])
     window = MainWindow()
-    window.show()
+    _show_centered(window)
     app.exec()

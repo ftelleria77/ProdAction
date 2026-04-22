@@ -2429,6 +2429,93 @@ def _validate_tool_sinking_length_for_spec(
         )
 
 
+def _normalize_tool_usage_group(tool_type: str) -> str:
+    normalized = (tool_type or "").strip().lower()
+    if normalized.startswith("broca"):
+        return "drilling"
+    if normalized.startswith("fresa") or normalized.startswith("freza"):
+        return "milling"
+    if normalized.startswith("sierra"):
+        return "saw"
+    return "other"
+
+
+def _is_vertical_x_saw(tool_type: str) -> bool:
+    return (tool_type or "").strip().lower() == "sierra vertical x"
+
+
+def _validate_vertical_x_saw_for_milling_spec(spec, tool_type: str) -> None:
+    if not isinstance(spec, _HydratedLineMillingSpec):
+        raise ValueError(
+            "La herramienta "
+            f"{_tool_catalog_label(spec)} ({tool_type}) solo permite ranurados lineales rectos."
+        )
+
+    if _normalize_plane_name(spec.plane_name) != "Top":
+        raise ValueError(
+            "La herramienta "
+            f"{_tool_catalog_label(spec)} ({tool_type}) solo permite ranurados sobre el plano Top."
+        )
+
+    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
+    if depth_spec.is_through:
+        raise ValueError(
+            "La herramienta "
+            f"{_tool_catalog_label(spec)} ({tool_type}) solo permite ranurados no pasantes."
+        )
+
+    if not math.isclose(float(spec.start_y), float(spec.end_y), abs_tol=1e-9):
+        raise ValueError(
+            "La herramienta "
+            f"{_tool_catalog_label(spec)} ({tool_type}) solo permite líneas horizontales."
+        )
+
+
+def _validate_tool_type_for_milling_spec(spec, tool_catalog: dict[str, dict[str, str]]) -> None:
+    catalog_entry = tool_catalog.get(spec.tool_id)
+    if catalog_entry is None:
+        raise ValueError(
+            "No se pudo validar el tipo de la herramienta "
+            f"{_tool_catalog_label(spec)} porque no existe en '{TOOL_CATALOG_PATH.name}'."
+        )
+
+    tool_type = (catalog_entry.get("type") or "").strip()
+    usage_group = _normalize_tool_usage_group(tool_type)
+    if usage_group == "milling":
+        return
+    if _is_vertical_x_saw(tool_type):
+        _validate_vertical_x_saw_for_milling_spec(spec, tool_type)
+        return
+    if usage_group != "milling":
+        raise ValueError(
+            "El fresado requiere una herramienta de tipo Fresa/Freza, "
+            "o bien una Sierra Vertical X en modo ranurado horizontal no pasante: "
+            f"{_tool_catalog_label(spec)} figura como '{tool_type or 'sin tipo'}'."
+        )
+
+
+def _validate_tool_type_for_drilling_spec(
+    spec: _HydratedDrillingSpec,
+    tool_catalog: dict[str, dict[str, str]],
+) -> None:
+    if spec.tool_object_type == "System.Object":
+        return
+
+    catalog_entry = tool_catalog.get(spec.tool_id)
+    if catalog_entry is None:
+        raise ValueError(
+            "No se pudo validar el tipo de la herramienta "
+            f"{_tool_catalog_label(spec)} porque no existe en '{TOOL_CATALOG_PATH.name}'."
+        )
+
+    tool_type = (catalog_entry.get("type") or "").strip()
+    if _normalize_tool_usage_group(tool_type) != "drilling":
+        raise ValueError(
+            "El taladrado requiere una herramienta de tipo Broca: "
+            f"{_tool_catalog_label(spec)} figura como '{tool_type or 'sin tipo'}'."
+        )
+
+
 def _validate_tool_sinking_length_for_drilling_spec(
     state: PgmxState,
     spec: _HydratedDrillingSpec,
@@ -2473,14 +2560,19 @@ def _validate_tool_sinking_lengths(
 
     tool_catalog = _load_tool_catalog()
     for spec in line_millings:
+        _validate_tool_type_for_milling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
     for spec in polyline_millings:
+        _validate_tool_type_for_milling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
     for spec in circle_millings:
+        _validate_tool_type_for_milling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
     for spec in squaring_millings:
+        _validate_tool_type_for_milling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
     for spec in drillings:
+        _validate_tool_type_for_drilling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_drilling_spec(state, spec, tool_catalog)
 
 
