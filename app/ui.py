@@ -1268,6 +1268,13 @@ def _parse_piece_quantity_value(raw_value, default: int = 1, minimum: int = 1) -
     return quantity if quantity >= minimum else minimum
 
 
+def _total_module_quantity(modules) -> int:
+    total_quantity = 0
+    for module in modules or []:
+        total_quantity += _parse_piece_quantity_value(getattr(module, "quantity", None), default=1)
+    return total_quantity
+
+
 def _coerce_piece_quantity_field(
     piece_data: dict,
     field_name: str = "quantity",
@@ -1444,7 +1451,7 @@ def _load_saved_modules(project_root: Path, locales: list[LocaleData]) -> tuple[
 
     for locale in resolved_locales:
         locale_modules = _load_saved_modules_for_locale(project_root, locale)
-        locale.modules_count = len(locale_modules)
+        locale.modules_count = _total_module_quantity(locale_modules)
         modules.extend(locale_modules)
 
     if not resolved_locales and project_root.exists():
@@ -1616,13 +1623,12 @@ class ProjectDetailWindow(QMainWindow):
         self.locales_list.clear()
         if locales:
             for locale in locales:
-                modules_count = len(
-                    [
-                        module
-                        for module in self.project.modules
-                        if str(module.locale_name or "").strip().lower() == locale.name.strip().lower()
-                    ]
-                )
+                locale_modules = [
+                    module
+                    for module in self.project.modules
+                    if str(module.locale_name or "").strip().lower() == locale.name.strip().lower()
+                ]
+                modules_count = _total_module_quantity(locale_modules)
                 if modules_count <= 0:
                     try:
                         modules_count = int(locale.modules_count or 0)
@@ -2223,7 +2229,7 @@ class ProjectDetailWindow(QMainWindow):
                 for module in self.project.modules
                 if module.locale_name == locale.name
             ]
-            locale.modules_count = len(locale_modules)
+            locale.modules_count = _total_module_quantity(locale_modules)
 
             rows = []
             for module in sorted(locale_modules, key=lambda item: item.name.lower()):
@@ -2245,7 +2251,7 @@ class ProjectDetailWindow(QMainWindow):
             config_data = {
                 "locale_name": locale.name,
                 "path": locale.path,
-                "modules_count": len(rows),
+                "modules_count": locale.modules_count,
                 "modules": rows,
             }
             self._locale_config_path(locale).write_text(
@@ -2393,7 +2399,7 @@ class ProjectDetailWindow(QMainWindow):
                         LocaleData(
                             name=locale_dir.name,
                             path=str(locale_dir.relative_to(root_path)).replace("\\", "/"),
-                            modules_count=len(locale_modules),
+                            modules_count=_total_module_quantity(locale_modules),
                         )
                     )
                     processed_modules.extend(locale_modules)
@@ -2434,7 +2440,7 @@ class ProjectDetailWindow(QMainWindow):
                     if resolved_modules is None:
                         return
                     locale_modules, locale_reprocessed_modules = resolved_modules
-                    locale.modules_count = len(locale_modules)
+                    locale.modules_count = _total_module_quantity(locale_modules)
                     processed_locales.append(locale)
                     processed_modules.extend(locale_modules)
                     reprocessed_modules.extend(locale_reprocessed_modules)
@@ -6701,14 +6707,6 @@ class ProjectDetailWindow(QMainWindow):
                     )
                     return
 
-                QMessageBox.information(
-                    config_dialog,
-                    "Crear En-Juego",
-                    "La interfaz y la separación por herramienta ya quedaron preparadas.\n"
-                    "La síntesis del En-Juego para 'Corte Nesting' la corregiremos en el siguiente paso.",
-                )
-                return
-
                 from core.en_juego_pgmx import create_en_juego_pgmx
 
                 default_name = f"{module_name}_EnJuego.pgmx"
@@ -6723,15 +6721,6 @@ class ProjectDetailWindow(QMainWindow):
                     return
 
                 sync_en_juego_settings_from_controls()
-                if en_juego_settings.get("cut_mode") == "nesting":
-                    QMessageBox.information(
-                        config_dialog,
-                        "Crear En-Juego",
-                        "El modo 'Corte Nesting' todavía no está implementado para generar el En-Juego.\n"
-                        "Use 'Corte Manual' para continuar.",
-                    )
-                    return
-
                 config_data["en_juego_layout"] = collect_en_juego_layout_data()
                 config_data["en_juego_settings"] = dict(en_juego_settings)
                 persist_module_config()
@@ -6743,6 +6732,7 @@ class ProjectDetailWindow(QMainWindow):
                         module_path=module_path,
                         piece_rows=all_rows,
                         saved_layout=config_data.get("en_juego_layout", {}),
+                        settings=config_data.get("en_juego_settings", {}),
                         output_path=Path(output_file),
                     )
                 except Exception as exc:

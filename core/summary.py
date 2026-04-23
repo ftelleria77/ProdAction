@@ -550,6 +550,12 @@ def export_production_sheet(project: Project, output_xlsx: Path):
             module_title_cell = ws.cell(row=current_row, column=1, value=module.name)
             module_title_cell.font = Font(name="Calibri", size=14, bold=True)
             ws.row_dimensions[current_row].height = 18.75
+            module_observation = ""
+            if module_quantity > 1:
+                module_observation = f"{module_quantity} módulos."
+                module_observation_cell = ws.cell(row=current_row, column=7, value=module_observation)
+                module_observation_cell.font = observations_font
+                observations_values.append(module_observation)
             has_dimensions = all([
                 _is_positive_dimension(x_val),
                 _is_positive_dimension(y_val),

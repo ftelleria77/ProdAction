@@ -7,8 +7,11 @@ from typing import Optional, Sequence
 from core.model import Piece, Project, normalize_piece_grain_direction
 from core.pgmx_processing import PieceDrawingData, parse_pgmx_for_piece
 from tools.synthesize_pgmx import (
+    build_bidirectional_milling_strategy_spec,
     build_polyline_milling_spec,
+    build_squaring_milling_spec,
     build_synthesis_request,
+    build_unidirectional_milling_strategy_spec,
     synthesize_request,
 )
 
@@ -47,6 +50,19 @@ def _safe_float(value) -> Optional[float]:
         return float(raw)
     except (TypeError, ValueError):
         return None
+
+
+def _safe_bool(value, default: bool = False) -> bool:
+    if value is None:
+        return bool(default)
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "t", "yes", "si", "sí", "on"}:
+        return True
+    if normalized in {"0", "false", "f", "no", "off"}:
+        return False
+    return bool(default)
 
 
 def _parse_dimension(raw_value) -> float:
@@ -239,12 +255,101 @@ def _sanitize_filename(value: str) -> str:
     return cleaned.strip("._") or "En_Juego"
 
 
+def _nonnegative_setting(value, default: float = 0.0) -> float:
+    parsed = _safe_float(value)
+    if parsed is None:
+        return float(default)
+    return max(0.0, float(parsed))
+
+
+def _resolved_tool_name(settings: dict, key_prefix: str) -> str:
+    return str(
+        settings.get(f"{key_prefix}_tool_code")
+        or settings.get(f"{key_prefix}_tool_name")
+        or ""
+    ).strip()
+
+
+def _resolve_division_spacing_mm(settings: dict, material_thickness_mm: float) -> float:
+    tool_type = str(settings.get("cutting_tool_type") or "").strip().lower()
+    if tool_type.startswith("fresa 45") or tool_type.startswith("freza 45"):
+        depth_value = _nonnegative_setting(settings.get("cutting_depth_value"), 1.0)
+        if _safe_bool(settings.get("cutting_is_through"), True):
+            return max(0.0, depth_value * 2.0)
+        extra_depth = max(0.0, depth_value - max(0.0, float(material_thickness_mm)))
+        return max(0.0, extra_depth * 2.0)
+    return _nonnegative_setting(settings.get("cutting_tool_diameter"), 0.0)
+
+
+def _build_division_strategy(settings: dict):
+    if not _safe_bool(settings.get("cutting_multipass_enabled"), False):
+        return None
+
+    axial_cutting_depth = _nonnegative_setting(settings.get("cutting_pocket_depth"), 0.0)
+    axial_finish_cutting_depth = _nonnegative_setting(settings.get("cutting_last_pocket"), 0.0)
+    path_mode = str(settings.get("cutting_path_mode") or "Unidirectional").strip().lower()
+    if path_mode == "bidirectional":
+        return build_bidirectional_milling_strategy_spec(
+            allow_multiple_passes=True,
+            axial_cutting_depth=axial_cutting_depth,
+            axial_finish_cutting_depth=axial_finish_cutting_depth,
+        )
+    return build_unidirectional_milling_strategy_spec(
+        connection_mode="Automatic",
+        allow_multiple_passes=True,
+        axial_cutting_depth=axial_cutting_depth,
+        axial_finish_cutting_depth=axial_finish_cutting_depth,
+    )
+
+
+def _build_squaring_strategy(settings: dict):
+    if not _safe_bool(settings.get("squaring_unidirectional_multipass"), False):
+        return None
+    return build_unidirectional_milling_strategy_spec(
+        connection_mode="Automatic",
+        allow_multiple_passes=True,
+        axial_cutting_depth=_nonnegative_setting(settings.get("squaring_pocket_depth"), 0.0),
+        axial_finish_cutting_depth=_nonnegative_setting(settings.get("squaring_last_pocket"), 0.0),
+    )
+
+
+def _division_depth_kwargs(settings: dict) -> dict:
+    if _safe_bool(settings.get("cutting_is_through"), True):
+        return {
+            "is_through": True,
+            "extra_depth": _nonnegative_setting(settings.get("cutting_depth_value"), 1.0),
+        }
+    target_depth = _nonnegative_setting(settings.get("cutting_depth_value"), 0.0)
+    if target_depth <= 0.0:
+        raise ValueError("La profundidad de división debe ser mayor que cero cuando el corte no es pasante.")
+    return {
+        "is_through": False,
+        "target_depth": target_depth,
+    }
+
+
+def _squaring_depth_kwargs(settings: dict) -> dict:
+    if _safe_bool(settings.get("squaring_is_through"), True):
+        return {
+            "is_through": True,
+            "extra_depth": _nonnegative_setting(settings.get("squaring_depth_value"), 1.0),
+        }
+    target_depth = _nonnegative_setting(settings.get("squaring_depth_value"), 0.0)
+    if target_depth <= 0.0:
+        raise ValueError("La profundidad de escuadrado debe ser mayor que cero cuando el corte no es pasante.")
+    return {
+        "is_through": False,
+        "target_depth": target_depth,
+    }
+
+
 def create_en_juego_pgmx(
     project: Project,
     module_name: str,
     module_path: Path,
     piece_rows: Sequence[dict],
     saved_layout: dict,
+    settings: Optional[dict],
     output_path: Path,
 ) -> EnJuegoPgmxResult:
     en_juego_rows = [
@@ -274,7 +379,11 @@ def create_en_juego_pgmx(
             f"Se encontraron: {thickness_text}."
         )
 
-    preview_gap_mm = 120.0
+    normalized_settings = dict(settings or {})
+    board_thickness = float(thickness_values[0])
+    preview_gap_mm = _resolve_division_spacing_mm(normalized_settings, board_thickness)
+    if preview_gap_mm <= 0.0:
+        preview_gap_mm = 120.0
     layout_wrap_mm = 2400.0
     drawing_data_cache: dict[str, Optional[PieceDrawingData]] = {}
 
@@ -379,7 +488,13 @@ def create_en_juego_pgmx(
     max_y = max(point[1] for point in scene_bound_points)
     board_width = round(max_x - min_x, 4)
     board_height = round(max_y - min_y, 4)
-    board_thickness = float(thickness_values[0])
+    cutting_tool_id = str(normalized_settings.get("cutting_tool_id") or "").strip()
+    cutting_tool_name = _resolved_tool_name(normalized_settings, "cutting")
+    cutting_tool_width = _nonnegative_setting(normalized_settings.get("cutting_tool_diameter"), 0.0)
+    if not cutting_tool_id or not cutting_tool_name or cutting_tool_width <= 0.0:
+        raise ValueError(
+            "Debe configurar una herramienta de división válida antes de crear el En-Juego."
+        )
 
     polyline_millings = []
     fallback_contour_count = 0
@@ -415,13 +530,27 @@ def create_en_juego_pgmx(
         polyline_millings.append(
             build_polyline_milling_spec(
                 points=normalized_points,
-                feature_name=f"{instance.title_text} - Contorno",
-                tool_id="1902",
-                tool_name="E003",
-                tool_width=9.52,
+                feature_name=f"{instance.title_text} - División",
+                tool_id=cutting_tool_id,
+                tool_name=cutting_tool_name,
+                tool_width=cutting_tool_width,
                 side_of_feature=side_of_feature,
-                is_through=True,
-                extra_depth=1.0,
+                approach_enabled=_safe_bool(normalized_settings.get("approach_enabled"), False),
+                approach_type=str(normalized_settings.get("approach_type") or "Arc"),
+                approach_mode=str(normalized_settings.get("approach_mode") or "Quote"),
+                approach_radius_multiplier=_nonnegative_setting(
+                    normalized_settings.get("approach_radius_multiplier"),
+                    2.0,
+                ),
+                retract_enabled=_safe_bool(normalized_settings.get("retract_enabled"), False),
+                retract_type=str(normalized_settings.get("retract_type") or "Arc"),
+                retract_mode=str(normalized_settings.get("retract_mode") or "Quote"),
+                retract_radius_multiplier=_nonnegative_setting(
+                    normalized_settings.get("retract_radius_multiplier"),
+                    2.0,
+                ),
+                milling_strategy=_build_division_strategy(normalized_settings),
+                **_division_depth_kwargs(normalized_settings),
             )
         )
         if instance.used_fallback_contour:
@@ -429,6 +558,38 @@ def create_en_juego_pgmx(
 
     if not polyline_millings:
         raise ValueError("No se pudieron construir contornos válidos para el archivo 'En-Juego'.")
+
+    squaring_tool_id = str(normalized_settings.get("squaring_tool_id") or "").strip()
+    squaring_tool_name = _resolved_tool_name(normalized_settings, "squaring")
+    squaring_tool_width = _nonnegative_setting(normalized_settings.get("squaring_tool_diameter"), 0.0)
+    if not squaring_tool_id or not squaring_tool_name or squaring_tool_width <= 0.0:
+        raise ValueError(
+            "Debe configurar una herramienta de escuadrado válida antes de crear el En-Juego."
+        )
+
+    squaring_milling = build_squaring_milling_spec(
+        feature_name=f"{module_name} - Escuadrado",
+        tool_id=squaring_tool_id,
+        tool_name=squaring_tool_name,
+        tool_width=squaring_tool_width,
+        winding=str(normalized_settings.get("squaring_direction") or "CW"),
+        approach_enabled=_safe_bool(normalized_settings.get("squaring_approach_enabled"), False),
+        approach_type=str(normalized_settings.get("squaring_approach_type") or "Arc"),
+        approach_mode=str(normalized_settings.get("squaring_approach_mode") or "Quote"),
+        approach_radius_multiplier=_nonnegative_setting(
+            normalized_settings.get("squaring_approach_radius_multiplier"),
+            2.0,
+        ),
+        retract_enabled=_safe_bool(normalized_settings.get("squaring_retract_enabled"), False),
+        retract_type=str(normalized_settings.get("squaring_retract_type") or "Arc"),
+        retract_mode=str(normalized_settings.get("squaring_retract_mode") or "Quote"),
+        retract_radius_multiplier=_nonnegative_setting(
+            normalized_settings.get("squaring_retract_radius_multiplier"),
+            2.0,
+        ),
+        milling_strategy=_build_squaring_strategy(normalized_settings),
+        **_squaring_depth_kwargs(normalized_settings),
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     piece_name = _sanitize_filename(f"{module_name}_EnJuego")
@@ -438,7 +599,11 @@ def create_en_juego_pgmx(
         length=board_width,
         width=board_height,
         depth=board_thickness,
+        origin_x=_nonnegative_setting(normalized_settings.get("origin_x"), 0.0),
+        origin_y=_nonnegative_setting(normalized_settings.get("origin_y"), 0.0),
+        origin_z=_nonnegative_setting(normalized_settings.get("origin_z"), 0.0),
         polyline_millings=tuple(polyline_millings),
+        squaring_millings=(squaring_milling,),
     )
     synthesize_request(request)
     return EnJuegoPgmxResult(
