@@ -263,6 +263,7 @@ def _expand_project_pieces(project: Project, squaring_allowance: float = 0.0) ->
 
         module_tag = _module_short_name(module.name)
         module_path = Path(module.path)
+        module_quantity = _safe_quantity(getattr(module, 'quantity', None))
         ordered_module_pieces = sorted(
             [piece for piece in module.pieces if (_safe_float(piece.thickness) or 0.0) > 0],
             key=lambda piece: piece_type_rank.get(str(piece.piece_type or "").strip(), len(PIECE_TYPE_ORDER)),
@@ -291,7 +292,7 @@ def _expand_project_pieces(project: Project, squaring_allowance: float = 0.0) ->
             material = str(piece.color or "SIN_COLOR").strip() or "SIN_COLOR"
             thickness = float(resolved_thickness)
             base_label = str(piece.name or piece.id or "pieza").strip()
-            quantity = _safe_quantity(piece.quantity)
+            quantity = _safe_quantity(piece.quantity) * module_quantity
             if program_piece_yield > 1:
                 quantity = max(1, (quantity + program_piece_yield - 1) // program_piece_yield)
             grain_mode = _normalize_piece_grain_mode(piece.grain_direction)

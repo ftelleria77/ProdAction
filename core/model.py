@@ -103,6 +103,7 @@ class ModuleData:
     path: str
     locale_name: str = ""
     relative_path: str = ""
+    quantity: int = 1
     pieces: List[Piece] = field(default_factory=list)
     is_manual: bool = False
 

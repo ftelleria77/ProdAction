@@ -56,6 +56,22 @@
       "margin": 20
     }
   ],
+  "manual_piece_templates": [
+    {
+      "id": "LAT_APL",
+      "name": "Lateral_Aplicado",
+      "quantity": 1,
+      "height": 873,
+      "width": 610,
+      "thickness": 18,
+      "color": "BCO18MDF",
+      "grain_direction": "0",
+      "source": "Lateral_Aplicado_873x610.pgmx",
+      "f6_source": null,
+      "piece_type": null,
+      "saved_at": "2026-04-23 11:47:49"
+    }
+  ],
   "available_herrajes": [
     "Perfil C Superior de Aluminio",
     "Perfil C Medio de Aluminio",

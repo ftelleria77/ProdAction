@@ -148,6 +148,7 @@ def _default_app_settings() -> dict:
         "cut_saw_kerf": 4,
         "cut_optimization_mode": CUT_OPTIMIZATION_OPTIONS[0],
         "available_boards": [],
+        "manual_piece_templates": [],
     }
 
 
@@ -239,6 +240,7 @@ def _read_app_settings() -> dict:
         return settings
     settings.update(saved_settings)
     settings["available_boards"] = _normalize_available_boards(settings.get("available_boards"))
+    settings["manual_piece_templates"] = _normalize_manual_piece_templates(settings.get("manual_piece_templates"))
     settings["cut_optimization_mode"] = _normalize_cut_optimization_option(settings.get("cut_optimization_mode"))
     settings["cut_piece_gap"] = _compact_number(_coerce_setting_number(settings.get("cut_piece_gap"), 0.0, minimum=0.0))
     settings["cut_squaring_allowance"] = _compact_number(_coerce_setting_number(settings.get("cut_squaring_allowance"), 10.0, minimum=0.0))
@@ -251,6 +253,9 @@ def _write_app_settings(settings: dict):
     merged_settings = _default_app_settings()
     merged_settings.update(settings)
     merged_settings["available_boards"] = _normalize_available_boards(merged_settings.get("available_boards"))
+    merged_settings["manual_piece_templates"] = _normalize_manual_piece_templates(
+        merged_settings.get("manual_piece_templates")
+    )
     merged_settings["cut_optimization_mode"] = _normalize_cut_optimization_option(merged_settings.get("cut_optimization_mode"))
     merged_settings["cut_piece_gap"] = _compact_number(_coerce_setting_number(merged_settings.get("cut_piece_gap"), 0.0, minimum=0.0))
     merged_settings["cut_squaring_allowance"] = _compact_number(_coerce_setting_number(merged_settings.get("cut_squaring_allowance"), 10.0, minimum=0.0))
@@ -259,6 +264,111 @@ def _write_app_settings(settings: dict):
         json.dumps(merged_settings, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+
+
+def _normalize_manual_piece_template_dimension(value):
+    raw = "" if value is None else str(value).strip().replace(",", ".")
+    if not raw:
+        return None
+    try:
+        return _compact_number(float(raw))
+    except ValueError:
+        return None
+
+
+def _normalize_manual_piece_template_entry(template_data: dict) -> dict | None:
+    if not isinstance(template_data, dict):
+        return None
+
+    template_id = str(template_data.get("id") or "").strip()
+    template_name = str(template_data.get("name") or template_id).strip()
+    if not template_id and not template_name:
+        return None
+    if not template_id:
+        template_id = template_name
+
+    normalized_entry = {
+        "id": template_id,
+        "name": template_name or template_id,
+        "quantity": _parse_piece_quantity_value(template_data.get("quantity"), default=1),
+        "height": _normalize_manual_piece_template_dimension(template_data.get("height")),
+        "width": _normalize_manual_piece_template_dimension(template_data.get("width")),
+        "thickness": _normalize_manual_piece_template_dimension(template_data.get("thickness")),
+        "color": str(template_data.get("color") or "").strip() or None,
+        "grain_direction": normalize_piece_grain_direction(template_data.get("grain_direction")),
+        "source": str(template_data.get("source") or "").strip(),
+        "f6_source": str(template_data.get("f6_source") or "").strip() or None,
+        "piece_type": str(template_data.get("piece_type") or "").strip() or None,
+    }
+    saved_at = str(template_data.get("saved_at") or "").strip()
+    if saved_at:
+        normalized_entry["saved_at"] = saved_at
+    return normalized_entry
+
+
+def _normalize_manual_piece_templates(raw_templates) -> list[dict]:
+    templates: list[dict] = []
+    for template_data in raw_templates or []:
+        normalized_entry = _normalize_manual_piece_template_entry(template_data)
+        if normalized_entry is not None:
+            templates.append(normalized_entry)
+    return templates
+
+
+def _manual_piece_template_signature(template_entry: dict) -> tuple:
+    return (
+        str(template_entry.get("id") or "").strip().lower(),
+        str(template_entry.get("name") or "").strip().lower(),
+        int(_parse_piece_quantity_value(template_entry.get("quantity"), default=1)),
+        template_entry.get("height"),
+        template_entry.get("width"),
+        template_entry.get("thickness"),
+        str(template_entry.get("color") or "").strip().lower(),
+        normalize_piece_grain_direction(template_entry.get("grain_direction")),
+        str(template_entry.get("source") or "").strip().lower(),
+        str(template_entry.get("piece_type") or "").strip().lower(),
+    )
+
+
+def _build_manual_piece_template_entry(piece_row: dict) -> dict:
+    normalized_entry = _normalize_manual_piece_template_entry(piece_row) or {
+        "id": "pieza",
+        "name": "pieza",
+        "quantity": 1,
+        "height": None,
+        "width": None,
+        "thickness": None,
+        "color": None,
+        "grain_direction": normalize_piece_grain_direction(None),
+        "source": "",
+        "f6_source": None,
+        "piece_type": None,
+    }
+    normalized_entry["saved_at"] = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
+    return normalized_entry
+
+
+def _save_manual_piece_template(piece_row: dict) -> dict:
+    settings = _read_app_settings()
+    template_entry = _build_manual_piece_template_entry(piece_row)
+    template_signature = _manual_piece_template_signature(template_entry)
+    existing_templates = _normalize_manual_piece_templates(settings.get("manual_piece_templates"))
+    filtered_templates = [
+        entry
+        for entry in existing_templates
+        if _manual_piece_template_signature(entry) != template_signature
+    ]
+    settings["manual_piece_templates"] = [template_entry] + filtered_templates
+    _write_app_settings(settings)
+    return template_entry
+
+
+def _persist_manual_piece_templates(template_entries) -> list[dict]:
+    normalized_templates = _normalize_manual_piece_templates(template_entries)
+    settings = _read_app_settings()
+    settings["manual_piece_templates"] = normalized_templates
+    _write_app_settings(settings)
+    return normalized_templates
 
 
 def _normalize_en_juego_cut_mode(value) -> str:
@@ -588,6 +698,10 @@ def _default_en_juego_settings() -> dict:
         "origin_z": 9,
         "cutting_is_through": True,
         "cutting_depth_value": 1.0,
+        "cutting_multipass_enabled": False,
+        "cutting_path_mode": "Unidirectional",
+        "cutting_pocket_depth": 0.0,
+        "cutting_last_pocket": 0.0,
         "approach_enabled": False,
         "approach_type": "Arc",
         "approach_radius_multiplier": 2.0,
@@ -664,6 +778,30 @@ def _normalize_en_juego_settings(value) -> dict:
             _coerce_setting_number(
                 value.get("cutting_depth_value"),
                 float(defaults["cutting_depth_value"]),
+                minimum=0.0,
+            )
+        ),
+        "cutting_multipass_enabled": _coerce_setting_bool(
+            value.get("cutting_multipass_enabled"),
+            bool(defaults["cutting_multipass_enabled"]),
+        ),
+        "cutting_path_mode": "Bidirectional"
+        if str(value.get("cutting_path_mode") or defaults["cutting_path_mode"]).strip().lower() in {
+            "bidirectional",
+            "bidireccional",
+        }
+        else "Unidirectional",
+        "cutting_pocket_depth": _compact_number(
+            _coerce_setting_number(
+                value.get("cutting_pocket_depth"),
+                float(defaults["cutting_pocket_depth"]),
+                minimum=0.0,
+            )
+        ),
+        "cutting_last_pocket": _compact_number(
+            _coerce_setting_number(
+                value.get("cutting_last_pocket"),
+                float(defaults["cutting_last_pocket"]),
                 minimum=0.0,
             )
         ),
@@ -1116,10 +1254,7 @@ def _coerce_required_piece_float_fields(piece_data: dict, field_names: tuple[str
             piece_data[field_name] = 0.0
 
 
-PIECE_QUANTITY_STEP_FIELD = "quantity_step"
-
-
-def _parse_piece_quantity_value(raw_value, default: int = 1, minimum: int = 0) -> int:
+def _parse_piece_quantity_value(raw_value, default: int = 1, minimum: int = 1) -> int:
     try:
         fallback_value = max(minimum, int(float(default)))
     except (TypeError, ValueError):
@@ -1138,7 +1273,7 @@ def _coerce_piece_quantity_field(
     field_name: str = "quantity",
     *,
     default: int = 1,
-    minimum: int = 0,
+    minimum: int = 1,
 ) -> None:
     piece_data[field_name] = _parse_piece_quantity_value(
         piece_data.get(field_name),
@@ -1204,6 +1339,7 @@ def _load_module_from_saved_config(
     locale_name: str = "",
     module_name_hint: str = "",
     relative_path_hint: str = "",
+    module_quantity_hint=1,
 ) -> ModuleData:
     config_path = module_path / "module_config.json"
     config_data = _read_json_file(config_path)
@@ -1213,12 +1349,14 @@ def _load_module_from_saved_config(
     module_name = str(config_data.get("module") or module_name_hint or module_path.name).strip() or module_path.name
     relative_path = _module_relative_path(project_root, module_path, relative_path_hint) or relative_path_hint
     pieces = _load_pieces_from_config_rows(config_data.get("pieces", []), module_name)
+    module_quantity = _parse_piece_quantity_value(module_quantity_hint, default=1)
 
     return ModuleData(
         name=module_name,
         path=str(module_path),
         locale_name=locale_name,
         relative_path=relative_path,
+        quantity=module_quantity,
         pieces=pieces,
     )
 
@@ -1238,6 +1376,7 @@ def _load_saved_modules_for_locale(project_root: Path, locale: LocaleData) -> li
                 module_relative_from_locale = str(module_row.get("path") or module_name).strip()
                 if not module_relative_from_locale:
                     continue
+                module_quantity = _parse_piece_quantity_value(module_row.get("quantity"), default=1)
 
                 module_path = locale_path / module_relative_from_locale
                 relative_path_hint = str((Path(locale.path) / module_relative_from_locale)).replace("\\", "/")
@@ -1247,6 +1386,7 @@ def _load_saved_modules_for_locale(project_root: Path, locale: LocaleData) -> li
                     locale_name=locale.name,
                     module_name_hint=module_name,
                     relative_path_hint=relative_path_hint,
+                    module_quantity_hint=module_quantity,
                 )
                 module_key = (module.relative_path or str(module.path)).lower()
                 modules_by_key[module_key] = module
@@ -1621,7 +1761,7 @@ class ProjectDetailWindow(QMainWindow):
                     filtered_dict,
                     ("thickness", "program_width", "program_height", "program_thickness"),
                 )
-                _coerce_piece_quantity_field(filtered_dict, minimum=0)
+                _coerce_piece_quantity_field(filtered_dict)
                 
                 try:
                     piece = Piece(**filtered_dict)
@@ -1707,13 +1847,12 @@ class ProjectDetailWindow(QMainWindow):
                 previous_row = previous_rows_by_id.get(str(piece.id or "").strip(), {})
                 source_value = piece.cnc_source or ""
                 pgmx_status = self._get_pgmx_status(source_value, pgmx_names, pgmx_relpaths)
-                piece_quantity = _parse_piece_quantity_value(piece.quantity, default=1, minimum=0)
+                piece_quantity = _parse_piece_quantity_value(piece.quantity, default=1)
                 rows.append(
                     {
                         "id": piece.id,
                         "name": piece.name or piece.id,
                         "quantity": piece_quantity,
-                        PIECE_QUANTITY_STEP_FIELD: piece_quantity,
                         "height": piece.height,
                         "width": piece.width,
                         "thickness": piece.thickness,
@@ -1943,7 +2082,6 @@ class ProjectDetailWindow(QMainWindow):
                 group["units_count"] += _parse_piece_quantity_value(
                     getattr(piece, "quantity", None),
                     default=1,
-                    minimum=0,
                 )
 
         if not unresolved_groups:
@@ -2016,6 +2154,13 @@ class ProjectDetailWindow(QMainWindow):
         modules_to_reprocess: list[ModuleData] = []
 
         for scanned_module in scanned_modules:
+            existing_module = existing_modules_by_path.get(self._module_path_processing_key(scanned_module))
+            if existing_module is not None:
+                scanned_module.quantity = _parse_piece_quantity_value(
+                    getattr(existing_module, "quantity", None),
+                    default=1,
+                )
+
             config_path = self._module_config_path(scanned_module)
             if not config_path.exists():
                 resolved_modules.append(scanned_module)
@@ -2044,13 +2189,13 @@ class ProjectDetailWindow(QMainWindow):
                 modules_to_reprocess.append(scanned_module)
                 continue
 
-            existing_module = existing_modules_by_path.get(self._module_path_processing_key(scanned_module))
             if existing_module is None:
                 existing_module = ModuleData(
                     name=scanned_module.name,
                     path=scanned_module.path,
                     locale_name=scanned_module.locale_name,
                     relative_path=scanned_module.relative_path,
+                    quantity=_parse_piece_quantity_value(getattr(scanned_module, "quantity", None), default=1),
                     is_manual=scanned_module.is_manual,
                     pieces=[],
                 )
@@ -2092,6 +2237,7 @@ class ProjectDetailWindow(QMainWindow):
                     {
                         "name": module.name,
                         "path": relative_module_path,
+                        "quantity": _parse_piece_quantity_value(getattr(module, "quantity", None), default=1),
                         "dimensions": self._resolve_module_nominal_dimensions(module),
                     }
                 )
@@ -2111,8 +2257,8 @@ class ProjectDetailWindow(QMainWindow):
         return [piece for piece in module.pieces if self._is_valid_piece_for_count(piece)]
 
     def _piece_quantity(self, piece) -> int:
-        """Cantidad numérica de la pieza, admitiendo 0 como mínimo."""
-        return _parse_piece_quantity_value(getattr(piece, "quantity", None), default=1, minimum=0)
+        """Cantidad numérica de la pieza."""
+        return _parse_piece_quantity_value(getattr(piece, "quantity", None), default=1)
 
     def _valid_piece_count_in_module(self, module) -> int:
         """Total de piezas (unidades) válidas en el módulo."""
@@ -2429,25 +2575,57 @@ class ProjectDetailWindow(QMainWindow):
             dialog.setWindowTitle(f"Módulos - {self.project.name} - {selected_locale_names[0]}")
         else:
             dialog.setWindowTitle(f"Módulos - {self.project.name}")
-        dialog.resize(620, 400)
+        dialog.resize(760, 400)
 
         dlg_layout = QVBoxLayout()
-        self.modules_list = QListWidget()
+        self.modules_list = QTableWidget()
+        self.modules_list.setColumnCount(3)
+        self.modules_list.setHorizontalHeaderLabels(["Cantidad", "Módulo", "Piezas"])
+        self.modules_list.verticalHeader().setVisible(False)
+        self.modules_list.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.modules_list.setSelectionBehavior(QTableWidget.SelectRows)
+        self.modules_list.setAlternatingRowColors(True)
+        modules_header = self.modules_list.horizontalHeader()
+        modules_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        modules_header.setSectionResizeMode(1, QHeaderView.Stretch)
+        modules_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
 
         def refresh_modules_list_view():
             current_visible_modules = filtered_modules_for_dialog()
+            current_selected_key = ""
+            if self.modules_list.currentRow() >= 0:
+                selected_item = self.modules_list.item(self.modules_list.currentRow(), 1)
+                if selected_item is not None:
+                    current_selected_key = str(selected_item.data(Qt.UserRole) or "").strip()
             # Recargar piezas desde module_config.json y normalizar thickness
             for module in current_visible_modules:
                 self._reload_module_pieces_from_config(module)
                 self._normalize_module_piece_thickness(module)
             
-            self.modules_list.clear()
-            for module in current_visible_modules:
+            self.modules_list.setRowCount(len(current_visible_modules))
+            selected_row = -1
+            for row_idx, module in enumerate(current_visible_modules):
                 valid_count = self._valid_piece_count_in_module(module)
                 module_label = f"{module.locale_name} / {module.name}" if module.locale_name else module.name
-                item = QListWidgetItem(f"{module_label} ({valid_count} piezas)")
-                item.setData(Qt.UserRole, module.relative_path or module.path)
-                self.modules_list.addItem(item)
+                module_key = module.relative_path or module.path
+                module_item = QTableWidgetItem(module_label)
+                module_item.setData(Qt.UserRole, module_key)
+                quantity_item = QTableWidgetItem(
+                    str(_parse_piece_quantity_value(getattr(module, "quantity", None), default=1))
+                )
+                quantity_item.setTextAlignment(Qt.AlignCenter)
+                pieces_item = QTableWidgetItem(str(valid_count))
+                pieces_item.setTextAlignment(Qt.AlignCenter)
+                self.modules_list.setItem(row_idx, 0, quantity_item)
+                self.modules_list.setItem(row_idx, 1, module_item)
+                self.modules_list.setItem(row_idx, 2, pieces_item)
+                if current_selected_key and str(module_key).strip() == current_selected_key:
+                    selected_row = row_idx
+
+            if self.modules_list.rowCount() > 0:
+                if selected_row < 0:
+                    selected_row = 0
+                self.modules_list.selectRow(selected_row)
 
         refresh_modules_list_view()
 
@@ -2553,6 +2731,7 @@ class ProjectDetailWindow(QMainWindow):
                 path=str(module_path),
                 locale_name=selected_locale.name,
                 relative_path=str(module_path.relative_to(Path(self.project.root_directory))).replace("\\", "/"),
+                quantity=1,
                 pieces=[],
                 is_manual=True,
             )
@@ -2578,6 +2757,7 @@ class ProjectDetailWindow(QMainWindow):
                 "pieces": [],
             }
             config_path.write_text(json.dumps(config_data, indent=2, ensure_ascii=False), encoding="utf-8")
+            self._write_locale_config_files([selected_locale])
 
             _save_project(self.project)
             self.refresh_project_header_info()
@@ -2586,14 +2766,20 @@ class ProjectDetailWindow(QMainWindow):
 
         new_btn.clicked.connect(create_manual_module)
         inspect_btn.clicked.connect(lambda: self.inspect_module(dialog, refresh_modules_list_view))
-        self.modules_list.itemDoubleClicked.connect(lambda _: self.inspect_module(dialog, refresh_modules_list_view))
+        self.modules_list.cellDoubleClicked.connect(lambda *_: self.inspect_module(dialog, refresh_modules_list_view))
         close_btn.clicked.connect(dialog.accept)
 
         _exec_centered(dialog, self)
 
     def inspect_module(self, parent_dialog, on_module_updated=None):
         """Mostrar piezas del módulo seleccionado"""
-        selected_item = self.modules_list.currentItem()
+        selected_item = None
+        if isinstance(self.modules_list, QTableWidget):
+            current_row = self.modules_list.currentRow()
+            if current_row >= 0:
+                selected_item = self.modules_list.item(current_row, 1)
+        else:
+            selected_item = self.modules_list.currentItem()
         if not selected_item:
             QMessageBox.warning(parent_dialog, "Inspeccionar", "Seleccione un módulo primero.")
             return
@@ -2664,16 +2850,11 @@ class ProjectDetailWindow(QMainWindow):
             normalized_row["quantity"] = _parse_piece_quantity_value(
                 normalized_row.get("quantity"),
                 default=1,
-                minimum=0,
-            )
-            normalized_row[PIECE_QUANTITY_STEP_FIELD] = _parse_piece_quantity_value(
-                normalized_row.get(PIECE_QUANTITY_STEP_FIELD),
-                default=normalized_row["quantity"],
-                minimum=0,
             )
             normalized_row["grain_direction"] = normalize_piece_grain_direction(normalized_row.get("grain_direction"))
             normalized_row["observations"] = normalize_piece_observations(normalized_row.get("observations"))
             normalized_row.pop("excel", None)
+            normalized_row.pop("quantity_step", None)
             return normalized_row
 
         all_rows = [
@@ -2700,13 +2881,65 @@ class ProjectDetailWindow(QMainWindow):
         dim_x_field = QLineEdit(str(settings.get("x", "") or ""))
         dim_y_field = QLineEdit(str(settings.get("y", "") or ""))
         dim_z_field = QLineEdit(str(settings.get("z", "") or ""))
+        module_quantity_field = QLineEdit(
+            str(_parse_piece_quantity_value(getattr(selected_module, "quantity", None), default=1))
+        )
         field_width = _scaled_int(100, compact_scale, 72)
+        quantity_field_width = _scaled_int(80, compact_scale, 60)
+        quantity_button_width = _scaled_int(14, compact_scale, 11)
+        quantity_button_height = _scaled_int(12, compact_scale, 10)
+        quantity_button_font_size = _scaled_int(7, compact_scale, 6)
         dim_x_field.setFixedWidth(field_width)
         dim_y_field.setFixedWidth(field_width)
         dim_z_field.setFixedWidth(field_width)
+        module_quantity_field.setFixedWidth(quantity_field_width)
+
+        def style_quantity_micro_button(button: QPushButton) -> None:
+            button.setContentsMargins(0, 0, 0, 0)
+            button.setStyleSheet(
+                "QPushButton {"
+                f"font-size: {quantity_button_font_size}px;"
+                "padding: 0px;"
+                "margin: 0px;"
+                "text-align: center;"
+                "}"
+            )
+
+        def adjust_module_quantity(delta: int) -> None:
+            current_value = _parse_piece_quantity_value(module_quantity_field.text().strip(), default=1)
+            target_value = max(1, current_value + int(delta))
+            if target_value != current_value:
+                module_quantity_field.setText(str(target_value))
+
+        module_quantity_buttons = QWidget()
+        module_quantity_buttons_layout = QVBoxLayout(module_quantity_buttons)
+        module_quantity_buttons_layout.setContentsMargins(0, 0, 0, 0)
+        module_quantity_buttons_layout.setSpacing(0)
+
+        module_quantity_plus_btn = QPushButton("+", module_quantity_buttons)
+        module_quantity_plus_btn.setToolTip("Incrementar cantidad del módulo")
+        module_quantity_plus_btn.setFixedSize(quantity_button_width, quantity_button_height)
+        style_quantity_micro_button(module_quantity_plus_btn)
+        module_quantity_plus_btn.clicked.connect(lambda: adjust_module_quantity(+1))
+
+        module_quantity_minus_btn = QPushButton("-", module_quantity_buttons)
+        module_quantity_minus_btn.setToolTip("Disminuir cantidad del módulo")
+        module_quantity_minus_btn.setFixedSize(quantity_button_width, quantity_button_height)
+        style_quantity_micro_button(module_quantity_minus_btn)
+        module_quantity_minus_btn.clicked.connect(lambda: adjust_module_quantity(-1))
+
+        module_quantity_buttons_layout.addWidget(module_quantity_plus_btn)
+        module_quantity_buttons_layout.addWidget(module_quantity_minus_btn)
+        module_quantity_buttons.setFixedSize(quantity_button_width, quantity_button_height * 2)
+
+        module_quantity_widget = QWidget()
+        module_quantity_layout = QHBoxLayout(module_quantity_widget)
+        module_quantity_layout.setContentsMargins(0, 0, 0, 0)
+        module_quantity_layout.setSpacing(2)
+        module_quantity_layout.addWidget(module_quantity_field)
+        module_quantity_layout.addWidget(module_quantity_buttons)
 
         xyz_layout = QHBoxLayout()
-        xyz_layout.setAlignment(Qt.AlignLeft)
         xyz_layout.addWidget(QLabel("X: "))
         xyz_layout.addWidget(dim_x_field)
         xyz_layout.addWidget(QLabel("Y: "))
@@ -2714,6 +2947,8 @@ class ProjectDetailWindow(QMainWindow):
         xyz_layout.addWidget(QLabel("Z: "))
         xyz_layout.addWidget(dim_z_field)
         xyz_layout.addStretch(1)
+        xyz_layout.addWidget(QLabel("Cantidad: "))
+        xyz_layout.addWidget(module_quantity_widget)
 
         herrajes_field = QLineEdit(str(settings.get("herrajes_y_accesorios", "")))
         guias_field = QLineEdit(str(settings.get("guias_y_bisagras", "")))
@@ -2727,6 +2962,7 @@ class ProjectDetailWindow(QMainWindow):
         dim_x_field.textChanged.connect(mark_unsaved_changes)
         dim_y_field.textChanged.connect(mark_unsaved_changes)
         dim_z_field.textChanged.connect(mark_unsaved_changes)
+        module_quantity_field.textChanged.connect(mark_unsaved_changes)
         herrajes_field.textChanged.connect(mark_unsaved_changes)
         guias_field.textChanged.connect(mark_unsaved_changes)
         detalles_field.textChanged.connect(mark_unsaved_changes)
@@ -3408,9 +3644,6 @@ class ProjectDetailWindow(QMainWindow):
             "En juego",
             "Excel",
         ])
-        quantity_header_item = pieces_table.horizontalHeaderItem(PIECES_COL_QUANTITY)
-        if quantity_header_item is not None:
-            quantity_header_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         visible_row_indexes = []
         refreshing_pieces_table = False
         program_dimensions_cache = {}
@@ -3425,7 +3658,7 @@ class ProjectDetailWindow(QMainWindow):
                 except (ValueError, TypeError):
                     thickness = None
 
-            quantity = _parse_piece_quantity_value(piece_row.get("quantity"), default=1, minimum=0)
+            quantity = _parse_piece_quantity_value(piece_row.get("quantity"), default=1)
 
             def parse_dimension(raw_value):
                 raw_text = "" if raw_value is None else str(raw_value).strip().replace(",", ".")
@@ -3537,21 +3770,6 @@ class ProjectDetailWindow(QMainWindow):
         swap_button_width = _scaled_int(14, compact_scale, 11)
         swap_button_height = _scaled_int(20, compact_scale, 16)
         swap_button_font_size = _scaled_int(8, compact_scale, 6)
-        quantity_button_width = _scaled_int(14, compact_scale, 11)
-        quantity_button_height = _scaled_int(10, compact_scale, 8)
-        quantity_button_font_size = _scaled_int(7, compact_scale, 6)
-        quantity_label_min_width = _scaled_int(26, compact_scale, 20)
-
-        def style_micro_button(button: QPushButton) -> None:
-            button.setContentsMargins(0, 0, 0, 0)
-            button.setStyleSheet(
-                "QPushButton {"
-                f"font-size: {quantity_button_font_size}px;"
-                "padding: 0px;"
-                "margin: 0px;"
-                "text-align: center;"
-                "}"
-            )
 
         def create_centered_swap_button(on_clicked, tooltip: str):
             container = QWidget()
@@ -3575,95 +3793,6 @@ class ProjectDetailWindow(QMainWindow):
             button_layout.addWidget(swap_button, 0, Qt.AlignCenter)
             button_layout.addStretch(1)
             return container
-
-        def create_quantity_cell_widget(
-            quantity_value: int,
-            on_increment,
-            on_decrement,
-            *,
-            increment_tooltip: str,
-            decrement_tooltip: str,
-        ) -> QWidget:
-            container = QWidget()
-            quantity_layout = QHBoxLayout(container)
-            quantity_layout.setContentsMargins(0, 0, 0, 0)
-            quantity_layout.setSpacing(2)
-
-            quantity_label = QLabel(str(quantity_value))
-            quantity_label.setAlignment(Qt.AlignCenter)
-            quantity_label.setMinimumWidth(quantity_label_min_width)
-            quantity_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-
-            buttons_widget = QWidget(container)
-            buttons_layout = QVBoxLayout(buttons_widget)
-            buttons_layout.setContentsMargins(0, 0, 0, 0)
-            buttons_layout.setSpacing(0)
-
-            plus_button = QPushButton("+", buttons_widget)
-            plus_button.setToolTip(increment_tooltip)
-            plus_button.setFixedSize(quantity_button_width, quantity_button_height)
-            style_micro_button(plus_button)
-            plus_button.clicked.connect(on_increment)
-
-            minus_button = QPushButton("-", buttons_widget)
-            minus_button.setToolTip(decrement_tooltip)
-            minus_button.setFixedSize(quantity_button_width, quantity_button_height)
-            style_micro_button(minus_button)
-            minus_button.clicked.connect(on_decrement)
-
-            buttons_layout.addWidget(plus_button)
-            buttons_layout.addWidget(minus_button)
-            buttons_widget.setFixedSize(quantity_button_width, quantity_button_height * 2)
-
-            quantity_layout.addStretch(1)
-            quantity_layout.addWidget(quantity_label, 0, Qt.AlignCenter)
-            quantity_layout.addWidget(buttons_widget, 0, Qt.AlignVCenter)
-            quantity_layout.addStretch(1)
-            return container
-
-        def update_single_piece_quantity(all_idx: int, delta: int, visible_row: int | None = None):
-            if all_idx < 0 or all_idx >= len(all_rows):
-                return
-            piece_row = all_rows[all_idx]
-            current_quantity = _parse_piece_quantity_value(piece_row.get("quantity"), default=1, minimum=0)
-            target_quantity = max(0, current_quantity + int(delta))
-            if target_quantity == current_quantity:
-                if visible_row is not None and pieces_table.rowCount() > 0:
-                    pieces_table.selectRow(max(0, min(visible_row, pieces_table.rowCount() - 1)))
-                return
-            piece_row["quantity"] = target_quantity
-            mark_unsaved_changes()
-            refresh_pieces_table()
-            if visible_row is not None and pieces_table.rowCount() > 0:
-                pieces_table.selectRow(max(0, min(visible_row, pieces_table.rowCount() - 1)))
-
-        def update_all_piece_quantities_by_step(direction: int):
-            if not all_rows:
-                return
-            current_row = pieces_table.currentRow()
-            changed = False
-            for piece_row in all_rows:
-                current_quantity = _parse_piece_quantity_value(piece_row.get("quantity"), default=1, minimum=0)
-                quantity_step = _parse_piece_quantity_value(
-                    piece_row.get(PIECE_QUANTITY_STEP_FIELD),
-                    default=current_quantity,
-                    minimum=0,
-                )
-                target_quantity = max(0, current_quantity + (int(direction) * quantity_step))
-                if target_quantity == current_quantity:
-                    continue
-                piece_row["quantity"] = target_quantity
-                changed = True
-
-            if not changed:
-                if current_row >= 0 and pieces_table.rowCount() > 0:
-                    pieces_table.selectRow(max(0, min(current_row, pieces_table.rowCount() - 1)))
-                return
-
-            mark_unsaved_changes()
-            refresh_pieces_table()
-            if current_row >= 0 and pieces_table.rowCount() > 0:
-                pieces_table.selectRow(max(0, min(current_row, pieces_table.rowCount() - 1)))
 
         def swap_piece_dimensions(all_idx: int, visible_row: int | None = None):
             if all_idx < 0 or all_idx >= len(all_rows):
@@ -3736,12 +3865,7 @@ class ProjectDetailWindow(QMainWindow):
                 pgmx_status = self._get_pgmx_status(source_value, pgmx_names, pgmx_relpaths)
                 program_dimension_note = filtered_program_notes[row_idx]
                 piece_row["pgmx"] = pgmx_status
-                piece_row["quantity"] = _parse_piece_quantity_value(piece_row.get("quantity"), default=1, minimum=0)
-                piece_row[PIECE_QUANTITY_STEP_FIELD] = _parse_piece_quantity_value(
-                    piece_row.get(PIECE_QUANTITY_STEP_FIELD),
-                    default=piece_row["quantity"],
-                    minimum=0,
-                )
+                piece_row["quantity"] = _parse_piece_quantity_value(piece_row.get("quantity"), default=1)
                 en_juego = bool(piece_row.get("en_juego", False))
                 piece_row["en_juego"] = en_juego
                 include_in_sheet = bool(piece_row.get("include_in_sheet", piece_row.get("excel", False)))
@@ -3749,25 +3873,9 @@ class ProjectDetailWindow(QMainWindow):
 
                 pieces_table.setItem(row_idx, PIECES_COL_ID, QTableWidgetItem(str(piece_row.get("id", ""))))
                 pieces_table.setItem(row_idx, PIECES_COL_NAME, QTableWidgetItem(str(piece_row.get("name", ""))))
-                pieces_table.setCellWidget(
-                    row_idx,
-                    PIECES_COL_QUANTITY,
-                    create_quantity_cell_widget(
-                        int(piece_row["quantity"]),
-                        lambda _checked=False, idx=all_idx, visible_idx=row_idx: update_single_piece_quantity(
-                            idx,
-                            +1,
-                            visible_idx,
-                        ),
-                        lambda _checked=False, idx=all_idx, visible_idx=row_idx: update_single_piece_quantity(
-                            idx,
-                            -1,
-                            visible_idx,
-                        ),
-                        increment_tooltip="Incrementar cantidad de esta pieza",
-                        decrement_tooltip="Disminuir cantidad de esta pieza",
-                    ),
-                )
+                quantity_item = QTableWidgetItem(str(piece_row["quantity"]))
+                quantity_item.setTextAlignment(Qt.AlignCenter)
+                pieces_table.setItem(row_idx, PIECES_COL_QUANTITY, quantity_item)
                 pieces_table.setItem(row_idx, PIECES_COL_HEIGHT, QTableWidgetItem(str(piece_row.get("height", ""))))
                 pieces_table.setCellWidget(
                     row_idx,
@@ -3830,13 +3938,13 @@ class ProjectDetailWindow(QMainWindow):
         header = pieces_table.horizontalHeader()
         auto_columns = {
             PIECES_COL_ID,
+            PIECES_COL_QUANTITY,
             PIECES_COL_HEIGHT,
             PIECES_COL_WIDTH,
             PIECES_COL_THICKNESS,
         }
         fixed_column_widths = {
             PIECES_COL_NAME: _scaled_int(180, compact_scale, 120),
-            PIECES_COL_QUANTITY: _scaled_int(72, compact_scale, 58),
             PIECES_COL_SWAP: _scaled_int(18, compact_scale, 14),
             PIECES_COL_COLOR: _scaled_int(110, compact_scale, 90),
             PIECES_COL_GRAIN: _scaled_int(110, compact_scale, 90),
@@ -3865,24 +3973,6 @@ class ProjectDetailWindow(QMainWindow):
             "}"
         )
         swap_all_dimensions_btn.clicked.connect(swap_all_piece_dimensions)
-        quantity_header_controls = QWidget(header)
-        quantity_header_layout = QVBoxLayout(quantity_header_controls)
-        quantity_header_layout.setContentsMargins(0, 0, 0, 0)
-        quantity_header_layout.setSpacing(0)
-        quantity_all_plus_btn = QPushButton("+", quantity_header_controls)
-        quantity_all_plus_btn.setToolTip("Incrementar cantidades según la cantidad base de cada pieza")
-        quantity_all_plus_btn.setFixedSize(quantity_button_width, quantity_button_height)
-        style_micro_button(quantity_all_plus_btn)
-        quantity_all_plus_btn.clicked.connect(lambda: update_all_piece_quantities_by_step(+1))
-        quantity_all_minus_btn = QPushButton("-", quantity_header_controls)
-        quantity_all_minus_btn.setToolTip("Disminuir cantidades según la cantidad base de cada pieza")
-        quantity_all_minus_btn.setFixedSize(quantity_button_width, quantity_button_height)
-        style_micro_button(quantity_all_minus_btn)
-        quantity_all_minus_btn.clicked.connect(lambda: update_all_piece_quantities_by_step(-1))
-        quantity_header_layout.addWidget(quantity_all_plus_btn)
-        quantity_header_layout.addWidget(quantity_all_minus_btn)
-        quantity_header_controls.setFixedSize(quantity_button_width, quantity_button_height * 2)
-
         def position_swap_all_dimensions_button(*_):
             section_width = header.sectionSize(PIECES_COL_SWAP)
             if section_width <= 0:
@@ -3896,30 +3986,10 @@ class ProjectDetailWindow(QMainWindow):
             swap_all_dimensions_btn.show()
             swap_all_dimensions_btn.raise_()
 
-        def position_quantity_header_controls(*_):
-            section_width = header.sectionSize(PIECES_COL_QUANTITY)
-            if section_width <= 0:
-                quantity_header_controls.hide()
-                return
-            controls_width = quantity_header_controls.width()
-            controls_height = quantity_header_controls.height()
-            x_position = (
-                header.sectionViewportPosition(PIECES_COL_QUANTITY)
-                + max(0, section_width - controls_width - 2)
-            )
-            y_position = max(0, (header.height() - controls_height) // 2)
-            quantity_header_controls.setGeometry(x_position, y_position, controls_width, controls_height)
-            quantity_header_controls.show()
-            quantity_header_controls.raise_()
-
         header.sectionResized.connect(position_swap_all_dimensions_button)
         header.geometriesChanged.connect(position_swap_all_dimensions_button)
-        header.sectionResized.connect(position_quantity_header_controls)
-        header.geometriesChanged.connect(position_quantity_header_controls)
         pieces_table.horizontalScrollBar().valueChanged.connect(position_swap_all_dimensions_button)
-        pieces_table.horizontalScrollBar().valueChanged.connect(position_quantity_header_controls)
         position_swap_all_dimensions_button()
-        position_quantity_header_controls()
 
         actions_column_reserved_width = MAIN_ACTION_BUTTON_WIDTH + 36
         pieces_table.setMinimumWidth(
@@ -3952,6 +4022,7 @@ class ProjectDetailWindow(QMainWindow):
                 "guias_y_bisagras": guias_field.text().strip(),
                 "detalles_de_obra": detalles_field.text().strip(),
             }
+            selected_module.quantity = _parse_piece_quantity_value(module_quantity_field.text().strip(), default=1)
             sync_program_dimensions_from_rows()
             serialized_rows = []
             for row in all_rows:
@@ -3959,12 +4030,6 @@ class ProjectDetailWindow(QMainWindow):
                 serialized_row["quantity"] = _parse_piece_quantity_value(
                     serialized_row.get("quantity"),
                     default=1,
-                    minimum=0,
-                )
-                serialized_row[PIECE_QUANTITY_STEP_FIELD] = _parse_piece_quantity_value(
-                    serialized_row.get(PIECE_QUANTITY_STEP_FIELD),
-                    default=serialized_row["quantity"],
-                    minimum=0,
                 )
                 serialized_row["en_juego"] = bool(serialized_row.get("en_juego", False))
                 include_in_sheet = bool(serialized_row.get("include_in_sheet", serialized_row.get("excel", False)))
@@ -3972,6 +4037,7 @@ class ProjectDetailWindow(QMainWindow):
                 serialized_row["grain_direction"] = normalize_piece_grain_direction(serialized_row.get("grain_direction"))
                 serialized_row["observations"] = normalize_piece_observations(serialized_row.get("observations"))
                 serialized_row.pop("excel", None)
+                serialized_row.pop("quantity_step", None)
                 serialized_rows.append(serialized_row)
             all_rows[:] = serialized_rows
             config_data["pieces"] = serialized_rows
@@ -3993,7 +4059,7 @@ class ProjectDetailWindow(QMainWindow):
                 piece_dict.pop("include_in_sheet", None)
                 piece_dict.pop("excel", None)
                 piece_dict.pop("observations", None)
-                piece_dict.pop(PIECE_QUANTITY_STEP_FIELD, None)
+                piece_dict.pop("quantity_step", None)
                 
                 # Validar y procesar thickness: convertir string vacío a None
                 thickness_val = piece_dict.get("thickness")
@@ -4174,12 +4240,7 @@ class ProjectDetailWindow(QMainWindow):
 
             id_field = QLineEdit(str(base_piece_row.get("id") or ""))
             name_field = QLineEdit(str(base_piece_row.get("name") or ""))
-            base_piece_quantity = _parse_piece_quantity_value(base_piece_row.get("quantity"), default=1, minimum=0)
-            base_piece_quantity_step = _parse_piece_quantity_value(
-                base_piece_row.get(PIECE_QUANTITY_STEP_FIELD),
-                default=base_piece_quantity,
-                minimum=0,
-            )
+            base_piece_quantity = _parse_piece_quantity_value(base_piece_row.get("quantity"), default=1)
             qty_field = QLineEdit(str(base_piece_quantity))
             height_field = QLineEdit(str(base_piece_row.get("height") or ""))
             width_field = QLineEdit(str(base_piece_row.get("width") or ""))
@@ -4216,6 +4277,19 @@ class ProjectDetailWindow(QMainWindow):
                 grain_field.setCurrentIndex(2)
             else:
                 grain_field.setCurrentIndex(0)
+            manual_piece_templates = _normalize_manual_piece_templates(
+                _read_app_settings().get("manual_piece_templates")
+            )
+            template_combo = None
+            if is_new_piece:
+                template_combo = QComboBox()
+                template_combo.addItem("(sin plantilla)", None)
+                for template_entry in manual_piece_templates:
+                    template_label = str(template_entry.get("name") or template_entry.get("id") or "pieza").strip()
+                    template_id = str(template_entry.get("id") or "").strip()
+                    if template_id and template_id != template_label:
+                        template_label = f"{template_id} - {template_label}"
+                    template_combo.addItem(template_label, template_entry)
 
             def build_labeled_field_widget(label_text: str, field: QWidget) -> QWidget:
                 label = QLabel(label_text)
@@ -4236,6 +4310,10 @@ class ProjectDetailWindow(QMainWindow):
             top_fields_grid.setVerticalSpacing(4)
             top_fields_grid.setContentsMargins(0, 0, 0, 0)
 
+            if template_combo is not None:
+                template_column = build_labeled_field_widget("Plantilla:", template_combo)
+                top_fields_grid.addWidget(template_column, 0, 0, 1, 4)
+
             id_column = build_labeled_field_widget("ID:", id_field)
             name_column = build_labeled_field_widget("Nombre:", name_field)
             height_column = build_labeled_field_widget("Alto:", height_field)
@@ -4243,14 +4321,15 @@ class ProjectDetailWindow(QMainWindow):
             thickness_column = build_labeled_field_widget("Espesor:", thickness_field)
             qty_column = build_labeled_field_widget("Cantidad:", qty_field)
 
-            top_fields_grid.addWidget(id_column, 0, 0)
-            top_fields_grid.addWidget(name_column, 0, 1, 1, 3)
-            top_fields_grid.addWidget(qty_column, 1, 0)
-            top_fields_grid.addWidget(height_column, 1, 1)
-            top_fields_grid.addWidget(width_column, 1, 2)
-            top_fields_grid.addWidget(thickness_column, 1, 3)
+            top_row_offset = 1 if template_combo is not None else 0
+            top_fields_grid.addWidget(id_column, 0 + top_row_offset, 0)
+            top_fields_grid.addWidget(name_column, 0 + top_row_offset, 1, 1, 3)
+            top_fields_grid.addWidget(qty_column, 1 + top_row_offset, 0)
+            top_fields_grid.addWidget(height_column, 1 + top_row_offset, 1)
+            top_fields_grid.addWidget(width_column, 1 + top_row_offset, 2)
+            top_fields_grid.addWidget(thickness_column, 1 + top_row_offset, 3)
             top_fields_grid.setColumnStretch(4, 1)
-            for top_fields_row in range(4):
+            for top_fields_row in range(5 if template_combo is not None else 4):
                 top_fields_grid.setRowMinimumHeight(top_fields_row, editor_grid_row_height)
 
             form_layout.insertLayout(0, top_fields_grid)
@@ -4259,6 +4338,10 @@ class ProjectDetailWindow(QMainWindow):
             if not is_new_piece:
                 apply_color_btn = QPushButton("Cambiar")
                 apply_color_btn.setFixedSize(editor_inline_button_width, editor_inline_button_height)
+            select_color_btn = None
+            if is_new_piece:
+                select_color_btn = QPushButton("Seleccionar")
+                select_color_btn.setFixedSize(editor_inline_button_width, editor_inline_button_height)
 
             color_column = build_labeled_field_widget("Color:", color_field)
             grain_column = build_labeled_field_widget("Veta:", grain_field)
@@ -4269,6 +4352,19 @@ class ProjectDetailWindow(QMainWindow):
             color_grain_row.setContentsMargins(0, 0, 0, 0)
             color_grain_row.addWidget(color_column, 1, Qt.AlignTop)
             color_grain_row.addWidget(grain_column, 1, Qt.AlignTop)
+            if select_color_btn is not None:
+                select_button_label = QLabel("")
+                select_button_label.setFixedHeight(editor_label_height)
+                select_button_column = QVBoxLayout()
+                select_button_column.setSpacing(editor_field_block_spacing)
+                select_button_column.setContentsMargins(0, 0, 0, 0)
+                select_button_column.addWidget(select_button_label)
+                select_button_column.addWidget(select_color_btn, 0, Qt.AlignRight)
+                select_button_widget = QWidget()
+                select_button_widget.setFixedWidth(editor_inline_button_width)
+                select_button_widget.setFixedHeight(editor_grid_row_height)
+                select_button_widget.setLayout(select_button_column)
+                color_grain_row.addWidget(select_button_widget, 0, Qt.AlignTop | Qt.AlignRight)
             if apply_color_btn is not None:
                 change_button_label = QLabel("")
                 change_button_label.setFixedHeight(editor_label_height)
@@ -4285,7 +4381,7 @@ class ProjectDetailWindow(QMainWindow):
             color_grain_widget = QWidget()
             color_grain_widget.setFixedHeight(editor_grid_row_height)
             color_grain_widget.setLayout(color_grain_row)
-            top_fields_grid.addWidget(color_grain_widget, 2, 0, 1, 4)
+            top_fields_grid.addWidget(color_grain_widget, 2 + top_row_offset, 0, 1, 4)
 
             source_field_widget = build_labeled_field_widget("Programa asociado (opcional):", source_field)
             source_field_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -4310,7 +4406,7 @@ class ProjectDetailWindow(QMainWindow):
             source_widget = QWidget()
             source_widget.setFixedHeight(editor_grid_row_height)
             source_widget.setLayout(source_row)
-            top_fields_grid.addWidget(source_widget, 3, 0, 1, 4)
+            top_fields_grid.addWidget(source_widget, 3 + top_row_offset, 0, 1, 4)
 
             form_panel = QWidget()
             form_panel_layout = QVBoxLayout()
@@ -4359,12 +4455,7 @@ class ProjectDetailWindow(QMainWindow):
                 piece_id = id_field.text().strip()
                 source_value = source_field.text().strip()
                 normalized_source = normalize_source_path(source_value) if source_value else ""
-                updated_quantity = _parse_piece_quantity_value(qty_field.text().strip(), default=1, minimum=0)
-                updated_quantity_step = (
-                    updated_quantity
-                    if is_new_piece or updated_quantity != base_piece_quantity
-                    else base_piece_quantity_step
-                )
+                updated_quantity = _parse_piece_quantity_value(qty_field.text().strip(), default=1)
 
                 updated_piece = dict(base_piece_row)
                 updated_piece.update(
@@ -4372,7 +4463,6 @@ class ProjectDetailWindow(QMainWindow):
                         "id": piece_id,
                         "name": name_field.text().strip() or piece_id,
                         "quantity": updated_quantity,
-                        PIECE_QUANTITY_STEP_FIELD: updated_quantity_step,
                         "height": parse_optional_piece_float(height_field.text()),
                         "width": parse_optional_piece_float(width_field.text()),
                         "thickness": parse_optional_piece_float(thickness_field.text()),
@@ -4488,6 +4578,82 @@ class ProjectDetailWindow(QMainWindow):
                 base_piece_row["color"] = new_color_val
                 color_field.setText(new_color_val or "")
 
+            def select_color_from_boards_for_editor():
+                piece_thickness = parse_optional_piece_float(thickness_field.text())
+                available_colors = _configured_board_colors(piece_thickness=piece_thickness)
+                if not available_colors:
+                    thickness_label = (
+                        f" para espesor {int(piece_thickness) if float(piece_thickness).is_integer() else piece_thickness} mm"
+                        if piece_thickness is not None
+                        else ""
+                    )
+                    QMessageBox.warning(
+                        editor_dialog,
+                        "Seleccionar color",
+                        f"No hay colores disponibles en los tableros configurados{thickness_label}.",
+                    )
+                    return
+
+                current_color = color_field.text().strip()
+                selected_index = 0
+                if current_color:
+                    for color_index, color_value in enumerate(available_colors):
+                        if color_value.strip().lower() == current_color.lower():
+                            selected_index = color_index
+                            break
+
+                selected_color, ok = QInputDialog.getItem(
+                    editor_dialog,
+                    "Seleccionar color",
+                    "Color:",
+                    available_colors,
+                    selected_index,
+                    False,
+                )
+                if not ok:
+                    return
+                color_field.setText(str(selected_color or "").strip())
+
+            def apply_template_to_editor(template_entry: dict) -> None:
+                normalized_template = _normalize_manual_piece_template_entry(template_entry)
+                if normalized_template is None:
+                    return
+
+                base_piece_row["piece_type"] = normalized_template.get("piece_type")
+                base_piece_row["f6_source"] = normalized_template.get("f6_source")
+                base_piece_row["program_width"] = None
+                base_piece_row["program_height"] = None
+                base_piece_row["program_thickness"] = None
+
+                id_field.setText(str(normalized_template.get("id") or ""))
+                name_field.setText(str(normalized_template.get("name") or ""))
+                qty_field.setText(str(_parse_piece_quantity_value(normalized_template.get("quantity"), default=1)))
+                height_field.setText("" if normalized_template.get("height") is None else str(normalized_template.get("height")))
+                width_field.setText("" if normalized_template.get("width") is None else str(normalized_template.get("width")))
+                thickness_field.setText(
+                    "" if normalized_template.get("thickness") is None else str(normalized_template.get("thickness"))
+                )
+                color_field.setText(str(normalized_template.get("color") or ""))
+                previous_grain_block = grain_field.blockSignals(True)
+                normalized_grain = normalize_piece_grain_direction(normalized_template.get("grain_direction"))
+                if normalized_grain == "1":
+                    grain_field.setCurrentIndex(1)
+                elif normalized_grain == "2":
+                    grain_field.setCurrentIndex(2)
+                else:
+                    grain_field.setCurrentIndex(0)
+                grain_field.blockSignals(previous_grain_block)
+                source_field.setText(str(normalized_template.get("source") or ""))
+                refresh_piece_preview_and_layout()
+
+            def on_template_changed(_index: int) -> None:
+                if template_combo is None:
+                    return
+                selected_template = template_combo.currentData()
+                if selected_template is None:
+                    return
+                apply_template_to_editor(selected_template)
+
             def save_piece_changes():
                 piece_id = id_field.text().strip()
                 if not piece_id:
@@ -4495,6 +4661,18 @@ class ProjectDetailWindow(QMainWindow):
                     return
 
                 updated_piece = build_editor_piece_row()
+                save_as_template = False
+                template_selected = bool(template_combo is not None and template_combo.currentData() is not None)
+                if is_new_piece and not template_selected:
+                    piece_display_name = str(updated_piece.get("name") or updated_piece.get("id") or "pieza").strip()
+                    template_answer = QMessageBox.question(
+                        editor_dialog,
+                        "Guardar plantilla",
+                        f'¿Desea guardar la pieza "{piece_display_name}" como plantilla?',
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No,
+                    )
+                    save_as_template = template_answer == QMessageBox.Yes
                 fallback_row = pieces_table.currentRow()
                 if is_new_piece:
                     all_rows.append(updated_piece)
@@ -4502,6 +4680,15 @@ class ProjectDetailWindow(QMainWindow):
                     all_rows[row_index] = updated_piece
 
                 persist_module_config()
+                if save_as_template:
+                    try:
+                        _save_manual_piece_template(updated_piece)
+                    except Exception as exc:
+                        QMessageBox.warning(
+                            editor_dialog,
+                            "Guardar plantilla",
+                            f"No se pudo guardar la pieza como plantilla:\n{exc}",
+                        )
                 refresh_pieces_table()
                 select_visible_piece_by_id(updated_piece["id"], fallback_row=fallback_row)
                 editor_dialog.accept()
@@ -4546,6 +4733,10 @@ class ProjectDetailWindow(QMainWindow):
             select_source_btn.clicked.connect(select_source_from_editor)
             source_field.editingFinished.connect(refresh_piece_preview_and_layout)
             grain_field.currentIndexChanged.connect(refresh_piece_preview_and_layout)
+            if template_combo is not None:
+                template_combo.currentIndexChanged.connect(on_template_changed)
+            if select_color_btn is not None:
+                select_color_btn.clicked.connect(select_color_from_boards_for_editor)
             if apply_color_btn is not None:
                 apply_color_btn.clicked.connect(apply_color_from_editor)
             editor_dialog.setLayout(editor_layout)
@@ -5087,7 +5278,7 @@ class ProjectDetailWindow(QMainWindow):
                     return None
 
             def en_juego_quantity(piece_row: dict) -> int:
-                return _parse_piece_quantity_value(piece_row.get("quantity"), default=1, minimum=0)
+                return _parse_piece_quantity_value(piece_row.get("quantity"), default=1)
 
             def en_juego_instance_key(piece_id: str, copy_index: int) -> str:
                 return f"{piece_id}#{copy_index}"
@@ -5912,6 +6103,35 @@ class ProjectDetailWindow(QMainWindow):
                 depth_group.setLayout(depth_layout)
                 depth_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
 
+                strategy_group = QGroupBox("Estrategia")
+                strategy_layout = QGridLayout()
+                strategy_layout.setContentsMargins(8, 8, 8, 8)
+                strategy_layout.setHorizontalSpacing(8)
+                strategy_layout.setVerticalSpacing(6)
+                cutting_multipass_checkbox = QCheckBox("Multipasada")
+                cutting_multipass_checkbox.setChecked(
+                    _coerce_setting_bool(en_juego_settings.get("cutting_multipass_enabled"), False)
+                )
+                cutting_path_mode_combo = QComboBox()
+                cutting_path_mode_combo.addItem("Unidireccional", "Unidirectional")
+                cutting_path_mode_combo.addItem("Bidireccional", "Bidirectional")
+                cutting_path_mode_combo.setCurrentIndex(
+                    1
+                    if str(en_juego_settings.get("cutting_path_mode") or "Unidirectional") == "Bidirectional"
+                    else 0
+                )
+                cutting_pocket_depth_field = QLineEdit(str(en_juego_settings.get("cutting_pocket_depth", 0.0)))
+                cutting_last_pocket_field = QLineEdit(str(en_juego_settings.get("cutting_last_pocket", 0.0)))
+                strategy_layout.addWidget(cutting_multipass_checkbox, 0, 0, 1, 2)
+                strategy_layout.addWidget(QLabel("Recorrido"), 1, 0)
+                strategy_layout.addWidget(cutting_path_mode_combo, 1, 1)
+                strategy_layout.addWidget(QLabel("Profundidad de Hueco"), 2, 0)
+                strategy_layout.addWidget(cutting_pocket_depth_field, 2, 1)
+                strategy_layout.addWidget(QLabel("Último Hueco"), 3, 0)
+                strategy_layout.addWidget(cutting_last_pocket_field, 3, 1)
+                strategy_group.setLayout(strategy_layout)
+                strategy_group.setMinimumHeight(_scaled_int(138, compact_scale, 108))
+
                 lead_group = QGroupBox("Acercamiento y Alejamiento")
                 lead_layout = QGridLayout()
                 lead_layout.setContentsMargins(8, 8, 8, 8)
@@ -5970,10 +6190,18 @@ class ProjectDetailWindow(QMainWindow):
                 lead_layout.addWidget(retract_mode_combo, 7, 1)
                 lead_group.setLayout(lead_layout)
 
+                left_column_layout = QVBoxLayout()
+                left_column_layout.setContentsMargins(0, 0, 0, 0)
+                left_column_layout.setSpacing(8)
+                left_column_layout.addWidget(depth_group, 0, Qt.AlignTop)
+                left_column_layout.addWidget(strategy_group, 1)
+                left_column_widget = QWidget()
+                left_column_widget.setLayout(left_column_layout)
+
                 depth_and_lead_row = QHBoxLayout()
                 depth_and_lead_row.setContentsMargins(0, 0, 0, 0)
                 depth_and_lead_row.setSpacing(8)
-                depth_and_lead_row.addWidget(depth_group, 1, Qt.AlignTop)
+                depth_and_lead_row.addWidget(left_column_widget, 1)
                 depth_and_lead_row.addWidget(lead_group, 1)
                 settings_layout.addLayout(depth_and_lead_row)
 
@@ -6067,6 +6295,14 @@ class ProjectDetailWindow(QMainWindow):
                     for widget in (retract_type_combo, retract_radius_field, retract_mode_combo):
                         widget.setEnabled(retract_enabled)
 
+                    multipass_enabled = cutting_multipass_checkbox.isChecked()
+                    for widget in (
+                        cutting_path_mode_combo,
+                        cutting_pocket_depth_field,
+                        cutting_last_pocket_field,
+                    ):
+                        widget.setEnabled(multipass_enabled)
+
                     depth_role_label.setText(
                         "Profundidad extra" if through_checkbox.isChecked() else "Profundidad de división"
                     )
@@ -6079,6 +6315,7 @@ class ProjectDetailWindow(QMainWindow):
                 through_checkbox.toggled.connect(lambda *_: refresh_lead_controls())
                 approach_checkbox.toggled.connect(lambda *_: refresh_lead_controls())
                 retract_checkbox.toggled.connect(lambda *_: refresh_lead_controls())
+                cutting_multipass_checkbox.toggled.connect(lambda *_: refresh_lead_controls())
 
                 def save_en_juego_settings_dialog_v2():
                     selected_tool = _resolve_en_juego_cutting_tool(tool_combo.currentData())
@@ -6102,6 +6339,24 @@ class ProjectDetailWindow(QMainWindow):
                         _coerce_setting_number(
                             depth_value_field.text().strip(),
                             en_juego_settings.get("cutting_depth_value", 1.0),
+                            minimum=0.0,
+                        )
+                    )
+                    en_juego_settings["cutting_multipass_enabled"] = cutting_multipass_checkbox.isChecked()
+                    en_juego_settings["cutting_path_mode"] = str(
+                        cutting_path_mode_combo.currentData() or "Unidirectional"
+                    )
+                    en_juego_settings["cutting_pocket_depth"] = _compact_number(
+                        _coerce_setting_number(
+                            cutting_pocket_depth_field.text().strip(),
+                            en_juego_settings.get("cutting_pocket_depth", 0.0),
+                            minimum=0.0,
+                        )
+                    )
+                    en_juego_settings["cutting_last_pocket"] = _compact_number(
+                        _coerce_setting_number(
+                            cutting_last_pocket_field.text().strip(),
+                            en_juego_settings.get("cutting_last_pocket", 0.0),
                             minimum=0.0,
                         )
                     )
@@ -7292,50 +7547,55 @@ class BoardEditDialog(QDialog):
         board = dict(board or {})
 
         layout = QVBoxLayout()
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 12)
         layout.addWidget(QLabel("Complete los datos del tablero."))
-
-        color_row = QHBoxLayout()
-        color_row.addWidget(QLabel("Color"))
         self.color_field = QLineEdit(str(board.get("color") or ""))
-        color_row.addWidget(self.color_field)
-        layout.addLayout(color_row)
-
-        length_row = QHBoxLayout()
-        length_row.addWidget(QLabel("Longitud"))
         self.length_field = QLineEdit(str(board.get("length") or "2750"))
-        length_row.addWidget(self.length_field)
-        layout.addLayout(length_row)
-
-        width_row = QHBoxLayout()
-        width_row.addWidget(QLabel("Ancho"))
         self.width_field = QLineEdit(str(board.get("width") or "1830"))
-        width_row.addWidget(self.width_field)
-        layout.addLayout(width_row)
-
-        thickness_row = QHBoxLayout()
-        thickness_row.addWidget(QLabel("Espesor"))
         self.thickness_field = QLineEdit(str(board.get("thickness") or "18"))
-        thickness_row.addWidget(self.thickness_field)
-        layout.addLayout(thickness_row)
-
-        margin_row = QHBoxLayout()
-        margin_row.addWidget(QLabel("Margen"))
         self.margin_field = QLineEdit(str(board.get("margin") or "0"))
-        margin_row.addWidget(self.margin_field)
-        layout.addLayout(margin_row)
-
-        grain_row = QHBoxLayout()
-        grain_row.addWidget(QLabel("Veta"))
         self.grain_field = QComboBox()
         self.grain_field.addItems(BOARD_GRAIN_OPTIONS)
         current_grain = _normalize_board_grain(board.get("grain") or board.get("veta"))
         self.grain_field.setCurrentText(current_grain)
-        grain_row.addWidget(self.grain_field)
-        layout.addLayout(grain_row)
+
+        label_width = 78
+        field_width = 220
+        self.color_field.setFixedWidth(field_width)
+        self.length_field.setFixedWidth(field_width)
+        self.width_field.setFixedWidth(field_width)
+        self.thickness_field.setFixedWidth(field_width)
+        self.margin_field.setFixedWidth(field_width)
+        self.grain_field.setFixedWidth(field_width)
+
+        form_grid = QGridLayout()
+        form_grid.setContentsMargins(0, 0, 0, 0)
+        form_grid.setHorizontalSpacing(8)
+        form_grid.setVerticalSpacing(6)
+
+        def add_form_row(row_index: int, label_text: str, field: QWidget):
+            label = QLabel(label_text)
+            label.setFixedWidth(label_width)
+            form_grid.addWidget(label, row_index, 0)
+            form_grid.addWidget(field, row_index, 1, alignment=Qt.AlignLeft)
+
+        add_form_row(0, "Color", self.color_field)
+        add_form_row(1, "Longitud", self.length_field)
+        add_form_row(2, "Ancho", self.width_field)
+        add_form_row(3, "Espesor", self.thickness_field)
+        add_form_row(4, "Margen", self.margin_field)
+        add_form_row(5, "Veta", self.grain_field)
+        layout.addLayout(form_grid)
 
         buttons_row = QHBoxLayout()
+        buttons_row.setContentsMargins(0, 0, 0, 0)
+        buttons_row.setSpacing(8)
+        buttons_row.addStretch(1)
         save_button = QPushButton("Guardar")
         cancel_button = QPushButton("Cancelar")
+        save_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        cancel_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
         save_button.clicked.connect(self.save_board)
         cancel_button.clicked.connect(self.reject)
         buttons_row.addWidget(save_button)
@@ -7745,6 +8005,484 @@ class CutsDialog(QDialog):
         QMessageBox.information(self, "Cortes", "Configuración guardada.")
 
 
+class PieceTemplateEditDialog(QDialog):
+    def __init__(self, template_entry: dict | None = None, parent=None):
+        super().__init__(parent)
+        self.template_data: dict | None = None
+        self.original_template = dict(template_entry or {})
+        self.setWindowTitle("Editar plantilla" if template_entry else "Nueva plantilla")
+        self.setModal(True)
+        editor_scale, _, _ = _apply_responsive_window_size(
+            self,
+            720,
+            400,
+            width_ratio=0.84,
+            height_ratio=0.80,
+        )
+
+        normalized_template = _normalize_manual_piece_template_entry(template_entry or {}) or {}
+
+        self.id_field = QLineEdit(str(normalized_template.get("id") or ""))
+        self.name_field = QLineEdit(str(normalized_template.get("name") or ""))
+        self.quantity_field = QLineEdit(
+            str(_parse_piece_quantity_value(normalized_template.get("quantity"), default=1))
+        )
+        self.height_field = QLineEdit(
+            "" if normalized_template.get("height") is None else str(normalized_template.get("height"))
+        )
+        self.width_field = QLineEdit(
+            "" if normalized_template.get("width") is None else str(normalized_template.get("width"))
+        )
+        self.thickness_field = QLineEdit(
+            "" if normalized_template.get("thickness") is None else str(normalized_template.get("thickness"))
+        )
+        self.color_field = QLineEdit(str(normalized_template.get("color") or ""))
+        self.grain_field = QComboBox()
+        self.source_field = QLineEdit(str(normalized_template.get("source") or ""))
+
+        self.grain_field.addItem("Sin veta", "0")
+        self.grain_field.addItem("Alto", "1")
+        self.grain_field.addItem("Ancho", "2")
+        current_grain = normalize_piece_grain_direction(normalized_template.get("grain_direction"))
+        if current_grain == "1":
+            self.grain_field.setCurrentIndex(1)
+        elif current_grain == "2":
+            self.grain_field.setCurrentIndex(2)
+        else:
+            self.grain_field.setCurrentIndex(0)
+
+        editor_inline_button_width = MAIN_ACTION_BUTTON_WIDTH
+        editor_inline_button_height = MAIN_ACTION_BUTTON_HEIGHT
+        top_fields_spacing = 8
+        editor_field_block_spacing = 1
+        editor_label_height = QLabel("X").sizeHint().height()
+        editor_field_height = max(
+            self.id_field.sizeHint().height(),
+            self.grain_field.sizeHint().height(),
+            self.source_field.sizeHint().height(),
+        )
+        editor_field_row_height = editor_label_height + editor_field_block_spacing + editor_field_height
+        editor_inline_row_height = editor_label_height + editor_field_block_spacing + editor_inline_button_height
+        id_field_width = _scaled_int(120, max(editor_scale, 0.82), 90)
+        quantity_field_width = _scaled_int(80, max(editor_scale, 0.82), 60)
+        dimension_field_width = _scaled_int(90, max(editor_scale, 0.82), 68)
+        color_grain_field_width = _scaled_int(104, max(editor_scale, 0.82), 82)
+
+        self.id_field.setFixedWidth(id_field_width)
+        self.quantity_field.setFixedWidth(quantity_field_width)
+        self.height_field.setFixedWidth(dimension_field_width)
+        self.width_field.setFixedWidth(dimension_field_width)
+        self.thickness_field.setFixedWidth(dimension_field_width)
+        self.name_field.setFixedWidth((dimension_field_width * 3) + (top_fields_spacing * 2))
+        self.color_field.setMinimumWidth(color_grain_field_width)
+        self.grain_field.setMinimumWidth(color_grain_field_width)
+        self.color_field.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.grain_field.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.source_field.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        def build_labeled_field_widget(
+            label_text: str,
+            field: QWidget,
+            row_height: int = editor_field_row_height,
+        ) -> QWidget:
+            label = QLabel(label_text)
+            label.setFixedHeight(editor_label_height)
+            column_layout = QVBoxLayout()
+            column_layout.setSpacing(editor_field_block_spacing)
+            column_layout.setContentsMargins(0, 0, 0, 0)
+            column_layout.addStretch(1)
+            column_layout.addWidget(label)
+            column_layout.addWidget(field)
+            column_widget = QWidget()
+            column_widget.setFixedHeight(row_height)
+            column_widget.setLayout(column_layout)
+            return column_widget
+
+        def available_board_colors(piece_thickness: float | None = None) -> list[str]:
+            colors: list[str] = []
+            seen: set[str] = set()
+            for board in _read_app_settings().get("available_boards", []):
+                color = str(board.get("color") or "").strip()
+                if not color:
+                    continue
+                if piece_thickness is not None:
+                    try:
+                        board_thickness = float(board.get("thickness"))
+                    except (TypeError, ValueError):
+                        continue
+                    if abs(board_thickness - piece_thickness) > 0.001:
+                        continue
+                color_key = color.lower()
+                if color_key in seen:
+                    continue
+                seen.add(color_key)
+                colors.append(color)
+            return colors
+
+        def parse_optional_piece_float(raw_value: str):
+            raw_text = (raw_value or "").strip().replace(",", ".")
+            if not raw_text:
+                return None
+            try:
+                return float(raw_text)
+            except ValueError:
+                return None
+
+        def select_color_from_boards():
+            piece_thickness = parse_optional_piece_float(self.thickness_field.text())
+            available_colors = available_board_colors(piece_thickness=piece_thickness)
+            if not available_colors:
+                thickness_label = (
+                    f" para espesor {int(piece_thickness) if float(piece_thickness).is_integer() else piece_thickness} mm"
+                    if piece_thickness is not None
+                    else ""
+                )
+                QMessageBox.warning(
+                    self,
+                    "Piezas",
+                    f"No hay colores disponibles en los tableros configurados{thickness_label}.",
+                )
+                return
+
+            current_color = self.color_field.text().strip()
+            selected_index = 0
+            if current_color:
+                for color_index, color_value in enumerate(available_colors):
+                    if color_value.strip().lower() == current_color.lower():
+                        selected_index = color_index
+                        break
+
+            selected_color, ok = QInputDialog.getItem(
+                self,
+                "Seleccionar color",
+                "Color:",
+                available_colors,
+                selected_index,
+                False,
+            )
+            if ok:
+                self.color_field.setText(str(selected_color or "").strip())
+
+        def select_source():
+            source_file, _ = QFileDialog.getOpenFileName(
+                self,
+                "Seleccionar programa asociado",
+                "",
+                "Programas PGMX (*.pgmx);;Todos los archivos (*.*)",
+            )
+            if source_file:
+                self.source_field.setText(source_file)
+
+        top_fields_grid = QGridLayout()
+        top_fields_grid.setHorizontalSpacing(top_fields_spacing)
+        top_fields_grid.setVerticalSpacing(2)
+        top_fields_grid.setContentsMargins(0, 0, 0, 0)
+
+        id_column = build_labeled_field_widget("ID:", self.id_field)
+        name_column = build_labeled_field_widget("Nombre:", self.name_field)
+        height_column = build_labeled_field_widget("Alto:", self.height_field)
+        width_column = build_labeled_field_widget("Ancho:", self.width_field)
+        thickness_column = build_labeled_field_widget("Espesor:", self.thickness_field)
+        qty_column = build_labeled_field_widget("Cantidad:", self.quantity_field)
+
+        top_fields_grid.addWidget(id_column, 0, 0)
+        top_fields_grid.addWidget(name_column, 0, 1, 1, 3)
+        top_fields_grid.addWidget(qty_column, 1, 0)
+        top_fields_grid.addWidget(height_column, 1, 1)
+        top_fields_grid.addWidget(width_column, 1, 2)
+        top_fields_grid.addWidget(thickness_column, 1, 3)
+        top_fields_grid.setColumnStretch(4, 1)
+
+        select_color_btn = QPushButton("Seleccionar")
+        select_color_btn.setFixedSize(editor_inline_button_width, editor_inline_button_height)
+        select_color_btn.clicked.connect(select_color_from_boards)
+
+        color_column = build_labeled_field_widget(
+            "Color:",
+            self.color_field,
+            row_height=editor_inline_row_height,
+        )
+        grain_column = build_labeled_field_widget(
+            "Veta:",
+            self.grain_field,
+            row_height=editor_inline_row_height,
+        )
+        color_column.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        grain_column.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        color_grain_row = QHBoxLayout()
+        color_grain_row.setSpacing(top_fields_spacing)
+        color_grain_row.setContentsMargins(0, 0, 0, 0)
+        color_grain_row.addWidget(color_column, 1, Qt.AlignTop)
+        color_grain_row.addWidget(grain_column, 1, Qt.AlignTop)
+        select_button_label = QLabel("")
+        select_button_label.setFixedHeight(editor_label_height)
+        select_button_column = QVBoxLayout()
+        select_button_column.setSpacing(editor_field_block_spacing)
+        select_button_column.setContentsMargins(0, 0, 0, 0)
+        select_button_column.addWidget(select_button_label)
+        select_button_column.addWidget(select_color_btn, 0, Qt.AlignRight)
+        select_button_widget = QWidget()
+        select_button_widget.setFixedWidth(editor_inline_button_width)
+        select_button_widget.setFixedHeight(editor_inline_row_height)
+        select_button_widget.setLayout(select_button_column)
+        color_grain_row.addWidget(select_button_widget, 0, Qt.AlignTop | Qt.AlignRight)
+        color_grain_widget = QWidget()
+        color_grain_widget.setFixedHeight(editor_inline_row_height)
+        color_grain_widget.setLayout(color_grain_row)
+        top_fields_grid.addWidget(color_grain_widget, 2, 0, 1, 4)
+
+        source_field_widget = build_labeled_field_widget(
+            "Programa asociado (opcional):",
+            self.source_field,
+            row_height=editor_inline_row_height,
+        )
+        source_field_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        select_source_btn = QPushButton("Seleccionar")
+        select_source_btn.setFixedSize(editor_inline_button_width, editor_inline_button_height)
+        select_source_btn.clicked.connect(select_source)
+        source_row = QHBoxLayout()
+        source_row.setSpacing(top_fields_spacing)
+        source_row.setContentsMargins(0, 0, 0, 0)
+        source_row.addWidget(source_field_widget, 1, Qt.AlignTop)
+        source_button_label = QLabel("")
+        source_button_label.setFixedHeight(editor_label_height)
+        source_button_column = QVBoxLayout()
+        source_button_column.setSpacing(editor_field_block_spacing)
+        source_button_column.setContentsMargins(0, 0, 0, 0)
+        source_button_column.addWidget(source_button_label)
+        source_button_column.addWidget(select_source_btn, 0, Qt.AlignRight)
+        source_button_widget = QWidget()
+        source_button_widget.setFixedWidth(editor_inline_button_width)
+        source_button_widget.setFixedHeight(editor_inline_row_height)
+        source_button_widget.setLayout(source_button_column)
+        source_row.addWidget(source_button_widget, 0, Qt.AlignTop | Qt.AlignRight)
+        source_widget = QWidget()
+        source_widget.setFixedHeight(editor_inline_row_height)
+        source_widget.setLayout(source_row)
+        top_fields_grid.addWidget(source_widget, 3, 0, 1, 4)
+
+        form_layout = QVBoxLayout()
+        form_layout.setSpacing(4)
+        form_layout.setContentsMargins(0, 0, 0, 0)
+        form_layout.addLayout(top_fields_grid)
+
+        form_panel = QWidget()
+        form_panel_horizontal_margin = 4
+        form_panel_layout = QVBoxLayout()
+        form_panel_layout.setContentsMargins(
+            form_panel_horizontal_margin,
+            0,
+            form_panel_horizontal_margin,
+            0,
+        )
+        form_panel_layout.setSpacing(0)
+        form_panel_layout.addLayout(form_layout)
+        form_panel.setLayout(form_panel_layout)
+        form_panel_width_hint = form_panel.sizeHint().width()
+        form_panel.setFixedWidth(form_panel_width_hint)
+        form_panel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        buttons_row = QHBoxLayout()
+        buttons_row.setContentsMargins(0, 0, form_panel_horizontal_margin, 0)
+        buttons_row.setSpacing(8)
+        buttons_row.addStretch(1)
+        save_button = QPushButton("Guardar")
+        cancel_button = QPushButton("Cancelar")
+        save_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        cancel_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        save_button.clicked.connect(self.save_template)
+        cancel_button.clicked.connect(self.reject)
+        buttons_row.addWidget(save_button)
+        buttons_row.addWidget(cancel_button)
+
+        buttons_widget = QWidget()
+        buttons_widget.setFixedWidth(form_panel_width_hint)
+        buttons_widget.setContentsMargins(0, 0, 0, 0)
+        buttons_widget.setLayout(buttons_row)
+        buttons_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        layout = QVBoxLayout()
+        layout.setSpacing(6)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.addWidget(QLabel("Complete los datos de la plantilla de pieza."))
+        layout.addWidget(form_panel, 0, Qt.AlignTop | Qt.AlignLeft)
+        layout.addSpacing(_scaled_int(14, max(editor_scale, 0.82), 10))
+        layout.addWidget(buttons_widget, 0, Qt.AlignTop | Qt.AlignLeft)
+        layout.addStretch(1)
+        self.setLayout(layout)
+        self.layout().activate()
+        compact_dialog_width = self.sizeHint().width()
+        compact_dialog_height = self.sizeHint().height()
+        available_geometry = _window_available_geometry(self)
+        if available_geometry is not None:
+            compact_dialog_width = min(
+                compact_dialog_width,
+                max(420, int(available_geometry.width() * 0.94)),
+            )
+            compact_dialog_height = min(
+                compact_dialog_height,
+                max(300, int(available_geometry.height() * 0.90)),
+            )
+        self.setMinimumSize(compact_dialog_width, compact_dialog_height)
+        self.resize(compact_dialog_width, compact_dialog_height)
+
+    def save_template(self):
+        template_id = self.id_field.text().strip()
+        if not template_id:
+            QMessageBox.warning(self, "Piezas", "El campo ID es obligatorio.")
+            return
+
+        raw_template = {
+            "id": template_id,
+            "name": self.name_field.text().strip() or template_id,
+            "quantity": self.quantity_field.text().strip() or "1",
+            "height": self.height_field.text().strip(),
+            "width": self.width_field.text().strip(),
+            "thickness": self.thickness_field.text().strip(),
+            "color": self.color_field.text().strip(),
+            "grain_direction": self.grain_field.currentData(),
+            "source": self.source_field.text().strip(),
+            "f6_source": self.original_template.get("f6_source"),
+            "piece_type": self.original_template.get("piece_type"),
+            "saved_at": datetime.datetime.now().isoformat(sep=" ", timespec="seconds"),
+        }
+        normalized_template = _normalize_manual_piece_template_entry(raw_template)
+        if normalized_template is None:
+            QMessageBox.warning(self, "Piezas", "No se pudo guardar la plantilla con los datos ingresados.")
+            return
+
+        self.template_data = normalized_template
+        self.accept()
+
+
+class PieceTemplatesDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Piezas")
+        self.setModal(True)
+        self.resize(900, 460)
+        self.templates = _normalize_manual_piece_templates(_read_app_settings().get("manual_piece_templates"))
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Plantillas de piezas agregadas manualmente."))
+
+        self.templates_table = QTableWidget()
+        self.templates_table.setColumnCount(6)
+        self.templates_table.setHorizontalHeaderLabels(
+            ["ID", "Nombre", "Cantidad", "Color", "Espesor", "Programa"]
+        )
+        self.templates_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.templates_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.templates_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.templates_table.setAlternatingRowColors(True)
+        self.templates_table.verticalHeader().setVisible(False)
+        header = self.templates_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.templates_table.itemDoubleClicked.connect(lambda _item: self.edit_template())
+
+        content_row = QHBoxLayout()
+        content_row.setContentsMargins(0, 0, 0, 0)
+        content_row.setSpacing(8)
+        content_row.addWidget(self.templates_table, 1)
+
+        buttons_column = QVBoxLayout()
+        buttons_column.setContentsMargins(0, 0, 0, 0)
+        buttons_column.setSpacing(8)
+        new_button = QPushButton("Nuevo")
+        edit_button = QPushButton("Editar")
+        delete_button = QPushButton("Eliminar")
+        close_button = QPushButton("Cerrar")
+        for button in (new_button, edit_button, delete_button, close_button):
+            button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        new_button.clicked.connect(self.add_template)
+        edit_button.clicked.connect(self.edit_template)
+        delete_button.clicked.connect(self.delete_template)
+        close_button.clicked.connect(self.accept)
+        buttons_column.addWidget(new_button)
+        buttons_column.addWidget(edit_button)
+        buttons_column.addWidget(delete_button)
+        buttons_column.addStretch(1)
+        buttons_column.addWidget(close_button)
+        content_row.addLayout(buttons_column)
+        layout.addLayout(content_row, 1)
+
+        self.setLayout(layout)
+        self.refresh_templates_table()
+
+    def _persist_templates(self):
+        self.templates = _persist_manual_piece_templates(self.templates)
+
+    def _selected_template_index(self) -> int:
+        return self.templates_table.currentRow()
+
+    def refresh_templates_table(self):
+        self.templates = _normalize_manual_piece_templates(self.templates)
+        self.templates_table.setRowCount(len(self.templates))
+        for row_idx, template_entry in enumerate(self.templates):
+            row_values = [
+                str(template_entry.get("id") or ""),
+                str(template_entry.get("name") or ""),
+                str(_parse_piece_quantity_value(template_entry.get("quantity"), default=1)),
+                str(template_entry.get("color") or ""),
+                "" if template_entry.get("thickness") is None else str(template_entry.get("thickness")),
+                Path(str(template_entry.get("source") or "")).name,
+            ]
+            for column_idx, value in enumerate(row_values):
+                item = QTableWidgetItem(value)
+                if column_idx in {2, 4}:
+                    item.setTextAlignment(Qt.AlignCenter)
+                self.templates_table.setItem(row_idx, column_idx, item)
+        if self.templates:
+            self.templates_table.selectRow(0)
+
+    def add_template(self):
+        dialog = PieceTemplateEditDialog(parent=self)
+        if _exec_centered(dialog, self) != QDialog.Accepted or dialog.template_data is None:
+            return
+        self.templates.append(dialog.template_data)
+        self._persist_templates()
+        self.refresh_templates_table()
+        self.templates_table.selectRow(len(self.templates) - 1)
+
+    def edit_template(self):
+        row_idx = self._selected_template_index()
+        if row_idx < 0 or row_idx >= len(self.templates):
+            QMessageBox.warning(self, "Piezas", "Seleccione una plantilla para editar.")
+            return
+        dialog = PieceTemplateEditDialog(template_entry=self.templates[row_idx], parent=self)
+        if _exec_centered(dialog, self) != QDialog.Accepted or dialog.template_data is None:
+            return
+        self.templates[row_idx] = dialog.template_data
+        self._persist_templates()
+        self.refresh_templates_table()
+        self.templates_table.selectRow(row_idx)
+
+    def delete_template(self):
+        row_idx = self._selected_template_index()
+        if row_idx < 0 or row_idx >= len(self.templates):
+            QMessageBox.warning(self, "Piezas", "Seleccione una plantilla para eliminar.")
+            return
+        template_entry = self.templates[row_idx]
+        template_label = str(template_entry.get("name") or template_entry.get("id") or "pieza").strip()
+        answer = QMessageBox.question(
+            self,
+            "Piezas",
+            f'¿Eliminar la plantilla "{template_label}"?',
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        del self.templates[row_idx]
+        self._persist_templates()
+        self.refresh_templates_table()
+
+
 class OptionsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -7790,6 +8528,14 @@ class OptionsDialog(QDialog):
         tools_row.addWidget(tools_button)
         layout.addLayout(tools_row)
 
+        pieces_row = QHBoxLayout()
+        pieces_row.addWidget(QLabel("Plantillas de piezas"))
+        pieces_button = QPushButton("Piezas")
+        pieces_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        pieces_button.clicked.connect(self.open_pieces_dialog)
+        pieces_row.addWidget(pieces_button)
+        layout.addLayout(pieces_row)
+
         buttons_row = QHBoxLayout()
         save_button = QPushButton("Guardar")
         close_button = QPushButton("Cerrar")
@@ -7816,6 +8562,11 @@ class OptionsDialog(QDialog):
     def open_tools_dialog(self):
         dialog = ToolsDialog(self)
         _exec_centered(dialog, self)
+
+    def open_pieces_dialog(self):
+        dialog = PieceTemplatesDialog(self)
+        _exec_centered(dialog, self)
+        self.settings = _read_app_settings()
 
     def save_settings(self):
         minimum_dimension_raw = self.minimum_dimension_field.text().strip() or "150"

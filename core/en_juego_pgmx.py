@@ -68,8 +68,8 @@ def _build_piece_from_row(module_name: str, piece_row: dict) -> Piece:
         quantity = int(quantity_raw)
     except (TypeError, ValueError):
         quantity = 1
-    if quantity < 0:
-        quantity = 0
+    if quantity <= 0:
+        quantity = 1
 
     return Piece(
         id=str(piece_row.get("id") or "").strip() or str(piece_row.get("name") or "pieza").strip(),
@@ -96,7 +96,7 @@ def _en_juego_quantity(piece_row: dict) -> int:
         quantity = int(quantity_raw)
     except (TypeError, ValueError):
         return 1
-    return quantity if quantity >= 0 else 0
+    return quantity if quantity > 0 else 1
 
 
 def _preview_dimensions_mm(piece_row: dict, drawing_data: Optional[PieceDrawingData]) -> tuple[float, float]:

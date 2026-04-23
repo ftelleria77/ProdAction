@@ -64,6 +64,7 @@ def export_summary(project: Project, output_csv: Path):
     
     rows = []
     for module in modules_sorted:
+        module_quantity = _safe_int(getattr(module, "quantity", None), default=1)
         for piece in module.pieces:
             # Filtrar piezas con espesor 0
             if piece.thickness == 0 or piece.thickness is None:
@@ -72,7 +73,7 @@ def export_summary(project: Project, output_csv: Path):
                 "module": module.name,
                 "piece_id": piece.id,
                 "piece_name": piece.name or piece.id,
-                "quantity": piece.quantity,
+                "quantity": _effective_piece_quantity(piece.quantity, module_quantity),
                 "height": piece.height,
                 "width": piece.width,
                 "thickness": piece.thickness,
@@ -100,6 +101,10 @@ def _safe_int(value, default=1) -> int:
         return parsed if parsed > 0 else default
     except (TypeError, ValueError):
         return default
+
+
+def _effective_piece_quantity(piece_quantity, module_quantity) -> int:
+    return _safe_int(piece_quantity, default=1) * _safe_int(module_quantity, default=1)
 
 
 def _safe_float(value):
@@ -483,6 +488,7 @@ def export_production_sheet(project: Project, output_xlsx: Path):
 
         current_row = 6
         for module in project.modules:
+            module_quantity = _safe_int(getattr(module, "quantity", None), default=1)
             config_path = Path(module.path) / "module_config.json"
             module_settings = {
                 "herrajes_y_accesorios": "",
@@ -698,7 +704,11 @@ def export_production_sheet(project: Project, output_xlsx: Path):
             for offset, piece in enumerate(pieces_with_type):
                 row = pieces_start + offset + extra_rows
                 ws.cell(row=row, column=1, value=piece.get("name") or piece.get("id") or "")
-                ws.cell(row=row, column=2, value=_safe_int(piece.get("quantity"), default=1))
+                ws.cell(
+                    row=row,
+                    column=2,
+                    value=_effective_piece_quantity(piece.get("quantity"), module_quantity),
+                )
                 ws.cell(row=row, column=3, value=_safe_float(piece.get("width")))
                 ws.cell(row=row, column=4, value=_safe_float(piece.get("height")))
                 ws.cell(row=row, column=5, value=_safe_float(piece.get("thickness")))
@@ -723,7 +733,11 @@ def export_production_sheet(project: Project, output_xlsx: Path):
             for offset, piece in enumerate(pieces_without_type):
                 row = pieces_start + len(pieces_with_type) + offset + extra_rows
                 ws.cell(row=row, column=1, value=piece.get("name") or piece.get("id") or "")
-                ws.cell(row=row, column=2, value=_safe_int(piece.get("quantity"), default=1))
+                ws.cell(
+                    row=row,
+                    column=2,
+                    value=_effective_piece_quantity(piece.get("quantity"), module_quantity),
+                )
                 ws.cell(row=row, column=3, value=_safe_float(piece.get("width")))
                 ws.cell(row=row, column=4, value=_safe_float(piece.get("height")))
                 ws.cell(row=row, column=5, value=_safe_float(piece.get("thickness")))
