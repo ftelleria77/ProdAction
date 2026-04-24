@@ -1,12 +1,13 @@
 """Algoritmos básicos de nesting/optimización de corte para tableros."""
 
 import hashlib
+import json
 import re
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import List
 
-from core.model import PIECE_TYPE_ORDER, Piece, Project, normalize_piece_grain_direction
+from core.model import PIECE_TYPE_ORDER, ModuleData, Piece, Project, normalize_piece_grain_direction
 
 
 CUT_OPTIMIZATION_NONE = 'none'
@@ -42,6 +43,8 @@ class CutPiece:
     color: str
     allow_rotate: bool
     grain_mode: str = PIECE_GRAIN_NONE
+    final_width: float | None = None
+    final_height: float | None = None
 
 
 @dataclass
@@ -251,6 +254,202 @@ def _normalize_guillotine_algorithm(value) -> str:
     return CUT_GUILLOTINE_ALGORITHM_CURRENT
 
 
+def _read_module_config(module_path: Path) -> dict:
+    config_path = module_path / "module_config.json"
+    if not config_path.exists():
+        return {}
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _row_by_piece_id(config_data: dict) -> dict[str, dict]:
+    rows = config_data.get("pieces", [])
+    if not isinstance(rows, list):
+        return {}
+    result: dict[str, dict] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        piece_id = str(row.get("id") or "").strip()
+        if piece_id:
+            result[piece_id] = row
+    return result
+
+
+def _composition_layout_rect(layout_data: dict) -> tuple[float, float] | None:
+    min_x: float | None = None
+    min_y: float | None = None
+    max_x: float | None = None
+    max_y: float | None = None
+
+    for stored in layout_data.values():
+        if not isinstance(stored, dict):
+            continue
+        x = _safe_float(stored.get("footprint_x_mm"))
+        y = _safe_float(stored.get("footprint_y_mm"))
+        width = _safe_float(stored.get("footprint_width_mm"))
+        height = _safe_float(stored.get("footprint_height_mm"))
+        if x is None or y is None or width is None or height is None or width <= 0 or height <= 0:
+            continue
+        min_x = x if min_x is None else min(min_x, x)
+        min_y = y if min_y is None else min(min_y, y)
+        max_x = x + width if max_x is None else max(max_x, x + width)
+        max_y = y + height if max_y is None else max(max_y, y + height)
+
+    if min_x is None or min_y is None or max_x is None or max_y is None:
+        return None
+    width = max_x - min_x
+    height = max_y - min_y
+    if width <= 0 or height <= 0:
+        return None
+    return width, height
+
+
+def _unique_nonempty_values(values) -> set[str]:
+    return {str(value or "").strip() for value in values if str(value or "").strip()}
+
+
+def _build_en_juego_cut_piece(
+    module: ModuleData,
+    config_data: dict,
+    squaring_allowance: float,
+) -> tuple[CutPiece | None, set[str]]:
+    layout_data = config_data.get("en_juego_layout", {})
+    if not isinstance(layout_data, dict) or not layout_data:
+        return None, set()
+
+    row_by_id = _row_by_piece_id(config_data)
+    enabled_en_juego_ids = {
+        piece_id
+        for piece_id, row in row_by_id.items()
+        if bool(row.get("en_juego", False))
+    }
+    if not enabled_en_juego_ids:
+        return None, set()
+
+    layout_piece_ids = {
+        str(stored.get("piece_id") or "").strip()
+        for stored in layout_data.values()
+        if isinstance(stored, dict) and str(stored.get("piece_id") or "").strip()
+    }
+    if not enabled_en_juego_ids.issubset(layout_piece_ids):
+        return None, set()
+
+    involved_piece_ids = layout_piece_ids & enabled_en_juego_ids
+    if not involved_piece_ids:
+        return None, set()
+
+    active_layout_data = {
+        instance_key: stored
+        for instance_key, stored in layout_data.items()
+        if isinstance(stored, dict)
+        and str(stored.get("piece_id") or "").strip() in involved_piece_ids
+    }
+    active_counts: dict[str, int] = {}
+    for stored in active_layout_data.values():
+        piece_id = str(stored.get("piece_id") or "").strip()
+        active_counts[piece_id] = active_counts.get(piece_id, 0) + 1
+    for piece_id in involved_piece_ids:
+        expected_quantity = _safe_quantity(row_by_id.get(piece_id, {}).get("quantity"))
+        if active_counts.get(piece_id, 0) != expected_quantity:
+            return None, set()
+
+    dimensions = _composition_layout_rect(active_layout_data)
+    if dimensions is None:
+        return None, set()
+
+    colors = _unique_nonempty_values(
+        stored.get("color")
+        for stored in active_layout_data.values()
+        if isinstance(stored, dict)
+    )
+    if not colors:
+        colors = _unique_nonempty_values(
+            row_by_id.get(piece_id, {}).get("color")
+            for piece_id in involved_piece_ids
+        )
+    if len(colors) > 1:
+        raise ValueError(
+            f"El En-Juego del modulo '{module.name}' tiene piezas de distintos colores y no puede reemplazarlas en diagramas de corte."
+        )
+    material = next(iter(colors), "SIN_COLOR") or "SIN_COLOR"
+
+    thicknesses = {
+        round(float(thickness), 2)
+        for thickness in (
+            _safe_float(row_by_id.get(piece_id, {}).get("thickness"))
+            for piece_id in involved_piece_ids
+        )
+        if thickness is not None and thickness > 0
+    }
+    if len(thicknesses) != 1:
+        raise ValueError(
+            f"El En-Juego del modulo '{module.name}' debe tener un unico espesor valido para diagramas de corte."
+        )
+    thickness = next(iter(thicknesses))
+
+    grain_axes = {
+        str(stored.get("grain_axis_composition") or "").strip().lower()
+        for stored in active_layout_data.values()
+        if isinstance(stored, dict)
+        and str(stored.get("grain_axis_composition") or "").strip().lower() in {"x", "y"}
+    }
+
+    composition_data = config_data.get("en_juego_composition", {})
+    composition_grain = "0"
+    if isinstance(composition_data, dict):
+        if str(composition_data.get("composition_grain_status") or "").strip().lower() == "mixed":
+            raise ValueError(
+                f"El En-Juego del modulo '{module.name}' tiene veta mixta y no puede reemplazarlas en diagramas de corte."
+            )
+        composition_grain = normalize_piece_grain_direction(
+            composition_data.get("composition_grain_direction")
+        )
+    if composition_grain == "0" and grain_axes:
+        if len(grain_axes) > 1:
+            raise ValueError(
+                f"El En-Juego del modulo '{module.name}' tiene veta mixta y no puede reemplazarlas en diagramas de corte."
+            )
+        composition_grain = "2" if next(iter(grain_axes)) == "x" else "1"
+
+    final_width, final_height = dimensions
+    width, height = final_width, final_height
+    resolved_squaring_allowance = max(0.0, _safe_float(squaring_allowance) or 0.0)
+    if resolved_squaring_allowance > 0:
+        width += resolved_squaring_allowance
+        height += resolved_squaring_allowance
+
+    composite_piece = Piece(
+        id="EN_JUEGO",
+        width=width,
+        height=height,
+        thickness=thickness,
+        quantity=1,
+        color=material,
+        grain_direction=composition_grain,
+        name="En-Juego",
+        module_name=module.name,
+    )
+    return (
+        CutPiece(
+            piece=composite_piece,
+            label="En-Juego",
+            width=width,
+            height=height,
+            thickness=thickness,
+            color=material,
+            allow_rotate=_piece_can_rotate(composite_piece),
+            grain_mode=_normalize_piece_grain_mode(composition_grain),
+            final_width=final_width,
+            final_height=final_height,
+        ),
+        involved_piece_ids,
+    )
+
+
 def _expand_project_pieces(project: Project, squaring_allowance: float = 0.0) -> dict[tuple[str, float], list[CutPiece]]:
     grouped: dict[tuple[str, float], list[CutPiece]] = {}
     dimension_cache: dict[tuple[str, str], tuple[float | None, float | None, float | None]] = {}
@@ -264,8 +463,19 @@ def _expand_project_pieces(project: Project, squaring_allowance: float = 0.0) ->
         module_tag = _module_short_name(module.name)
         module_path = Path(module.path)
         module_quantity = _safe_quantity(getattr(module, 'quantity', None))
+        config_data = _read_module_config(module_path)
+        en_juego_cut_piece, en_juego_involved_piece_ids = _build_en_juego_cut_piece(
+            module,
+            config_data,
+            resolved_squaring_allowance,
+        )
         ordered_module_pieces = sorted(
-            [piece for piece in module.pieces if (_safe_float(piece.thickness) or 0.0) > 0],
+            [
+                piece
+                for piece in module.pieces
+                if (_safe_float(piece.thickness) or 0.0) > 0
+                and str(piece.id or "").strip() not in en_juego_involved_piece_ids
+            ],
             key=lambda piece: piece_type_rank.get(str(piece.piece_type or "").strip(), len(PIECE_TYPE_ORDER)),
         )
         program_annotations = get_pgmx_program_dimension_annotations(
@@ -298,6 +508,8 @@ def _expand_project_pieces(project: Project, squaring_allowance: float = 0.0) ->
             grain_mode = _normalize_piece_grain_mode(piece.grain_direction)
             allow_rotate = _piece_can_rotate(piece)
             group_key = (material, round(thickness, 2))
+            final_width = _safe_float(piece.width) or resolved_width
+            final_height = _safe_float(piece.height) or resolved_height
 
             for copy_index in range(quantity):
                 label = base_label
@@ -316,7 +528,23 @@ def _expand_project_pieces(project: Project, squaring_allowance: float = 0.0) ->
                         color=material,
                         allow_rotate=allow_rotate,
                         grain_mode=grain_mode,
+                        final_width=final_width,
+                        final_height=final_height,
                     )
+                )
+
+        if en_juego_cut_piece is not None:
+            material = en_juego_cut_piece.color
+            thickness = float(en_juego_cut_piece.thickness)
+            group_key = (material, round(thickness, 2))
+            for copy_index in range(module_quantity):
+                label = en_juego_cut_piece.label
+                if module_quantity > 1:
+                    label = f"{label} #{copy_index + 1}"
+                if module_tag:
+                    label = f"{label} ({module_tag})"
+                grouped.setdefault(group_key, []).append(
+                    replace(en_juego_cut_piece, label=label)
                 )
 
     return grouped
@@ -1202,7 +1430,13 @@ def _load_print_font(image_font_module, size_px: int, bold: bool = False):
 
 
 def _piece_display_name(cut_piece: CutPiece) -> str:
-    return str(cut_piece.piece.name or cut_piece.piece.id or cut_piece.label).strip() or cut_piece.label
+    return str(cut_piece.label or cut_piece.piece.name or cut_piece.piece.id or "pieza").strip() or "pieza"
+
+
+def _piece_final_dimension_label(cut_piece: CutPiece) -> str:
+    final_width = _safe_float(cut_piece.final_width) or _safe_float(cut_piece.piece.width) or cut_piece.width
+    final_height = _safe_float(cut_piece.final_height) or _safe_float(cut_piece.piece.height) or cut_piece.height
+    return f'{_format_dimension(final_width)} x {_format_dimension(final_height)}'
 
 
 def _build_piece_text_overlay(image_module, image_draw_module, image_font_module, placement: CutPlacement, width_px: int, height_px: int):
@@ -1211,7 +1445,7 @@ def _build_piece_text_overlay(image_module, image_draw_module, image_font_module
         return None
 
     rotate_text = height_px > width_px
-    dimension_label = f'{_format_dimension(placement.cut_piece.width)} x {_format_dimension(placement.cut_piece.height)}'
+    dimension_label = _piece_final_dimension_label(placement.cut_piece)
     base_lines = [piece_name]
     if min(width_px, height_px) >= 28 and max(width_px, height_px) >= 90:
         base_lines.append(dimension_label)
@@ -1293,7 +1527,264 @@ def _draw_dashed_guide(draw, start: tuple[int, int], end: tuple[int, int], color
             current = segment_end + gap
 
 
-def _build_board_print_image(board: CutBoard):
+def _draw_dimension_label(
+    image,
+    image_module,
+    image_draw_module,
+    text: str,
+    center_x: float,
+    center_y: float,
+    font,
+    *,
+    rotate: bool = False,
+):
+    if not text:
+        return
+
+    measure_image = image_module.new('RGBA', (1, 1), (255, 255, 255, 0))
+    measure_draw = image_draw_module.Draw(measure_image)
+    bbox = measure_draw.textbbox((0, 0), text, font=font)
+    text_width = int(round(bbox[2] - bbox[0]))
+    text_height = int(round(bbox[3] - bbox[1]))
+    padding_x = 5
+    padding_y = 3
+    overlay = image_module.new(
+        'RGBA',
+        (max(1, text_width + padding_x * 2), max(1, text_height + padding_y * 2)),
+        (255, 255, 255, 0),
+    )
+    overlay_draw = image_draw_module.Draw(overlay)
+    overlay_draw.rounded_rectangle(
+        [(0, 0), (overlay.width - 1, overlay.height - 1)],
+        radius=4,
+        fill=(255, 253, 248, 220),
+        outline=(42, 54, 82, 190),
+        width=1,
+    )
+    overlay_draw.text(
+        (padding_x - bbox[0], padding_y - bbox[1]),
+        text,
+        fill=(28, 53, 92, 255),
+        font=font,
+    )
+    if rotate:
+        overlay = overlay.rotate(90, expand=True)
+
+    paste_x = int(round(center_x - overlay.width / 2.0))
+    paste_y = int(round(center_y - overlay.height / 2.0))
+    paste_x = max(0, min(image.width - overlay.width, paste_x))
+    paste_y = max(0, min(image.height - overlay.height, paste_y))
+    image.paste(overlay, (paste_x, paste_y), overlay)
+
+
+def _draw_piece_cut_dimensions(
+    image,
+    draw,
+    image_module,
+    image_draw_module,
+    image_font_module,
+    placement: CutPlacement,
+    x_px: int,
+    y_px: int,
+    width_px: int,
+    height_px: int,
+):
+    if width_px <= 36 or height_px <= 36:
+        return
+
+    dimension_color = '#1c355c'
+    line_width = 2 if min(width_px, height_px) >= 80 else 1
+    tick = max(5, min(12, int(round(min(width_px, height_px) * 0.10))))
+    inset = max(8, min(20, int(round(min(width_px, height_px) * 0.12))))
+    font_size = max(9, min(17, int(round(min(width_px, height_px) * 0.16))))
+    font = _load_print_font(image_font_module, font_size, bold=True)
+
+    horizontal_label = _format_dimension(placement.width)
+    vertical_label = _format_dimension(placement.height)
+
+    if width_px >= 72 and height_px >= 46:
+        x1 = x_px + inset
+        x2 = x_px + width_px - inset
+        y = y_px + inset
+        if x2 - x1 > 24:
+            draw.line([(x1, y), (x2, y)], fill=dimension_color, width=line_width)
+            draw.line([(x1, y - tick), (x1, y + tick)], fill=dimension_color, width=line_width)
+            draw.line([(x2, y - tick), (x2, y + tick)], fill=dimension_color, width=line_width)
+            _draw_dimension_label(
+                image,
+                image_module,
+                image_draw_module,
+                horizontal_label,
+                (x1 + x2) / 2.0,
+                y,
+                font,
+            )
+
+    if height_px >= 72 and width_px >= 46:
+        y1 = y_px + inset
+        y2 = y_px + height_px - inset
+        x = x_px + width_px - inset
+        if y2 - y1 > 24:
+            draw.line([(x, y1), (x, y2)], fill=dimension_color, width=line_width)
+            draw.line([(x - tick, y1), (x + tick, y1)], fill=dimension_color, width=line_width)
+            draw.line([(x - tick, y2), (x + tick, y2)], fill=dimension_color, width=line_width)
+            _draw_dimension_label(
+                image,
+                image_module,
+                image_draw_module,
+                vertical_label,
+                x,
+                (y1 + y2) / 2.0,
+                font,
+                rotate=True,
+            )
+
+
+def _main_cut_dimension_points(cut_positions: list[float], total_size: float) -> list[float]:
+    total = max(0.0, float(total_size))
+    points = [0.0]
+    for position in sorted(_safe_float(position) for position in cut_positions):
+        if position is None:
+            continue
+        if position <= 0.5 or position >= total - 0.5:
+            continue
+        if abs(position - points[-1]) > 0.5:
+            points.append(float(position))
+    if not points or abs(total - points[-1]) > 0.5:
+        points.append(total)
+    return points
+
+
+def _draw_horizontal_main_cut_dimensions(
+    image,
+    draw,
+    image_module,
+    image_draw_module,
+    image_font_module,
+    *,
+    board_left_px: int,
+    board_top_px: int,
+    board_width_px: int,
+    scale: float,
+    cut_positions: list[float],
+    board_width_mm: float,
+    top_band_px: int,
+):
+    points = _main_cut_dimension_points(cut_positions, board_width_mm)
+    if len(points) < 2 or top_band_px <= 0:
+        return
+
+    dimension_color = '#1c355c'
+    line_width = 2
+    tick = max(6, min(11, top_band_px // 5))
+    line_y = board_top_px - max(18, int(round(top_band_px * 0.52)))
+    font = _load_print_font(image_font_module, max(9, min(15, top_band_px // 4)), bold=True)
+    board_right_px = board_left_px + board_width_px
+
+    for point in points:
+        point_x = int(round(board_left_px + point * scale))
+        point_x = max(board_left_px, min(board_right_px, point_x))
+        draw.line(
+            [(point_x, board_top_px), (point_x, line_y + tick)],
+            fill=dimension_color,
+            width=1,
+        )
+
+    for start, end in zip(points, points[1:]):
+        if end - start <= 0.5:
+            continue
+        x1 = int(round(board_left_px + start * scale))
+        x2 = int(round(board_left_px + end * scale))
+        x1 = max(board_left_px, min(board_right_px, x1))
+        x2 = max(board_left_px, min(board_right_px, x2))
+        if x2 - x1 < 8:
+            continue
+        draw.line([(x1, line_y), (x2, line_y)], fill=dimension_color, width=line_width)
+        draw.line([(x1, line_y - tick), (x1, line_y + tick)], fill=dimension_color, width=line_width)
+        draw.line([(x2, line_y - tick), (x2, line_y + tick)], fill=dimension_color, width=line_width)
+        _draw_dimension_label(
+            image,
+            image_module,
+            image_draw_module,
+            _format_dimension(end - start),
+            (x1 + x2) / 2.0,
+            line_y,
+            font,
+        )
+
+
+def _draw_vertical_main_cut_dimensions(
+    image,
+    draw,
+    image_module,
+    image_draw_module,
+    image_font_module,
+    *,
+    board_left_px: int,
+    board_top_px: int,
+    board_width_px: int,
+    board_height_px: int,
+    scale: float,
+    cut_positions: list[float],
+    board_height_mm: float,
+    right_band_px: int,
+):
+    points = _main_cut_dimension_points(cut_positions, board_height_mm)
+    if len(points) < 2 or right_band_px <= 0:
+        return
+
+    dimension_color = '#1c355c'
+    line_width = 2
+    tick = max(6, min(11, right_band_px // 5))
+    board_right_px = board_left_px + board_width_px
+    x_line = board_right_px + max(18, int(round(right_band_px * 0.45)))
+    font = _load_print_font(image_font_module, max(9, min(15, right_band_px // 4)), bold=True)
+    board_bottom_px = board_top_px + board_height_px
+
+    for point in points:
+        point_y = int(round(board_top_px + point * scale))
+        point_y = max(board_top_px, min(board_bottom_px, point_y))
+        draw.line(
+            [(board_right_px, point_y), (x_line - tick, point_y)],
+            fill=dimension_color,
+            width=1,
+        )
+
+    for start, end in zip(points, points[1:]):
+        if end - start <= 0.5:
+            continue
+        y1 = int(round(board_top_px + start * scale))
+        y2 = int(round(board_top_px + end * scale))
+        y1 = max(board_top_px, min(board_bottom_px, y1))
+        y2 = max(board_top_px, min(board_bottom_px, y2))
+        if y2 - y1 < 8:
+            continue
+        draw.line([(x_line, y1), (x_line, y2)], fill=dimension_color, width=line_width)
+        draw.line([(x_line - tick, y1), (x_line + tick, y1)], fill=dimension_color, width=line_width)
+        draw.line([(x_line - tick, y2), (x_line + tick, y2)], fill=dimension_color, width=line_width)
+        _draw_dimension_label(
+            image,
+            image_module,
+            image_draw_module,
+            _format_dimension(end - start),
+            x_line,
+            (y1 + y2) / 2.0,
+            font,
+            rotate=True,
+        )
+
+
+def _board_group_key(board: CutBoard) -> tuple[str, float]:
+    return (str(board.material or "").strip().lower(), round(float(board.thickness or 0.0), 2))
+
+
+def _build_board_print_image(
+    board: CutBoard,
+    *,
+    production_name: str = "",
+    client_name: str = "",
+    board_group_total: int = 1,
+):
     from PIL import Image, ImageColor, ImageDraw, ImageFont
 
     page_width_mm, page_height_mm = _page_size_for_board(board)
@@ -1301,8 +1792,16 @@ def _build_board_print_image(board: CutBoard):
     page_height_px = _mm_to_pixels(page_height_mm)
     margin_px = _mm_to_pixels(10.0)
     header_h_px = _mm_to_pixels(20.0)
-    board_top_px = margin_px + header_h_px
-    available_width_px = page_width_px - margin_px * 2
+    has_horizontal_main_cut_dimensions = (
+        board.main_cut_orientation == 'vertical' and bool(board.main_cut_positions)
+    )
+    has_vertical_main_cut_dimensions = (
+        board.main_cut_orientation == 'horizontal' and bool(board.main_cut_positions)
+    )
+    top_dimension_band_px = _mm_to_pixels(8.0) if has_horizontal_main_cut_dimensions else 0
+    right_dimension_band_px = _mm_to_pixels(12.0) if has_vertical_main_cut_dimensions else 0
+    board_top_px = margin_px + header_h_px + top_dimension_band_px
+    available_width_px = page_width_px - margin_px * 2 - right_dimension_band_px
     available_height_px = page_height_px - board_top_px - margin_px
     scale = min(available_width_px / board.board_width, available_height_px / board.board_height)
     scale = max(0.01, scale)
@@ -1314,17 +1813,31 @@ def _build_board_print_image(board: CutBoard):
     image = Image.new('RGB', (page_width_px, page_height_px), 'white')
     draw = ImageDraw.Draw(image)
 
-    title_font = _load_print_font(ImageFont, 34, bold=True)
-    subtitle_font = _load_print_font(ImageFont, 18)
+    title_font = _load_print_font(ImageFont, 24, bold=True)
+    material_font = _load_print_font(ImageFont, 22, bold=True)
+    subtitle_font = _load_print_font(ImageFont, 15)
+    header_parts = []
+    if str(production_name or "").strip():
+        header_parts.append(f'Produccion: {str(production_name).strip()}')
+    if str(client_name or "").strip():
+        header_parts.append(f'Cliente: {str(client_name).strip()}')
+    if not header_parts:
+        header_parts.append('Diagrama de corte')
     draw.text(
         (margin_px, _mm_to_pixels(5.0)),
-        f'{board.material} - {_format_dimension(board.thickness)} mm - Tablero {board.index}',
+        ' | '.join(header_parts),
         fill='#111111',
         font=title_font,
     )
     draw.text(
-        (margin_px, _mm_to_pixels(12.0)),
-        f'Aprovechamiento: {board.utilization * 100:.1f}% | Tablero base: {_format_dimension(board.board_width)} x {_format_dimension(board.board_height)} mm | Margen: {_format_dimension(board.board_margin)} mm | Veta: {board.grain or "-"} | Hoja: {"A4 horizontal" if page_width_mm > page_height_mm else "A4 vertical"}',
+        (margin_px, _mm_to_pixels(10.2)),
+        f'{board.material} - {_format_dimension(board.thickness)} mm - Placa {board.index} de {max(1, int(board_group_total or 1))}',
+        fill='#222222',
+        font=material_font,
+    )
+    draw.text(
+        (margin_px, _mm_to_pixels(15.5)),
+        f'Base: {_format_dimension(board.board_width)} x {_format_dimension(board.board_height)} mm | Margen: {_format_dimension(board.board_margin)} mm | Veta: {board.grain or "-"}',
         fill='#4f4f4f',
         font=subtitle_font,
     )
@@ -1338,6 +1851,38 @@ def _build_board_print_image(board: CutBoard):
         outline='#2f2f2f',
         width=2,
     )
+
+    if has_horizontal_main_cut_dimensions:
+        _draw_horizontal_main_cut_dimensions(
+            image,
+            draw,
+            Image,
+            ImageDraw,
+            ImageFont,
+            board_left_px=board_left_px,
+            board_top_px=board_top_px,
+            board_width_px=board_width_px,
+            scale=scale,
+            cut_positions=board.main_cut_positions,
+            board_width_mm=board.board_width,
+            top_band_px=top_dimension_band_px,
+        )
+    if has_vertical_main_cut_dimensions:
+        _draw_vertical_main_cut_dimensions(
+            image,
+            draw,
+            Image,
+            ImageDraw,
+            ImageFont,
+            board_left_px=board_left_px,
+            board_top_px=board_top_px,
+            board_width_px=board_width_px,
+            board_height_px=board_height_px,
+            scale=scale,
+            cut_positions=board.main_cut_positions,
+            board_height_mm=board.board_height,
+            right_band_px=right_dimension_band_px,
+        )
 
     for placement in board.placements:
         x_px = int(round(board_left_px + placement.x * scale))
@@ -1353,6 +1898,19 @@ def _build_board_print_image(board: CutBoard):
             fill=fill_color,
             outline='#222222',
             width=2,
+        )
+
+        _draw_piece_cut_dimensions(
+            image,
+            draw,
+            Image,
+            ImageDraw,
+            ImageFont,
+            placement,
+            x_px,
+            y_px,
+            width_px,
+            height_px,
         )
 
         text_overlay = _build_piece_text_overlay(Image, ImageDraw, ImageFont, placement, width_px, height_px)
@@ -1383,7 +1941,13 @@ def _build_board_print_image(board: CutBoard):
     return image
 
 
-def _build_printable_pdf(pdf_path: Path, boards: list[CutBoard]) -> Path | None:
+def _build_printable_pdf(
+    pdf_path: Path,
+    boards: list[CutBoard],
+    *,
+    production_name: str = "",
+    client_name: str = "",
+) -> Path | None:
     if not boards:
         return None
 
@@ -1395,10 +1959,21 @@ def _build_printable_pdf(pdf_path: Path, boards: list[CutBoard]) -> Path | None:
     pdf_path = Path(pdf_path)
     pdf_path.parent.mkdir(parents=True, exist_ok=True)
     page_images: list[Image.Image] = []
+    board_group_totals: dict[tuple[str, float], int] = {}
+    for board in boards:
+        group_key = _board_group_key(board)
+        board_group_totals[group_key] = board_group_totals.get(group_key, 0) + 1
 
     try:
         for board in boards:
-            page_images.append(_build_board_print_image(board))
+            page_images.append(
+                _build_board_print_image(
+                    board,
+                    production_name=production_name,
+                    client_name=client_name,
+                    board_group_total=board_group_totals.get(_board_group_key(board), 1),
+                )
+            )
 
         first_page, *other_pages = page_images
         first_page.save(
@@ -1593,7 +2168,12 @@ def generate_cut_diagrams(
             }
         )
 
-    pdf_file = _build_printable_pdf(pdf_output_path, all_boards)
+    pdf_file = _build_printable_pdf(
+        pdf_output_path,
+        all_boards,
+        production_name=str(project.name or "").strip(),
+        client_name=str(project.client or "").strip(),
+    )
     return {
         'pdf_file': pdf_file,
         'skipped_pieces': skipped_labels,
@@ -1621,6 +2201,8 @@ def first_fit_2d(pieces: List[Piece], board_width: float, board_height: float, a
             color=str(piece.color or ''),
             allow_rotate=allow_rotate,
             grain_mode=_normalize_piece_grain_mode(piece.grain_direction),
+            final_width=float(piece.width),
+            final_height=float(piece.height),
         )
         for piece in pieces
         if _is_valid_piece(piece)

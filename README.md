@@ -46,7 +46,7 @@ python main.py
 - API programatica para inspeccion/construccion geometrica: `read_pgmx_geometries(...)`, `build_point_geometry_profile(...)`, `build_line_geometry_profile(...)`, `build_circle_geometry_profile(...)`, `build_composite_geometry_profile(...)` y `build_compensated_toolpath_profile(...)`
 - API programatica para snapshot integral de un `.pgmx`: `read_pgmx_snapshot(...)`, `snapshot_to_dict(...)` y `write_pgmx_snapshot_json(...)` en `tools.pgmx_snapshot`
 - API programatica para adaptar `.pgmx` existentes al subset publico del sintetizador: `adapt_pgmx_snapshot(...)`, `adapt_pgmx_path(...)`, `adaptation_to_dict(...)` y `write_pgmx_adaptation_json(...)` en `tools.pgmx_adapters`
-- `PgmxAdaptationResult.build_synthesis_request(...)` convierte el material adaptable a un `PgmxSynthesisRequest`; hoy preserva el orden dentro de cada familia soportada, pero la re-sintesis publica sigue agrupada por `line`, `polyline`, `circle`, `squaring` y `drilling`
+- `PgmxAdaptationResult.build_synthesis_request(...)` convierte el material adaptable a un `PgmxSynthesisRequest`; por defecto arma familias publicas, y `build_synthesis_request(..., ordered_machinings=...)` permite preservar una secuencia exacta cuando el flujo lo necesita
 - La sintesis de `.pgmx` permite fijar el area de `Parametros de Maquina` mediante `execution_fields` en la API o `--execution-fields/--area` en la CLI; si no se indica, usa `HG` por defecto.
 - La seguridad de profundidad usa `tools/tool_catalog.csv`: la profundidad total del fresado o del taladro no puede superar `sinking_length` de la herramienta cuando `ToolKey` queda resuelto.
 - Constante publica de version: `tools.synthesize_pgmx.SYNTHESIZER_VERSION`

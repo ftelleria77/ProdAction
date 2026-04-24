@@ -70,7 +70,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 
 PGMX_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.ProjectModule"
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
@@ -110,6 +110,7 @@ __all__ = [
     "CircleMillingSpec",
     "SquaringMillingSpec",
     "DrillingSpec",
+    "MachiningSpec",
     "XnSpec",
     "PgmxSynthesisRequest",
     "PgmxSynthesisResult",
@@ -394,6 +395,15 @@ class DrillingSpec:
     tool_resolution: str = "Auto"
     tool_id: str = "0"
     tool_name: str = ""
+
+
+MachiningSpec = Union[
+    LineMillingSpec,
+    PolylineMillingSpec,
+    CircleMillingSpec,
+    SquaringMillingSpec,
+    DrillingSpec,
+]
 
 
 @dataclass(frozen=True)
@@ -755,6 +765,8 @@ class PgmxSynthesisRequest:
     circle_millings: tuple[CircleMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
     drillings: tuple[DrillingSpec, ...] = ()
+    ordered_machinings: tuple[MachiningSpec, ...] = ()
+    machining_order: tuple[str, ...] = ("line", "polyline", "circle", "squaring", "drilling")
     xn: XnSpec = field(default_factory=XnSpec)
 
 
@@ -770,6 +782,8 @@ class PgmxSynthesisResult:
     circle_millings: tuple[CircleMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
     drillings: tuple[DrillingSpec, ...] = ()
+    ordered_machinings: tuple[MachiningSpec, ...] = ()
+    machining_order: tuple[str, ...] = ("line", "polyline", "circle", "squaring", "drilling")
     xn: XnSpec = field(default_factory=XnSpec)
 
 
@@ -7438,6 +7452,114 @@ def _apply_drillings(
         _append_drilling(root, state, drilling)
 
 
+HydratedMachiningSpec = Union[
+    _HydratedLineMillingSpec,
+    _HydratedPolylineMillingSpec,
+    _HydratedCircleMillingSpec,
+    _HydratedSquaringMillingSpec,
+    _HydratedDrillingSpec,
+]
+
+
+def _hydrate_machining_spec(
+    spec: MachiningSpec,
+    source_pgmx_path: Optional[Path],
+) -> HydratedMachiningSpec:
+    if isinstance(spec, LineMillingSpec):
+        return _hydrate_line_milling_spec(spec, source_pgmx_path)
+    if isinstance(spec, PolylineMillingSpec):
+        return _hydrate_polyline_milling_spec(spec, source_pgmx_path)
+    if isinstance(spec, CircleMillingSpec):
+        return _hydrate_circle_milling_spec(spec, source_pgmx_path)
+    if isinstance(spec, SquaringMillingSpec):
+        return _hydrate_squaring_milling_spec(spec, source_pgmx_path)
+    if isinstance(spec, DrillingSpec):
+        return _hydrate_drilling_spec(spec, source_pgmx_path)
+    raise TypeError(f"Spec de mecanizado no soportado: {type(spec).__name__}")
+
+
+def _append_hydrated_machining(
+    root: ET.Element,
+    state: PgmxState,
+    spec: HydratedMachiningSpec,
+) -> None:
+    if isinstance(spec, _HydratedLineMillingSpec):
+        _append_line_milling(root, state, spec)
+        return
+    if isinstance(spec, _HydratedPolylineMillingSpec):
+        _append_polyline_milling(root, state, spec)
+        return
+    if isinstance(spec, _HydratedCircleMillingSpec):
+        _append_circle_milling(root, state, spec)
+        return
+    if isinstance(spec, _HydratedSquaringMillingSpec):
+        _append_squaring_milling(root, state, spec)
+        return
+    if isinstance(spec, _HydratedDrillingSpec):
+        _append_drilling(root, state, spec)
+        return
+    raise TypeError(f"Spec hidratado no soportado: {type(spec).__name__}")
+
+
+def _split_hydrated_machinings(
+    specs: Sequence[HydratedMachiningSpec],
+) -> tuple[
+    list[_HydratedLineMillingSpec],
+    list[_HydratedPolylineMillingSpec],
+    list[_HydratedCircleMillingSpec],
+    list[_HydratedSquaringMillingSpec],
+    list[_HydratedDrillingSpec],
+]:
+    line_millings: list[_HydratedLineMillingSpec] = []
+    polyline_millings: list[_HydratedPolylineMillingSpec] = []
+    circle_millings: list[_HydratedCircleMillingSpec] = []
+    squaring_millings: list[_HydratedSquaringMillingSpec] = []
+    drillings: list[_HydratedDrillingSpec] = []
+    for spec in specs:
+        if isinstance(spec, _HydratedLineMillingSpec):
+            line_millings.append(spec)
+        elif isinstance(spec, _HydratedPolylineMillingSpec):
+            polyline_millings.append(spec)
+        elif isinstance(spec, _HydratedCircleMillingSpec):
+            circle_millings.append(spec)
+        elif isinstance(spec, _HydratedSquaringMillingSpec):
+            squaring_millings.append(spec)
+        elif isinstance(spec, _HydratedDrillingSpec):
+            drillings.append(spec)
+    return line_millings, polyline_millings, circle_millings, squaring_millings, drillings
+
+
+def _normalize_machining_order(value: Optional[Sequence[str]]) -> tuple[str, ...]:
+    default_order = ("line", "polyline", "circle", "squaring", "drilling")
+    aliases = {
+        "lines": "line",
+        "line_milling": "line",
+        "line_millings": "line",
+        "polyline_milling": "polyline",
+        "polyline_millings": "polyline",
+        "division": "polyline",
+        "divisions": "polyline",
+        "cutting": "polyline",
+        "circle_milling": "circle",
+        "circle_millings": "circle",
+        "squaring_milling": "squaring",
+        "squaring_millings": "squaring",
+        "square": "squaring",
+        "drilling": "drilling",
+        "drilling_millings": "drilling",
+    }
+    ordered: list[str] = []
+    for raw_item in value or default_order:
+        normalized = aliases.get(str(raw_item or "").strip().lower(), str(raw_item or "").strip().lower())
+        if normalized not in default_order or normalized in ordered:
+            continue
+        ordered.append(normalized)
+    for item in default_order:
+        if item not in ordered:
+            ordered.append(item)
+    return tuple(ordered)
+
+
 def _ensure_xn_step(root: ET.Element, xn: XnSpec) -> None:
     elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
     workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
@@ -7876,6 +7998,8 @@ def build_synthesis_request(
     circle_millings: Optional[Sequence[CircleMillingSpec]] = None,
     squaring_millings: Optional[Sequence[SquaringMillingSpec]] = None,
     drillings: Optional[Sequence[DrillingSpec]] = None,
+    ordered_machinings: Optional[Sequence[MachiningSpec]] = None,
+    machining_order: Optional[Sequence[str]] = None,
     xn: Optional[XnSpec] = None,
 ) -> PgmxSynthesisRequest:
     """Arma una solicitud reusable de sintesis para el flujo principal.
@@ -7926,6 +8050,8 @@ def build_synthesis_request(
         circle_millings=tuple(circle_millings or ()),
         squaring_millings=tuple(squaring_millings or ()),
         drillings=tuple(drillings or ()),
+        ordered_machinings=tuple(ordered_machinings or ()),
+        machining_order=_normalize_machining_order(machining_order),
         xn=_normalize_xn_spec(xn),
     )
 
@@ -7957,22 +8083,59 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         _hydrate_drilling_spec(drilling, request.source_pgmx_path)
         for drilling in request.drillings
     ]
+    hydrated_ordered_machinings = [
+        _hydrate_machining_spec(spec, request.source_pgmx_path)
+        for spec in request.ordered_machinings
+    ]
+    (
+        ordered_line_millings,
+        ordered_polyline_millings,
+        ordered_circle_millings,
+        ordered_squaring_millings,
+        ordered_drillings,
+    ) = _split_hydrated_machinings(hydrated_ordered_machinings)
     normalized_xn = _normalize_xn_spec(request.xn)
     _validate_tool_sinking_lengths(
         request.piece,
-        hydrated_line_millings,
-        hydrated_polyline_millings,
-        hydrated_circle_millings,
-        hydrated_squaring_millings,
-        hydrated_drillings,
+        hydrated_line_millings + ordered_line_millings,
+        hydrated_polyline_millings + ordered_polyline_millings,
+        hydrated_circle_millings + ordered_circle_millings,
+        hydrated_squaring_millings + ordered_squaring_millings,
+        hydrated_drillings + ordered_drillings,
     )
 
     _apply_piece_state(baseline_root, request.piece)
-    _apply_line_millings(baseline_root, request.piece, hydrated_line_millings)
-    _apply_polyline_millings(baseline_root, request.piece, hydrated_polyline_millings)
-    _apply_circle_millings(baseline_root, request.piece, hydrated_circle_millings)
-    _apply_squaring_millings(baseline_root, request.piece, hydrated_squaring_millings)
-    _apply_drillings(baseline_root, request.piece, hydrated_drillings)
+    for spec in hydrated_ordered_machinings:
+        _append_hydrated_machining(baseline_root, request.piece, spec)
+    apply_group = {
+        "line": lambda: _apply_line_millings(
+            baseline_root,
+            request.piece,
+            hydrated_line_millings,
+        ),
+        "polyline": lambda: _apply_polyline_millings(
+            baseline_root,
+            request.piece,
+            hydrated_polyline_millings,
+        ),
+        "circle": lambda: _apply_circle_millings(
+            baseline_root,
+            request.piece,
+            hydrated_circle_millings,
+        ),
+        "squaring": lambda: _apply_squaring_millings(
+            baseline_root,
+            request.piece,
+            hydrated_squaring_millings,
+        ),
+        "drilling": lambda: _apply_drillings(
+            baseline_root,
+            request.piece,
+            hydrated_drillings,
+        ),
+    }
+    for group_name in _normalize_machining_order(request.machining_order):
+        apply_group[group_name]()
     _ensure_xn_step(baseline_root, normalized_xn)
 
     xml_bytes = _finalize_synthesized_pgmx_xml_bytes(
@@ -7997,6 +8160,8 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         circle_millings=request.circle_millings,
         squaring_millings=request.squaring_millings,
         drillings=request.drillings,
+        ordered_machinings=request.ordered_machinings,
+        machining_order=_normalize_machining_order(request.machining_order),
         xn=normalized_xn,
     )
 

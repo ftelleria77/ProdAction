@@ -380,6 +380,19 @@ def _normalize_en_juego_cut_mode(value) -> str:
     return "manual"
 
 
+def _normalize_en_juego_operation_order(value) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {
+        "squaring_then_division",
+        "squaring_then_cutting",
+        "escuadrar_dividir",
+        "escuadrar -> dividir",
+        "escuadrar-dividir",
+    }:
+        return "squaring_then_division"
+    return "division_then_squaring"
+
+
 def _load_tool_catalog_rows() -> list[dict]:
     global _TOOL_CATALOG_ROWS_CACHE
 
@@ -696,6 +709,7 @@ def _default_en_juego_settings() -> dict:
         "origin_x": 5,
         "origin_y": 5,
         "origin_z": 9,
+        "division_squaring_order": "division_then_squaring",
         "cutting_is_through": True,
         "cutting_depth_value": 1.0,
         "cutting_multipass_enabled": False,
@@ -769,6 +783,11 @@ def _normalize_en_juego_settings(value) -> dict:
         ),
         "origin_z": _compact_number(
             _coerce_setting_number(value.get("origin_z"), float(defaults["origin_z"]))
+        ),
+        "division_squaring_order": _normalize_en_juego_operation_order(
+            value.get("division_squaring_order")
+            or value.get("operation_order")
+            or defaults["division_squaring_order"]
         ),
         "cutting_is_through": _coerce_setting_bool(
             value.get("cutting_is_through"),
@@ -5230,6 +5249,21 @@ class ProjectDetailWindow(QMainWindow):
             origin_layout.addWidget(origin_z_field, 2, 1)
             origin_group.setLayout(origin_layout)
 
+            operation_order_group = QGroupBox("Orden")
+            operation_order_layout = QVBoxLayout()
+            operation_order_layout.setContentsMargins(8, 8, 8, 8)
+            operation_order_layout.setSpacing(6)
+            divide_then_square_radio = QRadioButton("Dividir -> Escuadrar")
+            square_then_divide_radio = QRadioButton("Escuadrar -> Dividir")
+            current_operation_order = _normalize_en_juego_operation_order(
+                en_juego_settings.get("division_squaring_order")
+            )
+            divide_then_square_radio.setChecked(current_operation_order == "division_then_squaring")
+            square_then_divide_radio.setChecked(current_operation_order == "squaring_then_division")
+            operation_order_layout.addWidget(divide_then_square_radio)
+            operation_order_layout.addWidget(square_then_divide_radio)
+            operation_order_group.setLayout(operation_order_layout)
+
             options_group = QGroupBox("Opciones")
             options_group.setFixedWidth(left_panel_width)
             options_layout = QVBoxLayout()
@@ -5256,6 +5290,7 @@ class ProjectDetailWindow(QMainWindow):
             options_layout.addWidget(nesting_cut_radio)
             options_layout.addWidget(spacing_hint_label)
             options_layout.addWidget(origin_group)
+            options_layout.addWidget(operation_order_group)
             options_layout.addLayout(configure_buttons_row)
             options_group.setLayout(options_layout)
             left_panel_layout.addWidget(options_group, 0)
@@ -5420,6 +5455,343 @@ class ProjectDetailWindow(QMainWindow):
                     hatch_line.setAcceptedMouseButtons(QtCoreQt.NoButton)
                     current_y += hatch_spacing
 
+            item_by_instance_id: dict[str, object] = {}
+            dimension_annotation_items = []
+            dimension_annotation_state = {"ready": False}
+            dimension_tolerance_mm = 0.1
+
+            def nominal_scene_rect(scene_item):
+                return scene_item.mapRectToScene(scene_item.rect())
+
+            def clear_dimension_annotations():
+                for annotation_item in dimension_annotation_items:
+                    scene.removeItem(annotation_item)
+                dimension_annotation_items.clear()
+
+            def add_dimension_annotation_item(annotation_item, *, interactive: bool = False, z_value: float = 20.0):
+                annotation_item.setAcceptedMouseButtons(
+                    QtCoreQt.LeftButton if interactive else QtCoreQt.NoButton
+                )
+                annotation_item.setZValue(z_value)
+                scene.addItem(annotation_item)
+                dimension_annotation_items.append(annotation_item)
+                return annotation_item
+
+            class DimensionLabelTextItem(QGraphicsSimpleTextItem):
+                def __init__(self, text: str, on_click):
+                    super().__init__(text)
+                    self._on_click = on_click
+
+                def mousePressEvent(self, event):
+                    if self._on_click is not None:
+                        self._on_click()
+                        event.accept()
+                        return
+                    super().mousePressEvent(event)
+
+            class DimensionLabelBackgroundItem(QGraphicsRectItem):
+                def __init__(self, x: float, y: float, width: float, height: float, on_click):
+                    super().__init__(x, y, width, height)
+                    self._on_click = on_click
+
+                def mousePressEvent(self, event):
+                    if self._on_click is not None:
+                        self._on_click()
+                        event.accept()
+                        return
+                    super().mousePressEvent(event)
+
+            def add_dimension_line_item(x1: float, y1: float, x2: float, y2: float, *, dashed: bool = False):
+                line_item = QGraphicsLineItem(float(x1), float(y1), float(x2), float(y2))
+                line_item.setPen(make_pen("#7A4E00", 1.0, dashed=dashed))
+                return add_dimension_annotation_item(line_item)
+
+            def move_dimension_target(target_key: str, axis: str, delta_mm: float):
+                if abs(delta_mm) <= dimension_tolerance_mm:
+                    return
+                target_item = item_by_instance_id.get(target_key)
+                if target_item is None:
+                    return
+                current_pos = target_item.pos()
+                auto_spacing_adjustment_state["active"] = True
+                try:
+                    if axis == "x":
+                        target_item.setPos(current_pos.x() + delta_mm, current_pos.y())
+                    else:
+                        target_item.setPos(current_pos.x(), current_pos.y() + delta_mm)
+                finally:
+                    auto_spacing_adjustment_state["active"] = False
+                update_dimension_annotations()
+                update_scene_bounds()
+                scene.clearSelection()
+                target_item.setSelected(True)
+
+            def edit_dimension_value(
+                current_value_mm: float,
+                *,
+                target_key: str,
+                axis: str,
+                minimum_value_mm: float = 0.0,
+            ):
+                current_abs_value = round(abs(float(current_value_mm)), 1)
+                new_value, ok = QInputDialog.getDouble(
+                    config_dialog,
+                    "Editar cota",
+                    "Medida en mm:",
+                    current_abs_value,
+                    float(minimum_value_mm),
+                    100000.0,
+                    1,
+                )
+                if not ok:
+                    return
+                direction = -1.0 if current_value_mm < 0 else 1.0
+                desired_value = direction * float(new_value)
+                move_dimension_target(target_key, axis, desired_value - float(current_value_mm))
+
+            def add_dimension_text(text: str, x: float, y: float, on_edit=None):
+                text_item = DimensionLabelTextItem(text, on_edit)
+                text_item.setBrush(QBrush(QColorGui("#2A2418")))
+                text_item.setScale(1.35)
+                bounds = text_item.boundingRect()
+                text_width = bounds.width() * text_item.scale()
+                text_height = bounds.height() * text_item.scale()
+                background_item = DimensionLabelBackgroundItem(
+                    x - (text_width / 2.0) - 3.0,
+                    y - (text_height / 2.0) - 2.0,
+                    text_width + 6.0,
+                    text_height + 4.0,
+                    on_edit,
+                )
+                background_item.setPen(QPen(QtCoreQt.NoPen))
+                background_item.setBrush(QBrush(QColorGui("#FFFDF8")))
+                add_dimension_annotation_item(background_item, interactive=on_edit is not None, z_value=19.5)
+                text_item.setPos(x - (text_width / 2.0), y - (text_height / 2.0))
+                text_item.setToolTip("Editar medida")
+                background_item.setToolTip("Editar medida")
+                return add_dimension_annotation_item(text_item, interactive=on_edit is not None)
+
+            def dimension_label(value_mm: float) -> str:
+                return f"{_compact_number(round(abs(float(value_mm)), 1))} mm"
+
+            def add_horizontal_dimension(
+                x1: float,
+                x2: float,
+                y: float,
+                label_value: float,
+                *,
+                target_key: str | None = None,
+                minimum_value_mm: float = 0.0,
+            ):
+                if abs(x2 - x1) <= dimension_tolerance_mm:
+                    return
+                tick = 7.0
+                add_dimension_line_item(x1, y, x2, y)
+                add_dimension_line_item(x1, y - tick, x1, y + tick)
+                add_dimension_line_item(x2, y - tick, x2, y + tick)
+                on_edit = None
+                if target_key:
+                    on_edit = lambda value=label_value, key=target_key, minimum=minimum_value_mm: edit_dimension_value(
+                        value,
+                        target_key=key,
+                        axis="x",
+                        minimum_value_mm=minimum,
+                    )
+                add_dimension_text(dimension_label(label_value), (x1 + x2) / 2.0, y - 18.0, on_edit)
+
+            def add_vertical_dimension(
+                x: float,
+                y1: float,
+                y2: float,
+                label_value: float,
+                *,
+                target_key: str | None = None,
+                minimum_value_mm: float = 0.0,
+            ):
+                if abs(y2 - y1) <= dimension_tolerance_mm:
+                    return
+                tick = 7.0
+                add_dimension_line_item(x, y1, x, y2)
+                add_dimension_line_item(x - tick, y1, x + tick, y1)
+                add_dimension_line_item(x - tick, y2, x + tick, y2)
+                on_edit = None
+                if target_key:
+                    on_edit = lambda value=label_value, key=target_key, minimum=minimum_value_mm: edit_dimension_value(
+                        value,
+                        target_key=key,
+                        axis="y",
+                        minimum_value_mm=minimum,
+                    )
+                add_dimension_text(dimension_label(label_value), x + 22.0, (y1 + y2) / 2.0, on_edit)
+
+            def vertical_overlap(rect_a, rect_b) -> float:
+                return min(rect_a.bottom(), rect_b.bottom()) - max(rect_a.top(), rect_b.top())
+
+            def horizontal_overlap(rect_a, rect_b) -> float:
+                return min(rect_a.right(), rect_b.right()) - max(rect_a.left(), rect_b.left())
+
+            def has_horizontal_blocker(rect_entries, left_key, right_key, left_rect, right_rect) -> bool:
+                overlap_top = max(left_rect.top(), right_rect.top())
+                overlap_bottom = min(left_rect.bottom(), right_rect.bottom())
+                for candidate_key, _, candidate_rect in rect_entries:
+                    if candidate_key in {left_key, right_key}:
+                        continue
+                    if min(candidate_rect.bottom(), overlap_bottom) - max(candidate_rect.top(), overlap_top) <= dimension_tolerance_mm:
+                        continue
+                    if (
+                        candidate_rect.left() >= left_rect.right() - dimension_tolerance_mm
+                        and candidate_rect.right() <= right_rect.left() + dimension_tolerance_mm
+                    ):
+                        return True
+                return False
+
+            def has_vertical_blocker(rect_entries, upper_key, lower_key, upper_rect, lower_rect) -> bool:
+                overlap_left = max(upper_rect.left(), lower_rect.left())
+                overlap_right = min(upper_rect.right(), lower_rect.right())
+                for candidate_key, _, candidate_rect in rect_entries:
+                    if candidate_key in {upper_key, lower_key}:
+                        continue
+                    if min(candidate_rect.right(), overlap_right) - max(candidate_rect.left(), overlap_left) <= dimension_tolerance_mm:
+                        continue
+                    if (
+                        candidate_rect.top() >= upper_rect.bottom() - dimension_tolerance_mm
+                        and candidate_rect.bottom() <= lower_rect.top() + dimension_tolerance_mm
+                    ):
+                        return True
+                return False
+
+            def dimension_x_near_inner_edge(rect, *, left_side_piece: bool) -> float:
+                margin = 12.0
+                if rect.width() <= margin * 2.0:
+                    return (rect.left() + rect.right()) / 2.0
+                desired_x = rect.right() - 28.0 if left_side_piece else rect.left() + 28.0
+                return max(rect.left() + margin, min(rect.right() - margin, desired_x))
+
+            def add_vertical_edge_offsets(left_rect, right_rect, right_key: str):
+                gap = right_rect.left() - left_rect.right()
+                if gap < -dimension_tolerance_mm:
+                    return
+                top_offset = right_rect.top() - left_rect.top()
+                bottom_offset = right_rect.bottom() - left_rect.bottom()
+                if abs(top_offset) > dimension_tolerance_mm:
+                    lower_top_rect = left_rect if left_rect.top() > right_rect.top() else right_rect
+                    add_vertical_dimension(
+                        dimension_x_near_inner_edge(lower_top_rect, left_side_piece=lower_top_rect is left_rect),
+                        left_rect.top(),
+                        right_rect.top(),
+                        top_offset,
+                        target_key=right_key,
+                    )
+                if (
+                    abs(bottom_offset) > dimension_tolerance_mm
+                    and abs(abs(bottom_offset) - abs(top_offset)) > dimension_tolerance_mm
+                ):
+                    higher_bottom_rect = left_rect if left_rect.bottom() < right_rect.bottom() else right_rect
+                    add_vertical_dimension(
+                        dimension_x_near_inner_edge(
+                            higher_bottom_rect,
+                            left_side_piece=higher_bottom_rect is left_rect,
+                        ),
+                        left_rect.bottom(),
+                        right_rect.bottom(),
+                        bottom_offset,
+                        target_key=right_key,
+                    )
+
+            def add_horizontal_edge_offsets(upper_rect, lower_rect, lower_key: str):
+                gap = lower_rect.top() - upper_rect.bottom()
+                if gap < -dimension_tolerance_mm:
+                    return
+                dimension_y = upper_rect.bottom() + (max(gap, 0.0) / 2.0)
+                left_offset = lower_rect.left() - upper_rect.left()
+                right_offset = lower_rect.right() - upper_rect.right()
+                if abs(left_offset) > dimension_tolerance_mm:
+                    add_horizontal_dimension(
+                        upper_rect.left(),
+                        lower_rect.left(),
+                        dimension_y,
+                        left_offset,
+                        target_key=lower_key,
+                    )
+                if (
+                    abs(right_offset) > dimension_tolerance_mm
+                    and abs(abs(right_offset) - abs(left_offset)) > dimension_tolerance_mm
+                ):
+                    add_horizontal_dimension(
+                        upper_rect.right(),
+                        lower_rect.right(),
+                        dimension_y,
+                        right_offset,
+                        target_key=lower_key,
+                    )
+
+            def update_dimension_annotations():
+                if not dimension_annotation_state["ready"]:
+                    return
+                clear_dimension_annotations()
+                rect_entries = [
+                    (instance_key, scene_item, nominal_scene_rect(scene_item))
+                    for instance_key, scene_item in item_by_instance_id.items()
+                ]
+                if len(rect_entries) < 2:
+                    return
+                spacing_mm = effective_piece_spacing_mm()
+                for current_index, (first_key, _, first_rect) in enumerate(rect_entries):
+                    for second_key, _, second_rect in rect_entries[current_index + 1 :]:
+                        if vertical_overlap(first_rect, second_rect) > dimension_tolerance_mm:
+                            left_key, left_rect, right_key, right_rect = (
+                                (first_key, first_rect, second_key, second_rect)
+                                if first_rect.right() <= second_rect.left()
+                                else (second_key, second_rect, first_key, first_rect)
+                            )
+                            gap = right_rect.left() - left_rect.right()
+                            if gap >= -dimension_tolerance_mm and not has_horizontal_blocker(
+                                rect_entries,
+                                left_key,
+                                right_key,
+                                left_rect,
+                                right_rect,
+                            ):
+                                overlap_top = max(left_rect.top(), right_rect.top())
+                                overlap_bottom = min(left_rect.bottom(), right_rect.bottom())
+                                if gap > spacing_mm + dimension_tolerance_mm:
+                                    add_horizontal_dimension(
+                                        left_rect.right(),
+                                        right_rect.left(),
+                                        (overlap_top + overlap_bottom) / 2.0,
+                                        gap,
+                                        target_key=right_key,
+                                        minimum_value_mm=spacing_mm,
+                                    )
+                                add_vertical_edge_offsets(left_rect, right_rect, right_key)
+
+                        if horizontal_overlap(first_rect, second_rect) > dimension_tolerance_mm:
+                            upper_key, upper_rect, lower_key, lower_rect = (
+                                (first_key, first_rect, second_key, second_rect)
+                                if first_rect.bottom() <= second_rect.top()
+                                else (second_key, second_rect, first_key, first_rect)
+                            )
+                            gap = lower_rect.top() - upper_rect.bottom()
+                            if gap >= -dimension_tolerance_mm and not has_vertical_blocker(
+                                rect_entries,
+                                upper_key,
+                                lower_key,
+                                upper_rect,
+                                lower_rect,
+                            ):
+                                overlap_left = max(upper_rect.left(), lower_rect.left())
+                                overlap_right = min(upper_rect.right(), lower_rect.right())
+                                if gap > spacing_mm + dimension_tolerance_mm:
+                                    add_vertical_dimension(
+                                        (overlap_left + overlap_right) / 2.0,
+                                        upper_rect.bottom(),
+                                        lower_rect.top(),
+                                        gap,
+                                        target_key=lower_key,
+                                        minimum_value_mm=spacing_mm,
+                                    )
+                                add_horizontal_edge_offsets(upper_rect, lower_rect, lower_key)
+
             class EnJuegoPieceItem(QGraphicsRectItem):
                 def itemChange(self, change, value):
                     if change == QGraphicsItem.ItemPositionChange and auto_spacing_adjustment_state["active"]:
@@ -5428,7 +5800,7 @@ class ProjectDetailWindow(QMainWindow):
                     if change == QGraphicsItem.ItemPositionChange and self.scene() is not None:
                         proposed_pos = QPointF(value)
                         current_pos = self.pos()
-                        current_rect = self.sceneBoundingRect()
+                        current_rect = nominal_scene_rect(self)
                         delta_x = proposed_pos.x() - current_pos.x()
                         delta_y = proposed_pos.y() - current_pos.y()
                         candidate_rect = current_rect.translated(delta_x, delta_y)
@@ -5438,7 +5810,7 @@ class ProjectDetailWindow(QMainWindow):
                         for other_item in self.scene().items():
                             if other_item is self or not str(other_item.data(0) or "").strip():
                                 continue
-                            other_rect = other_item.sceneBoundingRect()
+                            other_rect = nominal_scene_rect(other_item)
                             spacing_mm = effective_piece_spacing_mm()
                             target_xs.extend([
                                 other_rect.left() - candidate_rect.left(),
@@ -5474,6 +5846,7 @@ class ProjectDetailWindow(QMainWindow):
                         return proposed_pos
 
                     if change == QGraphicsItem.ItemPositionHasChanged and self.scene() is not None:
+                        update_dimension_annotations()
                         items_rect = self.scene().itemsBoundingRect()
                         if not items_rect.isNull():
                             padded_rect = items_rect.adjusted(
@@ -5634,13 +6007,15 @@ class ProjectDetailWindow(QMainWindow):
                 stored, _ = saved_layout_for_instance(piece_id, copy_index)
                 if not isinstance(stored, dict):
                     continue
-                stored_x = safe_float(stored.get("x"))
-                stored_y = safe_float(stored.get("y"))
+                stored_x = safe_float(stored.get("scene_x"))
+                if stored_x is None:
+                    stored_x = safe_float(stored.get("x"))
+                stored_y = safe_float(stored.get("scene_y"))
+                if stored_y is None:
+                    stored_y = safe_float(stored.get("y"))
                 if stored_x is not None and stored_y is not None:
                     width_mm, _ = preview_dimensions_mm(piece_row, piece_drawing_data(piece_row))
                     current_unsaved_x_mm = max(current_unsaved_x_mm, stored_x + width_mm + preview_gap_mm)
-
-            item_by_instance_id: dict[str, object] = {}
 
             for instance in en_juego_instances:
                 piece_row = instance["piece_row"]
@@ -5652,9 +6027,19 @@ class ProjectDetailWindow(QMainWindow):
                 rect_item, width_mm, height_mm = build_piece_scene_item(piece_row, instance_key, title_text)
 
                 stored, _ = saved_layout_for_instance(piece_id, copy_index)
-                stored_x_mm = safe_float(stored.get("x")) if isinstance(stored, dict) else None
-                stored_y_mm = safe_float(stored.get("y")) if isinstance(stored, dict) else None
-                stored_rotation = safe_float(stored.get("rotation")) if isinstance(stored, dict) else None
+                stored_x_mm = None
+                stored_y_mm = None
+                stored_rotation = None
+                if isinstance(stored, dict):
+                    stored_x_mm = safe_float(stored.get("scene_x"))
+                    if stored_x_mm is None:
+                        stored_x_mm = safe_float(stored.get("x"))
+                    stored_y_mm = safe_float(stored.get("scene_y"))
+                    if stored_y_mm is None:
+                        stored_y_mm = safe_float(stored.get("y"))
+                    stored_rotation = safe_float(stored.get("rotation_deg"))
+                    if stored_rotation is None:
+                        stored_rotation = safe_float(stored.get("rotation"))
                 if stored_x_mm is not None and stored_y_mm is not None:
                     pos_x_mm = stored_x_mm
                     pos_y_mm = stored_y_mm
@@ -5684,8 +6069,8 @@ class ProjectDetailWindow(QMainWindow):
                 return sorted(
                     item_by_instance_id.values(),
                     key=lambda scene_item: (
-                        round(scene_item.sceneBoundingRect().top(), 3),
-                        round(scene_item.sceneBoundingRect().left(), 3),
+                        round(nominal_scene_rect(scene_item).top(), 3),
+                        round(nominal_scene_rect(scene_item).left(), 3),
                         str(scene_item.data(0) or ""),
                     ),
                 )
@@ -5714,9 +6099,9 @@ class ProjectDetailWindow(QMainWindow):
                         pass_moved = False
                         ordered_items = scene_piece_items_in_layout_order()
                         for current_index, current_item in enumerate(ordered_items):
-                            current_rect = current_item.sceneBoundingRect()
+                            current_rect = nominal_scene_rect(current_item)
                             for previous_item in ordered_items[:current_index]:
-                                previous_rect = previous_item.sceneBoundingRect()
+                                previous_rect = nominal_scene_rect(previous_item)
                                 overlap_height = min(previous_rect.bottom(), current_rect.bottom()) - max(previous_rect.top(), current_rect.top())
                                 overlap_width = min(previous_rect.right(), current_rect.right()) - max(previous_rect.left(), current_rect.left())
 
@@ -5745,7 +6130,7 @@ class ProjectDetailWindow(QMainWindow):
                                     current_item.setPos(current_pos.x() + delta_value, current_pos.y())
                                 else:
                                     current_item.setPos(current_pos.x(), current_pos.y() + delta_value)
-                                current_rect = current_item.sceneBoundingRect()
+                                current_rect = nominal_scene_rect(current_item)
                                 moved_any = True
                                 pass_moved = True
 
@@ -5757,6 +6142,7 @@ class ProjectDetailWindow(QMainWindow):
                 if not moved_any:
                     return
 
+                update_dimension_annotations()
                 update_scene_bounds()
                 if fit_view_after:
                     items_rect = scene.itemsBoundingRect()
@@ -5786,6 +6172,8 @@ class ProjectDetailWindow(QMainWindow):
             if pieces_list.count() > 0:
                 pieces_list.setCurrentRow(0)
 
+            dimension_annotation_state["ready"] = True
+            update_dimension_annotations()
             update_scene_bounds()
             items_rect = scene.itemsBoundingRect()
             if not items_rect.isNull():
@@ -5807,6 +6195,7 @@ class ProjectDetailWindow(QMainWindow):
                     QMessageBox.warning(config_dialog, "Configurar En Juego", "Seleccione una pieza para rotarla.")
                     return
                 scene_item.setRotation((scene_item.rotation() + delta) % 360)
+                update_dimension_annotations()
                 update_scene_bounds()
                 view.centerOn(scene_item)
 
@@ -5821,6 +6210,11 @@ class ProjectDetailWindow(QMainWindow):
                 )
                 en_juego_settings["origin_z"] = _compact_number(
                     _coerce_setting_number(origin_z_field.text().strip(), en_juego_settings.get("origin_z", 0.0))
+                )
+                en_juego_settings["division_squaring_order"] = (
+                    "squaring_then_division"
+                    if square_then_divide_radio.isChecked()
+                    else "division_then_squaring"
                 )
                 en_juego_settings["cutting_is_through"] = _coerce_setting_bool(
                     en_juego_settings.get("cutting_is_through"),
@@ -6681,18 +7075,130 @@ class ProjectDetailWindow(QMainWindow):
                 _exec_centered(settings_dialog, config_dialog)
 
             def collect_en_juego_layout_data():
+                from core.pgmx_processing import resolve_piece_grain_hatch_axis
+
+                piece_rows_by_id = {
+                    str(piece_row.get("id") or "").strip(): piece_row
+                    for piece_row in en_juego_rows
+                }
+
+                def local_grain_axis(hatch_axis: str) -> str:
+                    if hatch_axis == "horizontal":
+                        return "x"
+                    if hatch_axis == "vertical":
+                        return "y"
+                    return "none"
+
+                def composition_grain_axis(axis: str, rotation_deg: float) -> str:
+                    if axis not in {"x", "y"}:
+                        return "none"
+                    normalized_rotation = round(rotation_deg) % 180
+                    if normalized_rotation == 90:
+                        return "y" if axis == "x" else "x"
+                    return axis
+
+                def instance_grain_fields(piece_id: str, item_rect, rotation_deg: float) -> dict:
+                    piece_row = piece_rows_by_id.get(piece_id) or {}
+                    grain_direction = normalize_piece_grain_direction(piece_row.get("grain_direction"))
+                    hatch_axis = resolve_piece_grain_hatch_axis(
+                        grain_direction,
+                        safe_float(piece_row.get("width")),
+                        safe_float(piece_row.get("height")),
+                        float(item_rect.width()),
+                        float(item_rect.height()),
+                    )
+                    local_axis = local_grain_axis(hatch_axis)
+                    return {
+                        "grain_direction": grain_direction,
+                        "grain_axis_local": local_axis,
+                        "grain_axis_composition": composition_grain_axis(local_axis, rotation_deg),
+                    }
+
+                def instance_piece_color(piece_id: str) -> str:
+                    piece_row = piece_rows_by_id.get(piece_id) or {}
+                    return str(piece_row.get("color") or "").strip()
+
                 layout_data = {}
+                nominal_rects = {
+                    instance_key: nominal_scene_rect(scene_item)
+                    for instance_key, scene_item in item_by_instance_id.items()
+                }
+                if nominal_rects:
+                    min_scene_x = min(rect.left() for rect in nominal_rects.values())
+                    max_scene_y = max(rect.bottom() for rect in nominal_rects.values())
+                else:
+                    min_scene_x = 0.0
+                    max_scene_y = 0.0
                 for instance_key, scene_item in item_by_instance_id.items():
+                    scene_pos = scene_item.pos()
+                    rotation_deg = scene_item.rotation()
+                    item_rect = scene_item.rect()
+                    nominal_rect = nominal_rects.get(instance_key)
+                    origin_scene_point = scene_item.mapToScene(item_rect.left(), item_rect.bottom())
+                    piece_id = str(scene_item.data(1) or "").strip()
+                    footprint_x_mm = nominal_rect.left() - min_scene_x if nominal_rect is not None else 0.0
+                    footprint_y_mm = max_scene_y - nominal_rect.bottom() if nominal_rect is not None else 0.0
                     layout_data[instance_key] = {
-                        "x": round(scene_item.pos().x(), 2),
-                        "y": round(scene_item.pos().y(), 2),
-                        "rotation": round(scene_item.rotation(), 2),
+                        "layout_version": 2,
+                        "instance_key": instance_key,
+                        "piece_id": piece_id,
+                        "x": round(scene_pos.x(), 2),
+                        "y": round(scene_pos.y(), 2),
+                        "rotation": round(rotation_deg, 2),
+                        "scene_x": round(scene_pos.x(), 2),
+                        "scene_y": round(scene_pos.y(), 2),
+                        "rotation_deg": round(rotation_deg, 2),
+                        "x_mm": round(origin_scene_point.x() - min_scene_x, 2),
+                        "y_mm": round(max_scene_y - origin_scene_point.y(), 2),
+                        "footprint_x_mm": round(footprint_x_mm, 2),
+                        "footprint_y_mm": round(footprint_y_mm, 2),
+                        "footprint_width_mm": (
+                            round(nominal_rect.width(), 2) if nominal_rect is not None else 0.0
+                        ),
+                        "footprint_height_mm": (
+                            round(nominal_rect.height(), 2) if nominal_rect is not None else 0.0
+                        ),
+                        "width_mm": round(item_rect.width(), 2),
+                        "height_mm": round(item_rect.height(), 2),
+                        "color": instance_piece_color(piece_id),
+                        **instance_grain_fields(piece_id, item_rect, rotation_deg),
                     }
                 return layout_data
 
+            def collect_en_juego_composition_data(layout_data: dict) -> dict:
+                grain_axes = {
+                    str(stored.get("grain_axis_composition") or "").strip().lower()
+                    for stored in layout_data.values()
+                    if isinstance(stored, dict)
+                    and str(stored.get("grain_axis_composition") or "").strip().lower() in {"x", "y"}
+                }
+                if not grain_axes:
+                    grain_axis = "none"
+                    grain_direction = "0"
+                    grain_status = "ok"
+                elif len(grain_axes) == 1:
+                    grain_axis = next(iter(grain_axes))
+                    grain_direction = "2" if grain_axis == "x" else "1"
+                    grain_status = "ok"
+                else:
+                    grain_axis = "mixed"
+                    grain_direction = "mixed"
+                    grain_status = "mixed"
+                return {
+                    "layout_version": 2,
+                    "composition_grain_direction": grain_direction,
+                    "composition_grain_axis": grain_axis,
+                    "composition_grain_status": grain_status,
+                }
+
+            def save_en_juego_composition_layout():
+                layout_data = collect_en_juego_layout_data()
+                config_data["en_juego_layout"] = layout_data
+                config_data["en_juego_composition"] = collect_en_juego_composition_data(layout_data)
+
             def save_en_juego_layout():
                 sync_en_juego_settings_from_controls()
-                config_data["en_juego_layout"] = collect_en_juego_layout_data()
+                save_en_juego_composition_layout()
                 config_data["en_juego_settings"] = dict(en_juego_settings)
                 persist_module_config()
                 config_dialog.accept()
@@ -6707,7 +7213,7 @@ class ProjectDetailWindow(QMainWindow):
                     )
                     return
 
-                from core.en_juego_pgmx import create_en_juego_pgmx
+                from core.en_juego_synthesis import create_en_juego_pgmx
 
                 default_name = f"{module_name}_EnJuego.pgmx"
                 default_path = module_path / default_name
@@ -6721,7 +7227,7 @@ class ProjectDetailWindow(QMainWindow):
                     return
 
                 sync_en_juego_settings_from_controls()
-                config_data["en_juego_layout"] = collect_en_juego_layout_data()
+                save_en_juego_composition_layout()
                 config_data["en_juego_settings"] = dict(en_juego_settings)
                 persist_module_config()
 
@@ -6794,10 +7300,11 @@ class ProjectDetailWindow(QMainWindow):
             view_buttons_layout.addWidget(close_layout_btn)
             view_panel_layout.addLayout(view_buttons_layout)
 
-            def refresh_cut_mode_controls():
+            def refresh_cut_mode_controls(*, enforce_spacing: bool = False):
                 sync_en_juego_settings_from_controls()
                 is_nesting_mode = en_juego_settings.get("cut_mode") == "nesting"
                 origin_group.setEnabled(is_nesting_mode)
+                operation_order_group.setEnabled(is_nesting_mode)
                 configure_division_btn.setEnabled(is_nesting_mode)
                 configure_squaring_btn.setEnabled(is_nesting_mode)
                 create_en_juego_btn.setEnabled(is_nesting_mode)
@@ -6805,10 +7312,12 @@ class ProjectDetailWindow(QMainWindow):
                     "Separación mínima actual: "
                     f"{_compact_number(effective_piece_spacing_mm())} mm"
                 )
-                enforce_minimum_piece_spacing()
+                if enforce_spacing:
+                    enforce_minimum_piece_spacing()
+                update_dimension_annotations()
 
-            manual_cut_radio.toggled.connect(lambda *_: refresh_cut_mode_controls())
-            nesting_cut_radio.toggled.connect(lambda *_: refresh_cut_mode_controls())
+            manual_cut_radio.toggled.connect(lambda *_: refresh_cut_mode_controls(enforce_spacing=True))
+            nesting_cut_radio.toggled.connect(lambda *_: refresh_cut_mode_controls(enforce_spacing=True))
             refresh_cut_mode_controls()
 
             config_dialog.setLayout(main_layout)

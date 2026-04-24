@@ -732,6 +732,8 @@ build_synthesis_request(
     circle_millings=None,
     squaring_millings=None,
     drillings=None,
+    ordered_machinings=None,
+    machining_order=None,
     xn=None,
 )
 ```
@@ -742,6 +744,12 @@ Reglas:
 - si no se pasa `piece`, toma el estado desde `source_pgmx_path` o desde el baseline
 - se pueden combinar mecanizados lineales, por polilinea abierta, circulares,
   de escuadrado y de taladrado en un mismo request
+- `ordered_machinings` permite insertar una secuencia exacta de specs publicos
+  (`LineMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec`,
+  `SquaringMillingSpec`, `DrillingSpec`) preservando ese orden de worksteps
+- `machining_order` permite definir el orden de aplicacion de familias de
+  mecanizado; por defecto es `line`, `polyline`, `circle`, `squaring`,
+  `drilling`
 - `xn` permite configurar el `Xn` final del workplan
 - si no se indica `xn`, la request usa `build_xn_spec()` por defecto
 - `baseline_path` y `source_pgmx_path` aceptan `.pgmx`, `Pieza.xml` o carpeta contenedora

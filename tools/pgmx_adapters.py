@@ -408,6 +408,65 @@ def _matches_points(
     )
 
 
+def _closed_points(points: tuple[tuple[float, float], ...], tolerance: float = 1e-6) -> bool:
+    if len(points) < 4:
+        return False
+    return (
+        math.isclose(points[0][0], points[-1][0], abs_tol=tolerance)
+        and math.isclose(points[0][1], points[-1][1], abs_tol=tolerance)
+    )
+
+
+def _point_on_interval(value: float, lower: float, upper: float, tolerance: float) -> bool:
+    return lower - tolerance <= value <= upper + tolerance
+
+
+def _boundary_edge_for_point(
+    point: tuple[float, float],
+    *,
+    length: float,
+    width: float,
+    tolerance: float = 1e-6,
+) -> Optional[str]:
+    point_x, point_y = point
+    if math.isclose(point_y, 0.0, abs_tol=tolerance) and _point_on_interval(
+        point_x,
+        0.0,
+        length,
+        tolerance,
+    ):
+        return "Bottom"
+    if math.isclose(point_x, length, abs_tol=tolerance) and _point_on_interval(
+        point_y,
+        0.0,
+        width,
+        tolerance,
+    ):
+        return "Right"
+    if math.isclose(point_y, width, abs_tol=tolerance) and _point_on_interval(
+        point_x,
+        0.0,
+        length,
+        tolerance,
+    ):
+        return "Top"
+    if math.isclose(point_x, 0.0, abs_tol=tolerance) and _point_on_interval(
+        point_y,
+        0.0,
+        width,
+        tolerance,
+    ):
+        return "Left"
+    return None
+
+
+def _signed_area(points: tuple[tuple[float, float], ...]) -> float:
+    area = 0.0
+    for current_point, next_point in zip(points, points[1:]):
+        area += (current_point[0] * next_point[1]) - (next_point[0] * current_point[1])
+    return area / 2.0
+
+
 def _detect_squaring_signature(
     snapshot: PgmxSnapshot,
     feature: PgmxFeatureSnapshot,
@@ -423,16 +482,18 @@ def _detect_squaring_signature(
         return None
     if profile.has_arcs:
         return None
-    if profile.family != "ClosedPolylineMidEdgeStart":
+    if not profile.is_closed:
         return None
     bounding_box = profile.bounding_box
     if bounding_box is None:
         return None
+    length = float(snapshot.state.length)
+    width = float(snapshot.state.width)
     expected_bbox = (
         0.0,
         0.0,
-        float(snapshot.state.length),
-        float(snapshot.state.width),
+        length,
+        width,
     )
     if not _matches_points(
         ((bounding_box[0], bounding_box[1]), (bounding_box[2], bounding_box[3])),
@@ -440,23 +501,32 @@ def _detect_squaring_signature(
     ):
         return None
     points = _polyline_points_from_profile(profile)
-    for winding in ("CounterClockwise", "Clockwise"):
-        expected_side = "Right" if winding == "CounterClockwise" else "Left"
-        if feature.side_of_feature and feature.side_of_feature != expected_side:
-            continue
-        for start_edge in ("Bottom", "Right", "Top", "Left"):
-            expected_points = tuple(
-                (point[0], point[1])
-                for point in sp._build_squaring_outline_points(
-                    snapshot.state.length,
-                    snapshot.state.width,
-                    start_edge=start_edge,
-                    winding=winding,
-                )
-            )
-            if _matches_points(points, expected_points):
-                return (start_edge, winding)
-    return None
+    if not _closed_points(points):
+        return None
+    if any(
+        _boundary_edge_for_point(point, length=length, width=width) is None
+        for point in points
+    ):
+        return None
+
+    expected_area = length * width
+    signed_area = _signed_area(points)
+    if not math.isclose(
+        abs(signed_area),
+        expected_area,
+        abs_tol=max(1e-3, expected_area * 1e-6),
+    ):
+        return None
+
+    winding = "CounterClockwise" if signed_area > 0.0 else "Clockwise"
+    expected_side = "Right" if winding == "CounterClockwise" else "Left"
+    if feature.side_of_feature and feature.side_of_feature != expected_side:
+        return None
+
+    start_edge = _boundary_edge_for_point(points[0], length=length, width=width)
+    if start_edge is None:
+        return None
+    return (start_edge, winding)
 
 
 def _adapt_drilling(
