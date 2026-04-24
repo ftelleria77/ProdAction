@@ -128,6 +128,70 @@ Desde `Configurar Escuadrado`:
    separacion entre piezas, usando exclusivamente los parametros de
    `Configurar Divisiones`.
 
+## Premisa Confirmada Del Sistema Local
+
+Para construir la composicion `En-Juego`, primero se trabajara en un sistema
+local de coordenadas cuyo origen cartesiano es `(0, 0)`.
+
+Ese origen local se ubica en la interseccion entre:
+
+- el borde izquierdo de la composicion
+- el borde inferior de la composicion
+
+Consecuencia operativa:
+
+- todas las posiciones y rotaciones del layout se interpretan primero en este
+  sistema local
+- la huella total del conjunto tambien se calcula en este sistema local
+- recien despues se aplican los valores `origin_x`, `origin_y` y `origin_z`
+  configurados en `Configurar En-Juego` para la pieza sintetizada final
+
+## Regla Confirmada De Traslacion Sin Rotacion
+
+Si una pieza sin rotar esta ubicada en la posicion `(x0, y0)` dentro de la
+composicion `En-Juego`, todas las coordenadas de sus geometrias pasan a quedar
+referidas al origen local de la composicion.
+
+Para transferir una coordenada `(x1, y1)` de una geometria original de la pieza
+al sistema local de la composicion, basta con aplicar una traslacion directa:
+
+- `x = x0 + x1`
+- `y = y0 + y1`
+
+Esta regla aplica al caso base sin rotacion.
+
+Consecuencia operativa:
+
+- el punto `(x1, y1)` de la pieza original se convierte en `(x0 + x1, y0 + y1)`
+  dentro de la composicion
+- el mismo criterio base debe aplicarse a vertices, centros, puntos de entrada,
+  puntos de salida y demas coordenadas geometricas cuando la pieza no este
+  rotada
+
+## Criterio Confirmado Para Detectar El Escuadrado Original
+
+El escuadrado original de cada pieza debe detectarse como un fresado que:
+
+- recorre una polilinea cerrada
+- da una vuelta completa por el borde exterior de la pieza
+- puede estar en sentido horario o antihorario
+
+La relacion entre sentido y correccion debe ser consistente:
+
+- `Clockwise` / `CW` -> correccion `Left`
+- `CounterClockwise` / `CCW` -> correccion `Right`
+
+Por lo tanto, se consideran candidatos validos a escuadrado original:
+
+- perfil exterior cerrado + `CW` + `Left`
+- perfil exterior cerrado + `CCW` + `Right`
+
+Y deben descartarse como escuadrado original:
+
+- `CW` + `Right`
+- `CCW` + `Left`
+- correccion `Center`
+
 ## Definicion De Huella Total
 
 La huella total del conjunto es el rectangulo minimo que contiene a todas las
@@ -206,7 +270,7 @@ La nueva sintesis debe:
 
 Quedan por definir en rondas siguientes:
 
-- criterio exacto para detectar el escuadrado original de cada pieza
 - reglas para construir divisiones en composiciones complejas
-- forma exacta de trasladar y rotar toolpaths y geometria transferida
+- forma exacta de rotar toolpaths y geometria transferida, y como combinar esa
+  rotacion con la traslacion base ya confirmada
 - reglas de prioridad y orden de los worksteps del nuevo programa
