@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import math
 import re
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -279,7 +280,105 @@ def _row_by_piece_id(config_data: dict) -> dict[str, dict]:
     return result
 
 
-def _composition_layout_rect(layout_data: dict) -> tuple[float, float] | None:
+def _layout_piece_id(instance_key: str, stored: dict) -> str:
+    piece_id = str(stored.get("piece_id") or "").strip()
+    if piece_id:
+        return piece_id
+    key = str(instance_key or "").strip()
+    if "#" in key:
+        return key.rsplit("#", 1)[0].strip()
+    return key
+
+
+def _layout_rotation_degrees(stored: dict) -> float:
+    rotation = _safe_float(stored.get("rotation_deg"))
+    if rotation is None:
+        rotation = _safe_float(stored.get("rotation"))
+    return float(rotation or 0.0)
+
+
+def _stored_layout_dimensions(
+    stored: dict,
+    piece_row: dict,
+    drawing_dimensions: tuple[float, float] | None = None,
+) -> tuple[float, float] | None:
+    width = _safe_float(stored.get("width_mm"))
+    height = _safe_float(stored.get("height_mm"))
+    if width is not None and height is not None and width > 0 and height > 0:
+        return float(width), float(height)
+
+    if drawing_dimensions is not None:
+        width, height = drawing_dimensions
+        if width > 0 and height > 0:
+            return float(width), float(height)
+
+    width = _safe_float(piece_row.get("program_width"))
+    height = _safe_float(piece_row.get("program_height"))
+    if width is not None and height is not None and width > 0 and height > 0:
+        return float(width), float(height)
+
+    width = _safe_float(piece_row.get("width"))
+    height = _safe_float(piece_row.get("height"))
+    if width is not None and height is not None and width > 0 and height > 0:
+        return float(width), float(height)
+
+    return None
+
+
+def _layout_has_footprint(stored: dict) -> bool:
+    x = _safe_float(stored.get("footprint_x_mm"))
+    y = _safe_float(stored.get("footprint_y_mm"))
+    width = _safe_float(stored.get("footprint_width_mm"))
+    height = _safe_float(stored.get("footprint_height_mm"))
+    return (
+        x is not None
+        and y is not None
+        and width is not None
+        and height is not None
+        and width > 0
+        and height > 0
+    )
+
+
+def _legacy_layout_scene_rect(
+    stored: dict,
+    piece_row: dict,
+    drawing_dimensions: tuple[float, float] | None = None,
+) -> tuple[float, float, float, float] | None:
+    scene_x = _safe_float(stored.get("scene_x"))
+    if scene_x is None:
+        scene_x = _safe_float(stored.get("x"))
+    scene_y = _safe_float(stored.get("scene_y"))
+    if scene_y is None:
+        scene_y = _safe_float(stored.get("y"))
+    dimensions = _stored_layout_dimensions(stored, piece_row, drawing_dimensions)
+    if scene_x is None or scene_y is None or dimensions is None:
+        return None
+
+    width, height = dimensions
+    angle = math.radians(_layout_rotation_degrees(stored))
+    cos_a = math.cos(angle)
+    sin_a = math.sin(angle)
+    center_x = width / 2.0
+    center_y = height / 2.0
+    points: list[tuple[float, float]] = []
+    for local_x, local_y in ((0.0, 0.0), (width, 0.0), (width, height), (0.0, height)):
+        offset_x = local_x - center_x
+        offset_y = local_y - center_y
+        points.append(
+            (
+                float(scene_x) + center_x + (offset_x * cos_a) + (offset_y * sin_a),
+                float(scene_y) + center_y - (offset_x * sin_a) + (offset_y * cos_a),
+            )
+        )
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    min_x = min(xs)
+    min_y = min(ys)
+    return min_x, min_y, max(xs) - min_x, max(ys) - min_y
+
+
+def _composition_layout_rect_from_footprints(layout_data: dict) -> tuple[float, float] | None:
     min_x: float | None = None
     min_y: float | None = None
     max_x: float | None = None
@@ -308,12 +407,178 @@ def _composition_layout_rect(layout_data: dict) -> tuple[float, float] | None:
     return width, height
 
 
+def _composition_layout_rect_from_scene(
+    layout_data: dict,
+    row_by_id: dict[str, dict],
+    drawing_dimensions_by_piece_id: dict[str, tuple[float, float]] | None = None,
+) -> tuple[float, float] | None:
+    rects: list[tuple[float, float, float, float]] = []
+    for instance_key, stored in layout_data.items():
+        if not isinstance(stored, dict):
+            continue
+        piece_id = _layout_piece_id(str(instance_key), stored)
+        piece_row = row_by_id.get(piece_id)
+        if not isinstance(piece_row, dict):
+            return None
+        rect = _legacy_layout_scene_rect(
+            stored,
+            piece_row,
+            (drawing_dimensions_by_piece_id or {}).get(piece_id),
+        )
+        if rect is None:
+            return None
+        rects.append(rect)
+
+    if not rects:
+        return None
+
+    min_x = min(rect[0] for rect in rects)
+    min_y = min(rect[1] for rect in rects)
+    max_x = max(rect[0] + rect[2] for rect in rects)
+    max_y = max(rect[1] + rect[3] for rect in rects)
+    width = max_x - min_x
+    height = max_y - min_y
+    if width <= 0 or height <= 0:
+        return None
+    return width, height
+
+
+def _composition_layout_rect(
+    layout_data: dict,
+    row_by_id: dict[str, dict],
+    drawing_dimensions_by_piece_id: dict[str, tuple[float, float]] | None = None,
+) -> tuple[float, float] | None:
+    if layout_data and all(
+        isinstance(stored, dict) and _layout_has_footprint(stored)
+        for stored in layout_data.values()
+    ):
+        return _composition_layout_rect_from_footprints(layout_data)
+
+    scene_rect = _composition_layout_rect_from_scene(
+        layout_data,
+        row_by_id,
+        drawing_dimensions_by_piece_id,
+    )
+    if scene_rect is not None:
+        return scene_rect
+
+    return _composition_layout_rect_from_footprints(layout_data)
+
+
 def _unique_nonempty_values(values) -> set[str]:
     return {str(value or "").strip() for value in values if str(value or "").strip()}
 
 
-def _build_en_juego_cut_piece(
+def _derived_grain_axis_for_layout(
+    stored: dict,
+    piece_row: dict,
+    drawing_dimensions: tuple[float, float] | None = None,
+) -> str:
+    grain_direction = normalize_piece_grain_direction(piece_row.get("grain_direction"))
+    if grain_direction not in {"1", "2"}:
+        return ""
+
+    dimensions = _stored_layout_dimensions(stored, piece_row, drawing_dimensions)
+    if dimensions is None:
+        return ""
+    drawn_width, drawn_height = dimensions
+    piece_width = _safe_float(piece_row.get("width"))
+    piece_height = _safe_float(piece_row.get("height"))
+
+    try:
+        from core.pgmx_processing import resolve_piece_grain_hatch_axis
+
+        hatch_axis = resolve_piece_grain_hatch_axis(
+            grain_direction,
+            piece_width,
+            piece_height,
+            drawn_width,
+            drawn_height,
+        )
+    except Exception:
+        hatch_axis = "vertical" if grain_direction == "1" else "horizontal"
+
+    if hatch_axis == "horizontal":
+        local_axis = "x"
+    elif hatch_axis == "vertical":
+        local_axis = "y"
+    else:
+        return ""
+
+    if round(_layout_rotation_degrees(stored)) % 180 == 90:
+        return "y" if local_axis == "x" else "x"
+    return local_axis
+
+
+def _composition_grain_axes(
+    layout_data: dict,
+    row_by_id: dict[str, dict],
+    drawing_dimensions_by_piece_id: dict[str, tuple[float, float]] | None = None,
+) -> set[str]:
+    axes: set[str] = set()
+    for instance_key, stored in layout_data.items():
+        if not isinstance(stored, dict):
+            continue
+        axis = str(stored.get("grain_axis_composition") or "").strip().lower()
+        if axis not in {"x", "y"}:
+            piece_id = _layout_piece_id(str(instance_key), stored)
+            piece_row = row_by_id.get(piece_id)
+            if isinstance(piece_row, dict):
+                axis = _derived_grain_axis_for_layout(
+                    stored,
+                    piece_row,
+                    (drawing_dimensions_by_piece_id or {}).get(piece_id),
+                )
+        if axis in {"x", "y"}:
+            axes.add(axis)
+    return axes
+
+
+def _resolve_layout_drawing_dimensions(
+    project: Project | None,
     module: ModuleData,
+    module_path: Path,
+    involved_piece_ids: set[str],
+) -> dict[str, tuple[float, float]]:
+    if project is None:
+        return {}
+
+    resolved: dict[str, tuple[float, float]] = {}
+    piece_by_id = {
+        str(piece.id or "").strip(): piece
+        for piece in module.pieces
+        if str(piece.id or "").strip() in involved_piece_ids
+    }
+    if not piece_by_id:
+        return resolved
+
+    try:
+        from core.pgmx_processing import parse_pgmx_for_piece
+    except Exception:
+        return resolved
+
+    for piece_id, piece in piece_by_id.items():
+        try:
+            drawing_data = parse_pgmx_for_piece(project, piece, module_path)
+        except Exception:
+            continue
+        if drawing_data is None:
+            continue
+        top_dimensions = getattr(drawing_data, "face_dimensions", {}).get("Top")
+        if not top_dimensions or len(top_dimensions) < 2:
+            continue
+        width = _safe_float(top_dimensions[0])
+        height = _safe_float(top_dimensions[1])
+        if width is not None and height is not None and width > 0 and height > 0:
+            resolved[piece_id] = (float(width), float(height))
+
+    return resolved
+
+
+def _build_en_juego_cut_piece(
+    project: Project | None,
+    module: ModuleData,
+    module_path: Path,
     config_data: dict,
     squaring_allowance: float,
 ) -> tuple[CutPiece | None, set[str]]:
@@ -331,9 +596,9 @@ def _build_en_juego_cut_piece(
         return None, set()
 
     layout_piece_ids = {
-        str(stored.get("piece_id") or "").strip()
-        for stored in layout_data.values()
-        if isinstance(stored, dict) and str(stored.get("piece_id") or "").strip()
+        _layout_piece_id(str(instance_key), stored)
+        for instance_key, stored in layout_data.items()
+        if isinstance(stored, dict) and _layout_piece_id(str(instance_key), stored)
     }
     if not enabled_en_juego_ids.issubset(layout_piece_ids):
         return None, set()
@@ -346,18 +611,29 @@ def _build_en_juego_cut_piece(
         instance_key: stored
         for instance_key, stored in layout_data.items()
         if isinstance(stored, dict)
-        and str(stored.get("piece_id") or "").strip() in involved_piece_ids
+        and _layout_piece_id(str(instance_key), stored) in involved_piece_ids
     }
     active_counts: dict[str, int] = {}
-    for stored in active_layout_data.values():
-        piece_id = str(stored.get("piece_id") or "").strip()
+    for instance_key, stored in active_layout_data.items():
+        piece_id = _layout_piece_id(str(instance_key), stored)
         active_counts[piece_id] = active_counts.get(piece_id, 0) + 1
     for piece_id in involved_piece_ids:
         expected_quantity = _safe_quantity(row_by_id.get(piece_id, {}).get("quantity"))
         if active_counts.get(piece_id, 0) != expected_quantity:
             return None, set()
 
-    dimensions = _composition_layout_rect(active_layout_data)
+    drawing_dimensions_by_piece_id = _resolve_layout_drawing_dimensions(
+        project,
+        module,
+        module_path,
+        involved_piece_ids,
+    )
+
+    dimensions = _composition_layout_rect(
+        active_layout_data,
+        row_by_id,
+        drawing_dimensions_by_piece_id,
+    )
     if dimensions is None:
         return None, set()
 
@@ -391,12 +667,11 @@ def _build_en_juego_cut_piece(
         )
     thickness = next(iter(thicknesses))
 
-    grain_axes = {
-        str(stored.get("grain_axis_composition") or "").strip().lower()
-        for stored in active_layout_data.values()
-        if isinstance(stored, dict)
-        and str(stored.get("grain_axis_composition") or "").strip().lower() in {"x", "y"}
-    }
+    grain_axes = _composition_grain_axes(
+        active_layout_data,
+        row_by_id,
+        drawing_dimensions_by_piece_id,
+    )
 
     composition_data = config_data.get("en_juego_composition", {})
     composition_grain = "0"
@@ -465,7 +740,9 @@ def _expand_project_pieces(project: Project, squaring_allowance: float = 0.0) ->
         module_quantity = _safe_quantity(getattr(module, 'quantity', None))
         config_data = _read_module_config(module_path)
         en_juego_cut_piece, en_juego_involved_piece_ids = _build_en_juego_cut_piece(
+            project,
             module,
+            module_path,
             config_data,
             resolved_squaring_allowance,
         )

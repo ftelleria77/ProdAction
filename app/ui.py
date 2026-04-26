@@ -1555,18 +1555,18 @@ class ProjectDetailWindow(QMainWindow):
         dates_row.addWidget(self.lbl_modified)
 
         btn_process = QPushButton("Procesar\nSelección")
-        btn_modules = QPushButton("Ver\nmódulos")
-        btn_drawings = QPushButton("Generar\nImágenes")
+        btn_add_locale = QPushButton("Nuevo\nLocal")
+        btn_modules = QPushButton("Abrir\nLocal")
         btn_sheets = QPushButton("Generar\nPlanillas")
         btn_cuts = QPushButton("Diagramas\nde Corte")
         btn_close = QPushButton("Cerrar")
 
         for button in (
             btn_process,
+            btn_add_locale,
             btn_modules,
             btn_sheets,
             btn_cuts,
-            btn_drawings,
             btn_close,
         ):
             button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
@@ -1582,8 +1582,8 @@ class ProjectDetailWindow(QMainWindow):
         actions_column = QVBoxLayout()
         actions_column.setContentsMargins(0, 0, 0, 0)
         actions_column.addWidget(btn_process)
+        actions_column.addWidget(btn_add_locale)
         actions_column.addWidget(btn_modules)
-        actions_column.addWidget(btn_drawings)
         actions_column.addWidget(btn_sheets)
         actions_column.addWidget(btn_cuts)
         actions_column.addStretch(1)
@@ -1597,17 +1597,20 @@ class ProjectDetailWindow(QMainWindow):
         self.setCentralWidget(container)
 
         self.btn_modules = btn_modules
+        self.btn_sheets = btn_sheets
+        self.btn_cuts = btn_cuts
         self.btn_modules.clicked.connect(self.show_modules)
         self.locales_list.itemDoubleClicked.connect(lambda *_: self.show_modules())
 
         btn_process.clicked.connect(self.process_project)
+        btn_add_locale.clicked.connect(self.add_locale)
         btn_sheets.clicked.connect(self.generate_sheets)
         btn_cuts.clicked.connect(self.show_cuts)
-        btn_drawings.clicked.connect(self.generate_drawings_only)
         btn_close.clicked.connect(self.close)
 
         self.refresh_project_header_info()
         self.update_modules_button()
+        self.update_output_action_buttons()
 
     def _show_return_window(self):
         if self.return_window is None:
@@ -1669,6 +1672,9 @@ class ProjectDetailWindow(QMainWindow):
             placeholder_item.setTextAlignment(Qt.AlignCenter)
             placeholder_item.setForeground(QColor("#777777"))
             self.locales_list.addItem(placeholder_item)
+
+        self.update_modules_button()
+        self.update_output_action_buttons()
 
     def _selected_locale_names(self) -> list[str]:
         selected_locales: list[str] = []
@@ -2306,6 +2312,31 @@ class ProjectDetailWindow(QMainWindow):
                 QMessageBox.warning(self, title, "Ingrese un nombre de local válido.")
                 continue
 
+            if (
+                locale_name in {".", ".."}
+                or locale_name.rstrip(" .") != locale_name
+                or any(char in locale_name for char in '<>:"/\\|?*')
+            ):
+                QMessageBox.warning(
+                    self,
+                    title,
+                    "El nombre del local contiene caracteres no validos para una carpeta.",
+                )
+                continue
+
+            existing_locale_keys = {
+                value
+                for locale in _normalize_project_locales(getattr(self.project, "locales", []), getattr(self.project, "local", ""))
+                for value in {
+                    str(locale.name or "").strip().lower(),
+                    str(locale.path or "").strip().lower(),
+                }
+                if value
+            }
+            if locale_name.lower() in existing_locale_keys:
+                QMessageBox.warning(self, title, "Ya existe un local con ese nombre.")
+                continue
+
             locale_dir = root_path / locale_name
             if locale_dir.exists():
                 QMessageBox.warning(
@@ -2316,6 +2347,44 @@ class ProjectDetailWindow(QMainWindow):
                 continue
 
             return locale_name
+
+    def add_locale(self):
+        root_path = Path(self.project.root_directory)
+        if not root_path.exists():
+            QMessageBox.warning(self, "Agregar Local", "La carpeta raiz del proyecto no existe.")
+            return
+
+        locale_name = self._prompt_new_locale_name(
+            root_path,
+            "Agregar Local",
+            "Nombre del nuevo local:",
+        )
+        if not locale_name:
+            return
+
+        new_locale = LocaleData(name=locale_name, path=locale_name, modules_count=0)
+        current_locales = _normalize_project_locales(
+            getattr(self.project, "locales", []),
+            getattr(self.project, "local", ""),
+        )
+        updated_locales = sorted(
+            current_locales + [new_locale],
+            key=lambda locale: locale.name.lower(),
+        )
+        try:
+            self._write_locale_config_files([new_locale])
+            self.project.locales = updated_locales
+            _save_project(self.project)
+        except Exception as exc:
+            QMessageBox.warning(self, "Agregar Local", f"No se pudo crear el local:\n{exc}")
+            return
+
+        self.refresh_project_header_info()
+        QMessageBox.information(
+            self,
+            "Agregar Local",
+            f"Local creado correctamente:\n{root_path / locale_name}",
+        )
 
     def _move_loose_modules_to_locale(self, root_path: Path, locale_name: str, module_dirs: list[Path]) -> None:
         locale_dir = root_path / locale_name
@@ -2537,19 +2606,29 @@ class ProjectDetailWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.warning(self, "Error", f"Error durante el procesamiento: {exc}")
 
+    def _project_has_locales_and_modules(self) -> bool:
+        locales = _normalize_project_locales(getattr(self.project, "locales", []), getattr(self.project, "local", ""))
+        return bool(locales) and bool(getattr(self.project, "modules", []))
+
+    def _project_has_module_window_context(self) -> bool:
+        locales = _normalize_project_locales(getattr(self.project, "locales", []), getattr(self.project, "local", ""))
+        return bool(locales) or bool(getattr(self.project, "modules", []))
+
     def update_modules_button(self):
-        """Habilitar botón Módulos si el proyecto fue procesado o hay resumen."""
-        project_root = Path(self.project.root_directory)
-        summary_path = project_root / "resumen_piezas.csv"
-        has_modules = bool(self.project.modules) or summary_path.exists()
-        self.btn_modules.setEnabled(has_modules)
+        """Habilitar boton Modulos si hay un local o modulos cargados."""
+        enabled = self._project_has_module_window_context()
+        self.btn_modules.setEnabled(enabled)
+        self.btn_modules.setToolTip("" if enabled else "Agregue un local o procese el proyecto.")
+
+    def update_output_action_buttons(self):
+        enabled = self._project_has_locales_and_modules()
+        tooltip = "" if enabled else "Procese el proyecto y asegure que tenga locales y modulos."
+        for button in (self.btn_sheets, self.btn_cuts):
+            button.setEnabled(enabled)
+            button.setToolTip(tooltip)
 
     def show_modules(self):
         """Mostrar lista de módulos en una ventana modal"""
-        if not self.project.modules:
-            QMessageBox.warning(self, "Módulos", "No hay módulos cargados. Procese el proyecto primero.")
-            return
-
         selected_locale_names: list[str] = []
         seen_locale_keys: set[str] = set()
         for item in self.locales_list.selectedItems():
@@ -2577,6 +2656,13 @@ class ProjectDetailWindow(QMainWindow):
                     "Seleccione un local en la lista para ver sus módulos.",
                 )
                 return
+        if not selected_locale_names and not self.project.modules:
+            QMessageBox.warning(
+                self,
+                "Módulos",
+                "Agregue un local o procese el proyecto para continuar.",
+            )
+            return
 
         selected_locale_keys = {locale_name.strip().lower() for locale_name in selected_locale_names if locale_name.strip()}
         def filtered_modules_for_dialog() -> list[ModuleData]:
@@ -2586,20 +2672,11 @@ class ProjectDetailWindow(QMainWindow):
                 if not selected_locale_keys or str(module.locale_name or "").strip().lower() in selected_locale_keys
             ]
 
-        visible_modules = filtered_modules_for_dialog()
-        if not visible_modules:
-            QMessageBox.warning(
-                self,
-                "Módulos",
-                "No hay módulos cargados para el local seleccionado.",
-            )
-            return
-
         dialog = QDialog(self)
         if len(selected_locale_names) == 1:
-            dialog.setWindowTitle(f"Módulos - {self.project.name} - {selected_locale_names[0]}")
+            dialog.setWindowTitle(f"Local: {selected_locale_names[0]}")
         else:
-            dialog.setWindowTitle(f"Módulos - {self.project.name}")
+            dialog.setWindowTitle("Locales")
         dialog.resize(760, 400)
 
         dlg_layout = QVBoxLayout()
@@ -2651,18 +2728,26 @@ class ProjectDetailWindow(QMainWindow):
                 if selected_row < 0:
                     selected_row = 0
                 self.modules_list.selectRow(selected_row)
-
-        refresh_modules_list_view()
+            refresh_inspect_button_state()
 
         dlg_layout.addWidget(QLabel("Módulos encontrados:"))
         modules_and_actions_row = QHBoxLayout()
         modules_and_actions_row.addWidget(self.modules_list, 1)
 
-        new_btn = QPushButton("Nuevo")
-        inspect_btn = QPushButton("Abrir")
+        new_btn = QPushButton("Nuevo\nMódulo")
+        inspect_btn = QPushButton("Abrir\nMódulo")
         close_btn = QPushButton("Cerrar")
         for button in (new_btn, inspect_btn, close_btn):
             button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+
+        def refresh_inspect_button_state():
+            current_row = self.modules_list.currentRow()
+            enabled = 0 <= current_row < self.modules_list.rowCount()
+            inspect_btn.setEnabled(enabled)
+            inspect_btn.setToolTip("" if enabled else "Seleccione un módulo para abrirlo.")
+
+        self.modules_list.itemSelectionChanged.connect(refresh_inspect_button_state)
+        refresh_modules_list_view()
 
         actions_column = QVBoxLayout()
         actions_column.setContentsMargins(0, 0, 0, 0)
@@ -3672,6 +3757,7 @@ class ProjectDetailWindow(QMainWindow):
         visible_row_indexes = []
         refreshing_pieces_table = False
         program_dimensions_cache = {}
+        configure_en_juego_btn = None
 
         def build_piece_from_row(piece_row):
             thickness_val = piece_row.get("thickness")
@@ -3846,6 +3932,97 @@ class ProjectDetailWindow(QMainWindow):
             normalized_state = Qt.CheckState(state) == Qt.CheckState.Checked
             all_rows[all_idx][field_name] = normalized_state
             mark_unsaved_changes()
+            if field_name == "en_juego":
+                all_rows[all_idx]["observations"] = set_piece_en_juego_observation(
+                    all_rows[all_idx].get("observations"),
+                    normalized_state,
+                )
+                refresh_visible_piece_observations(all_idx)
+                refresh_configure_en_juego_button_state()
+                if not normalized_state:
+                    prompt_clear_persistent_en_juego_info_if_needed()
+
+        def has_configurable_en_juego_pieces() -> bool:
+            return any(bool(row.get("en_juego", False)) for row in all_rows)
+
+        def _config_section_has_data(value) -> bool:
+            if isinstance(value, dict):
+                return bool(value)
+            if isinstance(value, (list, tuple, set)):
+                return bool(value)
+            return value not in (None, "", False)
+
+        def has_persistent_en_juego_info() -> bool:
+            if _config_section_has_data(config_data.get("en_juego_layout")):
+                return True
+            if _config_section_has_data(config_data.get("en_juego_composition")):
+                return True
+            settings_value = config_data.get("en_juego_settings")
+            if isinstance(settings_value, dict):
+                return _normalize_en_juego_settings(settings_value) != _default_en_juego_settings()
+            return False
+
+        def clear_persistent_en_juego_info():
+            config_data["en_juego_layout"] = {}
+            config_data["en_juego_composition"] = {}
+            config_data["en_juego_settings"] = _default_en_juego_settings()
+            mark_unsaved_changes()
+
+        def prompt_clear_persistent_en_juego_info_if_needed():
+            if has_configurable_en_juego_pieces() or not has_persistent_en_juego_info():
+                return
+            answer = QMessageBox.question(
+                inspect_dialog,
+                "Eliminar En-Juego",
+                (
+                    "Ya no hay piezas marcadas como En-Juego en este modulo.\n\n"
+                    "Existe informacion guardada de En-Juego para este modulo. "
+                    "Desea eliminar toda esa informacion?"
+                ),
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if answer == QMessageBox.Yes:
+                clear_persistent_en_juego_info()
+
+        def refresh_configure_en_juego_button_state():
+            if configure_en_juego_btn is None:
+                return
+            enabled = has_configurable_en_juego_pieces()
+            configure_en_juego_btn.setEnabled(enabled)
+            configure_en_juego_btn.setToolTip(
+                "Configurar En Juego"
+                if enabled
+                else "Marque al menos una pieza en la columna En-Juego."
+            )
+
+        def refresh_visible_piece_observations(all_idx: int):
+            if all_idx not in visible_row_indexes:
+                return
+            row_idx = visible_row_indexes.index(all_idx)
+            if row_idx < 0 or row_idx >= pieces_table.rowCount():
+                return
+
+            from core.pgmx_processing import get_pgmx_program_dimension_notes
+
+            piece_row = all_rows[all_idx]
+            notes = get_pgmx_program_dimension_notes(
+                self.project,
+                [build_piece_from_row(piece_row)],
+                module_path,
+                cache=program_dimensions_cache,
+            )
+            program_dimension_note = notes[0] if notes else ""
+            observations_text = build_piece_observations_display(
+                piece_row.get("observations"),
+                program_dimension_note,
+            )
+            dimension_item = QTableWidgetItem(observations_text)
+            dimension_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            dimension_item.setToolTip(observations_text)
+            if observations_text:
+                dimension_item.setForeground(QColor("#B71C1C"))
+            pieces_table.setItem(row_idx, PIECES_COL_NOTES, dimension_item)
 
         def sync_en_juego_observations():
             for piece_row in all_rows:
@@ -3957,6 +4134,7 @@ class ProjectDetailWindow(QMainWindow):
                 )
 
             refreshing_pieces_table = False
+            refresh_configure_en_juego_button_state()
 
         refresh_pieces_table()
 
@@ -4184,6 +4362,33 @@ class ProjectDetailWindow(QMainWindow):
 
             return drawing_path
 
+        def remove_piece_drawing_file(piece_row, ignore_row_index: int | None = None):
+            drawing_path = drawing_path_for_piece_row(piece_row)
+            if not drawing_path.is_file():
+                return
+            for other_idx, other_row in enumerate(all_rows):
+                if ignore_row_index is not None and other_idx == ignore_row_index:
+                    continue
+                if not str(other_row.get("source") or "").strip():
+                    continue
+                if drawing_path_for_piece_row(other_row) == drawing_path:
+                    return
+            try:
+                drawing_path.unlink()
+            except OSError:
+                pass
+
+        def refresh_piece_drawing_file(piece_row, row_index: int | None = None):
+            if not str(piece_row.get("source") or "").strip():
+                remove_piece_drawing_file(piece_row, ignore_row_index=row_index)
+                return None
+
+            drawing_path = ensure_piece_drawing(piece_row, force_regenerate=True, show_warning=False)
+            if drawing_path is None or not drawing_path.is_file():
+                remove_piece_drawing_file(piece_row, ignore_row_index=row_index)
+                return None
+            return drawing_path
+
         def select_source_for_selected_piece():
             current_row = pieces_table.currentRow()
             if current_row < 0:
@@ -4220,25 +4425,7 @@ class ProjectDetailWindow(QMainWindow):
 
             piece_display_name = str(all_rows[all_idx].get("name") or all_rows[all_idx].get("id") or "pieza").strip()
             open_drawing_dialog(drawing_path, piece_display_name)
-
-        def remove_source_for_selected_piece():
-            current_row = pieces_table.currentRow()
-            if current_row < 0:
-                QMessageBox.warning(inspect_dialog, "Quitar programa", "Seleccione una pieza de la lista.")
-                return
-            if current_row >= len(visible_row_indexes):
-                return
-
-            all_idx = visible_row_indexes[current_row]
-            all_rows[all_idx]["source"] = ""
-            all_rows[all_idx]["f6_source"] = None
-            all_rows[all_idx]["program_width"] = None
-            all_rows[all_idx]["program_height"] = None
-            all_rows[all_idx]["program_thickness"] = None
-            all_rows[all_idx]["pgmx"] = "✗"
-            persist_module_config()
-            refresh_pieces_table()
-            pieces_table.selectRow(current_row)
+            return
 
         def open_piece_editor(piece_row=None, row_index=None):
             is_new_piece = piece_row is None
@@ -4366,7 +4553,7 @@ class ProjectDetailWindow(QMainWindow):
             select_color_btn = None
             if is_new_piece:
                 select_color_btn = QPushButton("Seleccionar")
-                select_color_btn.setFixedSize(editor_inline_button_width, editor_inline_button_height)
+                select_color_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
 
             color_column = build_labeled_field_widget("Color:", color_field)
             grain_column = build_labeled_field_widget("Veta:", grain_field)
@@ -4411,25 +4598,41 @@ class ProjectDetailWindow(QMainWindow):
             source_field_widget = build_labeled_field_widget("Programa asociado (opcional):", source_field)
             source_field_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             select_source_btn = QPushButton("Seleccionar")
-            select_source_btn.setFixedSize(editor_inline_button_width, editor_inline_button_height)
+            select_source_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+            remove_source_editor_btn = QPushButton("Quitar\nPrograma")
+            remove_source_editor_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
             source_row = QHBoxLayout()
             source_row.setSpacing(top_fields_spacing)
             source_row.setContentsMargins(0, 0, 0, 0)
             source_row.addWidget(source_field_widget, 1, Qt.AlignTop)
             source_button_label = QLabel("")
             source_button_label.setFixedHeight(editor_label_height)
+            source_buttons_column = QVBoxLayout()
+            source_buttons_column.setSpacing(top_fields_spacing)
+            source_buttons_column.setContentsMargins(0, 0, 0, 0)
+            source_buttons_column.addWidget(select_source_btn)
+            source_buttons_column.addWidget(remove_source_editor_btn)
+            source_buttons_widget = QWidget()
+            source_buttons_widget.setFixedWidth(editor_inline_button_width)
+            source_buttons_widget.setLayout(source_buttons_column)
             source_button_column = QVBoxLayout()
             source_button_column.setSpacing(editor_field_block_spacing)
             source_button_column.setContentsMargins(0, 0, 0, 0)
             source_button_column.addWidget(source_button_label)
-            source_button_column.addWidget(select_source_btn, 0, Qt.AlignRight)
+            source_button_column.addWidget(source_buttons_widget, 0, Qt.AlignRight)
+            source_buttons_stack_height = (
+                editor_label_height
+                + editor_field_block_spacing
+                + (MAIN_ACTION_BUTTON_HEIGHT * 2)
+                + top_fields_spacing
+            )
             source_button_widget = QWidget()
             source_button_widget.setFixedWidth(editor_inline_button_width)
-            source_button_widget.setFixedHeight(editor_grid_row_height)
+            source_button_widget.setFixedHeight(source_buttons_stack_height)
             source_button_widget.setLayout(source_button_column)
             source_row.addWidget(source_button_widget, 0, Qt.AlignTop | Qt.AlignRight)
             source_widget = QWidget()
-            source_widget.setFixedHeight(editor_grid_row_height)
+            source_widget.setFixedHeight(source_buttons_stack_height)
             source_widget.setLayout(source_row)
             top_fields_grid.addWidget(source_widget, 3 + top_row_offset, 0, 1, 4)
 
@@ -4476,6 +4679,9 @@ class ProjectDetailWindow(QMainWindow):
             )
             preview_panel.setLayout(preview_layout)
 
+            def refresh_remove_source_button_state():
+                remove_source_editor_btn.setEnabled(bool(source_field.text().strip()))
+
             def build_editor_piece_row():
                 piece_id = id_field.text().strip()
                 source_value = source_field.text().strip()
@@ -4496,9 +4702,9 @@ class ProjectDetailWindow(QMainWindow):
                         "source": normalized_source,
                         "f6_source": infer_companion_f6_source(normalized_source),
                         "pgmx": self._get_pgmx_status(normalized_source, pgmx_names, pgmx_relpaths),
-                        "program_width": base_piece_row.get("program_width"),
-                        "program_height": base_piece_row.get("program_height"),
-                        "program_thickness": base_piece_row.get("program_thickness"),
+                        "program_width": base_piece_row.get("program_width") if normalized_source else None,
+                        "program_height": base_piece_row.get("program_height") if normalized_source else None,
+                        "program_thickness": base_piece_row.get("program_thickness") if normalized_source else None,
                         "en_juego": bool(base_piece_row.get("en_juego", False)),
                         "include_in_sheet": bool(base_piece_row.get("include_in_sheet", base_piece_row.get("excel", False))),
                     }
@@ -4516,6 +4722,7 @@ class ProjectDetailWindow(QMainWindow):
                 )
 
             def refresh_piece_preview():
+                refresh_remove_source_button_state()
                 preview_piece_row = build_editor_piece_row()
                 preview_source = str(preview_piece_row.get("source") or "").strip()
                 preview_title_label.setText(
@@ -4584,6 +4791,14 @@ class ProjectDetailWindow(QMainWindow):
                 if not source_file:
                     return
                 source_field.setText(normalize_source_path(source_file))
+                refresh_piece_preview_and_layout()
+
+            def remove_source_from_editor():
+                source_field.clear()
+                base_piece_row["f6_source"] = None
+                base_piece_row["program_width"] = None
+                base_piece_row["program_height"] = None
+                base_piece_row["program_thickness"] = None
                 refresh_piece_preview_and_layout()
 
             def apply_color_from_editor():
@@ -4699,12 +4914,18 @@ class ProjectDetailWindow(QMainWindow):
                     )
                     save_as_template = template_answer == QMessageBox.Yes
                 fallback_row = pieces_table.currentRow()
+                previous_piece = None if is_new_piece or row_index is None else dict(all_rows[row_index])
                 if is_new_piece:
                     all_rows.append(updated_piece)
+                    target_row_index = len(all_rows) - 1
                 else:
                     all_rows[row_index] = updated_piece
+                    target_row_index = row_index
 
                 persist_module_config()
+                if previous_piece is not None and drawing_path_for_piece_row(previous_piece) != drawing_path_for_piece_row(updated_piece):
+                    remove_piece_drawing_file(previous_piece, ignore_row_index=target_row_index)
+                refresh_piece_drawing_file(updated_piece, row_index=target_row_index)
                 if save_as_template:
                     try:
                         _save_manual_piece_template(updated_piece)
@@ -4756,6 +4977,8 @@ class ProjectDetailWindow(QMainWindow):
             editor_layout.addWidget(content_panel, 0)
 
             select_source_btn.clicked.connect(select_source_from_editor)
+            remove_source_editor_btn.clicked.connect(remove_source_from_editor)
+            source_field.textChanged.connect(lambda *_: refresh_remove_source_button_state())
             source_field.editingFinished.connect(refresh_piece_preview_and_layout)
             grain_field.currentIndexChanged.connect(refresh_piece_preview_and_layout)
             if template_combo is not None:
@@ -4813,6 +5036,7 @@ class ProjectDetailWindow(QMainWindow):
                 return
 
             all_rows.pop(all_idx)
+            remove_piece_drawing_file(piece_row)
             persist_module_config()
             refresh_pieces_table()
             select_visible_piece_by_id("", fallback_row=current_row)
@@ -7337,24 +7561,21 @@ class ProjectDetailWindow(QMainWindow):
         edit_piece_btn.setToolTip("Editar Pieza")
         delete_piece_btn = QPushButton("Eliminar")
         delete_piece_btn.setToolTip("Eliminar Pieza")
-        remove_source_btn = QPushButton("Quitar\nPrograma")
-        remove_source_btn.setToolTip("Quitar programa")
         configure_en_juego_btn = QPushButton("Configurar\nEn Juego")
         configure_en_juego_btn.setToolTip("Configurar En Juego")
+        refresh_configure_en_juego_button_state()
 
         for button in (
             add_piece_btn,
             edit_piece_btn,
             delete_piece_btn,
             configure_en_juego_btn,
-            remove_source_btn,
         ):
             button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
 
         actions_column.addWidget(add_piece_btn)
         actions_column.addWidget(edit_piece_btn)
         actions_column.addWidget(delete_piece_btn)
-        actions_column.addWidget(remove_source_btn)
         actions_column.addWidget(configure_en_juego_btn)
 
         content_row.addLayout(actions_column)
@@ -7364,7 +7585,6 @@ class ProjectDetailWindow(QMainWindow):
         edit_piece_btn.clicked.connect(edit_selected_piece)
         pieces_table.cellDoubleClicked.connect(edit_piece_from_table_double_click)
         delete_piece_btn.clicked.connect(remove_selected_piece)
-        remove_source_btn.clicked.connect(remove_source_for_selected_piece)
         configure_en_juego_btn.clicked.connect(open_en_juego_configuration_dialog)
 
         def save_module_settings(show_feedback=True):
@@ -7509,8 +7729,10 @@ class ProjectDetailWindow(QMainWindow):
         # Loop para permitir reintentos
         while True:
             try:
+                from core.pgmx_processing import generate_project_piece_drawings
                 from core.summary import export_production_sheet
 
+                generate_project_piece_drawings(selected_project)
                 generated_path = export_production_sheet(
                     selected_project,
                     Path(output_file),
@@ -7552,36 +7774,6 @@ class ProjectDetailWindow(QMainWindow):
                     else:
                         break  # Usuario cancela el diálogo de archivo
                 # Si presiona Retry, el loop continúa con el mismo archivo
-
-    def generate_drawings_only(self):
-        """Regenerar todas las imágenes sin afectar el resto de configuraciones."""
-        if not self.project.modules:
-            QMessageBox.warning(self, "Generar imágenes", "No hay módulos cargados. Procese el proyecto primero.")
-            return
-
-        selected_project = self._project_for_selected_locales("Generar imágenes")
-        if selected_project is None:
-            return
-
-        try:
-            from core.pgmx_processing import generate_project_piece_drawings
-
-            generated_drawings, skipped_drawings, pieces_with_machining = generate_project_piece_drawings(
-                selected_project,
-            )
-
-            detail_text = (
-                f"Imágenes regeneradas correctamente:\n\n"
-                f"Dibujos SVG generados: {generated_drawings}\n"
-                f"Piezas con mecanizados detectados: {pieces_with_machining}\n"
-                f"Piezas sin PGMX utilizable: {skipped_drawings}\n"
-                f"Ubicación: Carpeta de cada módulo"
-            )
-
-            QMessageBox.information(self, "Generar imágenes", detail_text)
-        except Exception as exc:
-            QMessageBox.warning(self, "Generar imágenes", f"Error al generar imágenes: {exc}")
-
 
 class EditLocalesDialog(QDialog):
     """Ventana simple para visualizar la lista actual de locales."""

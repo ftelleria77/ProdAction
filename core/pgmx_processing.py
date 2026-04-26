@@ -2023,16 +2023,21 @@ def generate_project_piece_drawings(project: Project) -> tuple[int, int, int]:
         module_path = Path(module.path)
 
         for piece in module.pieces:
+            piece_slug = _sanitize_filename(piece.name or piece.id)
+            output_path = module_path / f"{piece_slug}.svg"
             drawing_data = parse_pgmx_for_piece(project, piece, module_path)
             if drawing_data is None:
+                if output_path.is_file():
+                    try:
+                        output_path.unlink()
+                    except OSError:
+                        pass
                 skipped += 1
                 continue
 
             if drawing_data.operations or drawing_data.milling_paths or drawing_data.milling_circles:
                 with_machining += 1
 
-            piece_slug = _sanitize_filename(piece.name or piece.id)
-            output_path = module_path / f"{piece_slug}.svg"
             build_piece_svg(piece, drawing_data, output_path)
             generated += 1
 
