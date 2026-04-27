@@ -10,6 +10,7 @@ import datetime
 import json
 import os
 import shutil
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt
@@ -39,6 +40,7 @@ from PySide6.QtWidgets import (
     QRadioButton,
     QGroupBox,
     QSizePolicy,
+    QProgressDialog,
 )
 from PySide6.QtSvgWidgets import QSvgWidget
 
@@ -47,6 +49,7 @@ from core.model import (
     Project,
     ModuleData,
     Piece,
+    PIECE_GRAIN_CODE_NONE,
     build_piece_observations_display,
     normalize_piece_grain_direction,
     normalize_piece_observations,
@@ -54,7 +57,17 @@ from core.model import (
     set_piece_en_juego_observation,
 )
 
-BASE_DIR = Path(__file__).resolve().parents[1]
+def _application_base_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        executable_dir = Path(sys.executable).resolve().parent
+        internal_dir = executable_dir / "_internal"
+        if (internal_dir / "tools" / "tool_catalog.csv").exists():
+            return internal_dir
+        return executable_dir
+    return Path(__file__).resolve().parents[1]
+
+
+BASE_DIR = _application_base_dir()
 PROJECT_REGISTRY = BASE_DIR / "projects_list.json"
 APP_SETTINGS_FILE = BASE_DIR / "app_settings.json"
 ARCHIVE_DIR = BASE_DIR / "archive"
@@ -75,6 +88,14 @@ CUT_OPTIMIZATION_OPTIONS = [
     "Sin optimizar",
     "Optimización longitudinal",
     "Optimización transversal",
+]
+
+
+DEFAULT_PATH_FIELDS = [
+    ("projects", "Proyectos"),
+    ("excel_sheets", "Planillas Excel"),
+    ("cut_diagrams", "Diagramas de corte"),
+    ("cnc_files", "Archivos CNC"),
 ]
 
 
@@ -149,6 +170,7 @@ def _default_app_settings() -> dict:
         "cut_optimization_mode": CUT_OPTIMIZATION_OPTIONS[0],
         "available_boards": [],
         "manual_piece_templates": [],
+        "default_paths": {},
     }
 
 
@@ -229,6 +251,42 @@ def _normalize_available_boards(raw_boards) -> list[dict]:
     return boards
 
 
+def _normalize_default_paths(raw_paths) -> dict:
+    if not isinstance(raw_paths, dict):
+        raw_paths = {}
+    return {
+        key: str(raw_paths.get(key) or "").strip()
+        for key, _label in DEFAULT_PATH_FIELDS
+    }
+
+
+def _board_matches_piece_thickness(board: dict, piece_thickness: float | None) -> bool:
+    if piece_thickness is None:
+        return True
+    try:
+        board_thickness = float(board.get("thickness"))
+    except (TypeError, ValueError):
+        return False
+    return abs(board_thickness - piece_thickness) <= 0.001
+
+
+def _board_color_has_no_grain(color: str | None, piece_thickness: float | None = None) -> bool:
+    color_key = str(color or "").strip().lower()
+    if not color_key:
+        return False
+
+    matching_boards = [
+        board
+        for board in _read_app_settings().get("available_boards", [])
+        if str(board.get("color") or "").strip().lower() == color_key
+        and _board_matches_piece_thickness(board, piece_thickness)
+    ]
+    return bool(matching_boards) and all(
+        _normalize_board_grain(board.get("grain") or board.get("veta")) == BOARD_GRAIN_OPTIONS[0]
+        for board in matching_boards
+    )
+
+
 def _read_app_settings() -> dict:
     """Leer configuración general de la aplicación."""
     settings = _default_app_settings()
@@ -241,6 +299,7 @@ def _read_app_settings() -> dict:
     settings.update(saved_settings)
     settings["available_boards"] = _normalize_available_boards(settings.get("available_boards"))
     settings["manual_piece_templates"] = _normalize_manual_piece_templates(settings.get("manual_piece_templates"))
+    settings["default_paths"] = _normalize_default_paths(settings.get("default_paths"))
     settings["cut_optimization_mode"] = _normalize_cut_optimization_option(settings.get("cut_optimization_mode"))
     settings["cut_piece_gap"] = _compact_number(_coerce_setting_number(settings.get("cut_piece_gap"), 0.0, minimum=0.0))
     settings["cut_squaring_allowance"] = _compact_number(_coerce_setting_number(settings.get("cut_squaring_allowance"), 10.0, minimum=0.0))
@@ -256,6 +315,7 @@ def _write_app_settings(settings: dict):
     merged_settings["manual_piece_templates"] = _normalize_manual_piece_templates(
         merged_settings.get("manual_piece_templates")
     )
+    merged_settings["default_paths"] = _normalize_default_paths(merged_settings.get("default_paths"))
     merged_settings["cut_optimization_mode"] = _normalize_cut_optimization_option(merged_settings.get("cut_optimization_mode"))
     merged_settings["cut_piece_gap"] = _compact_number(_coerce_setting_number(merged_settings.get("cut_piece_gap"), 0.0, minimum=0.0))
     merged_settings["cut_squaring_allowance"] = _compact_number(_coerce_setting_number(merged_settings.get("cut_squaring_allowance"), 10.0, minimum=0.0))
@@ -1907,6 +1967,7 @@ class ProjectDetailWindow(QMainWindow):
                 "path": str(module_path),
                 "generated_at": datetime.datetime.now().isoformat(sep=" ", timespec="seconds"),
                 "en_juego_layout": previous_config.get("en_juego_layout", {}),
+                "en_juego_output_path": previous_config.get("en_juego_output_path", ""),
                 "en_juego_settings": _normalize_en_juego_settings(previous_config.get("en_juego_settings")),
                 "settings": {
                     "x": previous_settings.get("x", ""),
@@ -2855,6 +2916,7 @@ class ProjectDetailWindow(QMainWindow):
                 "path": str(module_path),
                 "generated_at": datetime.datetime.now().isoformat(sep=" ", timespec="seconds"),
                 "en_juego_layout": {},
+                "en_juego_output_path": "",
                 "en_juego_settings": _default_en_juego_settings(),
                 "settings": {
                     "x": "",
@@ -3957,6 +4019,8 @@ class ProjectDetailWindow(QMainWindow):
                 return True
             if _config_section_has_data(config_data.get("en_juego_composition")):
                 return True
+            if _config_section_has_data(config_data.get("en_juego_output_path")):
+                return True
             settings_value = config_data.get("en_juego_settings")
             if isinstance(settings_value, dict):
                 return _normalize_en_juego_settings(settings_value) != _default_en_juego_settings()
@@ -3965,6 +4029,7 @@ class ProjectDetailWindow(QMainWindow):
         def clear_persistent_en_juego_info():
             config_data["en_juego_layout"] = {}
             config_data["en_juego_composition"] = {}
+            config_data.pop("en_juego_output_path", None)
             config_data["en_juego_settings"] = _default_en_juego_settings()
             mark_unsaved_changes()
 
@@ -4687,6 +4752,11 @@ class ProjectDetailWindow(QMainWindow):
                 source_value = source_field.text().strip()
                 normalized_source = normalize_source_path(source_value) if source_value else ""
                 updated_quantity = _parse_piece_quantity_value(qty_field.text().strip(), default=1)
+                selected_color = color_field.text().strip()
+                selected_thickness = parse_optional_piece_float(thickness_field.text())
+                selected_grain = grain_field.currentData()
+                if _board_color_has_no_grain(selected_color, selected_thickness):
+                    selected_grain = PIECE_GRAIN_CODE_NONE
 
                 updated_piece = dict(base_piece_row)
                 updated_piece.update(
@@ -4696,9 +4766,9 @@ class ProjectDetailWindow(QMainWindow):
                         "quantity": updated_quantity,
                         "height": parse_optional_piece_float(height_field.text()),
                         "width": parse_optional_piece_float(width_field.text()),
-                        "thickness": parse_optional_piece_float(thickness_field.text()),
-                        "color": color_field.text().strip() or None,
-                        "grain_direction": grain_field.currentData(),
+                        "thickness": selected_thickness,
+                        "color": selected_color or None,
+                        "grain_direction": selected_grain,
                         "source": normalized_source,
                         "f6_source": infer_companion_f6_source(normalized_source),
                         "pgmx": self._get_pgmx_status(normalized_source, pgmx_names, pgmx_relpaths),
@@ -4710,6 +4780,16 @@ class ProjectDetailWindow(QMainWindow):
                     }
                 )
                 return updated_piece
+
+            def set_editor_grain_to_no_grain_if_color_requires(color_value: str | None = None) -> bool:
+                selected_color = color_field.text().strip() if color_value is None else str(color_value or "").strip()
+                selected_thickness = parse_optional_piece_float(thickness_field.text())
+                if not _board_color_has_no_grain(selected_color, selected_thickness):
+                    return False
+                if grain_field.currentData() != PIECE_GRAIN_CODE_NONE:
+                    grain_field.setCurrentIndex(0)
+                base_piece_row["grain_direction"] = PIECE_GRAIN_CODE_NONE
+                return True
 
             def set_preview_canvas_height(canvas_height: int) -> None:
                 normalized_height = max(int(round(canvas_height)), 1)
@@ -4817,6 +4897,8 @@ class ProjectDetailWindow(QMainWindow):
                     return
                 base_piece_row["color"] = new_color_val
                 color_field.setText(new_color_val or "")
+                if set_editor_grain_to_no_grain_if_color_requires(new_color_val):
+                    base_piece_row["grain_direction"] = PIECE_GRAIN_CODE_NONE
 
             def select_color_from_boards_for_editor():
                 piece_thickness = parse_optional_piece_float(thickness_field.text())
@@ -4853,6 +4935,7 @@ class ProjectDetailWindow(QMainWindow):
                 if not ok:
                     return
                 color_field.setText(str(selected_color or "").strip())
+                set_editor_grain_to_no_grain_if_color_requires(selected_color)
 
             def apply_template_to_editor(template_entry: dict) -> None:
                 normalized_template = _normalize_manual_piece_template_entry(template_entry)
@@ -4900,6 +4983,7 @@ class ProjectDetailWindow(QMainWindow):
                     QMessageBox.warning(editor_dialog, "Editar pieza", "El campo ID es obligatorio.")
                     return
 
+                set_editor_grain_to_no_grain_if_color_requires()
                 updated_piece = build_editor_piece_row()
                 save_as_template = False
                 template_selected = bool(template_combo is not None and template_combo.currentData() is not None)
@@ -4958,6 +5042,10 @@ class ProjectDetailWindow(QMainWindow):
             buttons_widget.setLayout(editor_buttons)
             buttons_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
+            def sync_editor_grainless_color_rule():
+                if set_editor_grain_to_no_grain_if_color_requires():
+                    refresh_piece_preview_and_layout()
+
             editor_buttons_top_gap = _scaled_int(155, max(editor_scale, 0.82), 96)
             right_panel = QWidget()
             right_panel.setFixedWidth(form_panel_width_hint)
@@ -4978,6 +5066,8 @@ class ProjectDetailWindow(QMainWindow):
 
             select_source_btn.clicked.connect(select_source_from_editor)
             remove_source_editor_btn.clicked.connect(remove_source_from_editor)
+            color_field.editingFinished.connect(sync_editor_grainless_color_rule)
+            thickness_field.editingFinished.connect(sync_editor_grainless_color_rule)
             source_field.textChanged.connect(lambda *_: refresh_remove_source_button_state())
             source_field.editingFinished.connect(refresh_piece_preview_and_layout)
             grain_field.currentIndexChanged.connect(refresh_piece_preview_and_layout)
@@ -5259,6 +5349,13 @@ class ProjectDetailWindow(QMainWindow):
                 return None
 
             new_color_val, scope = selection
+            new_color_has_no_grain = _board_color_has_no_grain(new_color_val, piece_thickness)
+
+            def apply_selected_color_to_row(row: dict) -> None:
+                row["color"] = new_color_val
+                if new_color_has_no_grain:
+                    row["grain_direction"] = PIECE_GRAIN_CODE_NONE
+
             selected_piece_id = ""
             fallback_row = pieces_table.currentRow()
             if target_row_index is not None and 0 <= target_row_index < len(all_rows):
@@ -5267,19 +5364,19 @@ class ProjectDetailWindow(QMainWindow):
             if scope == "piece":
                 if target_row_index is None or target_row_index >= len(all_rows):
                     return None
-                all_rows[target_row_index]["color"] = new_color_val
+                apply_selected_color_to_row(all_rows[target_row_index])
                 persist_module_config()
 
             elif scope == "module":
                 for row in all_rows:
                     if str(row.get("color") or "") == current_color:
-                        row["color"] = new_color_val
+                        apply_selected_color_to_row(row)
                 persist_module_config()
 
             else:
                 for row in all_rows:
                     if str(row.get("color") or "") == current_color:
-                        row["color"] = new_color_val
+                        apply_selected_color_to_row(row)
                 persist_module_config()
 
                 current_locale_key = _module_locale_key(selected_module)
@@ -5292,6 +5389,8 @@ class ProjectDetailWindow(QMainWindow):
                     for piece in getattr(mod, "pieces", []):
                         if str(piece.color or "") == current_color:
                             piece.color = new_color_val
+                            if new_color_has_no_grain:
+                                piece.grain_direction = PIECE_GRAIN_CODE_NONE
 
                     other_config_path = self._module_config_path(mod)
                     if not other_config_path.exists():
@@ -5301,7 +5400,7 @@ class ProjectDetailWindow(QMainWindow):
                         changed = False
                         for row in other_config.get("pieces", []):
                             if str(row.get("color") or "") == current_color:
-                                row["color"] = new_color_val
+                                apply_selected_color_to_row(row)
                                 changed = True
                         if changed:
                             other_config["generated_at"] = datetime.datetime.now().isoformat(
@@ -7473,6 +7572,15 @@ class ProjectDetailWindow(QMainWindow):
                     )
                     return
 
+                generated_output_path = Path(result.output_path)
+                try:
+                    output_for_config = str(
+                        generated_output_path.resolve().relative_to(module_path.resolve())
+                    ).replace("\\", "/")
+                except Exception:
+                    output_for_config = str(generated_output_path)
+                config_data["en_juego_output_path"] = output_for_config
+
                 sync_en_juego_observations()
                 persist_module_config()
                 refresh_pieces_table()
@@ -7706,6 +7814,102 @@ class ProjectDetailWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.warning(self, "Diagramas de Cortes", f"Error al generar diagramas: {exc}")
 
+    def _default_output_start_dir(self, path_key: str) -> str:
+        default_paths = _normalize_default_paths(_read_app_settings().get("default_paths"))
+        configured_value = str(default_paths.get(path_key, "")).strip()
+        configured_path = Path(configured_value) if configured_value else None
+        if configured_path is not None and configured_path.is_dir():
+            return str(configured_path)
+        project_root = Path(getattr(self.project, "root_directory", "") or "")
+        if str(project_root) and project_root.is_dir():
+            return str(project_root)
+        return str(Path.home())
+
+    def _safe_output_filename(self, value: str, fallback: str) -> str:
+        raw = str(value or "").strip() or fallback
+        invalid_chars = '<>:"/\\|?*'
+        cleaned = "".join("_" if char in invalid_chars or ord(char) < 32 else char for char in raw)
+        return cleaned.strip(" ._") or fallback
+
+    def _output_relative_path(self, value: str, fallback: str) -> Path:
+        raw = str(value or "").strip()
+        relative_path = Path(raw) if raw else Path(fallback)
+        if relative_path.is_absolute():
+            try:
+                relative_path = relative_path.resolve().relative_to(Path(self.project.root_directory).resolve())
+            except Exception:
+                relative_path = Path(relative_path.name)
+        parts = [
+            self._safe_output_filename(part, "carpeta")
+            for part in relative_path.parts
+            if part not in {"", ".", ".."}
+        ]
+        if not parts:
+            parts = [self._safe_output_filename(fallback, "carpeta")]
+        return Path(*parts)
+
+    def _project_cnc_output_root(self, selected_project: Project, output_root: Path) -> Path:
+        project_root_name = Path(str(selected_project.root_directory or "")).name.strip()
+        project_folder_name = self._safe_output_filename(
+            project_root_name or selected_project.name,
+            "Proyecto",
+        )
+        return output_root / project_folder_name
+
+    def _create_plan_sheet_output_structure(self, selected_project: Project, output_root: Path) -> dict[str, Path]:
+        project_output_root = self._project_cnc_output_root(selected_project, output_root)
+        project_output_root.mkdir(parents=True, exist_ok=True)
+        locale_dirs: dict[str, Path] = {}
+        locales_by_key = {
+            locale.name.strip().lower(): locale
+            for locale in selected_project.locales
+        }
+
+        for locale in selected_project.locales:
+            locale_dir = project_output_root / self._output_relative_path(locale.path, locale.name)
+            locale_dir.mkdir(parents=True, exist_ok=True)
+            locale_dirs[locale.name.strip().lower()] = locale_dir
+
+        for module in selected_project.modules:
+            module_relative = str(module.relative_path or "").strip()
+            if not module_relative:
+                locale_key = str(module.locale_name or "").strip().lower()
+                locale = locales_by_key.get(locale_key)
+                locale_relative = self._output_relative_path(
+                    locale.path if locale is not None else module.locale_name,
+                    module.locale_name or "local",
+                )
+                module_relative = str(locale_relative / module.name)
+            module_dir = project_output_root / self._output_relative_path(module_relative, module.name)
+            module_dir.mkdir(parents=True, exist_ok=True)
+
+        return locale_dirs
+
+    def _production_output_base_name(self, project: Project) -> str:
+        name_parts = [str(project.name or "Proyecto").strip()]
+        client_name = str(project.client or "").strip()
+        if client_name:
+            name_parts.append(client_name)
+        return self._safe_output_filename(" - ".join(name_parts), "Proyecto")
+
+    def _project_for_single_locale(self, selected_project: Project, locale: LocaleData) -> Project:
+        locale_key = locale.name.strip().lower()
+        locale_modules = [
+            module
+            for module in selected_project.modules
+            if str(module.locale_name or "").strip().lower() == locale_key
+        ]
+        return Project(
+            name=selected_project.name,
+            root_directory=selected_project.root_directory,
+            project_data_file=selected_project.project_data_file,
+            client=selected_project.client,
+            created_at=selected_project.created_at,
+            locales=[locale],
+            modules=locale_modules,
+            output_directory=selected_project.output_directory,
+        )
+
     def generate_sheets(self):
         if not self.project.modules:
             QMessageBox.warning(self, "Generar Planillas", "No hay módulos cargados. Procese el proyecto primero.")
@@ -7715,37 +7919,135 @@ class ProjectDetailWindow(QMainWindow):
         if selected_project is None:
             return
 
-        default_name = f"{self.project.name} - {self.project.client}.xlsx"
-        default_output = str(Path(self.project.root_directory) / default_name)
-        output_file, _ = QFileDialog.getSaveFileName(
+        output_root_value = QFileDialog.getExistingDirectory(
             self,
-            "Guardar planilla de producción",
-            default_output,
-            "Excel (*.xlsx)",
+            "Seleccionar carpeta raiz para estructura de archivos CNC",
+            self._default_output_start_dir("cnc_files"),
         )
-        if not output_file:
+        if not output_root_value:
             return
+        output_root = Path(output_root_value)
 
         # Loop para permitir reintentos
         while True:
+            progress_dialog = None
             try:
                 from core.pgmx_processing import generate_project_piece_drawings
-                from core.summary import export_production_sheet
+                from core.summary import export_production_sheet, export_production_sheet_pdf
 
-                generate_project_piece_drawings(selected_project)
-                generated_path = export_production_sheet(
-                    selected_project,
-                    Path(output_file),
+                locale_work_items = []
+                for locale in selected_project.locales:
+                    locale_project = self._project_for_single_locale(selected_project, locale)
+                    if locale_project.modules:
+                        locale_work_items.append((locale, locale_project))
+
+                total_steps = max(1, 2 + len(locale_work_items))
+                progress_step = 0
+                progress_dialog = QProgressDialog(
+                    "Preparando generación de archivos...",
+                    "",
+                    0,
+                    total_steps,
+                    self,
                 )
+                progress_dialog.setWindowTitle("Generar Planillas")
+                progress_dialog.setWindowModality(Qt.ApplicationModal)
+                progress_dialog.setCancelButton(None)
+                progress_dialog.setMinimumDuration(0)
+                progress_dialog.setAutoClose(False)
+                progress_dialog.setAutoReset(False)
+                progress_dialog.setValue(0)
+                progress_dialog.show()
+                QApplication.processEvents()
+
+                def update_progress(message: str, *, advance: bool = True) -> None:
+                    nonlocal progress_step
+                    if progress_dialog is None:
+                        return
+                    if advance:
+                        progress_step = min(total_steps, progress_step + 1)
+                    progress_dialog.setLabelText(message)
+                    progress_dialog.setValue(progress_step)
+                    QApplication.processEvents()
+
+                update_progress("Generando dibujos de piezas desde PGMX...", advance=False)
+                generate_project_piece_drawings(selected_project)
+                update_progress("Dibujos de piezas generados.")
+
+                update_progress("Creando estructura de carpetas...", advance=False)
+                project_output_root = self._project_cnc_output_root(selected_project, output_root)
+                locale_dirs = self._create_plan_sheet_output_structure(selected_project, output_root)
+                update_progress("Estructura de carpetas creada.")
+                base_name = self._production_output_base_name(selected_project)
+                generated_pdf_paths: list[Path] = []
+                for locale, locale_project in locale_work_items:
+                    locale_key = locale.name.strip().lower()
+                    locale_dir = locale_dirs.get(locale_key)
+                    if locale_dir is None:
+                        locale_dir = project_output_root / self._output_relative_path(locale.path, locale.name)
+                        locale_dir.mkdir(parents=True, exist_ok=True)
+                    pdf_base_name = self._safe_output_filename(
+                        f"{base_name} - {locale.name}",
+                        "Planilla",
+                    )
+                    update_progress(f"Generando PDF del local {locale.name}...", advance=False)
+                    generated_pdf_paths.append(
+                        export_production_sheet_pdf(
+                            locale_project,
+                            locale_dir / f"{pdf_base_name}.pdf",
+                        )
+                    )
+                    update_progress(f"PDF del local {locale.name} generado.")
+
+                if progress_dialog is not None:
+                    progress_dialog.setLabelText("Estructura y PDF generados.")
+                    progress_dialog.setValue(total_steps)
+                    QApplication.processEvents()
+                    progress_dialog.close()
+                    progress_dialog = None
+
+                excel_default_path = str(Path(self._default_output_start_dir("excel_sheets")) / f"{base_name}.xlsx")
+                excel_output_file, _ = QFileDialog.getSaveFileName(
+                    self,
+                    "Guardar planilla Excel",
+                    excel_default_path,
+                    "Excel (*.xlsx)",
+                )
+                generated_excel_path = None
+                if excel_output_file:
+                    excel_output_path = Path(excel_output_file)
+                    if excel_output_path.suffix.lower() != ".xlsx":
+                        excel_output_path = excel_output_path.with_suffix(".xlsx")
+                    generated_excel_path = export_production_sheet(
+                        selected_project,
+                        excel_output_path,
+                    )
+
+                detail_lines = [
+                    "Planillas generadas correctamente.",
+                    "",
+                    f"Carpeta raiz seleccionada: {output_root}",
+                    f"Carpeta proyecto CNC: {project_output_root}",
+                ]
+                if generated_excel_path is not None:
+                    detail_lines.append(f"Excel: {generated_excel_path}")
+                else:
+                    detail_lines.append("Excel: no guardado.")
+                if generated_pdf_paths:
+                    detail_lines.append("PDF por local:")
+                    detail_lines.extend(str(path) for path in generated_pdf_paths)
                 QMessageBox.information(
                     self,
                     "Generar Planillas",
-                    f"Planilla generada correctamente en:\n{generated_path}",
+                    "\n".join(detail_lines),
                 )
                 break  # Éxito, salir del loop
             except Exception as exc:
+                if progress_dialog is not None:
+                    progress_dialog.close()
+                    progress_dialog = None
                 # Mostrar error con opciones de reintentar
-                error_msg = f"No se pudo generar la planilla:\n\n{exc}"
+                error_msg = f"No se pudieron generar las planillas:\n\n{exc}"
                 
                 # Crear un diálogo personalizado con más opciones
                 dlg = QMessageBox(self)
@@ -7762,18 +8064,15 @@ class ProjectDetailWindow(QMainWindow):
                 if dlg.clickedButton() == cancel_btn:
                     break  # Usuario cancela, salir del loop
                 elif dlg.clickedButton() == change_location_btn:
-                    # Permitir elegir otro archivo
-                    new_output, _ = QFileDialog.getSaveFileName(
+                    new_output_root = QFileDialog.getExistingDirectory(
                         self,
-                        "Guardar planilla de producción",
-                        default_output,
-                        "Excel (*.xlsx)",
+                        "Seleccionar carpeta raiz para estructura de archivos CNC",
+                        str(output_root),
                     )
-                    if new_output:
-                        output_file = new_output
+                    if new_output_root:
+                        output_root = Path(new_output_root)
                     else:
-                        break  # Usuario cancela el diálogo de archivo
-                # Si presiona Retry, el loop continúa con el mismo archivo
+                        break
 
 class EditLocalesDialog(QDialog):
     """Ventana simple para visualizar la lista actual de locales."""
@@ -9174,6 +9473,89 @@ class PieceTemplatesDialog(QDialog):
         self.refresh_templates_table()
 
 
+class PathsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Rutas")
+        self.setModal(True)
+        self.setMinimumWidth(720)
+        self.settings = _read_app_settings()
+        self.path_fields: dict[str, QLineEdit] = {}
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Rutas predeterminadas para abrir selectores de carpetas y archivos."))
+
+        paths_grid = QGridLayout()
+        paths_grid.setColumnStretch(1, 1)
+        default_paths = _normalize_default_paths(self.settings.get("default_paths"))
+        for row_index, (path_key, label_text) in enumerate(DEFAULT_PATH_FIELDS):
+            label = QLabel(label_text)
+            field = QLineEdit(default_paths.get(path_key, ""))
+            field.setMinimumWidth(440)
+            browse_button = QPushButton("...")
+            browse_button.setFixedSize(40, MAIN_ACTION_BUTTON_HEIGHT)
+            browse_button.clicked.connect(
+                lambda _checked=False, key=path_key: self.select_folder(key)
+            )
+            self.path_fields[path_key] = field
+            paths_grid.addWidget(label, row_index, 0)
+            paths_grid.addWidget(field, row_index, 1)
+            paths_grid.addWidget(browse_button, row_index, 2)
+        layout.addLayout(paths_grid)
+
+        buttons_row = QHBoxLayout()
+        buttons_row.addStretch(1)
+        save_button = QPushButton("Guardar")
+        close_button = QPushButton("Cerrar")
+        save_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        close_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        save_button.clicked.connect(self.save_paths)
+        close_button.clicked.connect(self.accept)
+        buttons_row.addWidget(save_button)
+        buttons_row.addWidget(close_button)
+        layout.addLayout(buttons_row)
+
+        self.setLayout(layout)
+
+    def _field_label(self, path_key: str) -> str:
+        return dict(DEFAULT_PATH_FIELDS).get(path_key, "Ruta")
+
+    def _selector_start_dir(self, path_key: str) -> str:
+        raw_path = self.path_fields[path_key].text().strip()
+        current_path = Path(raw_path) if raw_path else None
+        if current_path is not None and current_path.is_dir():
+            return str(current_path)
+        return str(Path.home())
+
+    def select_folder(self, path_key: str):
+        selected_folder = QFileDialog.getExistingDirectory(
+            self,
+            f"Seleccionar carpeta - {self._field_label(path_key)}",
+            self._selector_start_dir(path_key),
+        )
+        if selected_folder:
+            self.path_fields[path_key].setText(selected_folder)
+
+    def save_paths(self):
+        normalized_paths = {}
+        for path_key, field in self.path_fields.items():
+            path_value = field.text().strip()
+            if path_value and not Path(path_value).is_dir():
+                QMessageBox.warning(
+                    self,
+                    "Rutas",
+                    f"La ruta de {self._field_label(path_key)} no existe o no es una carpeta.",
+                )
+                return
+            normalized_paths[path_key] = path_value
+
+        current_settings = _read_app_settings()
+        current_settings["default_paths"] = normalized_paths
+        _write_app_settings(current_settings)
+        self.settings = _read_app_settings()
+        QMessageBox.information(self, "Rutas", "Rutas guardadas.")
+
+
 class OptionsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -9194,6 +9576,14 @@ class OptionsDialog(QDialog):
         minimum_dimension_row.addWidget(minimum_dimension_label)
         minimum_dimension_row.addWidget(self.minimum_dimension_field)
         layout.addLayout(minimum_dimension_row)
+
+        paths_row = QHBoxLayout()
+        paths_row.addWidget(QLabel("Rutas predeterminadas"))
+        paths_button = QPushButton("Rutas")
+        paths_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        paths_button.clicked.connect(self.open_paths_dialog)
+        paths_row.addWidget(paths_button)
+        layout.addLayout(paths_row)
 
         cuts_row = QHBoxLayout()
         cuts_row.addWidget(QLabel("Configuración de cortes"))
@@ -9242,6 +9632,11 @@ class OptionsDialog(QDialog):
 
     def open_boards_dialog(self):
         dialog = BoardsDialog(self)
+        _exec_centered(dialog, self)
+        self.settings = _read_app_settings()
+
+    def open_paths_dialog(self):
+        dialog = PathsDialog(self)
         _exec_centered(dialog, self)
         self.settings = _read_app_settings()
 

@@ -1,0 +1,14 @@
+{
+  "minimum_machinable_dimension": 150,
+  "cut_board_width": 1830,
+  "cut_board_height": 2750,
+  "cut_piece_gap": 0,
+  "cut_squaring_allowance": 10,
+  "cut_saw_kerf": 4,
+  "cut_optimization_mode": "Sin optimizar",
+  "available_boards": [],
+  "manual_piece_templates": [],
+  "available_herrajes": [],
+  "available_guias": [],
+  "available_detalles": []
+}

@@ -34,5 +34,11 @@
     "client_name": "Telleria",
     "source_folder": "C:/Proyectos/Prod 02-2026 - Telleria",
     "project_data_file": "project.json"
+  },
+  {
+    "project_name": "Prod-01-2026",
+    "client_name": "Vargas",
+    "source_folder": "S:/Maestro/Projects/Prod-2026-01 - Vargas",
+    "project_data_file": "project.json"
   }
 ]

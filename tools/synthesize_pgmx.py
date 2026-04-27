@@ -66,6 +66,7 @@ import hashlib
 import json
 import math
 import re
+import sys
 import zipfile
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field, replace
@@ -83,7 +84,19 @@ UTILITY_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDat
 XSD_NS = "http://www.w3.org/2001/XMLSchema"
 ARRAYS_NS = "http://schemas.microsoft.com/2003/10/Serialization/Arrays"
 PARAMETRIC_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Parametrics"
-MODULE_DIR = Path(__file__).resolve().parent
+def _module_data_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        executable_dir = Path(sys.executable).resolve().parent
+        for bundled_tools_dir in (
+            executable_dir / "tools",
+            executable_dir / "_internal" / "tools",
+        ):
+            if bundled_tools_dir.exists():
+                return bundled_tools_dir
+    return Path(__file__).resolve().parent
+
+
+MODULE_DIR = _module_data_dir()
 DEFAULT_BASELINE_DIR = MODULE_DIR / "maestro_baselines"
 DEFAULT_BASELINE_XML_PATH = DEFAULT_BASELINE_DIR / "Pieza.xml"
 TOOL_CATALOG_PATH = Path(__file__).with_name("tool_catalog.csv")

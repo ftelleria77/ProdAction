@@ -72,6 +72,12 @@
       "saved_at": "2026-04-23 11:47:49"
     }
   ],
+  "default_paths": {
+    "projects": "S:/Maestro/Projects",
+    "excel_sheets": "P:/PRODUCCION",
+    "cut_diagrams": "P:/PRODUCCION",
+    "cnc_files": "P:/USBMIX"
+  },
   "available_herrajes": [
     "Perfil C Superior de Aluminio",
     "Perfil C Medio de Aluminio",
