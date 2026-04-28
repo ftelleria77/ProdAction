@@ -17,9 +17,13 @@ El snapshot incluye:
 - variables y expresiones
 - planos y placements
 - geometrias con perfil clasificado cuando aplica
-- features con refs, profundidad cruda e inferida
+- features con refs, profundidad cruda e inferida, incluso cuando la familia no
+  tiene `SweptShape`
+- features de canal con perfil, extremos, sobrecortes y angulo cuando aplica
 - operaciones con herramienta, approach, retract, estrategia y toolpaths
 - working steps en el orden real del workplan
+- working steps resueltos, vinculando cada paso con feature, operacion,
+  geometria y plano cuando esos datos existen
 
 ## Uso programatico
 
@@ -34,6 +38,16 @@ print(snapshot.state)
 print(snapshot.feature_by_id["2204"])
 print(snapshot.operation_by_id["2203"])
 print(snapshot.working_steps[-2].name)
+
+for item in snapshot.resolved_working_steps:
+    print(
+        item.index,
+        item.step.name,
+        item.feature.feature_type if item.feature else "-",
+        item.operation.operation_type if item.operation else "-",
+        item.geometry.geometry_type if item.geometry else "-",
+        item.plane.plane_type if item.plane else "-",
+    )
 ```
 
 Si hace falta serializarlo para inspeccion externa:
@@ -46,6 +60,11 @@ from tools.pgmx_snapshot import read_pgmx_snapshot, write_pgmx_snapshot_json
 snapshot = read_pgmx_snapshot(Path("archive/maestro_examples/Tapa.pgmx"))
 write_pgmx_snapshot_json(snapshot, Path("tmp/tapa_snapshot.json"))
 ```
+
+El JSON generado por `snapshot_to_dict(...)` y `write_pgmx_snapshot_json(...)`
+incluye una clave derivada `resolved_working_steps`. Esa clave no duplica
+ningun dato del `.pgmx`: solo cruza referencias para facilitar inspeccion y
+adaptacion hacia `tools.synthesize_pgmx`.
 
 ## CLI
 

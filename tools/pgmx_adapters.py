@@ -6,8 +6,9 @@ sintetizador actual.
 
 Objetivos:
 
-- refactorizar casos manuales hacia `LineMillingSpec`, `PolylineMillingSpec`,
-  `CircleMillingSpec`, `SquaringMillingSpec` y `DrillingSpec`
+- refactorizar casos manuales hacia `LineMillingSpec`, `SlotMillingSpec`,
+  `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec` y
+  `DrillingSpec`
 - informar con claridad cuando una feature o working step no puede adaptarse
 - construir rapido un `PgmxSynthesisRequest` con el material soportado
 
@@ -40,6 +41,7 @@ from tools.pgmx_snapshot import (
 
 SupportedSynthesisSpec = (
     sp.LineMillingSpec
+    | sp.SlotMillingSpec
     | sp.PolylineMillingSpec
     | sp.CircleMillingSpec
     | sp.SquaringMillingSpec
@@ -124,6 +126,14 @@ class PgmxAdaptationResult:
         )
 
     @property
+    def slot_millings(self) -> tuple[sp.SlotMillingSpec, ...]:
+        return tuple(
+            entry.spec
+            for entry in self.adapted_entries
+            if isinstance(entry.spec, sp.SlotMillingSpec)
+        )
+
+    @property
     def polyline_millings(self) -> tuple[sp.PolylineMillingSpec, ...]:
         return tuple(
             entry.spec
@@ -171,7 +181,8 @@ class PgmxAdaptationResult:
 
         Nota: el request conserva el orden relativo dentro de cada familia
         soportada, pero la API publica del sintetizador sigue agrupando por
-        tipo de mecanizado (`line`, `polyline`, `circle`, `squaring`, `drilling`).
+        tipo de mecanizado (`line`, `slot`, `polyline`, `circle`, `squaring`,
+        `drilling`).
         """
 
         if strict and self.unsupported_entries:
@@ -191,6 +202,7 @@ class PgmxAdaptationResult:
             source_pgmx_path=source_pgmx_path or self.snapshot.source_path,
             piece=self.snapshot.state,
             line_millings=self.line_millings,
+            slot_millings=self.slot_millings,
             polyline_millings=self.polyline_millings,
             circle_millings=self.circle_millings,
             squaring_millings=self.squaring_millings,
@@ -277,6 +289,25 @@ def _effective_tool_width(value: Optional[float], fallback: float) -> float:
     if math.isclose(float(value), 0.0, abs_tol=1e-6):
         return float(fallback)
     return float(value)
+
+
+def _is_horizontal_line_primitive(primitive) -> bool:
+    return math.isclose(
+        float(primitive.start_point[1]),
+        float(primitive.end_point[1]),
+        abs_tol=1e-6,
+    )
+
+
+def _slot_end_radius(feature: PgmxFeatureSnapshot) -> float:
+    radii = [
+        float(end.radius)
+        for end in feature.end_conditions
+        if end.radius is not None
+    ]
+    if not radii:
+        return 60.0
+    return radii[0]
 
 
 def _unsupported_entry(
@@ -730,6 +761,92 @@ def _adapt_milling(
     approach = operation.approach or sp.build_approach_spec()
     retract = operation.retract or sp.build_retract_spec()
     profile = geometry.profile
+    is_slot_side = "SlotSide" in feature.feature_type or "SlotSide" in feature.object_type
+
+    if is_slot_side:
+        if profile.geometry_type != "GeomTrimmedCurve" or profile.primitive_count != 1:
+            return _unsupported_entry(
+                feature,
+                operation,
+                step,
+                order_index=order_index,
+                reasons=["`SlotSide` solo se adapta por ahora cuando la geometria es una recta simple."],
+                warnings=warnings,
+            )
+        primitive = profile.primitives[0]
+        if primitive.primitive_type != "Line":
+            return _unsupported_entry(
+                feature,
+                operation,
+                step,
+                order_index=order_index,
+                reasons=["`SlotSide` no referencia una recta simple."],
+                warnings=warnings,
+            )
+        if not _is_horizontal_line_primitive(primitive):
+            return _unsupported_entry(
+                feature,
+                operation,
+                step,
+                order_index=order_index,
+                reasons=[
+                    "`SlotSide` con Sierra Vertical X requiere una recta horizontal sobre `Top`; "
+                    "el recorrido vertical no es ejecutable en CNC."
+                ],
+                warnings=warnings,
+            )
+        try:
+            spec = sp.build_slot_milling_spec(
+                start_x=primitive.start_point[0],
+                start_y=primitive.start_point[1],
+                end_x=primitive.end_point[0],
+                end_y=primitive.end_point[1],
+                feature_name=feature_name,
+                plane_name=_plane_name_or_default(feature),
+                side_of_feature=feature.side_of_feature or "Center",
+                tool_id=tool_key.id,
+                tool_name=tool_key.name,
+                tool_width=_effective_tool_width(feature.tool_width, 3.8),
+                security_plane=float(operation.approach_security_plane),
+                is_through=bool(depth_kwargs["is_through"]),
+                target_depth=depth_kwargs["target_depth"],
+                extra_depth=depth_kwargs["extra_depth"],
+                approach_enabled=approach.is_enabled,
+                approach_type=approach.approach_type,
+                approach_mode=approach.mode,
+                approach_radius_multiplier=approach.radius_multiplier,
+                approach_speed=approach.speed,
+                approach_arc_side=approach.arc_side,
+                retract_enabled=retract.is_enabled,
+                retract_type=retract.retract_type,
+                retract_mode=retract.mode,
+                retract_radius_multiplier=retract.radius_multiplier,
+                retract_speed=retract.speed,
+                retract_arc_side=retract.arc_side,
+                retract_overlap=retract.overlap,
+                material_position=feature.material_position or "Left",
+                side_offset=feature.side_offset,
+                end_radius=_slot_end_radius(feature),
+                slot_angle=feature.slot_angle,
+            )
+        except Exception as exc:
+            return _unsupported_entry(
+                feature,
+                operation,
+                step,
+                order_index=order_index,
+                reasons=[_builder_error("No se pudo construir el `SlotMillingSpec`", exc)],
+                warnings=warnings,
+            )
+        return _adapted_entry(
+            feature,
+            operation,
+            step,
+            order_index=order_index,
+            spec_kind="slot_milling",
+            spec=spec,
+            warnings=warnings,
+        )
 
     squaring_signature = _detect_squaring_signature(snapshot, feature)
     if squaring_signature is not None:
@@ -994,7 +1111,7 @@ def _adapt_feature(
             step,
             order_index=order_index,
         )
-    if "GeneralProfileFeature" in feature.feature_type:
+    if "GeneralProfileFeature" in feature.feature_type or "SlotSide" in feature.feature_type:
         return _adapt_milling(
             snapshot,
             feature,
@@ -1119,6 +1236,7 @@ def adaptation_to_dict(result: PgmxAdaptationResult) -> dict[str, Any]:
             "working_step_entries": len(result.working_step_entries),
             "orphan_feature_entries": len(result.orphan_feature_entries),
             "line_millings": len(result.line_millings),
+            "slot_millings": len(result.slot_millings),
             "polyline_millings": len(result.polyline_millings),
             "circle_millings": len(result.circle_millings),
             "squaring_millings": len(result.squaring_millings),

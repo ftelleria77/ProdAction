@@ -26,10 +26,6 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        "tools.module_3d_preview_model",
-        "tools.module_3d_preview_test",
-        "tools.module_panda3d_preview_test",
-        "tools.module_vtk_preview_test",
         "cairocffi",
         "cairosvg",
         "cssselect2",

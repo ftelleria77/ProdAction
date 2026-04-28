@@ -25,6 +25,7 @@ Ademas, `PgmxAdaptationResult` expone:
 - `working_step_entries`
 - `orphan_feature_entries`
 - `line_millings`
+- `slot_millings`
 - `polyline_millings`
 - `circle_millings`
 - `squaring_millings`
@@ -58,6 +59,10 @@ describen un mecanizado publico reutilizable. No bloquean
 - `RoundHole` + `DrillingOperation` -> `DrillingSpec`
 - `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `LineMillingSpec`
   cuando la geometria es una recta simple
+- `SlotSide` + `BottomAndSideFinishMilling` -> `SlotMillingSpec`
+  cuando la geometria es una recta horizontal sobre `Top`
+  - las ranuras verticales quedan como `unsupported`: la `Sierra Vertical X`
+    no puede ejecutar ese recorrido y no hay herramienta alternativa validada
 - `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `PolylineMillingSpec`
   cuando la geometria es una curva compuesta sin arcos
 - `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `CircleMillingSpec`
@@ -118,9 +123,10 @@ subset publico.
 ## Nota de orden y fidelidad
 
 `entries` conserva el orden del workplan, pero `build_synthesis_request(...)`
-arma el request en las cuatro familias publicas del sintetizador:
+arma el request en las familias publicas del sintetizador:
 
 - `line_millings`
+- `slot_millings`
 - `polyline_millings`
 - `circle_millings`
 - `squaring_millings`

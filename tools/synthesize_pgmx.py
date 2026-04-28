@@ -24,7 +24,7 @@ Soporte actual de mecanizados sinteticos:
 - `XnSpec`: operacion nula final para mover la herramienta sin mecanizar.
 
 Estado de hito:
-- la API publica del sintetizador queda establecida como `v1.2`
+- la API publica del sintetizador queda establecida como `v1.3`
 
 Soporte actual de geometria base reusable:
 - `build_point_geometry_profile(...)`
@@ -100,7 +100,7 @@ MODULE_DIR = _module_data_dir()
 DEFAULT_BASELINE_DIR = MODULE_DIR / "maestro_baselines"
 DEFAULT_BASELINE_XML_PATH = DEFAULT_BASELINE_DIR / "Pieza.xml"
 TOOL_CATALOG_PATH = Path(__file__).with_name("tool_catalog.csv")
-SYNTHESIZER_VERSION = "1.2"
+SYNTHESIZER_VERSION = "1.3"
 
 ET.register_namespace("", PGMX_NS)
 ET.register_namespace("i", XSI_NS)
@@ -119,6 +119,7 @@ __all__ = [
     "GeometryPrimitiveSpec",
     "GeometryProfileSpec",
     "LineMillingSpec",
+    "SlotMillingSpec",
     "PolylineMillingSpec",
     "CircleMillingSpec",
     "SquaringMillingSpec",
@@ -141,6 +142,7 @@ __all__ = [
     "build_composite_geometry_profile",
     "build_compensated_toolpath_profile",
     "build_line_milling_spec",
+    "build_slot_milling_spec",
     "build_polyline_milling_spec",
     "build_circle_milling_spec",
     "build_squaring_milling_spec",
@@ -309,6 +311,40 @@ class LineMillingSpec:
 
 
 @dataclass(frozen=True)
+class SlotMillingSpec:
+    """Ranura lineal `SlotSide` validada para Sierra Vertical X sobre `Top`."""
+
+    start_x: float
+    start_y: float
+    end_x: float
+    end_y: float
+    feature_name: str = "Canal"
+    plane_name: str = "Top"
+    side_of_feature: str = "Center"
+    tool_id: str = "1899"
+    tool_name: str = "082"
+    tool_width: float = 3.8
+    security_plane: float = 20.0
+    depth_spec: MillingDepthSpec = field(
+        default_factory=lambda: MillingDepthSpec(
+            is_through=False,
+            target_depth=10.0,
+            extra_depth=0.0,
+        )
+    )
+    approach: ApproachSpec = field(default_factory=ApproachSpec)
+    retract: RetractSpec = field(default_factory=RetractSpec)
+    material_position: str = "Left"
+    side_offset: float = 0.0
+    end_radius: float = 60.0
+    slot_angle: float = 1.5707963267948966
+
+    @property
+    def milling_strategy(self) -> None:
+        return None
+
+
+@dataclass(frozen=True)
 class PolylineMillingSpec:
     """Descripcion reutilizable de un fresado asociado a una polilinea lineal.
 
@@ -412,6 +448,7 @@ class DrillingSpec:
 
 MachiningSpec = Union[
     LineMillingSpec,
+    SlotMillingSpec,
     PolylineMillingSpec,
     CircleMillingSpec,
     SquaringMillingSpec,
@@ -508,6 +545,94 @@ class _HydratedLineMillingSpec:
     @property
     def milling_strategy(self) -> Optional[MillingStrategySpec]:
         return self.spec.milling_strategy
+
+
+@dataclass(frozen=True)
+class _HydratedSlotMillingSpec:
+    """Datos internos de serializacion que complementan un `SlotMillingSpec`."""
+
+    spec: SlotMillingSpec
+    preferred_id_start: Optional[int] = None
+    geometry_serialization: Optional[str] = None
+    approach_curve: Optional[_CurveSpec] = None
+    trajectory_curve: Optional[_CurveSpec] = None
+    lift_curve: Optional[_CurveSpec] = None
+
+    @property
+    def start_x(self) -> float:
+        return self.spec.start_x
+
+    @property
+    def start_y(self) -> float:
+        return self.spec.start_y
+
+    @property
+    def end_x(self) -> float:
+        return self.spec.end_x
+
+    @property
+    def end_y(self) -> float:
+        return self.spec.end_y
+
+    @property
+    def feature_name(self) -> str:
+        return self.spec.feature_name
+
+    @property
+    def plane_name(self) -> str:
+        return self.spec.plane_name
+
+    @property
+    def side_of_feature(self) -> str:
+        return self.spec.side_of_feature
+
+    @property
+    def tool_id(self) -> str:
+        return self.spec.tool_id
+
+    @property
+    def tool_name(self) -> str:
+        return self.spec.tool_name
+
+    @property
+    def tool_width(self) -> float:
+        return self.spec.tool_width
+
+    @property
+    def security_plane(self) -> float:
+        return self.spec.security_plane
+
+    @property
+    def depth_spec(self) -> MillingDepthSpec:
+        return self.spec.depth_spec
+
+    @property
+    def approach(self) -> ApproachSpec:
+        return self.spec.approach
+
+    @property
+    def retract(self) -> RetractSpec:
+        return self.spec.retract
+
+    @property
+    def milling_strategy(self) -> None:
+        return None
+
+    @property
+    def material_position(self) -> str:
+        return self.spec.material_position
+
+    @property
+    def side_offset(self) -> float:
+        return self.spec.side_offset
+
+    @property
+    def end_radius(self) -> float:
+        return self.spec.end_radius
+
+    @property
+    def slot_angle(self) -> float:
+        return self.spec.slot_angle
 
 
 @dataclass(frozen=True)
@@ -774,12 +899,13 @@ class PgmxSynthesisRequest:
     piece: PgmxState
     source_pgmx_path: Optional[Path] = None
     line_millings: tuple[LineMillingSpec, ...] = ()
+    slot_millings: tuple[SlotMillingSpec, ...] = ()
     polyline_millings: tuple[PolylineMillingSpec, ...] = ()
     circle_millings: tuple[CircleMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
     drillings: tuple[DrillingSpec, ...] = ()
     ordered_machinings: tuple[MachiningSpec, ...] = ()
-    machining_order: tuple[str, ...] = ("line", "polyline", "circle", "squaring", "drilling")
+    machining_order: tuple[str, ...] = ("line", "slot", "polyline", "circle", "squaring", "drilling")
     xn: XnSpec = field(default_factory=XnSpec)
 
 
@@ -791,12 +917,13 @@ class PgmxSynthesisResult:
     piece: PgmxState
     sha256: str
     line_millings: tuple[LineMillingSpec, ...] = ()
+    slot_millings: tuple[SlotMillingSpec, ...] = ()
     polyline_millings: tuple[PolylineMillingSpec, ...] = ()
     circle_millings: tuple[CircleMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
     drillings: tuple[DrillingSpec, ...] = ()
     ordered_machinings: tuple[MachiningSpec, ...] = ()
-    machining_order: tuple[str, ...] = ("line", "polyline", "circle", "squaring", "drilling")
+    machining_order: tuple[str, ...] = ("line", "slot", "polyline", "circle", "squaring", "drilling")
     xn: XnSpec = field(default_factory=XnSpec)
 
 
@@ -2025,6 +2152,38 @@ def _normalize_line_milling_spec(line_milling: LineMillingSpec) -> LineMillingSp
     )
 
 
+def _normalize_slot_milling_spec(slot_milling: SlotMillingSpec) -> SlotMillingSpec:
+    if math.isclose(float(slot_milling.start_x), float(slot_milling.end_x), abs_tol=1e-9) and math.isclose(
+        float(slot_milling.start_y),
+        float(slot_milling.end_y),
+        abs_tol=1e-9,
+    ):
+        raise ValueError("La ranura no puede tener longitud cero.")
+    end_radius = float(slot_milling.end_radius)
+    if end_radius < 0.0:
+        raise ValueError("El radio de extremo de la ranura no puede ser negativo.")
+    return replace(
+        slot_milling,
+        start_x=float(slot_milling.start_x),
+        start_y=float(slot_milling.start_y),
+        end_x=float(slot_milling.end_x),
+        end_y=float(slot_milling.end_y),
+        plane_name=_normalize_plane_name(slot_milling.plane_name),
+        side_of_feature=_normalize_side_of_feature(slot_milling.side_of_feature),
+        tool_id=(slot_milling.tool_id or "1899").strip() or "1899",
+        tool_name=(slot_milling.tool_name or "082").strip() or "082",
+        tool_width=float(slot_milling.tool_width),
+        security_plane=float(slot_milling.security_plane),
+        depth_spec=_normalize_milling_depth_spec(slot_milling.depth_spec),
+        approach=_normalize_approach_spec(slot_milling.approach),
+        retract=_normalize_retract_spec(slot_milling.retract),
+        material_position=(slot_milling.material_position or "Left").strip() or "Left",
+        side_offset=float(slot_milling.side_offset),
+        end_radius=end_radius,
+        slot_angle=float(slot_milling.slot_angle),
+    )
+
+
 def _workpiece_depth_name(workpiece: Optional[ET.Element]) -> str:
     """Devuelve el nombre parametrico de espesor usado por la pieza.
 
@@ -2472,7 +2631,7 @@ def _is_vertical_x_saw(tool_type: str) -> bool:
 
 
 def _validate_vertical_x_saw_for_milling_spec(spec, tool_type: str) -> None:
-    if not isinstance(spec, _HydratedLineMillingSpec):
+    if not isinstance(spec, (_HydratedLineMillingSpec, _HydratedSlotMillingSpec)):
         raise ValueError(
             "La herramienta "
             f"{_tool_catalog_label(spec)} ({tool_type}) solo permite ranurados lineales rectos."
@@ -2508,6 +2667,14 @@ def _validate_tool_type_for_milling_spec(spec, tool_catalog: dict[str, dict[str,
 
     tool_type = (catalog_entry.get("type") or "").strip()
     usage_group = _normalize_tool_usage_group(tool_type)
+    if isinstance(spec, _HydratedSlotMillingSpec):
+        if not _is_vertical_x_saw(tool_type):
+            raise ValueError(
+                "La ranura `SlotSide` requiere una Sierra Vertical X compatible: "
+                f"{_tool_catalog_label(spec)} figura como '{tool_type or 'sin tipo'}'."
+            )
+        _validate_vertical_x_saw_for_milling_spec(spec, tool_type)
+        return
     if usage_group == "milling":
         return
     if _is_vertical_x_saw(tool_type):
@@ -2578,6 +2745,7 @@ def _validate_tool_sinking_length_for_drilling_spec(
 def _validate_tool_sinking_lengths(
     state: PgmxState,
     line_millings: Sequence[_HydratedLineMillingSpec],
+    slot_millings: Sequence[_HydratedSlotMillingSpec],
     polyline_millings: Sequence[_HydratedPolylineMillingSpec],
     circle_millings: Sequence[_HydratedCircleMillingSpec],
     squaring_millings: Sequence[_HydratedSquaringMillingSpec],
@@ -2587,6 +2755,9 @@ def _validate_tool_sinking_lengths(
 
     tool_catalog = _load_tool_catalog()
     for spec in line_millings:
+        _validate_tool_type_for_milling_spec(spec, tool_catalog)
+        _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
+    for spec in slot_millings:
         _validate_tool_type_for_milling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
     for spec in polyline_millings:
@@ -5862,6 +6033,14 @@ def _hydrate_line_milling_spec(
     )
 
 
+def _hydrate_slot_milling_spec(
+    slot_milling: SlotMillingSpec,
+    source_pgmx_path: Optional[Path],
+) -> _HydratedSlotMillingSpec:
+    del source_pgmx_path
+    return _HydratedSlotMillingSpec(spec=_normalize_slot_milling_spec(slot_milling))
+
+
 def _extract_polyline_milling_template(source_pgmx_path: Path) -> dict[str, object]:
     root, _, _ = _load_pgmx_container(source_pgmx_path)
 
@@ -6262,6 +6441,81 @@ def _build_profile_feature(
     _append_node(swept_shape, MILLING_NS, "SecondAngle", "0")
     _append_node(swept_shape, MILLING_NS, "SecondRadius", "0")
     _append_node(swept_shape, MILLING_NS, "Width", _compact_number(spec.tool_width))
+    return feature
+
+
+def _build_slot_side_feature(
+    state: PgmxState,
+    spec: _HydratedSlotMillingSpec,
+    feature_id: str,
+    geometry_id: str,
+    operation_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+) -> ET.Element:
+    feature = ET.Element(
+        _qname(PGMX_NS, "ManufacturingFeature"),
+        {f"{{{XSI_NS}}}type": "a:SlotSide"},
+    )
+    _set_xmlns(feature, "a", MILLING_NS)
+    _append_key(feature, feature_id, "ScmGroup.XCam.MachiningDataModel.Milling.SlotSide")
+    _append_blank_name(feature).text = spec.feature_name
+    _append_object_ref(
+        feature,
+        PGMX_NS,
+        "GeometryID",
+        geometry_id,
+        "ScmGroup.XCam.MachiningDataModel.Geometry.GeomTrimmedCurve",
+    )
+    operation_ids = _append_node(feature, PGMX_NS, "OperationIDs")
+    _append_reference_key(
+        operation_ids,
+        operation_id,
+        "ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideFinishMilling",
+    )
+    _append_object_ref(feature, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
+    bottom_condition = _append_node(
+        feature,
+        PGMX_NS,
+        "BottomCondition",
+        attrib={f"{{{XSI_NS}}}type": _feature_bottom_condition_type(spec)},
+    )
+    _set_xmlns(bottom_condition, "a", MILLING_NS)
+    depth = _append_node(feature, PGMX_NS, "Depth")
+    depth_value = _compact_number(_feature_depth_value(state, spec))
+    _append_node(depth, PGMX_NS, "EndDepth", depth_value)
+    _append_node(depth, PGMX_NS, "StartDepth", depth_value)
+    end_conditions = _append_node(feature, PGMX_NS, "EndConditions")
+    for _ in range(2):
+        slot_end = _append_node(
+            end_conditions,
+            MILLING_NS,
+            "SlotEndType",
+            attrib={f"{{{XSI_NS}}}type": "a:WoodruffSlotEndType"},
+        )
+        _set_xmlns(slot_end, "a", MILLING_NS)
+        _append_node(slot_end, MILLING_NS, "Radius", _compact_number(spec.end_radius))
+    _append_node(feature, PGMX_NS, "IsGeomSameDirection", "true")
+    _append_node(feature, PGMX_NS, "IsPrecise", "false")
+    _append_node(feature, PGMX_NS, "MaterialPosition", spec.material_position)
+    _append_node(feature, PGMX_NS, "OvercutLenghtInput", "0")
+    _append_node(feature, PGMX_NS, "OvercutLenghtOutput", "0")
+    _append_node(feature, PGMX_NS, "SideOfFeature", spec.side_of_feature)
+    _append_node(feature, PGMX_NS, "SideOffset", _compact_number(spec.side_offset))
+    swept_shape = _append_node(
+        feature,
+        PGMX_NS,
+        "SweptShape",
+        attrib={f"{{{XSI_NS}}}type": "a:SquareUProfile"},
+    )
+    _set_xmlns(swept_shape, "a", MILLING_NS)
+    swept_shape.append(_build_identity_profile_placement())
+    _append_node(swept_shape, MILLING_NS, "FirstAngle", "0")
+    _append_node(swept_shape, MILLING_NS, "FirstRadius", "0")
+    _append_node(swept_shape, MILLING_NS, "SecondAngle", "0")
+    _append_node(swept_shape, MILLING_NS, "SecondRadius", "0")
+    _append_node(swept_shape, MILLING_NS, "Width", _compact_number(spec.tool_width))
+    _append_node(feature, PGMX_NS, "Angle", str(float(spec.slot_angle)))
     return feature
 
 
@@ -6998,6 +7252,74 @@ def _append_line_milling(root: ET.Element, state: PgmxState, spec: _HydratedLine
         expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
 
 
+def _append_slot_milling(root: ET.Element, state: PgmxState, spec: _HydratedSlotMillingSpec) -> None:
+    geometries = root.find("./{*}Geometries")
+    features = root.find("./{*}Features")
+    operations = root.find("./{*}Operations")
+    expressions = root.find("./{*}Expressions")
+    elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
+    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
+    if any(node is None for node in (geometries, features, operations, expressions, elements, workpiece)):
+        raise ValueError("La plantilla no contiene todas las colecciones requeridas para sintetizar la ranura.")
+
+    workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
+    workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
+    depth_variable_name = _workpiece_depth_name(workpiece)
+    plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
+    uses_depth_expressions = _uses_feature_depth_expressions(spec)
+    reserved_ids = _reserve_ids(root, 6 if uses_depth_expressions else 4, spec.preferred_id_start)
+    geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
+    start_expression_id = reserved_ids[4] if uses_depth_expressions else None
+    end_expression_id = reserved_ids[5] if uses_depth_expressions else None
+    generated_toolpath_profile = _build_line_toolpath_profile(state, spec)
+    toolpath_start, toolpath_end, _, _ = _profile_entry_exit_context(generated_toolpath_profile)
+    approach_curve = spec.approach_curve
+    if approach_curve is None:
+        approach_curve = _build_generated_approach_curve_for_profile(state, spec, generated_toolpath_profile)
+    lift_curve = spec.lift_curve
+    if lift_curve is None:
+        lift_curve = _build_generated_lift_curve_for_profile(state, spec, generated_toolpath_profile)
+    trajectory_curve = spec.trajectory_curve or _curve_spec_from_profile_geometry(generated_toolpath_profile)
+
+    geometries.append(_build_line_geometry(geometry_id, plane_id, plane_object_type, spec))
+    features.append(
+        _build_slot_side_feature(
+            state,
+            spec,
+            feature_id,
+            geometry_id,
+            operation_id,
+            workpiece_id,
+            workpiece_object_type,
+        )
+    )
+    operations.append(
+        _build_line_operation(
+            state,
+            spec,
+            operation_id,
+            approach_curve,
+            lift_curve=lift_curve,
+            trajectory_curve=trajectory_curve,
+            trajectory_curve_member_keys=trajectory_curve.member_keys,
+            toolpath_start=toolpath_start,
+            toolpath_end=toolpath_end,
+        )
+    )
+    elements.append(
+        _build_working_step(
+            spec.feature_name,
+            step_id,
+            feature_id,
+            operation_id,
+            feature_object_type="ScmGroup.XCam.MachiningDataModel.Milling.SlotSide",
+        )
+    )
+    if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
+        expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
+        expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
+
+
 def _append_curve_profile_milling(
     root: ET.Element,
     state: PgmxState,
@@ -7415,6 +7737,15 @@ def _apply_line_millings(
         _append_line_milling(root, state, line_milling)
 
 
+def _apply_slot_millings(
+    root: ET.Element,
+    state: PgmxState,
+    slot_millings: Sequence[_HydratedSlotMillingSpec],
+) -> None:
+    for slot_milling in slot_millings:
+        _append_slot_milling(root, state, slot_milling)
+
+
 def _apply_polyline_millings(
     root: ET.Element,
     state: PgmxState,
@@ -7467,6 +7798,7 @@ def _apply_drillings(
 
 HydratedMachiningSpec = Union[
     _HydratedLineMillingSpec,
+    _HydratedSlotMillingSpec,
     _HydratedPolylineMillingSpec,
     _HydratedCircleMillingSpec,
     _HydratedSquaringMillingSpec,
@@ -7478,6 +7810,8 @@ def _hydrate_machining_spec(
     spec: MachiningSpec,
     source_pgmx_path: Optional[Path],
 ) -> HydratedMachiningSpec:
+    if isinstance(spec, SlotMillingSpec):
+        return _hydrate_slot_milling_spec(spec, source_pgmx_path)
     if isinstance(spec, LineMillingSpec):
         return _hydrate_line_milling_spec(spec, source_pgmx_path)
     if isinstance(spec, PolylineMillingSpec):
@@ -7499,6 +7833,9 @@ def _append_hydrated_machining(
     if isinstance(spec, _HydratedLineMillingSpec):
         _append_line_milling(root, state, spec)
         return
+    if isinstance(spec, _HydratedSlotMillingSpec):
+        _append_slot_milling(root, state, spec)
+        return
     if isinstance(spec, _HydratedPolylineMillingSpec):
         _append_polyline_milling(root, state, spec)
         return
@@ -7518,12 +7855,14 @@ def _split_hydrated_machinings(
     specs: Sequence[HydratedMachiningSpec],
 ) -> tuple[
     list[_HydratedLineMillingSpec],
+    list[_HydratedSlotMillingSpec],
     list[_HydratedPolylineMillingSpec],
     list[_HydratedCircleMillingSpec],
     list[_HydratedSquaringMillingSpec],
     list[_HydratedDrillingSpec],
 ]:
     line_millings: list[_HydratedLineMillingSpec] = []
+    slot_millings: list[_HydratedSlotMillingSpec] = []
     polyline_millings: list[_HydratedPolylineMillingSpec] = []
     circle_millings: list[_HydratedCircleMillingSpec] = []
     squaring_millings: list[_HydratedSquaringMillingSpec] = []
@@ -7531,6 +7870,8 @@ def _split_hydrated_machinings(
     for spec in specs:
         if isinstance(spec, _HydratedLineMillingSpec):
             line_millings.append(spec)
+        elif isinstance(spec, _HydratedSlotMillingSpec):
+            slot_millings.append(spec)
         elif isinstance(spec, _HydratedPolylineMillingSpec):
             polyline_millings.append(spec)
         elif isinstance(spec, _HydratedCircleMillingSpec):
@@ -7539,15 +7880,22 @@ def _split_hydrated_machinings(
             squaring_millings.append(spec)
         elif isinstance(spec, _HydratedDrillingSpec):
             drillings.append(spec)
-    return line_millings, polyline_millings, circle_millings, squaring_millings, drillings
+    return line_millings, slot_millings, polyline_millings, circle_millings, squaring_millings, drillings
 
 
 def _normalize_machining_order(value: Optional[Sequence[str]]) -> tuple[str, ...]:
-    default_order = ("line", "polyline", "circle", "squaring", "drilling")
+    default_order = ("line", "slot", "polyline", "circle", "squaring", "drilling")
     aliases = {
         "lines": "line",
         "line_milling": "line",
         "line_millings": "line",
+        "slots": "slot",
+        "slot_milling": "slot",
+        "slot_millings": "slot",
+        "canal": "slot",
+        "canales": "slot",
+        "ranura": "slot",
+        "ranuras": "slot",
         "polyline_milling": "polyline",
         "polyline_millings": "polyline",
         "division": "polyline",
@@ -7673,6 +8021,86 @@ def build_line_milling_spec(
             overlap=line_retract_overlap,
         ),
         milling_strategy=normalized_strategy,
+    )
+
+
+def build_slot_milling_spec(
+    *,
+    start_x: float,
+    start_y: float,
+    end_x: float,
+    end_y: float,
+    feature_name: Optional[str] = None,
+    plane_name: Optional[str] = None,
+    side_of_feature: Optional[str] = None,
+    tool_id: Optional[str] = None,
+    tool_name: Optional[str] = None,
+    tool_width: Optional[float] = None,
+    security_plane: Optional[float] = None,
+    is_through: Optional[bool] = None,
+    target_depth: Optional[float] = None,
+    extra_depth: Optional[float] = None,
+    approach_enabled: Optional[bool] = None,
+    approach_type: Optional[str] = None,
+    approach_mode: Optional[str] = None,
+    approach_radius_multiplier: Optional[float] = None,
+    approach_speed: Optional[float] = None,
+    approach_arc_side: Optional[str] = None,
+    retract_enabled: Optional[bool] = None,
+    retract_type: Optional[str] = None,
+    retract_mode: Optional[str] = None,
+    retract_radius_multiplier: Optional[float] = None,
+    retract_speed: Optional[float] = None,
+    retract_arc_side: Optional[str] = None,
+    retract_overlap: Optional[float] = None,
+    material_position: Optional[str] = None,
+    side_offset: Optional[float] = None,
+    end_radius: Optional[float] = None,
+    slot_angle: Optional[float] = None,
+) -> SlotMillingSpec:
+    """Construye una ranura lineal `SlotSide` compatible con Sierra Vertical X."""
+
+    depth_spec = build_milling_depth_spec(
+        is_through=False if is_through is None and target_depth is None and extra_depth is None else is_through,
+        target_depth=10.0 if is_through is None and target_depth is None and extra_depth is None else target_depth,
+        extra_depth=extra_depth,
+    )
+    return _normalize_slot_milling_spec(
+        SlotMillingSpec(
+            start_x=float(start_x),
+            start_y=float(start_y),
+            end_x=float(end_x),
+            end_y=float(end_y),
+            feature_name=(feature_name or "Canal").strip() or "Canal",
+            plane_name=_normalize_plane_name(plane_name),
+            side_of_feature=_normalize_side_of_feature(side_of_feature),
+            tool_id=(tool_id or "1899").strip() or "1899",
+            tool_name=(tool_name or "082").strip() or "082",
+            tool_width=3.8 if tool_width is None else float(tool_width),
+            security_plane=20.0 if security_plane is None else float(security_plane),
+            depth_spec=depth_spec,
+            approach=build_approach_spec(
+                enabled=approach_enabled,
+                approach_type=approach_type,
+                mode=approach_mode,
+                radius_multiplier=approach_radius_multiplier,
+                speed=approach_speed,
+                arc_side=approach_arc_side,
+            ),
+            retract=build_retract_spec(
+                enabled=retract_enabled,
+                retract_type=retract_type,
+                mode=retract_mode,
+                radius_multiplier=retract_radius_multiplier,
+                speed=retract_speed,
+                arc_side=retract_arc_side,
+                overlap=retract_overlap,
+            ),
+            material_position=(material_position or "Left").strip() or "Left",
+            side_offset=0.0 if side_offset is None else float(side_offset),
+            end_radius=60.0 if end_radius is None else float(end_radius),
+            slot_angle=1.5707963267948966 if slot_angle is None else float(slot_angle),
+        )
     )
 
 
@@ -8007,6 +8435,7 @@ def build_synthesis_request(
     origin_z: Optional[float] = None,
     execution_fields: Optional[str] = None,
     line_millings: Optional[Sequence[LineMillingSpec]] = None,
+    slot_millings: Optional[Sequence[SlotMillingSpec]] = None,
     polyline_millings: Optional[Sequence[PolylineMillingSpec]] = None,
     circle_millings: Optional[Sequence[CircleMillingSpec]] = None,
     squaring_millings: Optional[Sequence[SquaringMillingSpec]] = None,
@@ -8019,8 +8448,9 @@ def build_synthesis_request(
 
     Orden recomendado de uso:
     1. leer o definir la pieza
-    2. construir `LineMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec`,
-       `SquaringMillingSpec`, `DrillingSpec` y opcionalmente `XnSpec`
+    2. construir `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
+       `CircleMillingSpec`, `SquaringMillingSpec`, `DrillingSpec` y
+       opcionalmente `XnSpec`
     3. construir el request
     4. ejecutar `synthesize_request(...)`
 
@@ -8059,6 +8489,7 @@ def build_synthesis_request(
         piece=target_piece,
         source_pgmx_path=source_pgmx_path,
         line_millings=tuple(line_millings or ()),
+        slot_millings=tuple(slot_millings or ()),
         polyline_millings=tuple(polyline_millings or ()),
         circle_millings=tuple(circle_millings or ()),
         squaring_millings=tuple(squaring_millings or ()),
@@ -8079,6 +8510,10 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
     hydrated_line_millings = [
         _hydrate_line_milling_spec(line_milling, request.source_pgmx_path)
         for line_milling in request.line_millings
+    ]
+    hydrated_slot_millings = [
+        _hydrate_slot_milling_spec(slot_milling, request.source_pgmx_path)
+        for slot_milling in request.slot_millings
     ]
     hydrated_polyline_millings = [
         _hydrate_polyline_milling_spec(polyline_milling, request.source_pgmx_path)
@@ -8102,6 +8537,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
     ]
     (
         ordered_line_millings,
+        ordered_slot_millings,
         ordered_polyline_millings,
         ordered_circle_millings,
         ordered_squaring_millings,
@@ -8111,6 +8547,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
     _validate_tool_sinking_lengths(
         request.piece,
         hydrated_line_millings + ordered_line_millings,
+        hydrated_slot_millings + ordered_slot_millings,
         hydrated_polyline_millings + ordered_polyline_millings,
         hydrated_circle_millings + ordered_circle_millings,
         hydrated_squaring_millings + ordered_squaring_millings,
@@ -8125,6 +8562,11 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
             baseline_root,
             request.piece,
             hydrated_line_millings,
+        ),
+        "slot": lambda: _apply_slot_millings(
+            baseline_root,
+            request.piece,
+            hydrated_slot_millings,
         ),
         "polyline": lambda: _apply_polyline_millings(
             baseline_root,
@@ -8169,6 +8611,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         piece=request.piece,
         sha256=hashlib.sha256(request.output_path.read_bytes()).hexdigest(),
         line_millings=request.line_millings,
+        slot_millings=request.slot_millings,
         polyline_millings=request.polyline_millings,
         circle_millings=request.circle_millings,
         squaring_millings=request.squaring_millings,
@@ -8191,6 +8634,7 @@ def synthesize_pgmx(
     origin_y: Optional[float] = None,
     origin_z: Optional[float] = None,
     line_milling: Optional[LineMillingSpec] = None,
+    slot_milling: Optional[SlotMillingSpec] = None,
     polyline_milling: Optional[PolylineMillingSpec] = None,
     circle_milling: Optional[CircleMillingSpec] = None,
     squaring_milling: Optional[SquaringMillingSpec] = None,
@@ -8217,6 +8661,7 @@ def synthesize_pgmx(
         origin_z=origin_z,
         execution_fields=execution_fields,
         line_millings=[line_milling] if line_milling is not None else (),
+        slot_millings=[slot_milling] if slot_milling is not None else (),
         polyline_millings=[polyline_milling] if polyline_milling is not None else (),
         circle_millings=[circle_milling] if circle_milling is not None else (),
         squaring_millings=[squaring_milling] if squaring_milling is not None else (),

@@ -3706,6 +3706,11 @@ class ProjectDetailWindow(QMainWindow):
 
         pieces_title = QLabel("")
         layout.addWidget(pieces_title)
+        pgmx_repair_warning_label = QLabel("")
+        pgmx_repair_warning_label.setWordWrap(True)
+        pgmx_repair_warning_label.setStyleSheet("color: #B71C1C; font-weight: 600;")
+        pgmx_repair_warning_label.hide()
+        layout.addWidget(pgmx_repair_warning_label)
 
         PIECES_COL_ID = 0
         PIECES_COL_NAME = 1
@@ -3742,6 +3747,8 @@ class ProjectDetailWindow(QMainWindow):
         refreshing_pieces_table = False
         program_dimensions_cache = {}
         configure_en_juego_btn = None
+        repair_pgmx_btn = None
+        invalid_slot_cache = {}
 
         def build_piece_from_row(piece_row):
             thickness_val = piece_row.get("thickness")
@@ -3848,6 +3855,62 @@ class ProjectDetailWindow(QMainWindow):
             if f6_candidate.is_file():
                 return normalize_source_path(str(f6_candidate))
             return None
+
+        def clear_invalid_slot_cache(source_value: str | None = None):
+            if source_value is None:
+                invalid_slot_cache.clear()
+                return
+            normalized_source = str(source_value or "").strip()
+            keys_to_remove = [
+                key for key in invalid_slot_cache
+                if key[1] == normalized_source
+            ]
+            for key in keys_to_remove:
+                invalid_slot_cache.pop(key, None)
+
+        def get_invalid_slot_issues_for_row(piece_row: dict):
+            source_value = str(piece_row.get("source") or "").strip()
+            if not source_value:
+                return ()
+            cache_key = (str(module_path), source_value)
+            if cache_key not in invalid_slot_cache:
+                from core.pgmx_processing import get_invalid_slot_machining_issues
+
+                try:
+                    invalid_slot_cache[cache_key] = get_invalid_slot_machining_issues(
+                        self.project,
+                        build_piece_from_row(piece_row),
+                        module_path,
+                    )
+                except Exception:
+                    invalid_slot_cache[cache_key] = ()
+            return invalid_slot_cache.get(cache_key, ())
+
+        def invalid_slot_message(issues) -> str:
+            if not issues:
+                return ""
+            first_issue = issues[0]
+            feature_name = str(first_issue.feature_name or first_issue.feature_id or "ranura")
+            return (
+                f"Ranura no ejecutable: {feature_name}. "
+                "Puede corregirse girando el PGMX 90 grados antihorario."
+            )
+
+        def refresh_repair_pgmx_button_state():
+            if repair_pgmx_btn is None:
+                return
+            all_idx = selected_piece_all_index()
+            if all_idx is None:
+                repair_pgmx_btn.setEnabled(False)
+                repair_pgmx_btn.setToolTip("Seleccione una pieza con ranura no ejecutable.")
+                return
+            issues = get_invalid_slot_issues_for_row(all_rows[all_idx])
+            repair_pgmx_btn.setEnabled(bool(issues))
+            repair_pgmx_btn.setToolTip(
+                "Corregir PGMX girandolo 90 grados antihorario"
+                if issues
+                else "La pieza seleccionada no tiene ranuras no ejecutables detectadas."
+            )
 
         def create_centered_checkbox(checked: bool, on_changed):
             container = QWidget()
@@ -4004,6 +4067,11 @@ class ProjectDetailWindow(QMainWindow):
                 piece_row.get("observations"),
                 program_dimension_note,
             )
+            invalid_slot_note = invalid_slot_message(get_invalid_slot_issues_for_row(piece_row))
+            if invalid_slot_note:
+                observations_text = "\n".join(
+                    item for item in (observations_text, invalid_slot_note) if item
+                )
             dimension_item = QTableWidgetItem(observations_text)
             dimension_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             dimension_item.setToolTip(observations_text)
@@ -4048,11 +4116,16 @@ class ProjectDetailWindow(QMainWindow):
                 module_path,
                 cache=program_dimensions_cache,
             )
+            invalid_slot_row_count = 0
 
             for row_idx, (all_idx, piece_row) in enumerate(filtered):
                 source_value = str(piece_row.get("source", "")).strip()
                 pgmx_status = self._get_pgmx_status(source_value, pgmx_names, pgmx_relpaths)
                 program_dimension_note = filtered_program_notes[row_idx]
+                invalid_slot_issues = get_invalid_slot_issues_for_row(piece_row)
+                invalid_slot_note = invalid_slot_message(invalid_slot_issues)
+                if invalid_slot_issues:
+                    invalid_slot_row_count += 1
                 piece_row["pgmx"] = pgmx_status
                 piece_row["quantity"] = _parse_piece_quantity_value(piece_row.get("quantity"), default=1)
                 en_juego = bool(piece_row.get("en_juego", False))
@@ -4083,18 +4156,28 @@ class ProjectDetailWindow(QMainWindow):
                     QTableWidgetItem(piece_grain_direction_label(piece_row.get("grain_direction"))),
                 )
                 program_filename = Path(source_value).name if source_value else "(ninguno)"
-                program_item = QTableWidgetItem(f"{pgmx_status} {program_filename}")
-                if pgmx_status == "✓":
+                program_prefix = "!" if invalid_slot_issues else pgmx_status
+                program_item = QTableWidgetItem(f"{program_prefix} {program_filename}")
+                if invalid_slot_issues:
+                    program_item.setForeground(QColor("#E65100"))
+                elif pgmx_status == "✓":
                     program_item.setForeground(QColor("#4CAF50"))
                 else:
                     program_item.setForeground(QColor("#B71C1C"))
-                program_item.setToolTip(source_value or "(ninguno)")
+                program_tooltip = source_value or "(ninguno)"
+                if invalid_slot_note:
+                    program_tooltip = f"{program_tooltip}\n{invalid_slot_note}"
+                program_item.setToolTip(program_tooltip)
                 pieces_table.setItem(row_idx, PIECES_COL_PROGRAM, program_item)
 
                 observations_text = build_piece_observations_display(
                     piece_row.get("observations"),
                     program_dimension_note,
                 )
+                if invalid_slot_note:
+                    observations_text = "\n".join(
+                        item for item in (observations_text, invalid_slot_note) if item
+                    )
                 dimension_item = QTableWidgetItem(observations_text)
                 dimension_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                 dimension_item.setToolTip(observations_text)
@@ -4120,8 +4203,18 @@ class ProjectDetailWindow(QMainWindow):
                     ),
                 )
 
+            if invalid_slot_row_count:
+                pgmx_repair_warning_label.setText(
+                    f"Se detectaron {invalid_slot_row_count} pieza(s) con ranuras no ejecutables. "
+                    "Seleccione una fila y use 'Corregir PGMX' para sintetizar el archivo rotado."
+                )
+                pgmx_repair_warning_label.show()
+            else:
+                pgmx_repair_warning_label.clear()
+                pgmx_repair_warning_label.hide()
             refreshing_pieces_table = False
             refresh_configure_en_juego_button_state()
+            refresh_repair_pgmx_button_state()
 
         refresh_pieces_table()
 
@@ -4413,6 +4506,95 @@ class ProjectDetailWindow(QMainWindow):
             piece_display_name = str(all_rows[all_idx].get("name") or all_rows[all_idx].get("id") or "pieza").strip()
             open_drawing_dialog(drawing_path, piece_display_name)
             return
+
+        def repair_selected_invalid_pgmx():
+            current_row = pieces_table.currentRow()
+            all_idx = selected_piece_all_index("Corregir PGMX")
+            if all_idx is None:
+                return
+
+            piece_row = all_rows[all_idx]
+            issues = get_invalid_slot_issues_for_row(piece_row)
+            if not issues:
+                QMessageBox.information(
+                    inspect_dialog,
+                    "Corregir PGMX",
+                    "La pieza seleccionada no tiene ranuras no ejecutables detectadas.",
+                )
+                refresh_repair_pgmx_button_state()
+                return
+
+            from core.pgmx_processing import (
+                repair_invalid_slot_machining_by_rotating_ccw,
+                resolve_piece_program_path,
+            )
+
+            piece_obj = build_piece_from_row(piece_row)
+            source_path = resolve_piece_program_path(self.project, piece_obj, module_path)
+            if source_path is None:
+                QMessageBox.warning(
+                    inspect_dialog,
+                    "Corregir PGMX",
+                    "No se encontro el archivo PGMX asociado a la pieza seleccionada.",
+                )
+                return
+
+            issue_names = ", ".join(
+                str(issue.feature_name or issue.feature_id or "ranura")
+                for issue in issues
+            )
+            answer = QMessageBox.question(
+                inspect_dialog,
+                "Corregir PGMX",
+                (
+                    "Se detecto una ranura no ejecutable por la herramienta seleccionada.\n\n"
+                    f"Archivo: {source_path}\n"
+                    f"Ranura(s): {issue_names}\n\n"
+                    "El programa va a sintetizar el PGMX girandolo 90 grados antihorario "
+                    "y va a sobreescribir el archivo original. Continuar?"
+                ),
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if answer != QMessageBox.Yes:
+                return
+
+            try:
+                result = repair_invalid_slot_machining_by_rotating_ccw(
+                    self.project,
+                    piece_obj,
+                    module_path,
+                )
+            except Exception as exc:
+                QMessageBox.critical(
+                    inspect_dialog,
+                    "Corregir PGMX",
+                    f"No se pudo corregir el PGMX.\n\n{exc}",
+                )
+                clear_invalid_slot_cache()
+                refresh_pieces_table()
+                if current_row >= 0 and pieces_table.rowCount() > 0:
+                    pieces_table.selectRow(max(0, min(current_row, pieces_table.rowCount() - 1)))
+                return
+
+            program_dimensions_cache.clear()
+            clear_invalid_slot_cache()
+            refresh_piece_drawing_file(piece_row, row_index=all_idx)
+            persist_module_config()
+            refresh_pieces_table()
+            if current_row >= 0 and pieces_table.rowCount() > 0:
+                pieces_table.selectRow(max(0, min(current_row, pieces_table.rowCount() - 1)))
+
+            QMessageBox.information(
+                inspect_dialog,
+                "Corregir PGMX",
+                (
+                    "PGMX corregido correctamente.\n\n"
+                    f"Archivo: {result.source_path}\n"
+                    f"Dimensiones: {result.original_length:g} x {result.original_width:g} mm -> "
+                    f"{result.rotated_length:g} x {result.rotated_width:g} mm"
+                ),
+            )
 
         def open_piece_editor(piece_row=None, row_index=None):
             is_new_piece = piece_row is None
@@ -7591,6 +7773,9 @@ class ProjectDetailWindow(QMainWindow):
         edit_piece_btn.setToolTip("Editar Pieza")
         delete_piece_btn = QPushButton("Eliminar")
         delete_piece_btn.setToolTip("Eliminar Pieza")
+        repair_pgmx_btn = QPushButton("Corregir\nPGMX")
+        repair_pgmx_btn.setToolTip("Seleccione una pieza con ranura no ejecutable.")
+        repair_pgmx_btn.setEnabled(False)
         configure_en_juego_btn = QPushButton("Configurar\nEn Juego")
         configure_en_juego_btn.setToolTip("Configurar En Juego")
         refresh_configure_en_juego_button_state()
@@ -7599,6 +7784,7 @@ class ProjectDetailWindow(QMainWindow):
             add_piece_btn,
             edit_piece_btn,
             delete_piece_btn,
+            repair_pgmx_btn,
             configure_en_juego_btn,
         ):
             button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
@@ -7606,6 +7792,7 @@ class ProjectDetailWindow(QMainWindow):
         actions_column.addWidget(add_piece_btn)
         actions_column.addWidget(edit_piece_btn)
         actions_column.addWidget(delete_piece_btn)
+        actions_column.addWidget(repair_pgmx_btn)
         actions_column.addWidget(configure_en_juego_btn)
 
         content_row.addLayout(actions_column)
@@ -7615,7 +7802,10 @@ class ProjectDetailWindow(QMainWindow):
         edit_piece_btn.clicked.connect(edit_selected_piece)
         pieces_table.cellDoubleClicked.connect(edit_piece_from_table_double_click)
         delete_piece_btn.clicked.connect(remove_selected_piece)
+        repair_pgmx_btn.clicked.connect(repair_selected_invalid_pgmx)
         configure_en_juego_btn.clicked.connect(open_en_juego_configuration_dialog)
+        pieces_table.itemSelectionChanged.connect(refresh_repair_pgmx_button_state)
+        refresh_repair_pgmx_button_state()
 
         def save_module_settings(show_feedback=True):
             persist_module_config()
@@ -7723,6 +7913,8 @@ class ProjectDetailWindow(QMainWindow):
                 f"Adicional para escuadrado: {_compact_number(squaring_allowance)} mm | Espesor de sierra: {_compact_number(saw_kerf)} mm"
             )
             detail_lines.append(f"Modo de optimización: {optimization_mode}")
+            if optimization_mode != "Sin optimizar":
+                detail_lines.append(f"Metodo de guillotina: {result.get('guillotine_algorithm')}")
             if skipped_count:
                 detail_lines.append(f"Piezas sin ubicar: {skipped_count}")
             if missing_board_groups:

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -25,6 +26,15 @@ DEFAULT_STRATEGIES = (
     "primary-area-desc",
     "input",
 )
+
+BRKGA_TAIL_POPULATION = 24
+BRKGA_TAIL_GENERATIONS = 24
+BRKGA_TAIL_ELITE_FRACTION = 0.25
+BRKGA_TAIL_MUTANT_FRACTION = 0.20
+BRKGA_TAIL_ELITE_BIAS = 0.70
+BRKGA_TAIL_MUTATION_RATE = 0.08
+BRKGA_TAIL_MUTATION_SCALE = 0.18
+BRKGA_TAIL_SEED = 40727
 
 
 @dataclass(frozen=True)
@@ -77,6 +87,28 @@ class PackedMeasureSection:
 
 def _piece_area(cut_piece: nesting.CutPiece) -> float:
     return float(cut_piece.width) * float(cut_piece.height)
+
+
+def _full_tail_section_metrics(board: nesting.CutBoard) -> tuple[float, float]:
+    usable_width = max(0.0, float(board.board_width) - 2.0 * float(board.board_margin))
+    usable_height = max(0.0, float(board.board_height) - 2.0 * float(board.board_margin))
+    usable_right = float(board.board_width) - float(board.board_margin)
+    usable_bottom = float(board.board_height) - float(board.board_margin)
+
+    if not board.placements:
+        return usable_width * usable_height, 0.0
+
+    if board.main_cut_orientation == "vertical":
+        max_right = max(float(placement.x) + float(placement.width) for placement in board.placements)
+        tail_width = max(0.0, usable_right - max_right)
+        return tail_width * usable_height, tail_width
+
+    if board.main_cut_orientation == "horizontal":
+        max_bottom = max(float(placement.y) + float(placement.height) for placement in board.placements)
+        tail_height = max(0.0, usable_bottom - max_bottom)
+        return tail_height * usable_width, tail_height
+
+    return 0.0, 0.0
 
 
 def _cut_axes_are_swapped_from_final(cut_piece: nesting.CutPiece) -> bool:
@@ -1105,6 +1137,166 @@ def pack_order_driven_guillotine(
     return boards, skipped
 
 
+def _decode_random_key_order(
+    pieces: list[nesting.CutPiece],
+    keys: list[float],
+) -> list[nesting.CutPiece]:
+    return [
+        piece
+        for _, _, piece in sorted(
+            (float(key), index, piece)
+            for index, (key, piece) in enumerate(zip(keys, pieces))
+        )
+    ]
+
+
+def _initial_order_keys(count: int) -> list[float]:
+    if count <= 1:
+        return [0.0] * count
+    return [index / float(count - 1) for index in range(count)]
+
+
+def _mutate_random_keys(
+    keys: list[float],
+    rng: random.Random,
+    *,
+    mutation_rate: float = BRKGA_TAIL_MUTATION_RATE,
+    mutation_scale: float = BRKGA_TAIL_MUTATION_SCALE,
+) -> list[float]:
+    mutated = list(keys)
+    for index, value in enumerate(mutated):
+        if rng.random() < mutation_rate:
+            value += rng.uniform(-mutation_scale, mutation_scale)
+            mutated[index] = min(1.0, max(0.0, value))
+
+    if len(mutated) >= 2 and rng.random() < mutation_rate:
+        first = rng.randrange(len(mutated))
+        second = rng.randrange(len(mutated))
+        mutated[first], mutated[second] = mutated[second], mutated[first]
+
+    return mutated
+
+
+def _brkga_tail_fitness(
+    boards: list[nesting.CutBoard],
+    skipped: list[nesting.CutPiece],
+) -> tuple[float, float, float, float, float, float]:
+    tail_areas = [_full_tail_section_metrics(board)[0] for board in boards]
+    total_tail_area = sum(tail_areas)
+    max_tail_area = max(tail_areas) if tail_areas else 0.0
+    average_utilization = sum(board.utilization for board in boards) / max(1, len(boards))
+    min_utilization = min((board.utilization for board in boards), default=0.0)
+    return (
+        float(len(skipped)),
+        float(len(boards)),
+        -total_tail_area,
+        -max_tail_area,
+        -average_utilization,
+        -min_utilization,
+    )
+
+
+def pack_brkga_tail_guillotine(
+    material: str,
+    thickness: float,
+    pieces: list[nesting.CutPiece],
+    board_width: float,
+    board_height: float,
+    piece_spacing: float,
+    section_kerf: float,
+    *,
+    grain: str = "",
+    optimization_mode: str = nesting.CUT_OPTIMIZATION_LONGITUDINAL,
+    population_size: int = BRKGA_TAIL_POPULATION,
+    generations: int = BRKGA_TAIL_GENERATIONS,
+    seed: int = BRKGA_TAIL_SEED,
+) -> tuple[list[nesting.CutBoard], list[nesting.CutPiece]]:
+    """BRKGA experimental: evoluciona orden para conservar franjas completas.
+
+    El cromosoma son claves aleatorias. El decoder ordena las piezas y delega en
+    el packer `order-driven`, manteniendo la busqueda genetica fuera del motor.
+    """
+
+    if not pieces:
+        return [], []
+
+    normalized_mode = nesting._normalize_optimization_mode(optimization_mode)
+    if not nesting._uses_guillotine_mode(normalized_mode):
+        raise ValueError("El packer genetico requiere modo longitudinal o transversal.")
+
+    rng = random.Random(seed + len(pieces) * 1009 + int(round(float(thickness) * 100)))
+    population_size = max(6, int(population_size))
+    generations = max(1, int(generations))
+    elite_count = max(1, int(round(population_size * BRKGA_TAIL_ELITE_FRACTION)))
+    mutant_count = max(1, int(round(population_size * BRKGA_TAIL_MUTANT_FRACTION)))
+    offspring_count = max(0, population_size - elite_count - mutant_count)
+
+    count = len(pieces)
+    base_keys = _initial_order_keys(count)
+    population: list[list[float]] = [base_keys]
+    if count > 1:
+        population.append(list(reversed(base_keys)))
+    while len(population) < population_size:
+        population.append([rng.random() for _ in range(count)])
+
+    best_boards: list[nesting.CutBoard] = []
+    best_skipped: list[nesting.CutPiece] = list(pieces)
+    best_score: tuple[float, float, float, float, float, float] | None = None
+
+    def evaluate(keys: list[float]):
+        ordered_pieces = _decode_random_key_order(pieces, keys)
+        boards, skipped = pack_order_driven_guillotine(
+            material,
+            thickness,
+            ordered_pieces,
+            board_width,
+            board_height,
+            piece_spacing,
+            section_kerf,
+            grain=grain,
+            optimization_mode=normalized_mode,
+        )
+        return _brkga_tail_fitness(boards, skipped), boards, skipped
+
+    for _ in range(generations):
+        ranked = []
+        for keys in population:
+            score, boards, skipped = evaluate(keys)
+            ranked.append((score, keys, boards, skipped))
+            if best_score is None or score < best_score:
+                best_score = score
+                best_boards = boards
+                best_skipped = skipped
+
+        ranked.sort(key=lambda item: item[0])
+        elites = [list(keys) for _, keys, _, _ in ranked[:elite_count]]
+        non_elites = [list(keys) for _, keys, _, _ in ranked[elite_count:]] or elites
+        next_population = [list(keys) for keys in elites]
+
+        for _ in range(offspring_count):
+            elite_parent = rng.choice(elites)
+            other_parent = rng.choice(non_elites)
+            child = [
+                elite_gene if rng.random() < BRKGA_TAIL_ELITE_BIAS else other_gene
+                for elite_gene, other_gene in zip(elite_parent, other_parent)
+            ]
+            next_population.append(_mutate_random_keys(child, rng))
+
+        while len(next_population) < population_size:
+            next_population.append([rng.random() for _ in range(count)])
+
+        population = next_population
+
+    for keys in population:
+        score, boards, skipped = evaluate(keys)
+        if best_score is None or score < best_score:
+            best_score = score
+            best_boards = boards
+            best_skipped = skipped
+
+    return best_boards, best_skipped
+
+
 def _build_boards_from_sections(
     material: str,
     thickness: float,
@@ -1662,6 +1854,29 @@ def _pack_with_order_driven_algorithm(
     ), skipped
 
 
+def _pack_with_brkga_tail_algorithm(
+    context: ExperimentContext,
+    ordered_pieces: list[nesting.CutPiece],
+) -> tuple[list[nesting.CutBoard], list[nesting.CutPiece]]:
+    boards, skipped = pack_brkga_tail_guillotine(
+        context.material,
+        context.thickness,
+        ordered_pieces,
+        context.usable_board_width,
+        context.usable_board_height,
+        context.piece_spacing,
+        context.saw_kerf,
+        grain=context.grain,
+        optimization_mode=context.optimization_mode,
+    )
+    return nesting._apply_board_margin(
+        boards,
+        context.board_width,
+        context.board_height,
+        context.board_margin,
+    ), skipped
+
+
 def _pack_with_surface_fit_algorithm(
     context: ExperimentContext,
     ordered_pieces: list[nesting.CutPiece],
@@ -1755,12 +1970,16 @@ def _pack_with_measure_match_split_algorithm(
 
 
 def _board_summary(board: nesting.CutBoard, show_pieces: bool = False) -> dict:
+    full_tail_area, full_tail_span = _full_tail_section_metrics(board)
     summary = {
         "index": board.index,
         "placements": len(board.placements),
         "utilization": round(float(board.utilization), 4),
         "main_cut_orientation": board.main_cut_orientation,
         "main_cut_positions": [round(float(position), 2) for position in board.main_cut_positions],
+        "full_tail_area": round(float(full_tail_area), 2),
+        "full_tail_area_m2": round(float(full_tail_area) / 1_000_000.0, 4),
+        "full_tail_span": round(float(full_tail_span), 2),
     }
     if show_pieces:
         summary["pieces"] = [
@@ -1792,6 +2011,7 @@ def run_experiments(
     context, pieces = _load_context(project_name, material, thickness, optimization_mode)
     results = []
     packer_map = {
+        "brkga-tail": _pack_with_brkga_tail_algorithm,
         "current": _pack_with_current_algorithm,
         "measure-driven": _pack_with_measure_driven_algorithm,
         "measure-match-split": _pack_with_measure_match_split_algorithm,
@@ -1818,6 +2038,7 @@ def run_experiments(
             selected_board = None
             if show_board is not None:
                 selected_board = next((board for board in boards if board.index == show_board), None)
+            board_summaries = [_board_summary(board) for board in boards]
             results.append(
                 {
                     "strategy": strategy,
@@ -1828,8 +2049,12 @@ def run_experiments(
                         sum(board.utilization for board in boards) / max(1, len(boards)),
                         4,
                     ),
+                    "total_full_tail_area_m2": round(
+                        sum(board_summary["full_tail_area"] for board_summary in board_summaries) / 1_000_000.0,
+                        4,
+                    ),
                     "ordered_preview": ordered_preview,
-                    "boards": [_board_summary(board) for board in boards],
+                    "boards": board_summaries,
                     "selected_board": _board_summary(selected_board, show_pieces=True)
                     if selected_board is not None
                     else None,
@@ -1861,7 +2086,8 @@ def _print_text_report(report: dict) -> None:
             f"[{result['packer']}] {result['strategy']}: "
             f"{result['board_count']} placas, "
             f"{result['skipped_count']} sin ubicar, "
-            f"utilizacion media {result['total_utilization']}"
+            f"utilizacion media {result['total_utilization']}, "
+            f"seccion libre completa {result['total_full_tail_area_m2']} m2"
         )
         preview = ", ".join(
             f"{item['label']} ({item['cut'][0]:g}x{item['cut'][1]:g})"
@@ -1912,6 +2138,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         action="append",
         choices=(
             "current",
+            "brkga-tail",
             "measure-driven",
             "measure-match-split",
             "measure-split",

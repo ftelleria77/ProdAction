@@ -594,6 +594,125 @@ Metodologia actual:
 - Revisar si la utilizacion debe calcularse contra area total del tablero o area
   util descontando margen.
 
+## Prueba Genetica Experimental
+
+Relevamiento web inicial:
+
+- Los metodos geneticos mas adecuados para packing/corte rectangular suelen ser
+  indirectos: el cromosoma no codifica coordenadas finales, sino una secuencia,
+  rotaciones o parametros, y un decoder heuristico construye la ubicacion.
+- BRKGA/random-key es especialmente compatible con el laboratorio porque evita
+  operadores especiales de permutacion: una lista de claves reales se ordena y
+  se decodifica como secuencia de piezas.
+- En problemas con restriccion guillotina, la literatura recomienda hibridar GA
+  con busqueda local o decoders especificos; para una primera prueba local se
+  mantiene el decoder `order-driven` y se evoluciona solo el orden.
+
+Fuentes revisadas:
+
+- Goncalves y Resende, `A biased random key genetic algorithm for 2D and 3D bin
+  packing problems`, Int. J. Production Economics, 2013.
+- Souza y Grimes, `Combining Local Search and Genetic Algorithm for
+  Two-Dimensional Guillotine Bin Packing Problems`, 2020.
+- Pal, `A Genetic Algorithm for the Two-dimensional Single Large Object
+  Placement Problem`, 2006.
+- Hu et al., `An Improved Adaptive Genetic Algorithm for Two-Dimensional
+  Rectangular Packing Problem`, Applied Sciences, 2021.
+
+Implementacion agregada:
+
+- packer `brkga-tail` en `tools/cut_diagram_ordering_lab.py`
+- cromosoma: claves aleatorias sobre la lista de piezas recibida
+- decoder: orden por clave y `pack_order_driven_guillotine(...)`
+- objetivo:
+  1. minimizar piezas omitidas
+  2. minimizar cantidad de placas
+  3. maximizar area libre como seccion completa de borde
+  4. maximizar la mayor seccion completa individual
+  5. maximizar utilizacion media y minima como desempate
+
+Esta variante todavia es laboratorio. No reemplaza `dimension-scan`; sirve para
+probar si una busqueda evolutiva puede encontrar ordenes que conserven sobrantes
+como franjas completas sin aumentar la cantidad de placas.
+
+Prueba local inicial en `Prod-01-2026`, grupo `BCO18MDF 18mm`, tablero
+`1830 x 2600`, margen `10`, modo longitudinal:
+
+```powershell
+python -m tools.cut_diagram_ordering_lab `
+    --project-name "Prod-01-2026" `
+    --material BCO18MDF `
+    --thickness 18 `
+    --strategy primary-area-desc `
+    --packer brkga-tail `
+    --optimization-mode longitudinal
+```
+
+Resultado:
+
+- `brkga-tail + primary-area-desc`: 3 placas, 0 omitidas, utilizacion media
+  `0.8493`, area libre como seccion completa total `0.7454 m2`
+- distribucion de seccion completa por placa: `0.2270`, `0.0826`, `0.4358 m2`
+- comparacion directa medida con el mismo criterio:
+  - `dimension-scan longitudinal`: `0.6649 m2`
+  - `dimension-scan transversal`: `0.5843 m2`
+
+Lectura: para este caso, `brkga-tail` encontro una distribucion con mas sobrante
+recuperable en franjas completas que `dimension-scan`, manteniendo la misma
+cantidad de placas y sin omitir piezas.
+
+Integracion al sistema principal:
+
+- `core/nesting.py` incorpora `CUT_GUILLOTINE_ALGORITHM_BRKGA_TAIL`.
+- `CUT_GUILLOTINE_ALGORITHM_PREFERRED` apunta a `brkga-tail`.
+- `generate_cut_diagrams(...)` y `_pack_group_into_boards(...)` usan ese metodo
+  como default cuando el modo de optimizacion es longitudinal o transversal.
+- `app/ui.py` informa el metodo de guillotina usado al terminar la generacion.
+- El laboratorio queda como banco de pruebas; el flujo principal ya no depende
+  de `tools/cut_diagram_ordering_lab.py` para usar el algoritmo genetico.
+
+Validacion inicial del flujo principal:
+
+- comando usado: llamada directa a `generate_cut_diagrams(...)` sin pasar
+  `guillotine_algorithm`
+- PDF generado: `S:/Maestro/Projects/Prod-2026-01 - Vargas/diagramas_corte_a4.pdf`
+- resultado reportado: `guillotine_algorithm = brkga-tail`, 0 omitidas
+- `BCO18MDF 18mm`: 3 placas, 48 piezas
+- seccion completa total medida desde `core.nesting`: `0.7454 m2`
+
+## Ajustes De Render Del PDF De Corte
+
+Cambio solicitado sobre el PDF generado:
+
+- eliminar las lineas de cota internas de cada pieza
+- conservar solo los numeros de medida cuando la pieza tiene espacio suficiente
+- sacar el color de relleno de las superficies
+- evitar reducir progresivamente la tipografia en piezas muy pequenas
+- identificar piezas pequenas con un numero dentro de la placa
+- agregar un listado a la derecha del esquema de la placa para esas piezas
+
+Implementacion:
+
+- las piezas se dibujan con relleno blanco y contorno negro
+- `_draw_piece_cut_dimensions(...)` ya no dibuja lineas ni ticks internos; solo
+  etiquetas numericas de corte
+- `_build_piece_text_overlay(...)` usa tamanos fijos legibles y si no entra
+  devuelve `None`
+- las piezas pequenas o con texto largo pasan a listado lateral
+- `_draw_external_piece_list(...)` dibuja a la derecha del tablero:
+  numero, nombre, medida final y medida de corte
+
+Validacion inicial:
+
+- `generate_cut_diagrams(...)` genero nuevamente
+  `S:/Maestro/Projects/Prod-2026-01 - Vargas/diagramas_corte_a4.pdf`
+- algoritmo reportado: `brkga-tail`
+- omitidas: `0`
+- `BCO18MDF 18mm`: 3 placas, 48 piezas
+- `BCO3 3mm`: 1 placa, 8 piezas
+- no habia herramienta local disponible para rasterizar una previsualizacion
+  (`fitz`, `pdftoppm`, `magick`, `mutool` no disponibles)
+
 ## Proximo Paso Sugerido
 
 Ordenar esta memoria en secciones estables:

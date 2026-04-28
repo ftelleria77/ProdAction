@@ -1305,6 +1305,503 @@ Reconstruir paso a paso:
   - la guia tambien agrega un ejemplo completo de pieza escuadrada con doble
     camlock lateral usando el baseline por defecto
 
+### Ronda 25 - Pieza base 400x400x18 con origen no nulo
+
+- Estado: completado
+- Objetivo:
+  - trabajar fuera del flujo principal
+  - sintetizar una pieza simple sin mecanizados
+  - fijar un caso minimo con origen no nulo para futuras comparaciones
+- Archivo generado:
+  - `archive/maestro_examples/Pieza_400x400x18_Origen_5_5_25.pgmx`
+- Solicitud usada en `tools.synthesize_pgmx`:
+  - `piece_name = Pieza_400x400x18_Origen_5_5_25`
+  - `length = 400`
+  - `width = 400`
+  - `depth = 18`
+  - `origin_x = 5`
+  - `origin_y = 5`
+  - `origin_z = 25`
+- Verificacion con `tools.pgmx_snapshot.read_pgmx_snapshot(...)`:
+  - `snapshot.state.length = 400.0`
+  - `snapshot.state.width = 400.0`
+  - `snapshot.state.depth = 18.0`
+  - `snapshot.state.origin = (5.0, 5.0, 25.0)`
+  - `workpiece = (400.0, 400.0, 18.0)`
+  - `geometries = 0`
+  - `features = 0`
+  - `operations = 0`
+  - `working_steps = 1`
+  - `resolved_working_steps = 1`
+- Verificacion directa del XML dentro del `.pgmx`:
+  - entrada XML: `Pieza_400x400x18_Origen_5_5_25.xml`
+  - `WorkpieceSetup/Placement/_xP = 5`
+  - `WorkpieceSetup/Placement/_yP = 5`
+  - `WorkpieceSetup/Placement/_zP = 25`
+  - `WorkPiece/Length = 400`
+  - `WorkPiece/Width = 400`
+  - `WorkPiece/Depth = 18`
+  - variables: `dx1 = 400`, `dy1 = 400`, `dz1 = 18`
+- Hallazgo:
+  - una pieza sin mecanizados conserva solo el workstep final `Xn`
+  - `pgmx_snapshot.resolved_working_steps` resuelve ese paso como:
+    - `step = Xn`
+    - `feature = None`
+    - `operation = None`
+    - `geometry = None`
+    - `plane = None`
+  - para una pieza sin geometria ni mecanizado, el origen no nulo queda
+    expresado exclusivamente en `WorkpieceSetup/Placement`
+
+### Ronda 26 - Canal lineal manual sobre pieza con origen no nulo
+
+- Estado: completado
+- Archivos estudiados:
+  - `archive/maestro_examples/Pieza_400x400x18_Origen_5_5_25_CanalCentral.pgmx`
+  - `archive/maestro_examples/Pieza_400x400x18_Origen_5_5_25_CanalDerecha.pgmx`
+  - `archive/maestro_examples/Pieza_400x400x18_Origen_5_5_25_CanalIzquierda.pgmx`
+- Punto de partida:
+  - los tres archivos conservan la pieza base:
+    - `length = 400`
+    - `width = 400`
+    - `depth = 18`
+    - `origin = (5, 5, 25)`
+  - el origen sigue estando solo en `WorkpieceSetup/Placement`
+- Estructura comun:
+  - `geometries = 1`
+  - `features = 1`
+  - `operations = 1`
+  - `working_steps = 2`
+  - workplan:
+    - paso 1: `Canal`, resuelto por `pgmx_snapshot` a feature, operacion,
+      geometria y plano `Top`
+    - paso 2: `Xn`, sin feature, operacion, geometria ni plano
+- Geometria nominal del canal:
+  - tipo: `GeomTrimmedCurve`
+  - clasificacion: `LineHorizontal`
+  - plano: `Top`
+  - serializacion:
+    - `8 0 400`
+    - `1 400 390 0 -1 0 0`
+  - puntos nominales:
+    - inicio `(400, 390, 0)`
+    - fin `(0, 390, 0)`
+  - la geometria nominal corre de derecha a izquierda sobre `Y = 390`
+- Feature:
+  - tipo: `a:SlotSide`
+  - nombre: `Canal`
+  - `BottomCondition = a:GeneralMillingBottom`
+  - profundidad: `StartDepth = 10`, `EndDepth = 10`
+  - `depth_spec = MillingDepthSpec(is_through=False, target_depth=10)`
+  - `MaterialPosition = Left`
+  - `SideOffset = 0`
+  - `IsGeomSameDirection = true`
+  - `IsPrecise = false`
+  - perfil barrido:
+    - `SweptShape = a:SquareUProfile`
+    - `Width = 3.8`
+    - `FirstAngle = 0`
+    - `FirstRadius = 0`
+    - `SecondAngle = 0`
+    - `SecondRadius = 0`
+  - extremos:
+    - dos `a:WoodruffSlotEndType`
+    - `Radius = 60` en ambos extremos
+  - `OvercutLenghtInput = 0`
+  - `OvercutLenghtOutput = 0`
+  - `Angle = 1.5707963267948966`
+- Operacion:
+  - tipo: `a:BottomAndSideFinishMilling`
+  - `ToolKey = 1899 / 082`
+  - `ActivateCNCCorrection = false`
+  - `ToolpathPriority = true`
+  - `ApproachSecurityPlane = 20`
+  - `RetractSecurityPlane = 20`
+  - `HeadRotation = 0`
+  - `Technology = MillingTechnology`, con feed/cut/spindle en `0`
+  - `Approach = BaseApproachStrategy`, deshabilitado
+  - `Retract = BaseRetractStrategy`, deshabilitado
+  - `MachiningStrategy = nil`
+  - `AllowanceBottom = 0`
+  - `AllowanceSide = 0`
+- Toolpaths efectivos:
+  - siempre hay tres curvas:
+    - `Approach`
+    - `TrajectoryPath`
+    - `Lift`
+  - aunque `Approach` y `Retract` esten deshabilitados como estrategias, el
+    XML mantiene curvas verticales de bajada y subida
+  - como `depth = 18` y profundidad de canal `10`, la trayectoria mecanizante
+    queda en `Z = 8`
+  - la cota de seguridad queda en `Z = 38`, que coincide con `18 + 20`
+- Comparacion de lado:
+  - `CanalDerecha`:
+    - `SideOfFeature = Right`
+    - trayectoria efectiva en `Y = 391.9`
+    - offset efectivo contra geometria nominal: `+1.9`
+  - `CanalIzquierda`:
+    - `SideOfFeature = Left`
+    - trayectoria efectiva en `Y = 388.1`
+    - offset efectivo contra geometria nominal: `-1.9`
+  - `CanalCentral`:
+    - `SideOfFeature = Center`
+    - trayectoria efectiva en `Y = 390.0`
+    - offset efectivo contra geometria nominal: `0.0`
+    - XML interno distinto de `CanalDerecha` y de `CanalIzquierda`
+- Hallazgos:
+  - para una linea nominal que va de `(400,390)` a `(0,390)`,
+    `SideOfFeature = Right` desplaza el toolpath hacia `Y+`
+  - `SideOfFeature = Left` desplaza el toolpath hacia `Y-`
+  - `SideOfFeature = Center` mantiene el toolpath sobre la geometria nominal
+  - el desplazamiento observado es `tool_width / 2 = 3.8 / 2 = 1.9`
+    para `Right` y `Left`; para `Center` es `0`
+  - la compensacion cambia la trayectoria efectiva, no la geometria nominal
+  - ahora si quedan tres estados distintos:
+    - `Center`: trayectoria nominal
+    - `Right`: trayectoria desplazada `+1.9` en `Y`
+    - `Left`: trayectoria desplazada `-1.9` en `Y`
+- Mejora aplicada a `tools/pgmx_snapshot.py`:
+  - se agrego `PgmxSlotEndConditionSnapshot`
+  - `PgmxFeatureSnapshot` ahora expone:
+    - `overcut_input`
+    - `overcut_output`
+    - `swept_shape_type`
+    - `first_angle`
+    - `first_radius`
+    - `second_angle`
+    - `second_radius`
+    - `slot_angle`
+    - `end_conditions`
+  - esto evita depender del XML crudo para estudiar canales `SlotSide`
+
+### Ronda 27 - Canal erroneo sobre pieza con origen no nulo
+
+- Estado: completado
+- Revision:
+  - el archivo fue corregido despues del primer analisis para usar profundidad
+    `10`
+  - esta ronda refleja la lectura vigente del archivo corregido
+- Archivo estudiado:
+  - `archive/maestro_examples/Pieza_400x400x18_Origen_5_5_25_CanalErroneo.pgmx`
+- Comparado contra:
+  - `Pieza_400x400x18_Origen_5_5_25_CanalCentral.pgmx`
+  - `Pieza_400x400x18_Origen_5_5_25_CanalDerecha.pgmx`
+  - `Pieza_400x400x18_Origen_5_5_25_CanalIzquierda.pgmx`
+- Punto de partida comun:
+  - conserva pieza base `400 x 400 x 18`
+  - conserva origen `(5, 5, 25)`
+  - conserva una estructura de mecanizado:
+    - `geometries = 1`
+    - `features = 1`
+    - `operations = 1`
+    - `working_steps = 2`
+  - conserva feature `a:SlotSide` llamado `Canal`
+  - conserva operacion `a:BottomAndSideFinishMilling`
+  - conserva herramienta `1899 / 082`
+  - conserva perfil:
+    - `SweptShape = a:SquareUProfile`
+    - `Width = 3.8`
+    - dos extremos `a:WoodruffSlotEndType`
+    - `Radius = 60`
+    - `Angle = 1.5707963267948966`
+- Diferencias contra los canales validos:
+  - geometria nominal:
+    - validos: `LineHorizontal`
+    - erroneo: `LineVertical`
+  - serializacion geometrica del erroneo:
+    - `8 0 400`
+    - `1 390 0 0 0 1 0`
+  - puntos nominales del erroneo:
+    - inicio `(390, 0, 0)`
+    - fin `(390, 400, 0)`
+  - en los validos, la linea nominal era:
+    - inicio `(400, 390, 0)`
+    - fin `(0, 390, 0)`
+  - lado:
+    - erroneo: `SideOfFeature = Center`
+  - profundidad:
+    - el archivo corregido coincide con los validos:
+      - `StartDepth = 10`
+      - `EndDepth = 10`
+      - `MillingDepthSpec(is_through=False, target_depth=10)`
+- Toolpath efectivo del erroneo:
+  - `Approach`:
+    - `(390, 0, 38)` -> `(390, 0, 8)`
+  - `TrajectoryPath`:
+    - `(390, 0, 8)` -> `(390, 400, 8)`
+  - `Lift`:
+    - `(390, 400, 8)` -> `(390, 400, 38)`
+- Restriccion CNC / herramienta:
+  - el programa no es ejecutable en CNC con la herramienta seleccionada
+  - la herramienta `1899 / 082` figura en `tools/tool_catalog.csv` como
+    `Sierra Vertical X`
+  - para esta familia, la regla ya documentada en `tools/synthesize_pgmx.py`
+    acepta solamente ranurados lineales horizontales, sobre `Top`, no pasantes
+  - `CanalErroneo` pide una trayectoria vertical sobre `Top`, desde
+    `(390, 0, 8)` hasta `(390, 400, 8)`
+  - por criterio de maquina, no hay herramienta disponible que pueda realizar
+    ese recorrido como fue programado
+  - por lo tanto, este caso debe clasificarse como geometria invalida para
+    sintesis/adaptacion, no como una variante corregible por seleccion de
+    herramienta
+- Comparacion con `CanalCentral`:
+  - ambos usan `SideOfFeature = Center`
+  - `CanalCentral` mantiene trayectoria sobre la geometria nominal horizontal
+    en `Y = 390`, a `Z = 8`
+  - `CanalErroneo` mantiene trayectoria sobre la geometria nominal vertical
+    en `X = 390`, a `Z = 8`
+- Hallazgos:
+  - con la profundidad corregida, el error ya no esta en la profundidad ni en
+    la compensacion lateral
+  - el canal erroneo fue creado como linea vertical `X = 390` en lugar de
+    linea horizontal `Y = 390`
+  - la trayectoria mecanizante queda ahora a la misma profundidad que los
+    canales validos: `Z = 8`
+  - la longitud vertical del approach/lift baja/sube `30` mm (`38 -> 8`),
+    igual que en los canales validos
+  - para sintetizar o adaptar canales, el interprete debe validar juntos:
+    - orientacion/geometria nominal
+    - profundidad efectiva
+    - `SideOfFeature`
+    - toolpath resultante
+    - compatibilidad entre tipo de herramienta y orientacion del recorrido
+
+### Ronda 28 - Spec publica para ranuras `SlotSide`
+
+- Estado: completado
+- Objetivo:
+  - volcar los hallazgos de canales manuales a la API publica del sintetizador
+  - evitar que una ranura vertical con `Sierra Vertical X` sea tratada como
+    programa valido
+  - sintetizar una pieza de prueba `Fondo` con ranura horizontal real
+- Cambios aplicados en `tools/synthesize_pgmx.py`:
+  - `SYNTHESIZER_VERSION` sube a `1.3`
+  - se agrego `SlotMillingSpec`
+  - se agrego `build_slot_milling_spec(...)`
+  - `PgmxSynthesisRequest` y `PgmxSynthesisResult` ahora aceptan
+    `slot_millings`
+  - `synthesize_request(...)` hidrata, valida y aplica ranuras `SlotSide`
+  - `machining_order` incorpora la familia `slot`
+  - la feature generada es `a:SlotSide`, con:
+    - `ObjectType = ScmGroup.XCam.MachiningDataModel.Milling.SlotSide`
+    - `SweptShape = a:SquareUProfile`
+    - `Width = 3.8`
+    - dos extremos `a:WoodruffSlotEndType`
+    - `Radius = 60`
+    - `Angle = 1.5707963267948966`
+  - la herramienta default de la spec es `1899 / 082`
+  - la validacion de tipo de herramienta exige que `SlotMillingSpec` use
+    `Sierra Vertical X`
+  - para `Sierra Vertical X`, el sintetizador rechaza recorridos no
+    horizontales, planos distintos de `Top` y ranuras pasantes
+- Cambios aplicados en `tools/pgmx_adapters.py`:
+  - `SlotSide` horizontal se adapta como `SlotMillingSpec`
+  - `SlotSide` vertical queda `unsupported`
+  - `CanalCentral` adapta como:
+    - `adapted = 1`
+    - `slot_millings = 1`
+  - `CanalErroneo` queda:
+    - `unsupported = 1`
+    - razon: `SlotSide` con `Sierra Vertical X` requiere una recta horizontal
+      sobre `Top`; el recorrido vertical no es ejecutable en CNC
+- Documentacion actualizada:
+  - `README.md`
+  - `docs/synthesize_pgmx_help.md`
+  - `docs/pgmx_adapters_help.md`
+- Archivo sintetizado:
+  - no se piso el `archive/maestro_examples/Fondo.pgmx` existente
+  - se genero:
+    `archive/maestro_examples/Fondo_349p1x580x18_Origen_5_5_25_Ranura.pgmx`
+- Solicitud de sintesis:
+  - `piece_name = Fondo`
+  - `length = 349.1`
+  - `width = 580`
+  - `depth = 18`
+  - `origin = (5, 5, 25)`
+  - ranura:
+    - inicio `(7.55, 570)`
+    - fin `(341.55, 570)`
+    - profundidad no pasante `10`
+    - herramienta `1899 / 082`
+- Verificacion con `tools.pgmx_snapshot.read_pgmx_snapshot(...)`:
+  - `state.piece_name = Fondo`
+  - `state.length = 349.1`
+  - `state.width = 580`
+  - `state.depth = 18`
+  - `state.origin = (5, 5, 25)`
+  - `geometries = 1`
+  - `features = 1`
+  - `operations = 1`
+  - `working_steps = 2`
+  - `resolved_working_steps = 2`
+  - feature:
+    - `feature_type = a:SlotSide`
+    - `depth_spec = MillingDepthSpec(is_through=False, target_depth=10)`
+    - `tool_width = 3.8`
+    - `slot_angle = 1.5707963267948966`
+    - extremos `a:WoodruffSlotEndType`, radio `60`
+  - geometria:
+    - `family = LineHorizontal`
+    - inicio `(7.55, 570, 0)`
+    - fin `(341.55, 570, 0)`
+  - toolpaths:
+    - `Approach`: `(7.55, 570, 38)` -> `(7.55, 570, 8)`
+    - `TrajectoryPath`: `(7.55, 570, 8)` -> `(341.55, 570, 8)`
+    - `Lift`: `(341.55, 570, 8)` -> `(341.55, 570, 38)`
+- Validaciones ejecutadas:
+  - `py -3 -m py_compile tools\synthesize_pgmx.py tools\pgmx_adapters.py tools\pgmx_snapshot.py`
+  - sintesis programatica de `Fondo_349p1x580x18_Origen_5_5_25_Ranura.pgmx`
+  - lectura del `.pgmx` sintetizado con `pgmx_snapshot`
+  - prueba negativa de ranura vertical:
+    - resultado esperado: `ValueError`
+    - mensaje: `Sierra Vertical X solo permite lineas horizontales`
+  - `git diff --check` sobre codigo y documentacion actualizados
+
+### Ronda 29 - Comparacion `Fondo_Original` vs `Fondo_Girado`
+
+- Estado: completado
+- Archivos estudiados:
+  - `archive/maestro_examples/Fondo_Original.pgmx`
+  - `archive/maestro_examples/Fondo_Girado.pgmx`
+- Correccion previa al analisis:
+  - `tools/pgmx_snapshot.py` asumía `SweptShape` en todas las features
+  - `RoundHole` no tiene `SweptShape`, por lo que `Fondo_Original.pgmx`
+    rompia la lectura normalizada
+  - se corrigio el snapshot para tolerar features sin `SweptShape`
+  - `docs/pgmx_snapshot_help.md` queda actualizado con esa regla
+- Estructura comun:
+  - `piece_name = Fondo`
+  - `origin = (5, 5, 25)`
+  - `depth = 18`
+  - `planes = 6`
+  - `geometries = 10`
+  - `features = 10`
+  - `operations = 10`
+  - `working_steps = 11`
+  - `resolved_working_steps = 11`
+  - workplan:
+    - `LAV_1`: escuadrado exterior
+    - `XBO_1` a `XBO_8`: taladros superiores
+    - `LAV_2`: ranura `SlotSide`
+    - `XN`: paso administrativo final
+- Transformacion observada:
+  - `Fondo_Girado` es `Fondo_Original` rotado 90 grados
+  - dimensiones:
+    - original: `length = 580`, `width = 349.1`
+    - girado: `length = 349.1`, `width = 580`
+  - mapeo local validado:
+    - `x_girado = 349.1 - y_original`
+    - `y_girado = x_original`
+  - el mapeo transforma todos los puntos de taladro y la ranura
+- Escuadrado exterior `LAV_1`:
+  - ambos usan:
+    - `GeneralProfileFeature`
+    - `BottomAndSideFinishMilling`
+    - herramienta `1900 / E001`
+    - `tool_width = 18.36`
+    - `SideOfFeature = Left`
+    - pasante con `Extra = 1`
+    - `Approach Arc + Quote`, habilitado
+    - `Retract Arc + Quote`, habilitado
+    - `MachineFunction = PneumaticHood`
+  - adaptacion:
+    - original: `SquaringMillingSpec(start_edge=Right, winding=Clockwise)`
+    - girado: `SquaringMillingSpec(start_edge=Top, winding=Clockwise)`
+- Taladros:
+  - ambos tienen 8 `RoundHole` sobre `Top`
+  - `XBO_1` a `XBO_4`:
+    - diametro `8`
+    - profundidad no pasante `13`
+  - `XBO_5` a `XBO_8`:
+    - diametro `5`
+    - profundidad no pasante `15`
+  - las operaciones conservan `ToolKey` vacio:
+    - `ID = 0`
+    - `ObjectType = System.Object`
+    - `Name = ""`
+  - el adaptador los conserva como `DrillingSpec` con
+    `tool_resolution = None`
+- Ranura `LAV_2`:
+  - ambos usan:
+    - `feature_type = a:SlotSide`
+    - herramienta `1899 / 082`
+    - `Sierra Vertical X`
+    - `Width = 3.8`
+    - profundidad no pasante `10`
+    - dos extremos `a:WoodruffSlotEndType`, radio `60`
+    - `SideOfFeature = Right`
+    - `MaterialPosition = Left`
+  - `Fondo_Original`:
+    - geometria nominal `LineVertical`
+    - inicio `(570, 341.55, 0)`
+    - fin `(570, 7.55, 0)`
+    - toolpath efectivo:
+      - `(568.1, 341.55, 8)` -> `(568.1, 7.55, 8)`
+    - offset efectivo: `-1.9` en `X`
+    - no es ejecutable con `Sierra Vertical X`
+  - `Fondo_Girado`:
+    - geometria nominal `LineHorizontal`
+    - inicio `(7.55, 570, 0)`
+    - fin `(341.55, 570, 0)`
+    - toolpath efectivo:
+      - `(7.55, 568.1, 8)` -> `(341.55, 568.1, 8)`
+    - offset efectivo: `-1.9` en `Y`
+    - es compatible con `Sierra Vertical X`
+- Resultado del adaptador:
+  - `Fondo_Original`:
+    - `adapted = 9`
+    - `unsupported = 1`
+    - `ignored = 1`
+    - `squaring_millings = 1`
+    - `drillings = 8`
+    - `slot_millings = 0`
+    - no soportado: `LAV_2`, porque `SlotSide` con `Sierra Vertical X`
+      requiere una recta horizontal sobre `Top`
+  - `Fondo_Girado`:
+    - `adapted = 10`
+    - `unsupported = 0`
+    - `ignored = 1`
+    - `squaring_millings = 1`
+    - `drillings = 8`
+    - `slot_millings = 1`
+- Hallazgo para sintesis:
+  - para esta pieza, el giro correcto no debe tratarse como rotacion de
+    `WorkpieceSetup/Placement`
+  - se debe transformar la geometria local y tambien intercambiar dimensiones
+  - para recuperar ejecutabilidad CNC, la ranura debe quedar horizontal en el
+    sistema local final
+  - regla practica: antes de emitir `SlotMillingSpec`, si el recorrido sale
+    vertical, hay que evaluar una variante girada con el mapeo
+    `(x, y) -> (width_original - y, x)`
+- Validaciones ejecutadas:
+  - `py -3 -m py_compile tools\pgmx_snapshot.py tools\synthesize_pgmx.py tools\pgmx_adapters.py`
+  - lectura de ambos archivos con `read_pgmx_snapshot(...)`
+  - adaptacion de ambos archivos con `adapt_pgmx_path(...)`
+
+### Ronda 30 - Reparacion automatica de `SlotSide` vertical invalido
+
+- Se implemento en `core/pgmx_processing.py` un flujo reusable para:
+  - resolver la ruta real del PGMX asociado a una pieza
+  - detectar `SlotSide` vertical sobre `Top` con herramienta `Sierra Vertical X`
+  - sintetizar una variante girada 90 grados antihorario
+  - reemplazar el PGMX original solo despues de validar el temporal generado
+- La transformacion usada para la reparacion es:
+  - dimensiones: `length_final = width_original`, `width_final = length_original`
+  - puntos Top: `(x, y) -> (width_original - y, x)`
+  - borde inicial de escuadrado: `Bottom -> Right -> Top -> Left -> Bottom`
+- La reparacion conserva el orden del `MainWorkplan` usando
+  `ordered_machinings`.
+- La ventana de inspeccion de modulos ahora:
+  - avisa cuando una fila tiene una ranura no ejecutable
+  - marca el programa con `!`
+  - ofrece `Corregir PGMX` para sintetizar y sobreescribir el archivo rotado
+- Validaciones ejecutadas:
+  - `py -3 -m py_compile app\ui.py core\pgmx_processing.py tools\pgmx_snapshot.py tools\synthesize_pgmx.py tools\pgmx_adapters.py`
+  - deteccion: `Fondo_Original.pgmx -> 1`, `Fondo_Girado.pgmx -> 0`
+  - reparacion sobre copia temporal de `Fondo_Original.pgmx`
+  - resultado validado: `349.1 x 580 x 18`, `unsupported = 0`,
+    `slot_millings = 1`, ranura horizontal `y = 570`
+
 ## Discrepancias Acumuladas
 
 - Resuelta: Maestro guarda un estado manual valido de fresado no pasante con

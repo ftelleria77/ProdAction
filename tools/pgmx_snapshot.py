@@ -33,9 +33,11 @@ __all__ = [
     "PgmxGeometrySnapshot",
     "PgmxWorkpieceSnapshot",
     "PgmxPlaneSnapshot",
+    "PgmxSlotEndConditionSnapshot",
     "PgmxFeatureSnapshot",
     "PgmxOperationSnapshot",
     "PgmxWorkingStepSnapshot",
+    "PgmxResolvedWorkingStepSnapshot",
     "PgmxSnapshot",
     "read_pgmx_snapshot",
     "snapshot_to_dict",
@@ -174,6 +176,12 @@ class PgmxPlaneSnapshot:
 
 
 @dataclass(frozen=True)
+class PgmxSlotEndConditionSnapshot:
+    end_type: str
+    radius: Optional[float]
+
+
+@dataclass(frozen=True)
 class PgmxFeatureSnapshot:
     id: str
     object_type: str
@@ -190,7 +198,16 @@ class PgmxFeatureSnapshot:
     side_of_feature: str
     material_position: str
     side_offset: Optional[float]
+    overcut_input: Optional[float]
+    overcut_output: Optional[float]
+    swept_shape_type: str
     tool_width: Optional[float]
+    first_angle: Optional[float]
+    first_radius: Optional[float]
+    second_angle: Optional[float]
+    second_radius: Optional[float]
+    slot_angle: Optional[float]
+    end_conditions: tuple[PgmxSlotEndConditionSnapshot, ...]
     diameter: Optional[float]
     taper_height: Optional[float]
     is_geom_same_direction: Optional[bool]
@@ -235,6 +252,16 @@ class PgmxWorkingStepSnapshot:
 
 
 @dataclass(frozen=True)
+class PgmxResolvedWorkingStepSnapshot:
+    index: int
+    step: PgmxWorkingStepSnapshot
+    feature: Optional[PgmxFeatureSnapshot]
+    operation: Optional[PgmxOperationSnapshot]
+    geometry: Optional[PgmxGeometrySnapshot]
+    plane: Optional[PgmxPlaneSnapshot]
+
+
+@dataclass(frozen=True)
 class PgmxSnapshot:
     source_path: Path
     xml_entry_name: str
@@ -270,6 +297,62 @@ class PgmxSnapshot:
     @property
     def plane_by_id(self) -> dict[str, PgmxPlaneSnapshot]:
         return {item.id: item for item in self.planes}
+
+    @property
+    def plane_by_name(self) -> dict[str, PgmxPlaneSnapshot]:
+        result: dict[str, PgmxPlaneSnapshot] = {}
+        for item in self.planes:
+            if item.name:
+                result[item.name] = item
+            if item.plane_type:
+                result[item.plane_type] = item
+        return result
+
+    @property
+    def resolved_working_steps(self) -> tuple[PgmxResolvedWorkingStepSnapshot, ...]:
+        features = self.feature_by_id
+        operations = self.operation_by_id
+        geometries = self.geometry_by_id
+        planes_by_id = self.plane_by_id
+        planes_by_name = self.plane_by_name
+        resolved: list[PgmxResolvedWorkingStepSnapshot] = []
+
+        for index, step in enumerate(self.working_steps, start=1):
+            feature = None
+            if step.manufacturing_feature_ref is not None:
+                feature = features.get(step.manufacturing_feature_ref.id)
+
+            operation = None
+            if step.operation_ref is not None:
+                operation = operations.get(step.operation_ref.id)
+            if operation is None and feature is not None:
+                for operation_ref in feature.operation_refs:
+                    operation = operations.get(operation_ref.id)
+                    if operation is not None:
+                        break
+
+            geometry = None
+            if feature is not None and feature.geometry_ref is not None:
+                geometry = geometries.get(feature.geometry_ref.id)
+
+            plane = None
+            if geometry is not None and geometry.plane_ref is not None:
+                plane = planes_by_id.get(geometry.plane_ref.id)
+            if plane is None and feature is not None and feature.plane_name:
+                plane = planes_by_name.get(feature.plane_name)
+
+            resolved.append(
+                PgmxResolvedWorkingStepSnapshot(
+                    index=index,
+                    step=step,
+                    feature=feature,
+                    operation=operation,
+                    geometry=geometry,
+                    plane=plane,
+                )
+            )
+
+        return tuple(resolved)
 
 
 def _local_name(tag: str) -> str:
@@ -429,6 +512,20 @@ def _machine_function_snapshot(node: ET.Element) -> PgmxMachineFunctionSnapshot:
     return PgmxMachineFunctionSnapshot(
         runtime_type=sp._xsi_type(node),
         values=tuple(values),
+    )
+
+
+def _slot_end_conditions(feature: ET.Element) -> tuple[PgmxSlotEndConditionSnapshot, ...]:
+    end_conditions_node = _first_child(feature, "EndConditions")
+    if end_conditions_node is None:
+        return ()
+    return tuple(
+        PgmxSlotEndConditionSnapshot(
+            end_type=sp._xsi_type(node),
+            radius=_optional_float_text(node, "Radius"),
+        )
+        for node in list(end_conditions_node)
+        if _local_name(node.tag) == "SlotEndType"
     )
 
 
@@ -672,6 +769,7 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
             if workpiece_node is not None
             else depth_variable_name
         )
+        swept_shape = _first_child(feature, "SweptShape")
         features.append(
             PgmxFeatureSnapshot(
                 id=feature_id,
@@ -695,7 +793,16 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
                 side_of_feature=sp._text(feature, "./{*}SideOfFeature"),
                 material_position=sp._text(feature, "./{*}MaterialPosition"),
                 side_offset=_optional_float_text(feature, "SideOffset"),
-                tool_width=_optional_float_text(_first_child(feature, "SweptShape"), "Width"),
+                overcut_input=_optional_float_text(feature, "OvercutLenghtInput"),
+                overcut_output=_optional_float_text(feature, "OvercutLenghtOutput"),
+                swept_shape_type=sp._xsi_type(swept_shape) if swept_shape is not None else "",
+                tool_width=_optional_float_text(swept_shape, "Width"),
+                first_angle=_optional_float_text(swept_shape, "FirstAngle"),
+                first_radius=_optional_float_text(swept_shape, "FirstRadius"),
+                second_angle=_optional_float_text(swept_shape, "SecondAngle"),
+                second_radius=_optional_float_text(swept_shape, "SecondRadius"),
+                slot_angle=_optional_float_text(feature, "Angle"),
+                end_conditions=_slot_end_conditions(feature),
                 diameter=_optional_float_text(feature, "Diameter"),
                 taper_height=_optional_float_text(feature, "TaperHeight"),
                 is_geom_same_direction=(
@@ -767,7 +874,10 @@ def snapshot_to_dict(snapshot: PgmxSnapshot) -> dict[str, Any]:
             return {str(key): convert(item) for key, item in value.items()}
         return value
 
-    return convert(snapshot)
+    result = convert(snapshot)
+    if isinstance(result, dict):
+        result["resolved_working_steps"] = convert(snapshot.resolved_working_steps)
+    return result
 
 
 def write_pgmx_snapshot_json(

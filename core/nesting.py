@@ -3,6 +3,7 @@
 import hashlib
 import json
 import math
+import random
 import re
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -17,6 +18,18 @@ CUT_OPTIMIZATION_TRANSVERSAL = 'transversal'
 
 CUT_GUILLOTINE_ALGORITHM_CURRENT = 'current'
 CUT_GUILLOTINE_ALGORITHM_DIMENSION_SCAN = 'dimension-scan'
+CUT_GUILLOTINE_ALGORITHM_BRKGA_TAIL = 'brkga-tail'
+CUT_GUILLOTINE_ALGORITHM_PREFERRED = CUT_GUILLOTINE_ALGORITHM_BRKGA_TAIL
+PRINT_FONT_SCALE = 1.5
+
+BRKGA_TAIL_POPULATION = 24
+BRKGA_TAIL_GENERATIONS = 24
+BRKGA_TAIL_ELITE_FRACTION = 0.25
+BRKGA_TAIL_MUTANT_FRACTION = 0.20
+BRKGA_TAIL_ELITE_BIAS = 0.70
+BRKGA_TAIL_MUTATION_RATE = 0.08
+BRKGA_TAIL_MUTATION_SCALE = 0.18
+BRKGA_TAIL_SEED = 40727
 
 PIECE_GRAIN_NONE = 'none'
 PIECE_GRAIN_HEIGHT_AXIS = 'height_axis'
@@ -250,6 +263,8 @@ def _normalize_optimization_mode(value) -> str:
 
 def _normalize_guillotine_algorithm(value) -> str:
     raw = str(value or '').strip().lower()
+    if raw in {CUT_GUILLOTINE_ALGORITHM_BRKGA_TAIL, 'brkga_tail', 'genetic-tail', 'genetico'}:
+        return CUT_GUILLOTINE_ALGORITHM_BRKGA_TAIL
     if raw in {CUT_GUILLOTINE_ALGORITHM_DIMENSION_SCAN, 'dimension_scan', 'scan', 'escaneo-dimensiones'}:
         return CUT_GUILLOTINE_ALGORITHM_DIMENSION_SCAN
     return CUT_GUILLOTINE_ALGORITHM_CURRENT
@@ -1145,6 +1160,415 @@ def _build_main_cut_guides(
     return positions, orientation
 
 
+def _full_tail_section_metrics(board: CutBoard) -> tuple[float, float]:
+    usable_width = max(0.0, float(board.board_width) - 2.0 * float(board.board_margin))
+    usable_height = max(0.0, float(board.board_height) - 2.0 * float(board.board_margin))
+    usable_right = float(board.board_width) - float(board.board_margin)
+    usable_bottom = float(board.board_height) - float(board.board_margin)
+
+    if not board.placements:
+        return usable_width * usable_height, 0.0
+
+    if board.main_cut_orientation == 'vertical':
+        max_right = max(float(placement.x) + float(placement.width) for placement in board.placements)
+        tail_width = max(0.0, usable_right - max_right)
+        return tail_width * usable_height, tail_width
+
+    if board.main_cut_orientation == 'horizontal':
+        max_bottom = max(float(placement.y) + float(placement.height) for placement in board.placements)
+        tail_height = max(0.0, usable_bottom - max_bottom)
+        return tail_height * usable_width, tail_height
+
+    return 0.0, 0.0
+
+
+def _preferred_primary_secondary(
+    cut_piece: CutPiece,
+    optimization_mode: str,
+    grain: str,
+) -> tuple[float, float]:
+    preferred_width, preferred_height, _ = _orientation_options(cut_piece, optimization_mode, grain)[0]
+    return _section_dimensions(preferred_width, preferred_height, optimization_mode)
+
+
+def _order_group_pieces_for_brkga_tail(
+    pieces: list[CutPiece],
+    optimization_mode: str,
+    grain: str,
+) -> list[CutPiece]:
+    def sort_key(cut_piece: CutPiece) -> tuple[float, float, float]:
+        primary, secondary = _preferred_primary_secondary(cut_piece, optimization_mode, grain)
+        return (primary, cut_piece.width * cut_piece.height, secondary)
+
+    return sorted(pieces, key=sort_key, reverse=True)
+
+
+def _matching_option_for_order_section(
+    cut_piece: CutPiece,
+    section_size: float,
+    secondary_remaining: float,
+    optimization_mode: str,
+    grain: str,
+) -> tuple[float, float, bool, float, float] | None:
+    candidates: list[tuple[float, float, float, float, float, bool]] = []
+    for width, height, rotated in _orientation_options(cut_piece, optimization_mode, grain):
+        primary_span, secondary_span = _section_dimensions(width, height, optimization_mode)
+        if primary_span - section_size > 0.01:
+            continue
+        if secondary_span - secondary_remaining > 0.01:
+            continue
+        candidates.append(
+            (
+                abs(section_size - primary_span),
+                -primary_span,
+                -(width * height),
+                width,
+                height,
+                rotated,
+            )
+        )
+
+    if not candidates:
+        return None
+
+    _, _, _, width, height, rotated = min(candidates)
+    primary_span, secondary_span = _section_dimensions(width, height, optimization_mode)
+    return width, height, rotated, primary_span, secondary_span
+
+
+def _first_order_section_leader(
+    remaining: list[CutPiece],
+    primary_remaining: float,
+    secondary_capacity: float,
+    optimization_mode: str,
+    grain: str,
+) -> tuple[float, int] | None:
+    for idx, cut_piece in enumerate(remaining):
+        for width, height, _ in _orientation_options(cut_piece, optimization_mode, grain):
+            primary_span, secondary_span = _section_dimensions(width, height, optimization_mode)
+            if primary_span - primary_remaining <= 0.01 and secondary_span - secondary_capacity <= 0.01:
+                return primary_span, idx
+    return None
+
+
+def _build_order_driven_section(
+    remaining: list[CutPiece],
+    section_size: float,
+    primary_remaining: float,
+    secondary_capacity: float,
+    piece_spacing: float,
+    section_kerf: float,
+    grain: str,
+    optimization_mode: str,
+) -> SectionCandidate | None:
+    occupied_primary = _occupied_span(section_size, primary_remaining, section_kerf)
+    if occupied_primary - primary_remaining > 0.01:
+        return None
+
+    selections: list[SectionSelection] = []
+    used_secondary = 0.0
+    used_area = 0.0
+
+    for idx, cut_piece in enumerate(remaining):
+        secondary_remaining = secondary_capacity - used_secondary
+        if selections:
+            secondary_remaining -= piece_spacing
+        if secondary_remaining <= 0.01:
+            break
+
+        option = _matching_option_for_order_section(
+            cut_piece,
+            section_size,
+            secondary_remaining,
+            optimization_mode,
+            grain,
+        )
+        if option is None:
+            continue
+
+        width, height, rotated, primary_span, secondary_span = option
+        used_secondary = secondary_span if not selections else used_secondary + piece_spacing + secondary_span
+        selection = SectionSelection(
+            remaining_index=idx,
+            cut_piece=cut_piece,
+            width=width,
+            height=height,
+            rotated=rotated,
+            primary_span=primary_span,
+            secondary_span=secondary_span,
+            area=width * height,
+        )
+        selections.append(selection)
+        used_area += selection.area
+
+    if not selections:
+        return None
+
+    return SectionCandidate(
+        section_size=section_size,
+        occupied_primary=occupied_primary,
+        used_secondary=used_secondary,
+        used_area=used_area,
+        selections=selections,
+    )
+
+
+def _pack_group_into_boards_order_driven_guillotine(
+    material: str,
+    thickness: float,
+    pieces: list[CutPiece],
+    board_width: float,
+    board_height: float,
+    piece_spacing: float,
+    section_kerf: float,
+    grain: str = '',
+    optimization_mode: str = CUT_OPTIMIZATION_LONGITUDINAL,
+) -> tuple[list[CutBoard], list[CutPiece]]:
+    normalized_mode = _normalize_optimization_mode(optimization_mode)
+    if not _uses_guillotine_mode(normalized_mode):
+        raise ValueError('El packer genetico requiere modo longitudinal o transversal.')
+
+    primary_capacity = float(board_height) if normalized_mode == CUT_OPTIMIZATION_TRANSVERSAL else float(board_width)
+    secondary_capacity = float(board_width) if normalized_mode == CUT_OPTIMIZATION_TRANSVERSAL else float(board_height)
+    remaining = list(pieces)
+    boards: list[CutBoard] = []
+    skipped: list[CutPiece] = []
+    board_index = 1
+
+    while remaining:
+        sections: list[SectionCandidate] = []
+        current_primary = 0.0
+        used_area = 0.0
+
+        while remaining:
+            primary_remaining = primary_capacity - current_primary
+            if primary_remaining <= 0.01:
+                break
+
+            leader = _first_order_section_leader(
+                remaining,
+                primary_remaining,
+                secondary_capacity,
+                normalized_mode,
+                grain,
+            )
+            if leader is None:
+                break
+
+            section_size, _ = leader
+            section = _build_order_driven_section(
+                remaining,
+                section_size,
+                primary_remaining,
+                secondary_capacity,
+                piece_spacing,
+                section_kerf,
+                grain,
+                normalized_mode,
+            )
+            if section is None:
+                break
+
+            sections.append(section)
+            current_primary += section.occupied_primary
+            used_area += section.used_area
+            used_indexes = {selection.remaining_index for selection in section.selections}
+            remaining = [piece for idx, piece in enumerate(remaining) if idx not in used_indexes]
+
+        if not sections:
+            skipped.extend(remaining)
+            break
+
+        placements: list[CutPlacement] = []
+        primary_offset = 0.0
+        for section in sections:
+            placements.extend(
+                _build_section_placements(
+                    section,
+                    primary_offset,
+                    normalized_mode,
+                    piece_spacing,
+                )
+            )
+            primary_offset += section.occupied_primary
+
+        main_cut_positions, main_cut_orientation = _build_main_cut_guides(
+            sections,
+            normalized_mode,
+            primary_capacity,
+        )
+
+        boards.append(
+            CutBoard(
+                material=material,
+                thickness=thickness,
+                board_width=board_width,
+                board_height=board_height,
+                board_margin=0.0,
+                grain=grain,
+                index=board_index,
+                placements=placements,
+                utilization=used_area / float(board_width * board_height),
+                main_cut_positions=main_cut_positions,
+                main_cut_orientation=main_cut_orientation,
+            )
+        )
+        board_index += 1
+
+    return boards, skipped
+
+
+def _decode_random_key_order(
+    pieces: list[CutPiece],
+    keys: list[float],
+) -> list[CutPiece]:
+    return [
+        piece
+        for _, _, piece in sorted(
+            (float(key), index, piece)
+            for index, (key, piece) in enumerate(zip(keys, pieces))
+        )
+    ]
+
+
+def _initial_order_keys(count: int) -> list[float]:
+    if count <= 1:
+        return [0.0] * count
+    return [index / float(count - 1) for index in range(count)]
+
+
+def _mutate_random_keys(
+    keys: list[float],
+    rng: random.Random,
+    *,
+    mutation_rate: float = BRKGA_TAIL_MUTATION_RATE,
+    mutation_scale: float = BRKGA_TAIL_MUTATION_SCALE,
+) -> list[float]:
+    mutated = list(keys)
+    for index, value in enumerate(mutated):
+        if rng.random() < mutation_rate:
+            value += rng.uniform(-mutation_scale, mutation_scale)
+            mutated[index] = min(1.0, max(0.0, value))
+
+    if len(mutated) >= 2 and rng.random() < mutation_rate:
+        first = rng.randrange(len(mutated))
+        second = rng.randrange(len(mutated))
+        mutated[first], mutated[second] = mutated[second], mutated[first]
+
+    return mutated
+
+
+def _brkga_tail_fitness(
+    boards: list[CutBoard],
+    skipped: list[CutPiece],
+) -> tuple[float, float, float, float, float, float]:
+    tail_areas = [_full_tail_section_metrics(board)[0] for board in boards]
+    total_tail_area = sum(tail_areas)
+    max_tail_area = max(tail_areas) if tail_areas else 0.0
+    average_utilization = sum(board.utilization for board in boards) / max(1, len(boards))
+    min_utilization = min((board.utilization for board in boards), default=0.0)
+    return (
+        float(len(skipped)),
+        float(len(boards)),
+        -total_tail_area,
+        -max_tail_area,
+        -average_utilization,
+        -min_utilization,
+    )
+
+
+def _pack_group_into_boards_guillotine_brkga_tail(
+    material: str,
+    thickness: float,
+    pieces: list[CutPiece],
+    board_width: float,
+    board_height: float,
+    piece_spacing: float,
+    section_kerf: float,
+    grain: str = '',
+    optimization_mode: str = CUT_OPTIMIZATION_LONGITUDINAL,
+) -> tuple[list[CutBoard], list[CutPiece]]:
+    if not pieces:
+        return [], []
+
+    normalized_mode = _normalize_optimization_mode(optimization_mode)
+    if not _uses_guillotine_mode(normalized_mode):
+        raise ValueError('El packer genetico requiere modo longitudinal o transversal.')
+
+    base_pieces = _order_group_pieces_for_brkga_tail(pieces, normalized_mode, grain)
+    rng = random.Random(BRKGA_TAIL_SEED + len(base_pieces) * 1009 + int(round(float(thickness) * 100)))
+    population_size = max(6, BRKGA_TAIL_POPULATION)
+    generations = max(1, BRKGA_TAIL_GENERATIONS)
+    elite_count = max(1, int(round(population_size * BRKGA_TAIL_ELITE_FRACTION)))
+    mutant_count = max(1, int(round(population_size * BRKGA_TAIL_MUTANT_FRACTION)))
+    offspring_count = max(0, population_size - elite_count - mutant_count)
+
+    count = len(base_pieces)
+    base_keys = _initial_order_keys(count)
+    population: list[list[float]] = [base_keys]
+    if count > 1:
+        population.append(list(reversed(base_keys)))
+    while len(population) < population_size:
+        population.append([rng.random() for _ in range(count)])
+
+    best_boards: list[CutBoard] = []
+    best_skipped: list[CutPiece] = list(base_pieces)
+    best_score: tuple[float, float, float, float, float, float] | None = None
+
+    def evaluate(keys: list[float]):
+        ordered_pieces = _decode_random_key_order(base_pieces, keys)
+        boards, skipped = _pack_group_into_boards_order_driven_guillotine(
+            material,
+            thickness,
+            ordered_pieces,
+            board_width,
+            board_height,
+            piece_spacing,
+            section_kerf,
+            grain=grain,
+            optimization_mode=normalized_mode,
+        )
+        return _brkga_tail_fitness(boards, skipped), boards, skipped
+
+    for _ in range(generations):
+        ranked = []
+        for keys in population:
+            score, boards, skipped = evaluate(keys)
+            ranked.append((score, keys, boards, skipped))
+            if best_score is None or score < best_score:
+                best_score = score
+                best_boards = boards
+                best_skipped = skipped
+
+        ranked.sort(key=lambda item: item[0])
+        elites = [list(keys) for _, keys, _, _ in ranked[:elite_count]]
+        non_elites = [list(keys) for _, keys, _, _ in ranked[elite_count:]] or elites
+        next_population = [list(keys) for keys in elites]
+
+        for _ in range(offspring_count):
+            elite_parent = rng.choice(elites)
+            other_parent = rng.choice(non_elites)
+            child = [
+                elite_gene if rng.random() < BRKGA_TAIL_ELITE_BIAS else other_gene
+                for elite_gene, other_gene in zip(elite_parent, other_parent)
+            ]
+            next_population.append(_mutate_random_keys(child, rng))
+
+        while len(next_population) < population_size:
+            next_population.append([rng.random() for _ in range(count)])
+
+        population = next_population
+
+    for keys in population:
+        score, boards, skipped = evaluate(keys)
+        if best_score is None or score < best_score:
+            best_score = score
+            best_boards = boards
+            best_skipped = skipped
+
+    return best_boards, best_skipped
+
+
 def _sections_lower_bound_width(remaining: list[CutPiece], secondary_capacity: float) -> float:
     remaining_area = sum(piece.width * piece.height for piece in remaining)
     if secondary_capacity <= 0:
@@ -1633,10 +2057,22 @@ def _pack_group_into_boards(
     section_kerf: float,
     grain: str = "",
     optimization_mode: str = CUT_OPTIMIZATION_NONE,
-    guillotine_algorithm: str = CUT_GUILLOTINE_ALGORITHM_CURRENT,
+    guillotine_algorithm: str = CUT_GUILLOTINE_ALGORITHM_PREFERRED,
 ) -> tuple[list[CutBoard], list[CutPiece]]:
     if _uses_guillotine_mode(optimization_mode):
         resolved_algorithm = _normalize_guillotine_algorithm(guillotine_algorithm)
+        if resolved_algorithm == CUT_GUILLOTINE_ALGORITHM_BRKGA_TAIL:
+            return _pack_group_into_boards_guillotine_brkga_tail(
+                material,
+                thickness,
+                pieces,
+                board_width,
+                board_height,
+                piece_spacing,
+                section_kerf,
+                grain=grain,
+                optimization_mode=optimization_mode,
+            )
         if resolved_algorithm == CUT_GUILLOTINE_ALGORITHM_DIMENSION_SCAN:
             return _pack_group_into_boards_guillotine_dimension_scan(
                 material,
@@ -1706,81 +2142,146 @@ def _load_print_font(image_font_module, size_px: int, bold: bool = False):
     return image_font_module.load_default()
 
 
+def _scaled_print_font_size(size_px: float) -> int:
+    return max(1, int(math.ceil(float(size_px) * PRINT_FONT_SCALE)))
+
+
 def _piece_display_name(cut_piece: CutPiece) -> str:
-    return str(cut_piece.label or cut_piece.piece.name or cut_piece.piece.id or "pieza").strip() or "pieza"
+    display_name = str(cut_piece.label or cut_piece.piece.name or cut_piece.piece.id or "pieza").strip()
+    display_name = re.sub(r'\s+#\d+(?=\s*(?:\(|$))', '', display_name).strip()
+    return display_name or "pieza"
 
 
-def _piece_final_dimension_label(cut_piece: CutPiece) -> str:
-    final_width = _safe_float(cut_piece.final_width) or _safe_float(cut_piece.piece.width) or cut_piece.width
-    final_height = _safe_float(cut_piece.final_height) or _safe_float(cut_piece.piece.height) or cut_piece.height
-    return f'{_format_dimension(final_width)} x {_format_dimension(final_height)}'
+def _piece_cut_dimension_label(placement: CutPlacement) -> str:
+    return f'{_format_dimension(placement.width)} x {_format_dimension(placement.height)}'
 
 
-def _build_piece_text_overlay(image_module, image_draw_module, image_font_module, placement: CutPlacement, width_px: int, height_px: int):
+def _piece_needs_external_label(width_px: int, height_px: int) -> bool:
+    return width_px < 130 or height_px < 58 or min(width_px, height_px) < 42
+
+
+def _placement_should_use_external_label(placement: CutPlacement, width_px: int, height_px: int) -> bool:
+    if _piece_needs_external_label(width_px, height_px):
+        return True
+    piece_name = _piece_display_name(placement.cut_piece)
+    return len(piece_name) > 26 and (width_px < 220 or height_px < 82)
+
+
+def _build_piece_identifier_overlay(image_module, image_draw_module, image_font_module, piece_number: int, width_px: int, height_px: int):
+    if width_px <= 8 or height_px <= 8:
+        return None
+
+    label = str(piece_number)
+    measure_image = image_module.new('RGBA', (1, 1), (255, 255, 255, 0))
+    measure_draw = image_draw_module.Draw(measure_image)
+    font_size = max(
+        _scaled_print_font_size(10),
+        min(_scaled_print_font_size(19), _scaled_print_font_size(min(width_px, height_px) * 0.68)),
+    )
+    font = _load_print_font(image_font_module, font_size, bold=True)
+    bbox = measure_draw.textbbox((0, 0), label, font=font)
+    text_width = int(round(bbox[2] - bbox[0]))
+    text_height = int(round(bbox[3] - bbox[1]))
+    padding_x = max(3, font_size // 3)
+    padding_y = max(2, font_size // 5)
+    overlay = image_module.new(
+        'RGBA',
+        (max(1, text_width + padding_x * 2), max(1, text_height + padding_y * 2)),
+        (255, 255, 255, 0),
+    )
+    overlay_draw = image_draw_module.Draw(overlay)
+    overlay_draw.rounded_rectangle(
+        [(0, 0), (overlay.width - 1, overlay.height - 1)],
+        radius=max(2, padding_y),
+        fill=(255, 255, 255, 235),
+        outline=(28, 53, 92, 210),
+        width=1,
+    )
+    overlay_draw.text(
+        (padding_x - bbox[0], padding_y - bbox[1]),
+        label,
+        fill=(17, 17, 17, 255),
+        font=font,
+    )
+    return overlay
+
+
+def _build_piece_text_overlay(
+    image_module,
+    image_draw_module,
+    image_font_module,
+    placement: CutPlacement,
+    width_px: int,
+    height_px: int,
+    piece_number: int,
+):
     piece_name = _piece_display_name(placement.cut_piece)
     if not piece_name or width_px <= 8 or height_px <= 8:
         return None
 
     rotate_text = height_px > width_px
-    dimension_label = _piece_final_dimension_label(placement.cut_piece)
-    base_lines = [piece_name]
-    if min(width_px, height_px) >= 28 and max(width_px, height_px) >= 90:
-        base_lines.append(dimension_label)
+    dimension_label = _piece_cut_dimension_label(placement)
+    base_lines = [f'{piece_number}. {piece_name}', dimension_label]
 
     measure_image = image_module.new('RGBA', (1, 1), (255, 255, 255, 0))
     measure_draw = image_draw_module.Draw(measure_image)
-    available_width = max(1, width_px - 8)
-    available_height = max(1, height_px - 8)
-    start_font_size = max(4, min(24, int(min(width_px, height_px) * 0.62)))
-    chosen_text = None
-    chosen_font = None
-    chosen_bbox = None
-    chosen_spacing = 0
-
-    for candidate_lines in (base_lines, [piece_name]):
-        candidate_text = '\n'.join(candidate_lines)
-        for font_size in range(start_font_size, 3, -1):
-            font = _load_print_font(image_font_module, font_size, bold=True)
-            spacing = max(1, font_size // 5)
-            bbox = measure_draw.multiline_textbbox((0, 0), candidate_text, font=font, spacing=spacing, align='center')
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
-            oriented_width = text_height if rotate_text else text_width
-            oriented_height = text_width if rotate_text else text_height
-            if oriented_width <= available_width and oriented_height <= available_height:
-                chosen_text = candidate_text
-                chosen_font = font
-                chosen_bbox = bbox
-                chosen_spacing = spacing
-                break
-        if chosen_font is not None:
-            break
-
-    if chosen_font is None or chosen_bbox is None or chosen_text is None:
+    available_width = max(1, width_px - 12)
+    available_height = max(1, height_px - 12)
+    font_size = _scaled_print_font_size(16 if min(width_px, height_px) >= 76 else 14)
+    font = _load_print_font(image_font_module, font_size, bold=True)
+    spacing = max(2, font_size // 4)
+    text = '\n'.join(base_lines)
+    bbox = measure_draw.multiline_textbbox((0, 0), text, font=font, spacing=spacing, align='center')
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+    oriented_width = text_height if rotate_text else text_width
+    oriented_height = text_width if rotate_text else text_height
+    if oriented_width > available_width or oriented_height > available_height:
         return None
 
-    text_width = int(round(chosen_bbox[2] - chosen_bbox[0]))
-    text_height = int(round(chosen_bbox[3] - chosen_bbox[1]))
-    font_size = int(getattr(chosen_font, 'size', 8))
+    text_width = int(round(text_width))
+    text_height = int(round(text_height))
     padding = max(2, font_size // 4)
     overlay = image_module.new('RGBA', (text_width + padding * 2, text_height + padding * 2), (255, 255, 255, 0))
     overlay_draw = image_draw_module.Draw(overlay)
     overlay_draw.rounded_rectangle(
         [(0, 0), (overlay.width - 1, overlay.height - 1)],
         radius=max(2, padding),
-        fill=(255, 255, 255, 185),
+        fill=(255, 255, 255, 220),
     )
     overlay_draw.multiline_text(
-        (padding - chosen_bbox[0], padding - chosen_bbox[1]),
-        chosen_text,
+        (padding - bbox[0], padding - bbox[1]),
+        text,
         fill=(17, 17, 17, 255),
-        font=chosen_font,
-        spacing=chosen_spacing,
+        font=font,
+        spacing=spacing,
         align='center',
     )
     if rotate_text:
-        overlay = overlay.rotate(90, expand=True)
+        overlay = overlay.rotate(270, expand=True)
     return overlay
+
+
+def _placement_requires_external_label(
+    image_module,
+    image_draw_module,
+    image_font_module,
+    placement: CutPlacement,
+    piece_number: int,
+    width_px: int,
+    height_px: int,
+) -> bool:
+    if _placement_should_use_external_label(placement, width_px, height_px):
+        return True
+    return _build_piece_text_overlay(
+        image_module,
+        image_draw_module,
+        image_font_module,
+        placement,
+        width_px,
+        height_px,
+        piece_number,
+    ) is None
 
 
 def _draw_dashed_guide(draw, start: tuple[int, int], end: tuple[int, int], color: str, width: int = 3, dash: int = 18, gap: int = 10):
@@ -1845,7 +2346,7 @@ def _draw_dimension_label(
         font=font,
     )
     if rotate:
-        overlay = overlay.rotate(90, expand=True)
+        overlay = overlay.rotate(270, expand=True)
 
     paste_x = int(round(center_x - overlay.width / 2.0))
     paste_y = int(round(center_y - overlay.height / 2.0))
@@ -1866,55 +2367,41 @@ def _draw_piece_cut_dimensions(
     width_px: int,
     height_px: int,
 ):
-    if width_px <= 36 or height_px <= 36:
+    if width_px <= 36 or height_px <= 28:
         return
 
-    dimension_color = '#1c355c'
-    line_width = 2 if min(width_px, height_px) >= 80 else 1
-    tick = max(5, min(12, int(round(min(width_px, height_px) * 0.10))))
-    inset = max(8, min(20, int(round(min(width_px, height_px) * 0.12))))
-    font_size = max(9, min(17, int(round(min(width_px, height_px) * 0.16))))
+    inset = max(7, min(18, int(round(min(width_px, height_px) * 0.12))))
+    font_size = max(
+        _scaled_print_font_size(10),
+        min(_scaled_print_font_size(17), _scaled_print_font_size(min(width_px, height_px) * 0.18)),
+    )
     font = _load_print_font(image_font_module, font_size, bold=True)
 
     horizontal_label = _format_dimension(placement.width)
     vertical_label = _format_dimension(placement.height)
 
-    if width_px >= 72 and height_px >= 46:
-        x1 = x_px + inset
-        x2 = x_px + width_px - inset
-        y = y_px + inset
-        if x2 - x1 > 24:
-            draw.line([(x1, y), (x2, y)], fill=dimension_color, width=line_width)
-            draw.line([(x1, y - tick), (x1, y + tick)], fill=dimension_color, width=line_width)
-            draw.line([(x2, y - tick), (x2, y + tick)], fill=dimension_color, width=line_width)
-            _draw_dimension_label(
-                image,
-                image_module,
-                image_draw_module,
-                horizontal_label,
-                (x1 + x2) / 2.0,
-                y,
-                font,
-            )
+    if width_px >= 72 and height_px >= 42:
+        _draw_dimension_label(
+            image,
+            image_module,
+            image_draw_module,
+            horizontal_label,
+            x_px + width_px / 2.0,
+            y_px + inset,
+            font,
+        )
 
-    if height_px >= 72 and width_px >= 46:
-        y1 = y_px + inset
-        y2 = y_px + height_px - inset
-        x = x_px + width_px - inset
-        if y2 - y1 > 24:
-            draw.line([(x, y1), (x, y2)], fill=dimension_color, width=line_width)
-            draw.line([(x - tick, y1), (x + tick, y1)], fill=dimension_color, width=line_width)
-            draw.line([(x - tick, y2), (x + tick, y2)], fill=dimension_color, width=line_width)
-            _draw_dimension_label(
-                image,
-                image_module,
-                image_draw_module,
-                vertical_label,
-                x,
-                (y1 + y2) / 2.0,
-                font,
-                rotate=True,
-            )
+    if height_px >= 72 and width_px >= 42:
+        _draw_dimension_label(
+            image,
+            image_module,
+            image_draw_module,
+            vertical_label,
+            x_px + width_px - inset,
+            y_px + height_px / 2.0,
+            font,
+            rotate=True,
+        )
 
 
 def _main_cut_dimension_points(cut_positions: list[float], total_size: float) -> list[float]:
@@ -1955,7 +2442,14 @@ def _draw_horizontal_main_cut_dimensions(
     line_width = 2
     tick = max(6, min(11, top_band_px // 5))
     line_y = board_top_px - max(18, int(round(top_band_px * 0.52)))
-    font = _load_print_font(image_font_module, max(9, min(15, top_band_px // 4)), bold=True)
+    font = _load_print_font(
+        image_font_module,
+        max(
+            _scaled_print_font_size(10),
+            min(_scaled_print_font_size(16), _scaled_print_font_size(top_band_px / 4.0)),
+        ),
+        bold=True,
+    )
     board_right_px = board_left_px + board_width_px
 
     for point in points:
@@ -2015,7 +2509,14 @@ def _draw_vertical_main_cut_dimensions(
     tick = max(6, min(11, right_band_px // 5))
     board_right_px = board_left_px + board_width_px
     x_line = board_right_px + max(18, int(round(right_band_px * 0.45)))
-    font = _load_print_font(image_font_module, max(9, min(15, right_band_px // 4)), bold=True)
+    font = _load_print_font(
+        image_font_module,
+        max(
+            _scaled_print_font_size(10),
+            min(_scaled_print_font_size(16), _scaled_print_font_size(right_band_px / 4.0)),
+        ),
+        bold=True,
+    )
     board_bottom_px = board_top_px + board_height_px
 
     for point in points:
@@ -2051,6 +2552,97 @@ def _draw_vertical_main_cut_dimensions(
         )
 
 
+def _wrap_text_to_width(draw, text: str, font, max_width_px: int) -> list[str]:
+    words = str(text or "").split()
+    if not words:
+        return []
+
+    lines: list[str] = []
+    current = words[0]
+    for word in words[1:]:
+        candidate = f'{current} {word}'
+        bbox = draw.textbbox((0, 0), candidate, font=font)
+        if bbox[2] - bbox[0] <= max_width_px:
+            current = candidate
+            continue
+        lines.append(current)
+        current = word
+    lines.append(current)
+    return lines
+
+
+def _draw_external_piece_list(
+    draw,
+    image_font_module,
+    entries: list[tuple[int, CutPlacement]],
+    *,
+    left_px: int,
+    top_px: int,
+    width_px: int,
+    height_px: int,
+):
+    if not entries or width_px <= 40 or height_px <= 40:
+        return
+
+    title_font = _load_print_font(image_font_module, _scaled_print_font_size(17), bold=True)
+    entry_font = _load_print_font(image_font_module, _scaled_print_font_size(13))
+    entry_bold_font = _load_print_font(image_font_module, _scaled_print_font_size(13), bold=True)
+    padding = _scaled_print_font_size(8)
+    line_gap = _scaled_print_font_size(3)
+    row_gap = _scaled_print_font_size(7)
+    usable_width = max(1, width_px - padding * 2)
+    bottom_px = top_px + height_px
+
+    draw.rounded_rectangle(
+        [(left_px, top_px), (left_px + width_px, bottom_px)],
+        radius=8,
+        fill='#ffffff',
+        outline='#9a9a9a',
+        width=1,
+    )
+    cursor_y = top_px + padding
+    draw.text((left_px + padding, cursor_y), 'Piezas pequenas', fill='#111111', font=title_font)
+    title_bbox = draw.textbbox((left_px + padding, cursor_y), 'Piezas pequenas', font=title_font)
+    cursor_y = title_bbox[3] + row_gap
+
+    for entry_index, (piece_number, placement) in enumerate(entries):
+        if cursor_y + _scaled_print_font_size(22) > bottom_px - padding:
+            remaining = len(entries) - entry_index
+            draw.text(
+                (left_px + padding, cursor_y),
+                f'+ {remaining} piezas mas',
+                fill='#111111',
+                font=entry_bold_font,
+            )
+            break
+
+        number_text = f'{piece_number}.'
+        draw.text((left_px + padding, cursor_y), number_text, fill='#111111', font=entry_bold_font)
+        number_bbox = draw.textbbox((left_px + padding, cursor_y), number_text, font=entry_bold_font)
+        text_left = number_bbox[2] + 5
+        text_width = max(1, left_px + width_px - padding - text_left)
+
+        name_lines = _wrap_text_to_width(
+            draw,
+            _piece_display_name(placement.cut_piece),
+            entry_font,
+            text_width,
+        )
+        dimension_line = f'C {_piece_cut_dimension_label(placement)}'
+        for line in name_lines[:2]:
+            if cursor_y + _scaled_print_font_size(14) > bottom_px - padding:
+                return
+            draw.text((text_left, cursor_y), line, fill='#222222', font=entry_font)
+            line_bbox = draw.textbbox((text_left, cursor_y), line, font=entry_font)
+            cursor_y = line_bbox[3] + line_gap
+
+        if cursor_y + _scaled_print_font_size(12) > bottom_px - padding:
+            return
+        draw.text((text_left, cursor_y), dimension_line, fill='#555555', font=entry_font)
+        dimension_bbox = draw.textbbox((text_left, cursor_y), dimension_line, font=entry_font)
+        cursor_y = dimension_bbox[3] + row_gap
+
+
 def _board_group_key(board: CutBoard) -> tuple[str, float]:
     return (str(board.material or "").strip().lower(), round(float(board.thickness or 0.0), 2))
 
@@ -2062,37 +2654,64 @@ def _build_board_print_image(
     client_name: str = "",
     board_group_total: int = 1,
 ):
-    from PIL import Image, ImageColor, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw, ImageFont
 
     page_width_mm, page_height_mm = _page_size_for_board(board)
     page_width_px = _mm_to_pixels(page_width_mm)
     page_height_px = _mm_to_pixels(page_height_mm)
     margin_px = _mm_to_pixels(10.0)
-    header_h_px = _mm_to_pixels(20.0)
+    header_h_px = _mm_to_pixels(28.0)
     has_horizontal_main_cut_dimensions = (
         board.main_cut_orientation == 'vertical' and bool(board.main_cut_positions)
     )
     has_vertical_main_cut_dimensions = (
         board.main_cut_orientation == 'horizontal' and bool(board.main_cut_positions)
     )
-    top_dimension_band_px = _mm_to_pixels(8.0) if has_horizontal_main_cut_dimensions else 0
-    right_dimension_band_px = _mm_to_pixels(12.0) if has_vertical_main_cut_dimensions else 0
-    board_top_px = margin_px + header_h_px + top_dimension_band_px
-    available_width_px = page_width_px - margin_px * 2 - right_dimension_band_px
-    available_height_px = page_height_px - board_top_px - margin_px
-    scale = min(available_width_px / board.board_width, available_height_px / board.board_height)
-    scale = max(0.01, scale)
+    top_dimension_band_px = _mm_to_pixels(12.0) if has_horizontal_main_cut_dimensions else 0
+    right_dimension_band_px = _mm_to_pixels(18.0) if has_vertical_main_cut_dimensions else 0
+    legend_gap_px = _mm_to_pixels(3.0)
+    legend_band_px = 0
 
-    board_width_px = int(round(board.board_width * scale))
-    board_height_px = int(round(board.board_height * scale))
-    board_left_px = margin_px + max(0, (available_width_px - board_width_px) // 2)
-    fill_color = ImageColor.getrgb(_color_from_material(board.material))
+    def compute_layout(current_legend_band_px: int):
+        board_top = margin_px + header_h_px + top_dimension_band_px
+        legend_gap = legend_gap_px if current_legend_band_px > 0 else 0
+        available_width = page_width_px - margin_px * 2 - right_dimension_band_px - current_legend_band_px - legend_gap
+        available_height = page_height_px - board_top - margin_px
+        current_scale = min(available_width / board.board_width, available_height / board.board_height)
+        current_scale = max(0.01, current_scale)
+        current_board_width = int(round(board.board_width * current_scale))
+        current_board_height = int(round(board.board_height * current_scale))
+        current_board_left = margin_px + max(0, (available_width - current_board_width) // 2)
+        return board_top, available_width, available_height, current_scale, current_board_width, current_board_height, current_board_left
+
+    for _ in range(2):
+        board_top_px, available_width_px, available_height_px, scale, board_width_px, board_height_px, board_left_px = compute_layout(legend_band_px)
+        needs_legend = False
+        for piece_number, placement in enumerate(board.placements, start=1):
+            width_px = int(round(placement.width * scale))
+            height_px = int(round(placement.height * scale))
+            if _placement_requires_external_label(
+                Image,
+                ImageDraw,
+                ImageFont,
+                placement,
+                piece_number,
+                width_px,
+                height_px,
+            ):
+                needs_legend = True
+                break
+        if needs_legend and legend_band_px == 0:
+            legend_band_px = _mm_to_pixels(40.0)
+            continue
+        break
+
     image = Image.new('RGB', (page_width_px, page_height_px), 'white')
     draw = ImageDraw.Draw(image)
 
-    title_font = _load_print_font(ImageFont, 24, bold=True)
-    material_font = _load_print_font(ImageFont, 22, bold=True)
-    subtitle_font = _load_print_font(ImageFont, 15)
+    title_font = _load_print_font(ImageFont, _scaled_print_font_size(24), bold=True)
+    material_font = _load_print_font(ImageFont, _scaled_print_font_size(22), bold=True)
+    subtitle_font = _load_print_font(ImageFont, _scaled_print_font_size(15))
     header_parts = []
     if str(production_name or "").strip():
         header_parts.append(f'Produccion: {str(production_name).strip()}')
@@ -2101,19 +2720,19 @@ def _build_board_print_image(
     if not header_parts:
         header_parts.append('Diagrama de corte')
     draw.text(
-        (margin_px, _mm_to_pixels(5.0)),
+        (margin_px, _mm_to_pixels(4.0)),
         ' | '.join(header_parts),
         fill='#111111',
         font=title_font,
     )
     draw.text(
-        (margin_px, _mm_to_pixels(10.2)),
+        (margin_px, _mm_to_pixels(12.5)),
         f'{board.material} - {_format_dimension(board.thickness)} mm - Placa {board.index} de {max(1, int(board_group_total or 1))}',
         fill='#222222',
         font=material_font,
     )
     draw.text(
-        (margin_px, _mm_to_pixels(15.5)),
+        (margin_px, _mm_to_pixels(21.0)),
         f'Base: {_format_dimension(board.board_width)} x {_format_dimension(board.board_height)} mm | Margen: {_format_dimension(board.board_margin)} mm | Veta: {board.grain or "-"}',
         fill='#4f4f4f',
         font=subtitle_font,
@@ -2124,7 +2743,7 @@ def _build_board_print_image(
             (board_left_px + board_width_px, board_top_px + board_height_px),
         ],
         radius=max(8, _mm_to_pixels(1.8)),
-        fill='#fffdf8',
+        fill='#ffffff',
         outline='#2f2f2f',
         width=2,
     )
@@ -2161,36 +2780,48 @@ def _build_board_print_image(
             right_band_px=right_dimension_band_px,
         )
 
-    for placement in board.placements:
+    external_label_entries: list[tuple[int, CutPlacement]] = []
+
+    for piece_number, placement in enumerate(board.placements, start=1):
         x_px = int(round(board_left_px + placement.x * scale))
         y_px = int(round(board_top_px + placement.y * scale))
         width_px = int(round(placement.width * scale))
         height_px = int(round(placement.height * scale))
+        use_external_label = _placement_should_use_external_label(placement, width_px, height_px)
+        if use_external_label:
+            external_label_entries.append((piece_number, placement))
 
         draw.rectangle(
             [
                 (x_px, y_px),
                 (x_px + width_px, y_px + height_px),
             ],
-            fill=fill_color,
+            fill='#ffffff',
             outline='#222222',
             width=2,
         )
 
-        _draw_piece_cut_dimensions(
-            image,
-            draw,
-            Image,
-            ImageDraw,
-            ImageFont,
-            placement,
-            x_px,
-            y_px,
-            width_px,
-            height_px,
-        )
+        if not use_external_label:
+            _draw_piece_cut_dimensions(
+                image,
+                draw,
+                Image,
+                ImageDraw,
+                ImageFont,
+                placement,
+                x_px,
+                y_px,
+                width_px,
+                height_px,
+            )
 
-        text_overlay = _build_piece_text_overlay(Image, ImageDraw, ImageFont, placement, width_px, height_px)
+        if use_external_label:
+            text_overlay = _build_piece_identifier_overlay(Image, ImageDraw, ImageFont, piece_number, width_px, height_px)
+        else:
+            text_overlay = _build_piece_text_overlay(Image, ImageDraw, ImageFont, placement, width_px, height_px, piece_number)
+            if text_overlay is None:
+                external_label_entries.append((piece_number, placement))
+                text_overlay = _build_piece_identifier_overlay(Image, ImageDraw, ImageFont, piece_number, width_px, height_px)
         if text_overlay is not None:
             paste_x = x_px + max(0, (width_px - text_overlay.width) // 2)
             paste_y = y_px + max(0, (height_px - text_overlay.height) // 2)
@@ -2214,6 +2845,19 @@ def _build_board_print_image(
                 (board_left_px + board_width_px, y_px),
                 guide_color,
             )
+
+    if legend_band_px > 0 and external_label_entries:
+        legend_left_px = board_left_px + board_width_px + right_dimension_band_px + legend_gap_px
+        legend_width_px = min(legend_band_px, max(0, page_width_px - margin_px - legend_left_px))
+        _draw_external_piece_list(
+            draw,
+            ImageFont,
+            external_label_entries,
+            left_px=legend_left_px,
+            top_px=board_top_px,
+            width_px=legend_width_px,
+            height_px=board_height_px,
+        )
 
     return image
 
@@ -2348,7 +2992,7 @@ def generate_cut_diagrams(
     saw_kerf: float = 0.0,
     board_definitions: list[dict] | None = None,
     optimization_mode: str = CUT_OPTIMIZATION_NONE,
-    guillotine_algorithm: str = CUT_GUILLOTINE_ALGORITHM_CURRENT,
+    guillotine_algorithm: str = CUT_GUILLOTINE_ALGORITHM_PREFERRED,
 ) -> dict:
     """Genera un PDF de corte agrupado por color y espesor."""
 

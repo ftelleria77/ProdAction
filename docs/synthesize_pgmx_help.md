@@ -5,7 +5,7 @@ en que orden conviene llamarla y que reglas de trabajo seguimos para no perder e
 hilo de lo ya validado en Maestro.
 
 Estado de hito actual:
-- sintetizador Maestro `v1.2`
+- sintetizador Maestro `v1.3`
 - constante publica de version: `tools.synthesize_pgmx.SYNTHESIZER_VERSION`
 
 ## 1. Alcance actual
@@ -24,6 +24,7 @@ Casos publicos soportados hoy:
 - lectura y clasificacion de geometria base (`read_pgmx_geometries`)
 - compensacion geometrica reusable (`build_compensated_toolpath_profile`)
 - fresado lineal abierto (`LineMillingSpec`)
+- ranura lineal `SlotSide` con Sierra Vertical X (`SlotMillingSpec`)
 - fresado sobre polilinea lineal abierta o cerrada (`PolylineMillingSpec`)
 - fresado circular cerrado (`CircleMillingSpec`)
 - escuadrado exterior del contorno de pieza (`SquaringMillingSpec`)
@@ -41,15 +42,16 @@ Casos publicos soportados hoy:
 - `Area` de Parametros de Maquina, con `HG` por defecto
 
 Casos que no deben asumirse como API publica estable si no estan documentados aqui:
-- familias de feature distintas de `GeneralProfileFeature` y `RoundHole`
+- familias de feature distintas de `GeneralProfileFeature`, `SlotSide` y
+  `RoundHole`
 - cualquier mecanizado que no este construido con
-  `LineMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec`,
-  `SquaringMillingSpec` o `DrillingSpec`
+  `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
+  `CircleMillingSpec`, `SquaringMillingSpec` o `DrillingSpec`
 
 Importante:
 - la sintesis completa de feature + operation sigue expuesta hoy por
-  `LineMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec`,
-  `SquaringMillingSpec` y `DrillingSpec`
+  `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
+  `CircleMillingSpec`, `SquaringMillingSpec` y `DrillingSpec`
 - la capa de compensacion sigue resolviendo lineas, arcos, circulos y curvas
   compuestas abiertas/cerradas como base de estas familias publicas
 
@@ -62,8 +64,9 @@ Orden recomendado para usar el sintetizador:
 3. Leer o definir la pieza.
 4. Construir la profundidad.
 5. Construir `Approach` y `Retract`.
-6. Construir uno o mas mecanizados (`LineMillingSpec`, `PolylineMillingSpec`,
-   `CircleMillingSpec`, `SquaringMillingSpec` y/o `DrillingSpec`).
+6. Construir uno o mas mecanizados (`LineMillingSpec`, `SlotMillingSpec`,
+   `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec` y/o
+   `DrillingSpec`).
 7. Construir el `PgmxSynthesisRequest`.
 8. Ejecutar `synthesize_request(...)`.
 
@@ -419,6 +422,71 @@ Notas:
   - `Central/Right/Left`
   - `Approach/Retract` lineales sobre multipaso
 
+### `build_slot_milling_spec(...) -> SlotMillingSpec`
+
+Construye una ranura lineal Maestro `SlotSide` validada para la herramienta
+`Sierra Vertical X`.
+
+Firma simplificada:
+
+```python
+build_slot_milling_spec(
+    *,
+    start_x,
+    start_y,
+    end_x,
+    end_y,
+    feature_name=None,
+    plane_name=None,
+    side_of_feature=None,
+    tool_id=None,
+    tool_name=None,
+    tool_width=None,
+    security_plane=None,
+    is_through=None,
+    target_depth=None,
+    extra_depth=None,
+    approach_enabled=None,
+    approach_type=None,
+    approach_mode=None,
+    approach_radius_multiplier=None,
+    approach_speed=None,
+    approach_arc_side=None,
+    retract_enabled=None,
+    retract_type=None,
+    retract_mode=None,
+    retract_radius_multiplier=None,
+    retract_speed=None,
+    retract_arc_side=None,
+    retract_overlap=None,
+    material_position=None,
+    side_offset=None,
+    end_radius=None,
+    slot_angle=None,
+)
+```
+
+Defaults operativos observados:
+- `feature_name = "Canal"`
+- `plane_name = "Top"`
+- `side_of_feature = "Center"`
+- `tool_id/tool_name = 1899 / 082`
+- `tool_width = 3.8`
+- `target_depth = 10`
+- extremos `WoodruffSlotEndType` con `Radius = 60`
+- `slot_angle = 1.5707963267948966`
+- `Approach` y `Retract` quedan deshabilitados, pero el XML conserva las
+  curvas verticales `Approach` y `Lift`
+
+Reglas de maquina volcadas al codigo:
+- `SlotMillingSpec` genera una feature `a:SlotSide`, no un
+  `GeneralProfileFeature`
+- la herramienta `1899 / 082` esta catalogada como `Sierra Vertical X`
+- para esa herramienta, el sintetizador solo acepta ranuras lineales
+  horizontales sobre `Top` y no pasantes
+- una ranura vertical queda rechazada porque el CNC no puede ejecutar ese
+  recorrido con ninguna herramienta disponible en el catalogo actual
+
 ### `build_polyline_milling_spec(...) -> PolylineMillingSpec`
 
 Construye un fresado sobre polilinea lineal abierta o cerrada.
@@ -728,6 +796,7 @@ build_synthesis_request(
     origin_z=None,
     execution_fields=None,
     line_millings=None,
+    slot_millings=None,
     polyline_millings=None,
     circle_millings=None,
     squaring_millings=None,
@@ -742,14 +811,15 @@ Reglas:
 - si no se indica `baseline_path`, usa `tools/maestro_baselines`
 - si no se indica `execution_fields`, usa `HG` por defecto
 - si no se pasa `piece`, toma el estado desde `source_pgmx_path` o desde el baseline
-- se pueden combinar mecanizados lineales, por polilinea abierta, circulares,
-  de escuadrado y de taladrado en un mismo request
+- se pueden combinar mecanizados lineales, ranuras `SlotSide`, polilineas
+  abiertas, circulares, de escuadrado y de taladrado en un mismo request
 - `ordered_machinings` permite insertar una secuencia exacta de specs publicos
-  (`LineMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec`,
-  `SquaringMillingSpec`, `DrillingSpec`) preservando ese orden de worksteps
+  (`LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
+  `CircleMillingSpec`, `SquaringMillingSpec`, `DrillingSpec`) preservando ese
+  orden de worksteps
 - `machining_order` permite definir el orden de aplicacion de familias de
-  mecanizado; por defecto es `line`, `polyline`, `circle`, `squaring`,
-  `drilling`
+  mecanizado; por defecto es `line`, `slot`, `polyline`, `circle`,
+  `squaring`, `drilling`
 - `xn` permite configurar el `Xn` final del workplan
 - si no se indica `xn`, la request usa `build_xn_spec()` por defecto
 - `baseline_path` y `source_pgmx_path` aceptan `.pgmx`, `Pieza.xml` o carpeta contenedora
@@ -1037,6 +1107,42 @@ print(result.output_path)
 print(result.sha256)
 ```
 
+### Ejemplo minimo: ranura horizontal `SlotSide`
+
+```python
+from pathlib import Path
+from tools.synthesize_pgmx import (
+    build_slot_milling_spec,
+    build_synthesis_request,
+    synthesize_request,
+)
+
+slot = build_slot_milling_spec(
+    start_x=7.55,
+    start_y=570.0,
+    end_x=341.55,
+    end_y=570.0,
+    feature_name="Canal",
+    target_depth=10.0,
+)
+
+request = build_synthesis_request(
+    output_path=Path("archive/maestro_examples/Fondo.pgmx"),
+    piece_name="Fondo",
+    length=349.1,
+    width=580.0,
+    depth=18.0,
+    origin_x=5.0,
+    origin_y=5.0,
+    origin_z=25.0,
+    slot_millings=[slot],
+)
+
+result = synthesize_request(request)
+print(result.output_path)
+print(result.sha256)
+```
+
 ### Ejemplo minimo: linea central con estrategia `Unidireccional`
 
 ```python
@@ -1306,14 +1412,14 @@ Estas reglas aplican cada vez que se trabaja con esta herramienta:
 - Las salidas sintéticas de prueba también conviene escribirlas en `archive/maestro_examples`.
 - Si el usuario pide solo generar una pieza, no cambiar codigo.
 - Si ya existe un caso manual estudiado, usarlo como `source_pgmx_path` antes de inventar serializacion nueva.
-- No asumir que un caso "parecido" ya quedo resuelto: confirmar si la familia publica es linea o polilinea.
+- No asumir que un caso "parecido" ya quedo resuelto: confirmar si la familia publica es linea, ranura o polilinea.
 - Para reglas de correccion geometrica, usar primero `build_compensated_toolpath_profile(...)`
   y recien despues decidir si hace falta una API publica nueva de mecanizado.
 - Cuando aparezca un fallo de Maestro, revisar primero:
   - serializacion XML final
   - `xsi:type` y namespaces
   - referencias internas
-  - si el caso se esta construyendo con la familia correcta (`LineMillingSpec` vs `PolylineMillingSpec`)
+  - si el caso se esta construyendo con la familia correcta (`LineMillingSpec`, `SlotMillingSpec` o `PolylineMillingSpec`)
 
 ## 7. Fuente de verdad
 

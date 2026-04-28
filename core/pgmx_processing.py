@@ -4,7 +4,7 @@ import math
 import re
 import zipfile
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import List, Optional, Sequence
 
@@ -79,6 +79,36 @@ class PieceDrawingData:
     milling_paths: List[MillingPath] = field(default_factory=list)
     milling_circles: List[MillingCircle] = field(default_factory=list)
     face_dimensions: dict[str, tuple[float, float]] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class InvalidSlotMachiningIssue:
+    """Ranura `SlotSide` que Maestro puede guardar pero la CNC no puede ejecutar."""
+
+    source_path: Path
+    feature_id: str
+    feature_name: str
+    working_step_name: str
+    reason: str
+    start: tuple[float, float]
+    end: tuple[float, float]
+    original_length: float
+    original_width: float
+    rotated_length: float
+    rotated_width: float
+
+
+@dataclass(frozen=True)
+class InvalidSlotRepairResult:
+    """Resultado de reparar una ranura invalida rotando el programa PGMX."""
+
+    source_path: Path
+    issue_count: int
+    original_length: float
+    original_width: float
+    rotated_length: float
+    rotated_width: float
+    sha256: str
 
 
 def _safe_float(value: str) -> Optional[float]:
@@ -781,6 +811,341 @@ def _resolve_source_path(project: Project, piece: Piece, module_path: Path) -> O
         return case_insensitive_match
 
     return None
+
+
+def resolve_piece_program_path(project: Project, piece: Piece, module_path: Path) -> Optional[Path]:
+    """Devuelve la ruta real del programa PGMX asociado a una pieza."""
+
+    return _resolve_source_path(project, piece, module_path)
+
+
+def _rotate_point_90_ccw(original_width: float, x_value: float, y_value: float) -> tuple[float, float]:
+    return (round(float(original_width) - float(y_value), 6), round(float(x_value), 6))
+
+
+def _line_is_vertical(start: tuple[float, float, float], end: tuple[float, float, float]) -> bool:
+    return abs(float(start[0]) - float(end[0])) <= 1e-6 and abs(float(start[1]) - float(end[1])) > 1e-6
+
+
+def _is_top_plane_name(value: Optional[str]) -> bool:
+    return _normalize_face_name(value, default="Top") == "Top"
+
+
+def _operation_uses_vertical_x_tool(operation: Optional[PgmxOperationSnapshot]) -> bool:
+    if operation is None or operation.tool_key is None:
+        return False
+    tool_id = str(operation.tool_key.id or "").strip()
+    tool_name = str(operation.tool_key.name or "").strip()
+    return tool_id == "1899" or tool_name == "082"
+
+
+def _operation_for_entry(snapshot: PgmxSnapshot, feature: PgmxFeatureSnapshot, operation_id: Optional[str]) -> Optional[PgmxOperationSnapshot]:
+    if operation_id:
+        operation = snapshot.operation_by_id.get(operation_id)
+        if operation is not None:
+            return operation
+    for operation_ref in feature.operation_refs:
+        operation = snapshot.operation_by_id.get(operation_ref.id)
+        if operation is not None:
+            return operation
+    return None
+
+
+def _slot_end_radius(feature: PgmxFeatureSnapshot) -> Optional[float]:
+    for end_condition in feature.end_conditions:
+        if end_condition.radius is not None:
+            return end_condition.radius
+    return feature.first_radius or feature.second_radius
+
+
+def _invalid_slot_issue_from_adaptation_entry(result, entry) -> Optional[InvalidSlotMachiningIssue]:
+    if entry.status != "unsupported":
+        return None
+    if "slotside" not in str(entry.feature_type or "").lower():
+        return None
+
+    snapshot = result.snapshot
+    feature = snapshot.feature_by_id.get(entry.feature_id)
+    if feature is None or feature.geometry_ref is None:
+        return None
+    if not _is_top_plane_name(feature.plane_name):
+        return None
+
+    operation = _operation_for_entry(snapshot, feature, entry.operation_id)
+    if not _operation_uses_vertical_x_tool(operation):
+        return None
+
+    geometry = snapshot.geometry_by_id.get(feature.geometry_ref.id)
+    if geometry is None or geometry.profile is None or geometry.profile.primitive_count != 1:
+        return None
+    primitive = geometry.profile.primitives[0]
+    if primitive.primitive_type != "Line":
+        return None
+    if not _line_is_vertical(primitive.start_point, primitive.end_point):
+        return None
+
+    reason = "; ".join(entry.reasons) if entry.reasons else (
+        "SlotSide vertical con Sierra Vertical X; el recorrido no es ejecutable en CNC."
+    )
+    return InvalidSlotMachiningIssue(
+        source_path=snapshot.source_path,
+        feature_id=feature.id,
+        feature_name=feature.name or entry.feature_name or feature.id,
+        working_step_name=entry.working_step_name or "",
+        reason=reason,
+        start=(float(primitive.start_point[0]), float(primitive.start_point[1])),
+        end=(float(primitive.end_point[0]), float(primitive.end_point[1])),
+        original_length=float(snapshot.state.length),
+        original_width=float(snapshot.state.width),
+        rotated_length=float(snapshot.state.width),
+        rotated_width=float(snapshot.state.length),
+    )
+
+
+def _invalid_slot_issues_from_adaptation(result) -> tuple[InvalidSlotMachiningIssue, ...]:
+    issues = [
+        issue
+        for entry in result.entries
+        for issue in (_invalid_slot_issue_from_adaptation_entry(result, entry),)
+        if issue is not None
+    ]
+    return tuple(issues)
+
+
+def get_invalid_slot_machining_issues_from_path(source_path: Path) -> tuple[InvalidSlotMachiningIssue, ...]:
+    """Detecta ranuras verticales no ejecutables en un PGMX existente."""
+
+    from tools.pgmx_adapters import adapt_pgmx_path
+
+    return _invalid_slot_issues_from_adaptation(adapt_pgmx_path(Path(source_path)))
+
+
+def get_invalid_slot_machining_issues(
+    project: Project,
+    piece: Piece,
+    module_path: Path,
+) -> tuple[InvalidSlotMachiningIssue, ...]:
+    """Detecta ranuras no ejecutables en el PGMX asociado a una pieza."""
+
+    source_path = _resolve_source_path(project, piece, module_path)
+    if source_path is None:
+        return ()
+    return get_invalid_slot_machining_issues_from_path(source_path)
+
+
+def _rotated_start_edge_90_ccw(start_edge: str) -> str:
+    mapping = {
+        "Bottom": "Right",
+        "Right": "Top",
+        "Top": "Left",
+        "Left": "Bottom",
+    }
+    normalized = str(start_edge or "Bottom").strip().title()
+    return mapping.get(normalized, start_edge)
+
+
+def _require_top_plane_for_rotation(spec) -> None:
+    plane_name = getattr(spec, "plane_name", "Top")
+    if not _is_top_plane_name(plane_name):
+        raise ValueError(
+            f"No se puede rotar automaticamente un mecanizado sobre el plano {plane_name!r}."
+        )
+
+
+def _rotate_machining_spec_90_ccw(spec, original_width: float):
+    _require_top_plane_for_rotation(spec)
+    if isinstance(spec, sp.LineMillingSpec):
+        start_x, start_y = _rotate_point_90_ccw(original_width, spec.start_x, spec.start_y)
+        end_x, end_y = _rotate_point_90_ccw(original_width, spec.end_x, spec.end_y)
+        return replace(spec, start_x=start_x, start_y=start_y, end_x=end_x, end_y=end_y)
+    if isinstance(spec, sp.SlotMillingSpec):
+        start_x, start_y = _rotate_point_90_ccw(original_width, spec.start_x, spec.start_y)
+        end_x, end_y = _rotate_point_90_ccw(original_width, spec.end_x, spec.end_y)
+        return replace(spec, start_x=start_x, start_y=start_y, end_x=end_x, end_y=end_y)
+    if isinstance(spec, sp.PolylineMillingSpec):
+        return replace(
+            spec,
+            points=tuple(_rotate_point_90_ccw(original_width, x_value, y_value) for x_value, y_value in spec.points),
+        )
+    if isinstance(spec, sp.CircleMillingSpec):
+        center_x, center_y = _rotate_point_90_ccw(original_width, spec.center_x, spec.center_y)
+        return replace(spec, center_x=center_x, center_y=center_y)
+    if isinstance(spec, sp.SquaringMillingSpec):
+        return replace(spec, start_edge=_rotated_start_edge_90_ccw(spec.start_edge))
+    if isinstance(spec, sp.DrillingSpec):
+        center_x, center_y = _rotate_point_90_ccw(original_width, spec.center_x, spec.center_y)
+        return replace(spec, center_x=center_x, center_y=center_y)
+    raise TypeError(f"Spec de mecanizado no soportado para rotacion: {type(spec).__name__}")
+
+
+def _build_rotated_slot_spec_from_entry(result, entry, original_width: float) -> sp.SlotMillingSpec:
+    snapshot = result.snapshot
+    feature = snapshot.feature_by_id.get(entry.feature_id)
+    if feature is None or feature.geometry_ref is None:
+        raise ValueError(f"No se encontro la feature de ranura {entry.feature_id}.")
+
+    geometry = snapshot.geometry_by_id.get(feature.geometry_ref.id)
+    if geometry is None or geometry.profile is None or geometry.profile.primitive_count != 1:
+        raise ValueError(f"La ranura {feature.name or feature.id} no referencia una recta simple.")
+    primitive = geometry.profile.primitives[0]
+    if primitive.primitive_type != "Line" or not _line_is_vertical(primitive.start_point, primitive.end_point):
+        raise ValueError(f"La ranura {feature.name or feature.id} no es una recta vertical reparable.")
+
+    operation = _operation_for_entry(snapshot, feature, entry.operation_id)
+    if operation is None:
+        raise ValueError(f"No se encontro la operacion de ranura {feature.name or feature.id}.")
+    if operation.tool_key is None:
+        raise ValueError(f"La operacion de ranura {feature.name or feature.id} no tiene herramienta resuelta.")
+
+    depth_spec = feature.depth_spec or sp.MillingDepthSpec(is_through=False, target_depth=10.0, extra_depth=0.0)
+    approach = operation.approach or sp.build_approach_spec()
+    retract = operation.retract or sp.build_retract_spec()
+    start_x, start_y = _rotate_point_90_ccw(original_width, primitive.start_point[0], primitive.start_point[1])
+    end_x, end_y = _rotate_point_90_ccw(original_width, primitive.end_point[0], primitive.end_point[1])
+
+    return sp.build_slot_milling_spec(
+        start_x=start_x,
+        start_y=start_y,
+        end_x=end_x,
+        end_y=end_y,
+        feature_name=feature.name or entry.feature_name or "Canal",
+        plane_name=feature.plane_name or "Top",
+        side_of_feature=feature.side_of_feature or "Center",
+        tool_id=operation.tool_key.id,
+        tool_name=operation.tool_key.name,
+        tool_width=feature.tool_width or 3.8,
+        security_plane=float(operation.approach_security_plane),
+        is_through=depth_spec.is_through,
+        target_depth=depth_spec.target_depth,
+        extra_depth=depth_spec.extra_depth,
+        approach_enabled=approach.is_enabled,
+        approach_type=approach.approach_type,
+        approach_mode=approach.mode,
+        approach_radius_multiplier=approach.radius_multiplier,
+        approach_speed=approach.speed,
+        approach_arc_side=approach.arc_side,
+        retract_enabled=retract.is_enabled,
+        retract_type=retract.retract_type,
+        retract_mode=retract.mode,
+        retract_radius_multiplier=retract.radius_multiplier,
+        retract_speed=retract.speed,
+        retract_arc_side=retract.arc_side,
+        retract_overlap=retract.overlap,
+        material_position=feature.material_position or "Left",
+        side_offset=feature.side_offset,
+        end_radius=_slot_end_radius(feature),
+        slot_angle=feature.slot_angle,
+    )
+
+
+def repair_invalid_slot_pgmx_by_rotating_ccw(source_path: Path) -> InvalidSlotRepairResult:
+    """Sintetiza el PGMX rotado 90 grados antihorario y reemplaza el original."""
+
+    from tools.pgmx_adapters import adapt_pgmx_path
+
+    target_path = Path(source_path)
+    if not target_path.is_file():
+        raise FileNotFoundError(f"No existe el archivo PGMX: {target_path}")
+
+    adaptation = adapt_pgmx_path(target_path)
+    snapshot = adaptation.snapshot
+    issues = _invalid_slot_issues_from_adaptation(adaptation)
+    if not issues:
+        raise ValueError("No se detectaron ranuras verticales reparables en el PGMX.")
+
+    issue_feature_ids = {issue.feature_id for issue in issues}
+    rotated_specs = []
+    blockers: list[str] = []
+    original_width = float(snapshot.state.width)
+
+    for entry in adaptation.entries:
+        if entry.status == "ignored":
+            continue
+        if entry.status == "adapted" and entry.spec is not None:
+            try:
+                rotated_specs.append(_rotate_machining_spec_90_ccw(entry.spec, original_width))
+            except Exception as exc:
+                blockers.append(f"{entry.feature_name or entry.feature_id}: {exc}")
+            continue
+        if entry.status == "unsupported" and entry.feature_id in issue_feature_ids:
+            try:
+                rotated_specs.append(_build_rotated_slot_spec_from_entry(adaptation, entry, original_width))
+            except Exception as exc:
+                blockers.append(f"{entry.feature_name or entry.feature_id}: {exc}")
+            continue
+        blockers.append(
+            f"{entry.feature_name or entry.feature_id}: "
+            f"{'; '.join(entry.reasons or ('mecanizado no adaptable',))}"
+        )
+
+    if blockers:
+        raise ValueError(
+            "No se puede reparar automaticamente porque hay mecanizados fuera del subset soportado:\n- "
+            + "\n- ".join(blockers)
+        )
+
+    rotated_state = replace(
+        snapshot.state,
+        length=float(snapshot.state.width),
+        width=float(snapshot.state.length),
+    )
+    temp_path = target_path.with_name(f".{target_path.stem}.rotated.tmp{target_path.suffix}")
+    if temp_path.exists():
+        temp_path.unlink()
+
+    try:
+        request = sp.build_synthesis_request(
+            output_path=temp_path,
+            source_pgmx_path=target_path,
+            piece=rotated_state,
+            ordered_machinings=rotated_specs,
+        )
+        result = sp.synthesize_request(request)
+        validation = adapt_pgmx_path(temp_path)
+        remaining_issues = _invalid_slot_issues_from_adaptation(validation)
+        unsupported = [
+            entry
+            for entry in validation.unsupported_entries
+            if entry.feature_id not in {issue.feature_id for issue in remaining_issues}
+        ]
+        if remaining_issues or unsupported:
+            details = []
+            details.extend(issue.feature_name for issue in remaining_issues)
+            details.extend(entry.feature_name or entry.feature_id for entry in unsupported)
+            raise ValueError(
+                "La reparacion genero un PGMX que todavia contiene mecanizados no soportados: "
+                + ", ".join(details)
+            )
+        temp_path.replace(target_path)
+    finally:
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
+
+    return InvalidSlotRepairResult(
+        source_path=target_path,
+        issue_count=len(issues),
+        original_length=float(snapshot.state.length),
+        original_width=float(snapshot.state.width),
+        rotated_length=float(rotated_state.length),
+        rotated_width=float(rotated_state.width),
+        sha256=result.sha256,
+    )
+
+
+def repair_invalid_slot_machining_by_rotating_ccw(
+    project: Project,
+    piece: Piece,
+    module_path: Path,
+) -> InvalidSlotRepairResult:
+    """Repara el PGMX asociado a una pieza si contiene ranuras verticales invalidas."""
+
+    source_path = _resolve_source_path(project, piece, module_path)
+    if source_path is None:
+        raise FileNotFoundError("La pieza no tiene un PGMX asociado o no se encontro el archivo.")
+    return repair_invalid_slot_pgmx_by_rotating_ccw(source_path)
 
 
 def get_pgmx_program_dimensions(project: Project, piece: Piece, module_path: Path) -> tuple[Optional[float], Optional[float], Optional[float]]:
