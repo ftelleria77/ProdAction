@@ -20,6 +20,7 @@ El snapshot incluye:
 - features con refs, profundidad cruda e inferida, incluso cuando la familia no
   tiene `SweptShape`
 - features de canal con perfil, extremos, sobrecortes y angulo cuando aplica
+- features de repeticion con `ReplicationPattern` y `BaseFeature` cuando aplica
 - operaciones con herramienta, approach, retract, estrategia y toolpaths
 - working steps en el orden real del workplan
 - working steps resueltos, vinculando cada paso con feature, operacion,
@@ -49,6 +50,27 @@ for item in snapshot.resolved_working_steps:
         item.plane.plane_type if item.plane else "-",
     )
 ```
+
+Para patrones de huecos, `feature.replication_pattern` expone la definicion de
+repeticion y `feature.base_feature` expone el `RoundHole` base:
+
+```python
+for feature in snapshot.features:
+    if feature.replication_pattern:
+        print(
+            feature.name,
+            feature.replication_pattern.number_of_columns,
+            feature.replication_pattern.number_of_rows,
+            feature.replication_pattern.spacing,
+            feature.replication_pattern.row_spacing,
+            feature.base_feature.diameter if feature.base_feature else None,
+        )
+```
+
+En taladros pasantes, `feature.depth_spec.extra_depth` se infiere desde la
+longitud del `TrajectoryPath` cuando Maestro deja `Operation/OvercutLength` en
+`0`. Por ejemplo, en una pieza de `18 mm`, un `RoundHole` pasante con
+`TrajectoryPath = 19` se expone como `extra_depth = 1`.
 
 Si hace falta serializarlo para inspeccion externa:
 

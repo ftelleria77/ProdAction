@@ -30,6 +30,7 @@ Ademas, `PgmxAdaptationResult` expone:
 - `circle_millings`
 - `squaring_millings`
 - `drillings`
+- `drilling_patterns`
 - `build_synthesis_request(output_path, baseline_path=None, source_pgmx_path=None, strict=False)`
 
 ## Que representa cada entrada
@@ -57,6 +58,10 @@ describen un mecanizado publico reutilizable. No bloquean
 ## Mapeos soportados hoy
 
 - `RoundHole` + `DrillingOperation` -> `DrillingSpec`
+  - en taladros pasantes, `extra_depth` se recupera desde el `TrajectoryPath`
+    cuando `OvercutLength` no lo informa
+- `ReplicateFeature` + `DrillingOperation` + `RectangularPattern` ->
+  `DrillingPatternSpec`
 - `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `LineMillingSpec`
   cuando la geometria es una recta simple
 - `SlotSide` + `BottomAndSideFinishMilling` -> `SlotMillingSpec`
@@ -131,6 +136,7 @@ arma el request en las familias publicas del sintetizador:
 - `circle_millings`
 - `squaring_millings`
 - `drillings`
+- `drilling_patterns`
 
 Eso significa que hoy el adaptador sirve para:
 

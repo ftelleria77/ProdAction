@@ -8,7 +8,7 @@ Objetivos:
 
 - refactorizar casos manuales hacia `LineMillingSpec`, `SlotMillingSpec`,
   `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec` y
-  `DrillingSpec`
+  `DrillingSpec`/`DrillingPatternSpec`
 - informar con claridad cuando una feature o working step no puede adaptarse
 - construir rapido un `PgmxSynthesisRequest` con el material soportado
 
@@ -46,6 +46,7 @@ SupportedSynthesisSpec = (
     | sp.CircleMillingSpec
     | sp.SquaringMillingSpec
     | sp.DrillingSpec
+    | sp.DrillingPatternSpec
 )
 
 __all__ = [
@@ -165,6 +166,14 @@ class PgmxAdaptationResult:
             if isinstance(entry.spec, sp.DrillingSpec)
         )
 
+    @property
+    def drilling_patterns(self) -> tuple[sp.DrillingPatternSpec, ...]:
+        return tuple(
+            entry.spec
+            for entry in self.adapted_entries
+            if isinstance(entry.spec, sp.DrillingPatternSpec)
+        )
+
     def build_synthesis_request(
         self,
         output_path: Path,
@@ -182,7 +191,7 @@ class PgmxAdaptationResult:
         Nota: el request conserva el orden relativo dentro de cada familia
         soportada, pero la API publica del sintetizador sigue agrupando por
         tipo de mecanizado (`line`, `slot`, `polyline`, `circle`, `squaring`,
-        `drilling`).
+        `drilling`, `drilling_pattern`).
         """
 
         if strict and self.unsupported_entries:
@@ -207,6 +216,7 @@ class PgmxAdaptationResult:
             circle_millings=self.circle_millings,
             squaring_millings=self.squaring_millings,
             drillings=self.drillings,
+            drilling_patterns=self.drilling_patterns,
         )
 
 
@@ -676,6 +686,158 @@ def _adapt_drilling(
     )
 
 
+def _replicated_depth_kwargs(feature: PgmxFeatureSnapshot) -> Optional[dict[str, Any]]:
+    base_feature = feature.base_feature
+    if base_feature is None:
+        return None
+    if "ThroughHoleBottom" in base_feature.bottom_condition_type:
+        return {"is_through": True, "target_depth": None, "extra_depth": 0.0}
+    if base_feature.depth_end is None:
+        return None
+    return {"is_through": False, "target_depth": float(base_feature.depth_end), "extra_depth": 0.0}
+
+
+def _adapt_drilling_pattern(
+    snapshot: PgmxSnapshot,
+    feature: PgmxFeatureSnapshot,
+    operation: Optional[PgmxOperationSnapshot],
+    step: Optional[PgmxWorkingStepSnapshot],
+    *,
+    order_index: int,
+) -> PgmxAdaptationEntry:
+    reasons: list[str] = []
+    if operation is None:
+        reasons.append("La feature no referencia una operacion resoluble.")
+        return _unsupported_entry(
+            feature,
+            operation,
+            step,
+            order_index=order_index,
+            reasons=reasons,
+        )
+    if "DrillingOperation" not in operation.operation_type:
+        reasons.append("La operacion vinculada no es un `DrillingOperation`.")
+    if feature.geometry_ref is None:
+        reasons.append("La feature no referencia una geometria.")
+        return _unsupported_entry(
+            feature,
+            operation,
+            step,
+            order_index=order_index,
+            reasons=reasons,
+        )
+    geometry = snapshot.geometry_by_id.get(feature.geometry_ref.id)
+    if geometry is None or geometry.point is None:
+        reasons.append("La geometria del patron de taladros no es un punto compatible.")
+
+    pattern = feature.replication_pattern
+    if pattern is None:
+        reasons.append("La feature no expone `ReplicationPattern`.")
+    elif "RectangularPattern" not in pattern.pattern_type:
+        reasons.append(f"El patron `{pattern.pattern_type}` no tiene adaptador publico.")
+    elif not math.isclose(pattern.rotation_angle, 0.0, abs_tol=1e-9):
+        reasons.append("Solo se adapta `RectangularPattern` con `RotationAngle = 0`.")
+    elif not math.isclose(pattern.row_layout_angle, 90.0, abs_tol=1e-9):
+        reasons.append("Solo se adapta `RectangularPattern` con `RowLayoutAngle = 90`.")
+
+    base_feature = feature.base_feature
+    if base_feature is None:
+        reasons.append("La feature no expone `BaseFeature`.")
+    elif "RoundHole" not in base_feature.feature_type:
+        reasons.append(f"El `BaseFeature` `{base_feature.feature_type}` no es un `RoundHole`.")
+    elif base_feature.diameter is None or base_feature.diameter <= 0.0:
+        reasons.append("El `BaseFeature` no expone un diametro valido.")
+
+    depth_kwargs = _replicated_depth_kwargs(feature)
+    if depth_kwargs is None:
+        reasons.append("La profundidad del `BaseFeature` no pudo inferirse.")
+    if not _same_security_plane(operation):
+        reasons.append(
+            "ApproachSecurityPlane y RetractSecurityPlane difieren y la API "
+            "publica solo expone uno."
+        )
+    if operation.cutting_depth is not None and not math.isclose(
+        operation.cutting_depth,
+        0.0,
+        abs_tol=1e-6,
+    ):
+        reasons.append(
+            "La operacion usa CuttingDepth distinto de cero y la API publica "
+            "actual no lo expone."
+        )
+
+    warnings = _tool_warning(operation)
+    if reasons:
+        return _unsupported_entry(
+            feature,
+            operation,
+            step,
+            order_index=order_index,
+            reasons=reasons,
+            warnings=warnings,
+        )
+
+    plane_name = _plane_name_or_default(feature)
+    assert pattern is not None
+    assert base_feature is not None
+    assert geometry is not None
+    assert depth_kwargs is not None
+    drill_family = None
+    if "ConicalHoleBottom" in base_feature.bottom_condition_type:
+        drill_family = "Conical"
+    elif "FlatHoleBottom" in base_feature.bottom_condition_type:
+        drill_family = "Flat"
+
+    tool_key = operation.tool_key
+    tool_resolution = "None"
+    tool_id = None
+    tool_name = None
+    if tool_key is not None and tool_key.id and tool_key.id != "0" and tool_key.object_type != "System.Object":
+        tool_resolution = "Explicit"
+        tool_id = tool_key.id
+        tool_name = tool_key.name
+
+    try:
+        spec = sp.build_drilling_pattern_spec(
+            geometry.point[0],
+            geometry.point[1],
+            float(base_feature.diameter),
+            columns=pattern.number_of_columns,
+            rows=pattern.number_of_rows,
+            spacing=pattern.spacing,
+            row_spacing=pattern.row_spacing,
+            feature_name=_default_name(feature, step, "Taladrado"),
+            plane_name=plane_name,
+            security_plane=float(operation.approach_security_plane),
+            is_through=bool(depth_kwargs["is_through"]),
+            target_depth=depth_kwargs["target_depth"],
+            extra_depth=depth_kwargs["extra_depth"],
+            drill_family=drill_family,
+            tool_resolution=tool_resolution,
+            tool_id=tool_id,
+            tool_name=tool_name,
+        )
+    except Exception as exc:
+        return _unsupported_entry(
+            feature,
+            operation,
+            step,
+            order_index=order_index,
+            reasons=[_builder_error("No se pudo construir el `DrillingPatternSpec`", exc)],
+            warnings=warnings,
+        )
+
+    return _adapted_entry(
+        feature,
+        operation,
+        step,
+        order_index=order_index,
+        spec_kind="drilling_pattern",
+        spec=spec,
+        warnings=warnings,
+    )
+
+
 def _adapt_milling(
     snapshot: PgmxSnapshot,
     feature: PgmxFeatureSnapshot,
@@ -1103,6 +1265,14 @@ def _adapt_feature(
     order_index: int,
 ) -> PgmxAdaptationEntry:
     operation = _linked_operation(snapshot, feature, step)
+    if "ReplicateFeature" in feature.feature_type:
+        return _adapt_drilling_pattern(
+            snapshot,
+            feature,
+            operation,
+            step,
+            order_index=order_index,
+        )
     if "RoundHole" in feature.feature_type:
         return _adapt_drilling(
             snapshot,
@@ -1241,6 +1411,7 @@ def adaptation_to_dict(result: PgmxAdaptationResult) -> dict[str, Any]:
             "circle_millings": len(result.circle_millings),
             "squaring_millings": len(result.squaring_millings),
             "drillings": len(result.drillings),
+            "drilling_patterns": len(result.drilling_patterns),
         },
         "entries": convert(result.entries),
     }

@@ -1800,6 +1800,925 @@ Reconstruir paso a paso:
   - resultado validado: `349.1 x 580 x 18`, `unsupported = 0`,
     `slot_millings = 1`, ranura horizontal `y = 570`
 
+### Ronda 31 - Patrones rectangulares de huecos con `ReplicateFeature`
+
+- Estado: completado
+- Caso comparado:
+  - sintetico previo:
+    `S:\Maestro\Projects\ProdAction\ISO\Pieza_004.pgmx`
+  - correccion manual Maestro:
+    `S:\Maestro\Projects\ProdAction\ISO\Pieza_004_Repeticiones.pgmx`
+- Hallazgo:
+  - `Pieza_004.pgmx` contenia `6` features `RoundHole` y `6`
+    `DrillingOperation`; era correcto como coordenadas, pero no como patron
+    Maestro.
+  - `Pieza_004_Repeticiones.pgmx` contiene `2` features
+    `ReplicateFeature`, `2` operaciones y `3` working steps (`2` patrones +
+    `XN`).
+- Patron horizontal manual:
+  - `feature_name = Patron_Horizontal_1_D8`
+  - base local `Top = (80, 80)`
+  - `NumberOfColumns = 3`
+  - `NumberOfRows = 1`
+  - `Spacing = 32`
+  - `RowSpacing = 32`
+  - `RotationAngle = 0`
+  - `RowLayoutAngle = 90`
+  - `BaseFeature = RoundHole`, `Diameter = 8`, `Depth = (18, 18)`,
+    `BottomCondition = ThroughHoleBottom`
+- Patron vertical manual:
+  - `feature_name = Patron_Vertical_1_D8`
+  - base local `Top = (280, 80)`
+  - `NumberOfColumns = 1`
+  - `NumberOfRows = 3`
+  - `Spacing = 32`
+  - `RowSpacing = 32`
+  - misma base `RoundHole D8` pasante
+- Estructura XML observada:
+  - la feature externa es
+    `ManufacturingFeature i:type="a:ReplicateFeature"` con namespace de
+    `Patterns`
+  - `Key/ObjectType` sigue declarando
+    `ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole`
+  - `BottomCondition` de la feature externa queda `i:nil="true"`
+  - el taladro real vive dentro de `BaseFeature i:type="b:RoundHole"`
+  - la repeticion vive dentro de
+    `ReplicationPattern i:type="a:RectangularPattern"`
+  - en taladros pasantes, las expresiones apuntan a
+    `BaseFeature/Depth/StartDepth` y `BaseFeature/Depth/EndDepth`
+- Estado previo del codigo:
+  - `core/pgmx_processing.py` ya sabia leer y expandir
+    `ReplicateFeature` para inspeccion/adaptacion.
+  - `tools/synthesize_pgmx.py` no tenia soporte publico de escritura para
+    patrones de huecos; solo podia emitir taladros individuales con
+    `DrillingSpec`.
+- Implementacion agregada:
+  - version publica del sintetizador: `v1.4`
+  - `DrillingPatternSpec`
+  - `build_drilling_pattern_spec(...)`
+  - argumento `drilling_patterns` en `build_synthesis_request(...)`
+  - soporte en `ordered_machinings` y `machining_order`
+  - serializacion de `ReplicateFeature` + `BaseFeature RoundHole` +
+    `RectangularPattern`
+  - lectura de `replication_pattern` y `base_feature` en
+    `tools/pgmx_snapshot.py`
+- Limite deliberado:
+  - por ahora `DrillingPatternSpec` queda validado solo sobre `Top`; no se
+    asumen patrones laterales hasta tener un caso manual.
+- Validacion ejecutada:
+  - `py -3 -m py_compile tools\synthesize_pgmx.py tools\pgmx_snapshot.py`
+  - se sintetizo
+    `build\pgmx_pattern_validation\Pieza_004_PatternSynth.pgmx`
+  - `sha256 =
+    1b45f16efcae47334fa68fdcdfb449bb67e21a17d63795d35cc4422bcf24ac14`
+  - snapshot generado:
+    - `features = 2`
+    - `operations = 2`
+    - `working_steps = 3`
+    - ambos features son `a:ReplicateFeature`
+    - ambos patrones son `a:RectangularPattern`
+  - comparacion semantica contra `Pieza_004_Repeticiones.pgmx`:
+    - horizontal `3 x 1`, separacion `32`
+    - vertical `1 x 3`, separacion `32`
+    - base `RoundHole D8` pasante en ambos casos
+
+### Ronda 32 - Intento de patrones rectangulares en caras laterales
+
+- Estado: completado como sintesis local; postprocesado ISO recibido y
+  contrastado.
+- Solicitud:
+  - sintetizar la siguiente pieza de la serie ISO.
+  - usar patrones de `3` columnas separadas `32 mm` en:
+    - `Front`
+    - `Back`
+    - `Left`
+    - `Right`
+- Archivo generado:
+  - `S:\Maestro\Projects\ProdAction\ISO\Pieza_005.pgmx`
+- Pieza:
+  - `piece_name = Pieza_005`
+  - `length = 400`
+  - `width = 250`
+  - `depth = 18`
+  - `origin = (5, 5, 25)`
+  - `execution_fields = HG`
+- Criterio aplicado:
+  - `D8 Flat`
+  - no pasante
+  - `target_depth = 10`
+  - `tool_resolution = Auto`
+  - por la regla lateral ya validada, `Auto` en `Front/Back/Left/Right`
+    deja `ToolKey` vacio (`ID = 0`, `ObjectType = System.Object`).
+- Distribucion local pedida al sintetizador:
+
+| Cara | Patron | Base local | Columnas | Separacion |
+| --- | --- | --- | --- | --- |
+| `Front` | `Patron_Frente_D8_3x32` | `(168, 9)` | `3` | `32` |
+| `Back` | `Patron_Posterior_D8_3x32` | `(168, 9)` | `3` | `32` |
+| `Left` | `Patron_Izquierdo_D8_3x32` | `(93, 9)` | `3` | `32` |
+| `Right` | `Patron_Derecho_D8_3x32` | `(93, 9)` | `3` | `32` |
+
+- Implementacion agregada:
+  - version publica del sintetizador: `v1.5`
+  - `DrillingPatternSpec` ya no queda limitado a `Top`; ahora acepta las
+    mismas caras que `DrillingSpec`.
+  - `_apply_drilling_patterns(...)` ordena por plano con la misma prioridad de
+    taladros multicara: `Top`, `Front`, `Back`, `Left`, `Right`.
+  - `tools/pgmx_adapters.py` adapta `ReplicateFeature + RectangularPattern`
+    hacia `DrillingPatternSpec`.
+- Validacion ejecutada:
+  - `py -3 -m py_compile tools\synthesize_pgmx.py tools\pgmx_snapshot.py tools\pgmx_adapters.py`
+  - lectura con `read_pgmx_snapshot(...)`:
+    - `features = 4`
+    - `operations = 4`
+    - `working_steps = 5` (`4` patrones + `XN`)
+    - los `4` features son `a:ReplicateFeature`
+    - los `4` patrones son `a:RectangularPattern`
+    - todos tienen `BaseFeature = b:RoundHole`, `D8`, `Depth = (10, 10)`
+  - adaptacion con `adapt_pgmx_path(...)`:
+    - `adapted = 4`
+    - `unsupported = 0`
+    - `ignored = 1`
+    - `drilling_patterns = 4`
+  - `sha256 =
+    b4a71ed3bb52a050a87b313d6e3abb92ca54902486c438d04ded921fecc0a177`
+- Pendiente:
+  - abrir `Pieza_005.pgmx` en Maestro/CNC para confirmar que los patrones
+    laterales se aceptan como entidades editables.
+  - postprocesar y comparar si el ISO expande los `12` taladros o si cambia la
+    agrupacion por cara respecto de `Pieza_003`.
+
+### Ronda 33 - Pieza 006 ISO con ranura central
+
+- Estado: postprocesado Maestro/CNC recibido; pendiente estudiar variantes.
+- Solicitud:
+  - continuar la serie ISO con una ranura central.
+- Archivo generado:
+  - `S:\Maestro\Projects\ProdAction\ISO\Pieza_006.pgmx`
+- Pieza:
+  - `piece_name = Pieza_006`
+  - `length = 400`
+  - `width = 250`
+  - `depth = 18`
+  - `origin = (5, 5, 25)`
+  - `execution_fields = HG`
+- Ranura emitida:
+  - spec publica: `SlotMillingSpec`
+  - builder: `build_slot_milling_spec(...)`
+  - feature `Ranura_Central`
+  - tipo `a:SlotSide`
+  - plano `Top`
+  - recorrido `(50, 125) -> (350, 125)`
+  - geometria `LineHorizontal`
+  - profundidad no pasante `10 mm`
+  - herramienta default `1899 / 082` (`Sierra Vertical X`)
+- Validacion ejecutada:
+  - lectura con `read_pgmx_snapshot(...)`:
+    - `features = 1`
+    - `operations = 1`
+    - `working_steps = 2` (`Ranura_Central` + `Xn`)
+    - `depth = (10, 10)`
+    - `bounding_box = (50, 125, 350, 125)`
+  - adaptacion con `adapt_pgmx_path(...)`:
+    - `adapted = 1`
+    - `unsupported = 0`
+    - `ignored = 1`
+    - `slot_millings = 1`
+  - `sha256 =
+    6c505688db5c83b9488710b32508dfb64b58b213ac4ff32cf78f093e62b171be`
+- Postprocesado recibido:
+  - `P:\USBMIX\ProdAction\ISO\pieza_006.iso`
+- Confirmacion desde ISO:
+  - Maestro/CNC acepto el `SlotSide` horizontal sintetizado.
+  - `ToolKey.Name = 082` se emitio como `?%ETK[6]=82`.
+  - `tool_width = 3.8` se emitio como `SVR = 1.900`.
+  - `end_radius = 60` se emitio como `SVL = 60.000`.
+  - `target_depth = 10` se emitio como `G1 Z-10.000`.
+  - el ISO corto desde `X350` hacia `X50`, aunque la geometria PGMX fue
+    definida como `(50, 125) -> (350, 125)`.
+  - aclaracion operativa: la direccion unica responde a que la herramienta es
+    una sierra con dientes que giran en un solo sentido; el corte debe hacerse
+    en el sentido observado para no dañar la superficie de la placa.
+- Pendiente:
+  - estudiar variantes de `side_of_feature`, largo y profundidad.
+
+### Ronda 34 - Pieza 007 con ranura central invertida
+
+- Estado: postprocesado Maestro/CNC recibido y analizado.
+- Solicitud:
+  - generar la variante de sentido inverso para el estudio ISO de ranuras.
+- Archivo generado:
+  - `S:\Maestro\Projects\ProdAction\ISO\Pieza_007.pgmx`
+- Pieza:
+  - `piece_name = Pieza_007`
+  - `length = 400`
+  - `width = 250`
+  - `depth = 18`
+  - `origin = (5, 5, 25)`
+  - `execution_fields = HG`
+- Ranura emitida:
+  - spec publica: `SlotMillingSpec`
+  - builder: `build_slot_milling_spec(...)`
+  - feature `Ranura_Central_Inversa`
+  - tipo `a:SlotSide`
+  - plano `Top`
+  - recorrido invertido `(350, 125) -> (50, 125)`
+  - geometria `LineHorizontal`
+  - bounding box `(50, 125, 350, 125)`
+  - profundidad no pasante `10 mm`
+  - herramienta default `1899 / 082` (`Sierra Vertical X`)
+- Validacion ejecutada:
+  - lectura con `read_pgmx_snapshot(...)`:
+    - `features = 1`
+    - `operations = 1`
+    - `working_steps = 2` (`Ranura_Central_Inversa` + `Xn`)
+    - `depth = (10, 10)`
+    - `bounding_box = (50, 125, 350, 125)`
+  - adaptacion con `adapt_pgmx_path(...)`:
+    - `adapted = 1`
+    - `unsupported = 0`
+    - `ignored = 1`
+    - `slot_millings = 1`
+    - el spec adaptado conserva `start = (350, 125)` y `end = (50, 125)`
+  - `sha256 =
+    cebb68e0da68d862369bf149e925f55904381da7f91083fded9f02ab6392850d`
+- Postprocesado recibido:
+  - `P:\USBMIX\ProdAction\ISO\pieza_007.iso`
+- Confirmacion desde ISO:
+  - `pieza_007.iso` tiene `92` lineas y `1309` bytes.
+  - `sha256 = AF9C74659EF1605CA6384C6ACD26DF50735A467B08740E38CF089AEB50C4CB6B`.
+  - al comparar con `pieza_006.iso`, la unica diferencia es la primera linea
+    de nombre de programa.
+  - el cuerpo ISO es identico desde la linea `2`.
+  - ambos ISO aproximan en `G0 X350.000 Y125.000` y cortan hasta
+    `G1 X50.000 Z-10.000 F5000.000`.
+- Conclusion:
+  - en estas dos ranuras horizontales equivalentes, el orden de puntos PGMX no
+    modifica el sentido ISO.
+  - este sentido no debe tratarse como una variable libre: lo impone la sierra
+    para cortar con la rotacion correcta de los dientes y preservar la
+    superficie de la placa.
+  - para estudiar el lado efectivo del mecanizado, la siguiente variable es
+    `side_of_feature`/compensacion.
+
+### Ronda 35 - Variantes de correccion derecha/izquierda para ranuras
+
+- Estado: postprocesados Maestro/CNC recibidos y analizados.
+- Solicitud:
+  - sintetizar cuatro variantes:
+    - dos derivadas de `Pieza_006`
+    - dos derivadas de `Pieza_007`
+    - con correccion derecha e izquierda.
+- Criterio:
+  - `side_of_feature = Right` representa correccion derecha.
+  - `side_of_feature = Left` representa correccion izquierda.
+  - el sentido efectivo de corte sigue siendo una regla de la `Sierra Vertical
+    X`, no del orden de puntos.
+
+| Archivo | Base | Recorrido | Correccion | Feature |
+| --- | --- | --- | --- | --- |
+| `S:\Maestro\Projects\ProdAction\ISO\Pieza_008.pgmx` | `Pieza_006` | `(50, 125) -> (350, 125)` | `Right` | `Ranura_Central_006_Correccion_Derecha` |
+| `S:\Maestro\Projects\ProdAction\ISO\Pieza_009.pgmx` | `Pieza_006` | `(50, 125) -> (350, 125)` | `Left` | `Ranura_Central_006_Correccion_Izquierda` |
+| `S:\Maestro\Projects\ProdAction\ISO\Pieza_010.pgmx` | `Pieza_007` | `(350, 125) -> (50, 125)` | `Right` | `Ranura_Central_007_Correccion_Derecha` |
+| `S:\Maestro\Projects\ProdAction\ISO\Pieza_011.pgmx` | `Pieza_007` | `(350, 125) -> (50, 125)` | `Left` | `Ranura_Central_007_Correccion_Izquierda` |
+
+- Parametros comunes:
+  - `piece = 400 x 250 x 18`
+  - `origin = (5, 5, 25)`
+  - `plane = Top`
+  - `feature_type = a:SlotSide`
+  - `target_depth = 10`
+  - herramienta `1899 / 082` (`Sierra Vertical X`)
+  - `tool_width = 3.8`
+  - `end_radius = 60`
+- Validacion ejecutada:
+  - lectura con `read_pgmx_snapshot(...)`:
+    - cada archivo tiene `features = 1`, `operations = 1`,
+      `working_steps = 2`
+    - todos son `a:SlotSide` en `Top`
+    - todos tienen `bounding_box = (50, 125, 350, 125)`
+  - adaptacion con `adapt_pgmx_path(...)`:
+    - cada archivo queda como `SlotMillingSpec`
+    - `adapted = 1`
+    - `unsupported = 0`
+    - `ignored = 1`
+    - `slot_millings = 1`
+    - el spec adaptado conserva recorrido y correccion pedidos.
+- Hashes:
+  - `Pieza_008.pgmx`:
+    `c918f5c5a7b2c5ab02aeee70a9bd94f771936e5f2bd5b580d02bf83f0346878b`
+  - `Pieza_009.pgmx`:
+    `07f4c67fd6c22f86c2c788e895bd1aad950eeead8a4111b031abdfe6e6523689`
+  - `Pieza_010.pgmx`:
+    `81fe3ccaf1dc675f1077b79d64f95374add36b812e866a2c599086efc92e3570`
+  - `Pieza_011.pgmx`:
+    `07a2df0b9e641aa8f6cd0a01003d1564cfce19b3f4cf48abcc1105b351e1430c`
+- Pendiente:
+  - variar largo o profundidad para confirmar que `SVL` y `Z` escalan como
+    `end_radius` y `target_depth`.
+- Postprocesados recibidos:
+  - `P:\USBMIX\ProdAction\ISO\pieza_008.iso`
+  - `P:\USBMIX\ProdAction\ISO\pieza_009.iso`
+  - `P:\USBMIX\ProdAction\ISO\pieza_010.iso`
+  - `P:\USBMIX\ProdAction\ISO\pieza_011.iso`
+- Confirmacion desde ISO:
+  - los cuatro ISO tienen `92` lineas y `1309` bytes.
+  - al comparar contra `pieza_006.iso`/`pieza_007.iso`, solo cambia:
+    - linea `1`: nombre del programa
+    - linea `44`: coordenada `Y` del `G0` de aproximacion.
+  - no cambian:
+    - `SHF[X/Y/Z]`
+    - `ETK`
+    - `SVL/SVR`
+    - `D1`
+    - profundidad `Z`
+    - feed
+    - sentido fisico del corte.
+- Linea `44` observada:
+
+| ISO | Recorrido PGMX | Correccion | Linea 44 |
+| --- | --- | --- | --- |
+| `pieza_006.iso` | `(50, 125) -> (350, 125)` | `Center` | `G0 X350.000 Y125.000` |
+| `pieza_007.iso` | `(350, 125) -> (50, 125)` | `Center` | `G0 X350.000 Y125.000` |
+| `pieza_008.iso` | `(50, 125) -> (350, 125)` | `Right` | `G0 X350.000 Y123.100` |
+| `pieza_009.iso` | `(50, 125) -> (350, 125)` | `Left` | `G0 X350.000 Y126.900` |
+| `pieza_010.iso` | `(350, 125) -> (50, 125)` | `Right` | `G0 X350.000 Y126.900` |
+| `pieza_011.iso` | `(350, 125) -> (50, 125)` | `Left` | `G0 X350.000 Y123.100` |
+
+- Regla observada:
+  - `SideOfFeature` desplaza la trayectoria por `tool_width / 2`.
+  - con `tool_width = 3.8`, el desplazamiento es `1.9 mm`.
+  - el signo del desplazamiento se calcula respecto del sentido geometrico de
+    la linea PGMX:
+    - geometria `(50, 125) -> (350, 125)`:
+      - `Right -> Y123.100`
+      - `Left -> Y126.900`
+    - geometria `(350, 125) -> (50, 125)`:
+      - `Right -> Y126.900`
+      - `Left -> Y123.100`
+  - el postprocesador conserva esta compensacion, pero normaliza el sentido
+    fisico de corte por la sierra.
+- Equivalencias ISO:
+  - `pieza_008.iso` y `pieza_011.iso` tienen el mismo cuerpo despues de la
+    linea `1`.
+  - `pieza_009.iso` y `pieza_010.iso` tienen el mismo cuerpo despues de la
+    linea `1`.
+- Conclusion:
+  - `SideOfFeature` es la variable correcta para el lado mecanizado.
+  - el orden de puntos solo cambia el marco de referencia para interpretar
+    `Right/Left`; no cambia el sentido fisico de corte.
+  - para mantener previsibilidad, conviene elegir un sentido geometrico
+    consistente al sintetizar ranuras y aplicar `Right/Left` desde ese criterio.
+
+### Ronda 36 - Taladros D8 con profundidad no pasante y pasante
+
+- Estado: postprocesados Maestro/CNC recibidos y analizados.
+- Solicitud:
+  - generar tres piezas con huecos D8 de distintas profundidades:
+    - profundidad `15 mm`
+    - pasante con `Extra = 0`
+    - pasante con `Extra = 1`
+- Archivos generados:
+
+| Archivo | Profundidad solicitada | Feature |
+| --- | --- | --- |
+| `S:\Maestro\Projects\ProdAction\ISO\Pieza_012.pgmx` | no pasante `15 mm` | `Hueco_D8_Profundidad_15` |
+| `S:\Maestro\Projects\ProdAction\ISO\Pieza_013.pgmx` | pasante `Extra = 0` | `Hueco_D8_Pasante_Extra_0` |
+| `S:\Maestro\Projects\ProdAction\ISO\Pieza_014.pgmx` | pasante `Extra = 1` | `Hueco_D8_Pasante_Extra_1` |
+
+- Parametros comunes:
+  - pieza `400 x 250 x 18`
+  - origen `(5, 5, 25)`
+  - centro `Top = (200, 125)`
+  - diametro `8`
+  - herramienta resuelta `1888 / 001`
+  - `DrillFamily = Flat`
+  - `security_plane = 20`
+- Validacion ejecutada:
+  - cada archivo tiene `features = 1`, `operations = 1`,
+    `working_steps = 2`
+  - todos son `a:RoundHole` en `Top`
+  - todos adaptan como `DrillingSpec`
+  - `adapted = 1`
+  - `unsupported = 0`
+  - `ignored = 1`
+- Detalle de profundidad:
+
+| Archivo | BottomCondition | Depth Start/End | TrajectoryPath | `depth_spec` adaptado |
+| --- | --- | --- | --- | --- |
+| `Pieza_012.pgmx` | `FlatHoleBottom` | `15 / 15` | `8 0 15` | `is_through=False`, `target_depth=15`, `extra_depth=0` |
+| `Pieza_013.pgmx` | `ThroughHoleBottom` | `18 / 18` | `8 0 18` | `is_through=True`, `extra_depth=0` |
+| `Pieza_014.pgmx` | `ThroughHoleBottom` | `18 / 18` | `8 0 19` | `is_through=True`, `extra_depth=1` |
+
+- Mejora aplicada:
+  - `tools/pgmx_snapshot.py` ahora reconstruye el `extra_depth` de taladros
+    pasantes desde la longitud del `TrajectoryPath` cuando `OvercutLength`
+    queda en `0`.
+  - Esto corrige el caso `Pieza_014`: antes adaptaba como `extra_depth=0`,
+    aunque el XML tenia trayectoria efectiva de `19 mm`.
+- Hashes:
+  - `Pieza_012.pgmx`:
+    `f974eebbd337d585a7f9275ad7f395c6590437bbfa6e1c022d73673f4936155d`
+  - `Pieza_013.pgmx`:
+    `cd59b1f946cdce3a61e20bada273caea6663a6444b821561f3848290ff56c9c0`
+  - `Pieza_014.pgmx`:
+    `a9b58f5d8f6120e89b038afa7f6a8d2653b73dca0b5760354d86e8c01f0100e1`
+- Postprocesados recibidos:
+  - `P:\USBMIX\ProdAction\ISO\pieza_012.iso`
+  - `P:\USBMIX\ProdAction\ISO\pieza_013.iso`
+  - `P:\USBMIX\ProdAction\ISO\pieza_014.iso`
+- Confirmacion desde ISO:
+  - los tres ISO tienen `86` lineas y `1253` bytes.
+  - todos usan:
+    - `?%ETK[6]=1`
+    - `S6000M3`
+    - `?%ETK[0]=1`
+    - `G0 X200.000 Y125.000`
+    - `G0 Z115.000`
+    - `?%ETK[7]=3`
+  - `pieza_012.iso` difiere de `pieza_013.iso` solo por la linea `50`:
+    - `Pieza_012`: `G1 G9 Z80.000 F2000.000`
+    - `Pieza_013`: `G1 G9 Z77.000 F2000.000`
+  - `pieza_013.iso` y `pieza_014.iso` son identicos despues de la primera
+    linea de nombre de programa.
+- Conclusion:
+  - `target_depth = 15` se refleja en ISO como `Z80`.
+  - pasante `Extra = 0` se refleja como `Z77`.
+  - pasante `Extra = 1` conserva `TrajectoryPath = 19` en PGMX, pero el ISO
+    queda igual a `Extra = 0`.
+  - para D8/001, el postprocesador no esta usando el `Extra` de taladro
+    vertical en el ISO observado.
+- Pendiente:
+  - investigar si el `Extra` de taladros verticales se ignora siempre o si
+    depende de la herramienta, familia de broca, diametro o configuracion
+    Maestro/CNC.
+
+### Ronda 37 - Fresado lineal vertical E004 central
+
+- Estado: postprocesado Maestro/CNC recibido y analizado.
+- Solicitud:
+  - comenzar el estudio de fresados sobre polilineas.
+  - sintetizar una pieza con un fresado de linea vertical.
+  - usar fresa `E004`, correccion central y profundidad `15 mm`.
+- Archivo generado:
+  - `S:\Maestro\Projects\ProdAction\ISO\Pieza_015.pgmx`
+- Pieza:
+  - `piece_name = Pieza_015`
+  - `length = 400`
+  - `width = 250`
+  - `depth = 18`
+  - `origin = (5, 5, 25)`
+  - `execution_fields = HG`
+- Fresado emitido:
+  - spec publica: `LineMillingSpec`
+  - builder: `build_line_milling_spec(...)`
+  - feature `Fresado_Linea_Vertical_E004_Central_P15`
+  - feature type `a:GeneralProfileFeature`
+  - operation type `a:BottomAndSideFinishMilling`
+  - plano `Top`
+  - geometria nominal `(200, 50) -> (200, 200)`
+  - familia `LineVertical`
+  - `SideOfFeature = Center`
+  - herramienta `1903 / E004`
+  - `tool_width = 4.0`
+  - no pasante, `target_depth = 15`
+- Toolpaths:
+  - `Approach = 8 0 35 | 1 200 50 38 0 0 -1`
+  - `TrajectoryPath = 8 0 150 | 1 200 50 3 0 1 0`
+  - `Lift = 8 0 35 | 1 200 200 3 0 0 1`
+  - la trayectoria trabaja a `Z = 3` (`18 - 15`).
+- Validacion ejecutada:
+  - lectura con `read_pgmx_snapshot(...)`:
+    - `features = 1`
+    - `operations = 1`
+    - `working_steps = 2`
+    - `depth = (15, 15)`
+    - `bounding_box = (200, 50, 200, 200)`
+  - adaptacion con `adapt_pgmx_path(...)`:
+    - `adapted = 1`
+    - `unsupported = 0`
+    - `ignored = 1`
+    - `line_millings = 1`
+    - el spec adaptado conserva `start = (200, 50)`, `end = (200, 200)`,
+      `SideOfFeature = Center`, herramienta `E004` y `target_depth = 15`.
+  - `sha256 =
+    d96e8edd99fafff80d5eb1588df8408467fd80de4314393b7cb383a0902b41ef`
+- Postprocesado recibido:
+  - `P:\USBMIX\ProdAction\ISO\pieza_015.iso`
+- Confirmacion desde ISO:
+  - `pieza_015.iso` tiene `96` lineas y `1344` bytes.
+  - `sha256 = 6AB983FBAC156EB9513E395A212565A4BE7D2C65BB568AB1BE90F9B6A50071DB`.
+  - el postprocesador acepto el `LineMillingSpec` con E004 central no pasante.
+- Bloque ISO observado:
+  - cambio de herramienta `T4 / M06`
+  - `?%ETK[6]=1`
+  - `?%ETK[9]=4`
+  - `?%ETK[18]=1`
+  - `S18000M3`
+  - `?%ETK[13]=1`
+  - `SHF[X]=32.050`
+  - `SHF[Y]=-246.650`
+  - `SHF[Z]=-125.300`
+  - `G0 X200.000 Y50.000`
+  - `G0 Z127.200`
+  - `D1`
+  - `SVL 107.200`
+  - `SVR 2.000`
+  - `G1 Z-15.000 F2000.000`
+  - `?%ETK[7]=4`
+  - `G1 Y200.000 Z-15.000 F5000.000`
+  - `G0 Z20.000`
+- Relaciones confirmadas:
+  - `SVR = 2.000` corresponde a `tool_width / 2`.
+  - `SVL = 107.200` corresponde al `tool_offset_length` de E004 en
+    `tools/tool_catalog.csv`.
+  - `S18000M3`, `F2000` y `F5000` coinciden con spindle, descenso y avance
+    estandar del catalogo para E004.
+  - la profundidad PGMX no pasante `15` se emite como `Z-15.000`.
+  - el ISO conserva la geometria nominal en `X/Y`: inicia en `(200, 50)` y
+    avanza hasta `Y = 200`.
+- Conclusion:
+  - el fresado lineal E004 usa cambio real de herramienta y flags distintos a
+    `SlotSide`.
+  - comparte la estructura `D1 + SVL/SVR + ETK[7]` con ranuras, pero para E004
+    aparece `?%ETK[7]=4`.
+  - para continuar con polilineas, conviene usar la misma herramienta,
+    profundidad y correccion central para aislar solo la geometria.
+- Pendiente:
+  - sintetizar una polilinea abierta de dos segmentos con E004 central y
+    profundidad `15 mm`.
+  - comparar si el ISO la emite como recorrido continuo o como segmentos
+    separados.
+
+### Ronda 38 - Polilinea E004 con correccion izquierda y derecha
+
+- Estado: completado como sintesis local; pendiente de validacion Maestro/CNC.
+- Solicitud:
+  - hacer dos variantes de la polilinea:
+    - por izquierda
+    - por derecha
+- Archivos generados:
+
+| Archivo | Correccion | Feature |
+| --- | --- | --- |
+| `S:\Maestro\Projects\ProdAction\ISO\Pieza_016.pgmx` | `Left` | `Fresado_Polilinea_E004_Izquierda_P15` |
+| `S:\Maestro\Projects\ProdAction\ISO\Pieza_017.pgmx` | `Right` | `Fresado_Polilinea_E004_Derecha_P15` |
+
+- Parametros comunes:
+  - pieza `400 x 250 x 18`
+  - origen `(5, 5, 25)`
+  - spec publica `PolylineMillingSpec`
+  - plano `Top`
+  - polilinea abierta nominal:
+    - `(150, 50)`
+    - `(150, 125)`
+    - `(250, 125)`
+  - herramienta `1903 / E004`
+  - `tool_width = 4.0`
+  - no pasante, `target_depth = 15`
+  - cota efectiva `Z = 3`
+- Validacion ejecutada:
+  - lectura con `read_pgmx_snapshot(...)`:
+    - cada archivo tiene `features = 1`, `operations = 1`,
+      `working_steps = 2`
+    - ambos son `a:GeneralProfileFeature` en `Top`
+    - familia `OpenPolyline`
+    - bounding box nominal `(150, 50, 250, 125)`
+  - adaptacion con `adapt_pgmx_path(...)`:
+    - cada archivo queda como `PolylineMillingSpec`
+    - `adapted = 1`
+    - `unsupported = 0`
+    - `ignored = 1`
+    - `polyline_millings = 1`
+- Toolpath compensado:
+  - `Pieza_016` / `Left`:
+    - `Approach = 8 0 35 | 1 148 50 38 0 0 -1`
+    - `TrajectoryPath`:
+      - linea `8 0 75 | 1 148 50 3 0 1 0`
+      - arco `8 3.1415926535897931 4.7123889803846897 | 2 150 125 3 0 0 -1 1 0 0 0 -1 0 2`
+      - linea `8 0 100 | 1 150 127 3 1 0 0`
+    - `Lift = 8 0 35 | 1 250 127 3 0 0 1`
+  - `Pieza_017` / `Right`:
+    - `Approach = 8 0 35 | 1 152 50 38 0 0 -1`
+    - `TrajectoryPath`:
+      - linea `8 0 73 | 1 152 50 3 0 1 0`
+      - linea `8 0 98 | 1 152 123 3 1 0 0`
+    - `Lift = 8 0 35 | 1 250 123 3 0 0 1`
+- Observacion:
+  - con `Left`, la compensacion queda del lado exterior del vertice y se
+    genera un arco de radio `2 mm`.
+  - con `Right`, los tramos compensados se encuentran en la esquina interna
+    `(152, 123)` y no aparece arco.
+- Hashes:
+  - `Pieza_016.pgmx`:
+    `d341ccc12e9a301f1bad3b47ff81e4f5e34585c96cf3df771c484119ad59f077`
+  - `Pieza_017.pgmx`:
+    `631e91659847e2b18344404d774472d0e3d5b0f1cab892b4bc6cc627a3a9956e`
+- Contraste contra ISO postprocesado:
+  - `pieza_016.iso` y `pieza_017.iso` tienen `102` lineas y `1493` bytes.
+  - despues del nombre de programa, la unica diferencia del cuerpo ISO es:
+    - `Pieza_016` / `Left` -> `G41`
+    - `Pieza_017` / `Right` -> `G42`
+  - ambos ISO usan el recorrido nominal:
+    - `G0 X150.000 Y49.000`
+    - `G1 X150.000 Y50.000 Z20.000 F2000.000`
+    - `G1 Z-15.000 F2000.000`
+    - `G1 Y125.000 Z-15.000 F5000.000`
+    - `G1 X250.000 Z-15.000 F5000.000`
+    - `G1 Z20.000 F5000.000`
+    - `G40`
+    - `G1 X251.000 Y125.000 Z20.000 F5000.000`
+  - la compensacion no aparece en ISO como coordenadas desplazadas `X148`,
+    `Y127`, `X152` o `Y123`; aparece como `G41/G42` con `SVR 2.000`.
+  - el arco exterior de `Left` existente en el `TrajectoryPath` PGMX no se
+    emite como `G2/G3` en ISO.
+  - conclusion: para `GeneralProfileFeature` con E004, el postprocesador
+    conserva el contorno nominal y delega la compensacion al control CNC.
+- Pendiente:
+  - validar fisicamente o en simulacion CNC como resuelve el control la esquina
+    nominal con `G41/G42`.
+
+### Ronda 39 - Escuadrado E001 antihorario y horario pasante Extra 1
+
+- Estado: PGMX corregidos sin acercamiento/alejamiento y nuevos ISO
+  postprocesados analizados. El contraste ISO anterior queda como historico de
+  la version previa con `Arc + Quote`.
+- Solicitud:
+  - probar una pieza con escuadrado antihorario.
+  - probar otra pieza con escuadrado horario.
+  - usar fresa `E001`, pasante con `Extra = 1`.
+- Archivos generados:
+
+| Archivo | Winding | Correccion exterior | Feature |
+| --- | --- | --- | --- |
+| `S:\Maestro\Projects\ProdAction\ISO\Pieza_018.pgmx` | `CounterClockwise` | `Right` | `Escuadrado_Antihorario_E001_Pasante_Extra1` |
+| `S:\Maestro\Projects\ProdAction\ISO\Pieza_019.pgmx` | `Clockwise` | `Left` | `Escuadrado_Horario_E001_Pasante_Extra1` |
+
+- Parametros comunes:
+  - pieza `400 x 250 x 18`
+  - origen `(5, 5, 25)`
+  - `execution_fields = HG`
+  - spec publica `SquaringMillingSpec`
+  - `start_edge = Bottom`
+  - plano `Top`
+  - familia geometrica `ClosedPolylineMidEdgeStart`
+  - inicio nominal `(200, 0, 0)`
+  - bounding box nominal `(0, 0, 400, 250)`
+  - herramienta `1900 / E001`
+  - `tool_width = 18.36`
+  - profundidad pasante `Extra = 1`
+  - `BottomCondition = ThroughMillingBottom`
+  - `Depth.StartDepth/EndDepth = 18 / 18`
+  - `OvercutLength = 1`
+  - `Approach = Arc + Quote`
+  - `Retract = Arc + Quote`
+- Validacion ejecutada:
+  - lectura con `read_pgmx_snapshot(...)`:
+    - cada archivo tiene `features = 1`, `operations = 1`,
+      `working_steps = 2`
+    - ambos son `a:GeneralProfileFeature` en `Top`
+    - operacion `a:BottomAndSideFinishMilling`
+    - herramienta `1900 / E001`
+  - adaptacion con `adapt_pgmx_path(...)`:
+    - cada archivo queda como `SquaringMillingSpec`
+    - `adapted = 1`
+    - `unsupported = 0`
+    - `ignored = 1`
+    - `squaring_millings = 1`
+- Toolpath resumido:
+  - ambas variantes generan `TrajectoryPath` cerrado compuesto por `9`
+    miembros: `5` lineas y `4` arcos en las esquinas.
+  - la cota efectiva del fresado es `Z = -1`, consistente con pasante
+    `Extra = 1`.
+  - `Pieza_018` / antihoraria:
+    - `Approach`: `(190.82, -18.36, 38)` -> `(200, -9.18, -1)`
+    - `Lift`: `(200, -9.18, -1)` -> `(209.18, -18.36, 38)`
+  - `Pieza_019` / horaria:
+    - `Approach`: `(209.18, -18.36, 38)` -> `(200, -9.18, -1)`
+    - `Lift`: `(200, -9.18, -1)` -> `(190.82, -18.36, 38)`
+- Hashes:
+  - `Pieza_018.pgmx`:
+    `42ecd54c6d65953ba55edaa8d38615f983ce622c1157606d35337de0fda77b20`
+  - `Pieza_019.pgmx`:
+    `b5b1527655611b5d9878265e5a05266cbb7b7a9b7a19a6929f0c7d7c10184511`
+- Contraste contra ISO postprocesado:
+  - `pieza_018.iso` y `pieza_019.iso` tienen `107` lineas y `1690` bytes.
+  - herramienta ISO:
+    - `T1`, `M06`
+    - `?%ETK[6]=1`
+    - `?%ETK[9]=1`
+    - `S18000M3`
+  - parametros comunes:
+    - `SVL 125.400`
+    - `SVR 9.180`
+    - `?%ETK[7]=4`
+    - bajada `G1 Z-19.000 F2000.000`
+    - corte `F5000.000`
+  - `Extra = 1` si se refleja en ISO:
+    - espesor `18` + extra `1` -> profundidad `Z-19.000`
+  - `Pieza_018` / antihoraria:
+    - usa `G42`
+    - entra desde `G0 X181.640 Y-19.360`
+    - arco de entrada `G2` hacia `(200, 0)`
+    - recorre nominalmente:
+      `(200, 0) -> (400, 0) -> (400, 250) -> (0, 250) -> (0, 0) -> (200, 0)`
+    - arco de salida `G2` hacia `X218.360 Y-18.360`
+  - `Pieza_019` / horaria:
+    - usa `G41`
+    - entra desde `G0 X218.360 Y-19.360`
+    - arco de entrada `G3` hacia `(200, 0)`
+    - recorre nominalmente:
+      `(200, 0) -> (0, 0) -> (0, 250) -> (400, 250) -> (400, 0) -> (200, 0)`
+    - arco de salida `G3` hacia `X181.640 Y-18.360`
+  - el ISO no emite los cuatro arcos de esquina del `TrajectoryPath`
+    compensado del PGMX; emite el rectangulo nominal y delega la compensacion
+    al CNC con `G41/G42` y `SVR 9.180`.
+  - conclusion:
+    - el escuadrado E001 conserva el winding en el ISO.
+    - `Right -> G42` y `Left -> G41`.
+    - para `SquaringMillingSpec`, la compensacion queda en el control CNC, no
+      en coordenadas ya desplazadas.
+- Correccion posterior:
+  - el usuario aclaro que `Pieza_018` y `Pieza_019` debian generarse sin
+    acercamiento ni alejamiento.
+  - ambos archivos fueron sobrescritos en:
+    - `S:\Maestro\Projects\ProdAction\ISO\Pieza_018.pgmx`
+    - `S:\Maestro\Projects\ProdAction\ISO\Pieza_019.pgmx`
+  - nuevas features:
+    - `Pieza_018`: `Escuadrado_Antihorario_E001_SinAcercamientoAlejamiento`
+    - `Pieza_019`: `Escuadrado_Horario_E001_SinAcercamientoAlejamiento`
+  - configuracion nueva:
+    - `Approach.IsEnabled = False`
+    - `Retract.IsEnabled = False`
+    - herramienta `1900 / E001`
+    - profundidad pasante `Extra = 1`
+    - `Pieza_018`: `CounterClockwise`, exterior `Right`
+    - `Pieza_019`: `Clockwise`, exterior `Left`
+  - toolpaths nuevos:
+    - `Approach` queda sin miembros de curva y baja directo:
+      `(200, -9.18, 38)` -> `(200, -9.18, -1)`
+    - `TrajectoryPath` conserva `9` miembros, `5` lineas y `4` arcos.
+    - `Lift` queda sin miembros de curva y sube directo:
+      `(200, -9.18, -1)` -> `(200, -9.18, 38)`
+  - validacion con `adapt_pgmx_path(...)`:
+    - cada archivo queda como `SquaringMillingSpec`
+    - `adapted = 1`
+    - `unsupported = 0`
+    - `ignored = 1`
+    - `squaring_millings = 1`
+    - el adaptador preserva `approach_enabled = False` y
+      `retract_enabled = False`.
+  - hashes actuales:
+    - `Pieza_018.pgmx`:
+      `b637a0157010ea9f753cfedfb4802010f40a5be67359917b7479c84cbd749128`
+    - `Pieza_019.pgmx`:
+      `4f3fa5cfc79e3c7a7cc9b80ac165992ad556ac38881c702160b54e7b7bb0ee89`
+  - los ISO `pieza_018.iso` y `pieza_019.iso` registrados antes corresponden a
+    la version previa con acercamiento/alejamiento `Arc + Quote`.
+- Contraste contra nuevos ISO postprocesados:
+  - el usuario sobrescribio `pieza_018.iso` y `pieza_019.iso` desde los PGMX
+    corregidos.
+  - propiedades:
+    - `pieza_018.iso`: `105` lineas, `1584` bytes,
+      SHA256 `8874807C3FEF36136A08220EBA34ADA240C00F2EC4A492F27D5B2250E0F38F8A`
+    - `pieza_019.iso`: `105` lineas, `1584` bytes,
+      SHA256 `D929F154234C074BFBD190DDDEE081A762E25EAFED1BF8EE206302DE523FC92B`
+  - cuerpos ISO sin primera linea:
+    - `pieza_018.iso`:
+      `3063E0BA5699E3C2DAD785748B7F832282587C2C93B3162B138076B3419754C1`
+    - `pieza_019.iso`:
+      `B47F7086E541F80FE9084A708803A8089CD4546C9DA0EDED1A8728F0B985048E`
+  - `pieza_018.iso` / antihorario sin acercamiento/alejamiento:
+    - `G0 X199.000 Y0.000`
+    - `G42`
+    - `G1 X200.000 Y0.000 Z20.000 F2000.000`
+    - `G1 Z-19.000 F2000.000`
+    - recorrido nominal:
+      `(200, 0) -> (400, 0) -> (400, 250) -> (0, 250) -> (0, 0) -> (200, 0)`
+    - `G1 Z20.000 F5000.000`
+    - `G1 X201.000 Y0.000 Z20.000 F5000.000`
+  - `pieza_019.iso` / horario sin acercamiento/alejamiento:
+    - `G0 X201.000 Y0.000`
+    - `G41`
+    - `G1 X200.000 Y0.000 Z20.000 F2000.000`
+    - `G1 Z-19.000 F2000.000`
+    - recorrido nominal:
+      `(200, 0) -> (0, 0) -> (0, 250) -> (400, 250) -> (400, 0) -> (200, 0)`
+    - `G1 Z20.000 F5000.000`
+    - `G1 X199.000 Y0.000 Z20.000 F5000.000`
+  - comparacion con `pieza_020.iso`/`pieza_021.iso`:
+    - los ISO sin acercamiento/alejamiento son `2` lineas y `106` bytes mas
+      cortos.
+    - desaparecen los arcos `G2/G3` de entrada/salida.
+    - la entrada/salida pasa a ser lineal y corta, con desplazamiento `1 mm`
+      respecto de `(200, 0)`.
+  - conclusiones:
+    - deshabilitar `Approach` y `Retract` si cambia el ISO final.
+    - se conserva `Right -> G42` y `Left -> G41`.
+    - se conserva el winding.
+    - `Extra = 1` sigue saliendo como `Z-19.000`.
+
+### Ronda 40 - Escuadrado E001 Arco 2 en cota explicito
+
+- Estado: completado como sintesis local; postprocesado ISO recibido y
+  contrastado.
+- Solicitud:
+  - generar las dos variantes de escuadrado antihorario y horario.
+  - ambas con acercamiento y alejamiento:
+    - `Arco`
+    - radio/multiplicador `2`
+    - modo `En cota`.
+- Archivos generados:
+
+| Archivo | Winding | Correccion exterior | Feature |
+| --- | --- | --- | --- |
+| `S:\Maestro\Projects\ProdAction\ISO\Pieza_020.pgmx` | `CounterClockwise` | `Right` | `Escuadrado_Antihorario_E001_Arco2EnCota` |
+| `S:\Maestro\Projects\ProdAction\ISO\Pieza_021.pgmx` | `Clockwise` | `Left` | `Escuadrado_Horario_E001_Arco2EnCota` |
+
+- Parametros comunes:
+  - pieza `400 x 250 x 18`
+  - origen `(5, 5, 25)`
+  - `execution_fields = HG`
+  - spec publica `SquaringMillingSpec`
+  - `start_edge = Bottom`
+  - plano `Top`
+  - familia geometrica `ClosedPolylineMidEdgeStart`
+  - bounding box nominal `(0, 0, 400, 250)`
+  - herramienta `1900 / E001`
+  - `tool_width = 18.36`
+  - profundidad pasante `Extra = 1`
+  - `BottomCondition = ThroughMillingBottom`
+  - `Depth.StartDepth/EndDepth = 18 / 18`
+  - `OvercutLength = 1`
+  - acercamiento:
+    - `Approach = Arc + Quote`
+    - `RadiusMultiplier = 2.0`
+    - `ArcSide = Automatic`
+    - `Speed = -1`
+  - alejamiento:
+    - `Retract = Arc + Quote`
+    - `RadiusMultiplier = 2.0`
+    - `ArcSide = Automatic`
+    - `Speed = -1`
+    - `Overlap = 0`
+- Validacion ejecutada:
+  - lectura con `read_pgmx_snapshot(...)`:
+    - cada archivo tiene `features = 1`, `operations = 1`,
+      `working_steps = 2`
+    - ambos son `a:GeneralProfileFeature` en `Top`
+    - operacion `a:BottomAndSideFinishMilling`
+    - herramienta `1900 / E001`
+  - adaptacion con `adapt_pgmx_path(...)`:
+    - cada archivo queda como `SquaringMillingSpec`
+    - `adapted = 1`
+    - `unsupported = 0`
+    - `ignored = 1`
+    - `squaring_millings = 1`
+    - el adaptador preserva `Approach = Arc + Quote / 2.0` y
+      `Retract = Arc + Quote / 2.0`.
+- Toolpath resumido:
+  - ambas variantes generan `TrajectoryPath` cerrado compuesto por `9`
+    miembros: `5` lineas y `4` arcos en las esquinas.
+  - la cota efectiva del fresado es `Z = -1`, consistente con pasante
+    `Extra = 1`.
+  - `Pieza_020` / antihoraria:
+    - `Approach`: `(190.82, -18.36, 38)` -> `(200, -9.18, -1)`
+    - `Lift`: `(200, -9.18, -1)` -> `(209.18, -18.36, 38)`
+  - `Pieza_021` / horaria:
+    - `Approach`: `(209.18, -18.36, 38)` -> `(200, -9.18, -1)`
+    - `Lift`: `(200, -9.18, -1)` -> `(190.82, -18.36, 38)`
+- Hashes:
+  - `Pieza_020.pgmx`:
+    `11b394b846eb1ec3deac59a99db8364334759e90f560e4b2f7ddde1784094611`
+  - `Pieza_021.pgmx`:
+    `c05074bd7fc77745a3a38f94cdd7ab2bd8409a848f3f0c2986a119c8e6e25d7b`
+- Observacion:
+  - el resultado efectivo replica la configuracion default de escuadrado ya
+    usada en `Pieza_018` y `Pieza_019`; la diferencia de esta ronda es que los
+    parametros de acercamiento y alejamiento quedaron declarados explicitamente.
+- Contraste contra ISO postprocesado:
+  - `pieza_020.iso` y `pieza_021.iso` tienen `107` lineas y `1690` bytes.
+  - hashes:
+    - `pieza_020.iso`:
+      `B6E2E55ECB92B082879AC5424308F3936FED90A0FA7B9E14BC1E427DA4EACE5D`
+    - `pieza_021.iso`:
+      `EB806826F4A116419338C8B77D896D4F9ED31934FB6A1437086D1B9EF846B93E`
+  - cuerpos ISO sin primera linea:
+    - `pieza_020.iso`:
+      `BD0370CE302010C70AF733B2D4C795B94EF201229A4203D635D11E6B6BBA2777`
+    - `pieza_021.iso`:
+      `E9DFC6D44A708992C324F4E9160BE26E3E4FE5F0DFA0654F1BEDD290BD70617A`
+  - comparacion:
+    - `pieza_020.iso` es identico a `pieza_018.iso` salvo la primera linea
+      del nombre de programa.
+    - `pieza_021.iso` es identico a `pieza_019.iso` salvo la primera linea
+      del nombre de programa.
+  - conclusion:
+    - declarar explicitamente `Acercamiento Arco, 2, en cota` y
+      `Alejamiento Arco, 2, en cota` produce el mismo ISO que el default
+      publico del `SquaringMillingSpec`.
+    - el default publico de escuadrado ya corresponde a esa configuracion.
+
 ## Discrepancias Acumuladas
 
 - Resuelta: Maestro guarda un estado manual valido de fresado no pasante con
@@ -1811,6 +2730,9 @@ Reconstruir paso a paso:
 - Resuelta: la documentacion del caso `Escuadrado antihorario con E001` ya no
   usa cuadrantes absolutos fijos; ahora lo expresa desde la tangente local del
   toolpath efectivo y deja asentadas las 4 orientaciones validadas.
+- Resuelta: los patrones de huecos de `Pieza_004` no deben sintetizarse como
+  varios `RoundHole` sueltos; ahora se modelan con `DrillingPatternSpec` y
+  `ReplicateFeature`.
 - Resuelta: la documentacion ya explicita que `origin_x/origin_y/origin_z`
   modifica `WorkpieceSetup/Placement`, pero no traslada las curvas internas del
   `.pgmx`.

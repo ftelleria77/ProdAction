@@ -182,6 +182,27 @@ class PgmxSlotEndConditionSnapshot:
 
 
 @dataclass(frozen=True)
+class PgmxReplicationPatternSnapshot:
+    pattern_type: str
+    number_of_columns: int
+    number_of_rows: int
+    spacing: float
+    row_spacing: float
+    rotation_angle: float
+    row_layout_angle: float
+
+
+@dataclass(frozen=True)
+class PgmxReplicatedBaseFeatureSnapshot:
+    feature_type: str
+    bottom_condition_type: str
+    depth_start: Optional[float]
+    depth_end: Optional[float]
+    diameter: Optional[float]
+    taper_height: Optional[float]
+
+
+@dataclass(frozen=True)
 class PgmxFeatureSnapshot:
     id: str
     object_type: str
@@ -212,6 +233,8 @@ class PgmxFeatureSnapshot:
     taper_height: Optional[float]
     is_geom_same_direction: Optional[bool]
     is_precise: Optional[bool]
+    replication_pattern: Optional[PgmxReplicationPatternSnapshot] = None
+    base_feature: Optional[PgmxReplicatedBaseFeatureSnapshot] = None
 
 
 @dataclass(frozen=True)
@@ -396,6 +419,35 @@ def _optional_float_text(node: Optional[ET.Element], local_name: str) -> Optiona
     return sp._safe_float(child.text, 0.0)
 
 
+def _replication_pattern_snapshot(feature: ET.Element) -> Optional[PgmxReplicationPatternSnapshot]:
+    pattern = _first_child(feature, "ReplicationPattern")
+    if pattern is None:
+        return None
+    return PgmxReplicationPatternSnapshot(
+        pattern_type=sp._xsi_type(pattern),
+        number_of_columns=int(sp._safe_float(sp._text(pattern, "./{*}NumberOfColumns"), 1.0)),
+        number_of_rows=int(sp._safe_float(sp._text(pattern, "./{*}NumberOfRows"), 1.0)),
+        spacing=sp._safe_float(sp._text(pattern, "./{*}Spacing"), 0.0),
+        row_spacing=sp._safe_float(sp._text(pattern, "./{*}RowSpacing"), 0.0),
+        rotation_angle=sp._safe_float(sp._text(pattern, "./{*}RotationAngle"), 0.0),
+        row_layout_angle=sp._safe_float(sp._text(pattern, "./{*}RowLayoutAngle"), 0.0),
+    )
+
+
+def _replicated_base_feature_snapshot(feature: ET.Element) -> Optional[PgmxReplicatedBaseFeatureSnapshot]:
+    base_feature = _first_child(feature, "BaseFeature")
+    if base_feature is None:
+        return None
+    return PgmxReplicatedBaseFeatureSnapshot(
+        feature_type=sp._xsi_type(base_feature),
+        bottom_condition_type=sp._xsi_type(_first_child(base_feature, "BottomCondition")),
+        depth_start=_optional_float_text(_first_child(base_feature, "Depth"), "StartDepth"),
+        depth_end=_optional_float_text(_first_child(base_feature, "Depth"), "EndDepth"),
+        diameter=_optional_float_text(base_feature, "Diameter"),
+        taper_height=_optional_float_text(base_feature, "TaperHeight"),
+    )
+
+
 def _bool_text(node: Optional[ET.Element], local_name: str, default: bool = False) -> bool:
     return sp._safe_bool(_child_text(node, local_name), default)
 
@@ -529,6 +581,21 @@ def _slot_end_conditions(feature: ET.Element) -> tuple[PgmxSlotEndConditionSnaps
     )
 
 
+def _toolpath_trimmed_curve_length(operation: ET.Element, path_type: str) -> Optional[float]:
+    for toolpath in operation.findall("./{*}ToolpathList/{*}Toolpath"):
+        if _child_text(toolpath, "Type") != path_type:
+            continue
+        basic_curve = _first_child(toolpath, "BasicCurve")
+        serialization = sp._raw_text(basic_curve, "./{*}_serializationGeometryDescription")
+        if not serialization:
+            return None
+        first_line = serialization.strip().splitlines()[0].split()
+        if len(first_line) < 3:
+            return None
+        return abs(sp._safe_float(first_line[2], 0.0))
+    return None
+
+
 def _parse_feature_depth_spec(
     feature: ET.Element,
     operation: Optional[ET.Element],
@@ -545,11 +612,18 @@ def _parse_feature_depth_spec(
     }
     bottom_condition_type = sp._xsi_type(_first_child(feature, "BottomCondition"))
     overcut_length = sp._safe_float(sp._text(operation, "./{*}OvercutLength"), 0.0)
-    if "ThroughMillingBottom" in bottom_condition_type or (
+    matches_depth_variable = (
         expression_values.get("StartDepth") == depth_variable_name
         and expression_values.get("EndDepth") == depth_variable_name
-    ):
+    )
+    if "ThroughMillingBottom" in bottom_condition_type:
         return sp.build_milling_depth_spec(is_through=True, extra_depth=overcut_length)
+    if "ThroughHoleBottom" in bottom_condition_type or matches_depth_variable:
+        trajectory_length = _toolpath_trimmed_curve_length(operation, "TrajectoryPath")
+        inferred_extra = overcut_length
+        if trajectory_length is not None:
+            inferred_extra = max(inferred_extra, trajectory_length - plane_span)
+        return sp.build_milling_depth_spec(is_through=True, extra_depth=max(0.0, inferred_extra))
 
     depth_node = _first_child(feature, "Depth")
     start_depth = _optional_float_text(depth_node, "StartDepth")
@@ -815,6 +889,8 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
                     if _first_child(feature, "IsPrecise") is not None
                     else None
                 ),
+                replication_pattern=_replication_pattern_snapshot(feature),
+                base_feature=_replicated_base_feature_snapshot(feature),
             )
         )
 

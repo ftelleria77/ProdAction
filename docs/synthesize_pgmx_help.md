@@ -5,7 +5,7 @@ en que orden conviene llamarla y que reglas de trabajo seguimos para no perder e
 hilo de lo ya validado en Maestro.
 
 Estado de hito actual:
-- sintetizador Maestro `v1.3`
+- sintetizador Maestro `v1.5`
 - constante publica de version: `tools.synthesize_pgmx.SYNTHESIZER_VERSION`
 
 ## 1. Alcance actual
@@ -29,6 +29,7 @@ Casos publicos soportados hoy:
 - fresado circular cerrado (`CircleMillingSpec`)
 - escuadrado exterior del contorno de pieza (`SquaringMillingSpec`)
 - taladro puntual sobre punto (`DrillingSpec`)
+- repeticion rectangular de taladros (`DrillingPatternSpec`)
 - control de profundidad pasante/no pasante
 - estrategias publicas `Unidireccional` y `Bidireccional` para:
   - linea simple via `LineMillingSpec`
@@ -42,16 +43,18 @@ Casos publicos soportados hoy:
 - `Area` de Parametros de Maquina, con `HG` por defecto
 
 Casos que no deben asumirse como API publica estable si no estan documentados aqui:
-- familias de feature distintas de `GeneralProfileFeature`, `SlotSide` y
-  `RoundHole`
+- familias de feature distintas de `GeneralProfileFeature`, `SlotSide`,
+  `RoundHole` y `ReplicateFeature`
 - cualquier mecanizado que no este construido con
   `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
-  `CircleMillingSpec`, `SquaringMillingSpec` o `DrillingSpec`
+  `CircleMillingSpec`, `SquaringMillingSpec`, `DrillingSpec` o
+  `DrillingPatternSpec`
 
 Importante:
 - la sintesis completa de feature + operation sigue expuesta hoy por
   `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
-  `CircleMillingSpec`, `SquaringMillingSpec` y `DrillingSpec`
+  `CircleMillingSpec`, `SquaringMillingSpec`, `DrillingSpec` y
+  `DrillingPatternSpec`
 - la capa de compensacion sigue resolviendo lineas, arcos, circulos y curvas
   compuestas abiertas/cerradas como base de estas familias publicas
 
@@ -66,7 +69,7 @@ Orden recomendado para usar el sintetizador:
 5. Construir `Approach` y `Retract`.
 6. Construir uno o mas mecanizados (`LineMillingSpec`, `SlotMillingSpec`,
    `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec` y/o
-   `DrillingSpec`).
+   `DrillingSpec`/`DrillingPatternSpec`).
 7. Construir el `PgmxSynthesisRequest`.
 8. Ejecutar `synthesize_request(...)`.
 
@@ -484,6 +487,21 @@ Reglas de maquina volcadas al codigo:
 - la herramienta `1899 / 082` esta catalogada como `Sierra Vertical X`
 - para esa herramienta, el sintetizador solo acepta ranuras lineales
   horizontales sobre `Top` y no pasantes
+- el orden `start_x/start_y -> end_x/end_y` describe la geometria de la ranura,
+  pero no debe usarse para forzar el sentido efectivo de corte en ISO
+- con `Sierra Vertical X`, el postprocesador normaliza el recorrido para cortar
+  en el unico sentido compatible con la rotacion de los dientes; esto evita
+  dañar la superficie de la placa
+- `side_of_feature` controla la compensacion lateral de la ranura:
+  - `Center` conserva la coordenada nominal
+  - `Right` y `Left` desplazan la trayectoria por `tool_width / 2`
+  - con el default `tool_width = 3.8`, el desplazamiento observado es `1.9 mm`
+- esa compensacion se calcula respecto del sentido geometrico
+  `start -> end`, aunque el ISO luego normalice el sentido fisico de corte:
+  - para `(50, 125) -> (350, 125)`, `Right` desplaza a `Y123.100` y `Left` a
+    `Y126.900`
+  - para `(350, 125) -> (50, 125)`, `Right` desplaza a `Y126.900` y `Left` a
+    `Y123.100`
 - una ranura vertical queda rechazada porque el CNC no puede ejecutar ese
   recorrido con ninguna herramienta disponible en el catalogo actual
 
@@ -773,6 +791,74 @@ Reglas practicas relevantes:
   herramienta queda resuelta a una herramienta real; si `ToolKey` queda vacio,
   no hay chequeo de `sinking_length`
 
+### `build_drilling_pattern_spec(...) -> DrillingPatternSpec`
+
+Construye una repeticion rectangular de taladros iguales usando la familia
+Maestro `ReplicateFeature` con `ReplicationPattern = RectangularPattern`.
+
+Firma simplificada:
+
+```python
+build_drilling_pattern_spec(
+    center_x,
+    center_y,
+    diameter,
+    columns,
+    rows,
+    spacing,
+    feature_name=None,
+    *,
+    row_spacing=None,
+    plane_name="Top",
+    security_plane=None,
+    is_through=True,
+    target_depth=None,
+    extra_depth=0.0,
+    drill_family=None,
+    tool_resolution="Auto",
+    tool_id=None,
+    tool_name=None,
+)
+```
+
+Alcance validado hoy:
+- caras soportadas por sintesis: `Top`, `Front`, `Back`, `Right`, `Left`
+- feature externa: `ReplicateFeature`
+- feature base: `RoundHole`
+- patron: `RectangularPattern`
+- operacion: una unica `DrillingOperation` asociada al patron completo
+- `Top` ya fue comparado contra un caso manual Maestro; `Front`, `Back`,
+  `Left` y `Right` quedan como intento sintetico pendiente de abrir y
+  postprocesar en Maestro/CNC
+
+Reglas publicas de la spec:
+- `center_x/center_y` son el centro del taladro base del patron
+- `columns` y `rows` deben ser mayores o iguales a `1`
+- `columns * rows` debe ser mayor o igual a `2`; para un unico hueco usar
+  `DrillingSpec`
+- `spacing` es la separacion entre columnas
+- `row_spacing` es la separacion entre filas; si se omite, usa `spacing`
+- el patron se valida contra el rectangulo util del plano `Top`
+- profundidad, familia de broca y resolucion de herramienta reutilizan las
+  reglas de `DrillingSpec`
+
+Serializacion validada contra Maestro:
+- `ManufacturingFeature i:type = a:ReplicateFeature`
+- `BaseFeature i:type = b:RoundHole`
+- `ReplicationPattern i:type = a:RectangularPattern`
+- `NumberOfColumns`, `NumberOfRows`, `Spacing` y `RowSpacing` quedan en el
+  nodo `ReplicationPattern`
+- si el taladro es pasante, las expresiones de profundidad apuntan a
+  `BaseFeature/Depth/StartDepth` y `BaseFeature/Depth/EndDepth`
+
+Caso usado como referencia:
+- `Pieza_004.pgmx` era geometricamente equivalente, pero contenia seis
+  `RoundHole` individuales
+- `Pieza_004_Repeticiones.pgmx` contiene dos `ReplicateFeature`, uno
+  horizontal `3 x 1` y otro vertical `1 x 3`, ambos con separacion `32`
+- `Pieza_005.pgmx` extiende el intento a `Front`, `Back`, `Left` y `Right`
+  con patrones `3 x 1`, `D8`, no pasantes, separados `32`
+
 ### `build_synthesis_request(...) -> PgmxSynthesisRequest`
 
 Es el ensamblador del pedido completo.
@@ -800,6 +886,7 @@ build_synthesis_request(
     circle_millings=None,
     squaring_millings=None,
     drillings=None,
+    drilling_patterns=None,
     ordered_machinings=None,
     machining_order=None,
     xn=None,
@@ -811,14 +898,15 @@ Reglas:
 - si no se indica `execution_fields`, usa `HG` por defecto
 - si no se pasa `piece`, toma el estado desde `source_pgmx_path` o desde el baseline
 - se pueden combinar mecanizados lineales, ranuras `SlotSide`, polilineas
-  abiertas, circulares, de escuadrado y de taladrado en un mismo request
+  abiertas, circulares, de escuadrado, de taladrado y de patrones de taladrado
+  en un mismo request
 - `ordered_machinings` permite insertar una secuencia exacta de specs publicos
   (`LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
-  `CircleMillingSpec`, `SquaringMillingSpec`, `DrillingSpec`) preservando ese
-  orden de worksteps
+  `CircleMillingSpec`, `SquaringMillingSpec`, `DrillingSpec`,
+  `DrillingPatternSpec`) preservando ese orden de worksteps
 - `machining_order` permite definir el orden de aplicacion de familias de
   mecanizado; por defecto es `line`, `slot`, `polyline`, `circle`,
-  `squaring`, `drilling`
+  `squaring`, `drilling`, `drilling_pattern`
 - `xn` permite configurar el `Xn` final del workplan
 - si no se indica `xn`, la request usa `build_xn_spec()` por defecto
 - `baseline_path` y `source_pgmx_path` aceptan `.pgmx`, `Pieza.xml` o carpeta contenedora
@@ -1398,6 +1486,60 @@ Lectura conceptual del ejemplo:
 - `tool_resolution="Auto"` resuelve herramientas en la cara `Top`, pero deja
   `ToolKey` vacio en `Front`, `Back`, `Right` y `Left`
 - como no se indica `baseline_path`, se usa `tools/maestro_baselines`
+
+### Ejemplo minimo: dos patrones de huecos sobre `Top`
+
+```python
+from pathlib import Path
+
+from tools.synthesize_pgmx import (
+    build_drilling_pattern_spec,
+    build_synthesis_request,
+    synthesize_request,
+)
+
+request = build_synthesis_request(
+    output_path=Path(r"S:\Maestro\Projects\ProdAction\ISO\Pieza_004.pgmx"),
+    piece_name="Pieza_004",
+    length=400,
+    width=250,
+    depth=18,
+    origin_x=5,
+    origin_y=5,
+    origin_z=25,
+    drilling_patterns=(
+        build_drilling_pattern_spec(
+            80,
+            80,
+            8,
+            columns=3,
+            rows=1,
+            spacing=32,
+            feature_name="Patron_Horizontal_1_D8",
+        ),
+        build_drilling_pattern_spec(
+            280,
+            80,
+            8,
+            columns=1,
+            rows=3,
+            spacing=32,
+            row_spacing=32,
+            feature_name="Patron_Vertical_1_D8",
+        ),
+    ),
+)
+
+result = synthesize_request(request)
+print(result.output_path)
+```
+
+Lectura conceptual del ejemplo:
+- el archivo queda con dos features de tipo `ReplicateFeature`
+- el primer patron crea una fila de `3` columnas separadas `32 mm`
+- el segundo patron crea una columna de `3` filas separadas `32 mm`
+- no se deben modelar estos casos como tres `DrillingSpec` individuales si el
+  objetivo es que Maestro conserve la definicion de patron
 
 ## 6. Reglas de trabajo para no perder el hilo
 

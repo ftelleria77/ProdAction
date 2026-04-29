@@ -21,10 +21,12 @@ Soporte actual de mecanizados sinteticos:
 - `CircleMillingSpec`: circulo sobre `Top` con su fresado asociado.
 - `SquaringMillingSpec`: escuadrado exterior del contorno de la pieza sobre `Top`.
 - `DrillingSpec`: taladro puntual sobre `Top`, `Front`, `Back`, `Right` o `Left`.
+- `DrillingPatternSpec`: repeticion rectangular de taladros sobre `Top`, `Front`, `Back`,
+  `Right` o `Left`.
 - `XnSpec`: operacion nula final para mover la herramienta sin mecanizar.
 
 Estado de hito:
-- la API publica del sintetizador queda establecida como `v1.3`
+- la API publica del sintetizador queda establecida como `v1.5`
 
 Soporte actual de geometria base reusable:
 - `build_point_geometry_profile(...)`
@@ -78,6 +80,7 @@ XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
 BASE_MODEL_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel"
 MILLING_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Milling"
 DRILLING_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Drilling"
+PATTERNS_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Patterns"
 GEOMETRY_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Geometry"
 STRATEGY_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Strategy"
 UTILITY_NS = "http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel.Utility"
@@ -100,7 +103,7 @@ MODULE_DIR = _module_data_dir()
 DEFAULT_BASELINE_DIR = MODULE_DIR / "maestro_baselines"
 DEFAULT_BASELINE_XML_PATH = DEFAULT_BASELINE_DIR / "Pieza.xml"
 TOOL_CATALOG_PATH = Path(__file__).with_name("tool_catalog.csv")
-SYNTHESIZER_VERSION = "1.3"
+SYNTHESIZER_VERSION = "1.5"
 
 ET.register_namespace("", PGMX_NS)
 ET.register_namespace("i", XSI_NS)
@@ -124,6 +127,7 @@ __all__ = [
     "CircleMillingSpec",
     "SquaringMillingSpec",
     "DrillingSpec",
+    "DrillingPatternSpec",
     "MachiningSpec",
     "XnSpec",
     "PgmxSynthesisRequest",
@@ -147,6 +151,7 @@ __all__ = [
     "build_circle_milling_spec",
     "build_squaring_milling_spec",
     "build_drilling_spec",
+    "build_drilling_pattern_spec",
     "build_xn_spec",
     "read_pgmx_state",
     "read_pgmx_geometries",
@@ -446,6 +451,27 @@ class DrillingSpec:
     tool_name: str = ""
 
 
+@dataclass(frozen=True)
+class DrillingPatternSpec:
+    """Repeticion rectangular de taladros iguales usando `ReplicateFeature`."""
+
+    center_x: float
+    center_y: float
+    diameter: float
+    columns: int
+    rows: int
+    spacing: float
+    row_spacing: Optional[float] = None
+    feature_name: str = "Taladrado"
+    plane_name: str = "Top"
+    security_plane: float = 20.0
+    depth_spec: MillingDepthSpec = field(default_factory=MillingDepthSpec)
+    drill_family: str = "Flat"
+    tool_resolution: str = "Auto"
+    tool_id: str = "0"
+    tool_name: str = ""
+
+
 MachiningSpec = Union[
     LineMillingSpec,
     SlotMillingSpec,
@@ -453,6 +479,7 @@ MachiningSpec = Union[
     CircleMillingSpec,
     SquaringMillingSpec,
     DrillingSpec,
+    DrillingPatternSpec,
 ]
 
 
@@ -891,6 +918,78 @@ class _HydratedDrillingSpec:
 
 
 @dataclass(frozen=True)
+class _HydratedDrillingPatternSpec:
+    """Datos internos para serializar un `ReplicateFeature` de taladros."""
+
+    spec: DrillingPatternSpec
+    base_drilling: _HydratedDrillingSpec
+
+    @property
+    def center_x(self) -> float:
+        return self.spec.center_x
+
+    @property
+    def center_y(self) -> float:
+        return self.spec.center_y
+
+    @property
+    def diameter(self) -> float:
+        return self.spec.diameter
+
+    @property
+    def columns(self) -> int:
+        return self.spec.columns
+
+    @property
+    def rows(self) -> int:
+        return self.spec.rows
+
+    @property
+    def spacing(self) -> float:
+        return self.spec.spacing
+
+    @property
+    def row_spacing(self) -> float:
+        return self.spec.row_spacing if self.spec.row_spacing is not None else self.spec.spacing
+
+    @property
+    def feature_name(self) -> str:
+        return self.spec.feature_name
+
+    @property
+    def plane_name(self) -> str:
+        return self.spec.plane_name
+
+    @property
+    def security_plane(self) -> float:
+        return self.spec.security_plane
+
+    @property
+    def depth_spec(self) -> MillingDepthSpec:
+        return self.spec.depth_spec
+
+    @property
+    def drill_family(self) -> str:
+        return self.spec.drill_family
+
+    @property
+    def tool_resolution(self) -> str:
+        return self.spec.tool_resolution
+
+    @property
+    def tool_id(self) -> str:
+        return self.base_drilling.tool_id
+
+    @property
+    def tool_name(self) -> str:
+        return self.base_drilling.tool_name
+
+    @property
+    def tool_object_type(self) -> str:
+        return self.base_drilling.tool_object_type
+
+
+@dataclass(frozen=True)
 class PgmxSynthesisRequest:
     """Solicitud completa para sintetizar un `.pgmx` reutilizable desde la app."""
 
@@ -904,8 +1003,9 @@ class PgmxSynthesisRequest:
     circle_millings: tuple[CircleMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
     drillings: tuple[DrillingSpec, ...] = ()
+    drilling_patterns: tuple[DrillingPatternSpec, ...] = ()
     ordered_machinings: tuple[MachiningSpec, ...] = ()
-    machining_order: tuple[str, ...] = ("line", "slot", "polyline", "circle", "squaring", "drilling")
+    machining_order: tuple[str, ...] = ("line", "slot", "polyline", "circle", "squaring", "drilling", "drilling_pattern")
     xn: XnSpec = field(default_factory=XnSpec)
 
 
@@ -922,8 +1022,9 @@ class PgmxSynthesisResult:
     circle_millings: tuple[CircleMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
     drillings: tuple[DrillingSpec, ...] = ()
+    drilling_patterns: tuple[DrillingPatternSpec, ...] = ()
     ordered_machinings: tuple[MachiningSpec, ...] = ()
-    machining_order: tuple[str, ...] = ("line", "slot", "polyline", "circle", "squaring", "drilling")
+    machining_order: tuple[str, ...] = ("line", "slot", "polyline", "circle", "squaring", "drilling", "drilling_pattern")
     xn: XnSpec = field(default_factory=XnSpec)
 
 
@@ -2571,6 +2672,58 @@ def _normalize_drilling_spec(drilling: DrillingSpec) -> DrillingSpec:
     )
 
 
+def _normalize_drilling_pattern_spec(pattern: DrillingPatternSpec) -> DrillingPatternSpec:
+    base_drilling = _normalize_drilling_spec(
+        DrillingSpec(
+            center_x=pattern.center_x,
+            center_y=pattern.center_y,
+            diameter=pattern.diameter,
+            feature_name=pattern.feature_name,
+            plane_name=pattern.plane_name,
+            security_plane=pattern.security_plane,
+            depth_spec=pattern.depth_spec,
+            drill_family=pattern.drill_family,
+            tool_resolution=pattern.tool_resolution,
+            tool_id=pattern.tool_id,
+            tool_name=pattern.tool_name,
+        )
+    )
+    columns = int(pattern.columns)
+    rows = int(pattern.rows)
+    if columns < 1 or rows < 1:
+        raise ValueError("`DrillingPatternSpec` requiere `columns` y `rows` mayores o iguales a 1.")
+    if columns * rows < 2:
+        raise ValueError("Para un unico taladro use `DrillingSpec`; el patron requiere al menos 2 huecos.")
+
+    spacing = float(pattern.spacing)
+    row_spacing = spacing if pattern.row_spacing is None else float(pattern.row_spacing)
+    if spacing < 0.0 or row_spacing < 0.0:
+        raise ValueError("Las separaciones de `DrillingPatternSpec` no pueden ser negativas.")
+    if columns > 1 and spacing <= 0.0:
+        raise ValueError("Un patron con mas de una columna requiere `spacing` mayor que cero.")
+    if rows > 1 and row_spacing <= 0.0:
+        raise ValueError("Un patron con mas de una fila requiere `row_spacing` mayor que cero.")
+
+    return replace(
+        pattern,
+        center_x=base_drilling.center_x,
+        center_y=base_drilling.center_y,
+        diameter=base_drilling.diameter,
+        columns=columns,
+        rows=rows,
+        spacing=spacing,
+        row_spacing=row_spacing,
+        feature_name=base_drilling.feature_name,
+        plane_name=base_drilling.plane_name,
+        security_plane=base_drilling.security_plane,
+        depth_spec=base_drilling.depth_spec,
+        drill_family=base_drilling.drill_family,
+        tool_resolution=base_drilling.tool_resolution,
+        tool_id=base_drilling.tool_id,
+        tool_name=base_drilling.tool_name,
+    )
+
+
 def _validate_tool_sinking_length_for_spec(
     state: PgmxState,
     spec,
@@ -2676,7 +2829,7 @@ def _validate_tool_type_for_milling_spec(spec, tool_catalog: dict[str, dict[str,
 
 
 def _validate_tool_type_for_drilling_spec(
-    spec: _HydratedDrillingSpec,
+    spec,
     tool_catalog: dict[str, dict[str, str]],
 ) -> None:
     if spec.tool_object_type == "System.Object":
@@ -2699,7 +2852,7 @@ def _validate_tool_type_for_drilling_spec(
 
 def _validate_tool_sinking_length_for_drilling_spec(
     state: PgmxState,
-    spec: _HydratedDrillingSpec,
+    spec,
     tool_catalog: dict[str, dict[str, str]],
 ) -> None:
     if spec.tool_object_type == "System.Object":
@@ -2737,6 +2890,7 @@ def _validate_tool_sinking_lengths(
     circle_millings: Sequence[_HydratedCircleMillingSpec],
     squaring_millings: Sequence[_HydratedSquaringMillingSpec],
     drillings: Sequence[_HydratedDrillingSpec],
+    drilling_patterns: Sequence[_HydratedDrillingPatternSpec] = (),
 ) -> None:
     """Aplica la validacion de `sinking_length` a todos los mecanizados del request."""
 
@@ -2757,6 +2911,9 @@ def _validate_tool_sinking_lengths(
         _validate_tool_type_for_milling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
     for spec in drillings:
+        _validate_tool_type_for_drilling_spec(spec, tool_catalog)
+        _validate_tool_sinking_length_for_drilling_spec(state, spec, tool_catalog)
+    for spec in drilling_patterns:
         _validate_tool_type_for_drilling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_drilling_spec(state, spec, tool_catalog)
 
@@ -6290,6 +6447,31 @@ def _hydrate_drilling_spec(
     )
 
 
+def _hydrate_drilling_pattern_spec(
+    pattern: DrillingPatternSpec,
+    source_pgmx_path: Optional[Path],
+) -> _HydratedDrillingPatternSpec:
+    del source_pgmx_path
+    normalized_pattern = _normalize_drilling_pattern_spec(pattern)
+    base_drilling = _hydrate_drilling_spec(
+        DrillingSpec(
+            center_x=normalized_pattern.center_x,
+            center_y=normalized_pattern.center_y,
+            diameter=normalized_pattern.diameter,
+            feature_name=normalized_pattern.feature_name,
+            plane_name=normalized_pattern.plane_name,
+            security_plane=normalized_pattern.security_plane,
+            depth_spec=normalized_pattern.depth_spec,
+            drill_family=normalized_pattern.drill_family,
+            tool_resolution=normalized_pattern.tool_resolution,
+            tool_id=normalized_pattern.tool_id,
+            tool_name=normalized_pattern.tool_name,
+        ),
+        None,
+    )
+    return _HydratedDrillingPatternSpec(spec=normalized_pattern, base_drilling=base_drilling)
+
+
 def _build_point_geometry(
     geometry_id: str,
     plane_id: str,
@@ -6552,6 +6734,130 @@ def _build_drilling_feature(
     _append_node(depth, PGMX_NS, "StartDepth", depth_value)
     _append_node(feature, DRILLING_NS, "Diameter", _compact_number(spec.diameter))
     _append_node(feature, DRILLING_NS, "TaperHeight", "0")
+    return feature
+
+
+def _drilling_pattern_bottom_condition_type(spec: _HydratedDrillingPatternSpec) -> str:
+    return _drilling_bottom_condition_type(spec.base_drilling).replace("a:", "b:", 1)
+
+
+def _append_drilling_feature_payload(
+    parent: ET.Element,
+    state: PgmxState,
+    spec: _HydratedDrillingSpec,
+    feature_id: str,
+    geometry_id: str,
+    operation_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+    *,
+    bottom_condition_type: Optional[str] = None,
+) -> None:
+    _append_key(parent, feature_id, "ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole")
+    _append_blank_name(parent).text = spec.feature_name
+    _append_object_ref(
+        parent,
+        PGMX_NS,
+        "GeometryID",
+        geometry_id,
+        "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCartesianPoint",
+    )
+    operation_ids = _append_node(parent, PGMX_NS, "OperationIDs")
+    _append_reference_key(
+        operation_ids,
+        operation_id,
+        "ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation",
+    )
+    _append_object_ref(parent, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
+    effective_bottom_condition = bottom_condition_type or _drilling_bottom_condition_type(spec)
+    bottom_condition = _append_node(
+        parent,
+        PGMX_NS,
+        "BottomCondition",
+        attrib={f"{{{XSI_NS}}}type": effective_bottom_condition},
+    )
+    if effective_bottom_condition.startswith("b:"):
+        _set_xmlns(bottom_condition, "b", DRILLING_NS)
+    else:
+        _set_xmlns(bottom_condition, "a", DRILLING_NS)
+    if "ThroughHoleBottom" in effective_bottom_condition:
+        _append_node(bottom_condition, DRILLING_NS, "IsFlat", "false")
+    if "ConicalHoleBottom" in effective_bottom_condition:
+        _append_node(bottom_condition, DRILLING_NS, "TipAngle", "0")
+        _append_node(bottom_condition, DRILLING_NS, "TipRadius", "0")
+    depth = _append_node(parent, PGMX_NS, "Depth")
+    depth_value = _compact_number(_drilling_feature_depth_value(state, spec))
+    _append_node(depth, PGMX_NS, "EndDepth", depth_value)
+    _append_node(depth, PGMX_NS, "StartDepth", depth_value)
+    _append_node(parent, DRILLING_NS, "Diameter", _compact_number(spec.diameter))
+    _append_node(parent, DRILLING_NS, "TaperHeight", "0")
+
+
+def _build_drilling_pattern_feature(
+    state: PgmxState,
+    spec: _HydratedDrillingPatternSpec,
+    feature_id: str,
+    geometry_id: str,
+    operation_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+) -> ET.Element:
+    feature = ET.Element(
+        _qname(PGMX_NS, "ManufacturingFeature"),
+        {f"{{{XSI_NS}}}type": "a:ReplicateFeature"},
+    )
+    _set_xmlns(feature, "a", PATTERNS_NS)
+    _append_key(feature, feature_id, "ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole")
+    _append_blank_name(feature).text = spec.feature_name
+    _append_object_ref(
+        feature,
+        PGMX_NS,
+        "GeometryID",
+        geometry_id,
+        "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCartesianPoint",
+    )
+    operation_ids = _append_node(feature, PGMX_NS, "OperationIDs")
+    _append_reference_key(
+        operation_ids,
+        operation_id,
+        "ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation",
+    )
+    _append_object_ref(feature, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
+    _append_node(feature, PGMX_NS, "BottomCondition", attrib={f"{{{XSI_NS}}}nil": "true"})
+
+    base_feature = _append_node(
+        feature,
+        PATTERNS_NS,
+        "BaseFeature",
+        attrib={f"{{{XSI_NS}}}type": "b:RoundHole"},
+    )
+    _set_xmlns(base_feature, "b", DRILLING_NS)
+    _append_drilling_feature_payload(
+        base_feature,
+        state,
+        spec.base_drilling,
+        feature_id,
+        geometry_id,
+        operation_id,
+        workpiece_id,
+        workpiece_object_type,
+        bottom_condition_type=_drilling_pattern_bottom_condition_type(spec),
+    )
+
+    replication_pattern = _append_node(
+        feature,
+        PATTERNS_NS,
+        "ReplicationPattern",
+        attrib={f"{{{XSI_NS}}}type": "a:RectangularPattern"},
+    )
+    _set_xmlns(replication_pattern, "a", PATTERNS_NS)
+    _append_node(replication_pattern, PATTERNS_NS, "MissingBaseFeatures", "")
+    _append_node(replication_pattern, PATTERNS_NS, "NumberOfColumns", str(spec.columns))
+    _append_node(replication_pattern, PATTERNS_NS, "NumberOfRows", str(spec.rows))
+    _append_node(replication_pattern, PATTERNS_NS, "RotationAngle", "0")
+    _append_node(replication_pattern, PATTERNS_NS, "RowLayoutAngle", "90")
+    _append_node(replication_pattern, PATTERNS_NS, "RowSpacing", _compact_number(spec.row_spacing))
+    _append_node(replication_pattern, PATTERNS_NS, "Spacing", _compact_number(spec.spacing))
     return feature
 
 
@@ -7157,6 +7463,53 @@ def _build_depth_expression(
     return expression
 
 
+def _build_drilling_pattern_depth_expression(
+    expression_id: str,
+    feature_id: str,
+    inner_field_name: str,
+    depth_variable_name: str,
+) -> ET.Element:
+    expression = ET.Element(_qname(PARAMETRIC_NS, "Expression"))
+    _append_key(expression, expression_id, "ScmGroup.XCam.MachiningDataModel.Parametrics.Expression")
+    _append_blank_name(expression)
+    property_node = _append_node(
+        expression,
+        PARAMETRIC_NS,
+        "Property",
+        attrib={f"{{{XSI_NS}}}type": "a:CompositeField"},
+    )
+    _set_xmlns(property_node, "a", PARAMETRIC_NS)
+    _append_node(property_node, PARAMETRIC_NS, "Index", "-1")
+    _append_node(property_node, PARAMETRIC_NS, "Key", attrib={f"{{{XSI_NS}}}nil": "true"})
+    _append_node(property_node, PARAMETRIC_NS, "Name", "BaseFeature")
+
+    depth_field = _append_node(
+        property_node,
+        PARAMETRIC_NS,
+        "InnerField",
+        attrib={f"{{{XSI_NS}}}type": "a:CompositeField"},
+    )
+    _set_xmlns(depth_field, "a", PARAMETRIC_NS)
+    _append_node(depth_field, PARAMETRIC_NS, "Index", "-1")
+    _append_node(depth_field, PARAMETRIC_NS, "Key", attrib={f"{{{XSI_NS}}}nil": "true"})
+    _append_node(depth_field, PARAMETRIC_NS, "Name", "Depth")
+
+    final_field = _append_node(depth_field, PARAMETRIC_NS, "InnerField")
+    _append_node(final_field, PARAMETRIC_NS, "Index", "-1")
+    _append_node(final_field, PARAMETRIC_NS, "Key", attrib={f"{{{XSI_NS}}}nil": "true"})
+    _append_node(final_field, PARAMETRIC_NS, "Name", inner_field_name)
+
+    _append_object_ref(
+        expression,
+        PARAMETRIC_NS,
+        "ReferencedObject",
+        feature_id,
+        "ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
+    )
+    _append_node(expression, PARAMETRIC_NS, "Value", depth_variable_name)
+    return expression
+
+
 def _append_line_milling(root: ET.Element, state: PgmxState, spec: _HydratedLineMillingSpec) -> None:
     geometries = root.find("./{*}Geometries")
     features = root.find("./{*}Features")
@@ -7549,6 +7902,98 @@ def _append_drilling(root: ET.Element, state: PgmxState, spec: _HydratedDrilling
         )
 
 
+def _validate_drilling_pattern_center(state: PgmxState, spec: _HydratedDrillingPatternSpec) -> None:
+    max_x, max_y = _plane_local_dimensions(state, spec.plane_name)
+    last_x = spec.center_x + ((spec.columns - 1) * spec.spacing)
+    last_y = spec.center_y + ((spec.rows - 1) * spec.row_spacing)
+    if spec.center_x < -1e-9 or last_x > max_x + 1e-9:
+        raise ValueError(
+            "El patron de taladros cae fuera del eje X del plano "
+            f"'{spec.plane_name}': {_compact_number(spec.center_x)}..{_compact_number(last_x)} "
+            f"no pertenece a [0, {_compact_number(max_x)}]."
+        )
+    if spec.center_y < -1e-9 or last_y > max_y + 1e-9:
+        raise ValueError(
+            "El patron de taladros cae fuera del eje Y del plano "
+            f"'{spec.plane_name}': {_compact_number(spec.center_y)}..{_compact_number(last_y)} "
+            f"no pertenece a [0, {_compact_number(max_y)}]."
+        )
+
+
+def _append_drilling_pattern(root: ET.Element, state: PgmxState, spec: _HydratedDrillingPatternSpec) -> None:
+    geometries = root.find("./{*}Geometries")
+    features = root.find("./{*}Features")
+    operations = root.find("./{*}Operations")
+    expressions = root.find("./{*}Expressions")
+    elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
+    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
+    if any(node is None for node in (geometries, features, operations, expressions, elements, workpiece)):
+        raise ValueError("La plantilla no contiene todas las colecciones requeridas para sintetizar el patron.")
+
+    _validate_drilling_pattern_center(state, spec)
+    _drilling_feature_depth_value(state, spec.base_drilling)
+
+    workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
+    workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
+    depth_variable_name = _drilling_axis_variable_name(workpiece, spec.plane_name)
+    plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
+    uses_depth_expressions = _uses_drilling_depth_expressions(spec.base_drilling)
+    reserved_ids = _reserve_ids(root, 6 if uses_depth_expressions else 4)
+    geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
+    start_expression_id = reserved_ids[4] if uses_depth_expressions else None
+    end_expression_id = reserved_ids[5] if uses_depth_expressions else None
+
+    geometries.append(
+        _build_point_geometry(
+            geometry_id,
+            plane_id,
+            plane_object_type,
+            spec.center_x,
+            spec.center_y,
+            0.0,
+        )
+    )
+    features.append(
+        _build_drilling_pattern_feature(
+            state,
+            spec,
+            feature_id,
+            geometry_id,
+            operation_id,
+            workpiece_id,
+            workpiece_object_type,
+        )
+    )
+    operations.append(_build_drilling_operation(state, spec.base_drilling, operation_id))
+    elements.append(
+        _build_working_step(
+            spec.feature_name,
+            step_id,
+            feature_id,
+            operation_id,
+            feature_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
+            operation_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation",
+        )
+    )
+    if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
+        expressions.append(
+            _build_drilling_pattern_depth_expression(
+                start_expression_id,
+                feature_id,
+                "StartDepth",
+                depth_variable_name,
+            )
+        )
+        expressions.append(
+            _build_drilling_pattern_depth_expression(
+                end_expression_id,
+                feature_id,
+                "EndDepth",
+                depth_variable_name,
+            )
+        )
+
+
 # ============================================================================
 # Public read/build API
 # ============================================================================
@@ -7783,6 +8228,30 @@ def _apply_drillings(
         _append_drilling(root, state, drilling)
 
 
+def _drilling_plane_priority(plane_name: str) -> int:
+    plane_priority = {
+        "Top": 0,
+        "Front": 1,
+        "Back": 2,
+        "Left": 3,
+        "Right": 4,
+    }
+    return plane_priority.get(plane_name, 99)
+
+
+def _apply_drilling_patterns(
+    root: ET.Element,
+    state: PgmxState,
+    drilling_patterns: Sequence[_HydratedDrillingPatternSpec],
+) -> None:
+    ordered_drilling_patterns = sorted(
+        enumerate(drilling_patterns),
+        key=lambda item: (_drilling_plane_priority(item[1].plane_name), item[0]),
+    )
+    for _, drilling_pattern in ordered_drilling_patterns:
+        _append_drilling_pattern(root, state, drilling_pattern)
+
+
 HydratedMachiningSpec = Union[
     _HydratedLineMillingSpec,
     _HydratedSlotMillingSpec,
@@ -7790,6 +8259,7 @@ HydratedMachiningSpec = Union[
     _HydratedCircleMillingSpec,
     _HydratedSquaringMillingSpec,
     _HydratedDrillingSpec,
+    _HydratedDrillingPatternSpec,
 ]
 
 
@@ -7809,6 +8279,8 @@ def _hydrate_machining_spec(
         return _hydrate_squaring_milling_spec(spec, source_pgmx_path)
     if isinstance(spec, DrillingSpec):
         return _hydrate_drilling_spec(spec, source_pgmx_path)
+    if isinstance(spec, DrillingPatternSpec):
+        return _hydrate_drilling_pattern_spec(spec, source_pgmx_path)
     raise TypeError(f"Spec de mecanizado no soportado: {type(spec).__name__}")
 
 
@@ -7835,6 +8307,9 @@ def _append_hydrated_machining(
     if isinstance(spec, _HydratedDrillingSpec):
         _append_drilling(root, state, spec)
         return
+    if isinstance(spec, _HydratedDrillingPatternSpec):
+        _append_drilling_pattern(root, state, spec)
+        return
     raise TypeError(f"Spec hidratado no soportado: {type(spec).__name__}")
 
 
@@ -7847,6 +8322,7 @@ def _split_hydrated_machinings(
     list[_HydratedCircleMillingSpec],
     list[_HydratedSquaringMillingSpec],
     list[_HydratedDrillingSpec],
+    list[_HydratedDrillingPatternSpec],
 ]:
     line_millings: list[_HydratedLineMillingSpec] = []
     slot_millings: list[_HydratedSlotMillingSpec] = []
@@ -7854,6 +8330,7 @@ def _split_hydrated_machinings(
     circle_millings: list[_HydratedCircleMillingSpec] = []
     squaring_millings: list[_HydratedSquaringMillingSpec] = []
     drillings: list[_HydratedDrillingSpec] = []
+    drilling_patterns: list[_HydratedDrillingPatternSpec] = []
     for spec in specs:
         if isinstance(spec, _HydratedLineMillingSpec):
             line_millings.append(spec)
@@ -7867,11 +8344,21 @@ def _split_hydrated_machinings(
             squaring_millings.append(spec)
         elif isinstance(spec, _HydratedDrillingSpec):
             drillings.append(spec)
-    return line_millings, slot_millings, polyline_millings, circle_millings, squaring_millings, drillings
+        elif isinstance(spec, _HydratedDrillingPatternSpec):
+            drilling_patterns.append(spec)
+    return (
+        line_millings,
+        slot_millings,
+        polyline_millings,
+        circle_millings,
+        squaring_millings,
+        drillings,
+        drilling_patterns,
+    )
 
 
 def _normalize_machining_order(value: Optional[Sequence[str]]) -> tuple[str, ...]:
-    default_order = ("line", "slot", "polyline", "circle", "squaring", "drilling")
+    default_order = ("line", "slot", "polyline", "circle", "squaring", "drilling", "drilling_pattern")
     aliases = {
         "lines": "line",
         "line_milling": "line",
@@ -7895,6 +8382,16 @@ def _normalize_machining_order(value: Optional[Sequence[str]]) -> tuple[str, ...
         "square": "squaring",
         "drilling": "drilling",
         "drilling_millings": "drilling",
+        "drilling_pattern": "drilling_pattern",
+        "drilling_patterns": "drilling_pattern",
+        "hole_pattern": "drilling_pattern",
+        "hole_patterns": "drilling_pattern",
+        "pattern": "drilling_pattern",
+        "patterns": "drilling_pattern",
+        "patron": "drilling_pattern",
+        "patrones": "drilling_pattern",
+        "repeticion": "drilling_pattern",
+        "repeticiones": "drilling_pattern",
     }
     ordered: list[str] = []
     for raw_item in value or default_order:
@@ -8403,6 +8900,61 @@ def build_drilling_spec(
     )
 
 
+def build_drilling_pattern_spec(
+    center_x: float,
+    center_y: float,
+    diameter: float,
+    columns: int,
+    rows: int,
+    spacing: float,
+    feature_name: Optional[str] = None,
+    *,
+    row_spacing: Optional[float] = None,
+    plane_name: str = "Top",
+    security_plane: Optional[float] = None,
+    is_through: bool = True,
+    target_depth: Optional[float] = None,
+    extra_depth: float = 0.0,
+    drill_family: Optional[str] = None,
+    tool_resolution: str = "Auto",
+    tool_id: Optional[str] = None,
+    tool_name: Optional[str] = None,
+) -> DrillingPatternSpec:
+    """Construye una repeticion rectangular Maestro (`ReplicateFeature`)."""
+
+    normalized_plane_name = _normalize_plane_name(plane_name)
+    depth_spec = MillingDepthSpec(
+        is_through=is_through,
+        target_depth=target_depth,
+        extra_depth=extra_depth,
+    )
+    effective_drill_family = _default_drill_family(
+        normalized_plane_name,
+        float(diameter),
+        depth_spec,
+        drill_family,
+    )
+    return _normalize_drilling_pattern_spec(
+        DrillingPatternSpec(
+            center_x=float(center_x),
+            center_y=float(center_y),
+            diameter=float(diameter),
+            columns=int(columns),
+            rows=int(rows),
+            spacing=float(spacing),
+            row_spacing=row_spacing,
+            feature_name=(feature_name or "Taladrado").strip() or "Taladrado",
+            plane_name=normalized_plane_name,
+            security_plane=20.0 if security_plane is None else float(security_plane),
+            depth_spec=depth_spec,
+            drill_family=effective_drill_family,
+            tool_resolution=_normalize_tool_resolution(tool_resolution or "Auto"),
+            tool_id=(tool_id or "0").strip() or "0",
+            tool_name=(tool_name or "").strip(),
+        )
+    )
+
+
 # ============================================================================
 # Public execution API
 # ============================================================================
@@ -8427,6 +8979,7 @@ def build_synthesis_request(
     circle_millings: Optional[Sequence[CircleMillingSpec]] = None,
     squaring_millings: Optional[Sequence[SquaringMillingSpec]] = None,
     drillings: Optional[Sequence[DrillingSpec]] = None,
+    drilling_patterns: Optional[Sequence[DrillingPatternSpec]] = None,
     ordered_machinings: Optional[Sequence[MachiningSpec]] = None,
     machining_order: Optional[Sequence[str]] = None,
     xn: Optional[XnSpec] = None,
@@ -8437,6 +8990,7 @@ def build_synthesis_request(
     1. leer o definir la pieza
     2. construir `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
        `CircleMillingSpec`, `SquaringMillingSpec`, `DrillingSpec` y
+       `DrillingPatternSpec`, y
        opcionalmente `XnSpec`
     3. construir el request
     4. ejecutar `synthesize_request(...)`
@@ -8481,6 +9035,7 @@ def build_synthesis_request(
         circle_millings=tuple(circle_millings or ()),
         squaring_millings=tuple(squaring_millings or ()),
         drillings=tuple(drillings or ()),
+        drilling_patterns=tuple(drilling_patterns or ()),
         ordered_machinings=tuple(ordered_machinings or ()),
         machining_order=_normalize_machining_order(machining_order),
         xn=_normalize_xn_spec(xn),
@@ -8518,6 +9073,10 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         _hydrate_drilling_spec(drilling, request.source_pgmx_path)
         for drilling in request.drillings
     ]
+    hydrated_drilling_patterns = [
+        _hydrate_drilling_pattern_spec(drilling_pattern, request.source_pgmx_path)
+        for drilling_pattern in request.drilling_patterns
+    ]
     hydrated_ordered_machinings = [
         _hydrate_machining_spec(spec, request.source_pgmx_path)
         for spec in request.ordered_machinings
@@ -8529,6 +9088,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         ordered_circle_millings,
         ordered_squaring_millings,
         ordered_drillings,
+        ordered_drilling_patterns,
     ) = _split_hydrated_machinings(hydrated_ordered_machinings)
     normalized_xn = _normalize_xn_spec(request.xn)
     _validate_tool_sinking_lengths(
@@ -8539,6 +9099,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         hydrated_circle_millings + ordered_circle_millings,
         hydrated_squaring_millings + ordered_squaring_millings,
         hydrated_drillings + ordered_drillings,
+        hydrated_drilling_patterns + ordered_drilling_patterns,
     )
 
     _apply_piece_state(baseline_root, request.piece)
@@ -8575,6 +9136,11 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
             request.piece,
             hydrated_drillings,
         ),
+        "drilling_pattern": lambda: _apply_drilling_patterns(
+            baseline_root,
+            request.piece,
+            hydrated_drilling_patterns,
+        ),
     }
     for group_name in _normalize_machining_order(request.machining_order):
         apply_group[group_name]()
@@ -8603,6 +9169,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         circle_millings=request.circle_millings,
         squaring_millings=request.squaring_millings,
         drillings=request.drillings,
+        drilling_patterns=request.drilling_patterns,
         ordered_machinings=request.ordered_machinings,
         machining_order=_normalize_machining_order(request.machining_order),
         xn=normalized_xn,
@@ -8626,6 +9193,7 @@ def synthesize_pgmx(
     circle_milling: Optional[CircleMillingSpec] = None,
     squaring_milling: Optional[SquaringMillingSpec] = None,
     drilling: Optional[DrillingSpec] = None,
+    drilling_pattern: Optional[DrillingPatternSpec] = None,
     xn: Optional[XnSpec] = None,
     execution_fields: Optional[str] = None,
 ) -> PgmxState:
@@ -8653,6 +9221,7 @@ def synthesize_pgmx(
         circle_millings=[circle_milling] if circle_milling is not None else (),
         squaring_millings=[squaring_milling] if squaring_milling is not None else (),
         drillings=[drilling] if drilling is not None else (),
+        drilling_patterns=[drilling_pattern] if drilling_pattern is not None else (),
         xn=xn,
     )
     return synthesize_request(request).piece
