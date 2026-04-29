@@ -756,10 +756,9 @@ Resolucion de herramienta:
     - `Flat D4 -> 006 / 1893`
     - `Conical D5 -> 007 / 1894`
   - laterales:
-    - `Front D8 -> 058 / 1895`
-    - `Back D8 -> 059 / 1896`
-    - `Right D8 -> 060 / 1897`
-    - `Left D8 -> 061 / 1898`
+    - `Front`, `Back`, `Right` y `Left` dejan `ToolKey` vacio
+    - esta es la forma preferida para huecos multicara porque Maestro /
+      postprocesador resuelve la herramienta lateral efectiva
 - `tool_resolution="Explicit"`:
   - usa `tool_id/tool_name` dados por el usuario
   - valida que existan en `tools/tool_catalog.csv`
@@ -1396,8 +1395,8 @@ Lectura conceptual del ejemplo:
 - la pieza se define en el `request`
 - el escuadrado completo vive en un `SquaringMillingSpec`
 - cada hueco vive en un `DrillingSpec`
-- `tool_resolution="Auto"` deja que el sintetizador resuelva la herramienta
-  correcta segun cara, diametro y familia observada
+- `tool_resolution="Auto"` resuelve herramientas en la cara `Top`, pero deja
+  `ToolKey` vacio en `Front`, `Back`, `Right` y `Left`
 - como no se indica `baseline_path`, se usa `tools/maestro_baselines`
 
 ## 6. Reglas de trabajo para no perder el hilo

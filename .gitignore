@@ -8,3 +8,4 @@ __pycache__/
 venv/
 dist/
 build/
+tools/cnc_project_viewer_settings.json

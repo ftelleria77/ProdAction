@@ -2306,14 +2306,6 @@ _AUTO_VERTICAL_DRILL_TOOLS: dict[tuple[str, str], tuple[str, str]] = {
     ("Conical", "5"): ("1894", "007"),
 }
 
-_AUTO_LATERAL_DRILL_TOOLS: dict[tuple[str, str], tuple[str, str]] = {
-    ("Front", "8"): ("1895", "058"),
-    ("Back", "8"): ("1896", "059"),
-    ("Right", "8"): ("1897", "060"),
-    ("Left", "8"): ("1898", "061"),
-}
-
-
 def _lookup_tool_catalog_entry(
     tool_catalog: dict[str, dict[str, str]],
     *,
@@ -2519,23 +2511,18 @@ def _resolve_drilling_tool(
             "ScmGroup.XCam.ToolDataModel.Tool.CuttingTool",
         )
 
-    diameter_key = _diameter_key(drilling.diameter)
     if drilling.plane_name in {"Front", "Back", "Right", "Left"}:
-        if drilling.drill_family != "Flat":
-            raise ValueError(
-                "La resolucion automatica lateral solo esta validada para broca plana."
-            )
-        tool_key = _AUTO_LATERAL_DRILL_TOOLS.get((drilling.plane_name, diameter_key))
-        if tool_key is None:
-            raise ValueError(
-                "La resolucion automatica lateral solo esta validada para `D8` en las cuatro caras laterales."
-            )
-    else:
-        tool_key = _AUTO_VERTICAL_DRILL_TOOLS.get((drilling.drill_family, diameter_key))
-        if tool_key is None:
-            raise ValueError(
-                "No hay una herramienta vertical auto-resoluble para ese diametro/familia en el toolset relevado."
-            )
+        # En los taladros laterales Maestro deja la operacion sin ToolKey hasta
+        # el postprocesado. Forzar 058/059/060/061 desde el PGMX puede asignar
+        # una broca incorrecta segun el sentido real de la cara.
+        return "0", "", "System.Object"
+
+    diameter_key = _diameter_key(drilling.diameter)
+    tool_key = _AUTO_VERTICAL_DRILL_TOOLS.get((drilling.drill_family, diameter_key))
+    if tool_key is None:
+        raise ValueError(
+            "No hay una herramienta vertical auto-resoluble para ese diametro/familia en el toolset relevado."
+        )
 
     row = _lookup_tool_catalog_entry(
         tool_catalog,

@@ -640,15 +640,10 @@ Reconstruir paso a paso:
 - Implicacion importante para futura spec:
   - en taladros laterales, la herramienta no deberia modelarse como parametro
     libre por defecto
-  - la futura abstraccion puede derivar o validar automaticamente `ToolKey`
-    desde:
-    - `plane_name`
-    - `diameter`
-  - para el caso hoy relevado, la regla concreta queda:
-    - `Front + D8 -> 058 / 1895`
-    - `Back + D8 -> 059 / 1896`
-    - `Right + D8 -> 060 / 1897`
-    - `Left + D8 -> 061 / 1898`
+  - correccion posterior: la abstraccion no debe derivar automaticamente
+    `ToolKey` desde `plane_name + diameter`
+  - el default correcto para `Front/Back/Right/Left` es `ToolKey` vacio
+  - si se fuerza una herramienta, debe hacerse como seleccion explicita
 - Salvedad:
   - esta regla de unicidad esta relevada solo para los taladros laterales
     observados en esta pieza
@@ -1130,6 +1125,9 @@ Reconstruir paso a paso:
   - los `2` taladros `Back D8` tienen `ToolKey = 1896 / 059`
   - los `4` taladros superiores agregados y los `4` laterales `Left/Right`
     quedaron con `ToolKey` vacio
+  - correccion posterior: ese estado mixto no debe convertirse en default
+    automatico; para la generacion multicara se prefiere `ToolKey` vacio en
+    todas las caras laterales/frontal/posterior
 - Implicacion importante:
   - `ToolKey` es estrictamente por operacion
   - en un mismo archivo multicara pueden convivir:
@@ -1827,12 +1825,13 @@ Reconstruir paso a paso:
 - Resuelta: la capa publica ya lee y escribe `GeomCartesianPoint`, y la V1 de
   `DrillingSpec` ya sintetiza `RoundHole + DrillingOperation +
   MachiningWorkingStep`.
-- Resuelta parcialmente: en los taladros laterales, el estado con `ToolKey`
-  vacio es previo a la seleccion de herramienta; una vez elegida la unica
-  herramienta valida por cara, Maestro solo actualiza `Operation/ToolKey`.
-- Abierta: falta decidir si la futura spec de taladro lateral debe:
-  - derivar automaticamente `ToolKey` desde cara + diametro
-  - o permitir override manual con validacion fuerte
+- Resuelta: en los taladros laterales/frontal/posterior, el sintetizador debe
+  conservar `ToolKey` vacio por defecto. El archivo `Pieza_002.pgmx` corregido
+  manualmente muestra que resolver automaticamente `058..061` desde el PGMX
+  puede asignar herramientas incorrectas para `Front/Back`.
+- Resuelta: la spec de taladro lateral mantiene override manual con
+  `tool_resolution="Explicit"`, pero `tool_resolution="Auto"` queda como
+  `ToolKey` vacio en `Front`, `Back`, `Right` y `Left`.
 - Abierta: en cara superior, `diameter` no alcanza para resolver la herramienta;
   al menos `D5` es ambiguo entre broca plana y broca lanza.
 - Resuelta: Maestro si admite huecos en varias caras dentro de un unico
@@ -1861,12 +1860,8 @@ Reconstruir paso a paso:
   `SquaringMillingSpec`
 - si aparecen variantes manuales adicionales, ampliar el caso documentado con
   mas combinaciones de herramienta, correccion y estrategias de entrada/salida
-- para taladros laterales, evaluar si la spec publica debe resolver la
-  herramienta en forma automatica con una tabla cerrada por cara:
-  - `Front -> 058 / 1895`
-  - `Back -> 059 / 1896`
-  - `Right -> 060 / 1897`
-  - `Left -> 061 / 1898`
+- para taladros laterales/frontal/posterior, no resolver automaticamente
+  `ToolKey`; la tabla cerrada por cara queda descartada como default.
 - relevar casos manuales adicionales antes de generalizar:
   - cara superior con herramienta explicita
   - diametros distintos de `8`
