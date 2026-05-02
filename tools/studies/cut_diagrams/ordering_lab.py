@@ -1,8 +1,11 @@
-"""Laboratorio experimental para comparar ordenamientos de guillotina.
+"""Laboratorio archivado para comparar ordenamientos de guillotina.
 
 Este modulo no participa del flujo principal de la aplicacion. Usa APIs internas
 de `core.nesting` para poder experimentar rapido con criterios de orden y
 compararlos contra un packer guillotina simple, guiado por el orden recibido.
+
+Queda bajo `tools.studies` como herramienta reproducible de investigacion, no
+como modulo productivo.
 """
 
 from __future__ import annotations
@@ -10,8 +13,14 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from app.ui import _load_project, _normalize_cut_optimization_option, _read_app_settings
 from core import nesting

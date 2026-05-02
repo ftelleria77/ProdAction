@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""ProdAction CNC project viewer, XP-compatible prototype.
+"""ProdAction CNC traceability viewer, XP-compatible prototype.
 
 This module intentionally avoids the main PySide6 application stack.  The
 target runtime is a 32-bit Windows XP executable, so the UI is built with the
@@ -27,7 +27,8 @@ except ImportError:  # pragma: no cover - Python 3 path
     from tkinter import messagebox
 
 
-APP_TITLE = "ProdAction CNC - Visualizador"
+APP_TITLE = "ProdAction CNC - Trazabilidad"
+CONFIG_DIRNAME = "config"
 SETTINGS_FILENAME = "cnc_project_viewer_settings.json"
 INDEX_FILENAMES = ("cnc_project_viewer_index.json", "prodaction_cnc_queue.json")
 PROGRESS_FILENAME = "cnc_progress.json"
@@ -43,6 +44,14 @@ def app_dir():
     if getattr(sys, "frozen", False):
         return os.path.dirname(os.path.abspath(sys.executable))
     return os.path.dirname(os.path.abspath(__file__))
+
+
+def config_dir():
+    return os.path.join(app_dir(), CONFIG_DIRNAME)
+
+
+def settings_path():
+    return os.path.join(config_dir(), SETTINGS_FILENAME)
 
 
 def read_json(path):
@@ -450,12 +459,12 @@ class ScrollableFrame(object):
 class CncProjectViewerApp(object):
     def __init__(self, root):
         self.root = root
-        self.settings_path = os.path.join(app_dir(), SETTINGS_FILENAME)
+        self.settings_path = settings_path()
         self.settings = self.load_settings()
         self.projects = []
         self.project_windows = []
 
-        self.root.title("Proyectos")
+        self.root.title("Trazabilidad CNC")
         self.root.minsize(520, 520)
         self.build_ui()
         self.autoload_index()

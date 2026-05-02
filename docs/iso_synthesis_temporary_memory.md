@@ -5189,7 +5189,7 @@ Punto de reanudacion recomendado:
   - ejecutar:
 
 ```powershell
-python tools/generate_iso_minimal_fixtures.py --output-dir "S:\Maestro\Projects\ProdAction\ISO\minimal_fixtures_2026-05-03"
+python -m tools.studies.iso.minimal_fixtures_2026_05_03 --output-dir "S:\Maestro\Projects\ProdAction\ISO\minimal_fixtures_2026-05-03"
 ```
 
   - postprocesar esos `.pgmx` con Maestro.
@@ -5432,3 +5432,239 @@ Conclusion:
   - evitar `Retract Arc + Up` en polilineas abiertas de varios segmentos cuando
     se use estrategia `PH=5`.
   - usar `Retract Line + Up` o `Arc + Quote` segun el caso.
+
+## Barrido de parqueos laterales `Z149.*` - 2026-05-02
+
+- Objetivo:
+  - cerrar el hueco del contrato ISO sobre los movimientos `G0 G53 Z149.500` y
+    `G0 G53 Z149.450`.
+- Corpus revisado:
+  - `P:\USBMIX\ProdAction\ISO`, busqueda recursiva de `.iso`.
+  - `124` archivos `.iso` despues de sumar la tanda
+    `router_toolset_2026-05-03`.
+- Resultado del barrido:
+  - solo `pieza_002.iso`, `pieza_003.iso` y `pieza_005.iso` contienen
+    `G0 G53 Z149.*`.
+  - las tres piezas son familias de taladros laterales D8 en varias caras.
+  - los fixtures minimos de taladro lateral de una sola cara no contienen
+    `Z149.*`.
+- Cruce con PGMX/adaptador:
+  - `Pieza_002.pgmx`: 4 taladros laterales individuales adaptados.
+  - `Pieza_003.pgmx`: 8 taladros laterales individuales adaptados.
+  - `Pieza_005.pgmx`: 4 patrones de taladro lateral adaptados.
+  - en los tres casos el postprocesador resuelve brocas laterales reales
+    `ETK[6]=58..61` desde cara/trayectoria, con `ToolKey` PGMX vacio.
+
+Valores observados:
+
+| ISO | `ETK[6]` | Cara | `G53 Z` | `SHF[Z]` siguiente | Suma |
+| --- | ---: | --- | ---: | ---: | ---: |
+| `pieza_002/003/005` | `59` | `Back` | `149.500` | `66.500` | `216.000` |
+| `pieza_002/003/005` | `61` | `Left` | `149.500` | `66.300` | `215.800` |
+| `pieza_002/003/005` | `60` | `Right` | `149.450` | `66.450` | `215.900` |
+
+Lectura:
+
+- `Z149.*` aparece al cambiar de grupo/cara lateral despues de haber usado una
+  cara lateral previa.
+- El primer grupo lateral `Front / ETK[6]=58` no emite `Z149.*`.
+- Entre taladros de una misma cara:
+  - `Front/Back` pueden usar `G0 G53 Z201.000`.
+  - `Left/Right` reposicionan en plano lateral de seguridad.
+- Formula observada:
+  - `G53_Z_lateral = target_lateral_de_cara - SHF_Z_de_spindle`.
+  - targets observados:
+    - `Back`: `216.000`;
+    - `Left`: `215.800`;
+    - `Right`: `215.900`.
+- `spindles.cfg` explica los `SHF[Z]` por offsets fisicos de spindle:
+  - `59`: `Z=-66.50` -> `SHF[Z]=66.500`;
+  - `61`: `Z=-66.30` -> `SHF[Z]=66.300`;
+  - `60`: `Z=-66.45` -> `SHF[Z]=66.450`.
+- No se encontraron los targets `216.000`, `215.800` ni `215.900` como
+  literales en `Params.cfg`, `NCI.CFG`, `spindles.cfg`,
+  `S:\Xilog Plus\Job\def.tlg` ni `S:\Maestro\Tlgx\def.tlgx`.
+- Estado del hueco:
+  - regla ISO observada cerrada para el corpus actual.
+  - queda pendiente explicar de que tabla/binario/parametro interno salen los
+    targets laterales.
+
+## Barrido de herramientas router pendientes - 2026-05-02
+
+- Objetivo:
+  - verificar si el corpus ISO existente ya permitia validar `E002`, `E005`,
+    `E006` o `E007` sin generar otra tanda.
+- Corpus revisado:
+  - `P:\USBMIX\ProdAction\ISO`, busqueda recursiva de `.iso`.
+- Resultado antes de la tanda `router_toolset_2026-05-03`:
+  - valores `T` de router encontrados: `T1`, `T3`, `T4`.
+  - valores `?%ETK[9]` encontrados: `1`, `3`, `4`.
+  - no aparecen `T2`, `T5`, `T6`, `T7` ni `?%ETK[9]=2/5/6/7`.
+- Aclaracion importante:
+  - si aparecen `?%ETK[6]=2/5/6/7`, pero son brocas verticales
+    `002/005/006/007`.
+  - no deben confundirse con fresas de router `E002/E005/E006/E007`, que se
+    expresan por `Tn` y `?%ETK[9]=n`.
+- Estado del hueco:
+  - en ese momento las herramientas router `E002`, `E005`, `E006` y `E007`
+    seguian sin ISO en el corpus.
+  - se genero una tanda nueva para `E005`, `E006` y `E007`.
+  - `E002` quedo separada porque no pertenece a la misma familia de fresado
+    lineal.
+
+## Tanda router tools pendientes generada - 2026-05-02
+
+- Objetivo:
+  - generar PGMX minimos para obtener ISO de las fresas router pendientes.
+- Carpeta de `.pgmx`:
+  `S:\Maestro\Projects\ProdAction\ISO\router_toolset_2026-05-03`.
+- Carpeta preparada para recibir `.iso`:
+  `P:\USBMIX\ProdAction\ISO\router_toolset_2026-05-03`.
+- Geometria comun:
+  - pieza `500 x 300 x 18`;
+  - origen `(5, 5, 25)`;
+  - area `HG`;
+  - una linea centrada en Top de `(140, 150)` a `(360, 150)`;
+  - `SideOfFeature=Center`;
+  - profundidad pasante con `extra_depth=1.0`;
+  - `Approach Line + Down` y `Retract Line + Up`.
+- `E002` no se genero:
+  - el catalogo la clasifica como `Sierra Horizontal`.
+  - `LineMillingSpec` la rechaza correctamente con validacion fuerte porque el
+    fresado lineal publico requiere herramienta de tipo fresa, o Sierra Vertical
+    X en ranurado horizontal no pasante.
+  - para estudiar `E002` hace falta modelar la familia correcta de sierra
+    horizontal antes de generar PGMX.
+
+Fixtures generados:
+
+| Fixture | ToolKey | Ancho | SHA256 PGMX |
+| --- | --- | ---: | --- |
+| `ISO_ROUTER_205_E005_LineCenter.pgmx` | `1904 / E005` | `76` | `497ed60f43384f4aedf52f8bb9841c6e82287efb9bcddf087cc1733994e185f8` |
+| `ISO_ROUTER_206_E006_LineCenter.pgmx` | `1905 / E006` | `80` | `b9e34b00e88fc12fb1a2e66475a20a11e1d02cb87e3941828e09ce9cfece6400` |
+| `ISO_ROUTER_207_E007_LineCenter.pgmx` | `1906 / E007` | `17.72` | `5372922d637c3c95753184374eb90ff670560e72b95bd40e0ac1ee52efd102a0` |
+
+- Validacion local:
+  - `manifest.csv` escrito.
+  - hashes del manifest contra disco: OK.
+  - adaptacion de cada `.pgmx`: `adapted=1`, `unsupported=0`, `ignored=1`,
+    `line_millings=1`.
+- Pendiente inmediato:
+  - postprocesar los tres `.pgmx` con Maestro.
+  - copiar los `.iso` resultantes a
+    `P:\USBMIX\ProdAction\ISO\router_toolset_2026-05-03`.
+  - comparar `T`, `?%ETK[9]`, `SVL`, `SVR`, feeds, `D1` y movimientos contra
+    `E001/E003/E004`.
+
+## Tanda router tools pendientes postprocesada - 2026-05-02
+
+- El usuario postproceso los tres fixtures de
+  `router_toolset_2026-05-03`.
+- ISO recibidos:
+  - `iso_router_205_e005_linecenter.iso`
+  - `iso_router_206_e006_linecenter.iso`
+  - `iso_router_207_e007_linecenter.iso`
+- Carpeta:
+  `P:\USBMIX\ProdAction\ISO\router_toolset_2026-05-03`.
+
+Propiedades:
+
+| ISO | Lineas | Bytes | SHA256 | Body SHA256 sin primera linea |
+| --- | ---: | ---: | --- | --- |
+| `iso_router_205_e005_linecenter.iso` | `98` | `1421` | `0E5CB36CA41C8DD2294D4537C4DA151386A429D35617BE2A384CF69B6E29E7E2` | `8ABE2D649813F68372CC053D04E191BC06CE463DB6711B95D474B0FF3B97D9F5` |
+| `iso_router_206_e006_linecenter.iso` | `98` | `1421` | `B1F98AE5E419404B9424A7DE4C9F011FE554BAE41C2D8BE6B982E97FF27C0E04` | `B229E71464FED3637AC36293B486BDCD5F458BE7A14705E975E1AC0DD5B1C546` |
+| `iso_router_207_e007_linecenter.iso` | `98` | `1420` | `E1830851F24B4347512129D8678B412B8AF49A63E9D5FAB6E0B83EE30C5C34E9` | `4408093B843F6A9B1E6221841B478B5C8316954EC52CB789D51BB26047208D2B` |
+
+Mapeo router confirmado:
+
+| ToolKey | ISO | `SVL` | `SVR` | Feeds observados |
+| --- | --- | ---: | ---: | --- |
+| `1904 / E005` | `T5`, `?%ETK[9]=5` | `145.900` | `38.000` | entrada `F2000`, corte/retracta `F5000` |
+| `1905 / E006` | `T6`, `?%ETK[9]=6` | `120.870` | `40.000` | entrada/corte/retracta `F2000` |
+| `1906 / E007` | `T7`, `?%ETK[9]=7` | `152.100` | `8.860` | entrada `F2000`, corte/retracta `F5000` |
+
+Reglas confirmadas:
+
+- Las tres herramientas usan `M06`, `?%ETK[6]=1`, `?%ETK[18]=1`,
+  `S18000M3`, `?%ETK[13]=1`, `?%ETK[7]=4` y `D1`.
+- `SVL/VL6` coincide con `ToolOffsetLength`.
+- `SVR/VL7` coincide con `tool_width / 2`.
+- La entrada en `Z` usa `SVL + security_plane`:
+  - `E005`: `145.900 + 20 = 165.900`;
+  - `E006`: `120.870 + 20 = 140.870`;
+  - `E007`: `152.100 + 20 = 172.100`.
+- La trayectoria de aproximacion/retracta lineal compensa una herramienta
+  completa en X:
+  - `E005`: `140 - 76 = 64`, `360 + 76 = 436`;
+  - `E006`: `140 - 80 = 60`, `360 + 80 = 440`;
+  - `E007`: `140 - 17.72 = 122.280`, `360 + 17.72 = 377.720`.
+- La profundidad de corte emitida es `Z-19.000`, correspondiente a pieza de
+  `18` mm con `extra_depth=1.0`.
+- Al terminar, cada ISO apaga `SVL/SVR`, resetea `?%ETK[7]`, `?%ETK[13]` y
+  `?%ETK[18]`, y retorna por `G0 G53 Z201.000` y `G0 G53 X-3700.000`.
+
+Estado:
+
+- `E005`, `E006` y `E007` pasan a herramientas router observadas a nivel ISO.
+- Esa observacion de mapeo no equivale a autorizar cualquier uso automatico de
+  cada herramienta.
+- `E002` sigue requiriendo modelado especifico de Sierra Horizontal antes de
+  generar un PGMX valido para Maestro.
+
+## Aclaracion operativa sobre E002/E005/E006/E007 - 2026-05-02
+
+- `E005`:
+  - es una fresa de 45 grados.
+  - debe tratarse con cuidado.
+  - es preferible usarla manualmente desde Maestro, en fresados manuales o en
+    division/escuadrado de piezas especiales.
+  - puede usarse para dividir en juegos, pero solo aplicando la regla operativa
+    ya definida sobre separacion entre piezas en juego y profundidad del
+    fresado.
+  - pendiente si se automatiza: codificar/validar explicitamente esa regla de
+    separacion y profundidad en el flujo de sintesis.
+- `E006`:
+  - es una fresa de 0 grados / rectificado.
+  - no debe utilizarse en la forma del fixture lineal pasante
+    `ISO_ROUTER_206_E006_LineCenter`; ese caso solo sirvio para reconocer el
+    bloque ISO `T6` / `?%ETK[9]=6`.
+  - su uso esperado es el tratamiento de extensiones superficiales sobre la cara
+    superior de la pieza.
+  - puede usarse en fresados o vaciados de poca profundidad por pasada.
+  - pendiente: estudiar esos casos en Maestro/PGMX y establecer reglas seguras
+    antes de habilitar sintesis automatica.
+- `E007`:
+  - es una fresa de 90 grados / recta.
+  - funciona del mismo modo que `E001`.
+  - tiene mayor largo util, por lo que aplica a piezas de mayor espesor.
+  - queda como equivalente funcional de `E001` para casos donde se requiera ese
+    largo util, respetando las mismas reglas de fresado/escuadrado.
+- `E002`:
+  - es una sierra horizontal y debe tratarse con cuidado.
+  - no tiene filo para cortar la superficie de la cara superior.
+  - su recorrido debe programarse de la misma manera que un fresado de cara
+    superior.
+  - pendiente: modelar la familia de Sierra Horizontal y establecer reglas que
+    permitan usarla de forma segura antes de generar PGMX automaticos.
+
+## Limpieza De Generadores De Estudio - 2026-05-02
+
+El generador puntual de la tanda minima ISO se movio desde el nivel principal de
+`tools/` a:
+
+`tools/studies/iso/minimal_fixtures_2026_05_03.py`
+
+Motivo:
+
+- conservar la reproducibilidad de la tanda `minimal_fixtures_2026-05-03`;
+- dejar claro que no es un flujo productivo ni un generador ISO general;
+- mantener el nivel principal de `tools/` para herramientas publicas o
+  operativas.
+
+Comando vigente:
+
+```powershell
+python -m tools.studies.iso.minimal_fixtures_2026_05_03 --output-dir "S:\Maestro\Projects\ProdAction\ISO\minimal_fixtures_2026-05-03"
+```
+
+La definicion de los 14 fixtures minimos no se modifico.

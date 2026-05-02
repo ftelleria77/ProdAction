@@ -1,6 +1,6 @@
 # Guia Rapida De Estudio Del Repo
 
-Esta guia resume como esta organizado ProdAction al 2026-05-01. Sirve para
+Esta guia resume como esta organizado ProdAction al 2026-05-02. Sirve para
 entrar rapido al repo antes de tocar codigo.
 
 ## Estado actual
@@ -31,8 +31,9 @@ El sintetizador PGMX real vive en `tools/synthesize_pgmx.py` y expone
 | `tools/synthesize_pgmx.py` | API publica para escribir `.pgmx` desde baseline Maestro. |
 | `tools/pgmx_snapshot.py` | Snapshot normalizado de `.pgmx` existentes. |
 | `tools/pgmx_adapters.py` | Adaptacion de snapshots hacia specs publicos. |
-| `tools/cut_diagram_ordering_lab.py` | Laboratorio de algoritmos de guillotina. |
-| `tools/cnc_project_viewer_xp.py` | Prototipo Tkinter/stdlib compatible con Windows XP 32 bits. |
+| `tools/studies/cut_diagrams/ordering_lab.py` | Laboratorio de algoritmos de guillotina. |
+| `tools/studies/iso/minimal_fixtures_2026_05_03.py` | Generador archivado de fixtures minimos ISO. |
+| `cnc_traceability/` | Subsistema de trazabilidad CNC compatible con Windows XP 32 bits. |
 
 ## Flujos de aplicacion
 
@@ -128,17 +129,21 @@ La reparacion rota el PGMX 90 grados antihorario, re-sintetiza los mecanizados
 adaptables y reemplaza el archivo original si la validacion posterior no deja
 issues.
 
-### Viewer CNC/ISO
+### Trazabilidad CNC
 
-Codigo: `tools/cnc_project_viewer_xp.py`.
+Codigo: `cnc_traceability/viewer_xp.py`.
 
-Contrato: `docs/cnc_project_viewer_temporary_memory.md`.
+Entrada del subsistema: `cnc_traceability/README.md`.
+Contrato: `cnc_traceability/docs/contract.md`.
+Memoria: `cnc_traceability/memory/current-state.md`.
 
 Caracteristicas:
 
 - no depende de PySide6;
 - usa solo standard library/Tkinter;
 - pensado para empaquetar como ejecutable 32 bits compatible con Windows XP;
+- funciona como herramienta auxiliar de trazabilidad de ejecucion, no como
+  generador de programas;
 - lee `cnc_project_viewer_index.json` o `prodaction_cnc_queue.json`;
 - escanea `.iso` en una estructura de salida CNC;
 - guarda avance en `cnc_progress.json`;
@@ -153,12 +158,12 @@ documentacion del postprocesado Maestro/CNC.
 Fuente historica: `docs/iso_synthesis_temporary_memory.md`.
 Contrato CNC/ISO observado: `docs/iso_cnc_contract.md`.
 Plan de fixtures minimos: `docs/iso_minimal_fixtures_plan.md`.
-Generador de fixtures: `tools/generate_iso_minimal_fixtures.py`.
+Generador de fixtures: `tools/studies/iso/minimal_fixtures_2026_05_03.py`.
 
 Punto de reanudacion documentado:
 
 - generar `.pgmx` minimos comparables con
-  `tools/generate_iso_minimal_fixtures.py`;
+  `tools/studies/iso/minimal_fixtures_2026_05_03.py`;
 - postprocesar esos `.pgmx` en Maestro desde la compu del CNC;
 - copiar los `.iso` desde `C:\PrgMaestro\USBMIX` hacia
   `P:\USBMIX\ProdAction\ISO\minimal_fixtures_2026-05-03`;
@@ -171,11 +176,11 @@ Punto de reanudacion documentado:
 python -m compileall main.py app core tools
 python -c "import app.ui, core.parser, core.nesting, core.summary, core.pgmx_processing, core.en_juego_synthesis; print('core imports ok')"
 python -c "from tools import synthesize_pgmx as sp; print(sp.SYNTHESIZER_VERSION)"
-python tools/generate_iso_minimal_fixtures.py --output-dir tmp/iso_minimal_fixtures
+python -m tools.studies.iso.minimal_fixtures_2026_05_03 --output-dir tmp/iso_minimal_fixtures
 python -m tools.synthesize_pgmx --help
 python -m tools.pgmx_snapshot --help
 python -m tools.pgmx_adapters --help
-python -m tools.cut_diagram_ordering_lab --help
+python -m tools.studies.cut_diagrams.ordering_lab --help
 ```
 
 Prueba de humo PGMX recomendada:

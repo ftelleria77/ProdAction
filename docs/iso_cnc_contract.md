@@ -167,9 +167,10 @@ Observaciones del corpus ISO:
 - Tambien aparecen shifts de herramienta/operacion como `SHF[Y] = -246.650`,
   `126.950`, `-32.000`, `29.500`, `64.000` y otros valores ligados a offsets
   de cabezal o a operaciones especificas.
-- Ademas de los parqueos generales, hay movimientos `G0 G53 Z149.500` y
-  `G0 G53 Z149.450` en pocos ISO. Esos valores todavia no tienen formula
-  cerrada.
+- Ademas de los parqueos generales, hay movimientos intermedios `G0 G53
+  Z149.500` y `G0 G53 Z149.450` en `pieza_002`, `pieza_003` y `pieza_005`.
+  En el corpus local completo aparecen solo al entrar a otro grupo de taladros
+  laterales despues de haber usado una cara lateral previa.
 
 `NCI_ORI.CFG` parece una plantilla alternativa/anterior. Mantiene familias de
 claves similares (`$GEN_INIT`, `$GEN_END`, `$H03_VECTOR`, `$H04_VECTOR`,
@@ -191,6 +192,43 @@ de la logica de postprocesado.
 - `61`: `X=118.00`, `Y=32.00`, `Z=-66.30`
 - `82`: `X=96.00`, `Y=-128.85`, `Z=-22.15`
 
+### Parqueos laterales `Z149.*`
+
+Barrido local del corpus `P:\USBMIX\ProdAction\ISO`:
+
+- `124` archivos `.iso` revisados recursivamente despues de sumar la tanda
+  `router_toolset_2026-05-03`.
+- Solo `pieza_002.iso`, `pieza_003.iso` y `pieza_005.iso` contienen
+  `G0 G53 Z149.*`.
+- Los tres son piezas con taladros laterales D8 en varias caras.
+- Los fixtures minimos con una sola cara lateral no emiten `Z149.*`; arrancan
+  desde el parqueo inicial de `NCI.CFG` o usan `Z201.000`.
+
+Valores observados:
+
+| ISO | `ETK[6]` | Cara | `G53 Z` | `SHF[Z]` siguiente | `G53 Z + SHF[Z]` |
+| --- | ---: | --- | ---: | ---: | ---: |
+| `pieza_002/003/005` | `59` | `Back` | `149.500` | `66.500` | `216.000` |
+| `pieza_002/003/005` | `61` | `Left` | `149.500` | `66.300` | `215.800` |
+| `pieza_002/003/005` | `60` | `Right` | `149.450` | `66.450` | `215.900` |
+
+Regla observada:
+
+- El valor se emite despues de `MLV=0`, inmediatamente despues de seleccionar
+  la broca lateral con `?%ETK[6]=...`.
+- El primer grupo lateral `Front / ETK[6]=58` no emite `Z149.*`.
+- Entre taladros de una misma cara lateral el postprocesador no cambia
+  `ETK[6]`; puede usar `Z201.000` para `Front/Back` o reposicionar en plano
+  lateral para `Left/Right`.
+- La forma numerica observada es:
+  `G53_Z_lateral = target_lateral_de_cara - SHF_Z_de_spindle`.
+- Los targets observados son `216.000` para `Back`, `215.800` para `Left` y
+  `215.900` para `Right`.
+- Esos targets no aparecen como literales en `Params.cfg`, `NCI.CFG`,
+  `spindles.cfg`, `S:\Xilog Plus\Job\def.tlg` ni
+  `S:\Maestro\Tlgx\def.tlgx`; por ahora se tratan como constantes internas del
+  postprocesador/control para cambio de lateral.
+
 ## Herramientas del toolset
 
 `S:\Maestro\Tlgx\def.tlgx` contiene las herramientas y el cabezal agregado
@@ -211,12 +249,12 @@ de la logica de postprocesado.
 | `1898` | `061` | `FlatDrill` | `ERClamp` | `8` | `65` | `30` | `65` | `3` | `6000` |
 | `1899` | `082` | `UniversalBlade` | `ERClamp` | `120` | `0` | `10` | `60` | `5` | `4000` |
 | `1900` | `E001` | `Endmill` | `HSK63` | `18.36` | `125.4` | `30` | `125.4` | `5` | `18000` |
-| `1901` | `E002` | `Endmill` | `HSK63` | `100` | `107` | `30` | `107` | `3` | `6000` |
+| `1901` | `E002` | `Sierra Horizontal` | `HSK63` | `100` | `107` | `30` | `107` | `3` | `6000` |
 | `1902` | `E003` | `Endmill` | `HSK63` | `9.52` | `111.5` | `38` | `111.5` | `18` | `18000` |
 | `1903` | `E004` | `Endmill` | `HSK63` | `4` | `107.2` | `22` | `107.2` | `5` | `18000` |
-| `1904` | `E005` | `Endmill` | `HSK63` | `76` | `145.9` | `54` | `145.9` | `5` | `18000` |
-| `1905` | `E006` | `Endmill` | `HSK63` | `80` | `120.87` | `36` | `120.87` | `2` | `18000` |
-| `1906` | `E007` | `Endmill` | `HSK63` | `17.72` | `152.1` | `50` | `152.1` | `5` | `18000` |
+| `1904` | `E005` | `Fresa 45 grados` | `HSK63` | `76` | `145.9` | `54` | `145.9` | `5` | `18000` |
+| `1905` | `E006` | `Fresa 0 grados / Rectificado` | `HSK63` | `80` | `120.87` | `36` | `120.87` | `2` | `18000` |
+| `1906` | `E007` | `Fresa 90 grados / Recta` | `HSK63` | `17.72` | `152.1` | `50` | `152.1` | `5` | `18000` |
 
 ## Cabezal de brocas y sierra
 
@@ -248,7 +286,7 @@ Regla observada:
 
 ## Variables ISO observadas
 
-Estas reglas salen de los 101 ISO disponibles y de la memoria ISO historica.
+Estas reglas salen del corpus ISO disponible y de la memoria ISO historica.
 Donde no hay significado completo, queda marcado como inferencia.
 
 | Variable | Rol observado |
@@ -256,7 +294,7 @@ Donde no hay significado completo, queda marcado como inferencia.
 | `?%ETK[500]=100` | constante presente en todos los ISO estudiados. |
 | `?%ETK[6]` | selecciona broca/cabezal/sierra para operaciones de agregado: `1..7`, `58..61`, `82`. En fresados con router queda observado como `1`. |
 | `?%ETK[8]` | cara/plano de brocado lateral observado: `1=Top`, `2=Right`, `3=Left`, `4=Back`, `5=Front`. |
-| `?%ETK[9]` | herramienta de router/magazine: `E001 -> 1`, `E003 -> 3`, `E004 -> 4`. |
+| `?%ETK[9]` | herramienta de router/magazine: `E001 -> 1`, `E003 -> 3`, `E004 -> 4`, `E005 -> 5`, `E006 -> 6`, `E007 -> 7`. |
 | `?%ETK[0]` | mascara de herramienta/cabezal. Verticales: `001=1`, `002=2`, `003=4`, `004=8`, `005=16`, `006=32`, `007=64`. Laterales: `Front/Back=1073741824`, `Left/Right=2147483648`. |
 | `?%ETK[7]` | modo de operacion inferido: `1` en ranura con sierra, `3` en taladrado, `4` en fresado/router. |
 | `?%ETK[17]=257` | activacion/preparacion de cabezal agregado en taladros/ranuras; significado exacto pendiente. |
@@ -274,13 +312,54 @@ Donde no hay significado completo, queda marcado como inferencia.
 | `1900 / E001` | `T1`, `M06`, `S18000M3` | `?%ETK[9]=1`, `SVL=125.400`, `SVR=9.180`, `?%ETK[7]=4`, `D1` |
 | `1902 / E003` | `T3`, `M06`, `S18000M3` | `?%ETK[9]=3`, `SVL=111.500`, `SVR=4.760`, `?%ETK[7]=4`, `D1` |
 | `1903 / E004` | `T4`, `M06`, `S18000M3` | `?%ETK[9]=4`, `SVL=107.200`, `SVR=2.000`, `?%ETK[7]=4`, `D1` |
+| `1904 / E005` | `T5`, `M06`, `S18000M3` | `?%ETK[9]=5`, `SVL=145.900`, `SVR=38.000`, `?%ETK[7]=4`, `D1` |
+| `1905 / E006` | `T6`, `M06`, `S18000M3` | `?%ETK[9]=6`, `SVL=120.870`, `SVR=40.000`, `?%ETK[7]=4`, `D1` |
+| `1906 / E007` | `T7`, `M06`, `S18000M3` | `?%ETK[9]=7`, `SVL=152.100`, `SVR=8.860`, `?%ETK[7]=4`, `D1` |
 
-Herramientas del toolset aun no validadas en ISO de esta investigacion:
+Barrido local del corpus `P:\USBMIX\ProdAction\ISO` antes de generar la tanda
+`router_toolset_2026-05-03`:
+
+- valores `T` de router encontrados: `T1`, `T3`, `T4`;
+- valores `?%ETK[9]` encontrados: `1`, `3`, `4`;
+- no aparecen `T2`, `T5`, `T6`, `T7` ni `?%ETK[9]=2/5/6/7`;
+- los valores `?%ETK[6]=2/5/6/7` pertenecen a brocas verticales
+  `002/005/006/007`, no a las fresas `E002/E005/E006/E007`.
+
+La tanda `router_toolset_2026-05-03` agrega validacion ISO de `E005`, `E006` y
+`E007`:
+
+- `SVL` coincide con `ToolOffsetLength`;
+- `SVR` coincide con `tool_width / 2`;
+- el punto de aproximacion/retracta lineal se separa una herramienta completa:
+  `X_inicio - tool_width` y `X_fin + tool_width`;
+- el primer tramo de entrada usa `F2000.000`;
+- el corte usa el feed estandar de cada herramienta: `F5000.000` en
+  `E005/E007`, `F2000.000` en `E006`.
+
+Importante: esta tanda valida el mapeo ISO de herramienta, no autoriza todos
+los usos operativos de esas herramientas.
+
+## Politica operativa de herramientas E00x
+
+| Herramienta | Uso operativo | Estado para sintesis automatica |
+| --- | --- | --- |
+| `E001` | Fresa recta principal para escuadrado y fresados ya estudiados. | Permitida segun reglas ya validadas. |
+| `E002` | Sierra horizontal. No tiene filo para cortar la superficie de la cara superior, aunque su recorrido debe programarse como un fresado de cara superior. | Pendiente: modelar la familia de Sierra Horizontal y establecer reglas seguras antes de generar PGMX automaticos. |
+| `E003` | Fresa recta chica ya estudiada en polilineas/circulos. | Permitida segun reglas ya validadas. |
+| `E004` | Fresa recta chica ya estudiada en lineas, polilineas y PH. | Permitida segun reglas ya validadas y restricciones de `PH=5` documentadas. |
+| `E005` | Fresa de 45 grados. Herramienta sensible, preferible para uso manual desde Maestro en fresados manuales o en division/escuadrado de piezas especiales. Puede usarse para dividir en juegos solo aplicando la regla operativa de separacion entre piezas y profundidad de fresado. | No promover a uso automatico general. Pendiente codificar/validar las reglas exactas de separacion y profundidad si se automatiza division en juego con esta herramienta. |
+| `E006` | Fresa de 0 grados / rectificado. Sirve para tratar extensiones superficiales sobre la cara superior, con fresados o vaciados de poca profundidad por pasada. | No usar con el patron lineal pasante de la tanda `router_toolset_2026-05-03`; ese ISO solo sirve para reconocer `T6/ETK[9]=6`. Pendiente estudiar casos Maestro/PGMX de extensiones superficiales y vaciados seguros. |
+| `E007` | Fresa recta de 90 grados. Opera como `E001`, con mayor largo util para piezas de mayor espesor. | Permitida como equivalente funcional de `E001` cuando se necesita mayor largo util, respetando las mismas reglas de fresado/escuadrado ya validadas. |
+
+Herramientas o familias aun pendientes para reglas seguras:
 
 - `E002`
-- `E005`
-- `E006`
-- `E007`
+- `E006` en extensiones superficiales/vaciados
+- `E005` para automatizar division en juegos
+
+Nota sobre `E002`: el catalogo local la clasifica como `Sierra Horizontal`. La
+sintesis publica actual no genera ese caso con `LineMillingSpec`; hace falta
+modelar la familia correcta antes de pedir ISO.
 
 ## Cabecera ISO
 
@@ -398,10 +477,14 @@ falta cerrar:
    preambulo/final, parqueos y limites generales, pero no describe como Maestro
    transforma cada operacion PGMX en bloques ISO. Parte de esa logica parece
    estar en binarios/plantillas Xilog, o embebida en Maestro.
-5. Formula de los movimientos `G0 G53 Z149.500` y `G0 G53 Z149.450`. Los
-   parqueos `Z201.000` y `X-3700.000` ya estan explicados por `Params.cfg`; esos
-   Z intermedios todavia no.
+5. Origen interno de los targets laterales `216.000`, `215.800` y `215.900`
+   usados para calcular los `G0 G53 Z149.*`. El patron ISO ya esta acotado, pero
+   esos targets no aparecen como literales en los archivos legibles revisados.
 6. Validacion fisica o simulada de compensacion `G41/G42`, especialmente en
    esquinas donde el ISO delega la compensacion al CNC.
-7. Validacion de herramientas `E002`, `E005`, `E006` y `E007` si van a entrar
-   en el primer alcance del sintetizador.
+7. Reglas seguras para herramientas especiales:
+   - `E002` requiere modelar Sierra Horizontal antes de generar un PGMX valido;
+   - `E006` requiere estudiar extensiones superficiales y vaciados de poca
+     profundidad por pasada;
+   - `E005` requiere codificar/validar la regla de separacion entre piezas en
+     juego y profundidad de fresado antes de automatizar division.

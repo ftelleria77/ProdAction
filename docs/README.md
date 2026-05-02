@@ -13,8 +13,8 @@ tener que leer todas las memorias historicas de una vez.
    - Lectura/adaptacion de `.pgmx` existentes hacia specs publicos.
 4. `docs/cut_diagrams_temporary_memory.md`
    - Estado del motor de diagramas de corte y algoritmos de guillotina.
-5. `docs/cnc_project_viewer_temporary_memory.md`
-   - Contrato y estado del visualizador CNC compatible con Windows XP.
+5. `cnc_traceability/README.md`
+   - Entrada del subsistema de trazabilidad CNC compatible con Windows XP.
 6. `docs/iso_cnc_contract.md`
    - Contrato CNC/ISO observado: configuracion Maestro, toolset, variables y
      huecos pendientes para un sintetizador ISO.
@@ -38,9 +38,9 @@ tener que leer todas las memorias historicas de una vez.
 | Reparacion SlotSide | `docs/repo_study_guide.md`, `docs/pgmx_temporary_memory.md` | `core/pgmx_processing.py`, `app/ui.py` |
 | En-Juego | `docs/en_juego_synthesis_temporary_memory.md` | `core/en_juego_synthesis.py` |
 | Diagramas de corte | `docs/cut_diagrams_temporary_memory.md` | `core/nesting.py` |
-| Laboratorio de corte | `docs/cut_diagrams_temporary_memory.md` | `tools/cut_diagram_ordering_lab.py` |
-| Viewer CNC/ISO | `docs/cnc_project_viewer_temporary_memory.md` | `tools/cnc_project_viewer_xp.py` |
-| Contrato CNC/ISO | `docs/iso_cnc_contract.md`, `docs/iso_minimal_fixtures_plan.md`, `docs/iso_synthesis_temporary_memory.md` | `tools/generate_iso_minimal_fixtures.py` |
+| Laboratorio de corte | `docs/cut_diagrams_temporary_memory.md` | `tools/studies/cut_diagrams/ordering_lab.py` |
+| Trazabilidad CNC | `cnc_traceability/README.md`, `cnc_traceability/docs/contract.md`, `cnc_traceability/memory/current-state.md` | `cnc_traceability/viewer_xp.py` |
+| Contrato CNC/ISO | `docs/iso_cnc_contract.md`, `docs/iso_minimal_fixtures_plan.md`, `docs/iso_synthesis_temporary_memory.md` | `tools/studies/iso/minimal_fixtures_2026_05_03.py` |
 
 ## Reglas de mantenimiento
 
@@ -52,5 +52,8 @@ tener que leer todas las memorias historicas de una vez.
 - Si cambia `tools.synthesize_pgmx.SYNTHESIZER_VERSION`, actualizar
   `README.md`, `docs/synthesize_pgmx_help.md` y cualquier memoria externa de
   trabajo que se este usando.
+- Los scripts exploratorios o reproducibles de estudio deben vivir bajo
+  `tools/studies/`; el nivel principal de `tools/` queda para herramientas
+  publicas o de uso operativo.
 - Si se agrega un flujo nuevo, actualizar primero esta pagina y luego la guia
   especifica del tema.

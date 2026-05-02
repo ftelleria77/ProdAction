@@ -23,7 +23,7 @@ No sobrescribir los `Pieza_0xx` historicos. Usar los nombres `ISO_MIN_*`.
 Desde la raiz del repo `ProdAction`:
 
 ```powershell
-python tools/generate_iso_minimal_fixtures.py --output-dir "S:\Maestro\Projects\ProdAction\ISO\minimal_fixtures_2026-05-03"
+python -m tools.studies.iso.minimal_fixtures_2026_05_03 --output-dir "S:\Maestro\Projects\ProdAction\ISO\minimal_fixtures_2026-05-03"
 ```
 
 El script escribe:

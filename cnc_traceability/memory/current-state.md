@@ -1,8 +1,11 @@
-# Memoria temporal - Visualizador CNC de proyectos
+# Memoria actual - Trazabilidad CNC de proyectos
 
 ## Objetivo
 
-Crear un visualizador de proyectos para el operador del CNC que permita:
+Reformular el antiguo visualizador CNC como una herramienta auxiliar de
+trazabilidad de ejecucion de proyectos.
+
+El subsistema debe ayudar al operador del CNC a:
 - abrir o seleccionar un proyecto de ProdAction;
 - ver locales, modulos y piezas/programas de mecanizado;
 - ver la estructura de salida generada junto con las planillas de produccion;
@@ -14,9 +17,9 @@ Crear un visualizador de proyectos para el operador del CNC que permita:
 - persistir ese avance para poder cerrar y volver a abrir la herramienta sin
   perder estado.
 
-Este documento es el contrato inicial del subsistema. Antes de crear el
-ejecutable o agregar funcionalidades relacionadas, revisar y actualizar esta
-memoria.
+Este documento conserva la memoria historica y el estado de trabajo del
+subsistema. El contrato estable resumido vive en
+`cnc_traceability/docs/contract.md`.
 
 ## Restriccion critica
 
@@ -454,7 +457,7 @@ No implementar en la primera version:
 ## Implementacion inicial
 
 Primer prototipo creado:
-- `tools/cnc_project_viewer_xp.py`
+- `cnc_traceability/viewer_xp.py`
 
 Decision tecnica inicial:
 - usar Tkinter y solo libreria estandar de Python;
@@ -499,7 +502,7 @@ Vista previa:
   `.gif` o `.png` compatibles con XP junto con los `.svg`.
 
 Validacion realizada:
-- `py -3 -m py_compile tools\cnc_project_viewer_xp.py`;
+- `py -3 -m py_compile cnc_traceability\viewer_xp.py`;
 - prueba de helpers con carpeta temporal:
   - normalizacion de indice;
   - escaneo de `.iso`;
@@ -558,9 +561,43 @@ Mapeo de pieza para la planilla:
 - si no puede asociarla, usa el nombre base del `.iso` como fallback.
 
 Validacion adicional:
-- `py -3 -m py_compile tools\cnc_project_viewer_xp.py`;
+- `py -3 -m py_compile cnc_traceability\viewer_xp.py`;
 - prueba con carpeta temporal que confirma:
   - lectura de `.iso`;
   - agrupacion por local/modulo;
   - asociacion contra `module_config.json`;
   - carga de nombre de pieza, dimensiones y observaciones.
+
+## Reorganizacion Como Subsistema - 2026-05-02
+
+Se separo el subsistema de trazabilidad CNC en:
+
+`cnc_traceability/`
+
+Nueva estructura:
+
+- `cnc_traceability/viewer_xp.py`
+  - aplicacion XP-compatible basada en Tkinter y libreria estandar.
+- `cnc_traceability/config/cnc_project_viewer_settings.json`
+  - configuracion local inicial.
+- `cnc_traceability/README.md`
+  - entrada corta al subsistema.
+- `cnc_traceability/docs/contract.md`
+  - contrato estable de responsabilidades, datos y reglas de seguridad.
+- `cnc_traceability/memory/current-state.md`
+  - esta memoria historica.
+
+Lectura de producto:
+
+- ya no se trata como un script suelto para visualizar ISO;
+- se lo define como herramienta auxiliar para registrar trazabilidad de
+  ejecucion en la PC del CNC;
+- sigue separado de la app principal porque debe conservar compatibilidad con
+  Windows XP 32 bits.
+
+Cambio tecnico aplicado:
+
+- la configuracion pasa a buscarse en una carpeta `config/` junto al ejecutable
+  o junto al script en desarrollo;
+- el titulo principal de la ventana pasa a `Trazabilidad CNC`;
+- el titulo de aplicacion pasa a `ProdAction CNC - Trazabilidad`.

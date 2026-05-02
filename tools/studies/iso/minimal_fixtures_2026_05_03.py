@@ -1,12 +1,15 @@
-"""Generate minimal PGMX fixtures for ISO reverse engineering.
+"""Archived minimal PGMX fixture batch for ISO reverse engineering.
 
 These fixtures are intentionally small and comparable: each file changes one
 variable at a time so Maestro-postprocessed ISO can reveal which value controls
 `%Or`, `SHF`, `MLV`, `ETK`, park moves, and compensation behavior.
 
+This module is retained for reproducibility of the 2026-05-03 minimal ISO
+study. It is not part of the day-to-day synthesis workflow.
+
 Recommended factory run:
 
-    python tools/generate_iso_minimal_fixtures.py --output-dir "S:\\Maestro\\Projects\\ProdAction\\ISO\\minimal_fixtures_2026-05-03"
+    python -m tools.studies.iso.minimal_fixtures_2026_05_03 --output-dir "S:\\Maestro\\Projects\\ProdAction\\ISO\\minimal_fixtures_2026-05-03"
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

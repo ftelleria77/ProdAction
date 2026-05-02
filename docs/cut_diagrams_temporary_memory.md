@@ -230,7 +230,7 @@ Hipotesis para optimizacion futura:
 ### Estrategia Experimental: Sin Veta Por Lado Mayor
 
 Se decidio no tocar `core/nesting.py` para esta prueba. La variante vive en
-`tools/cut_diagram_ordering_lab.py` como estrategia `no-grain-major-side`.
+`tools/studies/cut_diagrams/ordering_lab.py` como estrategia `no-grain-major-side`.
 
 En modos guillotina longitudinal/transversal, cuando una pieza no tiene veta
 (`PIECE_GRAIN_NONE`) la clave inicial de orden experimental es:
@@ -245,7 +245,7 @@ queda intacto hasta validar resultados comparativos.
 
 ## Herramienta Experimental De Comparacion
 
-Se agrego `tools/cut_diagram_ordering_lab.py` como laboratorio fuera del flujo
+Se agrego `tools/studies/cut_diagrams/ordering_lab.py` como laboratorio fuera del flujo
 principal.
 
 Objetivo:
@@ -260,7 +260,7 @@ Objetivo:
 Ejemplo usado para el caso Vargas:
 
 ```powershell
-python -m tools.cut_diagram_ordering_lab `
+python -m tools.studies.cut_diagrams.ordering_lab `
     --project-name "Prod 2026-02" `
     --material BCO18MDF `
     --thickness 18 `
@@ -313,7 +313,7 @@ Resultado inicial observado:
 Comando:
 
 ```powershell
-python -m tools.cut_diagram_ordering_lab `
+python -m tools.studies.cut_diagrams.ordering_lab `
     --project-name "Prod 2026-02" `
     --material BCO18MDF `
     --thickness 18 `
@@ -369,7 +369,7 @@ Metodologia:
 Comando:
 
 ```powershell
-python -m tools.cut_diagram_ordering_lab `
+python -m tools.studies.cut_diagrams.ordering_lab `
     --project-name "Prod 2026-02" `
     --material BCO18MDF `
     --thickness 18 `
@@ -414,7 +414,7 @@ Metodologia:
 Comando:
 
 ```powershell
-python -m tools.cut_diagram_ordering_lab `
+python -m tools.studies.cut_diagrams.ordering_lab `
     --project-name "Prod 2026-02" `
     --material BCO18MDF `
     --thickness 18 `
@@ -462,7 +462,7 @@ Metodologia:
 Comando:
 
 ```powershell
-python -m tools.cut_diagram_ordering_lab `
+python -m tools.studies.cut_diagrams.ordering_lab `
     --project-name "Prod 2026-02" `
     --material BCO18MDF `
     --thickness 18 `
@@ -621,7 +621,7 @@ Fuentes revisadas:
 
 Implementacion agregada:
 
-- packer `brkga-tail` en `tools/cut_diagram_ordering_lab.py`
+- packer `brkga-tail` en `tools/studies/cut_diagrams/ordering_lab.py`
 - cromosoma: claves aleatorias sobre la lista de piezas recibida
 - decoder: orden por clave y `pack_order_driven_guillotine(...)`
 - objetivo:
@@ -639,7 +639,7 @@ Prueba local inicial en `Prod-01-2026`, grupo `BCO18MDF 18mm`, tablero
 `1830 x 2600`, margen `10`, modo longitudinal:
 
 ```powershell
-python -m tools.cut_diagram_ordering_lab `
+python -m tools.studies.cut_diagrams.ordering_lab `
     --project-name "Prod-01-2026" `
     --material BCO18MDF `
     --thickness 18 `
@@ -669,7 +669,7 @@ Integracion al sistema principal:
   como default cuando el modo de optimizacion es longitudinal o transversal.
 - `app/ui.py` informa el metodo de guillotina usado al terminar la generacion.
 - El laboratorio queda como banco de pruebas; el flujo principal ya no depende
-  de `tools/cut_diagram_ordering_lab.py` para usar el algoritmo genetico.
+  de `tools/studies/cut_diagrams/ordering_lab.py` para usar el algoritmo genetico.
 
 Validacion inicial del flujo principal:
 
@@ -725,3 +725,23 @@ Ordenar esta memoria en secciones estables:
 - cambios propuestos
 
 Despues, construir una bateria de escenarios antes de modificar el motor.
+
+## Limpieza Del Laboratorio - 2026-05-02
+
+Se movio el laboratorio desde el nivel principal de `tools/` a:
+
+`tools/studies/cut_diagrams/ordering_lab.py`
+
+Motivo:
+
+- conservar el banco de pruebas reproducible;
+- dejar claro que no participa del flujo productivo principal;
+- evitar que el nivel principal de `tools/` acumule scripts experimentales.
+
+Comando vigente:
+
+```powershell
+python -m tools.studies.cut_diagrams.ordering_lab --help
+```
+
+La logica del laboratorio no se modifico en esta limpieza.
