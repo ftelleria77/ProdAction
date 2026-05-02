@@ -15,13 +15,15 @@ tener que leer todas las memorias historicas de una vez.
    - Estado del motor de diagramas de corte y algoritmos de guillotina.
 5. `cnc_traceability/README.md`
    - Entrada del subsistema de trazabilidad CNC compatible con Windows XP.
-6. `docs/iso_cnc_contract.md`
+6. `iso_generation/README.md`
+   - Entrada del subsistema experimental para futura traduccion `.pgmx -> .iso`.
+7. `docs/iso_cnc_contract.md`
    - Contrato CNC/ISO observado: configuracion Maestro, toolset, variables y
      huecos pendientes para un sintetizador ISO.
-7. `docs/iso_minimal_fixtures_plan.md`
+8. `docs/iso_minimal_fixtures_plan.md`
    - Plan de reanudacion para generar `.pgmx` minimos comparables en la compu
      de fabrica y postprocesarlos con Maestro.
-8. `docs/iso_synthesis_temporary_memory.md`
+9. `docs/iso_synthesis_temporary_memory.md`
    - Ingenieria inversa del flujo PGMX -> Maestro/postprocesador -> ISO.
 
 ## Mapa por tema
@@ -40,6 +42,7 @@ tener que leer todas las memorias historicas de una vez.
 | Diagramas de corte | `docs/cut_diagrams_temporary_memory.md` | `core/nesting.py` |
 | Laboratorio de corte | `docs/cut_diagrams_temporary_memory.md` | `tools/studies/cut_diagrams/ordering_lab.py` |
 | Trazabilidad CNC | `cnc_traceability/README.md`, `cnc_traceability/docs/contract.md`, `cnc_traceability/memory/current-state.md` | `cnc_traceability/viewer_xp.py` |
+| Generacion ISO experimental | `iso_generation/README.md`, `iso_generation/docs/contract.md`, `iso_generation/memory/current-state.md` | `iso_generation/` |
 | Contrato CNC/ISO | `docs/iso_cnc_contract.md`, `docs/iso_minimal_fixtures_plan.md`, `docs/iso_synthesis_temporary_memory.md` | `tools/studies/iso/minimal_fixtures_2026_05_03.py` |
 
 ## Reglas de mantenimiento
