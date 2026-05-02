@@ -5,7 +5,7 @@ en que orden conviene llamarla y que reglas de trabajo seguimos para no perder e
 hilo de lo ya validado en Maestro.
 
 Estado de hito actual:
-- sintetizador Maestro `v1.5`
+- sintetizador Maestro `v1.6`
 - constante publica de version: `tools.synthesize_pgmx.SYNTHESIZER_VERSION`
 
 ## 1. Alcance actual
@@ -1120,6 +1120,17 @@ Uso practico:
   - arco `0 -> 90`, luego linea vertical
 - horario:
   - arco `180 -> 270`, luego linea vertical
+
+Limitacion Maestro observada:
+
+- en polilineas abiertas de varios segmentos con estrategia `PH = 5`, Maestro
+  no postprocesa `Retract Arc + Up`;
+- el fallo ocurre en `MoveOnCompositeCurve` / `WritePointOnParameters` al crear
+  un punto cartesiano;
+- desde `SYNTHESIZER_VERSION = "1.6"`, `build_polyline_milling_spec(...)`
+  rechaza esa combinacion con `ValueError`;
+- para archivos que deban postprocesarse, usar `Retract Line + Up` o
+  `Arc + Quote` en esa familia.
 
 ## 5. Ejemplos de uso
 

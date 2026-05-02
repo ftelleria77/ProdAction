@@ -37,7 +37,7 @@ python main.py
 4. (Próximo paso) Ejecutar nesting con `core.nesting.first_fit_2d`
 
 ## Sintesis PGMX
-- Estado actual del sintetizador Maestro: `v1.5`
+- Estado actual del sintetizador Maestro: `v1.6`
 - Flujo unico de generacion `.pgmx`: `python -m tools.synthesize_pgmx`
 - Guia completa del sintetizador: `docs/synthesize_pgmx_help.md`
 - Guia del snapshot integral de `.pgmx`: `docs/pgmx_snapshot_help.md`
@@ -80,6 +80,7 @@ Estado validado hasta ahora en `tools.synthesize_pgmx`:
 - para `Retract Line + Up` ya esta volcada la regla observada en Maestro: una sola subida oblicua hacia un punto final desplazado segun la direccion de salida
 - para `Arc + Quote` ya esta volcada la regla observada en Maestro para entradas/salidas en sentido horario y antihorario, incluyendo el toolpath vertical cuando la estrategia esta deshabilitada
 - para `Retract Arc + Up` ya esta volcada la regla observada en Maestro: arco en plano vertical segun la direccion de salida, seguido de linea vertical, sin alterar `TrajectoryPath`
+- por limitacion de Maestro, `Retract Arc + Up` queda bloqueado en polilineas abiertas de varios segmentos con estrategia multipasada `PH`
 - esas reglas de entrada/salida ya quedaron unificadas sobre la tangente de entrada/salida del toolpath efectivo, no sobre una familia geometrica puntual
 - caso manual validado: escuadrado exterior con `E001`, pasante + `Extra=1`, `Approach Arc + Quote x2` y `Retract Arc + Quote x2`; hoy ya queda expuesto por `SquaringMillingSpec`, con 4 orientaciones validas de `MidEdgeStart`, ambas combinaciones exteriores `CounterClockwise + Right` / `Clockwise + Left`, y `origin_x/y/z` limitado a `WorkpieceSetup/Placement`
 

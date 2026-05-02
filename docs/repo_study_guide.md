@@ -14,7 +14,7 @@ cuatro frentes grandes:
 - herramienta separada para piso/CNC basada en archivos `.iso`.
 
 El sintetizador PGMX real vive en `tools/synthesize_pgmx.py` y expone
-`SYNTHESIZER_VERSION = "1.5"`.
+`SYNTHESIZER_VERSION = "1.6"`.
 
 ## Estructura principal
 

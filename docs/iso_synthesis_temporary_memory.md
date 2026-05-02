@@ -5204,3 +5204,231 @@ python tools/generate_iso_minimal_fixtures.py --output-dir "S:\Maestro\Projects\
   - despues de la tanda minima, repetir piezas equivalentes a `Pieza_092` a
     `Pieza_095` agregando estrategia `PH = 5` para cerrar el cruce
     `Left/Right + Down/Up + PH = 5`.
+
+## Tanda minima postprocesada - 2026-05-02
+
+- Se generaron 14 fixtures `ISO_MIN_*` en
+  `S:\Maestro\Projects\ProdAction\ISO\minimal_fixtures_2026-05-03`.
+- El usuario los postproceso con Maestro y copio 14 `.iso` a
+  `P:\USBMIX\ProdAction\ISO\minimal_fixtures_2026-05-03`.
+- La comparacion quedo consolidada en `docs/iso_minimal_fixtures_plan.md` y las
+  reglas estables se copiaron a `docs/iso_cnc_contract.md`.
+- Hallazgos principales:
+  - `DX/DY/DZ` de cabecera siguen `dimension + origin`.
+  - mover geometria solo cambia movimientos `G0/G1`.
+  - cambiar `width` no mueve `%Or[Y]` ni `SHF[Y]`.
+  - cambiar `length` mueve `%Or[X]` y `SHF[X]`.
+  - `origin_y` cambia el `SHF[Y]` operativo:
+    `-1515.600 + origin_y`.
+  - `%Or[0].ofY=-1515599.976` queda constante en toda la tanda.
+  - laterales D8 confirman `ETK[8]`, `ETK[6]`, mascaras `ETK[0]` y offsets
+    `SHF[MLV=2]` de los spindles `58..61`.
+  - E004 confirma el bloque router chico: `T4`, `ETK[9]=4`, `SVL=107.200`,
+    `SVR=2.000`.
+  - `PH=5` sobre linea centrada confirma pasadas por niveles, pero no cierra
+    la pregunta de compensacion porque no usa `SideOfFeature=Left/Right`.
+- Proximo paso recomendado:
+  - generar una segunda tanda chica para cerrar compensacion con E004:
+    lineas equivalentes a `Pieza_092..Pieza_095`, pero con `PH=5`, manteniendo
+    `Left/Right` y entradas/salidas `Line + Down/Up` y `Arc + Down/Up`.
+
+## Segunda tanda PH5 generada - 2026-05-02
+
+- Se generaron 4 `.pgmx` nuevos derivados de `Pieza_092..095`, agregando
+  estrategia unidireccional:
+  - `connection_mode = InPiece`;
+  - `axial_cutting_depth = 5.0`;
+  - `axial_finish_cutting_depth = 0.0`.
+- Carpeta de salida:
+  `S:\Maestro\Projects\ProdAction\ISO\ph5_compensation_2026-05-03`.
+- Carpeta preparada para recibir ISO postprocesados:
+  `P:\USBMIX\ProdAction\ISO\ph5_compensation_2026-05-03`.
+
+| Fixture | Base | Variable mantenida | SHA256 PGMX |
+| --- | --- | --- | --- |
+| `ISO_PH5_092_Left_LineDownUp.pgmx` | `Pieza_092.pgmx` | `Left + Line Down/Up` | `8f68dc2f8a35095957098797d63c78da98c6c08fbad1709929b56530fb691a45` |
+| `ISO_PH5_093_Right_LineDownUp.pgmx` | `Pieza_093.pgmx` | `Right + Line Down/Up` | `cae6c698ef0e9fd1e78d66ca501b13af6d99b4b3160a8d1a81b74822dc50d3ab` |
+| `ISO_PH5_094_Left_ArcDownUp.pgmx` | `Pieza_094.pgmx` | `Left + Arc Down/Up` | `f8789309231bb5306d9f5a01e403e06e320044ab94c25c41ffbd4b89c8499916` |
+| `ISO_PH5_095_Right_ArcDownUp.pgmx` | `Pieza_095.pgmx` | `Right + Arc Down/Up` | `c5f433495fdda32cb3be304ed137de8302d6731d1985665a4cade0fbfc1bb843` |
+
+- Validacion local:
+  - `manifest.csv` escrito.
+  - hashes del manifest contra disco: OK.
+  - adaptacion de los 4 `.pgmx`: `adapted=2`, `unsupported=0`,
+    `ignored=1`.
+- Pendiente inmediato:
+  - postprocesar esos cuatro `.pgmx` con Maestro.
+  - copiar los `.iso` resultantes a
+    `P:\USBMIX\ProdAction\ISO\ph5_compensation_2026-05-03`.
+  - comparar contra `pieza_092..pieza_095.iso` para confirmar si
+    `Left/Right + PH=5 + Down/Up` elimina `G41/G42` o mantiene compensacion CNC.
+
+## Segunda tanda PH5 parcialmente postprocesada - 2026-05-02
+
+- El usuario postproceso con Maestro dos de los cuatro fixtures:
+  - `iso_ph5_092_left_linedownup.iso`
+  - `iso_ph5_093_right_linedownup.iso`
+- Los dos fixtures `Arc + Down/Up` fallaron durante el postprocesado:
+  - `ISO_PH5_094_Left_ArcDownUp.pgmx`
+  - `ISO_PH5_095_Right_ArcDownUp.pgmx`
+- Logs copiados por el usuario:
+  - `P:\USBMIX\ProdAction\ISO\ph5_compensation_2026-05-03\Log\Log20260502_093307.logx`
+  - `P:\USBMIX\ProdAction\ISO\ph5_compensation_2026-05-03\Log\Log20260502_095136.logx`
+- Mensaje de error comun:
+  - `Imposible ejecutar el post processor debido a un error de valoracion del ejecutable.`
+  - `Error al crear un punto cartesiano.`
+  - `El numero del valor utilizado no es valido.`
+- Stack relevante:
+  - `GeomCartesianPoint..ctor(Double x, Double y, Double z)`
+  - `PostProcessor.LocalToGlobal(...)`
+  - `PostProcessor.WritePointOnParameters(...)`
+  - `PostProcessor.MoveOnCompositeCurve(...)`
+  - `PostProcessor.EvaluateToolPath()`
+- Validacion local de los cuatro `.pgmx`:
+  - no contienen marcadores `NaN` / `Infinity`;
+  - adaptan con `adapted=2`, `unsupported=0`, `ignored=1`;
+  - la unica diferencia material entre los exitosos y los fallidos es
+    `Approach/Retract = Arc + Down/Up`.
+- Conclusion sobre el fallo:
+  - el error no parece ser un `.pgmx` corrupto ni un valor invalido escrito por
+    el sintetizador.
+  - Maestro/postprocesador no logra valorar el toolpath cuando se combinan:
+    polilinea abierta E004, `SideOfFeature=Left/Right`, estrategia
+    unidireccional `PH=5`, y entrada/salida `Arc + Down/Up`.
+  - como los equivalentes sin `PH=5` (`Pieza_094/095`) si postprocesan, y los
+    equivalentes con `PH=5` pero `Line + Down/Up` tambien postprocesan, el
+    cruce problematico queda acotado a `Arc + Down/Up + PH=5`.
+
+Propiedades de los ISO exitosos:
+
+| ISO | Lineas | Bytes | SHA256 | Body SHA256 sin primera linea |
+| --- | ---: | ---: | --- | --- |
+| `iso_ph5_092_left_linedownup.iso` | `177` | `3357` | `3381D3703A8FE91A14C7350FAE2E52AD2ABC1E6AC21E0966F076C646E4101EDE` | `29A15B9DA6F14E9F22CF52DCBE94FEC5F56F8C815C3521959901A2FEB3CFC715` |
+| `iso_ph5_093_right_linedownup.iso` | `177` | `3354` | `F762AACFCC902F714FEDE2B6A467EF0565B69312A4E77E77E478AF5667603804` | `79A66CD5C631EA763D078A851D9567DCC92C2B6DE4D4BD170049BA6728761CCA` |
+
+- En ambos ISO hay un `G42`, pero pertenece al escuadrado E001 inicial.
+- En el bloque E004, despues de `T4`, no aparece `G41/G42`.
+- `Left + Line + Down/Up + PH=5` emite geometria compensada a la izquierda del
+  perfil nominal. Primeros puntos E004:
+  - `G0 X149.368 Y-4.427`
+  - `G1 X148.103 Y-0.632 Z-5.000`
+  - `G1 X98.103 Y149.368`
+  - `G2 X100.485 Y151.940 I100.000 J150.000`
+  - `G1 X296.951 Y102.824`
+  - `G1 X248.103 Y249.368`
+- `Right + Line + Down/Up + PH=5` emite geometria compensada a la derecha del
+  perfil nominal. Primeros puntos E004:
+  - `G0 X153.162 Y-3.162`
+  - `G1 X151.897 Y0.632 Z-5.000`
+  - `G1 X103.049 Y147.176`
+  - `G1 X299.515 Y98.060`
+  - `G3 X301.897 Y100.632 I300.000 J100.000`
+  - `G1 X251.897 Y250.632`
+- Esta tanda confirma la hipotesis para `Line + Down/Up`:
+  `Left/Right + PH=5` elimina la compensacion CNC `G41/G42` del bloque E004 y
+  pasa a coordenadas compensadas.
+
+## Tanda diagnostica Arc PH5 generada - 2026-05-02
+
+- Objetivo:
+  - aislar por que `Left/Right + Arc + Down/Up + PH=5` falla en Maestro con
+    `Error al crear un punto cartesiano`.
+  - separar si el problema viene de `Approach Arc Down`, `Retract Arc Up`,
+    `ArcSide=Automatic`, la compensacion `Left/Right`, o la polilinea abierta
+    con quiebres.
+- Carpeta de `.pgmx`:
+  `S:\Maestro\Projects\ProdAction\ISO\arc_ph5_diagnostics_2026-05-03`.
+- Carpeta preparada para recibir `.iso` y logs:
+  `P:\USBMIX\ProdAction\ISO\arc_ph5_diagnostics_2026-05-03`.
+- Todos los fixtures:
+  - usan pieza `400 x 250 x 18`, origen `(5, 5, 25)`, area `HG`;
+  - usan E004, `tool_width=4.0`, pasante con `Extra=0.5`;
+  - usan estrategia unidireccional `PH=5`, `connection_mode=InPiece`;
+  - no incluyen escuadrado E001, para aislar el bloque E004.
+- Validacion local:
+  - `manifest.csv` escrito.
+  - hashes del manifest contra disco: OK.
+  - adaptacion de los 10 `.pgmx`: `adapted=1`, `unsupported=0`,
+    `ignored=1`.
+  - no se encontraron marcadores `NaN` / `Infinity`.
+
+| Fixture | Pregunta que responde | SHA256 PGMX |
+| --- | --- | --- |
+| `ISO_DIAG_001_Center_Polyline_ArcDownUp_PH5.pgmx` | si `Arc Down/Up + PH5` falla aun sin compensacion lateral | `2bd09b8e461e5a882acd0ed47a5165dd84d8a18c7bfac6630f57535abe36e10a` |
+| `ISO_DIAG_002_Left_Polyline_ArcDownUp_PH5_NoSquare.pgmx` | si el fallo `Left` persiste sin escuadrado previo | `4f456e6486d63ed4040592ea4dc040c2e6a569f829c7c883e023b179d5f109c7` |
+| `ISO_DIAG_003_Right_Polyline_ArcDownUp_PH5_NoSquare.pgmx` | si el fallo `Right` persiste sin escuadrado previo | `f0620d3b634ad92d7b017090d96724216d0835b23c005ef1011d00a55efbdba7` |
+| `ISO_DIAG_004_Left_Polyline_ArcDown_LineUp_PH5.pgmx` | aislar `Approach Arc Down` con salida lineal | `8842e41d90ef0171fbb53ca0a6f3fe6bf3942d3acf349bb715c78593e3362490` |
+| `ISO_DIAG_005_Left_Polyline_LineDown_ArcUp_PH5.pgmx` | aislar `Retract Arc Up` con entrada lineal | `ee3debeb6872d8150f9a87f95f7dc04555836bbe7d302805ae6f1d13881e06b1` |
+| `ISO_DIAG_006_Left_Polyline_ArcDownUp_PH5_ArcSideLeft.pgmx` | probar si `ArcSide=Left` evita el fallo de `Automatic` | `26cbb71d4df2483709dafe563862410550f651f510d30274371ac5d72f4701f7` |
+| `ISO_DIAG_007_Left_Polyline_ArcDownUp_PH5_ArcSideRight.pgmx` | probar si `ArcSide=Right` evita el fallo de `Automatic` | `19d2b36071bbd71574fb2b5a7a986155800ca2f6a741c9398774aeee64285d64` |
+| `ISO_DIAG_008_Left_SimpleLine_ArcDownUp_PH5.pgmx` | si el problema tambien ocurre en linea simple `Left` | `92eb1cfee434b48d81a7ed13d6d56d953e7cbdd95c6f248123bf5aa4a1ff1231` |
+| `ISO_DIAG_009_Right_SimpleLine_ArcDownUp_PH5.pgmx` | si el problema tambien ocurre en linea simple `Right` | `46710697c769edd909c31c9fe84a91ef27dadeda9d2fcd8f2629148a73dc494e` |
+| `ISO_DIAG_010_Left_Polyline_ArcQuote_PH5.pgmx` | control con arcos pero sin Z integrada `Down/Up` | `89761c92cf9ae0d2b6f7f9adf6428aa91f45b127e0d6651b9e51039b60dd51e8` |
+
+- Proximo paso:
+  - postprocesar los 10 `.pgmx` con Maestro.
+  - copiar los `.iso` que salgan y los logs de error a
+    `P:\USBMIX\ProdAction\ISO\arc_ph5_diagnostics_2026-05-03`.
+  - si hay fallos, conservar nombre de fixture o timestamp de intento para
+    mapear cada log al archivo probado.
+
+## Tanda diagnostica Arc PH5 postprocesada - 2026-05-02
+
+- El usuario postproceso la tanda diagnostica
+  `arc_ph5_diagnostics_2026-05-03`.
+- Solo 4 de los 10 fixtures generaron ISO:
+  - `iso_diag_004_left_polyline_arcdown_lineup_ph5.iso`
+  - `iso_diag_008_left_simpleline_arcdownup_ph5.iso`
+  - `iso_diag_009_right_simpleline_arcdownup_ph5.iso`
+  - `iso_diag_010_left_polyline_arcquote_ph5.iso`
+- Los ISO y logs quedaron en:
+  `P:\USBMIX\ProdAction\ISO\arc_ph5_diagnostics_2026-05-03`.
+- La carpeta `Log` contiene logs acumulados de esta tanda y de intentos
+  anteriores. Los errores nuevos de esta tanda siguen el mismo stack:
+  - `GeomCartesianPoint..ctor(Double x, Double y, Double z)`
+  - `PostProcessor.LocalToGlobal(...)`
+  - `PostProcessor.WritePointOnParameters(...)`
+  - `PostProcessor.MoveOnCompositeCurve(...)`
+  - `PostProcessor.EvaluateToolPath()`
+  - mensaje final: `El numero del valor utilizado no es valido.`
+
+Resultado por fixture:
+
+| Fixture | Resultado | Lectura |
+| --- | --- | --- |
+| `ISO_DIAG_001_Center_Polyline_ArcDownUp_PH5` | falla | el fallo no depende de `Left/Right`; tambien ocurre en `Center` |
+| `ISO_DIAG_002_Left_Polyline_ArcDownUp_PH5_NoSquare` | falla | el fallo no depende del escuadrado E001 previo |
+| `ISO_DIAG_003_Right_Polyline_ArcDownUp_PH5_NoSquare` | falla | idem lado derecho |
+| `ISO_DIAG_004_Left_Polyline_ArcDown_LineUp_PH5` | postprocesa | `Approach Arc + Down` no es el disparador por si solo |
+| `ISO_DIAG_005_Left_Polyline_LineDown_ArcUp_PH5` | falla | `Retract Arc + Up` es suficiente para disparar el fallo en polilinea abierta |
+| `ISO_DIAG_006_Left_Polyline_ArcDownUp_PH5_ArcSideLeft` | falla | fijar `ArcSide=Left` no evita el fallo |
+| `ISO_DIAG_007_Left_Polyline_ArcDownUp_PH5_ArcSideRight` | falla | fijar `ArcSide=Right` no evita el fallo |
+| `ISO_DIAG_008_Left_SimpleLine_ArcDownUp_PH5` | postprocesa | una linea simple si tolera `Arc Down/Up + PH5` |
+| `ISO_DIAG_009_Right_SimpleLine_ArcDownUp_PH5` | postprocesa | idem lado derecho |
+| `ISO_DIAG_010_Left_Polyline_ArcQuote_PH5` | postprocesa | arcos con `Quote` no fallan; el problema es el `Up` integrado en Z |
+
+Propiedades de los ISO exitosos:
+
+| ISO | Lineas | Bytes | SHA256 | Body SHA256 sin primera linea |
+| --- | ---: | ---: | --- | --- |
+| `iso_diag_004_left_polyline_arcdown_lineup_ph5.iso` | `132` | `2629` | `C25EBB9450D4EDCC0D4DC38BBD13BCEA643E016A6927D992AAB96BDF0DB2B001` | `12011DF636D93163FAA916F22284AA0AC5A48E02CB47EF08252DBEE0D4993101` |
+| `iso_diag_008_left_simpleline_arcdownup_ph5.iso` | `112` | `1834` | `F2E46150C620D21C2F4AABA485FCEC3C3E1FBC35651242FCEAEA535EF28C4D2F` | `44BD281A9C98A9BE92EA0BBC732109287FC3F9CD7C880FBCD9C737E50EA4E8E6` |
+| `iso_diag_009_right_simpleline_arcdownup_ph5.iso` | `112` | `1839` | `8DAA62F5A4C0F297947C832AAB792B4A40E84AC0DCADA645BEB6A3744033EF0F` | `6B981422A8C70047A66CC0AA59582C187662372E36BB3B57BECFE6C937A3F7A9` |
+| `iso_diag_010_left_polyline_arcquote_ph5.iso` | `133` | `2665` | `E73030E37C1B3A15960323AF9F6DA12CF35EC3DE126EA82C6C6563EB76A0F4AA` | `38C59FF2956CBA8B5C5F4EE9591BA9507DD38554B1134D3B4416C8F4C174BC2E` |
+
+Conclusion:
+
+- En polilinea abierta de varios segmentos con estrategia `PH=5`,
+  `Retract Arc + Up` no es postprocesable por Maestro en los casos estudiados.
+- El fallo no depende de:
+  - `SideOfFeature=Left/Right`;
+  - `ArcSide=Automatic`;
+  - el escuadrado E001 previo;
+  - el `Approach Arc + Down` por si solo.
+- El fallo tampoco es una prohibicion general de arcos con `PH=5`:
+  - linea simple `Arc Down/Up + PH5` postprocesa;
+  - polilinea abierta `Arc Quote + PH5` postprocesa.
+- Regla practica para futuras sintesis postprocesables:
+  - evitar `Retract Arc + Up` en polilineas abiertas de varios segmentos cuando
+    se use estrategia `PH=5`.
+  - usar `Retract Line + Up` o `Arc + Quote` segun el caso.

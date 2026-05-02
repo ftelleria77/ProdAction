@@ -26,7 +26,7 @@ Soporte actual de mecanizados sinteticos:
 - `XnSpec`: operacion nula final para mover la herramienta sin mecanizar.
 
 Estado de hito:
-- la API publica del sintetizador queda establecida como `v1.5`
+- la API publica del sintetizador queda establecida como `v1.6`
 
 Soporte actual de geometria base reusable:
 - `build_point_geometry_profile(...)`
@@ -58,6 +58,8 @@ Hallazgos ya volcados en la sintesis:
 - Para `Retract Arc + Up` ya se sintetizo la salida observada en Maestro:
     `arco en un plano vertical + linea vertical`, sin alterar `TrajectoryPath`.
     La construccion ya cuelga del toolpath efectivo y su tangente de salida.
+- Por limitacion observada en Maestro, se bloquea `Retract Arc + Up` en
+    polilineas abiertas de varios segmentos con estrategia multipasada `PH`.
 """
 
 from __future__ import annotations
@@ -103,7 +105,7 @@ MODULE_DIR = _module_data_dir()
 DEFAULT_BASELINE_DIR = MODULE_DIR / "maestro_baselines"
 DEFAULT_BASELINE_XML_PATH = DEFAULT_BASELINE_DIR / "Pieza.xml"
 TOOL_CATALOG_PATH = Path(__file__).with_name("tool_catalog.csv")
-SYNTHESIZER_VERSION = "1.5"
+SYNTHESIZER_VERSION = "1.6"
 
 ET.register_namespace("", PGMX_NS)
 ET.register_namespace("i", XSI_NS)
@@ -2320,13 +2322,34 @@ def _is_closed_polyline_points(points: Sequence[tuple[float, float]]) -> bool:
     return len(normalized_points) >= 4 and _points_close_2d(normalized_points[0], normalized_points[-1])
 
 
+def _validate_polyline_postprocessable_by_maestro(spec: PolylineMillingSpec) -> None:
+    """Bloquea una combinacion que Maestro no logra postprocesar a ISO."""
+
+    points = _normalize_polyline_points(spec.points)
+    strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
+    retract = _normalize_retract_spec(spec.retract)
+    is_open_multisegment = len(points) > 2 and not _is_closed_polyline_points(points)
+    has_ph_multipass = bool(strategy and strategy.allow_multiple_passes)
+    uses_arc_up_retract = (
+        retract.is_enabled
+        and retract.retract_type == "Arc"
+        and retract.mode == "Up"
+    )
+    if is_open_multisegment and has_ph_multipass and uses_arc_up_retract:
+        raise ValueError(
+            "Maestro no postprocesa polilineas abiertas de varios segmentos con "
+            "estrategia multipasada PH y Retract Arc + Up. Usar Retract Line + Up "
+            "o Arc + Quote para obtener ISO postprocesable."
+        )
+
+
 def _normalize_polyline_milling_spec(polyline_milling: PolylineMillingSpec) -> PolylineMillingSpec:
     normalized_strategy = _ensure_milling_strategy_allowed(
         _normalize_milling_strategy_spec(polyline_milling.milling_strategy),
         allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
         context="PolylineMillingSpec",
     )
-    return replace(
+    normalized_spec = replace(
         polyline_milling,
         points=_normalize_polyline_points(polyline_milling.points),
         side_of_feature=_normalize_side_of_feature(polyline_milling.side_of_feature),
@@ -2335,6 +2358,8 @@ def _normalize_polyline_milling_spec(polyline_milling: PolylineMillingSpec) -> P
         retract=_normalize_retract_spec(polyline_milling.retract),
         milling_strategy=normalized_strategy,
     )
+    _validate_polyline_postprocessable_by_maestro(normalized_spec)
+    return normalized_spec
 
 
 def _normalize_circle_milling_spec(circle_milling: CircleMillingSpec) -> CircleMillingSpec:
@@ -8625,7 +8650,7 @@ def build_polyline_milling_spec(
         allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
         context="PolylineMillingSpec",
     )
-    return PolylineMillingSpec(
+    normalized_spec = PolylineMillingSpec(
         points=_normalize_polyline_points(points),
         feature_name=(feature_name or "Fresado").strip() or "Fresado",
         side_of_feature=_normalize_side_of_feature(side_of_feature),
@@ -8657,6 +8682,8 @@ def build_polyline_milling_spec(
         ),
         milling_strategy=normalized_strategy,
     )
+    _validate_polyline_postprocessable_by_maestro(normalized_spec)
+    return normalized_spec
 
 
 def build_circle_milling_spec(

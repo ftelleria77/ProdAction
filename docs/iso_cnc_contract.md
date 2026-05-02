@@ -295,6 +295,88 @@ Regla ya validada en la memoria ISO:
 - `BX/BY/BZ` quedaron en `0` en los casos estudiados.
 - `-HG` corresponde al area de ejecucion usada por los PGMX de estudio.
 
+## Reglas HG Confirmadas Por Fixtures Minimos
+
+La tanda `minimal_fixtures_2026-05-03` agrego 14 `.pgmx` minimos y sus 14
+`.iso` postprocesados por Maestro. Cada fixture cambio una sola variable para
+separar geometria, dimensiones y origen.
+
+Reglas confirmadas:
+
+- Mover solo la geometria `X/Y` de una operacion cambia los movimientos
+  operativos (`G0/G1 X... Y...`), pero no cambia `%Or`, `SHF`, `MLV` ni `ETK`.
+- En `HG`, `%Or[0].ofY=-1515599.976` se mantuvo constante al mover geometria,
+  al cambiar el ancho de panel y al cambiar `origin_y`.
+- El `SHF[Y]` inicial de `MLV=1` se mantuvo en `-1515.600`.
+- El `SHF[Y]` operativo de `MLV=1` sigue:
+  `SHF[Y] = -1515.600 + origin_y`.
+  Con `origin_y=5` dio `-1510.600`; con `origin_y=10` dio `-1505.600`.
+- Cambiar el ancho de panel `width` de `100` a `200` cambio `DY` y la
+  coordenada operativa, pero no `%Or[Y]` ni `SHF[Y]`.
+- Cambiar el largo de panel `length` de `100` a `200` cambio el marco X:
+  `DX=205.000`, `%Or[0].ofX=-205000.000`, `%Or[0].ofX` operativo
+  `-210000.000` y `SHF[X]=-205.000`.
+- Para los casos con `origin_x=5`, `%Or[0].ofX` inicial sigue
+  `-(length + origin_x) * 1000`; el `%Or[0].ofX` operativo queda 5000 unidades
+  mas negativo, consistente con sumar otra vez `origin_x`.
+- En esta tanda no aparecieron parqueos intermedios `G0 G53 Z149.500` ni
+  `G0 G53 Z149.450`; solo aparecieron el `Z` parametrico inicial, `Z201.000` y
+  `X-3700.000`.
+
+Mapeo lateral confirmado en fixtures D8:
+
+| Cara | `ETK[8]` | `ETK[6]` | `ETK[0]` | `SHF[MLV=2]` |
+| --- | ---: | ---: | ---: | --- |
+| `Left` | `3` | `61` | `2147483648` | `(-118.000, -32.000, 66.300)` |
+| `Right` | `2` | `60` | `2147483648` | `(-66.900, -32.000, 66.450)` |
+| `Front` | `5` | `58` | `1073741824` | `(32.000, -21.750, 66.500)` |
+| `Back` | `4` | `59` | `1073741824` | `(32.000, 29.500, 66.500)` |
+
+Router E004 en pieza minima:
+
+- `T4`, `M06`, `S18000M3`;
+- `?%ETK[6]=1`, `?%ETK[9]=4`, `?%ETK[7]=4`;
+- `SVL/VL6=107.200`;
+- `SVR/VL7=2.000`;
+- `SHF[MLV=2]=(32.050, -246.650, -125.300)`.
+
+La variante `PH=5` sobre linea E004 centrada no usa `G41/G42`; genera pasadas
+alternadas por niveles de profundidad. Como la linea estaba en
+`SideOfFeature=Center`, esto no cierra todavia el cruce de compensacion
+`Left/Right + PH=5`.
+
+La segunda tanda `ph5_compensation_2026-05-03` cerro parte de ese cruce:
+
+- `Left/Right + Line + Down/Up + PH=5` en polilinea abierta E004 postprocesa.
+- En el bloque E004 no aparece `G41/G42`; Maestro emite coordenadas ya
+  compensadas por lado.
+- `Left` y `Right` cambian coordenadas y arcos de enlace del perfil compensado,
+  no solo una bandera de corrector CNC.
+- `Left/Right + Arc + Down/Up + PH=5` no postprocesa en Maestro para la
+  polilinea abierta estudiada. El log falla en `MoveOnCompositeCurve` /
+  `WritePointOnParameters` al crear un `GeomCartesianPoint`, con mensaje
+  `El numero del valor utilizado no es valido`.
+- Los `.pgmx` fallidos adaptan sin material `unsupported` y no contienen
+  marcadores `NaN`/`Infinity`; por ahora el caso se clasifica como combinacion
+  no valorable por Maestro/postprocesador, no como archivo corrupto.
+
+La tanda diagnostica `arc_ph5_diagnostics_2026-05-03` acoto mejor la regla:
+
+- La combinacion que falla es polilinea abierta de varios segmentos con
+  estrategia `PH=5` y `Retract Arc + Up`.
+- El fallo tambien ocurre con `SideOfFeature=Center`, por lo que no depende de
+  `Left/Right`.
+- El fallo tambien ocurre sin escuadrado E001 previo.
+- Fijar `ArcSide=Left` o `ArcSide=Right` no evita el fallo.
+- `Approach Arc + Down` no falla por si solo: la variante
+  `Arc Down + Line Up + PH5` postprocesa.
+- Una linea simple `Left/Right + Arc Down/Up + PH5` postprocesa.
+- Una polilinea abierta con `Arc + Quote + PH5` postprocesa.
+
+Regla practica: para ISO postprocesable con Maestro, evitar `Retract Arc + Up`
+en polilineas abiertas de varios segmentos cuando se usa `PH=5`; usar
+`Retract Line + Up` o `Arc + Quote`.
+
 ## Huecos pendientes del contrato
 
 Para reemplazar Maestro/postprocesador por un sintetizador ISO nativo todavia
@@ -305,10 +387,10 @@ falta cerrar:
    En los configs copiados no aparece el nombre comercial de la maquina. Para
    cerrar esto haria falta una foto/placa/manual de la maquina o una copia mas
    directa de la configuracion del control.
-2. Regla completa de seleccion de campo/area `HG`. `fields.cfg` explica la
-   familia de valores `-1515`, pero falta saber que campo se selecciona para
-   cada pieza y que correccion produce exactamente `%Or[0].ofY=-1515599.976`,
-   `SHF[Y]=-1515.600` y `SHF[Y]=-1510.600`.
+2. Regla completa de seleccion de campo/area `HG`. Los fixtures minimos ya
+   separaron geometria, dimensiones y `origin_y`, pero todavia falta explicar
+   por que el campo elegido produce exactamente `%Or[0].ofY=-1515599.976` y
+   `SHF[Y]=-1515.600` desde `fields.cfg`/controlador.
 3. Significado formal de `MLV`, `%Or`, `%ETK[13]`, `%ETK[17]`, `%ETK[18]`,
    `%ETK[114]` y `%EDK`. Se conocen patrones de uso, pero no la semantica de
    controlador que garantice que un ISO sintetico sea equivalente.
