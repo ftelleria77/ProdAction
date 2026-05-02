@@ -92,9 +92,22 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   valores variables confirmados como `-2500`, `-2292` y `-3700`; el corpus aun
   no compara completo porque requiere familias pendientes como escuadrados,
   polilineas y combinaciones de ranura/fresado.
+- El 2026-05-02 se genero una tanda para investigar el origen de los parqueos
+  intermedios `G0 G53 Z149.xxx` en taladros laterales:
+  - generador reproducible:
+    `tools/studies/iso/side_g53_z_fixtures_2026_05_03.py`;
+  - `.pgmx` escritos en
+    `S:\Maestro\Projects\ProdAction\ISO\side_g53_z_fixtures_2026-05-03`;
+  - carpeta destino preparada para ISO Maestro:
+    `P:\USBMIX\ProdAction\ISO\side_g53_z_fixtures_2026-05-03`;
+  - matriz: 20 piezas, 10 con `400x300x25` y origen `(5,5,25)`, 10 con
+    `400x300x18` y origen `(10,10,40)`;
+  - cada pieza adapto con `unsupported=0`.
 
 ## Proximo Paso
 
-Probar nuevamente contra Maestro cuando este disponible el drive `S:` y luego
-avanzar con `Pieza_016+`; la siguiente frontera detectada son polilineas `E004`
-y luego escuadrados `E001`.
+Postprocesar en Maestro la tanda `side_g53_z_fixtures_2026-05-03`, copiar los
+ISO resultantes a la carpeta `P:` preparada y comparar los `G0 G53 Z149.xxx`
+contra dimensiones, origen, cara destino y posicion lateral. Luego avanzar con
+`Pieza_016+`; la siguiente frontera detectada son polilineas `E004` y luego
+escuadrados `E001`.
