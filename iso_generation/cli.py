@@ -12,7 +12,7 @@ from .comparator import (
     compare_iso_files,
     unified_diff,
 )
-from .emitter import emit_header_only
+from .emitter import emit_header_only, emit_iso_program
 from .model import to_jsonable
 from .pgmx_source import load_pgmx_iso_source
 
@@ -41,6 +41,19 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--warnings-json",
         action="store_true",
         help="Imprime advertencias como JSON despues de escribir la cabecera.",
+    )
+
+    emit_parser = subparsers.add_parser(
+        "emit",
+        help="Emite ISO para el subset operativo implementado.",
+    )
+    emit_parser.add_argument("pgmx_path")
+    emit_parser.add_argument("--program-name", help="Nombre del programa ISO.")
+    emit_parser.add_argument("--output", help="Archivo de salida.")
+    emit_parser.add_argument(
+        "--warnings-json",
+        action="store_true",
+        help="Imprime advertencias como JSON despues de escribir el ISO.",
     )
 
     compare_parser = subparsers.add_parser(
@@ -81,6 +94,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return _inspect_pgmx(args)
     if args.command == "emit-header":
         return _emit_header(args)
+    if args.command == "emit":
+        return _emit(args)
     if args.command == "compare":
         return _compare(args)
     parser.error(f"Comando no soportado: {args.command}")
@@ -116,6 +131,18 @@ def _inspect_pgmx(args: argparse.Namespace) -> int:
 def _emit_header(args: argparse.Namespace) -> int:
     source = load_pgmx_iso_source(Path(args.pgmx_path))
     program = emit_header_only(source, program_name=args.program_name)
+    if args.output:
+        program.write_text(Path(args.output))
+    else:
+        print(program.text(), end="")
+    if args.warnings_json:
+        print(json.dumps(to_jsonable(program.warnings), indent=2, ensure_ascii=False))
+    return 0
+
+
+def _emit(args: argparse.Namespace) -> int:
+    source = load_pgmx_iso_source(Path(args.pgmx_path))
+    program = emit_iso_program(source, program_name=args.program_name)
     if args.output:
         program.write_text(Path(args.output))
     else:

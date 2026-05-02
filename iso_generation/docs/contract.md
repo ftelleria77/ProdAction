@@ -81,6 +81,18 @@ El comparador debe poder:
 
 ## Estado De Emision
 
-Al crear este subsistema solo esta implementada la cabecera validada. Cualquier
-intento de emision completa debe fallar explicitamente hasta implementar las
-familias operativas del MVP.
+El primer paso operativo implementado cubre cabecera, marco `HG`, cierre
+estandar, piezas sin operaciones, bloques de taladros superiores
+(`Top DrillingSpec` y patrones `DrillingPatternSpec`) con herramientas
+verticales `001..007`, y bloques de taladros laterales D8 individuales y por
+patron en `Left`, `Right`, `Front` y `Back`. Las demas familias deben fallar
+explicitamente hasta que se agreguen al MVP.
+
+La primera validacion compara `ISO_MIN_001..006` y `ISO_MIN_010..013` contra
+los ISO Maestro postprocesados con normalizacion de nombre de programa, espacios
+y lineas vacias.
+
+La segunda validacion compara las piezas de `S:\Maestro\Projects\ProdAction\ISO`
+contra sus ISO Maestro en `P:\USBMIX\ProdAction\ISO`: `Pieza`, `Pieza_001`,
+`Pieza_002`, `Pieza_003`, `Pieza_004`, `Pieza_004_Repeticiones` y `Pieza_005`.
+Todas comparan con 0 diferencias normalizadas.
