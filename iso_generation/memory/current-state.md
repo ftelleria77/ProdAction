@@ -14,6 +14,8 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   - `tools/pgmx_adapters.py`.
 - La politica de herramientas especiales ya esta documentada en
   `docs/iso_cnc_contract.md`.
+- La configuracion dimensional de Maestro/Xilog debe ser fuente primaria para
+  herramientas, campos de trabajo y coordenadas propias de la maquina.
 
 ## Implementacion Creada
 
@@ -31,6 +33,12 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
     pasadas multiples.
 - `comparator.py` compara ISO Maestro vs candidato con normalizacion simple.
 - `cli.py` ofrece comandos de inspeccion, cabecera y comparacion.
+- `machine_config/` contiene el snapshot inicial de configuracion:
+  - `snapshot/maestro/Cfgx` desde `S:\Maestro\Cfgx`;
+  - `snapshot/maestro/Tlgx` desde `S:\Maestro\Tlgx`;
+  - `snapshot/xilog_plus` con archivos `.cfg`, `.ini`, `.str`, `.tab`, `.tlg`
+    y `.txt` desde `S:\Xilog Plus`;
+  - `snapshot/manifest.csv` con hashes SHA256.
 
 ## Validacion
 
@@ -67,5 +75,7 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
 
 ## Proximo Paso
 
-Probar el generador contra `Pieza_016+`; la siguiente frontera detectada son
-polilineas `E004` y luego escuadrados `E001`.
+Antes de seguir ampliando familias, crear lectores sobre
+`machine_config/snapshot` para reemplazar constantes dimensionales del emitter.
+Luego probar `Pieza_016+`; la siguiente frontera detectada son polilineas `E004`
+y luego escuadrados `E001`.

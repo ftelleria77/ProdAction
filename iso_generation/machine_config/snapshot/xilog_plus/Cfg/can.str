@@ -1,0 +1,1759 @@
+[STRUCT]
+
+KEY_CAN {
+    KEY_CAN0;
+    KEY_CAN1;
+}
+
+KEY_CAN0 {
+    KEY_RNODES,can_ring0;
+    KEY_ND,can_ring0.Node,can_ring0.can_drives;
+}
+KEY_CAN1 {
+    KEY_RNODES,can_ring1;
+    KEY_ND,can_ring1.Node,can_ring1.can_drives;
+}
+KEY_RNODES {
+    RG_ENAB;
+    SPACE;
+    RG_BAUD;
+    RG_SYNC;
+    #,RG_NODES;
+}
+
+KEY_ND {
+    ND_NODE;
+    if( CanProf==402 ) {
+        ?R-1,NDD_AXNAM;
+    }
+    ?R-1,NDD_DNAME,(104,50);
+    *,ND_PROFILE,  (+300,+0);
+    ?R-1,NDD_HVERS,(104,+20);
+    ND_GUARD,      (+300,+0);
+    ?R-1,NDD_SVERS,(104,+20);
+    ND_LIFE,       (+300,+0);
+
+    if( CanProf==301 ) {
+    SRV_LINE,    ( 0  , 140 );
+    SRV_HEADER1, ( 185, 150 );
+    SRV_HEADER2, ( 425, 150 );
+    NODE_FBCMD,(163,170);
+    SRV_ENABLE, (+120,+0);
+    $,?R-1,NODE_FBSTS, (+120,+0);
+    NODE_FBOBJ,(-240,+20);
+    $,?R-1,NODE_FBERR,(+240,+0);
+    NODE_FBIN0,(-240,+20);
+    SRV_RESET, (+120,+0);
+    $,?R-1,NODE_FBDT0,(+120,+0);
+    NODE_FBIN1,(-240,+20);
+    $,?R-1,NODE_FBDT1,(+240,+0);
+    NODE_FB0,(-240,+40);
+    $,?R-1,NODE_FB4,(+240,+0);
+    NODE_FB1,(-240,+20);
+    $,?R-1,NODE_FB5,(+240,+0);
+    NODE_FB2,(-240,+20);
+    $,?R-1,NODE_FB6,(+240,+0);
+    NODE_FB3,(-240,+20);
+    $,?R-1,NODE_FB7,(+240,+0);
+    SPACE,   (-240,+20);
+
+    PAR_LINE,    ( 0, 500);
+    KEY_PARSET1, (45, 520);
+    ND_NUMOBJS,  (+360,+0);
+    IXOBJ0,( 45,+20);
+    VXOBJ0,(+105,+0);
+    IXOBJ1,(+150,+0);
+    VXOBJ1,(+105,+0);
+    IXOBJ2,( 45,+20);
+    VXOBJ2,(+105,+0);
+    IXOBJ3,(+150,+0);
+    VXOBJ3,(+105,+0);
+    IXOBJ4,( 45,+20);
+    VXOBJ4,(+105,+0);
+    IXOBJ5,(+150,+0);
+    VXOBJ5,(+105,+0);
+    IXOBJ6,( 45,+20);
+    VXOBJ6,(+105,+0);
+    IXOBJ7,(+150,+0);
+    VXOBJ7,(+105,+0);
+    KEY_PARSET2, (45,+25);
+    IXOBJ8,( 45,+15); 
+    VXOBJ8,(+105,+0);
+    IXOBJ9,(+150,+0);
+    VXOBJ9,(+105,+0);
+    IXOBJ10,( 45,+20);
+    VXOBJ10,(+105,+0);
+    IXOBJ11,(+150,+0);
+    VXOBJ11,(+105,+0);
+    IXOBJ12,( 45,+20);
+    VXOBJ12,(+105,+0);
+    IXOBJ13,(+150,+0);
+    VXOBJ13,(+105,+0);
+    IXOBJ14,( 45,+20);
+    VXOBJ14,(+105,+0);
+    IXOBJ15,(+150,+0);
+    VXOBJ15,(+105,+0);
+    KEY_PARSET3, (45,+25);
+    IXOBJ16,( 45,+15);
+    VXOBJ16,(+105,+0);
+    IXOBJ17,(+150,+0);
+    VXOBJ17,(+105,+0);
+    IXOBJ18,( 45,+20);
+    VXOBJ18,(+105,+0);
+    IXOBJ19,(+150,+0);
+    VXOBJ19,(+105,+0);
+    IXOBJ20,( 45,+20);
+    VXOBJ20,(+105,+0);
+    IXOBJ21,(+150,+0);
+    VXOBJ21,(+105,+0);
+    IXOBJ22,( 45,+20);
+    VXOBJ22,(+105,+0);
+    IXOBJ23,(+150,+0);
+    VXOBJ23,(+105,+0);
+    KEY_PARSET4, (45,+25);
+    IXOBJ24,( 45,+15);
+    VXOBJ24,(+105,+0);
+    IXOBJ25,(+150,+0);
+    VXOBJ25,(+105,+0);
+    IXOBJ26,( 45,+20);
+    VXOBJ26,(+105,+0);
+    IXOBJ27,(+150,+0);
+    VXOBJ27,(+105,+0);
+    IXOBJ28,( 45,+20);
+    VXOBJ28,(+105,+0);
+    IXOBJ29,(+150,+0);
+    VXOBJ29,(+105,+0);
+    IXOBJ30,( 45,+20);
+    VXOBJ30,(+105,+0);
+    IXOBJ31,(+150,+0);
+    VXOBJ31,(+105,+0);
+    SPACE,  ( 45,+20);
+    }
+
+    if( CanProf==402 ) {
+    SPACE;
+    DR_TYPE0;
+    DR_SWIDE0;
+    DR_FEED0;
+    DR_SHAFT0;
+
+    PAR_LINE,    ( 0, 230);
+    KEY_PARSET1, (45, 250);
+    ND_NUMOBJS,  (+360,+0);
+    IXOBJ0,( 45,+20);
+    VXOBJ0,(+105,+0);
+    IXOBJ1,(+150,+0);
+    VXOBJ1,(+105,+0);
+    IXOBJ2,( 45,+20);
+    VXOBJ2,(+105,+0);
+    IXOBJ3,(+150,+0);
+    VXOBJ3,(+105,+0);
+    IXOBJ4,( 45,+20);
+    VXOBJ4,(+105,+0);
+    IXOBJ5,(+150,+0);
+    VXOBJ5,(+105,+0);
+    IXOBJ6,( 45,+20);
+    VXOBJ6,(+105,+0);
+    IXOBJ7,(+150,+0);
+    VXOBJ7,(+105,+0);
+    KEY_PARSET2, (45,+25);
+    IXOBJ8,( 45,+15); 
+    VXOBJ8,(+105,+0);
+    IXOBJ9,(+150,+0);
+    VXOBJ9,(+105,+0);
+    IXOBJ10,( 45,+20);
+    VXOBJ10,(+105,+0);
+    IXOBJ11,(+150,+0);
+    VXOBJ11,(+105,+0);
+    IXOBJ12,( 45,+20);
+    VXOBJ12,(+105,+0);
+    IXOBJ13,(+150,+0);
+    VXOBJ13,(+105,+0);
+    IXOBJ14,( 45,+20);
+    VXOBJ14,(+105,+0);
+    IXOBJ15,(+150,+0);
+    VXOBJ15,(+105,+0);
+    KEY_PARSET3, (45,+25);
+    IXOBJ16,( 45,+15);
+    VXOBJ16,(+105,+0);
+    IXOBJ17,(+150,+0);
+    VXOBJ17,(+105,+0);
+    IXOBJ18,( 45,+20);
+    VXOBJ18,(+105,+0);
+    IXOBJ19,(+150,+0);
+    VXOBJ19,(+105,+0);
+    IXOBJ20,( 45,+20);
+    VXOBJ20,(+105,+0);
+    IXOBJ21,(+150,+0);
+    VXOBJ21,(+105,+0);
+    IXOBJ22,( 45,+20);
+    VXOBJ22,(+105,+0);
+    IXOBJ23,(+150,+0);
+    VXOBJ23,(+105,+0);
+    KEY_PARSET4, (45,+25);
+    IXOBJ24,( 45,+15);
+    VXOBJ24,(+105,+0);
+    IXOBJ25,(+150,+0);
+    VXOBJ25,(+105,+0);
+    IXOBJ26,( 45,+20);
+    VXOBJ26,(+105,+0);
+    IXOBJ27,(+150,+0);
+    VXOBJ27,(+105,+0);
+    IXOBJ28,( 45,+20);
+    VXOBJ28,(+105,+0);
+    IXOBJ29,(+150,+0);
+    VXOBJ29,(+105,+0);
+    IXOBJ30,( 45,+20);
+    VXOBJ30,(+105,+0);
+    IXOBJ31,(+150,+0);
+    VXOBJ31,(+105,+0);
+
+    SRV_LINE,    ( 0  , 670 );
+    SRV_HEADER1, ( 185, 680 );
+    SRV_HEADER2, ( 425, 680 );
+    NODE_FBCMD,(163,700);
+    SRV_ENABLE, (+120,+0);
+    $,?R-1,NODE_FBSTS, (+120,+0);
+    NODE_FBOBJ,(-240,+20);
+    $,?R-1,NODE_FBERR,(+240,+0);
+    NODE_FBIN0,(-240,+20);
+    SRV_RESET, (+120,+0);
+    $,?R-1,NODE_FBDT0,(+120,+0);
+    NODE_FBIN1,(-240,+20);
+    $,?R-1,NODE_FBDT1,(+240,+0);
+    NODE_FB0,(-240,+40);
+    $,?R-1,NODE_FB4,(+240,+0);
+    NODE_FB1,(-240,+20);
+    $,?R-1,NODE_FB5,(+240,+0);
+    NODE_FB2,(-240,+20);
+    $,?R-1,NODE_FB6,(+240,+0);
+    NODE_FB3,(-240,+20);
+    $,?R-1,NODE_FB7,(+240,+0);
+    SPACE,   (-240,+20);
+    }
+
+    if( CanProf==406 ) {
+    SPACE;
+    EN_TYPE0;
+    EN_SWIDE0;
+    EN_FEED0;
+    EN_SHAFT0;
+    SPACE;
+    EN_TYPE1;
+    EN_SWIDE1;
+    EN_FEED1;
+    EN_SHAFT1;
+
+    PAR_LINE,    ( 0 ,330);
+    KEY_PARSET1, ( 45,350);
+    ND_NUMOBJS,  (+360,+0);
+    IXOBJ0,( 45,+20);
+    VXOBJ0,(+105,+0);
+    IXOBJ1,(+150,+0);
+    VXOBJ1,(+105,+0);
+    IXOBJ2,( 45,+20);
+    VXOBJ2,(+105,+0);
+    IXOBJ3,(+150,+0);
+    VXOBJ3,(+105,+0);
+    IXOBJ4,( 45,+20);
+    VXOBJ4,(+105,+0);
+    IXOBJ5,(+150,+0);
+    VXOBJ5,(+105,+0);
+    IXOBJ6,( 45,+20);
+    VXOBJ6,(+105,+0);
+    IXOBJ7,(+150,+0);
+    VXOBJ7,(+105,+0);
+    KEY_PARSET2, (45,+25);
+    IXOBJ8,( 45,+15); 
+    VXOBJ8,(+105,+0);
+    IXOBJ9,(+150,+0);
+    VXOBJ9,(+105,+0);
+    IXOBJ10,( 45,+20);
+    VXOBJ10,(+105,+0);
+    IXOBJ11,(+150,+0);
+    VXOBJ11,(+105,+0);
+    IXOBJ12,( 45,+20);
+    VXOBJ12,(+105,+0);
+    IXOBJ13,(+150,+0);
+    VXOBJ13,(+105,+0);
+    IXOBJ14,( 45,+20);
+    VXOBJ14,(+105,+0);
+    IXOBJ15,(+150,+0);
+    VXOBJ15,(+105,+0);
+    KEY_PARSET3, (45,+25);
+    IXOBJ16,( 45,+15);
+    VXOBJ16,(+105,+0);
+    IXOBJ17,(+150,+0);
+    VXOBJ17,(+105,+0);
+    IXOBJ18,( 45,+20);
+    VXOBJ18,(+105,+0);
+    IXOBJ19,(+150,+0);
+    VXOBJ19,(+105,+0);
+    IXOBJ20,( 45,+20);
+    VXOBJ20,(+105,+0);
+    IXOBJ21,(+150,+0);
+    VXOBJ21,(+105,+0);
+    IXOBJ22,( 45,+20);
+    VXOBJ22,(+105,+0);
+    IXOBJ23,(+150,+0);
+    VXOBJ23,(+105,+0);
+    KEY_PARSET4, (45,+25);
+    IXOBJ24,( 45,+15);
+    VXOBJ24,(+105,+0);
+    IXOBJ25,(+150,+0);
+    VXOBJ25,(+105,+0);
+    IXOBJ26,( 45,+20);
+    VXOBJ26,(+105,+0);
+    IXOBJ27,(+150,+0);
+    VXOBJ27,(+105,+0);
+    IXOBJ28,( 45,+20);
+    VXOBJ28,(+105,+0);
+    IXOBJ29,(+150,+0);
+    VXOBJ29,(+105,+0);
+    IXOBJ30,( 45,+20);
+    VXOBJ30,(+105,+0);
+    IXOBJ31,(+150,+0);
+    VXOBJ31,(+105,+0);
+
+    SRV_LINE,    ( 0  , 780 );
+    SRV_HEADER1, ( 185, 790 );
+    SRV_HEADER2, ( 425, 790 );
+    NODE_FBCMD,(163,810);
+    SRV_ENABLE, (+120,+0);
+    $,?R-1,NODE_FBSTS, (+120,+0);
+    NODE_FBOBJ,(-240,+20);
+    $,?R-1,NODE_FBERR,(+240,+0);
+    NODE_FBIN0,(-240,+20);
+    SRV_RESET, (+120,+0);
+    $,?R-1,NODE_FBDT0,(+120,+0);
+    NODE_FBIN1,(-240,+20);
+    $,?R-1,NODE_FBDT1,(+240,+0);
+    NODE_FB0,(-240,+40);
+    $,?R-1,NODE_FB4,(+240,+0);
+    NODE_FB1,(-240,+20);
+    $,?R-1,NODE_FB5,(+240,+0);
+    NODE_FB2,(-240,+20);
+    $,?R-1,NODE_FB6,(+240,+0);
+    NODE_FB3,(-240,+20);
+    $,?R-1,NODE_FB7,(+240,+0);
+    SPACE,   (-240,+20);
+    }
+
+    if( CanProf==401 ) {
+    ND_NUMDEV;
+    PDO1TY,(104,150);
+    PDO1TX,(+150,+0);
+    PDO1TM,(+150,+0);
+    PDO1IW1,(154,+25);
+    PDO1MP1,(+50,+0);
+    PDO1IW2,(+150,+0);
+    PDO1MP2,(+50,+0);
+    PDO1IW3,(154,+20);
+    PDO1MP3,(+50,+0);
+    PDO1IW4,(+150,+0);
+    PDO1MP4,(+50,+0);
+    PDO1IW5,(154,+20);
+    PDO1MP5,(+50,+0);
+    PDO1IW6,(+150,+0);
+    PDO1MP6,(+50,+0);
+    PDO1IW7,(154,+20);
+    PDO1MP7,(+50,+0);
+    PDO1IW8,(+150,+0);
+    PDO1MP8,(+50,+0);
+
+    PDO2TY,(104,+30); 
+    PDO2TX,(+150,+0); 
+    PDO2TM,(+150,+0); 
+    PDO2IW1,(154,+25);
+    PDO2MP1,(+50,+0); 
+    PDO2IW2,(+150,+0);
+    PDO2MP2,(+50,+0); 
+    PDO2IW3,(154,+20);
+    PDO2MP3,(+50,+0); 
+    PDO2IW4,(+150,+0);
+    PDO2MP4,(+50,+0); 
+    PDO2IW5,(154,+20);
+    PDO2MP5,(+50,+0); 
+    PDO2IW6,(+150,+0);
+    PDO2MP6,(+50,+0); 
+    PDO2IW7,(154,+20);
+    PDO2MP7,(+50,+0); 
+    PDO2IW8,(+150,+0);
+    PDO2MP8,(+50,+0); 
+
+    PDO3TY,(104,+30); 
+    PDO3TX,(+150,+0); 
+    PDO3TM,(+150,+0); 
+    PDO3IW1,(154,+25);
+    PDO3MP1,(+50,+0); 
+    PDO3IW2,(+150,+0);
+    PDO3MP2,(+50,+0); 
+    PDO3IW3,(154,+20);
+    PDO3MP3,(+50,+0); 
+    PDO3IW4,(+150,+0);
+    PDO3MP4,(+50,+0); 
+    PDO3IW5,(154,+20);
+    PDO3MP5,(+50,+0); 
+    PDO3IW6,(+150,+0);
+    PDO3MP6,(+50,+0); 
+    PDO3IW7,(154,+20);
+    PDO3MP7,(+50,+0); 
+    PDO3IW8,(+150,+0);
+    PDO3MP8,(+50,+0); 
+
+    PDO4TY,(104,+30); 
+    PDO4TX,(+150,+0); 
+    PDO4TM,(+150,+0); 
+    PDO4IW1,(154,+25);
+    PDO4MP1,(+50,+0); 
+    PDO4IW2,(+150,+0);
+    PDO4MP2,(+50,+0); 
+    PDO4IW3,(154,+20);
+    PDO4MP3,(+50,+0); 
+    PDO4IW4,(+150,+0);
+    PDO4MP4,(+50,+0); 
+    PDO4IW5,(154,+20);
+    PDO4MP5,(+50,+0); 
+    PDO4IW6,(+150,+0);
+    PDO4MP6,(+50,+0); 
+    PDO4IW7,(154,+20);
+    PDO4MP7,(+50,+0); 
+    PDO4IW8,(+150,+0);
+    PDO4MP8,(+50,+0); 
+
+    PDO5TY,(104,+30); 
+    PDO5TX,(+150,+0); 
+    PDO5TM,(+150,+0); 
+    PDO5IW1,(154,+25);
+    PDO5MP1,(+50,+0); 
+    PDO5IW2,(+150,+0);
+    PDO5MP2,(+50,+0); 
+    PDO5IW3,(154,+20);
+    PDO5MP3,(+50,+0); 
+    PDO5IW4,(+150,+0);
+    PDO5MP4,(+50,+0); 
+    PDO5IW5,(154,+20);
+    PDO5MP5,(+50,+0); 
+    PDO5IW6,(+150,+0);
+    PDO5MP6,(+50,+0); 
+    PDO5IW7,(154,+20);
+    PDO5MP7,(+50,+0); 
+    PDO5IW8,(+150,+0);
+    PDO5MP8,(+50,+0); 
+
+    PAR_LINE,    ( 0, 720);
+    KEY_PARSET1, (45, 740);
+    ND_NUMOBJS,  (+360,+0);
+    IXOBJ0,( 45,+20);
+    VXOBJ0,(+105,+0);
+    IXOBJ1,(+150,+0);
+    VXOBJ1,(+105,+0);
+    IXOBJ2,( 45,+20);
+    VXOBJ2,(+105,+0);
+    IXOBJ3,(+150,+0);
+    VXOBJ3,(+105,+0);
+    IXOBJ4,( 45,+20);
+    VXOBJ4,(+105,+0);
+    IXOBJ5,(+150,+0);
+    VXOBJ5,(+105,+0);
+    IXOBJ6,( 45,+20);
+    VXOBJ6,(+105,+0);
+    IXOBJ7,(+150,+0);
+    VXOBJ7,(+105,+0);
+    KEY_PARSET2, (45,+30);
+    IXOBJ8,( 45,+20); 
+    VXOBJ8,(+105,+0);
+    IXOBJ9,(+150,+0);
+    VXOBJ9,(+105,+0);
+    IXOBJ10,( 45,+20);
+    VXOBJ10,(+105,+0);
+    IXOBJ11,(+150,+0);
+    VXOBJ11,(+105,+0);
+    IXOBJ12,( 45,+20);
+    VXOBJ12,(+105,+0);
+    IXOBJ13,(+150,+0);
+    VXOBJ13,(+105,+0);
+    IXOBJ14,( 45,+20);
+    VXOBJ14,(+105,+0);
+    IXOBJ15,(+150,+0);
+    VXOBJ15,(+105,+0);
+    KEY_PARSET3, (45,+30);
+    IXOBJ16,( 45,+20);
+    VXOBJ16,(+105,+0);
+    IXOBJ17,(+150,+0);
+    VXOBJ17,(+105,+0);
+    IXOBJ18,( 45,+20);
+    VXOBJ18,(+105,+0);
+    IXOBJ19,(+150,+0);
+    VXOBJ19,(+105,+0);
+    IXOBJ20,( 45,+20);
+    VXOBJ20,(+105,+0);
+    IXOBJ21,(+150,+0);
+    VXOBJ21,(+105,+0);
+    IXOBJ22,( 45,+20);
+    VXOBJ22,(+105,+0);
+    IXOBJ23,(+150,+0);
+    VXOBJ23,(+105,+0);
+    KEY_PARSET4, (45,+30);
+    IXOBJ24,( 45,+20);
+    VXOBJ24,(+105,+0);
+    IXOBJ25,(+150,+0);
+    VXOBJ25,(+105,+0);
+    IXOBJ26,( 45,+20);
+    VXOBJ26,(+105,+0);
+    IXOBJ27,(+150,+0);
+    VXOBJ27,(+105,+0);
+    IXOBJ28,( 45,+20);
+    VXOBJ28,(+105,+0);
+    IXOBJ29,(+150,+0);
+    VXOBJ29,(+105,+0);
+    IXOBJ30,( 45,+20);
+    VXOBJ30,(+105,+0);
+    IXOBJ31,(+150,+0);
+    VXOBJ31,(+105,+0);
+
+    SRV_LINE,    ( 0  , 1190 );
+    SRV_HEADER1, ( 185, 1200 );
+    SRV_HEADER2, ( 425, 1200 );
+    NODE_FBCMD,(163,1220);
+    SRV_ENABLE, (+120,+0);
+    $,?R-1,NODE_FBSTS, (+120,+0);
+    NODE_FBOBJ,(-240,+20);
+    $,?R-1,NODE_FBERR,(+240,+0);
+    NODE_FBIN0,(-240,+20);
+    SRV_RESET, (+120,+0);
+    $,?R-1,NODE_FBDT0,(+120,+0);
+    NODE_FBIN1,(-240,+20);
+    $,?R-1,NODE_FBDT1,(+240,+0);
+    NODE_FB0,(-240,+40);
+    $,?R-1,NODE_FB4,(+240,+0);
+    NODE_FB1,(-240,+20);
+    $,?R-1,NODE_FB5,(+240,+0);
+    NODE_FB2,(-240,+20);
+    $,?R-1,NODE_FB6,(+240,+0);
+    NODE_FB3,(-240,+20);
+    $,?R-1,NODE_FB7,(+240,+0);
+    SPACE,   (-240,+20);
+    }
+    
+    if( CanProf==900 ) {
+    kRPDO1,(190,140);
+    kRPDO1o1,(+115,+0);
+    kRPDO1o2,(+100,+0);
+    kRPDO2,(190,+25);
+    kRPDO2o1,(+115,+0);
+    kRPDO2o2,(+100,+0);
+    kRPDO3,(190,+25);
+    kRPDO3o1,(+115,+0);
+    kRPDO3o2,(+100,+0);
+    kRPDO4,(190,+25);
+    kRPDO4o1,(+115,+0);
+    kRPDO4o2,(+100,+0);
+
+    kTPDO1,(85,+40);
+    kTPDO1TX,(+120,+0);
+    kTPDO1o1,(+100,+0);
+    kTPDO1o2,(+100,+0);
+    kTPDO2,(85,+25);
+    kTPDO2TX,(+120,+0);
+    kTPDO2o1,(+100,+0);
+    kTPDO2o2,(+100,+0);
+    kTPDO3,(85,+25);
+    kTPDO3TX,(+120,+0);
+    kTPDO3o1,(+100,+0);
+    kTPDO3o2,(+100,+0);
+    kTPDO4,(85,+25);
+    kTPDO4TX,(+120,+0);
+    kTPDO4o1,(+100,+0);
+    kTPDO4o2,(+100,+0);
+
+    SRV_LINE,    ( 0  , 380 );
+    SRV_HEADER1, ( 185, 390 );
+    SRV_HEADER2, ( 425, 390 );
+    NODE_FBCMD,(163,410);
+    SRV_ENABLE, (+120,+0);
+    $,?R-1,NODE_FBSTS, (+120,+0);
+    NODE_FBOBJ,(-240,+20);
+    $,?R-1,NODE_FBERR,(+240,+0);
+    NODE_FBIN0,(-240,+20);
+    SRV_RESET, (+120,+0);
+    $,?R-1,NODE_FBDT0,(+120,+0);
+    NODE_FBIN1,(-240,+20);
+    $,?R-1,NODE_FBDT1,(+240,+0);
+    NODE_FB0,(-240,+40);
+    $,?R-1,NODE_FB4,(+240,+0);
+    NODE_FB1,(-240,+20);
+    $,?R-1,NODE_FB5,(+240,+0);
+    NODE_FB2,(-240,+20);
+    $,?R-1,NODE_FB6,(+240,+0);
+    NODE_FB3,(-240,+20);
+    $,?R-1,NODE_FB7,(+240,+0);
+    SPACE,   (-240,+20);
+    }
+}
+
+[DEFAULT]
+MSK = 0, 32
+FRM = DEC, 0
+LEN = 10
+
+[RG_ENAB]
+ADR = can_enable
+FRM = HEX,4
+HLP = RG_ENAB
+RST = 1
+
+[RG_NODES]
+ADR = can_drives
+RNG = {0:60}
+HLP = RG_NODES
+RST = 1
+
+[RG_SYNC]
+ADR = can_sync
+RNG = {0:250}
+HLP = RG_SYNC
+
+[RG_BAUD]
+ADR = can_baud
+FRM = CBX,9
+RNG = {0:8}
+LST = RG_BAUDLIST
+HLP = RG_BAUD
+RST = 1
+
+[ND_NODE]
+ADR = CanNode
+RNG = {0:60}
+HLP = ND_NODE
+RST = 1
+
+[ND_PROFILE]
+ADR = CanProf
+FRM = CBX,6
+RNG = {0,301,401,402,406,900}
+LST = ND_PROFLIST
+HLP = ND_PROFILE
+
+[ND_LIFE]
+ADR = CanLife
+HLP = ND_LIFE
+RST = 1
+
+[ND_GUARD]
+ADR = CanGuard
+RNG = {1,2,3,4}
+FRM = CBX,4
+LST = ND_GUARDLIST
+RST = 1
+
+[ND_NUMDEV]
+ADR = CanDevs
+HLP = ND_NUMDEV
+RST = 1
+
+[ND_NUMOBJS]
+ADR = CanObjs
+FRM = HEX,4
+HLP = ND_NUMOBJS
+
+[DR_TYPE0]
+ADR = CanAx0.AxTy
+FRM = CBX,6
+RNG = {0,10,20,30,31,40}
+LST = DR_TYPELIST
+HLP = DR_TYPE0
+RST = 1
+[DR_SWIDE0]
+ADR = CanAx0.AxSw
+HLP = DR_SWIDE0
+RST = 1
+[DR_FEED0]
+ADR = CanAx0.AxFeed
+FRM = DEC, 3
+HLP = DR_FEED0
+RST = 1
+[DR_SHAFT0]
+ADR = CanAx0.AxShaft
+FRM = DEC, 0
+HLP = DR_SHAFT0
+RST = 1
+
+[EN_TYPE0]
+ADR = CanAx0.AxTy
+FRM = CBX,1
+RNG = {0}
+LST = EN_TYPELIST
+RST = 1
+[EN_SWIDE0]
+ADR = CanAx0.AxSw
+RST = 1
+[EN_FEED0]
+ADR = CanAx0.AxFeed
+FRM = DEC, 3
+RST = 1
+[EN_SHAFT0]
+ADR = CanAx0.AxShaft
+FRM = DEC, 0
+RST = 1
+[EN_TYPE1]
+ADR = CanAx1.AxTy
+FRM = CBX,1
+RNG = {0}
+LST = EN_TYPELIST
+RST = 1
+[EN_SWIDE1]
+ADR = CanAx1.AxSw
+RST = 1
+[EN_FEED1]
+ADR = CanAx1.AxFeed
+FRM = DEC, 3
+RST = 1
+[EN_SHAFT1]
+ADR = CanAx1.AxShaft
+FRM = DEC, 0
+RST = 1
+
+[PDO1TY]
+ADR = CanIo0.PdoTy
+FRM = CBX,3
+RNG = {0,32,33}
+LST = PDO_LIST
+[PDO1TX]
+ADR = CanIo0.PdoTx
+HLP = PDOTX
+[PDO1TM]
+ADR = CanIo0.PdoTm
+HLP = PDOTM
+[PDO1IW1]
+ADR = CanIo0.PdoIw0
+LEN = 3
+HLP = PDOIW1
+[PDO1MP1]
+ADR = CanIo0.PdoMp0
+FRM = HEX,4
+HLP = PDOMP1
+[PDO1IW2]
+ADR = CanIo0.PdoIw1
+LEN = 3
+HLP = PDOIW1
+[PDO1MP2]
+ADR = CanIo0.PdoMp1
+FRM = HEX,4
+HLP = PDOMP1
+[PDO1IW3]
+ADR = CanIo0.PdoIw2
+LEN = 3
+HLP = PDOIW1
+[PDO1MP3]
+ADR = CanIo0.PdoMp2
+FRM = HEX,4
+HLP = PDOMP1
+[PDO1IW4]
+ADR = CanIo0.PdoIw3
+LEN = 3
+HLP = PDOIW1
+[PDO1MP4]
+ADR = CanIo0.PdoMp3
+FRM = HEX,4
+HLP = PDOMP1
+[PDO1IW5]
+ADR = CanIo0.PdoIw4
+LEN = 3
+HLP = PDOIW1
+[PDO1MP5]
+ADR = CanIo0.PdoMp4
+FRM = HEX,4
+HLP = PDOMP1
+[PDO1IW6]
+ADR = CanIo0.PdoIw5
+LEN = 3
+HLP = PDOIW1
+[PDO1MP6]
+ADR = CanIo0.PdoMp5
+FRM = HEX,4
+HLP = PDOMP1
+[PDO1IW7]
+ADR = CanIo0.PdoIw6
+LEN = 3
+HLP = PDOIW1
+[PDO1MP7]
+ADR = CanIo0.PdoMp6
+FRM = HEX,4
+HLP = PDOMP1
+[PDO1IW8]
+ADR = CanIo0.PdoIw7
+LEN = 3
+HLP = PDOIW1
+[PDO1MP8]
+ADR = CanIo0.PdoMp7
+FRM = HEX,4
+HLP = PDOMP1
+
+[PDO2TY]
+ADR = CanIo1.PdoTy
+FRM = CBX,3
+RNG = {0,32,33}
+LST = PDO_LIST
+[PDO2TX]
+ADR = CanIo1.PdoTx
+HLP = PDOTX
+[PDO2TM]
+ADR = CanIo1.PdoTm
+HLP = PDOTM
+[PDO2IW1]
+ADR = CanIo1.PdoIw0
+HLP = PDOIW1
+LEN = 3
+HLP = PDOIW1
+[PDO2MP1]
+ADR = CanIo1.PdoMp0
+FRM = HEX,4
+HLP = PDOMP1
+[PDO2IW2]
+ADR = CanIo1.PdoIw1
+LEN = 3
+HLP = PDOIW1
+[PDO2MP2]
+ADR = CanIo1.PdoMp1
+FRM = HEX,4
+HLP = PDOMP1
+[PDO2IW3]
+ADR = CanIo1.PdoIw2
+LEN = 3
+HLP = PDOIW1
+[PDO2MP3]
+ADR = CanIo1.PdoMp2
+FRM = HEX,4
+HLP = PDOMP1
+[PDO2IW4]
+ADR = CanIo1.PdoIw3
+LEN = 3
+HLP = PDOIW1
+[PDO2MP4]
+ADR = CanIo1.PdoMp3
+FRM = HEX,4
+HLP = PDOMP1
+[PDO2IW5]
+ADR = CanIo1.PdoIw4
+LEN = 3
+HLP = PDOIW1
+[PDO2MP5]
+ADR = CanIo1.PdoMp4
+FRM = HEX,4
+HLP = PDOMP1
+[PDO2IW6]
+ADR = CanIo1.PdoIw5
+LEN = 3
+HLP = PDOIW1
+[PDO2MP6]
+ADR = CanIo1.PdoMp5
+FRM = HEX,4
+HLP = PDOMP1
+[PDO2IW7]
+ADR = CanIo1.PdoIw6
+LEN = 3
+HLP = PDOIW1
+[PDO2MP7]
+ADR = CanIo1.PdoMp6
+FRM = HEX,4
+HLP = PDOMP1
+[PDO2IW8]
+ADR = CanIo1.PdoIw7
+LEN = 3
+HLP = PDOIW1
+[PDO2MP8]
+ADR = CanIo1.PdoMp7
+FRM = HEX,4
+HLP = PDOMP1
+
+[PDO3TY]
+ADR = CanIo2.PdoTy
+FRM = CBX,3
+RNG = {0,32,33}
+LST = PDO_LIST
+[PDO3TX]
+ADR = CanIo2.PdoTx
+HLP = PDOTX
+[PDO3TM]
+ADR = CanIo2.PdoTm
+HLP = PDOTM
+[PDO3IW1]
+ADR = CanIo2.PdoIw0
+HLP = PDOIW1
+LEN = 3
+HLP = PDOIW1
+[PDO3MP1]
+ADR = CanIo2.PdoMp0
+FRM = HEX,4
+HLP = PDOMP1
+[PDO3IW2]
+ADR = CanIo2.PdoIw1
+LEN = 3
+HLP = PDOIW1
+[PDO3MP2]
+ADR = CanIo2.PdoMp1
+FRM = HEX,4
+HLP = PDOMP1
+[PDO3IW3]
+ADR = CanIo2.PdoIw2
+LEN = 3
+HLP = PDOIW1
+[PDO3MP3]
+ADR = CanIo2.PdoMp2
+FRM = HEX,4
+HLP = PDOMP1
+[PDO3IW4]
+ADR = CanIo2.PdoIw3
+LEN = 3
+HLP = PDOIW1
+[PDO3MP4]
+ADR = CanIo2.PdoMp3
+FRM = HEX,4
+HLP = PDOMP1
+[PDO3IW5]
+ADR = CanIo2.PdoIw4
+LEN = 3
+HLP = PDOIW1
+[PDO3MP5]
+ADR = CanIo2.PdoMp4
+FRM = HEX,4
+HLP = PDOMP1
+[PDO3IW6]
+ADR = CanIo2.PdoIw5
+LEN = 3
+HLP = PDOIW1
+[PDO3MP6]
+ADR = CanIo2.PdoMp5
+FRM = HEX,4
+HLP = PDOMP1
+[PDO3IW7]
+ADR = CanIo2.PdoIw6
+LEN = 3
+HLP = PDOIW1
+[PDO3MP7]
+ADR = CanIo2.PdoMp6
+FRM = HEX,4
+HLP = PDOMP1
+[PDO3IW8]
+ADR = CanIo2.PdoIw7
+LEN = 3
+HLP = PDOIW1
+[PDO3MP8]
+ADR = CanIo2.PdoMp7
+FRM = HEX,4
+HLP = PDOMP1
+
+[PDO4TY]
+ADR = CanIo3.PdoTy
+FRM = CBX,3
+RNG = {0,32,33}
+LST = PDO_LIST
+[PDO4TX]
+HLP = PDOTX
+ADR = CanIo3.PdoTx
+[PDO4TM]
+ADR = CanIo3.PdoTm
+HLP = PDOTM
+[PDO4IW1]
+ADR = CanIo3.PdoIw0
+HLP = PDOIW1
+LEN = 3
+HLP = PDOIW1
+[PDO4MP1]
+ADR = CanIo3.PdoMp0
+FRM = HEX,4
+HLP = PDOMP1
+[PDO4IW2]
+ADR = CanIo3.PdoIw1
+LEN = 3
+HLP = PDOIW1
+[PDO4MP2]
+ADR = CanIo3.PdoMp1
+FRM = HEX,4
+HLP = PDOMP1
+[PDO4IW3]
+ADR = CanIo3.PdoIw2
+LEN = 3
+HLP = PDOIW1
+[PDO4MP3]
+ADR = CanIo3.PdoMp2
+FRM = HEX,4
+HLP = PDOMP1
+[PDO4IW4]
+ADR = CanIo3.PdoIw3
+LEN = 3
+HLP = PDOIW1
+[PDO4MP4]
+ADR = CanIo3.PdoMp3
+FRM = HEX,4
+HLP = PDOMP1
+[PDO4IW5]
+ADR = CanIo3.PdoIw4
+LEN = 3
+HLP = PDOIW1
+[PDO4MP5]
+ADR = CanIo3.PdoMp4
+FRM = HEX,4
+HLP = PDOMP1
+[PDO4IW6]
+ADR = CanIo3.PdoIw5
+LEN = 3
+HLP = PDOIW1
+[PDO4MP6]
+ADR = CanIo3.PdoMp5
+FRM = HEX,4
+HLP = PDOMP1
+[PDO4IW7]
+ADR = CanIo3.PdoIw6
+LEN = 3
+HLP = PDOIW1
+[PDO4MP7]
+ADR = CanIo3.PdoMp6
+FRM = HEX,4
+HLP = PDOMP1
+[PDO4IW8]
+ADR = CanIo3.PdoIw7
+LEN = 3
+HLP = PDOIW1
+[PDO4MP8]
+ADR = CanIo3.PdoMp7
+FRM = HEX,4
+HLP = PDOMP1
+
+[PDO5TY]
+ADR = CanIo4.PdoTy
+FRM = CBX,3
+RNG = {0,32,33}
+LST = PDO_LIST
+[PDO5TX]
+HLP = PDOTX
+ADR = CanIo4.PdoTx
+[PDO5TM]
+ADR = CanIo4.PdoTm
+HLP = PDOTM
+[PDO5IW1]
+ADR = CanIo4.PdoIw0
+HLP = PDOIW1
+LEN = 3
+HLP = PDOIW1
+[PDO5MP1]
+ADR = CanIo4.PdoMp0
+FRM = HEX,4
+HLP = PDOMP1
+[PDO5IW2]
+ADR = CanIo4.PdoIw1
+LEN = 3
+HLP = PDOIW1
+[PDO5MP2]
+ADR = CanIo4.PdoMp1
+FRM = HEX,4
+HLP = PDOMP1
+[PDO5IW3]
+ADR = CanIo4.PdoIw2
+LEN = 3
+HLP = PDOIW1
+[PDO5MP3]
+ADR = CanIo4.PdoMp2
+FRM = HEX,4
+HLP = PDOMP1
+[PDO5IW4]
+ADR = CanIo4.PdoIw3
+LEN = 3
+HLP = PDOIW1
+[PDO5MP4]
+ADR = CanIo4.PdoMp3
+FRM = HEX,4
+HLP = PDOMP1
+[PDO5IW5]
+ADR = CanIo4.PdoIw4
+LEN = 3
+HLP = PDOIW1
+[PDO5MP5]
+ADR = CanIo4.PdoMp4
+FRM = HEX,4
+HLP = PDOMP1
+[PDO5IW6]
+ADR = CanIo4.PdoIw5
+LEN = 3
+HLP = PDOIW1
+[PDO5MP6]
+ADR = CanIo4.PdoMp5
+FRM = HEX,4
+HLP = PDOMP1
+[PDO5IW7]
+ADR = CanIo4.PdoIw6
+LEN = 3
+HLP = PDOIW1
+[PDO5MP7]
+ADR = CanIo4.PdoMp6
+FRM = HEX,4
+HLP = PDOMP1
+[PDO5IW8]
+ADR = CanIo4.PdoIw7
+LEN = 3
+HLP = PDOIW1
+[PDO5MP8]
+ADR = CanIo4.PdoMp7
+FRM = HEX,4
+HLP = PDOMP1
+
+
+
+
+
+
+
+
+[KEY_PARSET1]
+CLR = 7
+[KEY_PARSET2]
+CLR = 7
+[KEY_PARSET3]
+CLR = 7
+[KEY_PARSET4]
+CLR = 7
+
+[VXOBJ0]
+ADR = CanVx0
+HLP = VXOBJ0
+[IXOBJ0]
+ADR = CanIx0
+FRM = HEX,4
+HLP = IXOBJ0
+[VXOBJ1]
+ADR = CanVx1
+HLP = VXOBJ1
+[IXOBJ1]
+ADR = CanIx1
+FRM = HEX,4
+HLP = IXOBJ1
+[VXOBJ2]
+ADR = CanVx2
+HLP = VXOBJ2
+[IXOBJ2]
+ADR = CanIx2
+FRM = HEX,4
+HLP = IXOBJ2
+[VXOBJ3]
+ADR = CanVx3
+HLP = VXOBJ3
+[IXOBJ3]
+ADR = CanIx3
+FRM = HEX,4
+HLP = IXOBJ3
+[VXOBJ4]
+ADR = CanVx4
+HLP = VXOBJ4
+[IXOBJ4]
+ADR = CanIx4
+FRM = HEX,4
+HLP = IXOBJ4
+[VXOBJ5]
+ADR = CanVx5
+HLP = VXOBJ5
+[IXOBJ5]
+ADR = CanIx5
+FRM = HEX,4
+HLP = IXOBJ5
+[VXOBJ6]
+ADR = CanVx6
+HLP = VXOBJ6
+[IXOBJ6]
+ADR = CanIx6
+FRM = HEX,4
+HLP = IXOBJ6
+[VXOBJ7]
+ADR = CanVx7
+HLP = VXOBJ7
+[IXOBJ7]
+ADR = CanIx7
+FRM = HEX,4
+HLP = IXOBJ7
+[VXOBJ8]
+ADR = CanVx8
+HLP = VXOBJ8
+[IXOBJ8]
+ADR = CanIx8
+FRM = HEX,4
+HLP = IXOBJ8
+[VXOBJ9]
+ADR = CanVx9
+HLP = VXOBJ9
+[IXOBJ9]
+ADR = CanIx9
+FRM = HEX,4
+HLP = IXOBJ9
+[VXOBJ10]
+ADR = CanVx10
+HLP = VXOBJ10
+[IXOBJ10]
+ADR = CanIx10
+FRM = HEX,4
+HLP = IXOBJ10
+[VXOBJ11]
+ADR = CanVx11
+HLP = VXOBJ11
+[IXOBJ11]
+ADR = CanIx11
+FRM = HEX,4
+HLP = IXOBJ11
+[VXOBJ12]
+ADR = CanVx12
+HLP = VXOBJ12
+[IXOBJ12]
+ADR = CanIx12
+FRM = HEX,4
+HLP = IXOBJ12
+[VXOBJ13]
+ADR = CanVx13
+HLP = VXOBJ13
+[IXOBJ13]
+ADR = CanIx13
+FRM = HEX,4
+HLP = IXOBJ13
+[VXOBJ14]
+ADR = CanVx14
+HLP = VXOBJ14
+[IXOBJ14]
+ADR = CanIx14
+FRM = HEX,4
+HLP = IXOBJ14
+[VXOBJ15]
+ADR = CanVx15
+HLP = VXOBJ15
+[IXOBJ15]
+ADR = CanIx15
+FRM = HEX,4
+HLP = IXOBJ15
+[VXOBJ16]
+ADR = CanVx16
+HLP = VXOBJ16
+[IXOBJ16]
+ADR = CanIx16
+FRM = HEX,4
+HLP = IXOBJ16
+[VXOBJ17]
+ADR = CanVx17
+HLP = VXOBJ17
+[IXOBJ17]
+ADR = CanIx17
+FRM = HEX,4
+HLP = IXOBJ17
+[VXOBJ18]
+ADR = CanVx18
+HLP = VXOBJ18
+[IXOBJ18]
+ADR = CanIx18
+FRM = HEX,4
+HLP = IXOBJ18
+[VXOBJ19]
+ADR = CanVx19
+HLP = VXOBJ19
+[IXOBJ19]
+ADR = CanIx19
+FRM = HEX,4
+HLP = IXOBJ19
+[VXOBJ20]
+ADR = CanVx20
+HLP = VXOBJ20
+[IXOBJ20]
+ADR = CanIx20
+FRM = HEX,4
+HLP = IXOBJ20
+[VXOBJ21]
+ADR = CanVx21
+HLP = VXOBJ21
+[IXOBJ21]
+ADR = CanIx21
+FRM = HEX,4
+HLP = IXOBJ21
+[VXOBJ22]
+ADR = CanVx22
+HLP = VXOBJ22
+[IXOBJ22]
+ADR = CanIx22
+FRM = HEX,4
+HLP = IXOBJ22
+[VXOBJ23]
+ADR = CanVx23
+HLP = VXOBJ23
+[IXOBJ23]
+ADR = CanIx23
+FRM = HEX,4
+HLP = IXOBJ23
+[VXOBJ24]
+ADR = CanVx24
+HLP = VXOBJ24
+[IXOBJ24]
+ADR = CanIx24
+FRM = HEX,4
+HLP = IXOBJ24
+[VXOBJ25]
+ADR = CanVx25
+HLP = VXOBJ25
+[IXOBJ25]
+ADR = CanIx25
+FRM = HEX,4
+HLP = IXOBJ25
+[VXOBJ26]
+ADR = CanVx26
+HLP = VXOBJ26
+[IXOBJ26]
+ADR = CanIx26
+FRM = HEX,4
+HLP = IXOBJ26
+[VXOBJ27]
+ADR = CanVx27
+HLP = VXOBJ27
+[IXOBJ27]
+ADR = CanIx27
+FRM = HEX,4
+HLP = IXOBJ27
+[VXOBJ28]
+ADR = CanVx28
+HLP = VXOBJ28
+[IXOBJ28]
+ADR = CanIx28
+FRM = HEX,4
+HLP = IXOBJ28
+[VXOBJ29]
+ADR = CanVx29
+HLP = VXOBJ29
+[IXOBJ29]
+ADR = CanIx29
+FRM = HEX,4
+HLP = IXOBJ29
+[VXOBJ30]
+ADR = CanVx30
+HLP = VXOBJ30
+[IXOBJ30]
+ADR = CanIx30
+FRM = HEX,4
+HLP = IXOBJ30
+[VXOBJ31]
+ADR = CanVx31
+HLP = VXOBJ31
+[IXOBJ31]
+ADR = CanIx31
+FRM = HEX,4
+HLP = IXOBJ31
+
+[HVOBJ0]
+ADR = CanVx0
+FRM = HEX,4
+[HIOBJ0]
+ADR = CanIx0
+FRM = HEX,4
+[HVOBJ1]
+ADR = CanVx1
+FRM = HEX,4
+[HIOBJ1]
+ADR = CanIx1
+FRM = HEX,4
+[HVOBJ2]
+ADR = CanVx2
+FRM = HEX,4
+[HIOBJ2]
+ADR = CanIx2
+FRM = HEX,4
+[HVOBJ3]
+ADR = CanVx3
+FRM = HEX,4
+[HIOBJ3]
+ADR = CanIx3
+FRM = HEX,4
+[HVOBJ4]
+ADR = CanVx4
+FRM = HEX,4
+[HIOBJ4]
+ADR = CanIx4
+FRM = HEX,4
+[HVOBJ5]
+ADR = CanVx5
+FRM = HEX,4
+[HIOBJ5]
+ADR = CanIx5
+FRM = HEX,4
+[HVOBJ6]
+ADR = CanVx6
+FRM = HEX,4
+[HIOBJ6]
+ADR = CanIx6
+FRM = HEX,4
+[HVOBJ7]
+ADR = CanVx7
+FRM = HEX,4
+[HIOBJ7]
+ADR = CanIx7
+FRM = HEX,4
+[HVOBJ8]
+ADR = CanVx8
+FRM = HEX,4
+[HIOBJ8]
+ADR = CanIx8
+FRM = HEX,4
+[HVOBJ9]
+ADR = CanVx9
+FRM = HEX,4
+[HIOBJ9]
+ADR = CanIx9
+FRM = HEX,4
+[HVOBJ10]
+ADR = CanVx10
+FRM = HEX,4
+[HIOBJ10]
+ADR = CanIx10
+FRM = HEX,4
+[HVOBJ11]
+ADR = CanVx11
+FRM = HEX,4
+[HIOBJ11]
+ADR = CanIx11
+FRM = HEX,4
+[HVOBJ12]
+ADR = CanVx12
+FRM = HEX,4
+[HIOBJ12]
+ADR = CanIx12
+FRM = HEX,4
+[HVOBJ13]
+ADR = CanVx13
+FRM = HEX,4
+[HIOBJ13]
+ADR = CanIx13
+FRM = HEX,4
+[HVOBJ14]
+ADR = CanVx14
+FRM = HEX,4
+[HIOBJ14]
+ADR = CanIx14
+FRM = HEX,4
+[HVOBJ15]
+ADR = CanVx15
+FRM = HEX,4
+[HIOBJ15]
+ADR = CanIx15
+FRM = HEX,4
+[HVOBJ16]
+ADR = CanVx16
+FRM = HEX,4
+[HIOBJ16]
+ADR = CanIx16
+FRM = HEX,4
+[HVOBJ17]
+ADR = CanVx17
+FRM = HEX,4
+[HIOBJ17]
+ADR = CanIx17
+FRM = HEX,4
+[HVOBJ18]
+ADR = CanVx18
+FRM = HEX,4
+[HIOBJ18]
+ADR = CanIx18
+FRM = HEX,4
+[HVOBJ19]
+ADR = CanVx19
+FRM = HEX,4
+[HIOBJ19]
+ADR = CanIx19
+FRM = HEX,4
+[HVOBJ20]
+ADR = CanVx20
+FRM = HEX,4
+[HIOBJ20]
+ADR = CanIx20
+FRM = HEX,4
+[HVOBJ21]
+ADR = CanVx21
+FRM = HEX,4
+[HIOBJ21]
+ADR = CanIx21
+FRM = HEX,4
+[HVOBJ22]
+ADR = CanVx22
+FRM = HEX,4
+[HIOBJ22]
+ADR = CanIx22
+FRM = HEX,4
+[HVOBJ23]
+ADR = CanVx23
+FRM = HEX,4
+[HIOBJ23]
+ADR = CanIx23
+FRM = HEX,4
+[HVOBJ24]
+ADR = CanVx24
+FRM = HEX,4
+[HIOBJ24]
+ADR = CanIx24
+FRM = HEX,4
+[HVOBJ25]
+ADR = CanVx25
+FRM = HEX,4
+[HIOBJ25]
+ADR = CanIx25
+FRM = HEX,4
+[HVOBJ26]
+ADR = CanVx26
+FRM = HEX,4
+[HIOBJ26]
+ADR = CanIx26
+FRM = HEX,4
+[HVOBJ27]
+ADR = CanVx27
+FRM = HEX,4
+[HIOBJ27]
+ADR = CanIx27
+FRM = HEX,4
+[HVOBJ28]
+ADR = CanVx28
+FRM = HEX,4
+[HIOBJ28]
+ADR = CanIx28
+FRM = HEX,4
+[HVOBJ29]
+ADR = CanVx29
+FRM = HEX,4
+[HIOBJ29]
+ADR = CanIx29
+FRM = HEX,4
+[HVOBJ30]
+ADR = CanVx30
+FRM = HEX,4
+[HIOBJ30]
+ADR = CanIx30
+FRM = HEX,4
+[HVOBJ31]
+ADR = CanVx31
+FRM = HEX,4
+[HIOBJ31]
+ADR = CanIx31
+FRM = HEX,4
+
+[SRV_HEADER1]
+CLR = 7
+[SRV_HEADER2]
+CLR = 7
+[NDD_AXNAM]
+ADR = CanAName
+FRM = STR
+LEN = 10
+[NDD_DNAME]
+ADR = CanDName
+FRM = STR
+LEN = 18
+[NDD_HVERS]
+ADR = CanHVers
+FRM = STR
+LEN = 18
+[NDD_SVERS]
+ADR = CanSVers
+FRM = STR
+LEN = 18
+
+//=========================Diagnostic============
+// CanFB Command
+[NODE_FBCMD]
+ADR = CanFb59
+FRM = CBX,11
+RNG = {0:10}
+LST = ND_FBLIST
+[NODE_FBOBJ]
+ADR = CanFb58
+FRM = HEX,4
+[NODE_FBIN0]
+ADR = CanFb56
+[NODE_FBIN1]
+ADR = CanFb57
+FRM = HEX,4
+
+// CanFB Status
+[NODE_FBSTS]
+ADR = CanFb60
+FRM = HEX,4
+[NODE_FBERR]
+ADR = CanFb61
+FRM = HEX,4
+[NODE_FBDT0]
+ADR = CanFb62
+FRM = HEX,4
+[NODE_FBDT1]
+ADR = CanFb63
+FRM = HEX,4
+
+// CanFB Data
+[NODE_FB0]
+ADR = CanFb0
+FRM = HEX,4
+[NODE_FB1]
+ADR = CanFb1
+FRM = HEX,4
+[NODE_FB2]
+ADR = CanFb2
+FRM = HEX,4
+[NODE_FB3]
+ADR = CanFb3
+FRM = HEX,4
+[NODE_FB4]
+ADR = CanFb4
+FRM = HEX,4
+[NODE_FB5]
+ADR = CanFb5
+FRM = HEX,4
+[NODE_FB6]
+ADR = CanFb6
+FRM = HEX,4
+[NODE_FB7]
+ADR = CanFb7
+FRM = HEX,4
+
+[SRV_ENABLE]
+ADR = CanFb59
+MSK = 29,1
+FRM = BTN,1
+HGH = 20
+LEN = 2
+TBS = 1
+
+[SRV_RESET]
+ADR = CanFb59
+MSK = 28,1
+FRM = BTN,1
+HGH = 20
+LEN = 2
+TBS = 1
+
+[SRV_LINE]
+LEN = 150
+HGH = 5
+FRM = GBX
+DTX = RGB(0,0,255)
+
+[PAR_LINE]
+LEN = 150
+HGH = 5
+FRM = GBX
+DTX = RGB(0,0,255)
+
+[kRPDO1]
+ADR = CanIo0.PdoTy
+FRM = CBX,2
+LEN = 5
+RNG = {0,32}
+LST = kRPDOLIST
+[kRPDO1o1]
+ADR = CanIo0.PdoIw0
+HLP = kRPDO1o1
+[kRPDO1o2]
+ADR = CanIo0.PdoIw1
+HLP = kRPDO1o1
+
+[kRPDO2]
+ADR = CanIo1.PdoTy
+FRM = CBX,2
+LEN = 5
+RNG = {0,32}
+LST = kRPDOLIST
+[kRPDO2o1]
+ADR = CanIo1.PdoIw0
+HLP = kRPDO1o1
+[kRPDO2o2]
+ADR = CanIo1.PdoIw1
+HLP = kRPDO1o1
+
+[kRPDO3]
+ADR = CanIo2.PdoTy
+FRM = CBX,2
+LEN = 5
+RNG = {0,32}
+LST = kRPDOLIST
+[kRPDO3o1]
+ADR = CanIo2.PdoIw0
+HLP = kRPDO1o1
+[kRPDO3o2]
+ADR = CanIo2.PdoIw1
+HLP = kRPDO1o1
+
+[kRPDO4]
+ADR = CanIo3.PdoTy
+FRM = CBX,2
+LEN = 5
+RNG = {0,32}
+LST = kRPDOLIST
+[kRPDO4o1]
+ADR = CanIo3.PdoIw0
+HLP = kRPDO1o1
+[kRPDO4o2]
+ADR = CanIo3.PdoIw1
+HLP = kRPDO1o1
+
+[kTPDO1]
+ADR = CanIo4.PdoTy
+FRM = CBX,2
+LEN = 5
+RNG = {0,33}
+LST = kRPDOLIST
+[kTPDO1TX]
+ADR = CanIo4.PdoTx
+HLP = kTPDOTX
+LEN = 3
+[kTPDO1o1]
+ADR = CanIo4.PdoIw0
+HLP = kRPDO1o1
+[kTPDO1o2]
+ADR = CanIo4.PdoIw1
+HLP = kRPDO1o1
+
+[kTPDO2]
+ADR = CanIo5.PdoTy
+FRM = CBX,2
+LEN = 5
+RNG = {0,33}
+LST = kRPDOLIST
+[kTPDO2TX]
+ADR = CanIo5.PdoTx
+HLP = kTPDOTX
+LEN = 3
+[kTPDO2o1]
+ADR = CanIo5.PdoIw0
+HLP = kRPDO1o1
+[kTPDO2o2]
+ADR = CanIo5.PdoIw1
+HLP = kRPDO1o1
+
+[kTPDO3]
+ADR = CanIo6.PdoTy
+FRM = CBX,2
+LEN = 5
+RNG = {0,33}
+LST = kRPDOLIST
+[kTPDO3TX]
+ADR = CanIo6.PdoTx
+HLP = kTPDOTX
+LEN = 3
+[kTPDO3o1]
+ADR = CanIo6.PdoIw0
+HLP = kRPDO1o1
+[kTPDO3o2]
+ADR = CanIo6.PdoIw1
+HLP = kRPDO1o1
+
+[kTPDO4]
+ADR = CanIo7.PdoTy
+FRM = CBX,2
+LEN = 5
+RNG = {0,33}
+LST = kRPDOLIST
+[kTPDO4TX]
+ADR = CanIo7.PdoTx
+HLP = kTPDOTX
+LEN = 3
+[kTPDO4o1]
+ADR = CanIo7.PdoIw0
+HLP = kRPDO1o1
+[kTPDO4o2]
+ADR = CanIo7.PdoIw1
+HLP = kRPDO1o1
+

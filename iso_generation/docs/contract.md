@@ -30,6 +30,25 @@ No debe:
 - Snapshot PGMX: `tools/pgmx_snapshot.py`.
 - Adaptacion PGMX: `tools/pgmx_adapters.py`.
 - Toolset normalizado: `tools/tool_catalog.csv`.
+- Configuracion de Maestro/Xilog: `iso_generation/machine_config/snapshot`.
+
+## Politica De Configuracion De Maquina
+
+El generador ISO debe usar los archivos de configuracion de Maestro y de la
+maquina como fuente dimensional para herramientas, cabezales, offsets, campos de
+trabajo, coordenadas de parqueo y parametros propios de operacion:
+
+- `S:\Maestro\Cfgx`;
+- `S:\Maestro\Tlgx`;
+- `S:\Xilog Plus`.
+
+El repo mantiene un snapshot inicial en `iso_generation/machine_config/snapshot`
+y un script de sincronizacion en
+`iso_generation/machine_config/sync_machine_config.ps1`. Cuando la maquina se
+calibra, ese snapshot debe reemplazarse desde las rutas fuente. Las constantes
+inferidas de ISO Maestro no deben crecer como fuente definitiva; si un valor
+esta disponible en configuracion, el codigo debe leerlo desde el snapshot o
+fallar explicitamente hasta que exista el lector correspondiente.
 
 ## Politica De Herramientas
 
@@ -90,6 +109,11 @@ horizontal `082` en `Top` con correcciones laterales observadas, y fresado
 lineal `E004` en `Top` horizontal o vertical, con corte simple y estrategia PH5
 observada con pasadas multiples. Las demas familias deben fallar explicitamente
 hasta que se agreguen al MVP.
+
+Nota de deuda tecnica: parte de `emitter.py` todavia contiene constantes
+aprendidas por comparacion ISO. La regla nueva exige migrar esas constantes a
+lectores sobre `machine_config/snapshot` antes de consolidar mas familias como
+comportamiento estable.
 
 La primera validacion compara `ISO_MIN_001..006` y `ISO_MIN_010..013` contra
 los ISO Maestro postprocesados con normalizacion de nombre de programa, espacios
