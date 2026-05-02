@@ -5621,8 +5621,8 @@ Estado:
   - puede usarse para dividir en juegos, pero solo aplicando la regla operativa
     ya definida sobre separacion entre piezas en juego y profundidad del
     fresado.
-  - pendiente si se automatiza: codificar/validar explicitamente esa regla de
-    separacion y profundidad en el flujo de sintesis.
+  - para generacion automatica de trazas PGMX, permitir solo division de
+    `en_juego` aplicando esa regla ya establecida.
 - `E006`:
   - es una fresa de 0 grados / rectificado.
   - no debe utilizarse en la forma del fixture lineal pasante
@@ -5631,8 +5631,8 @@ Estado:
   - su uso esperado es el tratamiento de extensiones superficiales sobre la cara
     superior de la pieza.
   - puede usarse en fresados o vaciados de poca profundidad por pasada.
-  - pendiente: estudiar esos casos en Maestro/PGMX y establecer reglas seguras
-    antes de habilitar sintesis automatica.
+  - bloquear generacion automatica de trazas PGMX hasta estudiar esos casos en
+    Maestro/PGMX y establecer reglas seguras.
 - `E007`:
   - es una fresa de 90 grados / recta.
   - funciona del mismo modo que `E001`.
@@ -5644,8 +5644,19 @@ Estado:
   - no tiene filo para cortar la superficie de la cara superior.
   - su recorrido debe programarse de la misma manera que un fresado de cara
     superior.
-  - pendiente: modelar la familia de Sierra Horizontal y establecer reglas que
-    permitan usarla de forma segura antes de generar PGMX automaticos.
+  - bloquear generacion automatica de trazas PGMX hasta modelar la familia de
+    Sierra Horizontal y establecer reglas seguras.
+
+Separacion definida:
+
+- Las restricciones anteriores aplican a generacion automatica de trazas nuevas
+  en `.pgmx`.
+- Si se implementa un traductor `.pgmx -> .iso` suficientemente general, puede
+  confiar en el criterio del usuario de Maestro: si la herramienta y la
+  trayectoria ya estan indicadas en un `.pgmx` existente, el traductor debe
+  intentar generar el `.iso` postprocesado equivalente.
+- En ese modo, `E002`, `E005` y `E006` pueden generar advertencias operativas,
+  pero no deben bloquearse automaticamente solo por herramienta.
 
 ## Limpieza De Generadores De Estudio - 2026-05-02
 

@@ -344,18 +344,33 @@ los usos operativos de esas herramientas.
 | Herramienta | Uso operativo | Estado para sintesis automatica |
 | --- | --- | --- |
 | `E001` | Fresa recta principal para escuadrado y fresados ya estudiados. | Permitida segun reglas ya validadas. |
-| `E002` | Sierra horizontal. No tiene filo para cortar la superficie de la cara superior, aunque su recorrido debe programarse como un fresado de cara superior. | Pendiente: modelar la familia de Sierra Horizontal y establecer reglas seguras antes de generar PGMX automaticos. |
+| `E002` | Sierra horizontal. No tiene filo para cortar la superficie de la cara superior, aunque su recorrido debe programarse como un fresado de cara superior. | Bloquear generacion automatica de trazas en `.pgmx` hasta modelar la familia de Sierra Horizontal y sus reglas seguras. |
 | `E003` | Fresa recta chica ya estudiada en polilineas/circulos. | Permitida segun reglas ya validadas. |
 | `E004` | Fresa recta chica ya estudiada en lineas, polilineas y PH. | Permitida segun reglas ya validadas y restricciones de `PH=5` documentadas. |
-| `E005` | Fresa de 45 grados. Herramienta sensible, preferible para uso manual desde Maestro en fresados manuales o en division/escuadrado de piezas especiales. Puede usarse para dividir en juegos solo aplicando la regla operativa de separacion entre piezas y profundidad de fresado. | No promover a uso automatico general. Pendiente codificar/validar las reglas exactas de separacion y profundidad si se automatiza division en juego con esta herramienta. |
-| `E006` | Fresa de 0 grados / rectificado. Sirve para tratar extensiones superficiales sobre la cara superior, con fresados o vaciados de poca profundidad por pasada. | No usar con el patron lineal pasante de la tanda `router_toolset_2026-05-03`; ese ISO solo sirve para reconocer `T6/ETK[9]=6`. Pendiente estudiar casos Maestro/PGMX de extensiones superficiales y vaciados seguros. |
+| `E005` | Fresa de 45 grados. Herramienta sensible, preferible para uso manual desde Maestro en fresados manuales o en division/escuadrado de piezas especiales. Puede usarse para dividir en juegos solo aplicando la regla operativa de separacion entre piezas y profundidad de fresado. | Permitir generacion automatica solo para division de `en_juego` aplicando la regla ya establecida. No promover a uso automatico general. |
+| `E006` | Fresa de 0 grados / rectificado. Sirve para tratar extensiones superficiales sobre la cara superior, con fresados o vaciados de poca profundidad por pasada. | Bloquear generacion automatica de trazas en `.pgmx`. El fixture lineal pasante `router_toolset_2026-05-03` solo sirve para reconocer `T6/ETK[9]=6`, no como patron permitido. |
 | `E007` | Fresa recta de 90 grados. Opera como `E001`, con mayor largo util para piezas de mayor espesor. | Permitida como equivalente funcional de `E001` cuando se necesita mayor largo util, respetando las mismas reglas de fresado/escuadrado ya validadas. |
 
-Herramientas o familias aun pendientes para reglas seguras:
+### Separacion entre sintesis PGMX y traduccion ISO
+
+La restriccion anterior aplica a la generacion automatica de trazas nuevas en
+`.pgmx`. El futuro traductor `.pgmx -> .iso` tiene una frontera distinta:
+
+- Si el sistema crea o modifica trazas PGMX, debe bloquear `E002` y `E006` y
+  permitir `E005` solo para division de `en_juego` con la regla establecida.
+- Si el sistema traduce un `.pgmx` existente, guardado por Maestro o por un
+  usuario competente de Maestro, debe respetar la herramienta y la trayectoria
+  indicadas en el archivo y emitir el `.iso` equivalente siempre que el contrato
+  ISO de esa operacion este suficientemente generalizado.
+- En ese modo de traduccion, el sistema puede advertir sobre herramientas
+  sensibles, pero no debe rechazar automaticamente `E002`, `E005` o `E006` solo
+  por la herramienta si la traza ya viene definida en el `.pgmx`.
+
+Herramientas o familias aun pendientes para reglas seguras de generacion PGMX:
 
 - `E002`
 - `E006` en extensiones superficiales/vaciados
-- `E005` para automatizar division en juegos
+- `E005` fuera de division de `en_juego`
 
 Nota sobre `E002`: el catalogo local la clasifica como `Sierra Horizontal`. La
 sintesis publica actual no genera ese caso con `LineMillingSpec`; hace falta
@@ -483,8 +498,13 @@ falta cerrar:
 6. Validacion fisica o simulada de compensacion `G41/G42`, especialmente en
    esquinas donde el ISO delega la compensacion al CNC.
 7. Reglas seguras para herramientas especiales:
-   - `E002` requiere modelar Sierra Horizontal antes de generar un PGMX valido;
-   - `E006` requiere estudiar extensiones superficiales y vaciados de poca
-     profundidad por pasada;
-   - `E005` requiere codificar/validar la regla de separacion entre piezas en
-     juego y profundidad de fresado antes de automatizar division.
+   - para generacion automatica de trazas PGMX, `E002` queda bloqueada hasta
+     modelar Sierra Horizontal;
+   - para generacion automatica de trazas PGMX, `E006` queda bloqueada hasta
+     estudiar extensiones superficiales y vaciados de poca profundidad por
+     pasada;
+   - `E005` queda permitida automaticamente solo para division de `en_juego`
+     aplicando la regla establecida de separacion y profundidad;
+   - para traduccion de un `.pgmx` existente a `.iso`, no se debe bloquear por
+     herramienta si el contrato ISO de la operacion puede generalizarse y la
+     traza ya esta indicada en el `.pgmx`.
