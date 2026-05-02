@@ -5167,3 +5167,40 @@ Punto de reanudacion recomendado:
   - altura lateral distinta de `Z = 9`.
   - retornos `G53 Z201` en combinaciones de operaciones mas complejas.
   - validacion fisica/simulada de esquinas con compensacion activa.
+
+## Pausa de trabajo - 2026-05-02
+
+- Contexto:
+  - no hay acceso inmediato a la computadora del CNC para postprocesar con
+    Maestro.
+  - el usuario indico que manana se instalara Codex/Nora en la compu de
+    fabrica para generar los `.pgmx`; despues el usuario postprocesara esos
+    `.pgmx` con Maestro y copiara los `.iso` resultantes para continuar.
+- Hallazgos nuevos ya estabilizados:
+  - los `.pgmx` de estudio estan en `S:\Maestro\Projects\ProdAction\ISO`.
+  - los `.iso` accesibles estan en `P:\USBMIX\ProdAction\ISO`.
+  - Maestro genera localmente en `C:\PrgMaestro\USBMIX`; esa carpeta es salida,
+    no fuente de configuracion faltante.
+  - configuracion adicional relevante esta en `S:\Xilog Plus`.
+  - el contrato CNC observado quedo promovido a `docs/iso_cnc_contract.md`.
+- Reanudacion recomendada:
+  - leer `docs/iso_cnc_contract.md`.
+  - leer `docs/iso_minimal_fixtures_plan.md`.
+  - ejecutar:
+
+```powershell
+python tools/generate_iso_minimal_fixtures.py --output-dir "S:\Maestro\Projects\ProdAction\ISO\minimal_fixtures_2026-05-03"
+```
+
+  - postprocesar esos `.pgmx` con Maestro.
+  - copiar los `.iso` desde `C:\PrgMaestro\USBMIX` a
+    `P:\USBMIX\ProdAction\ISO\minimal_fixtures_2026-05-03`.
+- Objetivo de la tanda:
+  - cerrar la formula `HG/%Or/SHF[Y]`.
+  - confirmar que cambios de geometria, dimensiones y `origin_y` afectan o no
+    afectan `%Or`, `SHF`, `MLV` y coordenadas ISO.
+  - validar offsets laterales y bloque router E004 en piezas chicas.
+- Pendiente secundario:
+  - despues de la tanda minima, repetir piezas equivalentes a `Pieza_092` a
+    `Pieza_095` agregando estrategia `PH = 5` para cerrar el cruce
+    `Left/Right + Down/Up + PH = 5`.

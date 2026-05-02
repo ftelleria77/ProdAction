@@ -150,12 +150,19 @@ Caracteristicas:
 No hay generador ISO nativo integrado. El estado actual es investigacion y
 documentacion del postprocesado Maestro/CNC.
 
-Fuente: `docs/iso_synthesis_temporary_memory.md`.
+Fuente historica: `docs/iso_synthesis_temporary_memory.md`.
+Contrato CNC/ISO observado: `docs/iso_cnc_contract.md`.
+Plan de fixtures minimos: `docs/iso_minimal_fixtures_plan.md`.
+Generador de fixtures: `tools/generate_iso_minimal_fixtures.py`.
 
 Punto de reanudacion documentado:
 
-- ultima ronda estable: Ronda 44;
-- proximo paso sugerido: repetir piezas equivalentes a `Pieza_092` a
+- generar `.pgmx` minimos comparables con
+  `tools/generate_iso_minimal_fixtures.py`;
+- postprocesar esos `.pgmx` en Maestro desde la compu del CNC;
+- copiar los `.iso` desde `C:\PrgMaestro\USBMIX` hacia
+  `P:\USBMIX\ProdAction\ISO\minimal_fixtures_2026-05-03`;
+- despues, si hace falta, repetir piezas equivalentes a `Pieza_092` a
   `Pieza_095` agregando estrategia `PH = 5`.
 
 ## Comandos utiles de verificacion
@@ -164,6 +171,7 @@ Punto de reanudacion documentado:
 python -m compileall main.py app core tools
 python -c "import app.ui, core.parser, core.nesting, core.summary, core.pgmx_processing, core.en_juego_synthesis; print('core imports ok')"
 python -c "from tools import synthesize_pgmx as sp; print(sp.SYNTHESIZER_VERSION)"
+python tools/generate_iso_minimal_fixtures.py --output-dir tmp/iso_minimal_fixtures
 python -m tools.synthesize_pgmx --help
 python -m tools.pgmx_snapshot --help
 python -m tools.pgmx_adapters --help

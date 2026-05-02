@@ -15,7 +15,13 @@ tener que leer todas las memorias historicas de una vez.
    - Estado del motor de diagramas de corte y algoritmos de guillotina.
 5. `docs/cnc_project_viewer_temporary_memory.md`
    - Contrato y estado del visualizador CNC compatible con Windows XP.
-6. `docs/iso_synthesis_temporary_memory.md`
+6. `docs/iso_cnc_contract.md`
+   - Contrato CNC/ISO observado: configuracion Maestro, toolset, variables y
+     huecos pendientes para un sintetizador ISO.
+7. `docs/iso_minimal_fixtures_plan.md`
+   - Plan de reanudacion para generar `.pgmx` minimos comparables en la compu
+     de fabrica y postprocesarlos con Maestro.
+8. `docs/iso_synthesis_temporary_memory.md`
    - Ingenieria inversa del flujo PGMX -> Maestro/postprocesador -> ISO.
 
 ## Mapa por tema
@@ -34,7 +40,7 @@ tener que leer todas las memorias historicas de una vez.
 | Diagramas de corte | `docs/cut_diagrams_temporary_memory.md` | `core/nesting.py` |
 | Laboratorio de corte | `docs/cut_diagrams_temporary_memory.md` | `tools/cut_diagram_ordering_lab.py` |
 | Viewer CNC/ISO | `docs/cnc_project_viewer_temporary_memory.md` | `tools/cnc_project_viewer_xp.py` |
-| Estudio ISO | `docs/iso_synthesis_temporary_memory.md` | No hay generador ISO nativo aun |
+| Contrato CNC/ISO | `docs/iso_cnc_contract.md`, `docs/iso_minimal_fixtures_plan.md`, `docs/iso_synthesis_temporary_memory.md` | `tools/generate_iso_minimal_fixtures.py` |
 
 ## Reglas de mantenimiento
 
