@@ -42,7 +42,11 @@ python -m iso_generation compare maestro.iso candidato.iso
     con herramientas verticales `001..007`;
   - taladros laterales D8 individuales y patrones en `Left`, `Right`, `Front`
     y `Back`.
+  - ranura lineal horizontal `082` sobre `Top`, con correcciones `Left`/`Right`;
+  - fresado lineal `E004` sobre `Top`, horizontal o vertical, incluyendo
+    estrategia PH5 observada con pasadas multiples.
 - Validado por comparacion exacta contra Maestro para `ISO_MIN_001..006`,
-  `ISO_MIN_010..013`, `Pieza`, `Pieza_001`, `Pieza_002`, `Pieza_003`,
-  `Pieza_004`, `Pieza_004_Repeticiones` y `Pieza_005`.
+  `ISO_MIN_010..013`, `ISO_MIN_020..023`, `Pieza`, `Pieza_001`,
+  `Pieza_002`, `Pieza_003`, `Pieza_004`, `Pieza_004_Repeticiones` y
+  `Pieza_005..015`.
 - No se conecta con `cnc_traceability/` hasta tener un MVP confiable.

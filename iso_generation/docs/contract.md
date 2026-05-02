@@ -65,7 +65,7 @@ Familias posteriores:
 - escuadrado;
 - polilineas;
 - circulos;
-- casos especiales de `PH=5`;
+- casos especiales de `PH=5` fuera del fresado lineal `E004` ya observado;
 - Sierra Horizontal `E002`;
 - rectificados/vaciados con `E006`.
 
@@ -85,8 +85,11 @@ El primer paso operativo implementado cubre cabecera, marco `HG`, cierre
 estandar, piezas sin operaciones, bloques de taladros superiores
 (`Top DrillingSpec` y patrones `DrillingPatternSpec`) con herramientas
 verticales `001..007`, y bloques de taladros laterales D8 individuales y por
-patron en `Left`, `Right`, `Front` y `Back`. Las demas familias deben fallar
-explicitamente hasta que se agreguen al MVP.
+patron en `Left`, `Right`, `Front` y `Back`. Tambien cubre ranura lineal
+horizontal `082` en `Top` con correcciones laterales observadas, y fresado
+lineal `E004` en `Top` horizontal o vertical, con corte simple y estrategia PH5
+observada con pasadas multiples. Las demas familias deben fallar explicitamente
+hasta que se agreguen al MVP.
 
 La primera validacion compara `ISO_MIN_001..006` y `ISO_MIN_010..013` contra
 los ISO Maestro postprocesados con normalizacion de nombre de programa, espacios
@@ -96,3 +99,12 @@ La segunda validacion compara las piezas de `S:\Maestro\Projects\ProdAction\ISO`
 contra sus ISO Maestro en `P:\USBMIX\ProdAction\ISO`: `Pieza`, `Pieza_001`,
 `Pieza_002`, `Pieza_003`, `Pieza_004`, `Pieza_004_Repeticiones` y `Pieza_005`.
 Todas comparan con 0 diferencias normalizadas.
+
+La tercera validacion compara `ISO_MIN_020..023` contra Maestro:
+fresado lineal `E004` base, variacion de `Y`, estrategia PH5 y cambio de
+`origin_y`. Todos comparan con 0 diferencias normalizadas.
+
+La cuarta validacion compara `Pieza_006..015` contra Maestro. Cubre ranuras
+`082` con sentido directo/inverso y correcciones `Left`/`Right`, taladros
+superiores no pasantes y pasantes con/sin extra, y fresado lineal `E004`
+vertical no pasante. Todas comparan con 0 diferencias normalizadas.
