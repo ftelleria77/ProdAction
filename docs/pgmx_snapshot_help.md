@@ -39,11 +39,15 @@ print(snapshot.state)
 print(snapshot.feature_by_id["2204"])
 print(snapshot.operation_by_id["2203"])
 print(snapshot.working_steps[-2].name)
+print(snapshot.working_steps[-1].runtime_type)
+print(snapshot.working_steps[-1].reference)
+print(snapshot.working_steps[-1].x, snapshot.working_steps[-1].y)
 
 for item in snapshot.resolved_working_steps:
     print(
         item.index,
         item.step.name,
+        item.step.runtime_type,
         item.feature.feature_type if item.feature else "-",
         item.operation.operation_type if item.operation else "-",
         item.geometry.geometry_type if item.geometry else "-",
@@ -71,6 +75,12 @@ En taladros pasantes, `feature.depth_spec.extra_depth` se infiere desde la
 longitud del `TrajectoryPath` cuando Maestro deja `Operation/OvercutLength` en
 `0`. Por ejemplo, en una pieza de `18 mm`, un `RoundHole` pasante con
 `TrajectoryPath = 19` se expone como `extra_depth = 1`.
+
+Los `working_steps` exponen tambien `runtime_type`, `reference`, `x` e `y`. En
+el paso administrativo final `Xn`, esos campos permiten leer directamente la
+posicion nula/parking definida por Maestro, por ejemplo
+`runtime_type = "Xn"`, `reference = "Absolute"`, `x = -3700`, `y = None` o
+`0`.
 
 Si hace falta serializarlo para inspeccion externa:
 

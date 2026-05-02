@@ -16,7 +16,7 @@ emitir solo reglas ISO ya validadas y comparar contra ISO Maestro.
 | `comparator.py` | Normalizacion y comparacion Maestro vs candidato. |
 | `cli.py` | CLI de inspeccion, cabecera y comparacion. |
 | `docs/contract.md` | Contrato del subsistema y MVP previsto. |
-| `machine_config/` | Snapshot versionable de configuracion Maestro/Xilog. |
+| `machine_config/` | Snapshot versionable y lectores de configuracion Maestro/Xilog. |
 | `memory/current-state.md` | Estado vivo de este subsistema. |
 
 ## Comandos
@@ -37,6 +37,11 @@ python -m iso_generation compare maestro.iso candidato.iso
 - Advierte sobre herramientas sensibles `E002`, `E005` y `E006`.
 - Mantiene un snapshot de configuracion de maquina en `machine_config/snapshot`,
   sincronizable desde `S:\Maestro\Cfgx`, `S:\Maestro\Tlgx` y `S:\Xilog Plus`.
+- Lee desde `machine_config/snapshot` los largos, velocidades, avances y
+  desplazamientos de herramientas `001..007`, laterales D8, `082` y `E004`;
+  el emitter ya no conserva esas tablas dimensionales como literales propios.
+- Lee el parking X de cierre desde el paso administrativo `Xn` del `.pgmx`;
+  usa la configuracion de maquina solo como fallback si falta `Xn.X`.
 - Emite cabecera ISO con la regla validada:
   `DX=length+origin_x`, `DY=width+origin_y`, `DZ=depth+origin_z`, area `-HG`.
 - Emite los primeros bloques operativos MVP:
@@ -61,6 +66,10 @@ posiciones de parqueo y parametros de operacion deben venir de la configuracion
 Maestro/Xilog cuando esten disponibles. Las constantes observadas en ISO Maestro
 son validas solo como bootstrap o prueba de contrato; antes de consolidar nuevas
 familias, deben migrarse hacia lectores sobre `machine_config/snapshot`.
+
+Los valores que todavia no tienen una ubicacion inequivoca en los archivos de
+Maestro/Xilog quedan centralizados en `machine_config.loader` como politica ISO
+observada, para que el emitter no vuelva a ser la fuente dimensional.
 
 Para renovar el snapshot tras una calibracion:
 

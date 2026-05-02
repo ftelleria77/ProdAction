@@ -8,6 +8,13 @@ from typing import Optional
 
 from tools import synthesize_pgmx as sp
 
+from .machine_config import (
+    LineMillingToolConfig as _LineMillingTool,
+    SideDrillToolConfig as _SideDrillTool,
+    SlotMillingToolConfig as _SlotMillingTool,
+    TopDrillToolConfig as _TopDrillTool,
+    load_machine_config,
+)
 from .model import IsoGenerationError, IsoGenerationWarning, IsoProgram
 from .pgmx_source import PgmxIsoSource, load_pgmx_iso_source
 
@@ -16,175 +23,7 @@ class IsoEmissionNotImplemented(IsoGenerationError, NotImplementedError):
     """Raised when callers request operational ISO blocks before the MVP exists."""
 
 
-@dataclass(frozen=True)
-class _TopDrillTool:
-    spindle: int
-    mask: int
-    shf_x: float
-    shf_y: float
-    shf_z: float
-    tool_offset_length: float
-    spindle_speed: float
-    descent_feed: float
-
-
-_TOP_DRILL_TOOLS: dict[str, _TopDrillTool] = {
-    "001": _TopDrillTool(1, 1, 0.0, 0.0, 0.0, 77.0, 6000.0, 2000.0),
-    "002": _TopDrillTool(2, 2, 0.0, 32.0, -0.2, 77.0, 4000.0, 1000.0),
-    "003": _TopDrillTool(3, 4, 0.0, 64.0, -0.25, 77.0, 4000.0, 1000.0),
-    "004": _TopDrillTool(4, 8, -32.0, 0.0, -0.35, 77.0, 4000.0, 1000.0),
-    "005": _TopDrillTool(5, 16, -64.0, 0.0, -0.95, 77.0, 6000.0, 2000.0),
-    "006": _TopDrillTool(6, 32, -96.0, 0.0, -0.2, 77.0, 6000.0, 2000.0),
-    "007": _TopDrillTool(7, 64, -128.0, 0.0, 0.0, 77.0, 6000.0, 2000.0),
-}
-
-
-@dataclass(frozen=True)
-class _SideDrillTool:
-    plane_name: str
-    etk8: int
-    spindle: int
-    mask: int
-    shf_x: float
-    shf_y: float
-    shf_z: float
-    tool_offset_length: float
-    spindle_speed: float
-    descent_feed: float
-    axis: str
-    direction: int
-    coordinate_sign: int
-
-
-_SIDE_DRILL_TOOLS: dict[str, _SideDrillTool] = {
-    "Left": _SideDrillTool(
-        "Left",
-        3,
-        61,
-        2147483648,
-        -118.0,
-        -32.0,
-        66.3,
-        65.0,
-        6000.0,
-        2000.0,
-        "X",
-        -1,
-        -1,
-    ),
-    "Right": _SideDrillTool(
-        "Right",
-        2,
-        60,
-        2147483648,
-        -66.9,
-        -32.0,
-        66.45,
-        65.0,
-        6000.0,
-        2000.0,
-        "X",
-        1,
-        1,
-    ),
-    "Front": _SideDrillTool(
-        "Front",
-        5,
-        58,
-        1073741824,
-        32.0,
-        -21.75,
-        66.5,
-        65.0,
-        6000.0,
-        2000.0,
-        "Y",
-        -1,
-        1,
-    ),
-    "Back": _SideDrillTool(
-        "Back",
-        4,
-        59,
-        1073741824,
-        32.0,
-        29.5,
-        66.5,
-        65.0,
-        6000.0,
-        2000.0,
-        "Y",
-        1,
-        -1,
-    ),
-}
-
-
-@dataclass(frozen=True)
-class _LineMillingTool:
-    tool_name: str
-    tool_number: int
-    spindle: int
-    tool_code: int
-    etk18: int
-    shf_x: float
-    shf_y: float
-    shf_z: float
-    tool_offset_length: float
-    spindle_speed: float
-    plunge_feed: float
-    milling_feed: float
-
-
-_LINE_MILLING_TOOLS: dict[str, _LineMillingTool] = {
-    "E004": _LineMillingTool(
-        "E004",
-        4,
-        1,
-        4,
-        1,
-        32.05,
-        -246.65,
-        -125.3,
-        89.2,
-        18000.0,
-        2000.0,
-        5000.0,
-    ),
-}
-
-
-@dataclass(frozen=True)
-class _SlotMillingTool:
-    tool_name: str
-    spindle: int
-    mask: int
-    shf_x: float
-    shf_y: float
-    shf_z: float
-    tool_offset_length: float
-    spindle_speed: float
-    plunge_feed: float
-    milling_feed: float
-
-
-_SLOT_MILLING_TOOLS: dict[str, _SlotMillingTool] = {
-    "082": _SlotMillingTool(
-        "082",
-        82,
-        16,
-        -96.0,
-        126.95,
-        22.15,
-        60.0,
-        4000.0,
-        2000.0,
-        5000.0,
-    ),
-}
-
-
-_SUPPORTED_IGNORED_STEP_NAMES = {"", "Xn"}
+_SUPPORTED_IGNORED_STEP_NAMES = {"", "XN"}
 
 
 @dataclass(frozen=True)
@@ -197,6 +36,24 @@ class _EmissionState:
 
 
 _SupportedOperation = sp.DrillingSpec | sp.LineMillingSpec | sp.SlotMillingSpec
+
+
+def _work_origin_y_line() -> str:
+    return f"%Or[0].ofY={_format_mm(load_machine_config().frame.work_origin_y)}"
+
+
+def _base_shf_y(origin_y: float = 0.0) -> float:
+    return load_machine_config().frame.base_shf_y + origin_y
+
+
+def _safe_z_line() -> str:
+    return f"G0 G53 Z{_format_mm(load_machine_config().frame.safe_z)}"
+
+
+def _park_x_line(park_x: float | None = None) -> str:
+    if park_x is None:
+        park_x = load_machine_config().frame.park_x
+    return f"G0 G53 X{_format_mm(park_x)}"
 
 
 def build_iso_header_lines(
@@ -274,11 +131,12 @@ def emit_iso_program(
     resolved_program_name = _program_name(program_name, source.path)
     _validate_supported_source(source)
     operations = _ordered_operations(source)
+    park_x = _source_park_x(source)
     lines: list[str] = []
     lines.extend(build_iso_header_lines(source.state, program_name=resolved_program_name))
     if not operations:
         lines.extend(_emit_empty_hg_preamble(source.state))
-        lines.extend(_emit_empty_program_end())
+        lines.extend(_emit_empty_program_end(park_x))
     else:
         first_operation = operations[0]
         lines.extend(
@@ -313,11 +171,11 @@ def emit_iso_program(
             lines.extend(block_lines)
         last_operation = operations[-1]
         if isinstance(last_operation, sp.LineMillingSpec):
-            lines.extend(_emit_line_milling_program_end())
+            lines.extend(_emit_line_milling_program_end(park_x))
         elif isinstance(last_operation, sp.SlotMillingSpec):
-            lines.extend(_emit_slot_milling_program_end())
+            lines.extend(_emit_slot_milling_program_end(park_x))
         else:
-            lines.extend(_emit_program_end(source.state, last_operation.plane_name))
+            lines.extend(_emit_program_end(source.state, last_operation.plane_name, park_x))
     return IsoProgram(
         program_name=resolved_program_name,
         lines=tuple(lines),
@@ -340,7 +198,8 @@ def _validate_supported_source(source: PgmxIsoSource) -> None:
             f"Unsupported PGMX entries cannot be emitted yet: {details}"
         )
     for entry in source.adaptation.ignored_entries:
-        if entry.working_step_name not in _SUPPORTED_IGNORED_STEP_NAMES:
+        working_step_name = entry.working_step_name.strip().upper()
+        if working_step_name not in _SUPPORTED_IGNORED_STEP_NAMES:
             raise IsoEmissionNotImplemented(
                 "Only administrative Xn ignored steps are supported by the "
                 f"initial emitter; got {entry.working_step_name!r}."
@@ -476,6 +335,19 @@ def _ordered_operations(source: PgmxIsoSource) -> tuple[_SupportedOperation, ...
     return tuple(ordered)
 
 
+def _source_park_x(source: PgmxIsoSource) -> float | None:
+    for step in reversed(source.snapshot.working_steps):
+        if step.runtime_type != "Xn":
+            continue
+        reference = step.reference.strip()
+        if reference and reference not in {"Absolute", "Absoluto"}:
+            raise IsoEmissionNotImplemented(
+                f"Xn reference {reference!r} is not supported for ISO parking."
+            )
+        return step.x
+    return None
+
+
 def _operation_plane_name(operation: _SupportedOperation) -> str:
     return operation.plane_name
 
@@ -516,13 +388,13 @@ def _emit_empty_hg_preamble(state: sp.PgmxState) -> tuple[str, ...]:
         "G71",
         "MLV=0",
         f"%Or[0].ofX={_format_mm(initial_or_x)}",
-        "%Or[0].ofY=-1515599.976",
+        _work_origin_y_line(),
         f"%Or[0].ofZ={_format_mm(header_dz * 1000.0)}",
         "?%EDK[0].0=0",
         "?%EDK[1].0=0",
         "MLV=1",
         f"SHF[X]={_format_mm(-(state.length + state.origin_x))}",
-        "SHF[Y]=-1515.600",
+        f"SHF[Y]={_format_mm(_base_shf_y())}",
         f"SHF[Z]={_format_mm(header_dz)}+%ETK[114]/1000",
         "?%ETK[8]=1",
         "G40",
@@ -531,13 +403,13 @@ def _emit_empty_hg_preamble(state: sp.PgmxState) -> tuple[str, ...]:
     )
 
 
-def _emit_empty_program_end() -> tuple[str, ...]:
+def _emit_empty_program_end(park_x: float | None) -> tuple[str, ...]:
     return (
         "G61",
         "MLV=0",
         "D0",
-        "G0 G53 Z201.000",
-        "G0 G53 X-3700.000",
+        _safe_z_line(),
+        _park_x_line(park_x),
         "G64",
         *_emit_syn_reset(),
     )
@@ -604,13 +476,13 @@ def _emit_hg_preamble(
         "G71",
         "MLV=0",
         f"%Or[0].ofX={_format_mm(initial_or_x)}",
-        "%Or[0].ofY=-1515599.976",
+        _work_origin_y_line(),
         f"%Or[0].ofZ={_format_mm(header_dz * 1000.0)}",
         "?%EDK[0].0=0",
         "?%EDK[1].0=0",
         "MLV=1",
         f"SHF[X]={_format_mm(-(state.length + state.origin_x))}",
-        "SHF[Y]=-1515.600",
+        f"SHF[Y]={_format_mm(_base_shf_y())}",
         f"SHF[Z]={_format_mm(header_dz)}+%ETK[114]/1000",
     ]
     lines.extend(_emit_face_selection(state, plane_name))
@@ -636,7 +508,7 @@ def _emit_face_selection(state: sp.PgmxState, plane_name: str) -> tuple[str, ...
             "?%ETK[8]=1",
             "G40",
         )
-    side = _SIDE_DRILL_TOOLS.get(plane_name)
+    side = load_machine_config().side_drill_tools.get(plane_name)
     if side is None:
         raise IsoEmissionNotImplemented(f"Unsupported drilling plane {plane_name!r}.")
     lines: list[str] = [
@@ -661,7 +533,7 @@ def _emit_face_selection(state: sp.PgmxState, plane_name: str) -> tuple[str, ...
 
 def _side_plane_frame_shift(state: sp.PgmxState, plane_name: str) -> tuple[float, float]:
     base_x = -(state.length + state.origin_x)
-    base_y = -1515.600 + state.origin_y
+    base_y = _base_shf_y(state.origin_y)
     if plane_name == "Left":
         return base_x, base_y + state.width
     if plane_name == "Back":
@@ -702,7 +574,7 @@ def _emit_top_drilling(
             [
                 f"?%ETK[6]={tool.spindle}",
                 f"%Or[0].ofX={_format_mm(operational_or_x)}",
-                "%Or[0].ofY=-1515599.976",
+                _work_origin_y_line(),
                 f"%Or[0].ofZ={_format_mm((state.depth + state.origin_z) * 1000.0)}",
                 *_emit_primary_work_frame(state, "Top"),
                 "MLV=2",
@@ -801,7 +673,7 @@ def _emit_side_drilling(
             [
                 f"?%ETK[6]={tool.spindle}",
                 f"%Or[0].ofX={_format_mm(-(state.length + (2.0 * state.origin_x)) * 1000.0)}",
-                "%Or[0].ofY=-1515599.976",
+                _work_origin_y_line(),
                 f"%Or[0].ofZ={_format_mm((state.depth + state.origin_z) * 1000.0)}",
                 *_emit_primary_work_frame(state, drilling.plane_name),
                 "MLV=2",
@@ -821,7 +693,7 @@ def _emit_side_drilling(
     elif previous.drilling.plane_name == drilling.plane_name:
         lines.extend(_emit_operation_reentry(state))
         if drilling.plane_name in {"Front", "Back"}:
-            lines.extend(["MLV=0", "G0 G53 Z201.000", "MLV=2"])
+            lines.extend(["MLV=0", _safe_z_line(), "MLV=2"])
             if _side_uses_short_dwell(drilling):
                 lines.append("G4F0.500")
             lines.extend(_emit_side_position_lines(tool, rapid, fixed, drilling.center_y))
@@ -865,7 +737,7 @@ def _emit_side_drilling(
 
 
 def _emit_side_face_change(state: sp.PgmxState, plane_name: str) -> tuple[str, ...]:
-    side = _SIDE_DRILL_TOOLS[plane_name]
+    side = load_machine_config().side_drill_tools[plane_name]
     shf_x, shf_y = _side_plane_frame_shift(state, plane_name)
     return (
         "MLV=1",
@@ -890,8 +762,8 @@ def _side_uses_short_dwell(drilling: sp.DrillingSpec) -> bool:
 
 def _side_g53_z(plane_name: str) -> float:
     if plane_name == "Right":
-        return 149.45
-    return 149.5
+        return load_machine_config().frame.side_g53_z_right
+    return load_machine_config().frame.side_g53_z
 
 
 def _is_repeated_right_pattern(
@@ -981,7 +853,7 @@ def _emit_line_milling(
     line_milling: sp.LineMillingSpec,
 ) -> tuple[str, ...]:
     tool = _line_milling_tool(line_milling)
-    rapid_z = state.depth + line_milling.security_plane + tool.tool_offset_length
+    rapid_z = line_milling.security_plane + tool.tool_offset_length
     cut_z = _line_milling_cut_z(state, line_milling)
     tool_radius = line_milling.tool_width / 2.0
     lines: list[str] = [
@@ -996,11 +868,11 @@ def _emit_line_milling(
         "G17",
         "MLV=2",
         f"%Or[0].ofX={_format_mm(-(state.length + (2.0 * state.origin_x)) * 1000.0)}",
-        "%Or[0].ofY=-1515599.976",
+        _work_origin_y_line(),
         f"%Or[0].ofZ={_format_mm((state.depth + state.origin_z) * 1000.0)}",
         "MLV=1",
         f"SHF[X]={_format_mm(-(state.length + state.origin_x))}",
-        f"SHF[Y]={_format_mm(-1515.600 + state.origin_y)}",
+        f"SHF[Y]={_format_mm(_base_shf_y(state.origin_y))}",
         f"SHF[Z]={_format_mm(state.depth + state.origin_z)}",
         "MLV=2",
         "?%ETK[13]=1",
@@ -1145,7 +1017,7 @@ def _line_milling_cut_z(state: sp.PgmxState, line_milling: sp.LineMillingSpec) -
     return -line_milling.depth_spec.target_depth
 
 
-def _emit_line_milling_program_end() -> tuple[str, ...]:
+def _emit_line_milling_program_end(park_x: float | None) -> tuple[str, ...]:
     return (
         "G61",
         "MLV=0",
@@ -1153,8 +1025,8 @@ def _emit_line_milling_program_end() -> tuple[str, ...]:
         "?%ETK[18]=0",
         "M5",
         "D0",
-        "G0 G53 Z201.000",
-        "G0 G53 X-3700.000",
+        _safe_z_line(),
+        _park_x_line(park_x),
         "G64",
         *_emit_syn_reset(),
     )
@@ -1179,11 +1051,11 @@ def _emit_slot_milling(
         "G17",
         "MLV=2",
         f"%Or[0].ofX={_format_mm(-(state.length + (2.0 * state.origin_x)) * 1000.0)}",
-        "%Or[0].ofY=-1515599.976",
+        _work_origin_y_line(),
         f"%Or[0].ofZ={_format_mm((state.depth + state.origin_z) * 1000.0)}",
         "MLV=1",
         f"SHF[X]={_format_mm(-(state.length + state.origin_x))}",
-        f"SHF[Y]={_format_mm(-1515.600 + state.origin_y)}",
+        f"SHF[Y]={_format_mm(_base_shf_y(state.origin_y))}",
         f"SHF[Z]={_format_mm(state.depth + state.origin_z)}",
         "MLV=2",
         "?%ETK[17]=257",
@@ -1226,7 +1098,7 @@ def _slot_milling_y(slot_milling: sp.SlotMillingSpec, tool_radius: float) -> flo
     )
 
 
-def _emit_slot_milling_program_end() -> tuple[str, ...]:
+def _emit_slot_milling_program_end(park_x: float | None) -> tuple[str, ...]:
     return (
         "G61",
         "MLV=0",
@@ -1235,14 +1107,18 @@ def _emit_slot_milling_program_end() -> tuple[str, ...]:
         "G4F1.200",
         "M5",
         "D0",
-        "G0 G53 Z201.000",
-        "G0 G53 X-3700.000",
+        _safe_z_line(),
+        _park_x_line(park_x),
         "G64",
         *_emit_syn_reset(),
     )
 
 
-def _emit_program_end(state: sp.PgmxState, plane_name: str) -> tuple[str, ...]:
+def _emit_program_end(
+    state: sp.PgmxState,
+    plane_name: str,
+    park_x: float | None,
+) -> tuple[str, ...]:
     lines: list[str] = [
         "G61",
         "MLV=0",
@@ -1251,8 +1127,8 @@ def _emit_program_end(state: sp.PgmxState, plane_name: str) -> tuple[str, ...]:
         "G4F1.200",
         "M5",
         "D0",
-        "G0 G53 Z201.000",
-        "G0 G53 X-3700.000",
+        _safe_z_line(),
+        _park_x_line(park_x),
         "G64",
     ]
     if plane_name != "Top":
@@ -1261,7 +1137,7 @@ def _emit_program_end(state: sp.PgmxState, plane_name: str) -> tuple[str, ...]:
                 [
                     "MLV=1",
                     f"SHF[X]={_format_mm(-(state.length + state.origin_x))}",
-                    f"SHF[Y]={_format_mm(-1515.600 + state.origin_y)}",
+                    f"SHF[Y]={_format_mm(_base_shf_y(state.origin_y))}",
                     f"SHF[Z]={_format_mm(state.depth + state.origin_z)}+%ETK[114]/1000",
                 ]
             )
@@ -1271,7 +1147,7 @@ def _emit_program_end(state: sp.PgmxState, plane_name: str) -> tuple[str, ...]:
         lines.extend(
             [
                 "D0",
-                "G0 G53 Z201.000",
+                _safe_z_line(),
                 "G64",
             ]
         )
@@ -1309,15 +1185,16 @@ def _top_drill_tool(drilling: sp.DrillingSpec) -> _TopDrillTool:
     if not tool_name and drilling.tool_id:
         tool_name = _tool_name_from_id(drilling.tool_id)
     normalized = _normalize_drill_tool_name(tool_name)
-    if normalized not in _TOP_DRILL_TOOLS:
+    tools = load_machine_config().top_drill_tools
+    if normalized not in tools:
         raise IsoEmissionNotImplemented(
             f"Top drilling tool {drilling.tool_name or drilling.tool_id!r} is not supported yet."
         )
-    return _TOP_DRILL_TOOLS[normalized]
+    return tools[normalized]
 
 
 def _side_drill_tool(drilling: sp.DrillingSpec) -> _SideDrillTool:
-    tool = _SIDE_DRILL_TOOLS.get(drilling.plane_name)
+    tool = load_machine_config().side_drill_tools.get(drilling.plane_name)
     if tool is None:
         raise IsoEmissionNotImplemented(
             f"Side drilling plane {drilling.plane_name!r} is not supported yet."
@@ -1332,8 +1209,8 @@ def _side_drill_tool(drilling: sp.DrillingSpec) -> _SideDrillTool:
 def _line_milling_tool(line_milling: sp.LineMillingSpec) -> _LineMillingTool:
     tool_name = line_milling.tool_name.strip().upper()
     if not tool_name and line_milling.tool_id:
-        tool_name = _line_tool_name_from_id(line_milling.tool_id)
-    tool = _LINE_MILLING_TOOLS.get(tool_name)
+        tool_name = _tool_name_from_id(line_milling.tool_id)
+    tool = load_machine_config().line_milling_tools.get(tool_name)
     if tool is None:
         raise IsoEmissionNotImplemented(
             f"Line milling tool {line_milling.tool_name or line_milling.tool_id!r} "
@@ -1347,8 +1224,8 @@ def _line_milling_tool(line_milling: sp.LineMillingSpec) -> _LineMillingTool:
 def _slot_milling_tool(slot_milling: sp.SlotMillingSpec) -> _SlotMillingTool:
     tool_name = slot_milling.tool_name.strip().upper()
     if not tool_name and slot_milling.tool_id:
-        tool_name = _slot_tool_name_from_id(slot_milling.tool_id)
-    tool = _SLOT_MILLING_TOOLS.get(tool_name)
+        tool_name = _tool_name_from_id(slot_milling.tool_id)
+    tool = load_machine_config().slot_milling_tools.get(tool_name)
     if tool is None:
         raise IsoEmissionNotImplemented(
             f"Slot milling tool {slot_milling.tool_name or slot_milling.tool_id!r} "
@@ -1377,30 +1254,7 @@ def _normalize_drill_tool_name(value: str) -> str:
 
 
 def _tool_name_from_id(tool_id: str) -> str:
-    mapping = {
-        "1888": "001",
-        "1889": "002",
-        "1890": "003",
-        "1891": "004",
-        "1892": "005",
-        "1893": "006",
-        "1894": "007",
-    }
-    return mapping.get(tool_id.strip(), "")
-
-
-def _line_tool_name_from_id(tool_id: str) -> str:
-    mapping = {
-        "1903": "E004",
-    }
-    return mapping.get(tool_id.strip(), "")
-
-
-def _slot_tool_name_from_id(tool_id: str) -> str:
-    mapping = {
-        "1899": "082",
-    }
-    return mapping.get(tool_id.strip(), "")
+    return load_machine_config().tool_names_by_id.get(tool_id.strip(), "")
 
 
 def _format_mm(value: float) -> str:

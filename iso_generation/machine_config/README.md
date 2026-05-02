@@ -41,3 +41,20 @@ After a machine calibration, replace the snapshot by running:
 Later ISO generator work should read dimensional machine/tool values through a
 loader over this snapshot instead of adding new hardcoded constants to
 `emitter.py`.
+
+## Loader
+
+`loader.py` exposes the ISO-facing configuration used by the emitter:
+
+- Maestro `Tlgx/def.tlgx` supplies tool lengths, spindle speeds, feed/descent
+  rates and aggregate translations for drilling tools, lateral D8 tools and
+  slot tool `082`.
+- Xilog `Cfg/pheads.cfg` supplies the observed head offsets for line milling
+  tool `E004`.
+- Xilog `Cfg/Params.cfg` supplies safe-Z and fallback axis parking limits.
+  Program parking X is read from the source PGMX `Xn` step when available.
+
+Some ISO control masks and field-origin values are not yet mapped to a unique
+source file. Those observed values are kept in the loader as ISO policy until
+the source mapping is identified, so `emitter.py` remains free of dimensional
+machine tables.

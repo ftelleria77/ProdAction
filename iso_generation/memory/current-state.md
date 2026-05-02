@@ -39,6 +39,17 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   - `snapshot/xilog_plus` con archivos `.cfg`, `.ini`, `.str`, `.tab`, `.tlg`
     y `.txt` desde `S:\Xilog Plus`;
   - `snapshot/manifest.csv` con hashes SHA256.
+- `machine_config/loader.py` lee configuracion dimensional desde el snapshot:
+  herramientas verticales `001..007`, taladros laterales D8 y ranura `082`
+  desde `maestro/Tlgx/def.tlgx`; offsets de cabezal para `E004` desde
+  `xilog_plus/Cfg/pheads.cfg`; `safe_z` desde `xilog_plus/Cfg/Params.cfg`.
+- El parking X del cierre ISO se lee del paso administrativo `Xn` del `.pgmx`
+  (`Reference/X/Y` capturados en `tools.pgmx_snapshot`). `Params.cfg` queda como
+  fallback de maquina si faltara `Xn.X`.
+- El emitter consume esos lectores y ya no mantiene tablas propias para largos,
+  offsets, velocidades, avances ni mapeos por `tool_id` de las familias
+  soportadas. Los valores ISO observados sin fuente inequivoca permanecen
+  centralizados como politica en el loader.
 
 ## Validacion
 
@@ -72,10 +83,18 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   - `Pieza_012..014`: taladro superior, 84 lineas normalizadas contra 84;
   - `Pieza_015`: fresado lineal vertical `E004`, 94 lineas normalizadas contra 94;
   - 0 diferencias en todos los casos.
+- Tras migrar las constantes dimensionales del emitter al loader de
+  `machine_config/snapshot`, la misma matriz `ISO_MIN_001..006`,
+  `ISO_MIN_010..013`, `ISO_MIN_020..023`, `Pieza`, `Pieza_001..015` y
+  `Pieza_004_Repeticiones` vuelve a comparar exacta: 0 diferencias.
+- Tras conectar `Xn.X` como parking X de cierre ISO, esa misma matriz vuelve a
+  comparar exacta: 0 diferencias. En el corpus Cocina, `_source_park_x` lee
+  valores variables confirmados como `-2500`, `-2292` y `-3700`; el corpus aun
+  no compara completo porque requiere familias pendientes como escuadrados,
+  polilineas y combinaciones de ranura/fresado.
 
 ## Proximo Paso
 
-Antes de seguir ampliando familias, crear lectores sobre
-`machine_config/snapshot` para reemplazar constantes dimensionales del emitter.
-Luego probar `Pieza_016+`; la siguiente frontera detectada son polilineas `E004`
+Probar nuevamente contra Maestro cuando este disponible el drive `S:` y luego
+avanzar con `Pieza_016+`; la siguiente frontera detectada son polilineas `E004`
 y luego escuadrados `E001`.

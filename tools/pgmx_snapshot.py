@@ -266,12 +266,16 @@ class PgmxOperationSnapshot:
 class PgmxWorkingStepSnapshot:
     id: str
     object_type: str
+    runtime_type: str
     name: str
     description: str
     is_enabled: bool
     priority: int
     manufacturing_feature_ref: Optional[PgmxObjectRefSnapshot]
     operation_ref: Optional[PgmxObjectRefSnapshot]
+    reference: str
+    x: Optional[float]
+    y: Optional[float]
 
 
 @dataclass(frozen=True)
@@ -900,12 +904,16 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
             PgmxWorkingStepSnapshot(
                 id=sp._text(step, "./{*}Key/{*}ID"),
                 object_type=sp._text(step, "./{*}Key/{*}ObjectType"),
+                runtime_type=sp._xsi_type(step),
                 name=sp._text(step, "./{*}Name"),
                 description=sp._text(step, "./{*}Description"),
                 is_enabled=sp._safe_bool(sp._text(step, "./{*}IsEnabled"), False),
                 priority=int(sp._safe_float(sp._text(step, "./{*}Priority"), 0.0)),
                 manufacturing_feature_ref=_object_ref(_first_child(step, "ManufacturingFeatureID")),
                 operation_ref=_object_ref(_first_child(step, "OperationID")),
+                reference=sp._text(step, "./{*}Reference"),
+                x=_optional_float_text(step, "X"),
+                y=_optional_float_text(step, "Y"),
             )
         )
 
