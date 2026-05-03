@@ -520,11 +520,24 @@ El emisor `iso_generation` compara exacto contra Maestro para:
 - `Pieza_018..019`: escuadrado `E001` horario/antihorario sin leads.
 - `Pieza_020..021`: escuadrado `E001` horario/antihorario con leads
   `Arc/Quote`.
+- `Pieza_022..024`: secuencia `E001` escuadrado + polilinea abierta `E004`
+  `Center`/`Left`/`Right`.
 
-La matriz `Pieza`, `Pieza_001..021` y `Pieza_004_Repeticiones` queda en 0
-diferencias normalizadas. `Pieza_022` queda como siguiente frontera porque
-combina escuadrado `E001` con polilinea `E004`; ambas familias ya comparan
-standalone, pero el emisor todavia no combina bloques operativos.
+La matriz `Pieza`, `Pieza_001..024`, `Pieza_004_Repeticiones`,
+`Pieza_DosHuecos`, `Pieza_DosHuecos_Origen_5_5_25`, `Pieza_Hueco8` y
+`Pieza_Hueco8_Origen_5_5_25` queda en 0 diferencias normalizadas.
+
+El escuadrado `E001` ya usa el borde de arranque real (`Bottom`, `Top`, `Left`
+o `Right`) y conserva la coordenada de arranque detectada en el perfil `.pgmx`
+cuando no coincide exactamente con el centro del borde. Esto fue necesario para
+comparar exacto `Cocina/mod 5 - Bajo despensero/Tapa_despensero`.
+
+El barrido `Cocina` disponible sin CNC compara
+`S:\Maestro\Projects\ProdAction\ISO\Cocina` contra
+`P:\USBMIX\ProdAction\ISO\Cocina`: el emisor genera 8/84 ISO y esos 8 comparan
+exactos. Los 76 restantes requieren combinaciones de familias y/o resolver
+taladros cuyo PGMX expone herramienta `0` aunque el ISO Maestro selecciona
+mandriles concretos.
 
 Tambien se generaron `Pieza_096` y `Pieza_097` como repeticion de la polilinea
 abierta de `Pieza_016..017` cambiando herramienta a `E003`. Quedan pendientes

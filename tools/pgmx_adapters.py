@@ -511,7 +511,7 @@ def _signed_area(points: tuple[tuple[float, float], ...]) -> float:
 def _detect_squaring_signature(
     snapshot: PgmxSnapshot,
     feature: PgmxFeatureSnapshot,
-) -> Optional[tuple[str, str]]:
+) -> Optional[tuple[str, str, float]]:
     geometry_ref = feature.geometry_ref
     if geometry_ref is None:
         return None
@@ -567,7 +567,8 @@ def _detect_squaring_signature(
     start_edge = _boundary_edge_for_point(points[0], length=length, width=width)
     if start_edge is None:
         return None
-    return (start_edge, winding)
+    start_coordinate = points[0][0] if start_edge in {"Bottom", "Top"} else points[0][1]
+    return (start_edge, winding, float(start_coordinate))
 
 
 def _adapt_drilling(
@@ -1012,11 +1013,12 @@ def _adapt_milling(
 
     squaring_signature = _detect_squaring_signature(snapshot, feature)
     if squaring_signature is not None:
-        start_edge, winding = squaring_signature
+        start_edge, winding, start_coordinate = squaring_signature
         try:
             spec = sp.build_squaring_milling_spec(
                 start_edge=start_edge,
                 winding=winding,
+                start_coordinate=start_coordinate,
                 feature_name=feature_name,
                 tool_id=tool_key.id,
                 tool_name=tool_key.name,

@@ -33,9 +33,10 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
     pasadas multiples.
   - polilinea abierta `E004` standalone en `Top`, con compensacion
     `Left`/`Right`.
-  - escuadrado `E001` standalone en `Top`, empezando por `Bottom`, con
-    winding horario/antihorario y sin leads o con leads `Arc/Quote`
-    observados.
+  - escuadrado `E001` standalone en `Top`, con cualquier borde de arranque
+    (`Bottom`, `Top`, `Left`, `Right`), winding horario/antihorario y sin
+    leads o con leads `Arc/Quote` observados.
+  - secuencia `E001` escuadrado + polilinea abierta `E004` en `Top`.
 - `comparator.py` compara ISO Maestro vs candidato con normalizacion simple.
 - `cli.py` ofrece comandos de inspeccion, cabecera y comparacion.
 - `machine_config/` contiene el snapshot inicial de configuracion:
@@ -49,9 +50,9 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   desde `maestro/Tlgx/def.tlgx`; offsets de cabezal para `E004` desde
   `xilog_plus/Cfg/pheads.cfg`; origen Y del marco `HG` desde el campo `H` de
   `xilog_plus/Cfg/fields.cfg`; `safe_z` desde `xilog_plus/Cfg/Params.cfg`.
-- El parking X del cierre ISO se lee del paso administrativo `Xn` del `.pgmx`
-  (`Reference/X/Y` capturados en `tools.pgmx_snapshot`). `Params.cfg` queda como
-  fallback de maquina si faltara `Xn.X`.
+- El parking X/Y del cierre ISO se lee del paso administrativo `Xn` del
+  `.pgmx` (`Reference/X/Y` capturados en `tools.pgmx_snapshot`). `Params.cfg`
+  queda como fallback de maquina si faltara `Xn.X`.
 - El emitter consume esos lectores y ya no mantiene tablas propias para largos,
   offsets, velocidades, avances ni mapeos por `tool_id` de las familias
   soportadas. Los valores ISO observados sin fuente inequivoca permanecen
@@ -138,16 +139,34 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
 - `Pieza_018..021` comparan igual contra Maestro: escuadrado `E001`
   antihorario/horario, sin leads y con leads `Arc/Quote`, 103/105 lineas
   normalizadas segun variante, 0 diferencias.
-- La matriz `Pieza`, `Pieza_001..021` y `Pieza_004_Repeticiones` compara
-  exacta: 23 piezas, 0 diferencias.
+- `Pieza_022..024` comparan igual contra Maestro: secuencia `E001`
+  escuadrado + polilinea abierta `E004` `Center`/`Left`/`Right`, 142/147
+  lineas normalizadas, 0 diferencias.
+- La matriz `Pieza`, `Pieza_001..024`, `Pieza_004_Repeticiones`,
+  `Pieza_DosHuecos`, `Pieza_DosHuecos_Origen_5_5_25`, `Pieza_Hueco8` y
+  `Pieza_Hueco8_Origen_5_5_25` compara exacta: 30 piezas, 0 diferencias.
 - El emisor ya acepta polilinea abierta standalone con `E003` ademas de `E004`
   usando los datos de herramienta del snapshot (`T3`, `SVL=111.500`,
   `SVR=4.760`). Se generaron fixtures PGMX pendientes de postprocesar:
   `Pieza_096` (`Left`) y `Pieza_097` (`Right`).
+- En el corpus Cocina, el emisor genera y compara exacto 8/84 piezas: los
+  escuadrados standalone de estantes/tapa. El barrido actualizado queda en
+  `tmp/cocina_iso_generated_20260503_171947`.
+- El adaptador de escuadrado conserva ahora la coordenada real de arranque
+  cuando el perfil `.pgmx` no empieza exactamente en el centro del borde; esto
+  cierra el caso `mod 5 - Bajo despensero/Tapa_despensero`.
 
 ## Proximo Paso
 
-Postprocesar en Maestro `Pieza_096` y `Pieza_097` para validar la polilinea con
-`E003`. Luego avanzar con combinaciones de familias: `Pieza_022` adapta como
-escuadrado `E001` + polilinea `E004`, pero el emisor todavia soporta esas
-familias solo como operaciones standalone.
+Sin acceso al CNC/Maestro, seguir desarrollando contra pares existentes
+`S:\Maestro\Projects\ProdAction\ISO` y `P:\USBMIX\ProdAction\ISO`. El siguiente
+frente recomendado es Cocina:
+
+- resolver taladros superiores de Cocina que adaptan con herramienta `0`, usando
+  la informacion disponible en toolpaths/snapshot para inferir mandril real;
+- luego habilitar combinaciones `escuadrado + taladros`;
+- despues avanzar con combinaciones `escuadrado + ranura`, `escuadrado +
+  fresado lineal` y `escuadrado + polilineas` con taladros.
+
+Cuando vuelva el acceso a Maestro, postprocesar `Pieza_096` y `Pieza_097` para
+validar la polilinea con `E003`.

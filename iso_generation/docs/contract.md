@@ -110,9 +110,11 @@ lineal `E004` en `Top` horizontal o vertical, con corte simple y estrategia PH5
 observada con pasadas multiples. Tambien cubre, como operaciones standalone,
 polilinea abierta `E004` en `Top` con compensacion `Left`/`Right`, candidato de
 polilinea abierta `E003` pendiente de validacion Maestro, y escuadrado `E001`
-en `Top` empezando por `Bottom`, horario/antihorario, sin leads o con los
-leads `Arc/Quote` observados. Las combinaciones entre familias y las demas
-familias deben fallar explicitamente hasta que se agreguen al MVP.
+en `Top` empezando por `Bottom`, `Top`, `Left` o `Right`,
+horario/antihorario, sin leads o con los leads `Arc/Quote` observados. La
+primera combinacion soportada es `E001` escuadrado seguido de polilinea abierta
+`E004`. Las demas combinaciones entre familias y las demas familias deben
+fallar explicitamente hasta que se agreguen al MVP.
 
 Nota de deuda tecnica: parte de `emitter.py` todavia contiene constantes
 aprendidas por comparacion ISO. La regla nueva exige migrar esas constantes a
@@ -137,11 +139,22 @@ La cuarta validacion compara `Pieza_006..015` contra Maestro. Cubre ranuras
 superiores no pasantes y pasantes con/sin extra, y fresado lineal `E004`
 vertical no pasante. Todas comparan con 0 diferencias normalizadas.
 
-La quinta validacion compara `Pieza_016..021` contra Maestro. Cubre polilinea
+La quinta validacion compara `Pieza_016..024` contra Maestro. Cubre polilinea
 abierta `E004` con compensacion `Left`/`Right`, escuadrado `E001`
-antihorario/horario sin leads, y escuadrado `E001` antihorario/horario con
-leads `Arc/Quote`. Todas comparan con 0 diferencias normalizadas. La matriz
-`Pieza`, `Pieza_001..021` y `Pieza_004_Repeticiones` compara exacta.
+antihorario/horario sin leads, escuadrado `E001` antihorario/horario con leads
+`Arc/Quote`, y la secuencia `E001` escuadrado + polilinea abierta `E004`
+`Center`/`Left`/`Right`. Todas comparan con 0 diferencias normalizadas. La
+matriz `Pieza`, `Pieza_001..024`, `Pieza_004_Repeticiones`,
+`Pieza_DosHuecos`, `Pieza_DosHuecos_Origen_5_5_25`, `Pieza_Hueco8` y
+`Pieza_Hueco8_Origen_5_5_25` compara exacta.
+
+El corpus Cocina se usa como corpus real de validacion sin depender del CNC:
+`S:\Maestro\Projects\ProdAction\ISO\Cocina` contra
+`P:\USBMIX\ProdAction\ISO\Cocina`. En el barrido
+`tmp/cocina_iso_generated_20260503_171947`, el emisor genera 8/84 ISO y esos 8
+comparan exactos. Todos son escuadrados standalone `E001`; el resto falla por
+combinaciones pendientes o por taladros de Cocina cuya herramienta publica en
+PGMX aparece como `0`.
 
 Validacion pendiente: `Pieza_096` y `Pieza_097` replican la polilinea abierta
 de `Pieza_016..017` cambiando la herramienta a `E003`; los `.pgmx` adaptan con

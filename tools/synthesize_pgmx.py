@@ -400,6 +400,7 @@ class SquaringMillingSpec:
 
     start_edge: str = "Bottom"
     winding: str = "CounterClockwise"
+    start_coordinate: Optional[float] = None
     feature_name: str = "Fresado"
     plane_name: str = "Top"
     tool_id: str = "1900"
@@ -8761,6 +8762,7 @@ def build_squaring_milling_spec(
     *,
     start_edge: Optional[str] = None,
     winding: Optional[str] = None,
+    start_coordinate: Optional[float] = None,
     feature_name: Optional[str] = None,
     tool_id: Optional[str] = None,
     tool_name: Optional[str] = None,
@@ -8870,6 +8872,7 @@ def build_squaring_milling_spec(
     return SquaringMillingSpec(
         start_edge=_normalize_squaring_start_edge(start_edge),
         winding=_normalize_geometry_winding(winding),
+        start_coordinate=None if start_coordinate is None else float(start_coordinate),
         feature_name=(feature_name or "Fresado").strip() or "Fresado",
         tool_id=(tool_id or "1900").strip() or "1900",
         tool_name=(tool_name or "E001").strip() or "E001",
