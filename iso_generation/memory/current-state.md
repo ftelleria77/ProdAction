@@ -149,6 +149,17 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   usando los datos de herramienta del snapshot (`T3`, `SVL=111.500`,
   `SVR=4.760`). Se generaron fixtures PGMX pendientes de postprocesar:
   `Pieza_096` (`Left`) y `Pieza_097` (`Right`).
+- En la matriz raiz `S:\Maestro\Projects\ProdAction\ISO\Pieza*.pgmx`, todo
+  archivo con par Maestro en `P:\USBMIX\ProdAction\ISO` compara exacto:
+  101 piezas con 0 diferencias normalizadas; `Pieza_096` y `Pieza_097` quedan
+  como `miss` porque no existe ISO de referencia.
+- El emisor nativo ya cubre, en secuencia con `E001` cuando corresponde:
+  circulos `E004` centro/izquierda/derecha, horario/antihorario, helicoidal,
+  PH5 unidireccional/bidireccional y leads `Line/Arc`; polilineas abiertas
+  `E004` con PH5 y leads `Line/Arc`; polilineas cerradas `E003/E004` con leads
+  `Line/Arc`, PH5, offset lateral explicito y arcos de esquina cuando Maestro
+  compensa por fuera; y escuadrados `E001` con leads `Line/Arc` en modos
+  `Quote` y `Down/Up`.
 - En el corpus Cocina, el emisor genera y compara exacto 8/84 piezas: los
   escuadrados standalone de estantes/tapa. El barrido actualizado queda en
   `tmp/cocina_iso_generated_20260503_171947`.
@@ -159,8 +170,9 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
 ## Proximo Paso
 
 Sin acceso al CNC/Maestro, seguir desarrollando contra pares existentes
-`S:\Maestro\Projects\ProdAction\ISO` y `P:\USBMIX\ProdAction\ISO`. El siguiente
-frente recomendado es Cocina:
+`S:\Maestro\Projects\ProdAction\ISO` y `P:\USBMIX\ProdAction\ISO`. La matriz
+raiz `Pieza*.pgmx` ya quedo cerrada contra todos los pares disponibles. El
+siguiente frente recomendado es Cocina:
 
 - resolver taladros superiores de Cocina que adaptan con herramienta `0`, usando
   la informacion disponible en toolpaths/snapshot para inferir mandril real;

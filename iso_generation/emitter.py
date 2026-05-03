@@ -41,6 +41,7 @@ _SupportedOperation = (
     | sp.LineMillingSpec
     | sp.SlotMillingSpec
     | sp.PolylineMillingSpec
+    | sp.CircleMillingSpec
     | sp.SquaringMillingSpec
 )
 
@@ -48,6 +49,7 @@ _TopProfileOperation = (
     sp.LineMillingSpec
     | sp.SlotMillingSpec
     | sp.PolylineMillingSpec
+    | sp.CircleMillingSpec
     | sp.SquaringMillingSpec
 )
 
@@ -147,6 +149,8 @@ def emit_iso_program(
     - E004 horizontal line milling on the top plane.
     - 082 horizontal slot milling on the top plane.
     - E004 open polyline milling on the top plane without custom leads.
+    - E004 circle milling on the top plane for observed no-lead, lead and
+      strategy cases.
     - E001 bottom-start squaring on the top plane with no leads or observed
       Arc/Quote leads.
     """
@@ -164,9 +168,19 @@ def emit_iso_program(
         lines.extend(_emit_empty_program_end(park_x))
     else:
         first_operation = operations[0]
-        include_top_profile_reset = isinstance(
-            first_operation,
-            (sp.PolylineMillingSpec, sp.SquaringMillingSpec),
+        include_top_profile_reset = (
+            isinstance(first_operation, sp.PolylineMillingSpec)
+            or (
+                isinstance(first_operation, sp.CircleMillingSpec)
+                and (
+                    _circle_compensation(first_operation) is not None
+                    or _circle_has_leads(first_operation)
+                )
+            )
+            or (
+                isinstance(first_operation, sp.SquaringMillingSpec)
+                and first_operation.milling_strategy is None
+            )
         )
         lines.extend(
             _emit_hg_preamble(
@@ -193,10 +207,14 @@ def emit_iso_program(
                         "Line milling after drilling is not implemented yet."
                     )
                 if top_profile_seen:
-                    raise IsoEmissionNotImplemented(
-                        "Line milling after another profile operation is not implemented yet."
+                    lines.extend(_emit_top_profile_milling_transition(operation))
+                lines.extend(
+                    _emit_line_milling(
+                        source.state,
+                        operation,
+                        include_full_setup=not top_profile_seen,
                     )
-                lines.extend(_emit_line_milling(source.state, operation))
+                )
                 top_profile_seen = True
                 continue
             if isinstance(operation, sp.SlotMillingSpec):
@@ -227,6 +245,22 @@ def emit_iso_program(
                 )
                 top_profile_seen = True
                 continue
+            if isinstance(operation, sp.CircleMillingSpec):
+                if previous is not None:
+                    raise IsoEmissionNotImplemented(
+                        "Circle milling after drilling is not implemented yet."
+                    )
+                if top_profile_seen:
+                    lines.extend(_emit_top_profile_milling_transition(operation))
+                lines.extend(
+                    _emit_circle_milling(
+                        source.state,
+                        operation,
+                        include_full_setup=not top_profile_seen,
+                    )
+                )
+                top_profile_seen = True
+                continue
             if isinstance(operation, sp.SquaringMillingSpec):
                 if previous is not None:
                     raise IsoEmissionNotImplemented(
@@ -247,7 +281,12 @@ def emit_iso_program(
         last_operation = operations[-1]
         if isinstance(
             last_operation,
-            (sp.LineMillingSpec, sp.PolylineMillingSpec, sp.SquaringMillingSpec),
+            (
+                sp.LineMillingSpec,
+                sp.PolylineMillingSpec,
+                sp.CircleMillingSpec,
+                sp.SquaringMillingSpec,
+            ),
         ):
             lines.extend(_emit_line_milling_program_end(park_x))
         elif isinstance(last_operation, sp.SlotMillingSpec):
@@ -282,9 +321,17 @@ def _validate_supported_source(source: PgmxIsoSource) -> None:
                 "Only administrative Xn ignored steps are supported by the "
                 f"initial emitter; got {entry.working_step_name!r}."
             )
-    supports_squaring_then_polyline = _supports_squaring_then_polyline(source)
+    supports_squaring_then_line = _supports_squaring_then(source, sp.LineMillingSpec)
+    supports_squaring_then_polyline = _supports_squaring_then(
+        source,
+        sp.PolylineMillingSpec,
+    )
+    supports_squaring_then_circle = _supports_squaring_then(
+        source,
+        sp.CircleMillingSpec,
+    )
     if source.adaptation.line_millings:
-        if (
+        if not supports_squaring_then_line and (
             len(source.adaptation.line_millings) != 1
             or source.adaptation.drillings
             or source.adaptation.drilling_patterns
@@ -323,9 +370,25 @@ def _validate_supported_source(source: PgmxIsoSource) -> None:
             )
         _validate_supported_polyline_milling(source.adaptation.polyline_millings[0])
     if source.adaptation.circle_millings:
-        raise IsoEmissionNotImplemented("Circle milling emission is not implemented yet.")
+        if not supports_squaring_then_circle and (
+            len(source.adaptation.circle_millings) != 1
+            or source.adaptation.drillings
+            or source.adaptation.drilling_patterns
+            or source.adaptation.line_millings
+            or source.adaptation.slot_millings
+            or source.adaptation.polyline_millings
+            or source.adaptation.squaring_millings
+        ):
+            raise IsoEmissionNotImplemented(
+                "The initial circle milling emitter supports one standalone circle."
+            )
+        _validate_supported_circle_milling(source.adaptation.circle_millings[0])
     if source.adaptation.squaring_millings:
-        if not supports_squaring_then_polyline and (
+        if not (
+            supports_squaring_then_line
+            or supports_squaring_then_polyline
+            or supports_squaring_then_circle
+        ) and (
             len(source.adaptation.squaring_millings) != 1
             or source.adaptation.drillings
             or source.adaptation.drilling_patterns
@@ -345,28 +408,54 @@ def _validate_supported_source(source: PgmxIsoSource) -> None:
         _validate_supported_drilling(drilling)
 
 
-def _supports_squaring_then_polyline(source: PgmxIsoSource) -> bool:
+def _supports_squaring_then(
+    source: PgmxIsoSource,
+    next_type: (
+        type[sp.LineMillingSpec]
+        | type[sp.PolylineMillingSpec]
+        | type[sp.CircleMillingSpec]
+    ),
+) -> bool:
     adaptation = source.adaptation
+    if next_type is sp.LineMillingSpec:
+        expected_next = len(adaptation.line_millings) == 1
+        no_other_next = (
+            not adaptation.polyline_millings
+            and not adaptation.slot_millings
+            and not adaptation.circle_millings
+        )
+    elif next_type is sp.PolylineMillingSpec:
+        expected_next = len(adaptation.polyline_millings) == 1
+        no_other_next = (
+            not adaptation.line_millings
+            and not adaptation.slot_millings
+            and not adaptation.circle_millings
+        )
+    else:
+        expected_next = len(adaptation.circle_millings) == 1
+        no_other_next = (
+            not adaptation.line_millings
+            and not adaptation.slot_millings
+            and not adaptation.polyline_millings
+        )
     if (
         len(adaptation.squaring_millings) != 1
-        or len(adaptation.polyline_millings) != 1
+        or not expected_next
+        or not no_other_next
         or adaptation.drillings
         or adaptation.drilling_patterns
-        or adaptation.line_millings
-        or adaptation.slot_millings
-        or adaptation.circle_millings
     ):
         return False
     operations = [
         entry.spec
         for entry in adaptation.entries
         if entry.status == "adapted"
-        and isinstance(entry.spec, (sp.SquaringMillingSpec, sp.PolylineMillingSpec))
+        and isinstance(entry.spec, (sp.SquaringMillingSpec, next_type))
     ]
     return (
         len(operations) == 2
         and isinstance(operations[0], sp.SquaringMillingSpec)
-        and isinstance(operations[1], sp.PolylineMillingSpec)
+        and isinstance(operations[1], next_type)
     )
 
 
@@ -383,29 +472,51 @@ def _validate_supported_line_milling(line_milling: sp.LineMillingSpec) -> None:
     _line_milling_tool(line_milling)
     if line_milling.plane_name != "Top":
         raise IsoEmissionNotImplemented("Line milling supports only the Top plane.")
-    if line_milling.side_of_feature != "Center":
-        raise IsoEmissionNotImplemented("Line milling supports only Center side.")
+    if line_milling.side_of_feature not in {"Center", "Left", "Right"}:
+        raise IsoEmissionNotImplemented(
+            f"Unsupported line milling side {line_milling.side_of_feature!r}."
+        )
     if _line_milling_axis(line_milling) is None:
         raise IsoEmissionNotImplemented("Line milling supports only axis-aligned lines.")
-    if line_milling.approach.is_enabled or line_milling.retract.is_enabled:
+    if (
+        line_milling.approach.is_enabled or line_milling.retract.is_enabled
+    ) and not _line_milling_has_quote_lines(line_milling):
         raise IsoEmissionNotImplemented(
             "Line milling approach/retract curves are not implemented yet."
         )
     strategy = line_milling.milling_strategy
+    if (
+        strategy is None
+        and line_milling.side_of_feature != "Center"
+        and not _line_milling_has_quote_lines(line_milling)
+    ):
+        raise IsoEmissionNotImplemented(
+            "Line milling side compensation needs the observed Line/Quote leads."
+        )
     if strategy is None:
+        return
+    if isinstance(strategy, sp.BidirectionalMillingStrategySpec):
+        if (
+            not strategy.allow_multiple_passes
+            or strategy.axial_cutting_depth <= 0.0
+            or strategy.axial_finish_cutting_depth != 0.0
+        ):
+            raise IsoEmissionNotImplemented(
+                "Line milling supports only the observed bidirectional PH5 strategy."
+            )
         return
     if not isinstance(strategy, sp.UnidirectionalMillingStrategySpec):
         raise IsoEmissionNotImplemented(
-            "Line milling supports only unidirectional multiple-pass strategy."
+            "Line milling supports only observed uni/bidirectional multiple-pass strategies."
         )
     if (
-        strategy.connection_mode != "InPiece"
+        strategy.connection_mode not in {"InPiece", "SafetyHeight"}
         or not strategy.allow_multiple_passes
         or strategy.axial_cutting_depth <= 0.0
         or strategy.axial_finish_cutting_depth != 0.0
     ):
         raise IsoEmissionNotImplemented(
-            "Line milling supports only the observed PH5 InPiece strategy."
+            "Line milling supports only the observed PH5 strategies."
         )
 
 
@@ -437,18 +548,143 @@ def _validate_supported_polyline_milling(polyline_milling: sp.PolylineMillingSpe
         )
     if len(polyline_milling.points) < 2:
         raise IsoEmissionNotImplemented("Polyline milling needs at least two points.")
-    if _polyline_is_closed(polyline_milling):
-        raise IsoEmissionNotImplemented("Closed polyline milling is not implemented yet.")
-    if polyline_milling.approach.is_enabled or polyline_milling.retract.is_enabled:
+    if _polyline_is_closed(polyline_milling) and _polyline_has_default_leads(polyline_milling):
         raise IsoEmissionNotImplemented(
-            "Polyline milling approach/retract curves are not implemented yet."
+            "Closed polyline milling without leads is not implemented yet."
         )
-    if polyline_milling.milling_strategy is not None:
+    strategy = polyline_milling.milling_strategy
+    has_supported_leads = (
+        _polyline_has_default_leads(polyline_milling)
+        or _polyline_has_quote_lines(polyline_milling)
+        or _polyline_has_down_up_lines(polyline_milling)
+        or _polyline_has_quote_arcs(polyline_milling)
+        or _polyline_has_down_up_arcs(polyline_milling)
+    )
+    if not has_supported_leads:
         raise IsoEmissionNotImplemented(
-            "Polyline milling strategies are not implemented yet."
+            "Polyline milling supports only no leads or observed Line/Arc leads."
         )
+    if strategy is not None:
+        if _polyline_has_leads(polyline_milling):
+            if not (
+                _polyline_is_closed(polyline_milling)
+                and _polyline_has_down_up_lines(polyline_milling)
+            ):
+                raise IsoEmissionNotImplemented(
+                    "Polyline milling strategies with approach/retract are not implemented yet."
+                )
+        elif polyline_milling.side_of_feature != "Center":
+            raise IsoEmissionNotImplemented(
+                "Polyline milling strategies support only the observed Center side."
+            )
+        if isinstance(strategy, sp.UnidirectionalMillingStrategySpec):
+            expected_connection = (
+                "InPiece"
+                if _polyline_is_closed(polyline_milling)
+                and _polyline_has_down_up_lines(polyline_milling)
+                else "SafetyHeight"
+            )
+            if (
+                strategy.connection_mode != expected_connection
+                or not strategy.allow_multiple_passes
+                or strategy.axial_cutting_depth <= 0.0
+                or strategy.axial_finish_cutting_depth != 0.0
+            ):
+                raise IsoEmissionNotImplemented(
+                    "Polyline milling supports only the observed SafetyHeight PH5 strategy."
+                )
+        elif isinstance(strategy, sp.BidirectionalMillingStrategySpec):
+            if (
+                not strategy.allow_multiple_passes
+                or strategy.axial_cutting_depth <= 0.0
+                or strategy.axial_finish_cutting_depth != 0.0
+            ):
+                raise IsoEmissionNotImplemented(
+                    "Polyline milling supports only the observed bidirectional PH5 strategy."
+                )
+        else:
+            raise IsoEmissionNotImplemented(
+                "Polyline milling supports only observed uni/bidirectional strategies."
+            )
+    if strategy is not None:
+        return
     if polyline_milling.depth_spec.target_depth is None and not polyline_milling.depth_spec.is_through:
         raise IsoEmissionNotImplemented("Polyline milling needs a target depth.")
+
+
+def _validate_supported_circle_milling(circle_milling: sp.CircleMillingSpec) -> None:
+    _circle_milling_tool(circle_milling)
+    if circle_milling.plane_name != "Top":
+        raise IsoEmissionNotImplemented("Circle milling supports only the Top plane.")
+    if circle_milling.side_of_feature not in {"Center", "Left", "Right"}:
+        raise IsoEmissionNotImplemented(
+            f"Unsupported circle side {circle_milling.side_of_feature!r}."
+        )
+    if circle_milling.winding not in {"Clockwise", "CounterClockwise"}:
+        raise IsoEmissionNotImplemented(
+            f"Unsupported circle winding {circle_milling.winding!r}."
+        )
+    if circle_milling.radius <= 0.0:
+        raise IsoEmissionNotImplemented("Circle milling needs a positive radius.")
+    if circle_milling.depth_spec.target_depth is None and not circle_milling.depth_spec.is_through:
+        raise IsoEmissionNotImplemented("Circle milling needs a target depth.")
+    has_supported_leads = (
+        _circle_has_default_leads(circle_milling)
+        or _circle_has_quote_lines(circle_milling)
+        or _circle_has_down_up_lines(circle_milling)
+        or _circle_has_quote_arcs(circle_milling)
+        or _circle_has_down_up_arcs(circle_milling)
+    )
+    if not has_supported_leads:
+        raise IsoEmissionNotImplemented(
+            "Circle milling supports only no leads or observed Line/Arc leads."
+        )
+    if _circle_has_leads(circle_milling) and circle_milling.side_of_feature != "Center":
+        raise IsoEmissionNotImplemented(
+            "Circle milling leads support only the observed Center side."
+        )
+    strategy = circle_milling.milling_strategy
+    if strategy is None:
+        return
+    if _circle_has_leads(circle_milling):
+        raise IsoEmissionNotImplemented(
+            "Circle milling strategies with approach/retract are not implemented yet."
+        )
+    if isinstance(strategy, sp.HelicalMillingStrategySpec):
+        if (
+            circle_milling.side_of_feature != "Center"
+            or not strategy.allows_finish_cutting
+            or strategy.axial_cutting_depth < 0.0
+            or strategy.axial_finish_cutting_depth != 0.0
+        ):
+            raise IsoEmissionNotImplemented(
+                "Circle milling supports only the observed center helical strategy."
+            )
+        return
+    if isinstance(strategy, sp.UnidirectionalMillingStrategySpec):
+        if (
+            strategy.connection_mode != "InPiece"
+            or not strategy.allow_multiple_passes
+            or strategy.axial_cutting_depth <= 0.0
+            or strategy.axial_finish_cutting_depth != 0.0
+        ):
+            raise IsoEmissionNotImplemented(
+                "Circle milling supports only the observed unidirectional PH5 strategy."
+            )
+        return
+    if isinstance(strategy, sp.BidirectionalMillingStrategySpec):
+        if (
+            not strategy.allow_multiple_passes
+            or strategy.axial_cutting_depth <= 0.0
+            or strategy.axial_finish_cutting_depth != 0.0
+        ):
+            raise IsoEmissionNotImplemented(
+                "Circle milling supports only the observed bidirectional PH5 strategy."
+            )
+        return
+    raise IsoEmissionNotImplemented(
+        "Circle milling supports only observed uni/bidirectional/helical strategies."
+    )
 
 
 def _validate_supported_squaring_milling(squaring_milling: sp.SquaringMillingSpec) -> None:
@@ -466,12 +702,44 @@ def _validate_supported_squaring_milling(squaring_milling: sp.SquaringMillingSpe
     if not (
         _squaring_has_default_leads(squaring_milling)
         or _squaring_has_quote_arcs(squaring_milling)
+        or _squaring_has_quote_lines(squaring_milling)
+        or _squaring_has_down_up_arcs(squaring_milling)
+        or _squaring_has_down_up_lines(squaring_milling)
     ):
         raise IsoEmissionNotImplemented(
-            "Squaring supports only no leads or observed Arc/Quote leads."
+            "Squaring supports only no leads or observed Line/Arc leads."
         )
-    if squaring_milling.milling_strategy is not None:
-        raise IsoEmissionNotImplemented("Squaring strategies are not implemented yet.")
+    strategy = squaring_milling.milling_strategy
+    if strategy is not None:
+        if squaring_milling.start_edge != "Bottom" or not _squaring_has_quote_arcs(
+            squaring_milling
+        ):
+            raise IsoEmissionNotImplemented(
+                "Squaring strategies support only the observed Bottom Arc/Quote case."
+            )
+        if isinstance(strategy, sp.UnidirectionalMillingStrategySpec):
+            if (
+                strategy.connection_mode != "InPiece"
+                or not strategy.allow_multiple_passes
+                or strategy.axial_cutting_depth <= 0.0
+                or strategy.axial_finish_cutting_depth != 0.0
+            ):
+                raise IsoEmissionNotImplemented(
+                    "Squaring supports only the observed unidirectional InPiece strategy."
+                )
+        elif isinstance(strategy, sp.BidirectionalMillingStrategySpec):
+            if (
+                not strategy.allow_multiple_passes
+                or strategy.axial_cutting_depth <= 0.0
+                or strategy.axial_finish_cutting_depth != 0.0
+            ):
+                raise IsoEmissionNotImplemented(
+                    "Squaring supports only the observed bidirectional strategy."
+                )
+        else:
+            raise IsoEmissionNotImplemented(
+                "Squaring supports only observed uni/bidirectional strategies."
+            )
     if squaring_milling.depth_spec.target_depth is None and not squaring_milling.depth_spec.is_through:
         raise IsoEmissionNotImplemented("Squaring needs a target depth.")
 
@@ -489,6 +757,9 @@ def _ordered_operations(source: PgmxIsoSource) -> tuple[_SupportedOperation, ...
             raw.append(spec)
             continue
         if isinstance(spec, sp.PolylineMillingSpec):
+            raw.append(spec)
+            continue
+        if isinstance(spec, sp.CircleMillingSpec):
             raw.append(spec)
             continue
         if isinstance(spec, sp.SquaringMillingSpec):
@@ -1068,64 +1339,134 @@ def _format_side_full_rapid(point: tuple[float, float, float]) -> str:
 def _emit_line_milling(
     state: sp.PgmxState,
     line_milling: sp.LineMillingSpec,
+    *,
+    include_full_setup: bool = True,
 ) -> tuple[str, ...]:
     tool = _line_milling_tool(line_milling)
     rapid_z = line_milling.security_plane + tool.tool_offset_length
     cut_z = _line_milling_cut_z(state, line_milling)
     tool_radius = line_milling.tool_width / 2.0
+    strategy = line_milling.milling_strategy
+    quote_lines = _line_milling_has_quote_lines(line_milling)
+    uses_coordinate_offset = strategy is not None and line_milling.side_of_feature != "Center"
+    start_point, end_point = _line_milling_toolpath_points(
+        line_milling,
+        tool_radius if uses_coordinate_offset else 0.0,
+    )
+    unit_x, unit_y = _unit_vector(start_point, end_point)
+    entry_point = (
+        start_point[0] - (unit_x * line_milling.tool_width),
+        start_point[1] - (unit_y * line_milling.tool_width),
+    )
+    exit_point = (
+        end_point[0] + (unit_x * line_milling.tool_width),
+        end_point[1] + (unit_y * line_milling.tool_width),
+    )
+    compensation = None if strategy is not None else _line_milling_compensation(line_milling)
+    if quote_lines:
+        if compensation is not None:
+            rapid_point = (entry_point[0] - unit_x, entry_point[1] - unit_y)
+        else:
+            rapid_point = entry_point
+    else:
+        rapid_point = start_point
     lines: list[str] = [
         "MLV=0",
         f"T{tool.tool_number}",
         "SYN",
         "M06",
-        f"?%ETK[6]={tool.spindle}",
-        f"?%ETK[9]={tool.tool_code}",
-        f"?%ETK[18]={tool.etk18}",
-        f"S{_format_spindle_speed(tool.spindle_speed)}M3",
-        "G17",
-        "MLV=2",
-        f"%Or[0].ofX={_format_mm(-(state.length + (2.0 * state.origin_x)) * 1000.0)}",
-        _work_origin_y_line(),
-        f"%Or[0].ofZ={_format_mm((state.depth + state.origin_z) * 1000.0)}",
-        "MLV=1",
-        f"SHF[X]={_format_mm(-(state.length + state.origin_x))}",
-        f"SHF[Y]={_format_mm(_base_shf_y(state.origin_y))}",
-        f"SHF[Z]={_format_mm(state.depth + state.origin_z)}",
-        "MLV=2",
-        "?%ETK[13]=1",
-        "MLV=2",
-        f"SHF[X]={_format_mm(tool.shf_x)}",
-        f"SHF[Y]={_format_mm(tool.shf_y)}",
-        f"SHF[Z]={_format_mm(tool.shf_z)}",
-        f"G0 X{_format_mm(line_milling.start_x)} Y{_format_mm(line_milling.start_y)}",
+    ]
+    if include_full_setup:
+        lines.append(f"?%ETK[6]={tool.spindle}")
+    lines.extend(
+        [
+            f"?%ETK[9]={tool.tool_code}",
+            f"?%ETK[18]={tool.etk18}",
+            f"S{_format_spindle_speed(tool.spindle_speed)}M3",
+            "G17",
+            "MLV=2",
+        ]
+    )
+    if include_full_setup:
+        lines.extend(
+            [
+                f"%Or[0].ofX={_format_mm(-(state.length + (2.0 * state.origin_x)) * 1000.0)}",
+                _work_origin_y_line(),
+                f"%Or[0].ofZ={_format_mm((state.depth + state.origin_z) * 1000.0)}",
+                "MLV=1",
+                f"SHF[X]={_format_mm(-(state.length + state.origin_x))}",
+                f"SHF[Y]={_format_mm(_base_shf_y(state.origin_y))}",
+                f"SHF[Z]={_format_mm(state.depth + state.origin_z)}",
+                "MLV=2",
+                "?%ETK[13]=1",
+                "MLV=2",
+                f"SHF[X]={_format_mm(tool.shf_x)}",
+                f"SHF[Y]={_format_mm(tool.shf_y)}",
+                f"SHF[Z]={_format_mm(tool.shf_z)}",
+            ]
+        )
+    else:
+        lines.append("?%ETK[13]=1")
+    lines.extend(
+        [
+        f"G0 X{_format_mm(rapid_point[0])} Y{_format_mm(rapid_point[1])}",
         f"G0 Z{_format_mm(rapid_z)}",
         "D1",
         f"SVL {_format_mm(rapid_z - line_milling.security_plane)}",
         f"VL6={_format_mm(rapid_z - line_milling.security_plane)}",
         f"SVR {_format_mm(tool_radius)}",
         f"VL7={_format_mm(tool_radius)}",
-    ]
-    strategy = line_milling.milling_strategy
+        ]
+    )
     if strategy is None:
-        lines.extend(
-            [
-                f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}",
-                "?%ETK[7]=4",
-                _emit_line_milling_move(
+        if quote_lines:
+            lines.extend(
+                _emit_line_milling_quote_single_pass(
                     line_milling,
-                    _line_milling_end_coordinate(line_milling),
+                    tool,
                     cut_z,
-                    tool.milling_feed,
-                ),
-                f"G0 Z{_format_mm(line_milling.security_plane)}",
-            ]
-        )
+                    start_point,
+                    end_point,
+                    entry_point,
+                    exit_point,
+                    compensation,
+                    (unit_x, unit_y),
+                )
+            )
+        else:
+            lines.extend(
+                [
+                    f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}",
+                    "?%ETK[7]=4",
+                    _emit_line_milling_move(
+                        line_milling,
+                        _line_milling_end_coordinate(line_milling),
+                        cut_z,
+                        tool.milling_feed,
+                    ),
+                    f"G0 Z{_format_mm(line_milling.security_plane)}",
+                ]
+            )
     else:
         lines.append(
             f"G1 Z{_format_mm(line_milling.security_plane)} F{_format_mm(tool.plunge_feed)}"
         )
         lines.append("?%ETK[7]=4")
-        lines.extend(_emit_line_milling_passes(line_milling, tool, cut_z, strategy))
+        if quote_lines:
+            lines.extend(
+                _emit_line_milling_quote_passes(
+                    line_milling,
+                    tool,
+                    cut_z,
+                    strategy,
+                    start_point,
+                    end_point,
+                    entry_point,
+                    exit_point,
+                )
+            )
+        else:
+            lines.extend(_emit_line_milling_passes(line_milling, tool, cut_z, strategy))
         lines.append(f"G0 Z{_format_mm(line_milling.security_plane)}")
     lines.extend(
         [
@@ -1137,6 +1478,68 @@ def _emit_line_milling(
             "?%ETK[7]=0",
         ]
     )
+    return tuple(lines)
+
+
+def _emit_line_milling_quote_single_pass(
+    line_milling: sp.LineMillingSpec,
+    tool: _LineMillingTool,
+    cut_z: float,
+    start_point: tuple[float, float],
+    end_point: tuple[float, float],
+    entry_point: tuple[float, float],
+    exit_point: tuple[float, float],
+    compensation: str | None,
+    unit: tuple[float, float],
+) -> tuple[str, ...]:
+    lines: list[str] = ["?%ETK[7]=4"]
+    if compensation is not None:
+        lines.append(compensation)
+        lines.append(
+            _format_polyline_xyz_move(
+                entry_point,
+                line_milling.security_plane,
+                tool.plunge_feed,
+            )
+        )
+    lines.append(f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}")
+    lines.append(
+        _emit_line_milling_point_move(
+            line_milling,
+            start_point,
+            cut_z,
+            tool.plunge_feed,
+        )
+    )
+    lines.append(
+        _emit_line_milling_point_move(
+            line_milling,
+            end_point,
+            cut_z,
+            tool.milling_feed,
+        )
+    )
+    lines.append(
+        _emit_line_milling_point_move(
+            line_milling,
+            exit_point,
+            cut_z,
+            tool.milling_feed,
+        )
+    )
+    lines.append(
+        f"G1 Z{_format_mm(line_milling.security_plane)} F{_format_mm(tool.milling_feed)}"
+    )
+    if compensation is not None:
+        lines.append("G40")
+        clearance_point = (exit_point[0] + unit[0], exit_point[1] + unit[1])
+        lines.append(
+            _format_polyline_xyz_move(
+                clearance_point,
+                line_milling.security_plane,
+                tool.milling_feed,
+            )
+        )
     return tuple(lines)
 
 
@@ -1177,6 +1580,189 @@ def _emit_line_milling_passes(
     return tuple(lines)
 
 
+def _emit_line_milling_quote_passes(
+    line_milling: sp.LineMillingSpec,
+    tool: _LineMillingTool,
+    final_depth: float,
+    strategy: sp.MillingStrategySpec,
+    start_point: tuple[float, float],
+    end_point: tuple[float, float],
+    entry_point: tuple[float, float],
+    exit_point: tuple[float, float],
+) -> tuple[str, ...]:
+    if isinstance(strategy, sp.UnidirectionalMillingStrategySpec):
+        if strategy.connection_mode != "SafetyHeight":
+            raise IsoEmissionNotImplemented(
+                "Quote line milling supports only SafetyHeight unidirectional strategy."
+            )
+        return _emit_line_milling_quote_safety_height_passes(
+            line_milling,
+            tool,
+            final_depth,
+            strategy,
+            start_point,
+            end_point,
+            entry_point,
+            exit_point,
+        )
+    if isinstance(strategy, sp.BidirectionalMillingStrategySpec):
+        return _emit_line_milling_quote_bidirectional_passes(
+            line_milling,
+            tool,
+            final_depth,
+            strategy,
+            start_point,
+            end_point,
+            entry_point,
+            exit_point,
+        )
+    raise IsoEmissionNotImplemented(
+        "Line milling quote passes support only observed uni/bidirectional strategies."
+    )
+
+
+def _emit_line_milling_quote_safety_height_passes(
+    line_milling: sp.LineMillingSpec,
+    tool: _LineMillingTool,
+    final_depth: float,
+    strategy: sp.UnidirectionalMillingStrategySpec,
+    start_point: tuple[float, float],
+    end_point: tuple[float, float],
+    entry_point: tuple[float, float],
+    exit_point: tuple[float, float],
+) -> tuple[str, ...]:
+    lines: list[str] = []
+    step = abs(float(strategy.axial_cutting_depth))
+    depths = _line_milling_pass_depths(final_depth, step)
+    for index, depth in enumerate(depths):
+        lines.append(f"G1 Z{_format_mm(depth)} F{_format_mm(tool.milling_feed)}")
+        if index == 0:
+            lines.append(
+                _emit_line_milling_point_move(
+                    line_milling,
+                    start_point,
+                    depth,
+                    tool.milling_feed,
+                )
+            )
+        lines.append(
+            _emit_line_milling_point_move(
+                line_milling,
+                end_point,
+                depth,
+                tool.milling_feed,
+            )
+        )
+        if index == len(depths) - 1:
+            lines.append(
+                _emit_line_milling_point_move(
+                    line_milling,
+                    exit_point,
+                    depth,
+                    tool.milling_feed,
+                )
+            )
+            lines.append(
+                f"G1 Z{_format_mm(line_milling.security_plane)} F{_format_mm(tool.milling_feed)}"
+            )
+            continue
+        lines.append(
+            f"G1 Z{_format_mm(line_milling.security_plane)} F{_format_mm(tool.milling_feed)}"
+        )
+        lines.append(
+            _emit_line_milling_point_move(
+                line_milling,
+                start_point,
+                line_milling.security_plane,
+                tool.milling_feed,
+            )
+        )
+    return tuple(lines)
+
+
+def _emit_line_milling_quote_bidirectional_passes(
+    line_milling: sp.LineMillingSpec,
+    tool: _LineMillingTool,
+    final_depth: float,
+    strategy: sp.BidirectionalMillingStrategySpec,
+    start_point: tuple[float, float],
+    end_point: tuple[float, float],
+    entry_point: tuple[float, float],
+    exit_point: tuple[float, float],
+) -> tuple[str, ...]:
+    lines: list[str] = []
+    step = abs(float(strategy.axial_cutting_depth))
+    depths = _line_milling_pass_depths(final_depth, step)
+    forward = True
+    current_point = entry_point
+    for index, depth in enumerate(depths):
+        lines.append(f"G1 Z{_format_mm(depth)} F{_format_mm(tool.milling_feed)}")
+        is_last = index == len(depths) - 1
+        if forward:
+            if not _same_xy(current_point, start_point):
+                lines.append(
+                    _emit_line_milling_point_move(
+                        line_milling,
+                        start_point,
+                        depth,
+                        tool.milling_feed,
+                    )
+                )
+            lines.append(
+                _emit_line_milling_point_move(
+                    line_milling,
+                    end_point,
+                    depth,
+                    tool.milling_feed,
+                )
+            )
+            current_point = end_point
+            if is_last:
+                lines.append(
+                    _emit_line_milling_point_move(
+                        line_milling,
+                        exit_point,
+                        depth,
+                        tool.milling_feed,
+                    )
+                )
+                current_point = exit_point
+        else:
+            if not _same_xy(current_point, end_point):
+                lines.append(
+                    _emit_line_milling_point_move(
+                        line_milling,
+                        end_point,
+                        depth,
+                        tool.milling_feed,
+                    )
+                )
+            lines.append(
+                _emit_line_milling_point_move(
+                    line_milling,
+                    start_point,
+                    depth,
+                    tool.milling_feed,
+                )
+            )
+            current_point = start_point
+            if is_last:
+                lines.append(
+                    _emit_line_milling_point_move(
+                        line_milling,
+                        entry_point,
+                        depth,
+                        tool.milling_feed,
+                    )
+                )
+                current_point = entry_point
+        forward = not forward
+    lines.append(
+        f"G1 Z{_format_mm(line_milling.security_plane)} F{_format_mm(tool.milling_feed)}"
+    )
+    return tuple(lines)
+
+
 def _emit_line_milling_move(
     line_milling: sp.LineMillingSpec,
     coordinate: float,
@@ -1189,12 +1775,86 @@ def _emit_line_milling_move(
     return f"G1 {axis}{_format_mm(coordinate)} Z{_format_mm(z)} F{_format_mm(feed)}"
 
 
+def _emit_line_milling_point_move(
+    line_milling: sp.LineMillingSpec,
+    point: tuple[float, float],
+    z: float,
+    feed: float,
+) -> str:
+    axis = _line_milling_axis(line_milling)
+    if axis is None:
+        raise IsoEmissionNotImplemented("Line milling supports only axis-aligned lines.")
+    coordinate = point[0] if axis == "X" else point[1]
+    return f"G1 {axis}{_format_mm(coordinate)} Z{_format_mm(z)} F{_format_mm(feed)}"
+
+
 def _line_milling_axis(line_milling: sp.LineMillingSpec) -> str | None:
     if round(float(line_milling.start_y), 3) == round(float(line_milling.end_y), 3):
         return "X"
     if round(float(line_milling.start_x), 3) == round(float(line_milling.end_x), 3):
         return "Y"
     return None
+
+
+def _line_milling_has_quote_lines(line_milling: sp.LineMillingSpec) -> bool:
+    approach = line_milling.approach
+    retract = line_milling.retract
+    return (
+        approach.is_enabled
+        and retract.is_enabled
+        and approach.approach_type == "Line"
+        and retract.retract_type == "Line"
+        and approach.mode == "Quote"
+        and retract.mode == "Quote"
+        and round(float(approach.radius_multiplier), 3) == 2.0
+        and round(float(retract.radius_multiplier), 3) == 2.0
+        and round(float(approach.speed), 3) == -1.0
+        and round(float(retract.speed), 3) == -1.0
+        and round(float(retract.overlap), 3) == 0.0
+    )
+
+
+def _line_milling_toolpath_points(
+    line_milling: sp.LineMillingSpec,
+    side_offset: float,
+) -> tuple[tuple[float, float], tuple[float, float]]:
+    start = (line_milling.start_x, line_milling.start_y)
+    end = (line_milling.end_x, line_milling.end_y)
+    if side_offset == 0.0 or line_milling.side_of_feature == "Center":
+        return start, end
+    unit_x, unit_y = _unit_vector(start, end)
+    if line_milling.side_of_feature == "Left":
+        normal = (-unit_y, unit_x)
+    elif line_milling.side_of_feature == "Right":
+        normal = (unit_y, -unit_x)
+    else:
+        raise IsoEmissionNotImplemented(
+            f"Unsupported line milling side {line_milling.side_of_feature!r}."
+        )
+    offset_x = normal[0] * side_offset
+    offset_y = normal[1] * side_offset
+    return (
+        (start[0] + offset_x, start[1] + offset_y),
+        (end[0] + offset_x, end[1] + offset_y),
+    )
+
+
+def _line_milling_compensation(line_milling: sp.LineMillingSpec) -> str | None:
+    if line_milling.side_of_feature == "Left":
+        return "G41"
+    if line_milling.side_of_feature == "Right":
+        return "G42"
+    return None
+
+
+def _same_xy(
+    first: tuple[float, float],
+    second: tuple[float, float],
+) -> bool:
+    return (
+        round(float(first[0]), 3) == round(float(second[0]), 3)
+        and round(float(first[1]), 3) == round(float(second[1]), 3)
+    )
 
 
 def _line_milling_start_coordinate(line_milling: sp.LineMillingSpec) -> float:
@@ -1249,6 +1909,700 @@ def _emit_line_milling_program_end(park_x: float | None) -> tuple[str, ...]:
     )
 
 
+def _emit_circle_milling(
+    state: sp.PgmxState,
+    circle_milling: sp.CircleMillingSpec,
+    *,
+    include_full_setup: bool = True,
+) -> tuple[str, ...]:
+    tool = _circle_milling_tool(circle_milling)
+    rapid_z = circle_milling.security_plane + tool.tool_offset_length
+    cut_z = _circle_milling_cut_z(state, circle_milling)
+    tool_radius = circle_milling.tool_width / 2.0
+    strategy = circle_milling.milling_strategy
+    uses_coordinate_offset = (
+        strategy is not None
+        and not isinstance(strategy, sp.HelicalMillingStrategySpec)
+        and circle_milling.side_of_feature != "Center"
+    )
+    radius = _circle_toolpath_radius(
+        circle_milling,
+        tool_radius if uses_coordinate_offset else 0.0,
+    )
+    start_point = _circle_start_point(circle_milling, radius)
+    compensation = None if strategy is not None else _circle_compensation(circle_milling)
+    rapid_point = _circle_rapid_point(circle_milling, radius, compensation)
+    lines: list[str] = [
+        "MLV=0",
+        f"T{tool.tool_number}",
+        "SYN",
+        "M06",
+    ]
+    if include_full_setup:
+        lines.append(f"?%ETK[6]={tool.spindle}")
+    lines.extend(
+        [
+            f"?%ETK[9]={tool.tool_code}",
+            f"?%ETK[18]={tool.etk18}",
+            f"S{_format_spindle_speed(tool.spindle_speed)}M3",
+            "G17",
+            "MLV=2",
+        ]
+    )
+    if include_full_setup:
+        lines.extend(
+            [
+                f"%Or[0].ofX={_format_mm(-(state.length + (2.0 * state.origin_x)) * 1000.0)}",
+                _work_origin_y_line(),
+                f"%Or[0].ofZ={_format_mm((state.depth + state.origin_z) * 1000.0)}",
+                "MLV=1",
+                f"SHF[X]={_format_mm(-(state.length + state.origin_x))}",
+                f"SHF[Y]={_format_mm(_base_shf_y(state.origin_y))}",
+                f"SHF[Z]={_format_mm(state.depth + state.origin_z)}",
+                "MLV=2",
+                "?%ETK[13]=1",
+                "MLV=2",
+                f"SHF[X]={_format_mm(tool.shf_x)}",
+                f"SHF[Y]={_format_mm(tool.shf_y)}",
+                f"SHF[Z]={_format_mm(tool.shf_z)}",
+            ]
+        )
+    else:
+        lines.append("?%ETK[13]=1")
+    lines.extend(
+        [
+            f"G0 X{_format_mm(rapid_point[0])} Y{_format_mm(rapid_point[1])}",
+            f"G0 Z{_format_mm(rapid_z)}",
+            "D1",
+            f"SVL {_format_mm(rapid_z - circle_milling.security_plane)}",
+            f"VL6={_format_mm(rapid_z - circle_milling.security_plane)}",
+            f"SVR {_format_mm(tool_radius)}",
+            f"VL7={_format_mm(tool_radius)}",
+        ]
+    )
+    if strategy is None:
+        lines.extend(
+            _emit_circle_single_pass(
+                circle_milling,
+                tool,
+                cut_z,
+                radius,
+                rapid_point,
+                start_point,
+                compensation,
+            )
+        )
+    elif isinstance(strategy, sp.HelicalMillingStrategySpec):
+        lines.extend(
+            _emit_circle_helical_passes(
+                circle_milling,
+                tool,
+                cut_z,
+                radius,
+                strategy,
+            )
+        )
+    else:
+        lines.extend(
+            _emit_circle_strategy_passes(
+                circle_milling,
+                tool,
+                cut_z,
+                radius,
+                strategy,
+            )
+        )
+    lines.extend(
+        [
+            "D0",
+            "SVL 0.000",
+            "VL6=0.000",
+            "SVR 0.000",
+            "VL7=0.000",
+            "?%ETK[7]=0",
+        ]
+    )
+    return tuple(lines)
+
+
+def _emit_circle_single_pass(
+    circle_milling: sp.CircleMillingSpec,
+    tool: _LineMillingTool,
+    cut_z: float,
+    radius: float,
+    rapid_point: tuple[float, float],
+    start_point: tuple[float, float],
+    compensation: str | None,
+) -> tuple[str, ...]:
+    if _circle_has_quote_arcs(circle_milling):
+        return _emit_circle_arc_quote_single_pass(
+            circle_milling,
+            tool,
+            cut_z,
+            radius,
+            rapid_point,
+            start_point,
+        )
+    if _circle_has_quote_lines(circle_milling):
+        return _emit_circle_line_quote_single_pass(
+            circle_milling,
+            tool,
+            cut_z,
+            radius,
+            rapid_point,
+            start_point,
+        )
+    if _circle_has_down_up_arcs(circle_milling):
+        return _emit_circle_arc_down_up_single_pass(
+            circle_milling,
+            tool,
+            cut_z,
+            radius,
+            rapid_point,
+            start_point,
+        )
+    if _circle_has_down_up_lines(circle_milling):
+        return _emit_circle_line_down_up_single_pass(
+            circle_milling,
+            tool,
+            cut_z,
+            radius,
+            rapid_point,
+            start_point,
+        )
+    if compensation is not None:
+        return _emit_circle_compensated_single_pass(
+            circle_milling,
+            tool,
+            cut_z,
+            radius,
+            rapid_point,
+            start_point,
+            compensation,
+        )
+    lines: list[str] = [
+        f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}",
+        "?%ETK[7]=4",
+    ]
+    lines.extend(_emit_circle_full_arcs(circle_milling, radius, tool.milling_feed))
+    lines.append(f"G0 Z{_format_mm(circle_milling.security_plane)}")
+    return tuple(lines)
+
+
+def _emit_circle_compensated_single_pass(
+    circle_milling: sp.CircleMillingSpec,
+    tool: _LineMillingTool,
+    cut_z: float,
+    radius: float,
+    rapid_point: tuple[float, float],
+    start_point: tuple[float, float],
+    compensation: str,
+) -> tuple[str, ...]:
+    exit_point = _circle_clearance_exit_point(circle_milling, start_point)
+    lines: list[str] = [
+        "?%ETK[7]=4",
+        compensation,
+        _format_polyline_xyz_move(
+            start_point,
+            circle_milling.security_plane,
+            tool.plunge_feed,
+        ),
+        f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}",
+    ]
+    lines.extend(_emit_circle_full_arcs(circle_milling, radius, tool.milling_feed))
+    lines.extend(
+        [
+            f"G1 Z{_format_mm(circle_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
+            "G40",
+            _format_polyline_xyz_move(
+                exit_point,
+                circle_milling.security_plane,
+                tool.milling_feed,
+            ),
+        ]
+    )
+    return tuple(lines)
+
+
+def _emit_circle_line_quote_single_pass(
+    circle_milling: sp.CircleMillingSpec,
+    tool: _LineMillingTool,
+    cut_z: float,
+    radius: float,
+    rapid_point: tuple[float, float],
+    start_point: tuple[float, float],
+) -> tuple[str, ...]:
+    exit_point = _circle_lead_exit_point(circle_milling, radius)
+    lines: list[str] = [
+        "?%ETK[7]=4",
+        f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}",
+        _format_polyline_cut_move(
+            rapid_point,
+            start_point,
+            cut_z,
+            tool.plunge_feed,
+        ),
+    ]
+    lines.extend(_emit_circle_full_arcs(circle_milling, radius, tool.milling_feed))
+    lines.extend(
+        [
+            _format_polyline_cut_move(
+                start_point,
+                exit_point,
+                cut_z,
+                tool.milling_feed,
+            ),
+            f"G1 Z{_format_mm(circle_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
+        ]
+    )
+    return tuple(lines)
+
+
+def _emit_circle_line_down_up_single_pass(
+    circle_milling: sp.CircleMillingSpec,
+    tool: _LineMillingTool,
+    cut_z: float,
+    radius: float,
+    rapid_point: tuple[float, float],
+    start_point: tuple[float, float],
+) -> tuple[str, ...]:
+    exit_point = _circle_lead_exit_point(circle_milling, radius)
+    lines: list[str] = [
+        "?%ETK[7]=4",
+        _format_polyline_cut_move(
+            rapid_point,
+            start_point,
+            cut_z,
+            tool.plunge_feed,
+        ),
+    ]
+    lines.extend(_emit_circle_full_arcs(circle_milling, radius, tool.milling_feed))
+    lines.extend(
+        [
+            _format_polyline_cut_move(
+                start_point,
+                exit_point,
+                circle_milling.security_plane,
+                tool.milling_feed,
+            ),
+            f"G0 Z{_format_mm(circle_milling.security_plane)}",
+        ]
+    )
+    return tuple(lines)
+
+
+def _emit_circle_arc_quote_single_pass(
+    circle_milling: sp.CircleMillingSpec,
+    tool: _LineMillingTool,
+    cut_z: float,
+    radius: float,
+    rapid_point: tuple[float, float],
+    start_point: tuple[float, float],
+) -> tuple[str, ...]:
+    lead_center = _circle_arc_lead_center(circle_milling, radius)
+    exit_point = _circle_lead_exit_point(circle_milling, radius)
+    lines: list[str] = [
+        "?%ETK[7]=4",
+        f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}",
+        _format_arc_move(
+            _circle_arc_code(circle_milling),
+            start_point,
+            lead_center,
+            tool.plunge_feed,
+        ),
+    ]
+    lines.extend(_emit_circle_full_arcs(circle_milling, radius, tool.milling_feed))
+    lines.extend(
+        [
+            _format_arc_move(
+                _circle_arc_code(circle_milling),
+                exit_point,
+                lead_center,
+                tool.milling_feed,
+            ),
+            f"G1 Z{_format_mm(circle_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
+        ]
+    )
+    return tuple(lines)
+
+
+def _emit_circle_arc_down_up_single_pass(
+    circle_milling: sp.CircleMillingSpec,
+    tool: _LineMillingTool,
+    cut_z: float,
+    radius: float,
+    rapid_point: tuple[float, float],
+    start_point: tuple[float, float],
+) -> tuple[str, ...]:
+    lead_center = _circle_arc_lead_center(circle_milling, radius)
+    exit_point = _circle_lead_exit_point(circle_milling, radius)
+    lines: list[str] = [
+        "?%ETK[7]=4",
+        _format_arc_move(
+            _circle_arc_code(circle_milling),
+            start_point,
+            lead_center,
+            tool.plunge_feed,
+            z=cut_z,
+        ),
+    ]
+    lines.extend(_emit_circle_full_arcs(circle_milling, radius, tool.milling_feed))
+    lines.extend(
+        [
+            _format_arc_move(
+                _circle_arc_code(circle_milling),
+                exit_point,
+                lead_center,
+                tool.milling_feed,
+                z=circle_milling.security_plane,
+            ),
+            f"G0 Z{_format_mm(circle_milling.security_plane)}",
+        ]
+    )
+    return tuple(lines)
+
+
+def _emit_circle_strategy_passes(
+    circle_milling: sp.CircleMillingSpec,
+    tool: _LineMillingTool,
+    final_depth: float,
+    radius: float,
+    strategy: sp.MillingStrategySpec,
+) -> tuple[str, ...]:
+    if isinstance(strategy, sp.UnidirectionalMillingStrategySpec):
+        bidirectional = False
+        step = abs(float(strategy.axial_cutting_depth))
+    elif isinstance(strategy, sp.BidirectionalMillingStrategySpec):
+        bidirectional = True
+        step = abs(float(strategy.axial_cutting_depth))
+    else:
+        raise IsoEmissionNotImplemented(
+            "Circle milling supports only observed uni/bidirectional strategies."
+        )
+    lines: list[str] = [
+        f"G1 Z{_format_mm(circle_milling.security_plane)} F{_format_mm(tool.plunge_feed)}",
+        "?%ETK[7]=4",
+    ]
+    direction = circle_milling.winding
+    for depth in _line_milling_pass_depths(final_depth, step):
+        lines.append(f"G1 Z{_format_mm(depth)} F{_format_mm(tool.milling_feed)}")
+        lines.extend(
+            _emit_circle_full_arcs(
+                circle_milling,
+                radius,
+                tool.milling_feed,
+                winding=direction,
+            )
+        )
+        if bidirectional:
+            direction = _opposite_winding(direction)
+    lines.extend(
+        [
+            f"G1 Z{_format_mm(circle_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
+            f"G0 Z{_format_mm(circle_milling.security_plane)}",
+        ]
+    )
+    return tuple(lines)
+
+
+def _emit_circle_helical_passes(
+    circle_milling: sp.CircleMillingSpec,
+    tool: _LineMillingTool,
+    final_depth: float,
+    radius: float,
+    strategy: sp.HelicalMillingStrategySpec,
+) -> tuple[str, ...]:
+    step = abs(float(strategy.axial_cutting_depth))
+    pass_depths = (
+        (final_depth,)
+        if step <= 0.0
+        else _line_milling_pass_depths(final_depth, step)
+    )
+    lines: list[str] = [
+        f"G1 Z{_format_mm(circle_milling.security_plane)} F{_format_mm(tool.plunge_feed)}",
+        "?%ETK[7]=4",
+        f"G1 Z0.000 F{_format_mm(tool.milling_feed)}",
+    ]
+    current_depth = 0.0
+    first_sign = 1.0 if circle_milling.winding == "CounterClockwise" else -1.0
+    for depth in pass_depths:
+        mid_depth = (current_depth + depth) / 2.0
+        first_offset = _circle_helical_center_offset(
+            radius,
+            mid_depth - current_depth,
+            truncate=step <= 0.0,
+        )
+        second_offset = _circle_helical_center_offset(
+            radius,
+            depth - mid_depth,
+            truncate=step <= 0.0,
+        )
+        lines.append(
+            _format_arc_move(
+                _circle_arc_code(circle_milling),
+                _circle_mid_point(circle_milling, radius),
+                (circle_milling.center_x, circle_milling.center_y + (first_sign * first_offset)),
+                tool.milling_feed,
+                z=mid_depth,
+            )
+        )
+        lines.append(
+            _format_arc_move(
+                _circle_arc_code(circle_milling),
+                _circle_start_point(circle_milling, radius),
+                (circle_milling.center_x, circle_milling.center_y - (first_sign * second_offset)),
+                tool.milling_feed,
+                z=depth,
+            )
+        )
+        current_depth = depth
+    lines.extend(_emit_circle_full_arcs(circle_milling, radius, tool.milling_feed))
+    lines.extend(
+        [
+            f"G1 Z{_format_mm(circle_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
+            f"G0 Z{_format_mm(circle_milling.security_plane)}",
+        ]
+    )
+    return tuple(lines)
+
+
+def _emit_circle_full_arcs(
+    circle_milling: sp.CircleMillingSpec,
+    radius: float,
+    feed: float,
+    *,
+    winding: str | None = None,
+) -> tuple[str, str]:
+    code = _circle_arc_code(circle_milling, winding=winding)
+    center = (circle_milling.center_x, circle_milling.center_y)
+    return (
+        _format_arc_move(code, _circle_mid_point(circle_milling, radius), center, feed),
+        _format_arc_move(code, _circle_start_point(circle_milling, radius), center, feed),
+    )
+
+
+def _circle_milling_cut_z(
+    state: sp.PgmxState,
+    circle_milling: sp.CircleMillingSpec,
+) -> float:
+    if circle_milling.depth_spec.is_through:
+        return -(state.depth + circle_milling.depth_spec.extra_depth)
+    if circle_milling.depth_spec.target_depth is None:
+        raise IsoEmissionNotImplemented("Circle milling needs a target depth.")
+    return -circle_milling.depth_spec.target_depth
+
+
+def _circle_toolpath_radius(
+    circle_milling: sp.CircleMillingSpec,
+    side_offset: float,
+) -> float:
+    if side_offset == 0.0 or circle_milling.side_of_feature == "Center":
+        return circle_milling.radius
+    outside = (
+        (circle_milling.winding == "CounterClockwise" and circle_milling.side_of_feature == "Right")
+        or (circle_milling.winding == "Clockwise" and circle_milling.side_of_feature == "Left")
+    )
+    return circle_milling.radius + side_offset if outside else circle_milling.radius - side_offset
+
+
+def _circle_start_point(
+    circle_milling: sp.CircleMillingSpec,
+    radius: float,
+) -> tuple[float, float]:
+    return circle_milling.center_x + radius, circle_milling.center_y
+
+
+def _circle_mid_point(
+    circle_milling: sp.CircleMillingSpec,
+    radius: float,
+) -> tuple[float, float]:
+    return circle_milling.center_x - radius, circle_milling.center_y
+
+
+def _circle_rapid_point(
+    circle_milling: sp.CircleMillingSpec,
+    radius: float,
+    compensation: str | None,
+) -> tuple[float, float]:
+    start_point = _circle_start_point(circle_milling, radius)
+    if _circle_has_quote_arcs(circle_milling) or _circle_has_down_up_arcs(circle_milling):
+        lead_center = _circle_arc_lead_center(circle_milling, radius)
+        tangent_x, tangent_y = _circle_start_tangent(circle_milling)
+        lead_radius = _circle_lead_radius(circle_milling)
+        return (
+            lead_center[0] - (tangent_x * lead_radius),
+            lead_center[1] - (tangent_y * lead_radius),
+        )
+    if _circle_has_quote_lines(circle_milling) or _circle_has_down_up_lines(circle_milling):
+        tangent_x, tangent_y = _circle_start_tangent(circle_milling)
+        lead_radius = _circle_lead_radius(circle_milling)
+        return (
+            start_point[0] - (tangent_x * lead_radius),
+            start_point[1] - (tangent_y * lead_radius),
+        )
+    if compensation is not None:
+        tangent_x, tangent_y = _circle_start_tangent(circle_milling)
+        return start_point[0] - tangent_x, start_point[1] - tangent_y
+    return start_point
+
+
+def _circle_clearance_exit_point(
+    circle_milling: sp.CircleMillingSpec,
+    start_point: tuple[float, float],
+) -> tuple[float, float]:
+    tangent_x, tangent_y = _circle_start_tangent(circle_milling)
+    return start_point[0] + tangent_x, start_point[1] + tangent_y
+
+
+def _circle_lead_exit_point(
+    circle_milling: sp.CircleMillingSpec,
+    radius: float,
+) -> tuple[float, float]:
+    start_point = _circle_start_point(circle_milling, radius)
+    tangent_x, tangent_y = _circle_start_tangent(circle_milling)
+    lead_radius = _circle_lead_radius(circle_milling)
+    if _circle_has_quote_arcs(circle_milling) or _circle_has_down_up_arcs(circle_milling):
+        lead_center = _circle_arc_lead_center(circle_milling, radius)
+        return (
+            lead_center[0] + (tangent_x * lead_radius),
+            lead_center[1] + (tangent_y * lead_radius),
+        )
+    return (
+        start_point[0] + (tangent_x * lead_radius),
+        start_point[1] + (tangent_y * lead_radius),
+    )
+
+
+def _circle_arc_lead_center(
+    circle_milling: sp.CircleMillingSpec,
+    radius: float,
+) -> tuple[float, float]:
+    start_point = _circle_start_point(circle_milling, radius)
+    lead_radius = _circle_lead_radius(circle_milling)
+    return start_point[0] - lead_radius, start_point[1]
+
+
+def _circle_start_tangent(circle_milling: sp.CircleMillingSpec) -> tuple[float, float]:
+    if circle_milling.winding == "CounterClockwise":
+        return 0.0, 1.0
+    if circle_milling.winding == "Clockwise":
+        return 0.0, -1.0
+    raise IsoEmissionNotImplemented(
+        f"Unsupported circle winding {circle_milling.winding!r}."
+    )
+
+
+def _circle_arc_code(
+    circle_milling: sp.CircleMillingSpec,
+    *,
+    winding: str | None = None,
+) -> str:
+    resolved = winding or circle_milling.winding
+    if resolved == "CounterClockwise":
+        return "G3"
+    if resolved == "Clockwise":
+        return "G2"
+    raise IsoEmissionNotImplemented(f"Unsupported circle winding {resolved!r}.")
+
+
+def _circle_compensation(circle_milling: sp.CircleMillingSpec) -> str | None:
+    if circle_milling.side_of_feature == "Left":
+        return "G41"
+    if circle_milling.side_of_feature == "Right":
+        return "G42"
+    return None
+
+
+def _circle_lead_radius(circle_milling: sp.CircleMillingSpec) -> float:
+    if circle_milling.approach.is_enabled:
+        return (circle_milling.tool_width / 2.0) * circle_milling.approach.radius_multiplier
+    return circle_milling.tool_width / 2.0
+
+
+def _circle_helical_center_offset(
+    radius: float,
+    delta_z: float,
+    *,
+    truncate: bool = False,
+) -> float:
+    offset = (abs(float(delta_z)) ** 2.0) / (8.0 * radius)
+    if truncate:
+        return int(offset * 1000.0) / 1000.0
+    return offset
+
+
+def _circle_has_leads(circle_milling: sp.CircleMillingSpec) -> bool:
+    return circle_milling.approach.is_enabled or circle_milling.retract.is_enabled
+
+
+def _circle_has_default_leads(circle_milling: sp.CircleMillingSpec) -> bool:
+    return not circle_milling.approach.is_enabled and not circle_milling.retract.is_enabled
+
+
+def _circle_has_quote_lines(circle_milling: sp.CircleMillingSpec) -> bool:
+    return _circle_has_line_leads(circle_milling, approach_mode="Quote", retract_mode="Quote")
+
+
+def _circle_has_down_up_lines(circle_milling: sp.CircleMillingSpec) -> bool:
+    return _circle_has_line_leads(circle_milling, approach_mode="Down", retract_mode="Up")
+
+
+def _circle_has_line_leads(
+    circle_milling: sp.CircleMillingSpec,
+    *,
+    approach_mode: str,
+    retract_mode: str,
+) -> bool:
+    approach = circle_milling.approach
+    retract = circle_milling.retract
+    return (
+        approach.is_enabled
+        and retract.is_enabled
+        and approach.approach_type == "Line"
+        and retract.retract_type == "Line"
+        and approach.mode == approach_mode
+        and retract.mode == retract_mode
+        and round(float(approach.radius_multiplier), 3) == 2.0
+        and round(float(retract.radius_multiplier), 3) == 2.0
+        and round(float(approach.speed), 3) == -1.0
+        and round(float(retract.speed), 3) == -1.0
+        and round(float(retract.overlap), 3) == 0.0
+    )
+
+
+def _circle_has_quote_arcs(circle_milling: sp.CircleMillingSpec) -> bool:
+    return _circle_has_arc_leads(circle_milling, approach_mode="Quote", retract_mode="Quote")
+
+
+def _circle_has_down_up_arcs(circle_milling: sp.CircleMillingSpec) -> bool:
+    return _circle_has_arc_leads(circle_milling, approach_mode="Down", retract_mode="Up")
+
+
+def _circle_has_arc_leads(
+    circle_milling: sp.CircleMillingSpec,
+    *,
+    approach_mode: str,
+    retract_mode: str,
+) -> bool:
+    approach = circle_milling.approach
+    retract = circle_milling.retract
+    return (
+        approach.is_enabled
+        and retract.is_enabled
+        and approach.approach_type == "Arc"
+        and retract.retract_type == "Arc"
+        and approach.mode == approach_mode
+        and retract.mode == retract_mode
+        and approach.arc_side == "Automatic"
+        and retract.arc_side == "Automatic"
+        and round(float(approach.radius_multiplier), 3) == 2.0
+        and round(float(retract.radius_multiplier), 3) == 2.0
+        and round(float(approach.speed), 3) == -1.0
+        and round(float(retract.speed), 3) == -1.0
+        and round(float(retract.overlap), 3) == 0.0
+    )
+
+
 def _emit_polyline_milling(
     state: sp.PgmxState,
     polyline_milling: sp.PolylineMillingSpec,
@@ -1259,10 +2613,18 @@ def _emit_polyline_milling(
     rapid_z = polyline_milling.security_plane + tool.tool_offset_length
     cut_z = _polyline_milling_cut_z(state, polyline_milling)
     tool_radius = polyline_milling.tool_width / 2.0
+    strategy = polyline_milling.milling_strategy
     first_point = polyline_milling.points[0]
-    rapid_point = _polyline_entry_point(polyline_milling)
     exit_point = _polyline_exit_point(polyline_milling)
-    compensation = _polyline_compensation(polyline_milling)
+    compensation = None if strategy is not None else _polyline_compensation(polyline_milling)
+    if (
+        strategy is not None
+        and _polyline_is_closed(polyline_milling)
+        and _polyline_has_down_up_lines(polyline_milling)
+    ):
+        rapid_point = _closed_polyline_strategy_rapid_point(polyline_milling)
+    else:
+        rapid_point = _polyline_rapid_point(polyline_milling, compensation)
     lines: list[str] = [
         "MLV=0",
         f"T{tool.tool_number}",
@@ -1308,10 +2670,75 @@ def _emit_polyline_milling(
         f"SVL {_format_mm(rapid_z - polyline_milling.security_plane)}",
         f"VL6={_format_mm(rapid_z - polyline_milling.security_plane)}",
         f"SVR {_format_mm(tool_radius)}",
-        f"VL7={_format_mm(tool_radius)}",
+            f"VL7={_format_mm(tool_radius)}",
         ]
     )
-    if compensation is not None:
+    if strategy is not None:
+        if _polyline_is_closed(polyline_milling) and _polyline_has_down_up_lines(
+            polyline_milling
+        ):
+            lines.extend(
+                _emit_closed_polyline_line_strategy_passes(
+                    polyline_milling,
+                    tool,
+                    cut_z,
+                    strategy,
+                )
+            )
+        else:
+            lines.extend(
+                _emit_polyline_strategy_passes(
+                    polyline_milling,
+                    tool,
+                    cut_z,
+                    strategy,
+                )
+            )
+    elif _polyline_has_quote_arcs(polyline_milling):
+        lines.extend(
+            _emit_polyline_arc_lead_single_pass(
+                polyline_milling,
+                tool,
+                cut_z,
+                rapid_point,
+                compensation,
+                quote_mode=True,
+            )
+        )
+    elif _polyline_has_quote_lines(polyline_milling):
+        lines.extend(
+            _emit_polyline_line_lead_single_pass(
+                polyline_milling,
+                tool,
+                cut_z,
+                rapid_point,
+                compensation,
+                quote_mode=True,
+            )
+        )
+    elif _polyline_has_down_up_arcs(polyline_milling):
+        lines.extend(
+            _emit_polyline_arc_lead_single_pass(
+                polyline_milling,
+                tool,
+                cut_z,
+                rapid_point,
+                compensation,
+                quote_mode=False,
+            )
+        )
+    elif _polyline_has_down_up_lines(polyline_milling):
+        lines.extend(
+            _emit_polyline_line_lead_single_pass(
+                polyline_milling,
+                tool,
+                cut_z,
+                rapid_point,
+                compensation,
+                quote_mode=False,
+            )
+        )
+    elif compensation is not None:
         lines.append("?%ETK[7]=4")
         lines.append(compensation)
         lines.append(
@@ -1321,26 +2748,19 @@ def _emit_polyline_milling(
                 tool.plunge_feed,
             )
         )
-    lines.extend(
-        [
-            f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}",
-        ]
-    )
-    if compensation is None:
-        lines.append("?%ETK[7]=4")
-    previous_point = first_point
-    for point in polyline_milling.points[1:]:
-        lines.append(
-            _format_polyline_cut_move(
-                previous_point,
-                point,
-                cut_z,
-                tool.milling_feed,
-                include_z=include_full_setup,
+        lines.append(f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}")
+        previous_point = first_point
+        for point in polyline_milling.points[1:]:
+            lines.append(
+                _format_polyline_cut_move(
+                    previous_point,
+                    point,
+                    cut_z,
+                    tool.milling_feed,
+                    include_z=include_full_setup,
+                )
             )
-        )
-        previous_point = point
-    if compensation is not None:
+            previous_point = point
         lines.extend(
             [
                 f"G1 Z{_format_mm(polyline_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
@@ -1353,7 +2773,39 @@ def _emit_polyline_milling(
             ]
         )
     else:
-        lines.append(f"G0 Z{_format_mm(polyline_milling.security_plane)}")
+        lines.extend(
+            [
+                f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}",
+            ]
+        )
+        if compensation is None:
+            lines.append("?%ETK[7]=4")
+        previous_point = first_point
+        for point in polyline_milling.points[1:]:
+            lines.append(
+                _format_polyline_cut_move(
+                    previous_point,
+                    point,
+                    cut_z,
+                    tool.milling_feed,
+                    include_z=include_full_setup,
+                )
+            )
+            previous_point = point
+        if compensation is not None:
+            lines.extend(
+                [
+                    f"G1 Z{_format_mm(polyline_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
+                    "G40",
+                    _format_polyline_xyz_move(
+                        exit_point,
+                        polyline_milling.security_plane,
+                        tool.milling_feed,
+                    ),
+                ]
+            )
+        else:
+            lines.append(f"G0 Z{_format_mm(polyline_milling.security_plane)}")
     lines.extend(
         [
             "D0",
@@ -1367,13 +2819,515 @@ def _emit_polyline_milling(
     return tuple(lines)
 
 
+def _emit_polyline_strategy_passes(
+    polyline_milling: sp.PolylineMillingSpec,
+    tool: _LineMillingTool,
+    final_depth: float,
+    strategy: sp.MillingStrategySpec,
+) -> tuple[str, ...]:
+    if isinstance(strategy, sp.UnidirectionalMillingStrategySpec):
+        bidirectional = False
+        step = abs(float(strategy.axial_cutting_depth))
+    elif isinstance(strategy, sp.BidirectionalMillingStrategySpec):
+        bidirectional = True
+        step = abs(float(strategy.axial_cutting_depth))
+    else:
+        raise IsoEmissionNotImplemented(
+            "Polyline milling supports only observed uni/bidirectional strategies."
+        )
+    lines: list[str] = [
+        f"G1 Z{_format_mm(polyline_milling.security_plane)} F{_format_mm(tool.plunge_feed)}",
+        "?%ETK[7]=4",
+    ]
+    points = polyline_milling.points
+    forward = True
+    depths = _line_milling_pass_depths(final_depth, step)
+    for index, depth in enumerate(depths):
+        lines.append(f"G1 Z{_format_mm(depth)} F{_format_mm(tool.milling_feed)}")
+        pass_points = points if forward else tuple(reversed(points))
+        lines.extend(_emit_polyline_path_moves(pass_points, tool.milling_feed))
+        is_last = index == len(depths) - 1
+        if not bidirectional and not is_last:
+            lines.append(
+                f"G1 Z{_format_mm(polyline_milling.security_plane)} F{_format_mm(tool.milling_feed)}"
+            )
+            lines.extend(
+                _emit_polyline_path_moves(
+                    tuple(reversed(points)),
+                    tool.milling_feed,
+                )
+            )
+        if bidirectional:
+            forward = not forward
+    lines.extend(
+        [
+            f"G1 Z{_format_mm(polyline_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
+            f"G0 Z{_format_mm(polyline_milling.security_plane)}",
+        ]
+    )
+    return tuple(lines)
+
+
+def _emit_closed_polyline_line_strategy_passes(
+    polyline_milling: sp.PolylineMillingSpec,
+    tool: _LineMillingTool,
+    final_depth: float,
+    strategy: sp.MillingStrategySpec,
+) -> tuple[str, ...]:
+    if isinstance(strategy, sp.UnidirectionalMillingStrategySpec):
+        bidirectional = False
+        step = abs(float(strategy.axial_cutting_depth))
+    elif isinstance(strategy, sp.BidirectionalMillingStrategySpec):
+        bidirectional = True
+        step = abs(float(strategy.axial_cutting_depth))
+    else:
+        raise IsoEmissionNotImplemented(
+            "Closed polyline milling supports only observed uni/bidirectional strategies."
+        )
+    lines: list[str] = [
+        f"G1 Z{_format_mm(polyline_milling.security_plane)} F{_format_mm(tool.plunge_feed)}",
+        "?%ETK[7]=4",
+    ]
+    forward = True
+    final_path = _closed_polyline_toolpath(polyline_milling, forward=True)
+    depths = _line_milling_pass_depths(final_depth, step)
+    for index, depth in enumerate(depths):
+        path = _closed_polyline_toolpath(polyline_milling, forward=forward)
+        if index == 0:
+            lead_start = _closed_polyline_strategy_lead_start(path, polyline_milling)
+            lines.append(
+                _format_polyline_cut_move(
+                    lead_start,
+                    path.start,
+                    depth,
+                    tool.milling_feed,
+                )
+            )
+        else:
+            lines.append(f"G1 Z{_format_mm(depth)} F{_format_mm(tool.milling_feed)}")
+        lines.extend(_emit_closed_polyline_toolpath_moves(path, depth, tool.milling_feed))
+        final_path = path
+        if bidirectional:
+            forward = not forward
+    lead_exit = _closed_polyline_strategy_lead_exit(final_path, polyline_milling)
+    lines.extend(
+        [
+            _format_polyline_cut_move(
+                final_path.start,
+                lead_exit,
+                polyline_milling.security_plane,
+                tool.milling_feed,
+            ),
+            f"G0 Z{_format_mm(polyline_milling.security_plane)}",
+        ]
+    )
+    return tuple(lines)
+
+
+@dataclass(frozen=True)
+class _ClosedPolylinePath:
+    start: tuple[float, float]
+    tangent: tuple[float, float]
+    moves: tuple[tuple[str, tuple[float, float], tuple[float, float] | None], ...]
+
+
+def _closed_polyline_strategy_rapid_point(
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    path = _closed_polyline_toolpath(polyline_milling, forward=True)
+    lead = _closed_polyline_strategy_lead_start(path, polyline_milling)
+    return lead
+
+
+def _closed_polyline_strategy_lead_start(
+    path: _ClosedPolylinePath,
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    radius = _polyline_lead_radius(polyline_milling)
+    tangent_x, tangent_y = path.tangent
+    return path.start[0] - (tangent_x * radius), path.start[1] - (tangent_y * radius)
+
+
+def _closed_polyline_strategy_lead_exit(
+    path: _ClosedPolylinePath,
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    radius = _polyline_lead_radius(polyline_milling)
+    tangent_x, tangent_y = path.tangent
+    return path.start[0] + (tangent_x * radius), path.start[1] + (tangent_y * radius)
+
+
+def _emit_closed_polyline_toolpath_moves(
+    path: _ClosedPolylinePath,
+    z: float,
+    feed: float,
+) -> tuple[str, ...]:
+    lines: list[str] = []
+    previous = path.start
+    for kind, point, center in path.moves:
+        if kind == "line":
+            lines.append(_format_polyline_cut_move(previous, point, z, feed))
+        else:
+            assert center is not None
+            lines.append(_format_arc_move(kind, point, center, feed))
+        previous = point
+    return tuple(lines)
+
+
+def _closed_polyline_toolpath(
+    polyline_milling: sp.PolylineMillingSpec,
+    *,
+    forward: bool,
+) -> _ClosedPolylinePath:
+    points = polyline_milling.points if forward else tuple(reversed(polyline_milling.points))
+    tangent = _unit_vector(points[0], points[1])
+    tool_radius = polyline_milling.tool_width / 2.0
+    if polyline_milling.side_of_feature == "Center":
+        return _ClosedPolylinePath(
+            start=points[0],
+            tangent=tangent,
+            moves=tuple(("line", point, None) for point in points[1:]),
+        )
+    if _closed_polyline_uses_outside_offset(points, polyline_milling.side_of_feature):
+        return _closed_polyline_outside_toolpath(points, polyline_milling.side_of_feature, tool_radius)
+    return _closed_polyline_inside_toolpath(points, polyline_milling.side_of_feature, tool_radius)
+
+
+def _closed_polyline_outside_toolpath(
+    points: tuple[tuple[float, float], ...],
+    side_of_feature: str,
+    tool_radius: float,
+) -> _ClosedPolylinePath:
+    normals = _closed_polyline_side_normals(points, side_of_feature)
+    tangent = _unit_vector(points[0], points[1])
+    start = _offset_point(points[0], normals[0], tool_radius)
+    arc_code = "G3" if _closed_polyline_signed_area(points) > 0.0 else "G2"
+    moves: list[tuple[str, tuple[float, float], tuple[float, float] | None]] = []
+    for index in range(len(points) - 1):
+        end_point = points[index + 1]
+        line_end = _offset_point(end_point, normals[index], tool_radius)
+        moves.append(("line", line_end, None))
+        if index + 1 < len(points) - 1:
+            arc_end = _offset_point(end_point, normals[index + 1], tool_radius)
+            moves.append((arc_code, arc_end, end_point))
+    return _ClosedPolylinePath(start=start, tangent=tangent, moves=tuple(moves))
+
+
+def _closed_polyline_inside_toolpath(
+    points: tuple[tuple[float, float], ...],
+    side_of_feature: str,
+    tool_radius: float,
+) -> _ClosedPolylinePath:
+    normals = _closed_polyline_side_normals(points, side_of_feature)
+    tangent = _unit_vector(points[0], points[1])
+    start = _offset_point(points[0], normals[0], tool_radius)
+    moves: list[tuple[str, tuple[float, float], tuple[float, float] | None]] = []
+    for index in range(len(points) - 1):
+        end_point = points[index + 1]
+        if index + 1 < len(points) - 1:
+            point = _offset_line_intersection(
+                points[index],
+                points[index + 1],
+                normals[index],
+                points[index + 1],
+                points[index + 2],
+                normals[index + 1],
+                tool_radius,
+            )
+        else:
+            point = start
+        moves.append(("line", point, None))
+    return _ClosedPolylinePath(start=start, tangent=tangent, moves=tuple(moves))
+
+
+def _closed_polyline_side_normals(
+    points: tuple[tuple[float, float], ...],
+    side_of_feature: str,
+) -> tuple[tuple[float, float], ...]:
+    normals: list[tuple[float, float]] = []
+    for index in range(len(points) - 1):
+        unit_x, unit_y = _unit_vector(points[index], points[index + 1])
+        if side_of_feature == "Left":
+            normals.append((-unit_y, unit_x))
+        elif side_of_feature == "Right":
+            normals.append((unit_y, -unit_x))
+        else:
+            raise IsoEmissionNotImplemented(
+                f"Unsupported polyline side {side_of_feature!r}."
+            )
+    return tuple(normals)
+
+
+def _closed_polyline_uses_outside_offset(
+    points: tuple[tuple[float, float], ...],
+    side_of_feature: str,
+) -> bool:
+    area = _closed_polyline_signed_area(points)
+    return (area > 0.0 and side_of_feature == "Right") or (
+        area < 0.0 and side_of_feature == "Left"
+    )
+
+
+def _closed_polyline_signed_area(points: tuple[tuple[float, float], ...]) -> float:
+    area = 0.0
+    for first, second in zip(points, points[1:]):
+        area += (first[0] * second[1]) - (second[0] * first[1])
+    return area / 2.0
+
+
+def _offset_point(
+    point: tuple[float, float],
+    normal: tuple[float, float],
+    distance: float,
+) -> tuple[float, float]:
+    return point[0] + (normal[0] * distance), point[1] + (normal[1] * distance)
+
+
+def _offset_line_intersection(
+    first_start: tuple[float, float],
+    first_end: tuple[float, float],
+    first_normal: tuple[float, float],
+    second_start: tuple[float, float],
+    second_end: tuple[float, float],
+    second_normal: tuple[float, float],
+    distance: float,
+) -> tuple[float, float]:
+    p = _offset_point(first_start, first_normal, distance)
+    r = (first_end[0] - first_start[0], first_end[1] - first_start[1])
+    q = _offset_point(second_start, second_normal, distance)
+    s = (second_end[0] - second_start[0], second_end[1] - second_start[1])
+    cross = (r[0] * s[1]) - (r[1] * s[0])
+    if abs(cross) <= 1e-9:
+        raise IsoEmissionNotImplemented("Closed polyline has parallel consecutive segments.")
+    qmp = (q[0] - p[0], q[1] - p[1])
+    t = ((qmp[0] * s[1]) - (qmp[1] * s[0])) / cross
+    return p[0] + (t * r[0]), p[1] + (t * r[1])
+
+
+def _emit_polyline_path_moves(
+    points: tuple[tuple[float, float], ...],
+    feed: float,
+    *,
+    z: float = 0.0,
+    include_z: bool = False,
+) -> tuple[str, ...]:
+    lines: list[str] = []
+    previous = points[0]
+    for point in points[1:]:
+        lines.append(
+            _format_polyline_cut_move(
+                previous,
+                point,
+                z,
+                feed,
+                include_z=include_z,
+            )
+        )
+        previous = point
+    return tuple(lines)
+
+
+def _emit_polyline_line_lead_single_pass(
+    polyline_milling: sp.PolylineMillingSpec,
+    tool: _LineMillingTool,
+    cut_z: float,
+    rapid_point: tuple[float, float],
+    compensation: str | None,
+    *,
+    quote_mode: bool,
+) -> tuple[str, ...]:
+    first_point = polyline_milling.points[0]
+    lead_start = _polyline_line_lead_start(polyline_milling)
+    lead_exit = _polyline_line_lead_exit(polyline_milling)
+    closed = _polyline_is_closed(polyline_milling)
+    lines: list[str] = ["?%ETK[7]=4"]
+    if compensation is not None:
+        lines.extend(
+            [
+                compensation,
+                _format_polyline_xyz_move(
+                    lead_start,
+                    polyline_milling.security_plane,
+                    tool.plunge_feed,
+                ),
+            ]
+        )
+    if quote_mode:
+        lines.append(f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}")
+        lines.append(
+            _format_polyline_cut_move(
+                lead_start,
+                first_point,
+                cut_z,
+                tool.plunge_feed,
+                include_z=closed,
+            )
+        )
+    else:
+        lines.append(
+            _format_polyline_cut_move(
+                lead_start,
+                first_point,
+                cut_z,
+                tool.plunge_feed,
+            )
+        )
+    lines.extend(
+        _emit_polyline_path_moves(
+            polyline_milling.points,
+            tool.milling_feed,
+            z=cut_z,
+            include_z=closed,
+        )
+    )
+    if quote_mode:
+        lines.extend(
+            [
+                _format_polyline_cut_move(
+                    polyline_milling.points[-1],
+                    lead_exit,
+                    cut_z,
+                    tool.milling_feed,
+                    include_z=closed,
+                ),
+                f"G1 Z{_format_mm(polyline_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
+            ]
+        )
+    else:
+        lines.append(
+            _format_polyline_cut_move(
+                polyline_milling.points[-1],
+                lead_exit,
+                polyline_milling.security_plane,
+                tool.milling_feed,
+            )
+        )
+        if compensation is None:
+            lines.append(f"G0 Z{_format_mm(polyline_milling.security_plane)}")
+    if compensation is not None:
+        lines.extend(
+            [
+                "G40",
+                _format_polyline_xyz_move(
+                    _polyline_line_compensation_exit(polyline_milling),
+                    polyline_milling.security_plane,
+                    tool.milling_feed,
+                ),
+            ]
+        )
+    return tuple(lines)
+
+
+def _emit_polyline_arc_lead_single_pass(
+    polyline_milling: sp.PolylineMillingSpec,
+    tool: _LineMillingTool,
+    cut_z: float,
+    rapid_point: tuple[float, float],
+    compensation: str | None,
+    *,
+    quote_mode: bool,
+) -> tuple[str, ...]:
+    first_point = polyline_milling.points[0]
+    arc_start = _polyline_arc_lead_start(polyline_milling)
+    entry_center = _polyline_arc_entry_center(polyline_milling)
+    exit_center = _polyline_arc_exit_center(polyline_milling)
+    arc_exit = _polyline_arc_lead_exit(polyline_milling)
+    arc_code = _polyline_arc_lead_code(polyline_milling)
+    closed = _polyline_is_closed(polyline_milling)
+    lines: list[str] = ["?%ETK[7]=4"]
+    if compensation is not None:
+        lines.extend(
+            [
+                compensation,
+                _format_polyline_xyz_move(
+                    arc_start,
+                    polyline_milling.security_plane,
+                    tool.plunge_feed,
+                ),
+            ]
+        )
+    if quote_mode:
+        lines.append(f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}")
+        lines.append(_format_arc_move(arc_code, first_point, entry_center, tool.plunge_feed))
+    else:
+        lines.append(
+            _format_arc_move(
+                arc_code,
+                first_point,
+                entry_center,
+                tool.plunge_feed,
+                z=cut_z,
+            )
+        )
+    lines.extend(
+        _emit_polyline_path_moves(
+            polyline_milling.points,
+            tool.milling_feed,
+            z=cut_z,
+            include_z=closed,
+        )
+    )
+    if quote_mode:
+        lines.extend(
+            [
+                _format_arc_move(
+                    arc_code,
+                    arc_exit,
+                    exit_center,
+                    tool.milling_feed,
+                ),
+                f"G1 Z{_format_mm(polyline_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
+            ]
+        )
+    else:
+        lines.append(
+            _format_arc_move(
+                arc_code,
+                arc_exit,
+                exit_center,
+                tool.milling_feed,
+                z=polyline_milling.security_plane,
+            )
+        )
+        if compensation is None:
+            lines.append(f"G0 Z{_format_mm(polyline_milling.security_plane)}")
+    if compensation is not None:
+        lines.extend(
+            [
+                "G40",
+                _format_polyline_xyz_move(
+                    _polyline_arc_compensation_exit(polyline_milling),
+                    polyline_milling.security_plane,
+                    tool.milling_feed,
+                ),
+            ]
+        )
+    return tuple(lines)
+
+
 def _emit_top_profile_milling_transition(
     next_operation: _TopProfileOperation,
 ) -> tuple[str, ...]:
     lines: list[str] = []
     if (
         isinstance(next_operation, sp.PolylineMillingSpec)
-        and _polyline_compensation(next_operation) is not None
+        and next_operation.milling_strategy is None
+        and (
+            _polyline_compensation(next_operation) is not None
+            or _polyline_has_leads(next_operation)
+        )
+    ) or (
+        isinstance(next_operation, sp.CircleMillingSpec)
+        and (
+            (
+                next_operation.milling_strategy is None
+                and _circle_compensation(next_operation) is not None
+            )
+            or _circle_has_leads(next_operation)
+        )
+    ) or (
+        isinstance(next_operation, sp.LineMillingSpec)
+        and next_operation.milling_strategy is None
     ):
         lines.append("?%ETK[7]=0")
     lines.extend(
@@ -1412,6 +3366,26 @@ def _polyline_entry_point(
     return first_point[0] - unit_x, first_point[1] - unit_y
 
 
+def _polyline_rapid_point(
+    polyline_milling: sp.PolylineMillingSpec,
+    compensation: str | None,
+) -> tuple[float, float]:
+    if _polyline_has_quote_arcs(polyline_milling) or _polyline_has_down_up_arcs(polyline_milling):
+        arc_start = _polyline_arc_lead_start(polyline_milling)
+        if compensation is None:
+            return arc_start
+        normal_x, normal_y = _polyline_first_right_normal(polyline_milling)
+        side = _polyline_arc_side_sign(polyline_milling)
+        return arc_start[0] + (normal_x * side), arc_start[1] + (normal_y * side)
+    if _polyline_has_quote_lines(polyline_milling) or _polyline_has_down_up_lines(polyline_milling):
+        lead_start = _polyline_line_lead_start(polyline_milling)
+        if compensation is None:
+            return lead_start
+        tangent_x, tangent_y = _polyline_first_tangent(polyline_milling)
+        return lead_start[0] - tangent_x, lead_start[1] - tangent_y
+    return _polyline_entry_point(polyline_milling)
+
+
 def _polyline_exit_point(
     polyline_milling: sp.PolylineMillingSpec,
 ) -> tuple[float, float]:
@@ -1419,6 +3393,119 @@ def _polyline_exit_point(
     last_point = polyline_milling.points[-1]
     unit_x, unit_y = _unit_vector(previous_point, last_point)
     return last_point[0] + unit_x, last_point[1] + unit_y
+
+
+def _polyline_first_tangent(
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    return _unit_vector(polyline_milling.points[0], polyline_milling.points[1])
+
+
+def _polyline_last_tangent(
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    return _unit_vector(polyline_milling.points[-2], polyline_milling.points[-1])
+
+
+def _polyline_first_right_normal(
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    tangent_x, tangent_y = _polyline_first_tangent(polyline_milling)
+    return tangent_y, -tangent_x
+
+
+def _polyline_last_right_normal(
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    tangent_x, tangent_y = _polyline_last_tangent(polyline_milling)
+    return tangent_y, -tangent_x
+
+
+def _polyline_lead_radius(polyline_milling: sp.PolylineMillingSpec) -> float:
+    if polyline_milling.approach.is_enabled:
+        return (polyline_milling.tool_width / 2.0) * polyline_milling.approach.radius_multiplier
+    return polyline_milling.tool_width / 2.0
+
+
+def _polyline_line_lead_start(
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    first_point = polyline_milling.points[0]
+    tangent_x, tangent_y = _polyline_first_tangent(polyline_milling)
+    radius = _polyline_lead_radius(polyline_milling)
+    return first_point[0] - (tangent_x * radius), first_point[1] - (tangent_y * radius)
+
+
+def _polyline_line_lead_exit(
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    last_point = polyline_milling.points[-1]
+    tangent_x, tangent_y = _polyline_last_tangent(polyline_milling)
+    radius = _polyline_lead_radius(polyline_milling)
+    return last_point[0] + (tangent_x * radius), last_point[1] + (tangent_y * radius)
+
+
+def _polyline_line_compensation_exit(
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    lead_exit = _polyline_line_lead_exit(polyline_milling)
+    tangent_x, tangent_y = _polyline_last_tangent(polyline_milling)
+    return lead_exit[0] + tangent_x, lead_exit[1] + tangent_y
+
+
+def _polyline_arc_side_sign(polyline_milling: sp.PolylineMillingSpec) -> float:
+    return 1.0 if polyline_milling.side_of_feature == "Right" else -1.0
+
+
+def _polyline_arc_lead_code(polyline_milling: sp.PolylineMillingSpec) -> str:
+    return "G2" if _polyline_arc_side_sign(polyline_milling) > 0.0 else "G3"
+
+
+def _polyline_arc_entry_center(
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    first_point = polyline_milling.points[0]
+    normal_x, normal_y = _polyline_first_right_normal(polyline_milling)
+    radius = _polyline_lead_radius(polyline_milling)
+    side = _polyline_arc_side_sign(polyline_milling)
+    return first_point[0] + (normal_x * side * radius), first_point[1] + (normal_y * side * radius)
+
+
+def _polyline_arc_exit_center(
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    last_point = polyline_milling.points[-1]
+    normal_x, normal_y = _polyline_last_right_normal(polyline_milling)
+    radius = _polyline_lead_radius(polyline_milling)
+    side = _polyline_arc_side_sign(polyline_milling)
+    return last_point[0] + (normal_x * side * radius), last_point[1] + (normal_y * side * radius)
+
+
+def _polyline_arc_lead_start(
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    center = _polyline_arc_entry_center(polyline_milling)
+    tangent_x, tangent_y = _polyline_first_tangent(polyline_milling)
+    radius = _polyline_lead_radius(polyline_milling)
+    return center[0] - (tangent_x * radius), center[1] - (tangent_y * radius)
+
+
+def _polyline_arc_lead_exit(
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    center = _polyline_arc_exit_center(polyline_milling)
+    tangent_x, tangent_y = _polyline_last_tangent(polyline_milling)
+    radius = _polyline_lead_radius(polyline_milling)
+    return center[0] + (tangent_x * radius), center[1] + (tangent_y * radius)
+
+
+def _polyline_arc_compensation_exit(
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[float, float]:
+    arc_exit = _polyline_arc_lead_exit(polyline_milling)
+    normal_x, normal_y = _polyline_last_right_normal(polyline_milling)
+    side = _polyline_arc_side_sign(polyline_milling)
+    return arc_exit[0] + (normal_x * side), arc_exit[1] + (normal_y * side)
 
 
 def _unit_vector(
@@ -1439,6 +3526,78 @@ def _polyline_compensation(polyline_milling: sp.PolylineMillingSpec) -> str | No
     if polyline_milling.side_of_feature == "Right":
         return "G42"
     return None
+
+
+def _polyline_has_leads(polyline_milling: sp.PolylineMillingSpec) -> bool:
+    return polyline_milling.approach.is_enabled or polyline_milling.retract.is_enabled
+
+
+def _polyline_has_default_leads(polyline_milling: sp.PolylineMillingSpec) -> bool:
+    return not polyline_milling.approach.is_enabled and not polyline_milling.retract.is_enabled
+
+
+def _polyline_has_quote_lines(polyline_milling: sp.PolylineMillingSpec) -> bool:
+    return _polyline_has_line_leads(polyline_milling, approach_mode="Quote", retract_mode="Quote")
+
+
+def _polyline_has_down_up_lines(polyline_milling: sp.PolylineMillingSpec) -> bool:
+    return _polyline_has_line_leads(polyline_milling, approach_mode="Down", retract_mode="Up")
+
+
+def _polyline_has_line_leads(
+    polyline_milling: sp.PolylineMillingSpec,
+    *,
+    approach_mode: str,
+    retract_mode: str,
+) -> bool:
+    approach = polyline_milling.approach
+    retract = polyline_milling.retract
+    return (
+        approach.is_enabled
+        and retract.is_enabled
+        and approach.approach_type == "Line"
+        and retract.retract_type == "Line"
+        and approach.mode == approach_mode
+        and retract.mode == retract_mode
+        and round(float(approach.radius_multiplier), 3) in {2.0, 4.0}
+        and round(float(retract.radius_multiplier), 3) in {2.0, 4.0}
+        and round(float(approach.speed), 3) == -1.0
+        and round(float(retract.speed), 3) == -1.0
+        and round(float(retract.overlap), 3) == 0.0
+    )
+
+
+def _polyline_has_quote_arcs(polyline_milling: sp.PolylineMillingSpec) -> bool:
+    return _polyline_has_arc_leads(polyline_milling, approach_mode="Quote", retract_mode="Quote")
+
+
+def _polyline_has_down_up_arcs(polyline_milling: sp.PolylineMillingSpec) -> bool:
+    return _polyline_has_arc_leads(polyline_milling, approach_mode="Down", retract_mode="Up")
+
+
+def _polyline_has_arc_leads(
+    polyline_milling: sp.PolylineMillingSpec,
+    *,
+    approach_mode: str,
+    retract_mode: str,
+) -> bool:
+    approach = polyline_milling.approach
+    retract = polyline_milling.retract
+    return (
+        approach.is_enabled
+        and retract.is_enabled
+        and approach.approach_type == "Arc"
+        and retract.retract_type == "Arc"
+        and approach.mode == approach_mode
+        and retract.mode == retract_mode
+        and approach.arc_side == "Automatic"
+        and retract.arc_side == "Automatic"
+        and round(float(approach.radius_multiplier), 3) == 2.0
+        and round(float(retract.radius_multiplier), 3) == 2.0
+        and round(float(approach.speed), 3) == -1.0
+        and round(float(retract.speed), 3) == -1.0
+        and round(float(retract.overlap), 3) == 0.0
+    )
 
 
 def _polyline_is_closed(polyline_milling: sp.PolylineMillingSpec) -> bool:
@@ -1494,7 +3653,18 @@ def _emit_squaring_milling(
     points = _squaring_points(state, squaring_milling)
     first_point = points[0]
     has_quote_arcs = _squaring_has_quote_arcs(squaring_milling)
-    if has_quote_arcs:
+    has_quote_lines = _squaring_has_quote_lines(squaring_milling)
+    has_down_up_arcs = _squaring_has_down_up_arcs(squaring_milling)
+    has_down_up_lines = _squaring_has_down_up_lines(squaring_milling)
+    strategy = squaring_milling.milling_strategy
+    if strategy is not None:
+        rapid_point = _squaring_strategy_rapid_point(squaring_milling, tool_radius)
+        lead_point = first_point
+        exit_arc_point = None
+        exit_point = first_point
+        arc_center = first_point
+        arc_code = None
+    elif has_quote_arcs or has_down_up_arcs:
         arc_radius = _squaring_arc_radius(squaring_milling)
         arc_center = _squaring_arc_center(state, squaring_milling, arc_radius)
         rapid_point = _squaring_arc_rapid_point(
@@ -1517,6 +3687,14 @@ def _emit_squaring_milling(
         )
         exit_point = _squaring_arc_clearance_point(squaring_milling, exit_arc_point)
         arc_code = _squaring_arc_code(squaring_milling)
+    elif has_quote_lines or has_down_up_lines:
+        line_radius = _squaring_arc_radius(squaring_milling)
+        rapid_point = _squaring_line_rapid_point(points, line_radius)
+        lead_point = _squaring_line_lead_point(points, line_radius)
+        exit_arc_point = _squaring_line_exit_lead_point(points, line_radius)
+        exit_point = _squaring_line_clearance_point(points, line_radius)
+        arc_center = first_point
+        arc_code = None
     else:
         rapid_point = _squaring_entry_point(points)
         lead_point = first_point
@@ -1555,21 +3733,76 @@ def _emit_squaring_milling(
         f"VL6={_format_mm(tool.tool_offset_length)}",
         f"SVR {_format_mm(tool_radius)}",
         f"VL7={_format_mm(tool_radius)}",
-        "?%ETK[7]=4",
-        compensation,
-        _format_polyline_xyz_move(
-            lead_point,
-            squaring_milling.security_plane,
-            tool.plunge_feed,
-        ),
-        f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}",
     ]
+    if strategy is not None:
+        lines.extend(
+            [
+                f"G1 Z{_format_mm(squaring_milling.security_plane)} F{_format_mm(tool.plunge_feed)}",
+                "?%ETK[7]=4",
+                *_emit_squaring_strategy_passes(
+                    state,
+                    squaring_milling,
+                    tool,
+                    cut_z,
+                    strategy,
+                ),
+                f"G0 Z{_format_mm(squaring_milling.security_plane)}",
+                "D0",
+                "SVL 0.000",
+                "VL6=0.000",
+                "SVR 0.000",
+                "VL7=0.000",
+                "?%ETK[7]=0",
+            ]
+        )
+        return tuple(lines)
+    lines.extend(
+        [
+            "?%ETK[7]=4",
+            compensation,
+            _format_polyline_xyz_move(
+                lead_point,
+                squaring_milling.security_plane,
+                tool.plunge_feed,
+            ),
+        ]
+    )
+    if has_down_up_arcs and arc_code is not None:
+        lines.append(
+            _format_arc_move(
+                arc_code,
+                first_point,
+                arc_center,
+                tool.plunge_feed,
+                z=cut_z,
+            )
+        )
+    elif has_down_up_lines:
+        lines.append(
+            _format_polyline_cut_move(
+                lead_point,
+                first_point,
+                cut_z,
+                tool.plunge_feed,
+            )
+        )
+    else:
+        lines.append(f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}")
     if has_quote_arcs and arc_code is not None:
         lines.append(
             _format_arc_move(
                 arc_code,
                 first_point,
                 arc_center,
+                tool.plunge_feed,
+            )
+        )
+    elif has_quote_lines:
+        lines.append(
+            _format_polyline_cut_move(
+                lead_point,
+                first_point,
+                cut_z,
                 tool.plunge_feed,
             )
         )
@@ -1593,9 +3826,40 @@ def _emit_squaring_milling(
                 tool.milling_feed,
             )
         )
+    elif has_quote_lines and exit_arc_point is not None:
+        lines.append(
+            _format_polyline_cut_move(
+                previous_point,
+                exit_arc_point,
+                cut_z,
+                tool.milling_feed,
+            )
+        )
+    elif has_down_up_arcs and arc_code is not None and exit_arc_point is not None:
+        lines.append(
+            _format_arc_move(
+                arc_code,
+                exit_arc_point,
+                arc_center,
+                tool.milling_feed,
+                z=squaring_milling.security_plane,
+            )
+        )
+    elif has_down_up_lines and exit_arc_point is not None:
+        lines.append(
+            _format_polyline_cut_move(
+                previous_point,
+                exit_arc_point,
+                squaring_milling.security_plane,
+                tool.milling_feed,
+            )
+        )
+    if not (has_down_up_arcs or has_down_up_lines):
+        lines.append(
+            f"G1 Z{_format_mm(squaring_milling.security_plane)} F{_format_mm(tool.milling_feed)}"
+        )
     lines.extend(
         [
-            f"G1 Z{_format_mm(squaring_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
             "G40",
             _format_polyline_xyz_move(
                 exit_point,
@@ -1613,11 +3877,251 @@ def _emit_squaring_milling(
     return tuple(lines)
 
 
+def _squaring_strategy_rapid_point(
+    squaring_milling: sp.SquaringMillingSpec,
+    tool_radius: float,
+) -> tuple[float, float]:
+    start_x = _squaring_start_x(squaring_milling)
+    if squaring_milling.winding == "CounterClockwise":
+        return start_x - tool_radius, -(2.0 * tool_radius)
+    if squaring_milling.winding == "Clockwise":
+        return start_x + tool_radius, -(2.0 * tool_radius)
+    raise IsoEmissionNotImplemented(
+        f"Unsupported squaring winding {squaring_milling.winding!r}."
+    )
+
+
+def _emit_squaring_strategy_passes(
+    state: sp.PgmxState,
+    squaring_milling: sp.SquaringMillingSpec,
+    tool: _LineMillingTool,
+    final_depth: float,
+    strategy: sp.MillingStrategySpec,
+) -> tuple[str, ...]:
+    if isinstance(strategy, sp.UnidirectionalMillingStrategySpec):
+        bidirectional = False
+        step = abs(float(strategy.axial_cutting_depth))
+    elif isinstance(strategy, sp.BidirectionalMillingStrategySpec):
+        bidirectional = True
+        step = abs(float(strategy.axial_cutting_depth))
+    else:
+        raise IsoEmissionNotImplemented(
+            "Squaring supports only observed uni/bidirectional strategies."
+        )
+    lines: list[str] = []
+    depths = _line_milling_pass_depths(final_depth, step)
+    direction = squaring_milling.winding
+    final_direction = direction
+    for index, depth in enumerate(depths):
+        lines.append(f"G1 Z{_format_mm(depth)} F{_format_mm(tool.milling_feed)}")
+        if index == 0:
+            lines.append(
+                _format_arc_move(
+                    _squaring_strategy_entry_arc_code(squaring_milling),
+                    _squaring_strategy_start_point(squaring_milling),
+                    _squaring_strategy_entry_center(squaring_milling),
+                    tool.milling_feed,
+                )
+            )
+        lines.extend(
+            _emit_squaring_strategy_contour(
+                state,
+                squaring_milling,
+                direction,
+                depth,
+                tool.milling_feed,
+            )
+        )
+        final_direction = direction
+        if bidirectional:
+            direction = _opposite_winding(direction)
+    lines.append(
+        _format_arc_move(
+            _squaring_strategy_exit_arc_code(
+                squaring_milling,
+                final_direction,
+                bidirectional,
+            ),
+            _squaring_strategy_exit_point(
+                squaring_milling,
+                final_direction,
+                bidirectional,
+            ),
+            _squaring_strategy_exit_center(
+                squaring_milling,
+                final_direction,
+                bidirectional,
+            ),
+            tool.milling_feed,
+        )
+    )
+    lines.append(
+        f"G1 Z{_format_mm(squaring_milling.security_plane)} F{_format_mm(tool.milling_feed)}"
+    )
+    return tuple(lines)
+
+
+def _emit_squaring_strategy_contour(
+    state: sp.PgmxState,
+    squaring_milling: sp.SquaringMillingSpec,
+    direction: str,
+    z: float,
+    feed: float,
+) -> tuple[str, ...]:
+    tool_radius = squaring_milling.tool_width / 2.0
+    start_x = _squaring_start_x(squaring_milling)
+    length = state.length
+    width = state.width
+    start = (start_x, -tool_radius)
+    if direction == "CounterClockwise":
+        moves: tuple[tuple[str, tuple[float, float], tuple[float, float] | None], ...] = (
+            ("line", (length, -tool_radius), None),
+            ("arc_g3", (length + tool_radius, 0.0), (length, 0.0)),
+            ("line", (length + tool_radius, width), None),
+            ("arc_g3", (length, width + tool_radius), (length, width)),
+            ("line", (0.0, width + tool_radius), None),
+            ("arc_g3", (-tool_radius, width), (0.0, width)),
+            ("line", (-tool_radius, 0.0), None),
+            ("arc_g3", (0.0, -tool_radius), (0.0, 0.0)),
+            ("line", start, None),
+        )
+    elif direction == "Clockwise":
+        moves = (
+            ("line", (0.0, -tool_radius), None),
+            ("arc_g2", (-tool_radius, 0.0), (0.0, 0.0)),
+            ("line", (-tool_radius, width), None),
+            ("arc_g2", (0.0, width + tool_radius), (0.0, width)),
+            ("line", (length, width + tool_radius), None),
+            ("arc_g2", (length + tool_radius, width), (length, width)),
+            ("line", (length + tool_radius, 0.0), None),
+            ("arc_g2", (length, -tool_radius), (length, 0.0)),
+            ("line", start, None),
+        )
+    else:
+        raise IsoEmissionNotImplemented(f"Unsupported squaring winding {direction!r}.")
+
+    lines: list[str] = []
+    previous = start
+    for kind, point, center in moves:
+        if kind == "line":
+            lines.append(_format_polyline_cut_move(previous, point, z, feed))
+        else:
+            assert center is not None
+            code = "G3" if kind == "arc_g3" else "G2"
+            lines.append(_format_arc_move(code, point, center, feed))
+        previous = point
+    return tuple(lines)
+
+
+def _squaring_strategy_entry_arc_code(
+    squaring_milling: sp.SquaringMillingSpec,
+) -> str:
+    if squaring_milling.winding == "CounterClockwise":
+        return "G2"
+    if squaring_milling.winding == "Clockwise":
+        return "G3"
+    raise IsoEmissionNotImplemented(
+        f"Unsupported squaring winding {squaring_milling.winding!r}."
+    )
+
+
+def _squaring_strategy_start_point(
+    squaring_milling: sp.SquaringMillingSpec,
+) -> tuple[float, float]:
+    return _squaring_start_x(squaring_milling), -(squaring_milling.tool_width / 2.0)
+
+
+def _squaring_strategy_entry_center(
+    squaring_milling: sp.SquaringMillingSpec,
+) -> tuple[float, float]:
+    return _squaring_start_x(squaring_milling), -squaring_milling.tool_width
+
+
+def _squaring_strategy_exit_arc_code(
+    squaring_milling: sp.SquaringMillingSpec,
+    final_direction: str,
+    bidirectional: bool,
+) -> str:
+    if bidirectional and final_direction != squaring_milling.winding:
+        if final_direction == "CounterClockwise":
+            return "G3"
+        if final_direction == "Clockwise":
+            return "G2"
+    return _squaring_strategy_entry_arc_code(squaring_milling)
+
+
+def _squaring_strategy_exit_point(
+    squaring_milling: sp.SquaringMillingSpec,
+    final_direction: str,
+    bidirectional: bool,
+) -> tuple[float, float]:
+    start_x = _squaring_start_x(squaring_milling)
+    tool_radius = squaring_milling.tool_width / 2.0
+    if bidirectional and final_direction != squaring_milling.winding:
+        if final_direction == "CounterClockwise":
+            return start_x + tool_radius, 0.0
+        if final_direction == "Clockwise":
+            return start_x - tool_radius, 0.0
+    if squaring_milling.winding == "CounterClockwise":
+        return start_x + tool_radius, -squaring_milling.tool_width
+    if squaring_milling.winding == "Clockwise":
+        return start_x - tool_radius, -squaring_milling.tool_width
+    raise IsoEmissionNotImplemented(
+        f"Unsupported squaring winding {squaring_milling.winding!r}."
+    )
+
+
+def _squaring_strategy_exit_center(
+    squaring_milling: sp.SquaringMillingSpec,
+    final_direction: str,
+    bidirectional: bool,
+) -> tuple[float, float]:
+    if bidirectional and final_direction != squaring_milling.winding:
+        return _squaring_start_x(squaring_milling), 0.0
+    return _squaring_strategy_entry_center(squaring_milling)
+
+
+def _squaring_start_x(squaring_milling: sp.SquaringMillingSpec) -> float:
+    coordinate = getattr(squaring_milling, "start_coordinate", None)
+    if coordinate is not None:
+        return float(coordinate)
+    return 0.0
+
+
+def _opposite_winding(winding: str) -> str:
+    if winding == "CounterClockwise":
+        return "Clockwise"
+    if winding == "Clockwise":
+        return "CounterClockwise"
+    raise IsoEmissionNotImplemented(f"Unsupported squaring winding {winding!r}.")
+
+
 def _squaring_has_default_leads(squaring_milling: sp.SquaringMillingSpec) -> bool:
     return not squaring_milling.approach.is_enabled and not squaring_milling.retract.is_enabled
 
 
 def _squaring_has_quote_arcs(squaring_milling: sp.SquaringMillingSpec) -> bool:
+    return _squaring_has_arc_leads(
+        squaring_milling,
+        approach_mode="Quote",
+        retract_mode="Quote",
+    )
+
+
+def _squaring_has_down_up_arcs(squaring_milling: sp.SquaringMillingSpec) -> bool:
+    return _squaring_has_arc_leads(
+        squaring_milling,
+        approach_mode="Down",
+        retract_mode="Up",
+    )
+
+
+def _squaring_has_arc_leads(
+    squaring_milling: sp.SquaringMillingSpec,
+    *,
+    approach_mode: str,
+    retract_mode: str,
+) -> bool:
     approach = squaring_milling.approach
     retract = squaring_milling.retract
     return (
@@ -1625,10 +4129,49 @@ def _squaring_has_quote_arcs(squaring_milling: sp.SquaringMillingSpec) -> bool:
         and retract.is_enabled
         and approach.approach_type == "Arc"
         and retract.retract_type == "Arc"
-        and approach.mode == "Quote"
-        and retract.mode == "Quote"
+        and approach.mode == approach_mode
+        and retract.mode == retract_mode
         and approach.arc_side == "Automatic"
         and retract.arc_side == "Automatic"
+        and round(float(approach.radius_multiplier), 3) == 2.0
+        and round(float(retract.radius_multiplier), 3) == 2.0
+        and round(float(approach.speed), 3) == -1.0
+        and round(float(retract.speed), 3) == -1.0
+        and round(float(retract.overlap), 3) == 0.0
+    )
+
+
+def _squaring_has_quote_lines(squaring_milling: sp.SquaringMillingSpec) -> bool:
+    return _squaring_has_line_leads(
+        squaring_milling,
+        approach_mode="Quote",
+        retract_mode="Quote",
+    )
+
+
+def _squaring_has_down_up_lines(squaring_milling: sp.SquaringMillingSpec) -> bool:
+    return _squaring_has_line_leads(
+        squaring_milling,
+        approach_mode="Down",
+        retract_mode="Up",
+    )
+
+
+def _squaring_has_line_leads(
+    squaring_milling: sp.SquaringMillingSpec,
+    *,
+    approach_mode: str,
+    retract_mode: str,
+) -> bool:
+    approach = squaring_milling.approach
+    retract = squaring_milling.retract
+    return (
+        approach.is_enabled
+        and retract.is_enabled
+        and approach.approach_type == "Line"
+        and retract.retract_type == "Line"
+        and approach.mode == approach_mode
+        and retract.mode == retract_mode
         and round(float(approach.radius_multiplier), 3) == 2.0
         and round(float(retract.radius_multiplier), 3) == 2.0
         and round(float(approach.speed), 3) == -1.0
@@ -1706,6 +4249,40 @@ def _squaring_entry_point(points: tuple[tuple[float, float], ...]) -> tuple[floa
 def _squaring_exit_point(points: tuple[tuple[float, float], ...]) -> tuple[float, float]:
     unit_x, unit_y = _unit_vector(points[-2], points[-1])
     return points[-1][0] + unit_x, points[-1][1] + unit_y
+
+
+def _squaring_line_lead_point(
+    points: tuple[tuple[float, float], ...],
+    lead_radius: float,
+) -> tuple[float, float]:
+    unit_x, unit_y = _unit_vector(points[0], points[1])
+    return points[0][0] - (unit_x * lead_radius), points[0][1] - (unit_y * lead_radius)
+
+
+def _squaring_line_rapid_point(
+    points: tuple[tuple[float, float], ...],
+    lead_radius: float,
+) -> tuple[float, float]:
+    lead_point = _squaring_line_lead_point(points, lead_radius)
+    unit_x, unit_y = _unit_vector(points[0], points[1])
+    return lead_point[0] - unit_x, lead_point[1] - unit_y
+
+
+def _squaring_line_exit_lead_point(
+    points: tuple[tuple[float, float], ...],
+    lead_radius: float,
+) -> tuple[float, float]:
+    unit_x, unit_y = _unit_vector(points[-2], points[-1])
+    return points[-1][0] + (unit_x * lead_radius), points[-1][1] + (unit_y * lead_radius)
+
+
+def _squaring_line_clearance_point(
+    points: tuple[tuple[float, float], ...],
+    lead_radius: float,
+) -> tuple[float, float]:
+    lead_point = _squaring_line_exit_lead_point(points, lead_radius)
+    unit_x, unit_y = _unit_vector(points[-2], points[-1])
+    return lead_point[0] + unit_x, lead_point[1] + unit_y
 
 
 def _squaring_arc_radius(squaring_milling: sp.SquaringMillingSpec) -> float:
@@ -1799,10 +4376,14 @@ def _format_arc_move(
     point: tuple[float, float],
     center: tuple[float, float],
     feed: float,
+    *,
+    z: float | None = None,
 ) -> str:
+    axes = f"{code} X{_format_mm(point[0])} Y{_format_mm(point[1])}"
+    if z is not None:
+        axes += f" Z{_format_mm(z)}"
     return (
-        f"{code} X{_format_mm(point[0])} "
-        f"Y{_format_mm(point[1])} "
+        f"{axes} "
         f"I{_format_mm(center[0])} "
         f"J{_format_mm(center[1])} "
         f"F{_format_mm(feed)}"
@@ -2027,6 +4608,25 @@ def _polyline_milling_tool(polyline_milling: sp.PolylineMillingSpec) -> _LineMil
     if round(float(polyline_milling.tool_width), 3) != round(tool.tool_width, 3):
         raise IsoEmissionNotImplemented(
             f"{tool.tool_name} polyline milling expects {tool.tool_width:.3f} mm width."
+        )
+    return tool
+
+
+def _circle_milling_tool(circle_milling: sp.CircleMillingSpec) -> _LineMillingTool:
+    tool_name = circle_milling.tool_name.strip().upper()
+    if not tool_name and circle_milling.tool_id:
+        tool_name = _tool_name_from_id(circle_milling.tool_id)
+    tool = load_machine_config().line_milling_tools.get(tool_name)
+    if tool is None:
+        raise IsoEmissionNotImplemented(
+            f"Circle milling tool {circle_milling.tool_name or circle_milling.tool_id!r} "
+            "is not supported yet."
+        )
+    if tool.tool_name != "E004":
+        raise IsoEmissionNotImplemented("Circle milling supports only E004 for now.")
+    if round(float(circle_milling.tool_width), 3) != round(tool.tool_width, 3):
+        raise IsoEmissionNotImplemented(
+            f"{tool.tool_name} circle milling expects {tool.tool_width:.3f} mm width."
         )
     return tool
 

@@ -111,10 +111,14 @@ observada con pasadas multiples. Tambien cubre, como operaciones standalone,
 polilinea abierta `E004` en `Top` con compensacion `Left`/`Right`, candidato de
 polilinea abierta `E003` pendiente de validacion Maestro, y escuadrado `E001`
 en `Top` empezando por `Bottom`, `Top`, `Left` o `Right`,
-horario/antihorario, sin leads o con los leads `Arc/Quote` observados. La
-primera combinacion soportada es `E001` escuadrado seguido de polilinea abierta
-`E004`. Las demas combinaciones entre familias y las demas familias deben
-fallar explicitamente hasta que se agreguen al MVP.
+horario/antihorario, sin leads o con los leads `Line/Arc` observados. Tambien
+cubre circulos `E004` centro/izquierda/derecha, horario/antihorario, PH5 y
+helicoidal; polilineas abiertas `E004` con PH5 y leads `Line/Arc`; y
+polilineas cerradas `E003/E004` con leads, PH5, offset lateral explicito y
+arcos de esquina compensados. La combinacion soportada principal es `E001`
+escuadrado seguido de perfiles superiores `E004`/`E003` observados. Las demas
+combinaciones entre familias y las demas familias deben fallar explicitamente
+hasta que se agreguen al MVP.
 
 Nota de deuda tecnica: parte de `emitter.py` todavia contiene constantes
 aprendidas por comparacion ISO. La regla nueva exige migrar esas constantes a
@@ -147,6 +151,15 @@ antihorario/horario sin leads, escuadrado `E001` antihorario/horario con leads
 matriz `Pieza`, `Pieza_001..024`, `Pieza_004_Repeticiones`,
 `Pieza_DosHuecos`, `Pieza_DosHuecos_Origen_5_5_25`, `Pieza_Hueco8` y
 `Pieza_Hueco8_Origen_5_5_25` compara exacta.
+
+La sexta validacion compara toda la matriz raiz
+`S:\Maestro\Projects\ProdAction\ISO\Pieza*.pgmx` contra
+`P:\USBMIX\ProdAction\ISO`. Los 101 archivos con ISO Maestro de referencia
+comparan con 0 diferencias normalizadas. `Pieza_096` y `Pieza_097` quedan
+pendientes solo porque no existe su par `.iso` postprocesado. Esta validacion
+cubre `Pieza_025..095`: circulos `E004`, polilineas abiertas/cerradas
+`E003/E004`, escuadrados con leads `Line/Arc`, estrategias PH5 y combinaciones
+`E001 + perfil superior`.
 
 El corpus Cocina se usa como corpus real de validacion sin depender del CNC:
 `S:\Maestro\Projects\ProdAction\ISO\Cocina` contra

@@ -522,10 +522,14 @@ El emisor `iso_generation` compara exacto contra Maestro para:
   `Arc/Quote`.
 - `Pieza_022..024`: secuencia `E001` escuadrado + polilinea abierta `E004`
   `Center`/`Left`/`Right`.
+- `Pieza_025..095`: secuencias `E001` + perfiles superiores con circulos
+  `E004`, polilineas abiertas/cerradas `E003/E004`, leads `Line/Arc`,
+  estrategias PH5, helicoidal circular y offset lateral explicito.
 
-La matriz `Pieza`, `Pieza_001..024`, `Pieza_004_Repeticiones`,
-`Pieza_DosHuecos`, `Pieza_DosHuecos_Origen_5_5_25`, `Pieza_Hueco8` y
-`Pieza_Hueco8_Origen_5_5_25` queda en 0 diferencias normalizadas.
+La matriz raiz `S:\Maestro\Projects\ProdAction\ISO\Pieza*.pgmx` queda en 0
+diferencias normalizadas para todos los pares disponibles: 101 ISO exactos
+contra `P:\USBMIX\ProdAction\ISO`, sin errores ni diferencias. `Pieza_096` y
+`Pieza_097` quedan pendientes solo porque no existe ISO Maestro de referencia.
 
 El escuadrado `E001` ya usa el borde de arranque real (`Bottom`, `Top`, `Left`
 o `Right`) y conserva la coordenada de arranque detectada en el perfil `.pgmx`
@@ -540,8 +544,9 @@ taladros cuyo PGMX expone herramienta `0` aunque el ISO Maestro selecciona
 mandriles concretos.
 
 Tambien se generaron `Pieza_096` y `Pieza_097` como repeticion de la polilinea
-abierta de `Pieza_016..017` cambiando herramienta a `E003`. Quedan pendientes
-de postprocesado Maestro para comparar contra el candidato ISO nativo.
+abierta de `Pieza_016..017` cambiando herramienta a `E003`. El emisor puede
+generar los candidatos, pero quedan pendientes de postprocesado Maestro para
+compararlos contra un ISO de referencia.
 
 ## Huecos pendientes del contrato
 
