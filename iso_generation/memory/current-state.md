@@ -31,6 +31,11 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   - ranura lineal horizontal `082` en `Top`, con correcciones `Left`/`Right`;
   - fresado lineal `E004` en `Top`, horizontal o vertical, incluido PH5 con
     pasadas multiples.
+  - polilinea abierta `E004` standalone en `Top`, con compensacion
+    `Left`/`Right`.
+  - escuadrado `E001` standalone en `Top`, empezando por `Bottom`, con
+    winding horario/antihorario y sin leads o con leads `Arc/Quote`
+    observados.
 - `comparator.py` compara ISO Maestro vs candidato con normalizacion simple.
 - `cli.py` ofrece comandos de inspeccion, cabecera y comparacion.
 - `machine_config/` contiene el snapshot inicial de configuracion:
@@ -127,10 +132,22 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
 - La ventana `GENDATA` de Xilog Plus contiene varios `40.000`, pero sus
   etiquetas corresponden a velocidades de referencia de arcos/discontinuidades,
   no a una holgura `Z`.
+- `Pieza_016..017` comparan igual contra Maestro: polilinea abierta `E004` con
+  compensacion `Left` y `Right`, 100 lineas normalizadas contra 100, 0
+  diferencias.
+- `Pieza_018..021` comparan igual contra Maestro: escuadrado `E001`
+  antihorario/horario, sin leads y con leads `Arc/Quote`, 103/105 lineas
+  normalizadas segun variante, 0 diferencias.
+- La matriz `Pieza`, `Pieza_001..021` y `Pieza_004_Repeticiones` compara
+  exacta: 23 piezas, 0 diferencias.
+- El emisor ya acepta polilinea abierta standalone con `E003` ademas de `E004`
+  usando los datos de herramienta del snapshot (`T3`, `SVL=111.500`,
+  `SVR=4.760`). Se generaron fixtures PGMX pendientes de postprocesar:
+  `Pieza_096` (`Left`) y `Pieza_097` (`Right`).
 
 ## Proximo Paso
 
-Cerrar las diferencias no relacionadas de la tanda `side_g53_z_fixtures_2026-05-03`
-si se quiere usarla como comparacion exacta integral; hoy el contrato puntual
-de `G0 G53 Z...` ya esta cerrado. Luego avanzar con `Pieza_016+`; la siguiente
-frontera detectada son polilineas `E004` y luego escuadrados `E001`.
+Postprocesar en Maestro `Pieza_096` y `Pieza_097` para validar la polilinea con
+`E003`. Luego avanzar con combinaciones de familias: `Pieza_022` adapta como
+escuadrado `E001` + polilinea `E004`, pero el emisor todavia soporta esas
+familias solo como operaciones standalone.

@@ -107,8 +107,12 @@ verticales `001..007`, y bloques de taladros laterales D8 individuales y por
 patron en `Left`, `Right`, `Front` y `Back`. Tambien cubre ranura lineal
 horizontal `082` en `Top` con correcciones laterales observadas, y fresado
 lineal `E004` en `Top` horizontal o vertical, con corte simple y estrategia PH5
-observada con pasadas multiples. Las demas familias deben fallar explicitamente
-hasta que se agreguen al MVP.
+observada con pasadas multiples. Tambien cubre, como operaciones standalone,
+polilinea abierta `E004` en `Top` con compensacion `Left`/`Right`, candidato de
+polilinea abierta `E003` pendiente de validacion Maestro, y escuadrado `E001`
+en `Top` empezando por `Bottom`, horario/antihorario, sin leads o con los
+leads `Arc/Quote` observados. Las combinaciones entre familias y las demas
+familias deben fallar explicitamente hasta que se agreguen al MVP.
 
 Nota de deuda tecnica: parte de `emitter.py` todavia contiene constantes
 aprendidas por comparacion ISO. La regla nueva exige migrar esas constantes a
@@ -132,3 +136,14 @@ La cuarta validacion compara `Pieza_006..015` contra Maestro. Cubre ranuras
 `082` con sentido directo/inverso y correcciones `Left`/`Right`, taladros
 superiores no pasantes y pasantes con/sin extra, y fresado lineal `E004`
 vertical no pasante. Todas comparan con 0 diferencias normalizadas.
+
+La quinta validacion compara `Pieza_016..021` contra Maestro. Cubre polilinea
+abierta `E004` con compensacion `Left`/`Right`, escuadrado `E001`
+antihorario/horario sin leads, y escuadrado `E001` antihorario/horario con
+leads `Arc/Quote`. Todas comparan con 0 diferencias normalizadas. La matriz
+`Pieza`, `Pieza_001..021` y `Pieza_004_Repeticiones` compara exacta.
+
+Validacion pendiente: `Pieza_096` y `Pieza_097` replican la polilinea abierta
+de `Pieza_016..017` cambiando la herramienta a `E003`; los `.pgmx` adaptan con
+`unsupported=0` y el emisor genera candidato ISO, pero falta comparar contra
+Maestro postprocesado.

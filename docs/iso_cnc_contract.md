@@ -1,6 +1,6 @@
 # Contrato CNC/ISO Observado
 
-Estado: 2026-05-02.
+Estado: 2026-05-03.
 
 Esta guia consolida el punto 1 de la investigacion ISO: que se sabe del
 contrato real entre Maestro/postprocesador y la CNC. Es una base para un futuro
@@ -510,6 +510,25 @@ La tanda diagnostica `arc_ph5_diagnostics_2026-05-03` acoto mejor la regla:
 Regla practica: para ISO postprocesable con Maestro, evitar `Retract Arc + Up`
 en polilineas abiertas de varios segmentos cuando se usa `PH=5`; usar
 `Retract Line + Up` o `Arc + Quote`.
+
+### Validacion del emisor nativo sobre polilinea y escuadrado
+
+El emisor `iso_generation` compara exacto contra Maestro para:
+
+- `Pieza_016..017`: polilinea abierta `E004` en `Top` con compensacion
+  `Left`/`Right`.
+- `Pieza_018..019`: escuadrado `E001` horario/antihorario sin leads.
+- `Pieza_020..021`: escuadrado `E001` horario/antihorario con leads
+  `Arc/Quote`.
+
+La matriz `Pieza`, `Pieza_001..021` y `Pieza_004_Repeticiones` queda en 0
+diferencias normalizadas. `Pieza_022` queda como siguiente frontera porque
+combina escuadrado `E001` con polilinea `E004`; ambas familias ya comparan
+standalone, pero el emisor todavia no combina bloques operativos.
+
+Tambien se generaron `Pieza_096` y `Pieza_097` como repeticion de la polilinea
+abierta de `Pieza_016..017` cambiando herramienta a `E003`. Quedan pendientes
+de postprocesado Maestro para comparar contra el candidato ISO nativo.
 
 ## Huecos pendientes del contrato
 

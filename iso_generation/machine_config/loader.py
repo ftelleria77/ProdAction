@@ -51,6 +51,7 @@ class LineMillingToolConfig:
     spindle: int
     tool_code: int
     etk18: int
+    tool_width: float
     shf_x: float
     shf_y: float
     shf_z: float
@@ -156,6 +157,8 @@ _SIDE_DRILL_POLICIES = {
     "Front": _SideDrillPolicy("Front", 5, 58, 1073741824, "Y", -1, 1),
     "Back": _SideDrillPolicy("Back", 4, 59, 1073741824, "Y", 1, -1),
 }
+
+_ROUTER_TOOL_NAMES = ("E001", "E003", "E004", "E005", "E006", "E007")
 
 
 def load_machine_config(snapshot_root: Path | None = None) -> MachineConfig:
@@ -291,19 +294,21 @@ def _build_line_milling_tools(
     snapshot_root: Path,
     library: _ToolLibraryData,
 ) -> dict[str, LineMillingToolConfig]:
-    tool = _required_core_tool(library, "E004")
     head_x, head_y, head_z = _read_line_spindle_offsets(
         snapshot_root / "xilog_plus" / "Cfg" / "pheads.cfg"
     )
-    tool_number = int(tool.name.removeprefix("E"))
-    return {
-        tool.name.upper(): LineMillingToolConfig(
+    tools: dict[str, LineMillingToolConfig] = {}
+    for tool_name in _ROUTER_TOOL_NAMES:
+        tool = _required_core_tool(library, tool_name)
+        tool_number = int(tool.name.removeprefix("E"))
+        tools[tool.name.upper()] = LineMillingToolConfig(
             tool_name=tool.name.upper(),
             tool_number=tool_number,
             # Spindle/ETK routing is ISO policy; tool geometry comes from snapshot.
             spindle=1,
             tool_code=tool_number,
             etk18=1,
+            tool_width=tool.diameter,
             shf_x=_invert_offset(head_x),
             shf_y=_invert_offset(head_y),
             shf_z=_invert_offset(head_z),
@@ -312,7 +317,7 @@ def _build_line_milling_tools(
             plunge_feed=tool.descent_speed * 1000.0,
             milling_feed=tool.feed_rate * 1000.0,
         )
-    }
+    return tools
 
 
 def _build_slot_milling_tools(library: _ToolLibraryData) -> dict[str, SlotMillingToolConfig]:
