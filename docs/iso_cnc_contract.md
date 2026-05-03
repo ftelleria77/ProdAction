@@ -134,9 +134,11 @@ Reglas observadas desde estos archivos:
   - `$GEN_SPINTIME = 0.5`
   - `$GEN_UTMAXLEN = 155`
 - `fields.cfg` contiene campos `E/F/G/H` con valores Y alrededor de `-1515`.
-  Esos valores estan en la misma familia que `SHF[Y] = -1515.600` y
-  `%Or[0].ofY=-1515599.976`, pero la regla exacta de seleccion/ajuste del
-  campo todavia no esta cerrada.
+  En los programas `HG` observados, el marco toma como referencia el campo
+  `H`: `Y0=-1515.600`.
+- `%Or[0].ofY=-1515599.976` coincide con `-1515.600` almacenado como
+  `float32` y multiplicado por `1000`; no requiere una correccion adicional
+  desde `yzone.cfg`.
 
 Campos de mesa parseados desde `fields.cfg` con lectura de registro binario
 simple. En este archivo la etiqueta queda al final del registro:
@@ -150,7 +152,7 @@ simple. En este archivo la etiqueta queda al final del registro:
 | `E` | `1` | `-3688.00` | `-1515.25` | `0.00` | `1843.00` | `1555.00` |
 | `F` | `1` | `-1843.00` | `-1515.75` | `0.00` | `1843.00` | `1555.00` |
 | `G` | `1` | `-1843.00` | `-1515.75` | `0.00` | `1843.00` | `1555.00` |
-| `H` | `1` | `0.00` | `-1515.00` | `0.00` | `1843.00` | `1555.00` |
+| `H` | `1` | `0.00` | `-1515.60` | `0.00` | `1843.00` | `1555.00` |
 | `I..P` | `0` | `0.00` | `0.00` | `0.00` | `0.00` | `0.00` |
 
 `Axis.ini` confirma que hay parametros dedicados a dimension de area:
@@ -161,7 +163,9 @@ simple. En este archivo la etiqueta queda al final del registro:
 
 Observaciones del corpus ISO:
 
-- `%Or[0].ofY` solo aparece con el valor `-1515599.976` en los ISO estudiados.
+- `%Or[0].ofY` solo aparece con el valor `-1515599.976` en los ISO estudiados;
+  corresponde al `Y0` del campo `H` (`-1515.600`) con redondeo interno
+  `float32`.
 - Los shifts base mas frecuentes de Y son `SHF[Y] = -1515.600` y
   `SHF[Y] = -1510.600`.
 - Tambien aparecen shifts de herramienta/operacion como `SHF[Y] = -246.650`,
@@ -206,28 +210,64 @@ Barrido local del corpus `P:\USBMIX\ProdAction\ISO`:
 
 Valores observados:
 
-| ISO | `ETK[6]` | Cara | `G53 Z` | `SHF[Z]` siguiente | `G53 Z + SHF[Z]` |
-| --- | ---: | --- | ---: | ---: | ---: |
-| `pieza_002/003/005` | `59` | `Back` | `149.500` | `66.500` | `216.000` |
-| `pieza_002/003/005` | `61` | `Left` | `149.500` | `66.300` | `215.800` |
-| `pieza_002/003/005` | `60` | `Right` | `149.450` | `66.450` | `215.900` |
+| Corpus | `DZ` cabecera | `G53 Z` intermedio | `G53 Z - DZ` |
+| --- | ---: | ---: | ---: |
+| `pieza_002/003/005` | `43.000` | `149.500` | `106.500` |
+| `pieza_002/003/005` | `43.000` | `149.450` | `106.450` |
+| `side_g53_z_fixtures` grupo A | `50.000` | `156.500` | `106.500` |
+| `side_g53_z_fixtures` grupo A | `50.000` | `156.450` | `106.450` |
+| `side_g53_z_fixtures` grupo B | `58.000` | `164.500` | `106.500` |
+| `side_g53_z_fixtures` grupo B | `58.000` | `164.450` | `106.450` |
+
+El corpus Cocina agrega `149.300`, tambien con `DZ=43.000`, por lo que su delta
+es `106.300`.
+
+Comparacion contra `Offset Z` de Xilog Plus:
+
+| Mandril | Lado Xilog | `Offset Z` | `SHF_Z` ISO | `DZ=43` -> `DZ+40+SHF_Z` |
+| ---: | ---: | ---: | ---: | ---: |
+| `58` | `4` | `-66.500` | `66.500` | `149.500` |
+| `59` | `5` | `-66.500` | `66.500` | `149.500` |
+| `60` | `2` | `-66.450` | `66.450` | `149.450` |
+| `61` | `3` | `-66.300` | `66.300` | `149.300` |
 
 Regla observada:
 
 - El valor se emite despues de `MLV=0`, inmediatamente despues de seleccionar
-  la broca lateral con `?%ETK[6]=...`.
-- El primer grupo lateral `Front / ETK[6]=58` no emite `Z149.*`.
+  la broca lateral con `?%ETK[6]=...`, cuando hay una transicion entre grupos
+  de herramienta/cara.
+- El primer grupo lateral puro `Front / ETK[6]=58` no emite `Z149.*` si la
+  pieza empieza directamente por esa cara. Si se llega a `Front` desde una
+  herramienta superior/vertical, si puede aparecer el parqueo intermedio.
 - Entre taladros de una misma cara lateral el postprocesador no cambia
   `ETK[6]`; puede usar `Z201.000` para `Front/Back` o reposicionar en plano
   lateral para `Left/Right`.
 - La forma numerica observada es:
-  `G53_Z_lateral = target_lateral_de_cara - SHF_Z_de_spindle`.
-- Los targets observados son `216.000` para `Back`, `215.800` para `Left` y
-  `215.900` para `Right`.
-- Esos targets no aparecen como literales en `Params.cfg`, `NCI.CFG`,
-  `spindles.cfg`, `S:\Xilog Plus\Job\def.tlg` ni
-  `S:\Maestro\Tlgx\def.tlgx`; por ahora se tratan como constantes internas del
-  postprocesador/control para cambio de lateral.
+  `G53_Z_lateral = DZ_cabecera + 40.000 + max(SHF_Z_lateral_involucrado)`.
+- `DZ_cabecera` es `depth + origin_z`, la misma cota emitida en la cabecera
+  `;H` y en `%Or[0].ofZ`.
+- El `40.000` coincide con `2 * SecurityDistance`: Maestro declara
+  `SecurityDistance=20`, y los PGMX laterales revisados tienen
+  `ApproachSecurityPlane=20` y `RetractSecurityPlane=20`. La lectura operativa
+  actual es que el movimiento despeja las dos cotas de seguridad alrededor del
+  panel.
+- Los `SHF_Z` laterales salen de la configuracion de spindles:
+  - `Front`/`Back`: `66.500`;
+  - `Right`: `66.450`;
+  - `Left`: `66.300`.
+- Al entrar o salir de una broca lateral desde una herramienta vertical, la
+  formula usa la cota lateral de la broca involucrada. Al cambiar de lateral a
+  lateral, usa la mayor cota lateral entre cara activa y cara destino.
+- La comparacion `destino solamente` no alcanza: en 74 movimientos
+  intermedios revisados, 15 fallan si se usa solo el mandril destino, por
+  ejemplo `59 -> 61` con `DZ=43` emite `149.500`, aunque el destino `61`
+  daria `149.300`. En esos mismos 74 casos, usar la mayor cota Z de los
+  laterales involucrados coincide siempre.
+- El emitter ya lee esta holgura como `2 * SecurityDistance` desde
+  `Maestro/Cfgx/Programaciones.settingsx`, no como literal propio.
+- La ventana/configuracion `GENDATA` de Xilog Plus muestra varios `40.000`,
+  pero las etiquetas internas los ubican como velocidades de referencia para
+  arcos y avances de discontinuidad, no como cotas de despeje `Z`.
 
 ## Herramientas del toolset
 
@@ -481,10 +521,11 @@ falta cerrar:
    En los configs copiados no aparece el nombre comercial de la maquina. Para
    cerrar esto haria falta una foto/placa/manual de la maquina o una copia mas
    directa de la configuracion del control.
-2. Regla completa de seleccion de campo/area `HG`. Los fixtures minimos ya
-   separaron geometria, dimensiones y `origin_y`, pero todavia falta explicar
-   por que el campo elegido produce exactamente `%Or[0].ofY=-1515599.976` y
-   `SHF[Y]=-1515.600` desde `fields.cfg`/controlador.
+2. Regla general de seleccion de campos/areas fuera del caso `HG`. Para `HG`
+   observado, `fields.cfg` ya explica `SHF[Y]=-1515.600` desde el campo `H`,
+   y `%Or[0].ofY=-1515599.976` sale del mismo valor tras redondeo `float32`.
+   Falta validar otros valores de area (`A`, `EF`, combinaciones distintas) si
+   aparecen en piezas reales.
 3. Significado formal de `MLV`, `%Or`, `%ETK[13]`, `%ETK[17]`, `%ETK[18]`,
    `%ETK[114]` y `%EDK`. Se conocen patrones de uso, pero no la semantica de
    controlador que garantice que un ISO sintetico sea equivalente.
@@ -492,9 +533,11 @@ falta cerrar:
    preambulo/final, parqueos y limites generales, pero no describe como Maestro
    transforma cada operacion PGMX en bloques ISO. Parte de esa logica parece
    estar en binarios/plantillas Xilog, o embebida en Maestro.
-5. Origen interno de los targets laterales `216.000`, `215.800` y `215.900`
-   usados para calcular los `G0 G53 Z149.*`. El patron ISO ya esta acotado, pero
-   esos targets no aparecen como literales en los archivos legibles revisados.
+5. Validacion causal de la holgura lateral `40.000`. La mejor fuente legible
+   encontrada es `2 * SecurityDistance` de Maestro (`20 + 20`), y el emitter ya
+   la lee desde `Programaciones.settingsx`; falta una prueba cambiando
+   `SecurityDistance` o las cotas de seguridad de operaciones laterales para
+   confirmar que Maestro mueve los `G0 G53 Z...` en consecuencia.
 6. Validacion fisica o simulada de compensacion `G41/G42`, especialmente en
    esquinas donde el ISO delega la compensacion al CNC.
 7. Reglas seguras para herramientas especiales:

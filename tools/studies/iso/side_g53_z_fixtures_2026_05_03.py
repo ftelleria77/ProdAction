@@ -1,8 +1,8 @@
 """Generate side-drilling PGMX fixtures for G53 Z park investigation.
 
 The batch isolates intermediate side-face park moves such as
-`G0 G53 Z149.500` and `G0 G53 Z149.450` by varying side faces, local hole
-positions, panel thickness, and workpiece origin.
+`G0 G53 Z149.xxx` equivalents by varying side faces, local hole positions,
+panel thickness, and workpiece origin.
 
 Recommended factory run:
 

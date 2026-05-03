@@ -70,9 +70,9 @@ Para cada `.iso`, extraer:
 
 ## Hipotesis que se busca cerrar
 
-1. `fields.cfg` explica la familia de valores Y alrededor de `-1515`, pero
-   falta la correccion exacta que produce `%Or[0].ofY=-1515599.976`,
-   `SHF[Y]=-1515.600` y `SHF[Y]=-1510.600`.
+1. `fields.cfg` explica la familia de valores Y alrededor de `-1515`; para
+   `HG`, el campo `H` aporta `SHF[Y]=-1515.600` y `%Or[0].ofY=-1515599.976`
+   sale del mismo valor tras almacenamiento `float32` y escala `x1000`.
 2. Si mover la geometria en Y cambia coordenadas ISO pero no `SHF[Y]`, entonces
    `SHF[Y]` es marco/area de maquina y no posicion de operacion.
 3. Si cambiar `origin_y` mueve `DX/DY` o `%Or/SHF`, el origen de PGMX entra en
@@ -110,6 +110,8 @@ Conclusiones de la tanda:
   - mover la geometria `X/Y`;
   - cambiar el ancho de panel `DY 105 -> 205`;
   - cambiar `origin_y 5 -> 10`.
+- Ese `%Or[Y]` corresponde al `Y0=-1515.600` del campo `H` en `fields.cfg`,
+  con redondeo interno de simple precision.
 - El `SHF[Y]` inicial del marco `MLV=1` se mantuvo en `-1515.600`.
 - El `SHF[Y]` operativo del marco `MLV=1` depende de `origin_y`:
   - con `origin_y=5`, queda `-1510.600`;
@@ -163,5 +165,5 @@ Conclusiones de la tanda:
 
 La memoria ISO historica recomienda repetir piezas equivalentes a
 `Pieza_092..Pieza_095` agregando estrategia `PH=5` para cerrar el cruce
-`Left/Right + Down/Up + PH=5`. Eso queda como segunda tanda, despues de cerrar
-primero el contrato `HG/%Or/SHF`.
+`Left/Right + Down/Up + PH=5`. El contrato `HG/%Or/SHF` ya quedo cerrado para
+el area `HG` observada; la tanda pendiente queda como ampliacion de estrategia.

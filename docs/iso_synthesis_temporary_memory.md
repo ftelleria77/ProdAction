@@ -5196,7 +5196,8 @@ python -m tools.studies.iso.minimal_fixtures_2026_05_03 --output-dir "S:\Maestro
   - copiar los `.iso` desde `C:\PrgMaestro\USBMIX` a
     `P:\USBMIX\ProdAction\ISO\minimal_fixtures_2026-05-03`.
 - Objetivo de la tanda:
-  - cerrar la formula `HG/%Or/SHF[Y]`.
+  - cerrar la formula `HG/%Or/SHF[Y]` (cumplido luego al vincular `HG` con el
+    campo `H` de `fields.cfg` y el redondeo `float32`).
   - confirmar que cambios de geometria, dimensiones y `origin_y` afectan o no
     afectan `%Or`, `SHF`, `MLV` y coordenadas ISO.
   - validar offsets laterales y bloque router E004 en piezas chicas.
@@ -5455,39 +5456,64 @@ Conclusion:
   - en los tres casos el postprocesador resuelve brocas laterales reales
     `ETK[6]=58..61` desde cara/trayectoria, con `ToolKey` PGMX vacio.
 
-Valores observados:
+Valores observados y corregidos tras la tanda
+`side_g53_z_fixtures_2026-05-03`:
 
-| ISO | `ETK[6]` | Cara | `G53 Z` | `SHF[Z]` siguiente | Suma |
-| --- | ---: | --- | ---: | ---: | ---: |
-| `pieza_002/003/005` | `59` | `Back` | `149.500` | `66.500` | `216.000` |
-| `pieza_002/003/005` | `61` | `Left` | `149.500` | `66.300` | `215.800` |
-| `pieza_002/003/005` | `60` | `Right` | `149.450` | `66.450` | `215.900` |
+| Corpus | `DZ` cabecera | `G53 Z` intermedio | `G53 Z - DZ` |
+| --- | ---: | ---: | ---: |
+| `pieza_002/003/005` | `43.000` | `149.500` | `106.500` |
+| `pieza_002/003/005` | `43.000` | `149.450` | `106.450` |
+| `side_g53_z_fixtures` grupo A | `50.000` | `156.500` | `106.500` |
+| `side_g53_z_fixtures` grupo A | `50.000` | `156.450` | `106.450` |
+| `side_g53_z_fixtures` grupo B | `58.000` | `164.500` | `106.500` |
+| `side_g53_z_fixtures` grupo B | `58.000` | `164.450` | `106.450` |
+
+El corpus Cocina agrega `149.300`, tambien con `DZ=43.000`, por lo que su delta
+es `106.300`.
+
+Comparacion puntual con la ventana de Xilog Plus:
+
+| Mandril | Lado Xilog | `Offset Z` | `SHF_Z` usado | `DZ=43` -> `DZ+40+SHF_Z` |
+| ---: | ---: | ---: | ---: | ---: |
+| `58` | `4` | `-66.500` | `66.500` | `149.500` |
+| `59` | `5` | `-66.500` | `66.500` | `149.500` |
+| `60` | `2` | `-66.450` | `66.450` | `149.450` |
+| `61` | `3` | `-66.300` | `66.300` | `149.300` |
 
 Lectura:
 
-- `Z149.*` aparece al cambiar de grupo/cara lateral despues de haber usado una
-  cara lateral previa.
-- El primer grupo lateral `Front / ETK[6]=58` no emite `Z149.*`.
+- `Z149.*` aparece al cambiar de grupo/herramienta con una broca lateral
+  involucrada. Si el `DZ` de cabecera cambia, el mismo patron aparece como
+  `Z156.*` o `Z164.*`.
+- El primer grupo lateral `Front / ETK[6]=58` no emite `Z149.*` si la pieza
+  empieza directamente por esa cara.
 - Entre taladros de una misma cara:
   - `Front/Back` pueden usar `G0 G53 Z201.000`.
   - `Left/Right` reposicionan en plano lateral de seguridad.
 - Formula observada:
-  - `G53_Z_lateral = target_lateral_de_cara - SHF_Z_de_spindle`.
-  - targets observados:
-    - `Back`: `216.000`;
-    - `Left`: `215.800`;
-    - `Right`: `215.900`.
+  - `G53_Z_lateral = DZ_cabecera + 2*SecurityDistance + max(SHF_Z lateral
+    involucrado)`.
+  - `SecurityDistance=20` en Maestro, por lo que hoy equivale a `+40.000`.
+  - si se entra/sale desde herramienta vertical, se usa el `SHF_Z` de la broca
+    lateral;
+  - si se cambia lateral a lateral, se usa la mayor cota `SHF_Z` entre la cara
+    activa y la cara destino.
+- La hipotesis "usar solo mandril destino" falla en cambios como `59 -> 61`:
+  con `DZ=43`, el destino `61` daria `149.300`, pero Maestro emite `149.500`
+  porque el lateral anterior `59` tiene `SHF_Z=66.500`.
 - `spindles.cfg` explica los `SHF[Z]` por offsets fisicos de spindle:
+  - `58`: `Z=-66.50` -> `SHF[Z]=66.500`;
   - `59`: `Z=-66.50` -> `SHF[Z]=66.500`;
   - `61`: `Z=-66.30` -> `SHF[Z]=66.300`;
   - `60`: `Z=-66.45` -> `SHF[Z]=66.450`.
-- No se encontraron los targets `216.000`, `215.800` ni `215.900` como
-  literales en `Params.cfg`, `NCI.CFG`, `spindles.cfg`,
-  `S:\Xilog Plus\Job\def.tlg` ni `S:\Maestro\Tlgx\def.tlgx`.
+- `Programaciones.settingsx` de Maestro declara `SecurityDistance=20`; las 81
+  piezas PGMX con laterales revisadas tienen `ApproachSecurityPlane=20` y
+  `RetractSecurityPlane=20`. La hipotesis mas fuerte para `40.000` es entonces
+  `20 + 20`, salida/reentrada a cota segura alrededor de la pieza.
 - Estado del hueco:
   - regla ISO observada cerrada para el corpus actual.
-  - queda pendiente explicar de que tabla/binario/parametro interno salen los
-    targets laterales.
+  - queda pendiente validar causalmente cambiando `SecurityDistance` o las
+    cotas de seguridad de operaciones laterales.
 
 ## Barrido de herramientas router pendientes - 2026-05-02
 
@@ -5679,3 +5705,18 @@ python -m tools.studies.iso.minimal_fixtures_2026_05_03 --output-dir "S:\Maestro
 ```
 
 La definicion de los 14 fixtures minimos no se modifico.
+
+## Cierre Parcial De HG / `%Or[Y]` - 2026-05-02
+
+Al revisar la ventana de configuracion de Xilog Plus y las etiquetas internas
+de `Parsifal.dll`, `fields.cfg` quedo identificado como la fuente legible de
+los campos de trabajo. Para los programas `HG` estudiados:
+
+- el campo `H` tiene `Origen Y = -1515.600`;
+- el `SHF[Y]` base del marco `MLV=1` usa ese valor;
+- `%Or[0].ofY=-1515599.976` se explica al guardar `-1515.600` como `float32`
+  (`-1515.5999755859375`) y multiplicarlo por `1000`.
+
+Esto elimina la hipotesis de una correccion oculta desde `yzone.cfg` para ese
+valor puntual. Sigue pendiente validar la regla general para areas distintas a
+`HG` si aparecen en piezas reales.

@@ -42,7 +42,8 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
 - `machine_config/loader.py` lee configuracion dimensional desde el snapshot:
   herramientas verticales `001..007`, taladros laterales D8 y ranura `082`
   desde `maestro/Tlgx/def.tlgx`; offsets de cabezal para `E004` desde
-  `xilog_plus/Cfg/pheads.cfg`; `safe_z` desde `xilog_plus/Cfg/Params.cfg`.
+  `xilog_plus/Cfg/pheads.cfg`; origen Y del marco `HG` desde el campo `H` de
+  `xilog_plus/Cfg/fields.cfg`; `safe_z` desde `xilog_plus/Cfg/Params.cfg`.
 - El parking X del cierre ISO se lee del paso administrativo `Xn` del `.pgmx`
   (`Reference/X/Y` capturados en `tools.pgmx_snapshot`). `Params.cfg` queda como
   fallback de maquina si faltara `Xn.X`.
@@ -92,6 +93,10 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   valores variables confirmados como `-2500`, `-2292` y `-3700`; el corpus aun
   no compara completo porque requiere familias pendientes como escuadrados,
   polilineas y combinaciones de ranura/fresado.
+- Tras leer `HG` desde `fields.cfg`, la relacion pendiente quedo cerrada para
+  el corpus actual: `SHF[Y]=-1515.600` sale de `Y0` del campo `H`, y
+  `%Or[0].ofY=-1515599.976` es ese mismo valor almacenado como `float32` y
+  multiplicado por `1000`.
 - El 2026-05-02 se genero una tanda para investigar el origen de los parqueos
   intermedios `G0 G53 Z149.xxx` en taladros laterales:
   - generador reproducible:
@@ -103,11 +108,29 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   - matriz: 20 piezas, 10 con `400x300x25` y origen `(5,5,25)`, 10 con
     `400x300x18` y origen `(10,10,40)`;
   - cada pieza adapto con `unsupported=0`.
+- La tanda fue postprocesada en Maestro y comparada contra el emisor para el
+  contrato puntual de `G0 G53 Z...`: los 20 fixtures nuevos y `Pieza_002`,
+  `Pieza_003`, `Pieza_005` coinciden en esas lineas. La regla refinada es
+  `G53_Z_lateral = DZ_cabecera + 2*SecurityDistance + max(SHF_Z lateral
+  involucrado)`.
+  Con `DZ=43` eso explica `149.300`, `149.450` y `149.500`; con `DZ=50`
+  produce `156.450/156.500`; con `DZ=58` produce `164.450/164.500`.
+- Recomparacion contra la ventana de Xilog Plus: mandriles `58/59/60/61`
+  tienen `Offset Z=-66.500/-66.500/-66.450/-66.300`, que explican
+  `149.500/149.450/149.300` como `DZ+2*20+(-Offset Z)`. La regla sigue usando
+  `max` porque en transiciones lateral-a-lateral debe considerar tambien el
+  lateral anterior: `59 -> 61` con `DZ=43` emite `149.500`, no `149.300`.
+- `SecurityDistance=20` esta en `Maestro/Cfgx/Programaciones.settingsx`, y las
+  81 piezas PGMX con laterales revisadas tienen `ApproachSecurityPlane=20` y
+  `RetractSecurityPlane=20`. El loader ya calcula la holgura lateral como
+  `2 * SecurityDistance`; queda pendiente probar causalmente un valor distinto.
+- La ventana `GENDATA` de Xilog Plus contiene varios `40.000`, pero sus
+  etiquetas corresponden a velocidades de referencia de arcos/discontinuidades,
+  no a una holgura `Z`.
 
 ## Proximo Paso
 
-Postprocesar en Maestro la tanda `side_g53_z_fixtures_2026-05-03`, copiar los
-ISO resultantes a la carpeta `P:` preparada y comparar los `G0 G53 Z149.xxx`
-contra dimensiones, origen, cara destino y posicion lateral. Luego avanzar con
-`Pieza_016+`; la siguiente frontera detectada son polilineas `E004` y luego
-escuadrados `E001`.
+Cerrar las diferencias no relacionadas de la tanda `side_g53_z_fixtures_2026-05-03`
+si se quiere usarla como comparacion exacta integral; hoy el contrato puntual
+de `G0 G53 Z...` ya esta cerrado. Luego avanzar con `Pieza_016+`; la siguiente
+frontera detectada son polilineas `E004` y luego escuadrados `E001`.

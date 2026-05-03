@@ -33,6 +33,7 @@ class _EmissionState:
     spindle: int
     mask: int
     spindle_speed: float
+    side_shf_z: float | None = None
 
 
 _SupportedOperation = sp.DrillingSpec | sp.LineMillingSpec | sp.SlotMillingSpec
@@ -666,6 +667,7 @@ def _emit_side_drilling(
         spindle=tool.spindle,
         mask=tool.mask,
         spindle_speed=tool.spindle_speed,
+        side_shf_z=tool.shf_z,
     )
     lines: list[str] = []
     if previous is None:
@@ -708,8 +710,13 @@ def _emit_side_drilling(
     else:
         lines.extend(_emit_side_face_change(state, drilling.plane_name))
         lines.append(f"?%ETK[6]={tool.spindle}")
-        if drilling.plane_name in {"Back", "Left", "Right"}:
-            lines.extend(["MLV=0", f"G0 G53 Z{_format_mm(_side_g53_z(drilling.plane_name))}", "MLV=2"])
+        lines.extend(
+            [
+                "MLV=0",
+                f"G0 G53 Z{_format_mm(_side_g53_z(state, previous, tool))}",
+                "MLV=2",
+            ]
+        )
         lines.extend(
             [
                 "MLV=2",
@@ -760,10 +767,21 @@ def _side_uses_short_dwell(drilling: sp.DrillingSpec) -> bool:
     )
 
 
-def _side_g53_z(plane_name: str) -> float:
-    if plane_name == "Right":
-        return load_machine_config().frame.side_g53_z_right
-    return load_machine_config().frame.side_g53_z
+def _side_g53_z(
+    state: sp.PgmxState,
+    previous: _EmissionState | None,
+    tool: _SideDrillTool,
+) -> float:
+    involved_side_z = [tool.shf_z]
+    if previous is not None and previous.side_shf_z is not None:
+        involved_side_z.append(previous.side_shf_z)
+    frame = load_machine_config().frame
+    return (
+        state.depth
+        + state.origin_z
+        + frame.side_g53_clearance
+        + max(involved_side_z)
+    )
 
 
 def _is_repeated_right_pattern(

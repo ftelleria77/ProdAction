@@ -49,12 +49,16 @@ loader over this snapshot instead of adding new hardcoded constants to
 - Maestro `Tlgx/def.tlgx` supplies tool lengths, spindle speeds, feed/descent
   rates and aggregate translations for drilling tools, lateral D8 tools and
   slot tool `082`.
+- Maestro `Cfgx/Programaciones.settingsx` supplies `SecurityDistance`; lateral
+  aggregate G53 clearances use both safety offsets, so the observed `40.000`
+  comes from `2 * 20`.
 - Xilog `Cfg/pheads.cfg` supplies the observed head offsets for line milling
   tool `E004`.
+- Xilog `Cfg/fields.cfg` supplies the observed `HG` frame Y reference from
+  field `H`.
 - Xilog `Cfg/Params.cfg` supplies safe-Z and fallback axis parking limits.
   Program parking X is read from the source PGMX `Xn` step when available.
 
-Some ISO control masks and field-origin values are not yet mapped to a unique
-source file. Those observed values are kept in the loader as ISO policy until
-the source mapping is identified, so `emitter.py` remains free of dimensional
-machine tables.
+Some ISO control masks are not yet mapped to a unique source file. Those
+observed values are kept in the loader as ISO policy until the source mapping
+is identified, so `emitter.py` remains free of dimensional machine tables.

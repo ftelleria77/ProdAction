@@ -40,6 +40,9 @@ python -m iso_generation compare maestro.iso candidato.iso
 - Lee desde `machine_config/snapshot` los largos, velocidades, avances y
   desplazamientos de herramientas `001..007`, laterales D8, `082` y `E004`;
   el emitter ya no conserva esas tablas dimensionales como literales propios.
+- Lee desde `xilog_plus/Cfg/fields.cfg` el origen Y del marco `HG` observado:
+  campo `H`, `Y0=-1515.600`, con `%Or[Y]` emitido en unidades del controlador
+  tras redondeo `float32`.
 - Lee el parking X de cierre desde el paso administrativo `Xn` del `.pgmx`;
   usa la configuracion de maquina solo como fallback si falta `Xn.X`.
 - Emite cabecera ISO con la regla validada:
@@ -57,6 +60,10 @@ python -m iso_generation compare maestro.iso candidato.iso
   `ISO_MIN_010..013`, `ISO_MIN_020..023`, `Pieza`, `Pieza_001`,
   `Pieza_002`, `Pieza_003`, `Pieza_004`, `Pieza_004_Repeticiones` y
   `Pieza_005..015`.
+- Validado puntualmente para parqueos laterales intermedios `G0 G53 Z...` en
+  `side_g53_z_fixtures_2026-05-03` y en `Pieza_002/003/005`: el valor se
+  calcula como `DZ_cabecera + 2*SecurityDistance + max(SHF_Z lateral
+  involucrado)`.
 - No se conecta con `cnc_traceability/` hasta tener un MVP confiable.
 
 ## Regla De Configuracion De Maquina

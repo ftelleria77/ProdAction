@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import struct
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 import xml.etree.ElementTree as ET
+from zipfile import BadZipFile, ZipFile
 
 
 class MachineConfigError(RuntimeError):
@@ -78,8 +80,7 @@ class MachineFrameConfig:
     base_shf_y: float
     safe_z: float
     park_x: float
-    side_g53_z: float
-    side_g53_z_right: float
+    side_g53_clearance: float
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,16 @@ class _SideDrillPolicy:
     axis: str
     direction: int
     coordinate_sign: int
+
+
+@dataclass(frozen=True)
+class _WorkFieldData:
+    name: str
+    origin_x: float
+    origin_y: float
+    origin_z: float
+    size_x: float
+    size_y: float
 
 
 _DEFAULT_SNAPSHOT_ROOT = Path(__file__).resolve().parent / "snapshot"
@@ -325,19 +336,29 @@ def _build_slot_milling_tools(library: _ToolLibraryData) -> dict[str, SlotMillin
 
 
 def _load_frame_config(snapshot_root: Path) -> MachineFrameConfig:
+    maestro_security_distance = _read_maestro_app_setting(
+        snapshot_root / "maestro" / "Cfgx" / "Programaciones.settingsx",
+        ("UI00.exe.Config", "XConverter.exe.config"),
+        "SecurityDistance",
+    )
     params = _read_ini_sections(snapshot_root / "xilog_plus" / "Cfg" / "Params.cfg")
+    hg_reference = _read_work_field(
+        snapshot_root / "xilog_plus" / "Cfg" / "fields.cfg",
+        "H",
+    )
     z_park = _axis_param(params, "ax2", "AP_PARKQTA")
     if z_park == 0.0:
         z_park = _axis_param(params, "ax2", "AP_MAXQUOTA")
     x_min = _axis_param(params, "ax0", "AP_MINQUOTA")
     return MachineFrameConfig(
-        # Field-origin values still need a unique source mapping in the snapshot.
-        work_origin_y=-1515599.976,
-        base_shf_y=-1515.600,
+        # HG programs observed from Maestro use field H as the Y reference.
+        # %Or is emitted in controller units after single-precision storage.
+        work_origin_y=_controller_units_from_mm(hg_reference.origin_y),
+        base_shf_y=hg_reference.origin_y,
         safe_z=z_park / 1000.0,
         park_x=(x_min / 1000.0) + 2.0,
-        side_g53_z=149.5,
-        side_g53_z_right=149.45,
+        # Lateral aggregate changes clear both safety offsets around the panel.
+        side_g53_clearance=2.0 * maestro_security_distance,
     )
 
 
@@ -358,6 +379,95 @@ def _read_numeric_lines(path: Path) -> Iterable[float]:
             yield float(raw_line.strip())
         except ValueError:
             continue
+
+
+def _read_maestro_app_setting(
+    path: Path,
+    config_entry_names: tuple[str, ...],
+    key: str,
+) -> float:
+    if not path.exists():
+        raise MachineConfigError(f"Missing Maestro settings archive: {path}")
+    wanted_entries = tuple(name.lower() for name in config_entry_names)
+    try:
+        with ZipFile(path) as archive:
+            entries = {
+                name.lower(): name
+                for name in archive.namelist()
+                if name.lower() in wanted_entries
+            }
+            for wanted in wanted_entries:
+                entry_name = entries.get(wanted)
+                if entry_name is None:
+                    continue
+                root = ET.fromstring(archive.read(entry_name))
+                for add in root.iter("add"):
+                    if add.attrib.get("key") != key:
+                        continue
+                    value = add.attrib.get("value")
+                    if value is None:
+                        break
+                    try:
+                        return float(value)
+                    except ValueError as exc:
+                        raise MachineConfigError(
+                            f"Invalid Maestro setting {key!r} in {path}:{entry_name}."
+                        ) from exc
+    except (BadZipFile, ET.ParseError) as exc:
+        raise MachineConfigError(f"Cannot parse Maestro settings archive {path}.") from exc
+    raise MachineConfigError(
+        f"Missing Maestro setting {key!r} in {path} "
+        f"entries {', '.join(config_entry_names)}."
+    )
+
+
+def _read_work_field(path: Path, field_name: str) -> _WorkFieldData:
+    if not path.exists():
+        raise MachineConfigError(f"Missing Xilog fields configuration: {path}")
+    field_name = field_name.strip().upper()
+    for label, values in _read_labeled_numeric_blocks(path):
+        if label.upper() != field_name:
+            continue
+        if len(values) < 19:
+            raise MachineConfigError(
+                f"Cannot read field {field_name!r} origin from {path}: "
+                f"expected at least 19 numeric values, got {len(values)}."
+            )
+        return _WorkFieldData(
+            name=label.upper(),
+            origin_x=values[14],
+            origin_y=values[15],
+            origin_z=values[16],
+            size_x=values[17],
+            size_y=values[18],
+        )
+    raise MachineConfigError(f"Missing work field {field_name!r} in {path}.")
+
+
+def _read_labeled_numeric_blocks(path: Path) -> Iterable[tuple[str, list[float]]]:
+    values: list[float] = []
+    for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw_line.strip()
+        try:
+            values.append(float(line))
+            continue
+        except ValueError:
+            pass
+        label = "".join(
+            char for char in line if ord(char) >= 32 and char != "\x7f"
+        ).strip()
+        yield label, values
+        values = []
+    if values:
+        yield "", values
+
+
+def _controller_units_from_mm(value: float) -> float:
+    return _to_float32(value) * 1000.0
+
+
+def _to_float32(value: float) -> float:
+    return struct.unpack("<f", struct.pack("<f", float(value)))[0]
 
 
 def _read_ini_sections(path: Path) -> dict[str, dict[str, float]]:

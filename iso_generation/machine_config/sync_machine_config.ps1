@@ -13,7 +13,11 @@ $excludedXilogFileNames = @("passwd.cfg", "rs232.cfg")
 
 function Get-ResolvedPath {
     param([string]$Path)
-    return (Resolve-Path -LiteralPath $Path).Path
+    $resolved = Resolve-Path -LiteralPath $Path
+    if ($resolved.ProviderPath) {
+        return $resolved.ProviderPath
+    }
+    return $resolved.Path
 }
 
 function Assert-PathInside {
