@@ -5720,3 +5720,34 @@ los campos de trabajo. Para los programas `HG` estudiados:
 Esto elimina la hipotesis de una correccion oculta desde `yzone.cfg` para ese
 valor puntual. Sigue pendiente validar la regla general para areas distintas a
 `HG` si aparecen en piezas reales.
+
+## Cocina: Escuadrado + Taladros - 2026-05-03
+
+- Se habilito la secuencia observada `E001` escuadrado + taladros
+  superiores/laterales.
+- El caso cubierto exige una operacion de escuadrado inicial, al menos un
+  taladro superior como primera operacion de taladrado y luego solo taladros o
+  patrones de taladro.
+- Hallazgos volcados al emisor:
+  - los taladros superiores adaptados desde Cocina pueden traer herramienta
+    `0`; el emisor resuelve mandril por familia/diametro igual que el
+    sintetizador PGMX (`Flat 8/15/20/35/5/4`, `Conical 5`);
+  - despues de un perfil superior, el primer taladro usa setup compacto: no se
+    repiten `%Or` ni el marco primario, y se omite `?%ETK[6]=1` si el mandril
+    ya queda en spindle `1`;
+  - los taladros superiores posteriores al perfil se ordenan por vecino mas
+    cercano con distancia Manhattan desde `(0,0)`; los taladros standalone
+    conservan el orden PGMX para no romper la matriz raiz;
+  - los laterales se ordenan por cara (`Front/Right` ascendente,
+    `Back/Left` descendente);
+  - las pausas `G4F0.500` laterales dependen de cara, profundidad y si el grupo
+    lateral arranco inmediatamente despues de `Top`.
+- Validacion:
+  - Cocina completa:
+    `tmp/cocina_iso_generated_20260503_192117` -> `29 ok`, `0 diff`,
+    `55 error`.
+  - Los `55 error` restantes son guards todavia no abiertos: `23` fresado
+    lineal combinado, `18` ranura combinada y `14` polilinea combinada.
+  - Matriz raiz:
+    `tmp/root_iso_regression_20260503_192117` -> `101 ok`,
+    `2 missing_reference` (`Pieza_096`, `Pieza_097`).

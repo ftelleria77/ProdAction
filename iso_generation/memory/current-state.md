@@ -160,9 +160,18 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   `Line/Arc`, PH5, offset lateral explicito y arcos de esquina cuando Maestro
   compensa por fuera; y escuadrados `E001` con leads `Line/Arc` en modos
   `Quote` y `Down/Up`.
-- En el corpus Cocina, el emisor genera y compara exacto 8/84 piezas: los
-  escuadrados standalone de estantes/tapa. El barrido actualizado queda en
-  `tmp/cocina_iso_generated_20260503_171947`.
+- En el corpus Cocina, el emisor genera y compara exacto 29/84 piezas: los
+  escuadrados standalone y las secuencias `E001` escuadrado + taladros
+  superiores/laterales observadas. El barrido final de esta tanda queda en
+  `tmp/cocina_iso_generated_20260503_192117`: `29 ok`, `0 diff`, `55 error`.
+  Los errores restantes son guards de combinaciones todavia no abiertas:
+  `23` con fresado lineal, `18` con ranura y `14` con polilinea.
+- Para `E001 + taladros`, el emisor replica las reglas observadas de Cocina:
+  herramientas verticales automaticas por familia/diametro cuando el PGMX trae
+  herramienta `0`; transicion compacta de perfil superior a taladrado;
+  reordenamiento Manhattan de taladros superiores solo cuando vienen despues de
+  perfil; orden lateral por cara; y pausas `G4F0.500` dependientes de cara,
+  profundidad y si el grupo lateral arranca luego de `Top`.
 - El adaptador de escuadrado conserva ahora la coordenada real de arranque
   cuando el perfil `.pgmx` no empieza exactamente en el centro del borde; esto
   cierra el caso `mod 5 - Bajo despensero/Tapa_despensero`.
@@ -174,11 +183,9 @@ Sin acceso al CNC/Maestro, seguir desarrollando contra pares existentes
 raiz `Pieza*.pgmx` ya quedo cerrada contra todos los pares disponibles. El
 siguiente frente recomendado es Cocina:
 
-- resolver taladros superiores de Cocina que adaptan con herramienta `0`, usando
-  la informacion disponible en toolpaths/snapshot para inferir mandril real;
-- luego habilitar combinaciones `escuadrado + taladros`;
-- despues avanzar con combinaciones `escuadrado + ranura`, `escuadrado +
-  fresado lineal` y `escuadrado + polilineas` con taladros.
+- avanzar con combinaciones `escuadrado + ranura`, `escuadrado + fresado lineal`
+  y `escuadrado + polilineas` con taladros, empezando por la familia que reduzca
+  mas errores del barrido Cocina.
 
 Cuando vuelva el acceso a Maestro, postprocesar `Pieza_096` y `Pieza_097` para
 validar la polilinea con `E003`.
