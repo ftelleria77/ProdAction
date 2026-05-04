@@ -14,6 +14,7 @@ from tools.pgmx_snapshot import (
     PgmxFeatureSnapshot,
     PgmxGeometrySnapshot,
     PgmxOperationSnapshot,
+    PgmxPlaneSnapshot,
     PgmxSnapshot,
     PgmxWorkingStepSnapshot,
     read_pgmx_snapshot,
@@ -32,6 +33,8 @@ class MachiningOperation:
     height: Optional[float] = None
     face: str = "Top"
     depth: Optional[float] = None
+    projected_x: Optional[float] = None
+    projected_y: Optional[float] = None
 
 
 @dataclass
@@ -1814,6 +1817,75 @@ def _snapshot_feature_depth(feature: PgmxFeatureSnapshot) -> Optional[float]:
     return positive_depths[0] if positive_depths else None
 
 
+def _cross_vector_3d(
+    left: tuple[float, float, float],
+    right: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    return (
+        (left[1] * right[2]) - (left[2] * right[1]),
+        (left[2] * right[0]) - (left[0] * right[2]),
+        (left[0] * right[1]) - (left[1] * right[0]),
+    )
+
+
+def _snapshot_plane_for_feature(
+    snapshot: PgmxSnapshot,
+    feature: PgmxFeatureSnapshot,
+    geometry: Optional[PgmxGeometrySnapshot],
+) -> Optional[PgmxPlaneSnapshot]:
+    if geometry is not None and geometry.plane_ref is not None and geometry.plane_ref.id:
+        plane = snapshot.plane_by_id.get(geometry.plane_ref.id)
+        if plane is not None:
+            return plane
+
+    planes_by_name = snapshot.plane_by_name
+    for candidate in (
+        feature.plane_name,
+        _normalize_face_name(feature.plane_name, default=""),
+    ):
+        if not candidate:
+            continue
+        plane = planes_by_name.get(candidate)
+        if plane is not None:
+            return plane
+
+    return None
+
+
+def _snapshot_project_point_to_top(
+    plane: Optional[PgmxPlaneSnapshot],
+    point: Optional[tuple[float, float, float]],
+) -> Optional[tuple[float, float]]:
+    if plane is None or plane.placement is None or point is None:
+        return None
+
+    placement = plane.placement
+    normal = (
+        float(placement.x_n),
+        float(placement.y_n),
+        float(placement.z_n),
+    )
+    local_x_axis = (
+        float(placement.x_vx),
+        float(placement.y_vx),
+        float(placement.z_vx),
+    )
+    local_y_axis = _cross_vector_3d(normal, local_x_axis)
+    if not plane.is_right_handed:
+        local_y_axis = (-local_y_axis[0], -local_y_axis[1], -local_y_axis[2])
+
+    origin = (
+        float(placement.x_p),
+        float(placement.y_p),
+        float(placement.z_p),
+    )
+    local_x = float(point[0])
+    local_y = float(point[1])
+    global_x = origin[0] + (local_x * local_x_axis[0]) + (local_y * local_y_axis[0])
+    global_y = origin[1] + (local_x * local_x_axis[1]) + (local_y * local_y_axis[1])
+    return (global_x, global_y)
+
+
 def _snapshot_face_dimensions(
     snapshot: PgmxSnapshot,
     fallback_width: float,
@@ -1940,6 +2012,10 @@ def _build_piece_drawing_from_snapshot(
                 or "DrillingOperation" in operation_type
             )
         ):
+            top_projection = _snapshot_project_point_to_top(
+                _snapshot_plane_for_feature(snapshot, feature, geometry),
+                geometry.point,
+            )
             operations.append(
                 MachiningOperation(
                     op_type="drill",
@@ -1948,6 +2024,8 @@ def _build_piece_drawing_from_snapshot(
                     diameter=float(feature.diameter) if feature.diameter is not None else None,
                     face=face_name,
                     depth=_snapshot_feature_depth(feature),
+                    projected_x=float(top_projection[0]) if top_projection is not None else None,
+                    projected_y=float(top_projection[1]) if top_projection is not None else None,
                 )
             )
             continue
@@ -2039,43 +2117,16 @@ def parse_pgmx_for_piece(project: Project, piece: Piece, module_path: Path) -> O
     except Exception:
         snapshot = None
 
+    if snapshot is not None:
+        snapshot_drawing = _build_piece_drawing_from_snapshot(snapshot, source_path, piece)
+        if snapshot_drawing is not None:
+            return snapshot_drawing
+
     text: Optional[str] = None
     try:
         text = _read_pgmx_text(source_path)
     except OSError:
         text = None
-
-    if snapshot is not None:
-        snapshot_drawing = _build_piece_drawing_from_snapshot(snapshot, source_path, piece)
-        if snapshot_drawing is not None:
-            if text:
-                legacy_operations, legacy_face_dims_ops = _extract_operations_from_xcam_xml(text)
-                if not legacy_operations:
-                    legacy_operations = [
-                        MachiningOperation(
-                            op_type=operation.op_type,
-                            x=operation.x,
-                            y=operation.y,
-                            diameter=operation.diameter,
-                            width=operation.width,
-                            height=operation.height,
-                            face="Top",
-                        )
-                        for operation in _extract_operations(text)
-                    ]
-                snapshot_drawing.operations = _merge_operations(snapshot_drawing.operations, legacy_operations)
-
-                legacy_paths, legacy_face_dims_milling = _extract_milling_paths_from_xcam_xml(text)
-                if legacy_paths:
-                    snapshot_drawing.milling_paths = _merge_milling_paths(snapshot_drawing.milling_paths, legacy_paths)
-                snapshot_drawing.face_dimensions.update(
-                    {
-                        face_name: dims
-                        for face_name, dims in {**legacy_face_dims_ops, **legacy_face_dims_milling}.items()
-                        if face_name not in snapshot_drawing.face_dimensions
-                    }
-                )
-            return snapshot_drawing
 
     if text is None:
         return None
@@ -2252,19 +2303,21 @@ def build_piece_svg(piece: Piece, drawing: PieceDrawingData, output_path: Path):
         face = (op.face or "").strip().lower()
         diameter = op.diameter if op.diameter and op.diameter > 0 else 5.0
         proj_len_mm = op.depth if op.depth and op.depth > 0 else max(8.0, diameter * 2.2)
+        projected_x = float(op.projected_x) if op.projected_x is not None else float(op.x)
+        projected_y = float(op.projected_y) if op.projected_y is not None else float(op.x)
 
         if face == "left":
-            y_mm = clamp(op.x, 0.0, top_h)
+            y_mm = clamp(projected_y, 0.0, top_h)
             return (0.0, y_mm, clamp(proj_len_mm, 0.0, top_w), y_mm)
         if face == "right":
-            y_mm = clamp(op.x, 0.0, top_h)
+            y_mm = clamp(projected_y, 0.0, top_h)
             return (top_w, y_mm, clamp(top_w - proj_len_mm, 0.0, top_w), y_mm)
         if face == "front":
-            x_mm = clamp(op.x, 0.0, top_w)
-            return (x_mm, top_h, x_mm, clamp(top_h - proj_len_mm, 0.0, top_h))
-        if face == "back":
-            x_mm = clamp(op.x, 0.0, top_w)
+            x_mm = clamp(projected_x, 0.0, top_w)
             return (x_mm, 0.0, x_mm, clamp(proj_len_mm, 0.0, top_h))
+        if face == "back":
+            x_mm = clamp(projected_x, 0.0, top_w)
+            return (x_mm, top_h, x_mm, clamp(top_h - proj_len_mm, 0.0, top_h))
         return None
 
     lines = [
@@ -2324,8 +2377,10 @@ def build_piece_svg(piece: Piece, drawing: PieceDrawingData, output_path: Path):
         face = (operation.face or "Top").strip().lower()
 
         if face == "top":
-            op_x = to_canvas_x(clamp(operation.x, 0.0, top_w))
-            op_y = to_canvas_y(clamp(operation.y, 0.0, top_h))
+            operation_x = operation.projected_x if operation.projected_x is not None else operation.x
+            operation_y = operation.projected_y if operation.projected_y is not None else operation.y
+            op_x = to_canvas_x(clamp(operation_x, 0.0, top_w))
+            op_y = to_canvas_y(clamp(operation_y, 0.0, top_h))
             if operation.op_type == "drill":
                 diameter = operation.diameter if operation.diameter and operation.diameter > 0 else 5.0
                 radius = (diameter * scale) / 2.0
@@ -2344,8 +2399,10 @@ def build_piece_svg(piece: Piece, drawing: PieceDrawingData, output_path: Path):
             continue
 
         if face == "bottom":
-            op_x = to_canvas_x(clamp(operation.x, 0.0, top_w))
-            op_y = to_canvas_y(clamp(operation.y, 0.0, top_h))
+            operation_x = operation.projected_x if operation.projected_x is not None else operation.x
+            operation_y = operation.projected_y if operation.projected_y is not None else operation.y
+            op_x = to_canvas_x(clamp(operation_x, 0.0, top_w))
+            op_y = to_canvas_y(clamp(operation_y, 0.0, top_h))
             diameter = operation.diameter if operation.diameter and operation.diameter > 0 else 5.0
             radius = (diameter * scale) / 2.0
             lines.append(

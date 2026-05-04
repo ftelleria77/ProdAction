@@ -1372,6 +1372,13 @@ def _load_module_from_saved_config(
 def _load_saved_modules_for_locale(project_root: Path, locale: LocaleData) -> list[ModuleData]:
     locale_path = project_root / locale.path
     modules_by_key: dict[str, ModuleData] = {}
+    ordered_module_keys: list[str] = []
+
+    def remember_module(module: ModuleData) -> None:
+        module_key = (module.relative_path or str(module.path)).lower()
+        modules_by_key[module_key] = module
+        if module_key not in ordered_module_keys:
+            ordered_module_keys.append(module_key)
 
     local_config_data = _read_json_file(locale_path / "local_config.json")
     if isinstance(local_config_data, dict):
@@ -1396,8 +1403,7 @@ def _load_saved_modules_for_locale(project_root: Path, locale: LocaleData) -> li
                     relative_path_hint=relative_path_hint,
                     module_quantity_hint=module_quantity,
                 )
-                module_key = (module.relative_path or str(module.path)).lower()
-                modules_by_key[module_key] = module
+                remember_module(module)
 
     if locale_path.exists():
         for child in sorted(locale_path.iterdir(), key=lambda item: item.name.lower()):
@@ -1409,12 +1415,10 @@ def _load_saved_modules_for_locale(project_root: Path, locale: LocaleData) -> li
                 locale_name=locale.name,
             )
             module_key = (module.relative_path or str(module.path)).lower()
-            modules_by_key.setdefault(module_key, module)
+            if module_key not in modules_by_key:
+                remember_module(module)
 
-    return sorted(
-        modules_by_key.values(),
-        key=lambda module: ((module.locale_name or "").lower(), module.name.lower()),
-    )
+    return [modules_by_key[module_key] for module_key in ordered_module_keys]
 
 
 def _discover_saved_locales(project_root: Path, locales: list[LocaleData]) -> list[LocaleData]:
@@ -2155,6 +2159,38 @@ class ProjectDetailWindow(QMainWindow):
         except Exception:
             return str(module.path or "").strip().lower()
 
+    def _preserve_locale_module_order(
+        self,
+        locale_name: str,
+        modules: list[ModuleData],
+    ) -> list[ModuleData]:
+        locale_key = str(locale_name or "").strip().lower()
+        modules_by_path: dict[str, ModuleData] = {}
+        scanned_order: list[str] = []
+        for module in modules:
+            module_key = self._module_path_processing_key(module)
+            if module_key not in modules_by_path:
+                scanned_order.append(module_key)
+            modules_by_path[module_key] = module
+
+        ordered_modules: list[ModuleData] = []
+        used_keys: set[str] = set()
+        for module in self.project.modules:
+            if str(module.locale_name or "").strip().lower() != locale_key:
+                continue
+            module_key = self._module_path_processing_key(module)
+            ordered_module = modules_by_path.get(module_key)
+            if ordered_module is None or module_key in used_keys:
+                continue
+            ordered_modules.append(ordered_module)
+            used_keys.add(module_key)
+
+        for module_key in scanned_order:
+            if module_key not in used_keys:
+                ordered_modules.append(modules_by_path[module_key])
+
+        return ordered_modules
+
     def _resolve_modules_for_processing(
         self,
         scanned_modules: list[ModuleData],
@@ -2240,7 +2276,7 @@ class ProjectDetailWindow(QMainWindow):
             locale.modules_count = _total_module_quantity(locale_modules)
 
             rows = []
-            for module in sorted(locale_modules, key=lambda item: item.name.lower()):
+            for module in locale_modules:
                 module_path = Path(module.path)
                 try:
                     relative_module_path = str(module_path.relative_to(locale_path)).replace("\\", "/")
@@ -2415,6 +2451,46 @@ class ProjectDetailWindow(QMainWindow):
         from core.parser import inspect_project_layout, scan_project, scan_project_structure
         from core.pgmx_processing import generate_project_piece_drawings
 
+        progress_dialog: QProgressDialog | None = None
+        progress_step = 0
+        total_steps = 8
+
+        def close_progress() -> None:
+            nonlocal progress_dialog
+            if progress_dialog is None:
+                return
+            progress_dialog.close()
+            progress_dialog = None
+            QApplication.processEvents()
+
+        def start_progress(message: str = "Preparando procesamiento del proyecto...") -> None:
+            nonlocal progress_dialog
+            if progress_dialog is not None:
+                progress_dialog.setLabelText(message)
+                progress_dialog.show()
+                QApplication.processEvents()
+                return
+            progress_dialog = QProgressDialog(message, "", 0, total_steps, self)
+            progress_dialog.setWindowTitle("Procesar Seleccion")
+            progress_dialog.setWindowModality(Qt.ApplicationModal)
+            progress_dialog.setCancelButton(None)
+            progress_dialog.setMinimumDuration(0)
+            progress_dialog.setAutoClose(False)
+            progress_dialog.setAutoReset(False)
+            progress_dialog.setValue(progress_step)
+            progress_dialog.show()
+            QApplication.processEvents()
+
+        def update_progress(message: str, *, advance: bool = True) -> None:
+            nonlocal progress_step
+            if progress_dialog is None:
+                return
+            if advance:
+                progress_step = min(total_steps, progress_step + 1)
+            progress_dialog.setLabelText(message)
+            progress_dialog.setValue(progress_step)
+            QApplication.processEvents()
+
         try:
             root_path = Path(self.project.root_directory)
             if not root_path.exists():
@@ -2439,6 +2515,8 @@ class ProjectDetailWindow(QMainWindow):
                     )
                     return
 
+                start_progress()
+                update_progress("Buscando locales seleccionados...", advance=False)
                 layout = inspect_project_layout(root_path)
                 selected_locale_keys = {locale_name.strip().lower() for locale_name in selected_locale_names}
                 locale_dirs = [
@@ -2447,6 +2525,7 @@ class ProjectDetailWindow(QMainWindow):
                     if locale_dir.name.strip().lower() in selected_locale_keys
                 ]
                 if not locale_dirs:
+                    close_progress()
                     QMessageBox.warning(
                         self,
                         "Procesar",
@@ -2457,15 +2536,20 @@ class ProjectDetailWindow(QMainWindow):
                 rescanned_locale_keys = {locale_dir.name.strip().lower() for locale_dir in locale_dirs}
                 processed_locales = []
                 processed_modules = []
+                update_progress("Escaneando locales seleccionados.")
                 for locale_dir in locale_dirs:
+                    update_progress(f"Escaneando local {locale_dir.name}...", advance=False)
                     locale_modules = scan_project(locale_dir)
                     for module in locale_modules:
                         module.locale_name = locale_dir.name
                         module.relative_path = str(Path(module.path).relative_to(root_path)).replace("\\", "/")
+                    close_progress()
                     resolved_modules = self._resolve_modules_for_processing(locale_modules)
                     if resolved_modules is None:
                         return
+                    start_progress(f"Local {locale_dir.name} escaneado.")
                     locale_modules, locale_reprocessed_modules = resolved_modules
+                    locale_modules = self._preserve_locale_module_order(locale_dir.name, locale_modules)
                     processed_locales.append(
                         LocaleData(
                             name=locale_dir.name,
@@ -2491,12 +2575,12 @@ class ProjectDetailWindow(QMainWindow):
                     preserved_locales + processed_locales,
                     key=lambda locale: locale.name.lower(),
                 )
-                self.project.modules = sorted(
-                    preserved_modules + processed_modules,
-                    key=lambda module: (str(module.locale_name or "").lower(), module.name.lower()),
-                )
+                self.project.modules = preserved_modules + processed_modules
             else:
+                start_progress()
+                update_progress("Escaneando estructura del proyecto...", advance=False)
                 scanned_locales, scanned_modules = scan_project_structure(root_path)
+                update_progress("Estructura del proyecto escaneada.")
                 scanned_modules_by_locale: dict[str, list[ModuleData]] = {}
                 for module in scanned_modules:
                     locale_key = str(module.locale_name or "").strip().lower()
@@ -2507,10 +2591,14 @@ class ProjectDetailWindow(QMainWindow):
                 for locale in scanned_locales:
                     locale_key = locale.name.strip().lower()
                     locale_modules = scanned_modules_by_locale.get(locale_key, [])
+                    update_progress(f"Resolviendo local {locale.name}...", advance=False)
+                    close_progress()
                     resolved_modules = self._resolve_modules_for_processing(locale_modules)
                     if resolved_modules is None:
                         return
+                    start_progress(f"Local {locale.name} resuelto.")
                     locale_modules, locale_reprocessed_modules = resolved_modules
+                    locale_modules = self._preserve_locale_module_order(locale.name, locale_modules)
                     locale.modules_count = _total_module_quantity(locale_modules)
                     processed_locales.append(locale)
                     processed_modules.extend(locale_modules)
@@ -2520,12 +2608,17 @@ class ProjectDetailWindow(QMainWindow):
                 self.project.modules = processed_modules
 
             # Normalizar thickness de todas las piezas procesadas
+            update_progress("Normalizando piezas procesadas.")
             for module in reprocessed_modules:
                 self._normalize_module_piece_thickness(module)
 
+            update_progress("Revisando colores de piezas.")
+            close_progress()
             if not self._resolve_processed_piece_colors(reprocessed_modules):
                 return
+            start_progress("Colores de piezas resueltos.")
             
+            update_progress("Guardando configuracion de modulos.")
             self._write_module_config_files(reprocessed_modules)
             self._write_locale_config_files(processed_locales)
             
@@ -2538,6 +2631,7 @@ class ProjectDetailWindow(QMainWindow):
 
             from core.summary import export_summary
             summary_csv_path = root_path / "resumen_piezas.csv"
+            update_progress("Exportando resumen de piezas.")
             export_summary(self.project, summary_csv_path)
 
             processed_project = Project(
@@ -2550,6 +2644,7 @@ class ProjectDetailWindow(QMainWindow):
                 modules=reprocessed_modules,
                 output_directory=self.project.output_directory,
             )
+            update_progress("Generando dibujos SVG de piezas.")
             generated_drawings, skipped_drawings, pieces_with_machining = generate_project_piece_drawings(
                 processed_project,
             )
@@ -2568,6 +2663,7 @@ class ProjectDetailWindow(QMainWindow):
 
             self.refresh_project_header_info()
             self.update_modules_button()
+            update_progress("Actualizando interfaz.")
 
             detail_text = (
                 f"Locales procesados: {len(processed_locales)}\n"
@@ -2585,8 +2681,11 @@ class ProjectDetailWindow(QMainWindow):
             if warning_parts:
                 detail_text += "\n\nAtención: algunos módulos no tienen piezas: " + ", ".join(warning_parts)
 
+            update_progress("Procesamiento completado.")
+            close_progress()
             QMessageBox.information(self, "Procesamiento completado", detail_text)
         except Exception as exc:
+            close_progress()
             QMessageBox.warning(self, "Error", f"Error durante el procesamiento: {exc}")
 
     def _project_has_locales_and_modules(self) -> bool:
@@ -2669,16 +2768,21 @@ class ProjectDetailWindow(QMainWindow):
         self.modules_list.verticalHeader().setVisible(False)
         self.modules_list.setEditTriggers(QTableWidget.NoEditTriggers)
         self.modules_list.setSelectionBehavior(QTableWidget.SelectRows)
+        self.modules_list.setSelectionMode(QTableWidget.SingleSelection)
         self.modules_list.setAlternatingRowColors(True)
         modules_header = self.modules_list.horizontalHeader()
         modules_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         modules_header.setSectionResizeMode(1, QHeaderView.Stretch)
         modules_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
 
-        def refresh_modules_list_view():
+        def refresh_modules_list_view(
+            selected_module_key: str | None = None,
+            *,
+            focus_selected_row: bool = False,
+        ):
             current_visible_modules = filtered_modules_for_dialog()
-            current_selected_key = ""
-            if self.modules_list.currentRow() >= 0:
+            current_selected_key = str(selected_module_key or "").strip()
+            if not current_selected_key and self.modules_list.currentRow() >= 0:
                 selected_item = self.modules_list.item(self.modules_list.currentRow(), 1)
                 if selected_item is not None:
                     current_selected_key = str(selected_item.data(Qt.UserRole) or "").strip()
@@ -2710,8 +2814,16 @@ class ProjectDetailWindow(QMainWindow):
             if self.modules_list.rowCount() > 0:
                 if selected_row < 0:
                     selected_row = 0
+                self.modules_list.clearSelection()
+                self.modules_list.setCurrentCell(selected_row, 1)
                 self.modules_list.selectRow(selected_row)
+                selected_item = self.modules_list.item(selected_row, 1)
+                if selected_item is not None:
+                    self.modules_list.scrollToItem(selected_item)
+                if focus_selected_row:
+                    self.modules_list.setFocus(Qt.OtherFocusReason)
             refresh_inspect_button_state()
+            refresh_module_order_button_state()
 
         dlg_layout.addWidget(QLabel("Módulos encontrados:"))
         modules_and_actions_row = QHBoxLayout()
@@ -2719,8 +2831,10 @@ class ProjectDetailWindow(QMainWindow):
 
         new_btn = QPushButton("Nuevo\nMódulo")
         inspect_btn = QPushButton("Abrir\nMódulo")
+        move_up_btn = QPushButton("Subir")
+        move_down_btn = QPushButton("Bajar")
         close_btn = QPushButton("Cerrar")
-        for button in (new_btn, inspect_btn, close_btn):
+        for button in (new_btn, inspect_btn, move_up_btn, move_down_btn, close_btn):
             button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
 
         def refresh_inspect_button_state():
@@ -2729,13 +2843,94 @@ class ProjectDetailWindow(QMainWindow):
             inspect_btn.setEnabled(enabled)
             inspect_btn.setToolTip("" if enabled else "Seleccione un módulo para abrirlo.")
 
+        def module_at_table_row(row: int) -> ModuleData | None:
+            if row < 0 or row >= self.modules_list.rowCount():
+                return None
+            module_item = self.modules_list.item(row, 1)
+            module_key = str(module_item.data(Qt.UserRole) or "").strip() if module_item is not None else ""
+            if not module_key:
+                return None
+            for module in self.project.modules:
+                if str(module.relative_path or module.path).strip() == module_key:
+                    return module
+            return None
+
+        def module_locale_key(module: ModuleData | None) -> str:
+            return str(getattr(module, "locale_name", "") or "").strip().lower()
+
+        def can_move_selected_module(delta: int) -> bool:
+            current_row = self.modules_list.currentRow()
+            target_row = current_row + delta
+            current_module = module_at_table_row(current_row)
+            target_module = module_at_table_row(target_row)
+            return (
+                current_module is not None
+                and target_module is not None
+                and module_locale_key(current_module) == module_locale_key(target_module)
+            )
+
+        def refresh_module_order_button_state():
+            move_up_btn.setEnabled(can_move_selected_module(-1))
+            move_down_btn.setEnabled(can_move_selected_module(1))
+            move_up_btn.setToolTip("" if move_up_btn.isEnabled() else "Seleccione un modulo que pueda subir.")
+            move_down_btn.setToolTip("" if move_down_btn.isEnabled() else "Seleccione un modulo que pueda bajar.")
+
+        def module_project_index(module: ModuleData) -> int | None:
+            module_key = str(module.relative_path or module.path).strip()
+            for index, current_module in enumerate(self.project.modules):
+                if str(current_module.relative_path or current_module.path).strip() == module_key:
+                    return index
+            return None
+
+        def persist_module_order(module: ModuleData) -> None:
+            locale_key = module_locale_key(module)
+            target_locale = next(
+                (
+                    locale
+                    for locale in self.project.locales
+                    if str(locale.name or "").strip().lower() == locale_key
+                ),
+                None,
+            )
+            if target_locale is not None:
+                self._write_locale_config_files([target_locale])
+            _save_project(self.project)
+
+        def move_selected_module(delta: int) -> None:
+            current_row = self.modules_list.currentRow()
+            target_row = current_row + delta
+            current_module = module_at_table_row(current_row)
+            target_module = module_at_table_row(target_row)
+            if (
+                current_module is None
+                or target_module is None
+                or module_locale_key(current_module) != module_locale_key(target_module)
+            ):
+                return
+
+            current_index = module_project_index(current_module)
+            target_index = module_project_index(target_module)
+            if current_index is None or target_index is None:
+                return
+
+            self.project.modules[current_index], self.project.modules[target_index] = (
+                self.project.modules[target_index],
+                self.project.modules[current_index],
+            )
+            persist_module_order(current_module)
+            moved_module_key = str(current_module.relative_path or current_module.path).strip()
+            refresh_modules_list_view(moved_module_key, focus_selected_row=True)
+
         self.modules_list.itemSelectionChanged.connect(refresh_inspect_button_state)
+        self.modules_list.itemSelectionChanged.connect(refresh_module_order_button_state)
         refresh_modules_list_view()
 
         actions_column = QVBoxLayout()
         actions_column.setContentsMargins(0, 0, 0, 0)
         actions_column.addWidget(new_btn)
         actions_column.addWidget(inspect_btn)
+        actions_column.addWidget(move_up_btn)
+        actions_column.addWidget(move_down_btn)
         actions_column.addStretch(1)
         actions_column.addWidget(close_btn)
 
@@ -2860,6 +3055,8 @@ class ProjectDetailWindow(QMainWindow):
 
         new_btn.clicked.connect(create_manual_module)
         inspect_btn.clicked.connect(lambda: self.inspect_module(dialog, refresh_modules_list_view))
+        move_up_btn.clicked.connect(lambda: move_selected_module(-1))
+        move_down_btn.clicked.connect(lambda: move_selected_module(1))
         self.modules_list.cellDoubleClicked.connect(lambda *_: self.inspect_module(dialog, refresh_modules_list_view))
         close_btn.clicked.connect(dialog.accept)
 
@@ -2968,6 +3165,136 @@ class ProjectDetailWindow(QMainWindow):
                 return str(relative).replace("\\", "/")
             except Exception:
                 return file_path
+
+        def normalized_program_reference_keys(source_value: str) -> set[str]:
+            raw_source = str(source_value or "").strip()
+            if not raw_source:
+                return set()
+
+            keys = {raw_source.replace("\\", "/").lower(), Path(raw_source).name.lower()}
+            source_path = Path(raw_source)
+            candidate_path = source_path if source_path.is_absolute() else module_path / source_path
+            if candidate_path.is_file():
+                try:
+                    keys.add(str(candidate_path.resolve()).lower())
+                except OSError:
+                    keys.add(str(candidate_path).lower())
+            return keys
+
+        def associated_program_reference_keys() -> set[str]:
+            keys: set[str] = set()
+            for piece_row in all_rows:
+                keys.update(normalized_program_reference_keys(str(piece_row.get("source") or "")))
+                keys.update(normalized_program_reference_keys(str(piece_row.get("f6_source") or "")))
+            return keys
+
+        def orphan_pgmx_files() -> list[Path]:
+            associated_keys = associated_program_reference_keys()
+            orphans: list[Path] = []
+            for pgmx_file in sorted(module_path.rglob("*.pgmx"), key=lambda item: str(item.relative_to(module_path)).lower()):
+                if not pgmx_file.is_file():
+                    continue
+                relative_key = str(pgmx_file.relative_to(module_path)).replace("\\", "/").lower()
+                try:
+                    resolved_key = str(pgmx_file.resolve()).lower()
+                except OSError:
+                    resolved_key = str(pgmx_file).lower()
+                if (
+                    relative_key in associated_keys
+                    or pgmx_file.name.lower() in associated_keys
+                    or resolved_key in associated_keys
+                ):
+                    continue
+                orphans.append(pgmx_file)
+            return orphans
+
+        def unique_orphan_piece_id(program_path: Path) -> str:
+            existing_ids = {str(row.get("id") or "").strip().lower() for row in all_rows}
+            base_id = "".join(
+                char if char.isalnum() or char in {"-", "_"} else "_"
+                for char in program_path.stem.strip()
+            ).strip("_") or "PGMX"
+            candidate = base_id
+            suffix = 2
+            while candidate.lower() in existing_ids:
+                candidate = f"{base_id}_{suffix}"
+                suffix += 1
+            existing_ids.add(candidate.lower())
+            return candidate
+
+        def row_for_orphan_program(program_path: Path) -> dict:
+            from core.pgmx_processing import get_pgmx_program_dimensions
+
+            source_value = normalize_source_path(str(program_path))
+            piece_id = unique_orphan_piece_id(program_path)
+            temp_piece = Piece(
+                id=piece_id,
+                name=program_path.stem,
+                width=0.0,
+                height=0.0,
+                thickness=None,
+                module_name=selected_module.name,
+                cnc_source=source_value,
+            )
+            program_width, program_height, program_thickness = get_pgmx_program_dimensions(
+                self.project,
+                temp_piece,
+                module_path,
+            )
+            return {
+                "id": piece_id,
+                "name": program_path.stem,
+                "quantity": 1,
+                "height": program_width or "",
+                "width": program_height or "",
+                "thickness": program_thickness,
+                "color": None,
+                "grain_direction": PIECE_GRAIN_CODE_NONE,
+                "source": source_value,
+                "f6_source": None,
+                "pgmx": self._get_pgmx_status(source_value, pgmx_names, pgmx_relpaths),
+                "piece_type": None,
+                "program_width": program_width,
+                "program_height": program_height,
+                "program_thickness": program_thickness,
+                "en_juego": False,
+                "include_in_sheet": False,
+                "observations": "",
+            }
+
+        def prompt_add_orphan_programs() -> bool:
+            orphan_files = orphan_pgmx_files()
+            if not orphan_files:
+                return False
+
+            relative_names = [
+                str(program_path.relative_to(module_path)).replace("\\", "/")
+                for program_path in orphan_files
+            ]
+            preview_names = "\n".join(f"- {name}" for name in relative_names[:12])
+            if len(relative_names) > 12:
+                preview_names += f"\n- ... y {len(relative_names) - 12} mas"
+
+            answer = QMessageBox.question(
+                inspect_dialog,
+                "Programas no asociados",
+                (
+                    "Se encontraron programas PGMX en la carpeta del modulo "
+                    "que no estan asociados a ninguna pieza.\n\n"
+                    f"{preview_names}\n\n"
+                    "Desea agregarlos a la lista de piezas?"
+                ),
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if answer != QMessageBox.Yes:
+                return False
+
+            for program_path in orphan_files:
+                all_rows.append(row_for_orphan_program(program_path))
+            return True
+
+        added_orphan_program_rows = prompt_add_orphan_programs()
 
         layout = QVBoxLayout()
         layout.addWidget(QLabel("Configuración del módulo:"))
@@ -3748,6 +4075,8 @@ class ProjectDetailWindow(QMainWindow):
         program_dimensions_cache = {}
         configure_en_juego_btn = None
         repair_pgmx_btn = None
+        move_piece_up_btn = None
+        move_piece_down_btn = None
         invalid_slot_cache = {}
 
         def build_piece_from_row(piece_row):
@@ -3828,16 +4157,34 @@ class ProjectDetailWindow(QMainWindow):
                 return None
             return visible_row_indexes[current_row]
 
+        def select_piece_table_row(row_idx: int, *, focus_selected_row: bool = False) -> None:
+            if row_idx < 0 or row_idx >= pieces_table.rowCount():
+                return
+            pieces_table.clearSelection()
+            pieces_table.setCurrentCell(row_idx, PIECES_COL_ID)
+            pieces_table.selectRow(row_idx)
+            selected_item = pieces_table.item(row_idx, PIECES_COL_ID)
+            if selected_item is not None:
+                pieces_table.scrollToItem(selected_item)
+            if focus_selected_row:
+                pieces_table.setFocus(Qt.OtherFocusReason)
+
+        def select_visible_piece_by_all_index(all_idx: int, *, focus_selected_row: bool = False) -> bool:
+            if all_idx not in visible_row_indexes:
+                return False
+            select_piece_table_row(visible_row_indexes.index(all_idx), focus_selected_row=focus_selected_row)
+            return True
+
         def select_visible_piece_by_id(piece_id: str, fallback_row: int | None = None):
             normalized_id = str(piece_id or "").strip()
             if normalized_id:
                 for row_idx, all_idx in enumerate(visible_row_indexes):
                     if str(all_rows[all_idx].get("id") or "").strip() == normalized_id:
-                        pieces_table.selectRow(row_idx)
+                        select_piece_table_row(row_idx)
                         return
 
             if fallback_row is not None and pieces_table.rowCount() > 0:
-                pieces_table.selectRow(max(0, min(fallback_row, pieces_table.rowCount() - 1)))
+                select_piece_table_row(max(0, min(fallback_row, pieces_table.rowCount() - 1)))
 
         def infer_companion_f6_source(source_value: str):
             normalized_source = str(source_value or "").strip()
@@ -3910,6 +4257,28 @@ class ProjectDetailWindow(QMainWindow):
                 "Corregir PGMX girandolo 90 grados antihorario"
                 if issues
                 else "La pieza seleccionada no tiene ranuras no ejecutables detectadas."
+            )
+
+        def can_move_selected_piece(delta: int) -> bool:
+            current_row = pieces_table.currentRow()
+            target_row = current_row + delta
+            return (
+                0 <= current_row < pieces_table.rowCount()
+                and 0 <= target_row < pieces_table.rowCount()
+                and current_row < len(visible_row_indexes)
+                and target_row < len(visible_row_indexes)
+            )
+
+        def refresh_piece_order_button_state():
+            if move_piece_up_btn is None or move_piece_down_btn is None:
+                return
+            move_piece_up_btn.setEnabled(can_move_selected_piece(-1))
+            move_piece_down_btn.setEnabled(can_move_selected_piece(1))
+            move_piece_up_btn.setToolTip(
+                "" if move_piece_up_btn.isEnabled() else "Seleccione una pieza que pueda subir."
+            )
+            move_piece_down_btn.setToolTip(
+                "" if move_piece_down_btn.isEnabled() else "Seleccione una pieza que pueda bajar."
             )
 
         def create_centered_checkbox(checked: bool, on_changed):
@@ -4088,10 +4457,15 @@ class ProjectDetailWindow(QMainWindow):
 
         def refresh_pieces_table():
             nonlocal refreshing_pieces_table
-            from core.model import PIECE_TYPE_ORDER
             from core.pgmx_processing import get_pgmx_program_dimension_notes
 
-            _type_rank = {t: i for i, t in enumerate(PIECE_TYPE_ORDER)}
+            for old_row in range(pieces_table.rowCount()):
+                for old_column in range(pieces_table.columnCount()):
+                    old_widget = pieces_table.cellWidget(old_row, old_column)
+                    if old_widget is None:
+                        continue
+                    pieces_table.removeCellWidget(old_row, old_column)
+                    old_widget.deleteLater()
 
             sync_program_dimensions_from_rows()
 
@@ -4100,8 +4474,6 @@ class ProjectDetailWindow(QMainWindow):
             for idx, row_data in enumerate(all_rows):
                 if self._is_valid_thickness_value(row_data.get("thickness")):
                     filtered.append((idx, row_data))
-
-            filtered.sort(key=lambda pair: _type_rank.get(pair[1].get("piece_type") or "", len(PIECE_TYPE_ORDER)))
 
             for all_idx, _ in filtered:
                 visible_row_indexes.append(all_idx)
@@ -4215,18 +4587,19 @@ class ProjectDetailWindow(QMainWindow):
             refreshing_pieces_table = False
             refresh_configure_en_juego_button_state()
             refresh_repair_pgmx_button_state()
+            refresh_piece_order_button_state()
 
         refresh_pieces_table()
 
         header = pieces_table.horizontalHeader()
         auto_columns = {
-            PIECES_COL_ID,
             PIECES_COL_QUANTITY,
             PIECES_COL_HEIGHT,
             PIECES_COL_WIDTH,
             PIECES_COL_THICKNESS,
         }
         fixed_column_widths = {
+            PIECES_COL_ID: 50,
             PIECES_COL_NAME: _scaled_int(180, compact_scale, 120),
             PIECES_COL_SWAP: _scaled_int(18, compact_scale, 14),
             PIECES_COL_COLOR: _scaled_int(110, compact_scale, 90),
@@ -4283,6 +4656,7 @@ class ProjectDetailWindow(QMainWindow):
         pieces_table.setAlternatingRowColors(True)
         pieces_table.setEditTriggers(QTableWidget.NoEditTriggers)
         pieces_table.setSelectionBehavior(QTableWidget.SelectRows)
+        pieces_table.setSelectionMode(QTableWidget.SingleSelection)
 
         def persist_module_config():
             nonlocal has_unsaved_changes
@@ -4380,6 +4754,27 @@ class ProjectDetailWindow(QMainWindow):
             if on_module_updated:
                 on_module_updated()
             has_unsaved_changes = False
+
+        if added_orphan_program_rows:
+            persist_module_config()
+
+        def move_selected_piece(delta: int) -> None:
+            current_row = pieces_table.currentRow()
+            target_row = current_row + delta
+            if not can_move_selected_piece(delta):
+                return
+            current_all_idx = visible_row_indexes[current_row]
+            target_all_idx = visible_row_indexes[target_row]
+            if current_all_idx < 0 or target_all_idx < 0:
+                return
+            if current_all_idx >= len(all_rows) or target_all_idx >= len(all_rows):
+                return
+
+            all_rows[current_all_idx], all_rows[target_all_idx] = all_rows[target_all_idx], all_rows[current_all_idx]
+            persist_module_config()
+            refresh_pieces_table()
+            select_visible_piece_by_all_index(target_all_idx, focus_selected_row=True)
+            refresh_piece_order_button_state()
 
         def piece_from_row(piece_row):
             return build_piece_from_row(piece_row)
@@ -4768,6 +5163,8 @@ class ProjectDetailWindow(QMainWindow):
             source_field_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             select_source_btn = QPushButton("Seleccionar")
             select_source_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+            edit_source_editor_btn = QPushButton("Editar\nPrograma")
+            edit_source_editor_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
             remove_source_editor_btn = QPushButton("Quitar\nPrograma")
             remove_source_editor_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
             source_row = QHBoxLayout()
@@ -4780,6 +5177,7 @@ class ProjectDetailWindow(QMainWindow):
             source_buttons_column.setSpacing(top_fields_spacing)
             source_buttons_column.setContentsMargins(0, 0, 0, 0)
             source_buttons_column.addWidget(select_source_btn)
+            source_buttons_column.addWidget(edit_source_editor_btn)
             source_buttons_column.addWidget(remove_source_editor_btn)
             source_buttons_widget = QWidget()
             source_buttons_widget.setFixedWidth(editor_inline_button_width)
@@ -4792,8 +5190,8 @@ class ProjectDetailWindow(QMainWindow):
             source_buttons_stack_height = (
                 editor_label_height
                 + editor_field_block_spacing
-                + (MAIN_ACTION_BUTTON_HEIGHT * 2)
-                + top_fields_spacing
+                + (MAIN_ACTION_BUTTON_HEIGHT * 3)
+                + (top_fields_spacing * 2)
             )
             source_button_widget = QWidget()
             source_button_widget.setFixedWidth(editor_inline_button_width)
@@ -4848,8 +5246,10 @@ class ProjectDetailWindow(QMainWindow):
             )
             preview_panel.setLayout(preview_layout)
 
-            def refresh_remove_source_button_state():
-                remove_source_editor_btn.setEnabled(bool(source_field.text().strip()))
+            def refresh_source_button_state():
+                has_source = bool(source_field.text().strip())
+                edit_source_editor_btn.setEnabled(has_source)
+                remove_source_editor_btn.setEnabled(has_source)
 
             def build_editor_piece_row():
                 piece_id = id_field.text().strip()
@@ -4906,7 +5306,7 @@ class ProjectDetailWindow(QMainWindow):
                 )
 
             def refresh_piece_preview():
-                refresh_remove_source_button_state()
+                refresh_source_button_state()
                 preview_piece_row = build_editor_piece_row()
                 preview_source = str(preview_piece_row.get("source") or "").strip()
                 preview_title_label.setText(
@@ -4976,6 +5376,41 @@ class ProjectDetailWindow(QMainWindow):
                     return
                 source_field.setText(normalize_source_path(source_file))
                 refresh_piece_preview_and_layout()
+
+            def edit_source_from_editor():
+                from core.pgmx_processing import resolve_piece_program_path
+
+                if not source_field.text().strip():
+                    QMessageBox.warning(
+                        editor_dialog,
+                        "Editar programa",
+                        "La pieza no tiene un programa asociado.",
+                    )
+                    return
+
+                piece_obj = build_piece_from_row(build_editor_piece_row())
+                source_path = resolve_piece_program_path(self.project, piece_obj, module_path)
+                if source_path is None:
+                    QMessageBox.warning(
+                        editor_dialog,
+                        "Editar programa",
+                        "No se encontro el archivo PGMX asociado a la pieza seleccionada.",
+                    )
+                    return
+
+                try:
+                    os.startfile(str(source_path))
+                except OSError as exc:
+                    QMessageBox.critical(
+                        editor_dialog,
+                        "Editar programa",
+                        (
+                            "No se pudo abrir el programa asociado.\n\n"
+                            "Verifique que Maestro este instalado o que los archivos PGMX "
+                            "tengan una aplicacion predeterminada.\n\n"
+                            f"{exc}"
+                        ),
+                    )
 
             def remove_source_from_editor():
                 source_field.clear()
@@ -5131,10 +5566,25 @@ class ProjectDetailWindow(QMainWindow):
             editor_buttons.setContentsMargins(0, 0, 0, 0)
             editor_buttons.setSpacing(8)
             editor_buttons.addStretch(1)
-            btn_save_piece = QPushButton("Guardar")
+            btn_save_piece = QPushButton("Aceptar")
             btn_cancel_piece = QPushButton("Cancelar")
             btn_save_piece.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
             btn_cancel_piece.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+            btn_save_piece.setDefault(True)
+            btn_save_piece.setAutoDefault(True)
+            btn_cancel_piece.setAutoDefault(False)
+            for auxiliary_button in (
+                apply_color_btn,
+                select_color_btn,
+                select_source_btn,
+                edit_source_editor_btn,
+                remove_source_editor_btn,
+                btn_cancel_piece,
+            ):
+                if auxiliary_button is not None:
+                    auxiliary_button.setDefault(False)
+                    auxiliary_button.setAutoDefault(False)
+                    auxiliary_button.setFocusPolicy(Qt.NoFocus)
             btn_save_piece.clicked.connect(save_piece_changes)
             btn_cancel_piece.clicked.connect(editor_dialog.reject)
             editor_buttons.addWidget(btn_save_piece)
@@ -5169,10 +5619,11 @@ class ProjectDetailWindow(QMainWindow):
             editor_layout.addWidget(content_panel, 0)
 
             select_source_btn.clicked.connect(select_source_from_editor)
+            edit_source_editor_btn.clicked.connect(edit_source_from_editor)
             remove_source_editor_btn.clicked.connect(remove_source_from_editor)
             color_field.editingFinished.connect(sync_editor_grainless_color_rule)
             thickness_field.editingFinished.connect(sync_editor_grainless_color_rule)
-            source_field.textChanged.connect(lambda *_: refresh_remove_source_button_state())
+            source_field.textChanged.connect(lambda *_: refresh_source_button_state())
             source_field.editingFinished.connect(refresh_piece_preview_and_layout)
             grain_field.currentIndexChanged.connect(refresh_piece_preview_and_layout)
             if template_combo is not None:
@@ -7773,6 +8224,8 @@ class ProjectDetailWindow(QMainWindow):
         edit_piece_btn.setToolTip("Editar Pieza")
         delete_piece_btn = QPushButton("Eliminar")
         delete_piece_btn.setToolTip("Eliminar Pieza")
+        move_piece_up_btn = QPushButton("Subir")
+        move_piece_down_btn = QPushButton("Bajar")
         repair_pgmx_btn = QPushButton("Corregir\nPGMX")
         repair_pgmx_btn.setToolTip("Seleccione una pieza con ranura no ejecutable.")
         repair_pgmx_btn.setEnabled(False)
@@ -7784,6 +8237,8 @@ class ProjectDetailWindow(QMainWindow):
             add_piece_btn,
             edit_piece_btn,
             delete_piece_btn,
+            move_piece_up_btn,
+            move_piece_down_btn,
             repair_pgmx_btn,
             configure_en_juego_btn,
         ):
@@ -7792,6 +8247,8 @@ class ProjectDetailWindow(QMainWindow):
         actions_column.addWidget(add_piece_btn)
         actions_column.addWidget(edit_piece_btn)
         actions_column.addWidget(delete_piece_btn)
+        actions_column.addWidget(move_piece_up_btn)
+        actions_column.addWidget(move_piece_down_btn)
         actions_column.addWidget(repair_pgmx_btn)
         actions_column.addWidget(configure_en_juego_btn)
 
@@ -7802,10 +8259,14 @@ class ProjectDetailWindow(QMainWindow):
         edit_piece_btn.clicked.connect(edit_selected_piece)
         pieces_table.cellDoubleClicked.connect(edit_piece_from_table_double_click)
         delete_piece_btn.clicked.connect(remove_selected_piece)
+        move_piece_up_btn.clicked.connect(lambda: move_selected_piece(-1))
+        move_piece_down_btn.clicked.connect(lambda: move_selected_piece(1))
         repair_pgmx_btn.clicked.connect(repair_selected_invalid_pgmx)
         configure_en_juego_btn.clicked.connect(open_en_juego_configuration_dialog)
         pieces_table.itemSelectionChanged.connect(refresh_repair_pgmx_button_state)
+        pieces_table.itemSelectionChanged.connect(refresh_piece_order_button_state)
         refresh_repair_pgmx_button_state()
+        refresh_piece_order_button_state()
 
         def save_module_settings(show_feedback=True):
             persist_module_config()
@@ -7974,10 +8435,6 @@ class ProjectDetailWindow(QMainWindow):
         project_output_root = self._project_cnc_output_root(selected_project, output_root)
         project_output_root.mkdir(parents=True, exist_ok=True)
         locale_dirs: dict[str, Path] = {}
-        locales_by_key = {
-            locale.name.strip().lower(): locale
-            for locale in selected_project.locales
-        }
 
         for locale in selected_project.locales:
             locale_dir = project_output_root / self._output_relative_path(locale.path, locale.name)
@@ -7985,19 +8442,134 @@ class ProjectDetailWindow(QMainWindow):
             locale_dirs[locale.name.strip().lower()] = locale_dir
 
         for module in selected_project.modules:
-            module_relative = str(module.relative_path or "").strip()
-            if not module_relative:
-                locale_key = str(module.locale_name or "").strip().lower()
-                locale = locales_by_key.get(locale_key)
-                locale_relative = self._output_relative_path(
-                    locale.path if locale is not None else module.locale_name,
-                    module.locale_name or "local",
-                )
-                module_relative = str(locale_relative / module.name)
-            module_dir = project_output_root / self._output_relative_path(module_relative, module.name)
+            module_dir = self._module_cnc_output_dir(selected_project, output_root, module)
             module_dir.mkdir(parents=True, exist_ok=True)
 
         return locale_dirs
+
+    def _module_cnc_output_dir(self, selected_project: Project, output_root: Path, module: ModuleData) -> Path:
+        project_output_root = self._project_cnc_output_root(selected_project, output_root)
+        locales_by_key = {
+            locale.name.strip().lower(): locale
+            for locale in selected_project.locales
+        }
+        module_relative = str(module.relative_path or "").strip()
+        if not module_relative:
+            locale_key = str(module.locale_name or "").strip().lower()
+            locale = locales_by_key.get(locale_key)
+            locale_relative = self._output_relative_path(
+                locale.path if locale is not None else module.locale_name,
+                module.locale_name or "local",
+            )
+            module_relative = str(locale_relative / module.name)
+        return project_output_root / self._output_relative_path(module_relative, module.name)
+
+    def _unique_iso_output_path(
+        self,
+        module_output_dir: Path,
+        pgmx_path: Path,
+        used_stems: set[str],
+        piece: Piece,
+    ) -> Path:
+        base_stem = self._safe_output_filename(pgmx_path.stem, "programa")
+        stem = base_stem
+        if stem.lower() in used_stems:
+            piece_label = self._safe_output_filename(
+                str(piece.id or piece.name or "").strip(),
+                "",
+            )
+            if piece_label:
+                stem = f"{base_stem}_{piece_label}"
+
+        candidate_stem = stem
+        suffix = 2
+        while candidate_stem.lower() in used_stems:
+            candidate_stem = f"{stem}_{suffix}"
+            suffix += 1
+
+        used_stems.add(candidate_stem.lower())
+        return module_output_dir / f"{candidate_stem}.iso"
+
+    def _export_project_iso_files(self, selected_project: Project, output_root: Path) -> dict:
+        from core.pgmx_processing import resolve_piece_program_path
+        from iso_generation.emitter import emit_iso_program
+
+        generated_paths: list[Path] = []
+        skipped_missing: list[dict] = []
+        skipped_failed: list[dict] = []
+        warnings: list[dict] = []
+        duplicate_sources = 0
+        used_stems_by_dir: dict[Path, set[str]] = {}
+        converted_by_module_source: dict[tuple[str, str], Path] = {}
+
+        for module in selected_project.modules:
+            module_path = Path(module.path)
+            module_output_dir = self._module_cnc_output_dir(selected_project, output_root, module)
+            module_output_dir.mkdir(parents=True, exist_ok=True)
+            used_stems = used_stems_by_dir.setdefault(module_output_dir, set())
+            module_key = str(module.relative_path or module.path).strip().lower()
+
+            for piece in module.pieces:
+                source_value = str(piece.cnc_source or piece.f6_source or "").strip()
+                if not source_value:
+                    continue
+
+                source_path = resolve_piece_program_path(selected_project, piece, module_path)
+                piece_label = str(piece.id or piece.name or "").strip() or "(sin ID)"
+                if source_path is None or source_path.suffix.lower() != ".pgmx":
+                    skipped_missing.append(
+                        {
+                            "module": module.name,
+                            "piece": piece_label,
+                            "source": source_value,
+                        }
+                    )
+                    continue
+
+                try:
+                    source_key = str(source_path.resolve()).lower()
+                except OSError:
+                    source_key = str(source_path).lower()
+                conversion_key = (module_key, source_key)
+                if conversion_key in converted_by_module_source:
+                    duplicate_sources += 1
+                    continue
+
+                output_path = self._unique_iso_output_path(module_output_dir, source_path, used_stems, piece)
+                try:
+                    program = emit_iso_program(source_path, program_name=output_path.stem)
+                    program.write_text(output_path)
+                except Exception as exc:
+                    skipped_failed.append(
+                        {
+                            "module": module.name,
+                            "piece": piece_label,
+                            "source": str(source_path),
+                            "error": str(exc),
+                        }
+                    )
+                    continue
+
+                converted_by_module_source[conversion_key] = output_path
+                generated_paths.append(output_path)
+                for warning in program.warnings:
+                    warnings.append(
+                        {
+                            "module": module.name,
+                            "piece": piece_label,
+                            "source": str(source_path),
+                            "code": warning.code,
+                            "message": warning.message,
+                        }
+                    )
+
+        return {
+            "generated_paths": generated_paths,
+            "missing": skipped_missing,
+            "failed": skipped_failed,
+            "warnings": warnings,
+            "duplicate_sources": duplicate_sources,
+        }
 
     def _production_output_base_name(self, project: Project) -> str:
         name_parts = [str(project.name or "Proyecto").strip()]
@@ -8055,7 +8627,7 @@ class ProjectDetailWindow(QMainWindow):
                     if locale_project.modules:
                         locale_work_items.append((locale, locale_project))
 
-                total_steps = max(1, 2 + len(locale_work_items))
+                total_steps = max(1, 3 + len(locale_work_items))
                 progress_step = 0
                 progress_dialog = QProgressDialog(
                     "Preparando generación de archivos...",
@@ -8092,6 +8664,11 @@ class ProjectDetailWindow(QMainWindow):
                 project_output_root = self._project_cnc_output_root(selected_project, output_root)
                 locale_dirs = self._create_plan_sheet_output_structure(selected_project, output_root)
                 update_progress("Estructura de carpetas creada.")
+
+                update_progress("Convirtiendo programas PGMX asociados a ISO...", advance=False)
+                iso_result = self._export_project_iso_files(selected_project, output_root)
+                update_progress("Conversion ISO finalizada.")
+
                 base_name = self._production_output_base_name(selected_project)
                 generated_pdf_paths: list[Path] = []
                 for locale, locale_project in locale_work_items:
@@ -8114,7 +8691,7 @@ class ProjectDetailWindow(QMainWindow):
                     update_progress(f"PDF del local {locale.name} generado.")
 
                 if progress_dialog is not None:
-                    progress_dialog.setLabelText("Estructura y PDF generados.")
+                    progress_dialog.setLabelText("Estructura, ISO y PDF generados.")
                     progress_dialog.setValue(total_steps)
                     QApplication.processEvents()
                     progress_dialog.close()
@@ -8150,6 +8727,26 @@ class ProjectDetailWindow(QMainWindow):
                 if generated_pdf_paths:
                     detail_lines.append("PDF por local:")
                     detail_lines.extend(str(path) for path in generated_pdf_paths)
+                generated_iso_paths = iso_result.get("generated_paths", [])
+                missing_iso_sources = iso_result.get("missing", [])
+                failed_iso_sources = iso_result.get("failed", [])
+                iso_warnings = iso_result.get("warnings", [])
+                duplicate_iso_sources = int(iso_result.get("duplicate_sources") or 0)
+                detail_lines.append(f"ISO generados: {len(generated_iso_paths)}")
+                if duplicate_iso_sources:
+                    detail_lines.append(f"PGMX repetidos reutilizados: {duplicate_iso_sources}")
+                if missing_iso_sources:
+                    detail_lines.append(f"PGMX asociados no encontrados: {len(missing_iso_sources)}")
+                if failed_iso_sources:
+                    detail_lines.append(f"PGMX no convertidos a ISO: {len(failed_iso_sources)}")
+                    for failed_item in failed_iso_sources[:5]:
+                        detail_lines.append(
+                            "  - "
+                            f"{failed_item.get('module', '')} / {failed_item.get('piece', '')}: "
+                            f"{failed_item.get('error', '')}"
+                        )
+                if iso_warnings:
+                    detail_lines.append(f"Advertencias ISO: {len(iso_warnings)}")
                 QMessageBox.information(
                     self,
                     "Generar Planillas",
@@ -9225,6 +9822,9 @@ class PieceTemplateEditDialog(QDialog):
 
         select_color_btn = QPushButton("Seleccionar")
         select_color_btn.setFixedSize(editor_inline_button_width, editor_inline_button_height)
+        select_color_btn.setDefault(False)
+        select_color_btn.setAutoDefault(False)
+        select_color_btn.setFocusPolicy(Qt.NoFocus)
         select_color_btn.clicked.connect(select_color_from_boards)
 
         color_column = build_labeled_field_widget(
@@ -9316,10 +9916,17 @@ class PieceTemplateEditDialog(QDialog):
         buttons_row.setContentsMargins(0, 0, form_panel_horizontal_margin, 0)
         buttons_row.setSpacing(8)
         buttons_row.addStretch(1)
-        save_button = QPushButton("Guardar")
+        save_button = QPushButton("Aceptar")
         cancel_button = QPushButton("Cancelar")
         save_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
         cancel_button.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
+        save_button.setDefault(True)
+        save_button.setAutoDefault(True)
+        cancel_button.setDefault(False)
+        cancel_button.setAutoDefault(False)
+        select_source_btn.setDefault(False)
+        select_source_btn.setAutoDefault(False)
+        select_source_btn.setFocusPolicy(Qt.NoFocus)
         save_button.clicked.connect(self.save_template)
         cancel_button.clicked.connect(self.reject)
         buttons_row.addWidget(save_button)
