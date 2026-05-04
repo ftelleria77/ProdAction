@@ -1,6 +1,6 @@
 # Contrato CNC/ISO Observado
 
-Estado: 2026-05-03.
+Estado: 2026-05-04.
 
 Esta guia consolida el punto 1 de la investigacion ISO: que se sabe del
 contrato real entre Maestro/postprocesador y la CNC. Es una base para un futuro
@@ -538,10 +538,12 @@ comparar exacto `Cocina/mod 5 - Bajo despensero/Tapa_despensero`.
 
 El barrido `Cocina` disponible sin CNC compara
 `S:\Maestro\Projects\ProdAction\ISO\Cocina` contra
-`P:\USBMIX\ProdAction\ISO\Cocina`: el emisor genera 51/84 ISO exactos en
-`tmp/cocina_iso_generated_20260504_102634`, con `0 diff`. Los 33 restantes
-requieren combinaciones de familias aun no abiertas: ranura, polilinea,
-fresado lineal despues de taladros y taladros multicara intercalados.
+`P:\USBMIX\ProdAction\ISO\Cocina`: el emisor genera 57/84 ISO exactos en
+`tmp/cocina_iso_generated_20260504_104354`, con `0 diff`. La nueva cobertura
+incluye 6 fondos simples con `E001 + taladros Top + ranura 082`. Los 27
+restantes requieren combinaciones de familias aun no abiertas: ranuras
+complejas, polilinea, fresado lineal despues de taladros y taladros multicara
+intercalados.
 
 En Cocina se observo que Maestro no postprocesa `WorkingStep` deshabilitados,
 aunque sus features queden presentes en el `.pgmx`. Para traduccion ISO se

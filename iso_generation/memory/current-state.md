@@ -37,6 +37,8 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
     (`Bottom`, `Top`, `Left`, `Right`), winding horario/antihorario y sin
     leads o con leads `Arc/Quote` observados.
   - secuencia `E001` escuadrado + polilinea abierta `E004` en `Top`.
+  - secuencia `E001` escuadrado + taladros superiores + ranura horizontal
+    `082` en `Top`, validada en fondos simples de Cocina.
 - `comparator.py` compara ISO Maestro vs candidato con normalizacion simple.
 - `cli.py` ofrece comandos de inspeccion, cabecera y comparacion.
 - `machine_config/` contiene el snapshot inicial de configuracion:
@@ -160,14 +162,15 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   `Line/Arc`, PH5, offset lateral explicito y arcos de esquina cuando Maestro
   compensa por fuera; y escuadrados `E001` con leads `Line/Arc` en modos
   `Quote` y `Down/Up`.
-- En el corpus Cocina, el emisor genera y compara exacto 51/84 piezas:
+- En el corpus Cocina, el emisor genera y compara exacto 57/84 piezas:
   escuadrados standalone, secuencias `E001` escuadrado + taladros superiores,
   secuencias con taladrado lateral de una unica cara tras perfil, y piezas que
-  tenian `WorkingStep` deshabilitados que Maestro no postprocesa. El barrido
-  queda en `tmp/cocina_iso_generated_20260504_102634`: `51 ok`, `0 diff`,
-  `33 error`. Los errores restantes son guards todavia no abiertos: `18` con
-  ranura, `7` con combinaciones de escuadrado + taladros multicara
-  intercalados, `7` con polilinea y `1` con fresado lineal.
+  tenian `WorkingStep` deshabilitados que Maestro no postprocesa. Tambien
+  cubre 6 fondos simples con `E001 + taladros Top + ranura 082`. El barrido
+  queda en `tmp/cocina_iso_generated_20260504_104354`: `57 ok`, `0 diff`,
+  `27 error`. Los errores restantes son guards todavia no abiertos: `12` con
+  ranura en combinaciones mas complejas, `7` con combinaciones de escuadrado +
+  taladros multicara intercalados, `7` con polilinea y `1` con fresado lineal.
 - Para `E001 + taladros`, el emisor replica las reglas observadas de Cocina:
   herramientas verticales automaticas por familia/diametro cuando el PGMX trae
   herramienta `0`; transicion compacta de perfil superior a taladrado;
@@ -188,9 +191,9 @@ Sin acceso al CNC/Maestro, seguir desarrollando contra pares existentes
 raiz `Pieza*.pgmx` ya quedo cerrada contra todos los pares disponibles. El
 siguiente frente recomendado es Cocina:
 
-- avanzar con combinaciones `escuadrado + ranura`, `escuadrado + fresado lineal`
-  y `escuadrado + polilineas` con taladros, empezando por la familia que reduzca
-  mas errores del barrido Cocina.
+- avanzar con las 12 ranuras complejas restantes de Cocina o pasar a
+  `escuadrado + fresado lineal` / `escuadrado + polilineas` con taladros,
+  empezando por la familia que reduzca mas errores del barrido Cocina.
 
 Cuando vuelva el acceso a Maestro, postprocesar `Pieza_096` y `Pieza_097` para
 validar la polilinea con `E003`.

@@ -165,6 +165,7 @@ def emit_iso_program(
     - E001 bottom-start squaring on the top plane with no leads or observed
       Arc/Quote leads.
     - E001 squaring followed by observed top/side drilling sequences.
+    - E001 squaring followed by observed top drilling and 082 slot sequences.
     """
 
     if not isinstance(source, PgmxIsoSource):
@@ -231,9 +232,22 @@ def emit_iso_program(
                 continue
             if isinstance(operation, sp.SlotMillingSpec):
                 if previous is not None:
-                    raise IsoEmissionNotImplemented(
-                        "Slot milling after drilling is not implemented yet."
+                    if previous.drilling.plane_name != "Top":
+                        raise IsoEmissionNotImplemented(
+                            "Slot milling after side drilling is not implemented yet."
+                        )
+                    lines.extend(_emit_top_drilling_to_slot_transition())
+                    lines.extend(
+                        _emit_slot_milling(
+                            source.state,
+                            operation,
+                            include_full_setup=False,
+                            include_observed_edge_cleanup=True,
+                        )
                     )
+                    previous = None
+                    top_profile_seen = True
+                    continue
                 if top_profile_seen:
                     raise IsoEmissionNotImplemented(
                         "Slot milling after another profile operation is not implemented yet."
@@ -370,6 +384,9 @@ def _validate_supported_source(source: PgmxIsoSource) -> None:
         sp.CircleMillingSpec,
     )
     supports_squaring_then_drilling = _supports_squaring_then_drilling(source)
+    supports_squaring_top_drilling_then_slot = (
+        _supports_squaring_top_drilling_then_slot(source)
+    )
     if source.adaptation.line_millings:
         if not supports_squaring_then_line and (
             len(source.adaptation.line_millings) != 1
@@ -384,7 +401,7 @@ def _validate_supported_source(source: PgmxIsoSource) -> None:
             )
         _validate_supported_line_milling(source.adaptation.line_millings[0])
     if source.adaptation.slot_millings:
-        if (
+        if not supports_squaring_top_drilling_then_slot and (
             len(source.adaptation.slot_millings) != 1
             or source.adaptation.drillings
             or source.adaptation.drilling_patterns
@@ -429,6 +446,7 @@ def _validate_supported_source(source: PgmxIsoSource) -> None:
             or supports_squaring_then_polyline
             or supports_squaring_then_circle
             or supports_squaring_then_drilling
+            or supports_squaring_top_drilling_then_slot
         ) and (
             len(source.adaptation.squaring_millings) != 1
             or source.adaptation.drillings
@@ -529,6 +547,31 @@ def _supports_squaring_then_drilling(source: PgmxIsoSource) -> bool:
     if first_plane == "Top":
         return True
     return all(drilling.plane_name == first_plane for drilling in drillings)
+
+
+def _supports_squaring_top_drilling_then_slot(source: PgmxIsoSource) -> bool:
+    adaptation = source.adaptation
+    if (
+        len(adaptation.squaring_millings) != 1
+        or len(adaptation.slot_millings) != 1
+        or not adaptation.drillings
+        or adaptation.drilling_patterns
+        or adaptation.line_millings
+        or adaptation.polyline_millings
+        or adaptation.circle_millings
+    ):
+        return False
+    operations = _ordered_operations(source)
+    if len(operations) < 3:
+        return False
+    return (
+        isinstance(operations[0], sp.SquaringMillingSpec)
+        and isinstance(operations[-1], sp.SlotMillingSpec)
+        and all(
+            isinstance(operation, sp.DrillingSpec) and operation.plane_name == "Top"
+            for operation in operations[1:-1]
+        )
+    )
 
 
 def _validate_supported_drilling(drilling: sp.DrillingSpec) -> None:
@@ -1285,6 +1328,17 @@ def _emit_top_profile_to_drilling_transition(state: sp.PgmxState) -> tuple[str, 
         _safe_z_line(),
         "G64",
         *_emit_operation_reentry(state),
+    )
+
+
+def _emit_top_drilling_to_slot_transition() -> tuple[str, ...]:
+    return (
+        "?%ETK[8]=1",
+        "G40",
+        "MLV=0",
+        _safe_z_line(),
+        "MLV=2",
+        "?%ETK[0]=0",
     )
 
 
@@ -4703,6 +4757,9 @@ def _squaring_compensation(squaring_milling: sp.SquaringMillingSpec) -> str:
 def _emit_slot_milling(
     state: sp.PgmxState,
     slot_milling: sp.SlotMillingSpec,
+    *,
+    include_full_setup: bool = True,
+    include_observed_edge_cleanup: bool = False,
 ) -> tuple[str, ...]:
     tool = _slot_milling_tool(slot_milling)
     target_depth = slot_milling.depth_spec.target_depth
@@ -4714,43 +4771,68 @@ def _emit_slot_milling(
     start_x = max(slot_milling.start_x, slot_milling.end_x)
     end_x = min(slot_milling.start_x, slot_milling.end_x)
     y = _slot_milling_y(slot_milling, tool_radius)
-    return (
+    lines: list[str] = [
         f"?%ETK[6]={tool.spindle}",
         "G17",
-        "MLV=2",
-        f"%Or[0].ofX={_format_mm(-(state.length + (2.0 * state.origin_x)) * 1000.0)}",
-        _work_origin_y_line(),
-        f"%Or[0].ofZ={_format_mm((state.depth + state.origin_z) * 1000.0)}",
-        "MLV=1",
-        f"SHF[X]={_format_mm(-(state.length + state.origin_x))}",
-        f"SHF[Y]={_format_mm(_base_shf_y(state.origin_y))}",
-        f"SHF[Z]={_format_mm(state.depth + state.origin_z)}",
-        "MLV=2",
-        "?%ETK[17]=257",
-        f"S{_format_spindle_speed(tool.spindle_speed)}M3",
-        f"?%ETK[1]={tool.mask}",
-        "MLV=2",
-        f"SHF[X]={_format_mm(tool.shf_x)}",
-        f"SHF[Y]={_format_mm(tool.shf_y)}",
-        f"SHF[Z]={_format_mm(tool.shf_z)}",
-        f"G0 X{_format_mm(start_x)} Y{_format_mm(y)}",
-        f"G0 Z{_format_mm(rapid_z)}",
-        "D1",
-        f"SVL {_format_mm(tool.tool_offset_length)}",
-        f"VL6={_format_mm(tool.tool_offset_length)}",
-        f"SVR {_format_mm(tool_radius)}",
-        f"VL7={_format_mm(tool_radius)}",
-        f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}",
-        "?%ETK[7]=1",
-        f"G1 X{_format_mm(end_x)} Z{_format_mm(cut_z)} F{_format_mm(tool.milling_feed)}",
-        f"G0 Z{_format_mm(slot_milling.security_plane)}",
-        "D0",
-        "SVL 0.000",
-        "VL6=0.000",
-        "SVR 0.000",
-        "VL7=0.000",
-        "?%ETK[7]=0",
+    ]
+    if include_full_setup:
+        lines.extend(
+            [
+                "MLV=2",
+                f"%Or[0].ofX={_format_mm(-(state.length + (2.0 * state.origin_x)) * 1000.0)}",
+                _work_origin_y_line(),
+                f"%Or[0].ofZ={_format_mm((state.depth + state.origin_z) * 1000.0)}",
+                "MLV=1",
+                f"SHF[X]={_format_mm(-(state.length + state.origin_x))}",
+                f"SHF[Y]={_format_mm(_base_shf_y(state.origin_y))}",
+                f"SHF[Z]={_format_mm(state.depth + state.origin_z)}",
+                "MLV=2",
+            ]
+        )
+    lines.extend(
+        [
+            "?%ETK[17]=257",
+            f"S{_format_spindle_speed(tool.spindle_speed)}M3",
+            f"?%ETK[1]={tool.mask}",
+            "MLV=2",
+            f"SHF[X]={_format_mm(tool.shf_x)}",
+            f"SHF[Y]={_format_mm(tool.shf_y)}",
+            f"SHF[Z]={_format_mm(tool.shf_z)}",
+            f"G0 X{_format_mm(start_x)} Y{_format_mm(y)}",
+            f"G0 Z{_format_mm(rapid_z)}",
+            "D1",
+            f"SVL {_format_mm(tool.tool_offset_length)}",
+            f"VL6={_format_mm(tool.tool_offset_length)}",
+            f"SVR {_format_mm(tool_radius)}",
+            f"VL7={_format_mm(tool_radius)}",
+            f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.plunge_feed)}",
+            "?%ETK[7]=1",
+            f"G1 X{_format_mm(end_x)} Z{_format_mm(cut_z)} F{_format_mm(tool.milling_feed)}",
+        ]
     )
+    if include_observed_edge_cleanup:
+        edge_reentry_x = start_x - 0.75
+        lines.extend(
+            [
+                f"G1 Z{_format_mm(slot_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
+                f"G1 X{_format_mm(edge_reentry_x)} Z{_format_mm(slot_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
+                f"G1 X{_format_mm(start_x)} Z{_format_mm(slot_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
+                f"G1 Z{_format_mm(slot_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
+                f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.milling_feed)}",
+            ]
+        )
+    lines.extend(
+        [
+            f"G0 Z{_format_mm(slot_milling.security_plane)}",
+            "D0",
+            "SVL 0.000",
+            "VL6=0.000",
+            "SVR 0.000",
+            "VL7=0.000",
+            "?%ETK[7]=0",
+        ]
+    )
+    return tuple(lines)
 
 
 def _slot_milling_y(slot_milling: sp.SlotMillingSpec, tool_radius: float) -> float:
