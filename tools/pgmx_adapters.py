@@ -1314,6 +1314,22 @@ def adapt_pgmx_snapshot(snapshot: PgmxSnapshot) -> PgmxAdaptationResult:
     for step in snapshot.working_steps:
         feature_ref = step.manufacturing_feature_ref
         order_index = len(entries)
+        if feature_ref is not None and feature_ref.id:
+            feature_ids_seen_in_workplan.add(feature_ref.id)
+        if not step.is_enabled:
+            entries.append(
+                _workplan_step_entry_without_feature(
+                    step,
+                    order_index=order_index,
+                    status="ignored",
+                    feature_id=feature_ref.id if feature_ref is not None else "",
+                    operation_id=step.operation_ref.id if step.operation_ref is not None else None,
+                    reasons=[
+                        "El working step esta deshabilitado y Maestro no lo postprocesa."
+                    ],
+                )
+            )
+            continue
         if feature_ref is None or not feature_ref.id:
             entries.append(
                 _workplan_step_entry_without_feature(
@@ -1346,7 +1362,6 @@ def adapt_pgmx_snapshot(snapshot: PgmxSnapshot) -> PgmxAdaptationResult:
             )
             continue
 
-        feature_ids_seen_in_workplan.add(feature.id)
         entries.append(
             _adapt_feature(
                 snapshot,

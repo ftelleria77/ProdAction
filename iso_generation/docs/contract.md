@@ -164,10 +164,17 @@ cubre `Pieza_025..095`: circulos `E004`, polilineas abiertas/cerradas
 El corpus Cocina se usa como corpus real de validacion sin depender del CNC:
 `S:\Maestro\Projects\ProdAction\ISO\Cocina` contra
 `P:\USBMIX\ProdAction\ISO\Cocina`. En el barrido
-`tmp/cocina_iso_generated_20260503_171947`, el emisor genera 8/84 ISO y esos 8
-comparan exactos. Todos son escuadrados standalone `E001`; el resto falla por
-combinaciones pendientes o por taladros de Cocina cuya herramienta publica en
-PGMX aparece como `0`.
+`tmp/cocina_iso_generated_20260504_102634`, el emisor genera y compara exacto
+51/84 ISO. La cobertura actual incluye escuadrados standalone `E001`,
+escuadrados con taladros superiores/laterales observados y taladrado lateral de
+una unica cara inmediatamente despues del perfil. Los 33 restantes fallan por
+guards explicitos de combinaciones aun no abiertas: ranura, polilinea,
+fresado lineal despues de taladros y taladros multicara intercalados.
+
+Los `WorkingStep` deshabilitados se ignoran para emision ISO y tambien se
+marcan como vistos para no reinyectarlos como features huerfanas. Ese
+comportamiento replica Cocina, donde Maestro no postprocesa esos pasos aunque
+las features sigan presentes en el `.pgmx`.
 
 Validacion pendiente: `Pieza_096` y `Pieza_097` replican la polilinea abierta
 de `Pieza_016..017` cambiando la herramienta a `E003`; los `.pgmx` adaptan con

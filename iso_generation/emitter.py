@@ -299,10 +299,21 @@ def emit_iso_program(
                 )
             else:
                 if top_profile_seen and previous is None:
-                    raise IsoEmissionNotImplemented(
-                        "Side drilling directly after top profile milling is not implemented yet."
+                    lines.extend(
+                        _emit_top_profile_to_side_drilling_transition(
+                            source.state,
+                            operation.plane_name,
+                        )
                     )
-                block_lines, previous = _emit_side_drilling(source.state, operation, previous)
+                    top_profile_seen = False
+                    block_lines, previous = _emit_side_drilling(
+                        source.state,
+                        operation,
+                        previous,
+                        include_full_setup=False,
+                    )
+                else:
+                    block_lines, previous = _emit_side_drilling(source.state, operation, previous)
             lines.extend(block_lines)
         last_operation = operations[-1]
         if isinstance(
@@ -341,6 +352,8 @@ def _validate_supported_source(source: PgmxIsoSource) -> None:
             f"Unsupported PGMX entries cannot be emitted yet: {details}"
         )
     for entry in source.adaptation.ignored_entries:
+        if _is_disabled_working_step_entry(entry):
+            continue
         working_step_name = entry.working_step_name.strip().upper()
         if working_step_name not in _SUPPORTED_IGNORED_STEP_NAMES:
             raise IsoEmissionNotImplemented(
@@ -436,6 +449,14 @@ def _validate_supported_source(source: PgmxIsoSource) -> None:
         _validate_supported_drilling(drilling)
 
 
+def _is_disabled_working_step_entry(entry: PgmxAdaptationEntry) -> bool:
+    return (
+        entry.entry_source == "working_step"
+        and entry.status == "ignored"
+        and any("deshabilitado" in reason for reason in entry.reasons)
+    )
+
+
 def _supports_squaring_then(
     source: PgmxIsoSource,
     next_type: (
@@ -499,12 +520,15 @@ def _supports_squaring_then_drilling(source: PgmxIsoSource) -> bool:
     ):
         return False
     operations = _ordered_operations(source)
-    return (
-        len(operations) >= 2
-        and isinstance(operations[0], sp.SquaringMillingSpec)
-        and all(isinstance(operation, sp.DrillingSpec) for operation in operations[1:])
-        and operations[1].plane_name == "Top"
-    )
+    if len(operations) < 2 or not isinstance(operations[0], sp.SquaringMillingSpec):
+        return False
+    drillings = operations[1:]
+    if not all(isinstance(operation, sp.DrillingSpec) for operation in drillings):
+        return False
+    first_plane = drillings[0].plane_name
+    if first_plane == "Top":
+        return True
+    return all(drilling.plane_name == first_plane for drilling in drillings)
 
 
 def _validate_supported_drilling(drilling: sp.DrillingSpec) -> None:
@@ -1264,6 +1288,43 @@ def _emit_top_profile_to_drilling_transition(state: sp.PgmxState) -> tuple[str, 
     )
 
 
+def _emit_top_profile_to_side_drilling_transition(
+    state: sp.PgmxState,
+    plane_name: str,
+) -> tuple[str, ...]:
+    side = load_machine_config().side_drill_tools.get(plane_name)
+    if side is None:
+        raise IsoEmissionNotImplemented(f"Unsupported drilling plane {plane_name!r}.")
+    lines: list[str] = []
+    if plane_name in {"Left", "Back"}:
+        shf_x, shf_y = _side_plane_frame_shift(state, plane_name)
+        lines.extend(
+            [
+                "MLV=1",
+                f"SHF[X]={_format_mm(shf_x)}",
+                f"SHF[Y]={_format_mm(shf_y)}",
+                f"SHF[Z]={_format_mm(state.depth + state.origin_z)}+%ETK[114]/1000",
+            ]
+        )
+    lines.extend(
+        [
+            f"?%ETK[8]={side.etk8}",
+            "G40",
+            "MLV=0",
+            _safe_z_line(),
+            "MLV=2",
+            "G61",
+            "MLV=0",
+            "?%ETK[13]=0",
+            "?%ETK[18]=0",
+            _safe_z_line(),
+            "G64",
+            *_emit_operation_reentry(state),
+        ]
+    )
+    return tuple(lines)
+
+
 def _format_top_full_rapid(point: tuple[float, float, float]) -> str:
     x, y, z = point
     return f"G0 X{_format_mm(x)} Y{_format_mm(y)} Z{_format_mm(z)}"
@@ -1273,6 +1334,8 @@ def _emit_side_drilling(
     state: sp.PgmxState,
     drilling: sp.DrillingSpec,
     previous: _EmissionState | None,
+    *,
+    include_full_setup: bool = True,
 ) -> tuple[tuple[str, ...], _EmissionState]:
     tool = _side_drill_tool(drilling)
     target_depth = drilling.depth_spec.target_depth
@@ -1289,25 +1352,33 @@ def _emit_side_drilling(
         spindle_speed=tool.spindle_speed,
         side_shf_z=tool.shf_z,
         side_group_from_top=(
-            previous is not None
-            and (
-                previous.drilling.plane_name == "Top"
-                or (
-                    previous.drilling.plane_name == drilling.plane_name
-                    and previous.side_group_from_top
+            not include_full_setup
+            or (
+                previous is not None
+                and (
+                    previous.drilling.plane_name == "Top"
+                    or (
+                        previous.drilling.plane_name == drilling.plane_name
+                        and previous.side_group_from_top
+                    )
                 )
             )
         ),
     )
     lines: list[str] = []
     if previous is None:
+        lines.append(f"?%ETK[6]={tool.spindle}")
+        if include_full_setup:
+            lines.extend(
+                [
+                    f"%Or[0].ofX={_format_mm(-(state.length + (2.0 * state.origin_x)) * 1000.0)}",
+                    _work_origin_y_line(),
+                    f"%Or[0].ofZ={_format_mm((state.depth + state.origin_z) * 1000.0)}",
+                    *_emit_primary_work_frame(state, drilling.plane_name),
+                ]
+            )
         lines.extend(
             [
-                f"?%ETK[6]={tool.spindle}",
-                f"%Or[0].ofX={_format_mm(-(state.length + (2.0 * state.origin_x)) * 1000.0)}",
-                _work_origin_y_line(),
-                f"%Or[0].ofZ={_format_mm((state.depth + state.origin_z) * 1000.0)}",
-                *_emit_primary_work_frame(state, drilling.plane_name),
                 "MLV=2",
                 f"SHF[X]={_format_mm(tool.shf_x)}",
                 f"SHF[Y]={_format_mm(tool.shf_y)}",
@@ -1317,11 +1388,14 @@ def _emit_side_drilling(
                 f"?%ETK[0]={tool.mask}",
             ]
         )
-        if _side_uses_short_dwell(drilling):
+        if _side_uses_short_dwell(drilling) or (
+            not include_full_setup and drilling.plane_name == "Left"
+        ):
             lines.append("G4F0.500")
         lines.extend(_emit_side_position_lines(tool, rapid, fixed, drilling.center_y))
         lines.append("?%ETK[7]=3")
-        lines.append("MLV=2")
+        if include_full_setup:
+            lines.append("MLV=2")
     elif previous.drilling.plane_name == drilling.plane_name:
         lines.extend(_emit_operation_reentry(state))
         if drilling.plane_name in {"Front", "Back"}:
@@ -1334,7 +1408,7 @@ def _emit_side_drilling(
             if drilling.plane_name == "Left" and _side_uses_short_dwell(drilling):
                 lines.append("G4F0.500")
             if drilling.plane_name == "Right" and (
-                _side_needs_right_between_dwell(drilling)
+                _side_needs_right_between_dwell(previous, drilling)
                 or _is_repeated_right_pattern(previous.drilling, drilling)
             ):
                 lines.append("G4F0.500")
@@ -1425,7 +1499,12 @@ def _side_uses_short_dwell(drilling: sp.DrillingSpec) -> bool:
     return drilling.plane_name == "Left" and target_depth <= 21.0
 
 
-def _side_needs_right_between_dwell(drilling: sp.DrillingSpec) -> bool:
+def _side_needs_right_between_dwell(
+    previous: _EmissionState,
+    drilling: sp.DrillingSpec,
+) -> bool:
+    if previous.side_group_from_top and _is_close_high_side_pair(previous.drilling, drilling):
+        return False
     target_depth = drilling.depth_spec.target_depth
     return target_depth is not None and target_depth > 10.0
 
@@ -1434,6 +1513,8 @@ def _side_needs_front_back_between_dwell(
     previous: _EmissionState,
     drilling: sp.DrillingSpec,
 ) -> bool:
+    if previous.side_group_from_top and _is_close_high_side_pair(previous.drilling, drilling):
+        return False
     target_depth = drilling.depth_spec.target_depth
     if target_depth is None:
         return False
@@ -1442,6 +1523,18 @@ def _side_needs_front_back_between_dwell(
     if drilling.plane_name == "Front":
         return target_depth >= 29.0
     return target_depth >= 29.0 and previous.side_group_from_top
+
+
+def _is_close_high_side_pair(
+    previous: sp.DrillingSpec,
+    current: sp.DrillingSpec,
+) -> bool:
+    return (
+        previous.plane_name == current.plane_name
+        and current.plane_name in {"Front", "Back", "Right"}
+        and previous.center_x > 100.0
+        and abs(current.center_x - previous.center_x) <= 32.0
+    )
 
 
 def _side_g53_z(

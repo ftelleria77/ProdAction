@@ -538,10 +538,14 @@ comparar exacto `Cocina/mod 5 - Bajo despensero/Tapa_despensero`.
 
 El barrido `Cocina` disponible sin CNC compara
 `S:\Maestro\Projects\ProdAction\ISO\Cocina` contra
-`P:\USBMIX\ProdAction\ISO\Cocina`: el emisor genera 8/84 ISO y esos 8 comparan
-exactos. Los 76 restantes requieren combinaciones de familias y/o resolver
-taladros cuyo PGMX expone herramienta `0` aunque el ISO Maestro selecciona
-mandriles concretos.
+`P:\USBMIX\ProdAction\ISO\Cocina`: el emisor genera 51/84 ISO exactos en
+`tmp/cocina_iso_generated_20260504_102634`, con `0 diff`. Los 33 restantes
+requieren combinaciones de familias aun no abiertas: ranura, polilinea,
+fresado lineal despues de taladros y taladros multicara intercalados.
+
+En Cocina se observo que Maestro no postprocesa `WorkingStep` deshabilitados,
+aunque sus features queden presentes en el `.pgmx`. Para traduccion ISO se
+deben ignorar esos pasos y no reinsertar sus features como huerfanas.
 
 Tambien se generaron `Pieza_096` y `Pieza_097` como repeticion de la polilinea
 abierta de `Pieza_016..017` cambiando herramienta a `E003`. El emisor puede
