@@ -58,6 +58,20 @@
   ],
   "manual_piece_templates": [
     {
+      "id": "11FC3",
+      "name": "Fondo_Cajón",
+      "quantity": 1,
+      "height": null,
+      "width": null,
+      "thickness": null,
+      "color": "BCO18MDF",
+      "grain_direction": "0",
+      "source": "",
+      "f6_source": null,
+      "piece_type": null,
+      "saved_at": "2026-05-04 18:12:48"
+    },
+    {
       "id": "LAT_APL",
       "name": "Lateral_Aplicado",
       "quantity": 1,
@@ -73,10 +87,10 @@
     }
   ],
   "default_paths": {
-    "projects": "S:/Maestro/Projects",
-    "excel_sheets": "P:/PRODUCCION",
-    "cut_diagrams": "P:/PRODUCCION",
-    "cnc_files": "P:/USBMIX"
+    "projects": "S:/Maestro/Projects/ProdAction",
+    "excel_sheets": "P:/PRODUCCION/ProdAction",
+    "cut_diagrams": "P:/PRODUCCION/ProdAction",
+    "cnc_files": "P:/USBMIX/ProdAction"
   },
   "available_herrajes": [
     "Perfil C Superior de Aluminio",

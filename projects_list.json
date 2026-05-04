@@ -1,56 +1,14 @@
 [
   {
-    "project_name": "CajaAspirador",
-    "client_name": "Mobile",
-    "source_folder": "C:/Proyectos/CajaAspirador",
-    "project_data_file": "project.json"
-  },
-  {
-    "project_name": "Mobile 2026-04",
-    "client_name": "Mobile",
-    "source_folder": "S:/Maestro/Projects/Mobile/Fermín/CajaAspirador",
+    "project_name": "Test",
+    "client_name": "",
+    "source_folder": "C:\\Users\\fermi\\AppData\\Local\\Temp\\prodaction_piece_editor_default_3troe2gb",
     "project_data_file": "project.json"
   },
   {
     "project_name": "Prod 26-01-01",
     "client_name": "Cazaux",
-    "source_folder": "C:/Projects/Prod 26-01-01 Cazaux",
-    "project_data_file": "project.json"
-  },
-  {
-    "project_name": "Prod-2026-01",
-    "client_name": "Alejandro Vargas",
-    "source_folder": "S:/Maestro/Projects/Prod-2026-01 - Vargas",
-    "project_data_file": "project.json"
-  },
-  {
-    "project_name": "Prod 2026-02",
-    "client_name": "Vargas",
-    "source_folder": "C:/Proyectos/Prod 01-2026 - Vargas",
-    "project_data_file": "project.json"
-  },
-  {
-    "project_name": "Prod 02-2026",
-    "client_name": "Telleria",
-    "source_folder": "C:/Proyectos/Prod 02-2026 - Telleria",
-    "project_data_file": "project.json"
-  },
-  {
-    "project_name": "Prod-01-2026",
-    "client_name": "Vargas",
-    "source_folder": "S:/Maestro/Projects/Prod-2026-01 - Vargas",
-    "project_data_file": "project.json"
-  },
-  {
-    "project_name": "Prod 2026-03",
-    "client_name": "Mobile",
-    "source_folder": "S:/Maestro/Projects/ProdAction",
-    "project_data_file": "project.json"
-  },
-  {
-    "project_name": "Prod - 2026-02",
-    "client_name": "Mobile",
-    "source_folder": "S:/Maestro/Projects/Prod-2026-02 - Mobile",
+    "source_folder": "S:/Maestro/Projects/ProdAction/Prod 26-01-01 Cazaux",
     "project_data_file": "project.json"
   }
 ]
