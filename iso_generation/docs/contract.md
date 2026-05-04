@@ -116,10 +116,12 @@ cubre circulos `E004` centro/izquierda/derecha, horario/antihorario, PH5 y
 helicoidal; polilineas abiertas `E004` con PH5 y leads `Line/Arc`; y
 polilineas cerradas `E003/E004` con leads, PH5, offset lateral explicito y
 arcos de esquina compensados. La combinacion soportada principal es `E001`
-escuadrado seguido de perfiles superiores `E004`/`E003` observados, y la
+escuadrado seguido de perfiles superiores `E004`/`E003` observados, la
 secuencia observada `E001 + taladros Top + ranura 082` de fondos simples de
-Cocina. Las demas combinaciones entre familias y las demas familias deben
-fallar explicitamente hasta que se agreguen al MVP.
+Cocina y los laterales `Lado_derecho`/`Lado_izquierdo` con polilineas `E001`,
+ranura `082`, taladros Top antes/despues de la ranura y un grupo lateral. Las
+demas combinaciones entre familias y las demas familias deben fallar
+explicitamente hasta que se agreguen al MVP.
 
 Nota de deuda tecnica: parte de `emitter.py` todavia contiene constantes
 aprendidas por comparacion ISO. La regla nueva exige migrar esas constantes a
@@ -165,13 +167,15 @@ cubre `Pieza_025..095`: circulos `E004`, polilineas abiertas/cerradas
 El corpus Cocina se usa como corpus real de validacion sin depender del CNC:
 `S:\Maestro\Projects\ProdAction\ISO\Cocina` contra
 `P:\USBMIX\ProdAction\ISO\Cocina`. En el barrido
-`tmp/cocina_iso_generated_20260504_104354`, el emisor genera y compara exacto
-57/84 ISO. La cobertura actual incluye escuadrados standalone `E001`,
+`tmp/cocina_iso_generated_20260504_complete`, el emisor genera y compara
+exacto 84/84 ISO. La cobertura actual incluye escuadrados standalone `E001`,
 escuadrados con taladros superiores/laterales observados, taladrado lateral de
-una unica cara inmediatamente despues del perfil y 6 fondos simples con
-`E001 + taladros Top + ranura 082`. Los 27 restantes fallan por guards
-explicitos de combinaciones aun no abiertas: ranuras complejas, polilinea,
-fresado lineal despues de taladros y taladros multicara intercalados.
+una unica cara inmediatamente despues del perfil, 6 fondos simples con
+`E001 + taladros Top + ranura 082` y 12 laterales `Lado_derecho`/
+`Lado_izquierdo` con polilineas `E001`, ranura `082`, taladros Top
+antes/despues de la ranura y un grupo lateral, mas los 7 `fajx` con `E001` +
+taladros `Top` y laterales `Left/Right` intercalados, las 7 polilineas `E001`
+de Torre/Alacena y el fresado lineal `E001` de `Divisor_Horiz`.
 
 Los `WorkingStep` deshabilitados se ignoran para emision ISO y tambien se
 marcan como vistos para no reinyectarlos como features huerfanas. Ese

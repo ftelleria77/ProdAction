@@ -35,6 +35,7 @@ class _EmissionState:
     spindle_speed: float
     side_shf_z: float | None = None
     side_group_from_top: bool = False
+    from_slot_profile: bool = False
 
 
 _SupportedOperation = (
@@ -166,6 +167,11 @@ def emit_iso_program(
       Arc/Quote leads.
     - E001 squaring followed by observed top/side drilling sequences.
     - E001 squaring followed by observed top drilling and 082 slot sequences.
+    - Cocina side-panel sequences with E001 reused for top polylines, 082 slot,
+      top drilling and one side-drilling group.
+    - Cocina `fajx` sequences with E001 followed by interleaved Top/Left/Right
+      drilling groups.
+    - Cocina E001 line/polyline sequences after observed drilling groups.
     """
 
     if not isinstance(source, PgmxIsoSource):
@@ -174,6 +180,8 @@ def emit_iso_program(
     _validate_supported_source(source)
     operations = _ordered_operations(source)
     park_x = _source_park_x(source)
+    supports_cocina_line_sequence = _supports_cocina_line_sequence(source)
+    supports_cocina_fajx_sequence = _supports_cocina_fajx_sequence(source)
     lines: list[str] = []
     lines.extend(build_iso_header_lines(source.state, program_name=resolved_program_name))
     if not operations:
@@ -213,9 +221,25 @@ def emit_iso_program(
         )
         previous: _EmissionState | None = None
         top_profile_seen = False
+        last_top_profile: _TopProfileOperation | None = None
         for operation in operations:
+            is_final_operation = operation is operations[-1]
             if isinstance(operation, sp.LineMillingSpec):
                 if previous is not None:
+                    if previous.drilling.plane_name != "Top" and _is_e001_down_up_line(
+                        operation
+                    ):
+                        lines.extend(
+                            _emit_side_drilling_to_router_line_transition(
+                                source.state,
+                                previous,
+                            )
+                        )
+                        lines.extend(_emit_router_line_after_side_drilling(source.state, operation))
+                        previous = None
+                        top_profile_seen = True
+                        last_top_profile = operation
+                        continue
                     raise IsoEmissionNotImplemented(
                         "Line milling after drilling is not implemented yet."
                     )
@@ -229,6 +253,7 @@ def emit_iso_program(
                     )
                 )
                 top_profile_seen = True
+                last_top_profile = operation
                 continue
             if isinstance(operation, sp.SlotMillingSpec):
                 if previous is not None:
@@ -236,17 +261,23 @@ def emit_iso_program(
                         raise IsoEmissionNotImplemented(
                             "Slot milling after side drilling is not implemented yet."
                         )
+                    slot_tool = _slot_milling_tool(operation)
                     lines.extend(_emit_top_drilling_to_slot_transition())
                     lines.extend(
                         _emit_slot_milling(
                             source.state,
                             operation,
                             include_full_setup=False,
-                            include_observed_edge_cleanup=True,
+                            include_head_activation=(
+                                previous.spindle_speed != slot_tool.spindle_speed
+                            ),
+                            include_observed_feed_retract=True,
+                            include_observed_edge_cleanup=operation.side_of_feature == "Right",
                         )
                     )
                     previous = None
                     top_profile_seen = True
+                    last_top_profile = operation
                     continue
                 if top_profile_seen:
                     raise IsoEmissionNotImplemented(
@@ -254,22 +285,51 @@ def emit_iso_program(
                     )
                 lines.extend(_emit_slot_milling(source.state, operation))
                 top_profile_seen = True
+                last_top_profile = operation
                 continue
             if isinstance(operation, sp.PolylineMillingSpec):
                 if previous is not None:
-                    raise IsoEmissionNotImplemented(
-                        "Polyline milling after drilling is not implemented yet."
+                    if previous.drilling.plane_name != "Top" or not _is_e001_down_up_polyline(
+                        operation
+                    ):
+                        raise IsoEmissionNotImplemented(
+                            "Polyline milling after drilling is not implemented yet."
+                        )
+                    lines.extend(_emit_top_drilling_to_router_polyline_transition(source.state))
+                    lines.extend(
+                        _emit_router_polyline_after_top_drilling(
+                            source.state,
+                            operation,
+                        )
                     )
-                if top_profile_seen:
+                    previous = None
+                    top_profile_seen = True
+                    last_top_profile = operation
+                    continue
+                if top_profile_seen and last_top_profile is not None and _can_reuse_router_tool(
+                    last_top_profile,
+                    operation,
+                ):
+                    lines.extend(
+                        _emit_same_router_polyline_milling(
+                            source.state,
+                            operation,
+                            previous_profile=last_top_profile,
+                        )
+                    )
+                elif top_profile_seen:
                     lines.extend(_emit_top_profile_milling_transition(operation))
-                lines.extend(
-                    _emit_polyline_milling(
-                        source.state,
-                        operation,
-                        include_full_setup=not top_profile_seen,
+                    lines.extend(
+                        _emit_polyline_milling(
+                            source.state,
+                            operation,
+                            include_full_setup=False,
+                        )
                     )
-                )
+                else:
+                    lines.extend(_emit_polyline_milling(source.state, operation))
                 top_profile_seen = True
+                last_top_profile = operation
                 continue
             if isinstance(operation, sp.CircleMillingSpec):
                 if previous is not None:
@@ -286,6 +346,7 @@ def emit_iso_program(
                     )
                 )
                 top_profile_seen = True
+                last_top_profile = operation
                 continue
             if isinstance(operation, sp.SquaringMillingSpec):
                 if previous is not None:
@@ -295,14 +356,33 @@ def emit_iso_program(
                 if top_profile_seen:
                     raise IsoEmissionNotImplemented(
                         "Squaring after another profile operation is not implemented yet."
-                    )
+                )
                 lines.extend(_emit_squaring_milling(source.state, operation))
                 top_profile_seen = True
+                last_top_profile = operation
                 continue
             elif operation.plane_name == "Top":
                 include_full_drilling_setup = True
+                force_drilling_spindle_select = False
+                preselected_drilling_spindle = False
+                top_drilling_from_slot = False
+                if previous is not None and previous.drilling.plane_name != "Top":
+                    lines.extend(
+                        _emit_side_to_top_drilling_transition(
+                            source.state,
+                            previous,
+                            operation,
+                        )
+                    )
+                    include_full_drilling_setup = False
+                    preselected_drilling_spindle = True
                 if top_profile_seen and previous is None:
-                    lines.extend(_emit_top_profile_to_drilling_transition(source.state))
+                    if isinstance(last_top_profile, sp.SlotMillingSpec):
+                        lines.extend(_emit_slot_to_top_drilling_transition(source.state))
+                        force_drilling_spindle_select = True
+                        top_drilling_from_slot = True
+                    else:
+                        lines.extend(_emit_top_profile_to_drilling_transition(source.state))
                     top_profile_seen = False
                     include_full_drilling_setup = False
                 block_lines, previous = _emit_top_drilling(
@@ -310,6 +390,9 @@ def emit_iso_program(
                     operation,
                     previous,
                     include_full_setup=include_full_drilling_setup,
+                    force_spindle_select=force_drilling_spindle_select,
+                    preselected_spindle=preselected_drilling_spindle,
+                    from_slot_profile=top_drilling_from_slot,
                 )
             else:
                 if top_profile_seen and previous is None:
@@ -325,9 +408,17 @@ def emit_iso_program(
                         operation,
                         previous,
                         include_full_setup=False,
+                        is_final_operation=is_final_operation,
+                        force_back_between_dwell=supports_cocina_line_sequence,
                     )
                 else:
-                    block_lines, previous = _emit_side_drilling(source.state, operation, previous)
+                    block_lines, previous = _emit_side_drilling(
+                        source.state,
+                        operation,
+                        previous,
+                        is_final_operation=is_final_operation,
+                        force_back_between_dwell=supports_cocina_line_sequence,
+                    )
             lines.extend(block_lines)
         last_operation = operations[-1]
         if isinstance(
@@ -343,7 +434,10 @@ def emit_iso_program(
         elif isinstance(last_operation, sp.SlotMillingSpec):
             lines.extend(_emit_slot_milling_program_end(park_x))
         else:
-            lines.extend(_emit_program_end(source.state, last_operation.plane_name, park_x))
+            if supports_cocina_fajx_sequence:
+                lines.extend(_emit_cocina_fajx_program_end(park_x))
+            else:
+                lines.extend(_emit_program_end(source.state, last_operation.plane_name, park_x))
     return IsoProgram(
         program_name=resolved_program_name,
         lines=tuple(lines),
@@ -387,8 +481,12 @@ def _validate_supported_source(source: PgmxIsoSource) -> None:
     supports_squaring_top_drilling_then_slot = (
         _supports_squaring_top_drilling_then_slot(source)
     )
+    supports_cocina_lado_sequence = _supports_cocina_lado_sequence(source)
+    supports_cocina_polyline_sequence = _supports_cocina_polyline_sequence(source)
+    supports_cocina_line_sequence = _supports_cocina_line_sequence(source)
+    supports_cocina_fajx_sequence = _supports_cocina_fajx_sequence(source)
     if source.adaptation.line_millings:
-        if not supports_squaring_then_line and (
+        if not (supports_squaring_then_line or supports_cocina_line_sequence) and (
             len(source.adaptation.line_millings) != 1
             or source.adaptation.drillings
             or source.adaptation.drilling_patterns
@@ -399,9 +497,15 @@ def _validate_supported_source(source: PgmxIsoSource) -> None:
             raise IsoEmissionNotImplemented(
                 "The initial line milling emitter supports one standalone line."
             )
-        _validate_supported_line_milling(source.adaptation.line_millings[0])
+        _validate_supported_line_milling(
+            source.adaptation.line_millings[0],
+            allow_e001=supports_cocina_line_sequence,
+        )
     if source.adaptation.slot_millings:
-        if not supports_squaring_top_drilling_then_slot and (
+        if not (
+            supports_squaring_top_drilling_then_slot
+            or supports_cocina_lado_sequence
+        ) and (
             len(source.adaptation.slot_millings) != 1
             or source.adaptation.drillings
             or source.adaptation.drilling_patterns
@@ -414,7 +518,11 @@ def _validate_supported_source(source: PgmxIsoSource) -> None:
             )
         _validate_supported_slot_milling(source.adaptation.slot_millings[0])
     if source.adaptation.polyline_millings:
-        if not supports_squaring_then_polyline and (
+        if not (
+            supports_squaring_then_polyline
+            or supports_cocina_lado_sequence
+            or supports_cocina_polyline_sequence
+        ) and (
             len(source.adaptation.polyline_millings) != 1
             or source.adaptation.drillings
             or source.adaptation.drilling_patterns
@@ -425,7 +533,12 @@ def _validate_supported_source(source: PgmxIsoSource) -> None:
             raise IsoEmissionNotImplemented(
                 "The initial polyline milling emitter supports one standalone polyline."
             )
-        _validate_supported_polyline_milling(source.adaptation.polyline_millings[0])
+        for polyline_milling in source.adaptation.polyline_millings:
+            _validate_supported_polyline_milling(
+                polyline_milling,
+                allow_e001=supports_cocina_lado_sequence
+                or supports_cocina_polyline_sequence,
+            )
     if source.adaptation.circle_millings:
         if not supports_squaring_then_circle and (
             len(source.adaptation.circle_millings) != 1
@@ -447,6 +560,10 @@ def _validate_supported_source(source: PgmxIsoSource) -> None:
             or supports_squaring_then_circle
             or supports_squaring_then_drilling
             or supports_squaring_top_drilling_then_slot
+            or supports_cocina_lado_sequence
+            or supports_cocina_polyline_sequence
+            or supports_cocina_line_sequence
+            or supports_cocina_fajx_sequence
         ) and (
             len(source.adaptation.squaring_millings) != 1
             or source.adaptation.drillings
@@ -574,6 +691,157 @@ def _supports_squaring_top_drilling_then_slot(source: PgmxIsoSource) -> bool:
     )
 
 
+def _supports_cocina_lado_sequence(source: PgmxIsoSource) -> bool:
+    adaptation = source.adaptation
+    if (
+        len(adaptation.squaring_millings) != 1
+        or len(adaptation.slot_millings) != 1
+        or not adaptation.polyline_millings
+        or not adaptation.drillings
+        or adaptation.drilling_patterns
+        or adaptation.line_millings
+        or adaptation.circle_millings
+    ):
+        return False
+    slot = adaptation.slot_millings[0]
+    if slot.side_of_feature not in {"Left", "Right"}:
+        return False
+    operations = _ordered_operations(source)
+    if len(operations) < 6 or not isinstance(operations[0], sp.SquaringMillingSpec):
+        return False
+    index = 1
+    seen_polyline = False
+    top_drills_before_slot = 0
+    while index < len(operations) and operations[index] is not slot:
+        operation = operations[index]
+        if isinstance(operation, sp.PolylineMillingSpec):
+            if not _is_e001_down_up_polyline(operation):
+                return False
+            seen_polyline = True
+        elif isinstance(operation, sp.DrillingSpec):
+            if operation.plane_name != "Top":
+                return False
+            top_drills_before_slot += 1
+        else:
+            return False
+        index += 1
+    if not seen_polyline or top_drills_before_slot == 0:
+        return False
+    if index >= len(operations) or operations[index] is not slot:
+        return False
+    index += 1
+    top_drills_after_slot = 0
+    while index < len(operations) and isinstance(operations[index], sp.DrillingSpec):
+        if operations[index].plane_name != "Top":
+            break
+        top_drills_after_slot += 1
+        index += 1
+    if top_drills_after_slot == 0:
+        return False
+    side_drills = operations[index:]
+    if not side_drills or not all(isinstance(operation, sp.DrillingSpec) for operation in side_drills):
+        return False
+    first_side = side_drills[0].plane_name
+    return first_side != "Top" and all(drilling.plane_name == first_side for drilling in side_drills)
+
+
+def _supports_cocina_polyline_sequence(source: PgmxIsoSource) -> bool:
+    adaptation = source.adaptation
+    if (
+        len(adaptation.squaring_millings) != 1
+        or not adaptation.polyline_millings
+        or not adaptation.drillings
+        or adaptation.drilling_patterns
+        or adaptation.line_millings
+        or adaptation.slot_millings
+        or adaptation.circle_millings
+    ):
+        return False
+    operations = _ordered_operations(source)
+    if len(operations) < 4 or not isinstance(operations[0], sp.SquaringMillingSpec):
+        return False
+    seen_top_drilling = False
+    seen_polyline = False
+    seen_side_drilling = False
+    for operation in operations[1:]:
+        if isinstance(operation, sp.PolylineMillingSpec):
+            if not _is_e001_down_up_polyline(operation):
+                return False
+            seen_polyline = True
+            continue
+        if isinstance(operation, sp.DrillingSpec):
+            if operation.plane_name == "Top":
+                if seen_side_drilling:
+                    return False
+                seen_top_drilling = True
+                continue
+            if operation.plane_name not in {"Left", "Right"}:
+                return False
+            if not seen_polyline:
+                return False
+            seen_side_drilling = True
+            continue
+        return False
+    return seen_top_drilling and seen_polyline
+
+
+def _supports_cocina_line_sequence(source: PgmxIsoSource) -> bool:
+    adaptation = source.adaptation
+    if (
+        len(adaptation.squaring_millings) != 1
+        or len(adaptation.line_millings) != 1
+        or not adaptation.drillings
+        or adaptation.drilling_patterns
+        or adaptation.slot_millings
+        or adaptation.polyline_millings
+        or adaptation.circle_millings
+    ):
+        return False
+    operations = _ordered_operations(source)
+    if len(operations) < 4:
+        return False
+    if not isinstance(operations[0], sp.SquaringMillingSpec):
+        return False
+    if not isinstance(operations[-1], sp.LineMillingSpec) or not _is_e001_down_up_line(
+        operations[-1]
+    ):
+        return False
+    drillings = operations[1:-1]
+    return bool(drillings) and all(
+        isinstance(operation, sp.DrillingSpec)
+        and operation.plane_name in {"Top", "Front", "Back"}
+        for operation in drillings
+    )
+
+
+def _supports_cocina_fajx_sequence(source: PgmxIsoSource) -> bool:
+    adaptation = source.adaptation
+    if (
+        len(adaptation.squaring_millings) != 1
+        or not adaptation.drillings
+        or adaptation.drilling_patterns
+        or adaptation.line_millings
+        or adaptation.slot_millings
+        or adaptation.polyline_millings
+        or adaptation.circle_millings
+    ):
+        return False
+    operations = _ordered_operations(source)
+    if len(operations) < 4 or not isinstance(operations[0], sp.SquaringMillingSpec):
+        return False
+    drillings = operations[1:]
+    if not all(isinstance(operation, sp.DrillingSpec) for operation in drillings):
+        return False
+    planes = [drilling.plane_name for drilling in drillings]
+    return (
+        drillings[-1].plane_name == "Right"
+        and "Top" in planes
+        and "Left" in planes
+        and "Right" in planes
+        and all(plane in {"Top", "Left", "Right"} for plane in planes)
+    )
+
+
 def _validate_supported_drilling(drilling: sp.DrillingSpec) -> None:
     if drilling.plane_name != "Top":
         _side_drill_tool(drilling)
@@ -583,8 +851,12 @@ def _validate_supported_drilling(drilling: sp.DrillingSpec) -> None:
         raise IsoEmissionNotImplemented("Drilling needs a target depth.")
 
 
-def _validate_supported_line_milling(line_milling: sp.LineMillingSpec) -> None:
-    _line_milling_tool(line_milling)
+def _validate_supported_line_milling(
+    line_milling: sp.LineMillingSpec,
+    *,
+    allow_e001: bool = False,
+) -> None:
+    _line_milling_tool(line_milling, allow_e001=allow_e001)
     if line_milling.plane_name != "Top":
         raise IsoEmissionNotImplemented("Line milling supports only the Top plane.")
     if line_milling.side_of_feature not in {"Center", "Left", "Right"}:
@@ -593,9 +865,10 @@ def _validate_supported_line_milling(line_milling: sp.LineMillingSpec) -> None:
         )
     if _line_milling_axis(line_milling) is None:
         raise IsoEmissionNotImplemented("Line milling supports only axis-aligned lines.")
-    if (
-        line_milling.approach.is_enabled or line_milling.retract.is_enabled
-    ) and not _line_milling_has_quote_lines(line_milling):
+    has_supported_leads = _line_milling_has_quote_lines(line_milling) or (
+        allow_e001 and _line_milling_has_down_up_lines(line_milling)
+    )
+    if (line_milling.approach.is_enabled or line_milling.retract.is_enabled) and not has_supported_leads:
         raise IsoEmissionNotImplemented(
             "Line milling approach/retract curves are not implemented yet."
         )
@@ -603,7 +876,7 @@ def _validate_supported_line_milling(line_milling: sp.LineMillingSpec) -> None:
     if (
         strategy is None
         and line_milling.side_of_feature != "Center"
-        and not _line_milling_has_quote_lines(line_milling)
+        and not has_supported_leads
     ):
         raise IsoEmissionNotImplemented(
             "Line milling side compensation needs the observed Line/Quote leads."
@@ -653,8 +926,12 @@ def _validate_supported_slot_milling(slot_milling: sp.SlotMillingSpec) -> None:
         )
 
 
-def _validate_supported_polyline_milling(polyline_milling: sp.PolylineMillingSpec) -> None:
-    _polyline_milling_tool(polyline_milling)
+def _validate_supported_polyline_milling(
+    polyline_milling: sp.PolylineMillingSpec,
+    *,
+    allow_e001: bool = False,
+) -> None:
+    _polyline_milling_tool(polyline_milling, allow_e001=allow_e001)
     if polyline_milling.plane_name != "Top":
         raise IsoEmissionNotImplemented("Polyline milling supports only the Top plane.")
     if polyline_milling.side_of_feature not in {"Center", "Left", "Right"}:
@@ -898,7 +1175,7 @@ def _ordered_operations(source: PgmxIsoSource) -> tuple[_SupportedOperation, ...
             end += 1
         group = raw[index:end]
         if plane_name == "Top":
-            group = _order_top_drilling_runs(group)
+            group = _order_top_drilling_runs(group, force_order_drilling_runs=bool(ordered))
         elif all(isinstance(operation, sp.DrillingSpec) for operation in group):
             group = _order_side_drilling_group(group)
         ordered.extend(group)
@@ -906,7 +1183,11 @@ def _ordered_operations(source: PgmxIsoSource) -> tuple[_SupportedOperation, ...
     return tuple(ordered)
 
 
-def _order_top_drilling_runs(group: list[_SupportedOperation]) -> list[_SupportedOperation]:
+def _order_top_drilling_runs(
+    group: list[_SupportedOperation],
+    *,
+    force_order_drilling_runs: bool = False,
+) -> list[_SupportedOperation]:
     ordered: list[_SupportedOperation] = []
     index = 0
     profile_seen = False
@@ -922,7 +1203,7 @@ def _order_top_drilling_runs(group: list[_SupportedOperation]) -> list[_Supporte
         while end < len(group) and isinstance(group[end], sp.DrillingSpec):
             end += 1
         drilling_run = group[index:end]
-        if profile_seen:
+        if profile_seen or force_order_drilling_runs:
             ordered.extend(_order_top_drilling_group(drilling_run))
         else:
             ordered.extend(drilling_run)
@@ -1210,6 +1491,9 @@ def _emit_top_drilling(
     previous: _EmissionState | None,
     *,
     include_full_setup: bool = True,
+    force_spindle_select: bool = False,
+    preselected_spindle: bool = False,
+    from_slot_profile: bool = False,
 ) -> tuple[tuple[str, ...], _EmissionState]:
     tool = _top_drill_tool(drilling)
     rapid_z = state.depth + drilling.security_plane + tool.tool_offset_length
@@ -1221,8 +1505,18 @@ def _emit_top_drilling(
         spindle=tool.spindle,
         mask=tool.mask,
         spindle_speed=tool.spindle_speed,
+        from_slot_profile=(
+            from_slot_profile
+            or (
+                previous is not None
+                and previous.drilling.plane_name == "Top"
+                and previous.from_slot_profile
+            )
+        ),
     )
     lines: list[str] = []
+    if previous is not None and previous.drilling.plane_name != drilling.plane_name:
+        previous = None
     if previous is None:
         if include_full_setup:
             lines.extend(
@@ -1244,7 +1538,7 @@ def _emit_top_drilling(
                 ]
             )
         else:
-            if tool.spindle != 1:
+            if not preselected_spindle and (force_spindle_select or tool.spindle != 1):
                 lines.append(f"?%ETK[6]={tool.spindle}")
             lines.extend(
                 [
@@ -1331,6 +1625,115 @@ def _emit_top_profile_to_drilling_transition(state: sp.PgmxState) -> tuple[str, 
     )
 
 
+def _emit_slot_to_top_drilling_transition(state: sp.PgmxState) -> tuple[str, ...]:
+    return (
+        "?%ETK[8]=1",
+        "G40",
+        "MLV=0",
+        _safe_z_line(),
+        "MLV=2",
+        "?%ETK[1]=0",
+        *_emit_operation_reentry(state),
+    )
+
+
+def _emit_side_to_top_drilling_transition(
+    state: sp.PgmxState,
+    previous: _EmissionState,
+    drilling: sp.DrillingSpec,
+) -> tuple[str, ...]:
+    tool = _top_drill_tool(drilling)
+    frame = load_machine_config().frame
+    side_z = previous.side_shf_z or 0.0
+    lines: list[str] = []
+    if previous.drilling.plane_name in {"Left", "Back"}:
+        lines.extend(
+            [
+                "MLV=1",
+                f"SHF[X]={_format_mm(-(state.length + state.origin_x))}",
+                f"SHF[Y]={_format_mm(_base_shf_y(state.origin_y))}",
+                f"SHF[Z]={_format_mm(state.depth + state.origin_z)}+%ETK[114]/1000",
+            ]
+        )
+    lines.extend(
+        [
+            "?%ETK[8]=1",
+            "G40",
+            "MLV=1",
+            f"SHF[Z]={_format_mm(state.origin_z)}+%ETK[114]/1000",
+            "MLV=2",
+            "G17",
+            f"?%ETK[6]={tool.spindle}",
+            "MLV=0",
+            f"G0 G53 Z{_format_mm(state.depth + state.origin_z + frame.side_g53_clearance + side_z)}",
+            "MLV=2",
+        ]
+    )
+    return tuple(lines)
+
+
+def _emit_top_drilling_to_router_polyline_transition(state: sp.PgmxState) -> tuple[str, ...]:
+    return (
+        "?%ETK[7]=0",
+        "?%ETK[8]=1",
+        "G40",
+        "?%ETK[17]=0",
+        "M5",
+        "?%ETK[0]=0",
+        "MLV=0",
+        _safe_z_line(),
+        "MLV=2",
+        "MLV=0",
+        _safe_z_line(),
+        "MLV=0",
+        "T1",
+        "SYN",
+        "M06",
+        "G61",
+        _safe_z_line(),
+        "G64",
+    )
+
+
+def _emit_side_drilling_to_router_line_transition(
+    state: sp.PgmxState,
+    previous: _EmissionState,
+) -> tuple[str, ...]:
+    lines: list[str] = []
+    if previous.drilling.plane_name in {"Left", "Back"}:
+        lines.extend(
+            [
+                "MLV=1",
+                f"SHF[X]={_format_mm(-(state.length + state.origin_x))}",
+                f"SHF[Y]={_format_mm(_base_shf_y(state.origin_y))}",
+                f"SHF[Z]={_format_mm(state.depth + state.origin_z)}+%ETK[114]/1000",
+            ]
+        )
+    lines.extend(
+        [
+            "?%ETK[7]=0",
+            "?%ETK[8]=1",
+            "G40",
+            "?%ETK[17]=0",
+            "M5",
+            "?%ETK[0]=0",
+            "MLV=0",
+            _safe_z_line(),
+            "MLV=2",
+            "MLV=0",
+            _safe_z_line(),
+            "MLV=0",
+            "T1",
+            "SYN",
+            "M06",
+            "G61",
+            _safe_z_line(),
+            "G64",
+        ]
+    )
+    return tuple(lines)
+
+
 def _emit_top_drilling_to_slot_transition() -> tuple[str, ...]:
     return (
         "?%ETK[8]=1",
@@ -1390,6 +1793,8 @@ def _emit_side_drilling(
     previous: _EmissionState | None,
     *,
     include_full_setup: bool = True,
+    is_final_operation: bool = False,
+    force_back_between_dwell: bool = False,
 ) -> tuple[tuple[str, ...], _EmissionState]:
     tool = _side_drill_tool(drilling)
     target_depth = drilling.depth_spec.target_depth
@@ -1415,6 +1820,16 @@ def _emit_side_drilling(
                         previous.drilling.plane_name == drilling.plane_name
                         and previous.side_group_from_top
                     )
+                )
+            )
+        ),
+        from_slot_profile=(
+            previous is not None
+            and (
+                (previous.drilling.plane_name == "Top" and previous.from_slot_profile)
+                or (
+                    previous.drilling.plane_name == drilling.plane_name
+                    and previous.from_slot_profile
                 )
             )
         ),
@@ -1454,15 +1869,29 @@ def _emit_side_drilling(
         lines.extend(_emit_operation_reentry(state))
         if drilling.plane_name in {"Front", "Back"}:
             lines.extend(["MLV=0", _safe_z_line(), "MLV=2"])
-            if _side_needs_front_back_between_dwell(previous, drilling):
+            if _side_needs_front_back_between_dwell(
+                previous,
+                drilling,
+                force_back_between_dwell=force_back_between_dwell,
+            ):
                 lines.append("G4F0.500")
             lines.extend(_emit_side_position_lines(tool, rapid, fixed, drilling.center_y))
         else:
             lines.append(_format_side_full_rapid(previous.rapid_point))
-            if drilling.plane_name == "Left" and _side_uses_short_dwell(drilling):
+            if drilling.plane_name == "Left" and _side_needs_left_between_dwell(
+                previous,
+                drilling,
+            ):
                 lines.append("G4F0.500")
             if drilling.plane_name == "Right" and (
-                _side_needs_right_between_dwell(previous, drilling)
+                (
+                    not _skip_final_right_high_dwell(
+                        previous,
+                        drilling,
+                        is_final_operation=is_final_operation,
+                    )
+                    and _side_needs_right_between_dwell(previous, drilling)
+                )
                 or _is_repeated_right_pattern(previous.drilling, drilling)
             ):
                 lines.append("G4F0.500")
@@ -1559,14 +1988,75 @@ def _side_needs_right_between_dwell(
 ) -> bool:
     if previous.side_group_from_top and _is_close_high_side_pair(previous.drilling, drilling):
         return False
+    previous_depth = previous.drilling.depth_spec.target_depth
     target_depth = drilling.depth_spec.target_depth
+    if (
+        previous.from_slot_profile
+        and previous_depth is not None
+        and target_depth is not None
+        and target_depth > previous_depth
+    ):
+        return False
+    if (
+        previous_depth is not None
+        and target_depth is not None
+        and target_depth > previous_depth
+        and previous.drilling.center_x < 100.0
+    ):
+        return False
     return target_depth is not None and target_depth > 10.0
+
+
+def _skip_final_right_high_dwell(
+    previous: _EmissionState,
+    drilling: sp.DrillingSpec,
+    *,
+    is_final_operation: bool,
+) -> bool:
+    previous_depth = previous.drilling.depth_spec.target_depth
+    target_depth = drilling.depth_spec.target_depth
+    return (
+        is_final_operation
+        and previous.side_group_from_top
+        and previous.drilling.plane_name == "Right"
+        and drilling.plane_name == "Right"
+        and previous_depth is not None
+        and target_depth is not None
+        and target_depth > previous_depth
+        and drilling.center_x > previous.drilling.center_x
+        and abs(drilling.center_x - previous.drilling.center_x) <= 64.0
+    )
+
+
+def _side_needs_left_between_dwell(
+    previous: _EmissionState,
+    drilling: sp.DrillingSpec,
+) -> bool:
+    target_depth = drilling.depth_spec.target_depth
+    if target_depth is None:
+        return False
+    if (
+        target_depth >= 28.0
+        and drilling.center_x < previous.drilling.center_x
+        and drilling.center_x <= 32.0
+    ):
+        return False
+    return True
 
 
 def _side_needs_front_back_between_dwell(
     previous: _EmissionState,
     drilling: sp.DrillingSpec,
+    *,
+    force_back_between_dwell: bool = False,
 ) -> bool:
+    if (
+        force_back_between_dwell
+        and drilling.plane_name == "Back"
+        and previous.drilling.plane_name == "Back"
+        and drilling.center_x < previous.drilling.center_x
+    ):
+        return True
     if previous.side_group_from_top and _is_close_high_side_pair(previous.drilling, drilling):
         return False
     target_depth = drilling.depth_spec.target_depth
@@ -1612,10 +2102,15 @@ def _is_repeated_right_pattern(
     previous: sp.DrillingSpec,
     current: sp.DrillingSpec,
 ) -> bool:
+    previous_depth = previous.depth_spec.target_depth
+    current_depth = current.depth_spec.target_depth
     return (
         current.plane_name == "Right"
         and previous.plane_name == "Right"
         and previous.feature_name == current.feature_name
+        and previous_depth is not None
+        and current_depth is not None
+        and current_depth <= previous_depth
         and current.center_x > previous.center_x
         and (current.center_x - previous.center_x) <= 32.0
         and previous.center_x < 100.0
@@ -1688,6 +2183,72 @@ def _emit_side_retract_line(
 def _format_side_full_rapid(point: tuple[float, float, float]) -> str:
     x, y, z = point
     return f"G0 X{_format_mm(x)} Y{_format_mm(y)} Z{_format_mm(z)}"
+
+
+def _emit_router_line_after_side_drilling(
+    state: sp.PgmxState,
+    line_milling: sp.LineMillingSpec,
+) -> tuple[str, ...]:
+    tool = _line_milling_tool(line_milling, allow_e001=True)
+    rapid_z = line_milling.security_plane + tool.tool_offset_length
+    cut_z = _line_milling_cut_z(state, line_milling)
+    tool_radius = line_milling.tool_width / 2.0
+    start_point, end_point = _line_milling_toolpath_points(line_milling, 0.0)
+    unit_x, unit_y = _unit_vector(start_point, end_point)
+    lead_start = _line_milling_line_lead_start(line_milling, start_point, end_point)
+    lead_exit = _line_milling_line_lead_exit(line_milling, start_point, end_point)
+    compensation = _line_milling_compensation(line_milling)
+    if compensation is None:
+        raise IsoEmissionNotImplemented("E001 line after side drilling needs compensation.")
+    rapid_point = (lead_start[0] - unit_x, lead_start[1] - unit_y)
+    clearance_point = (lead_exit[0] + unit_x, lead_exit[1] + unit_y)
+    lines: list[str] = [
+        f"?%ETK[6]={tool.spindle}",
+        f"?%ETK[18]={tool.etk18}",
+        f"S{_format_spindle_speed(tool.spindle_speed)}M3",
+        "G17",
+        "MLV=2",
+        "?%ETK[13]=1",
+        "MLV=2",
+        f"SHF[X]={_format_mm(tool.shf_x)}",
+        f"SHF[Y]={_format_mm(tool.shf_y)}",
+        f"SHF[Z]={_format_mm(tool.shf_z)}",
+        f"G0 X{_format_mm(rapid_point[0])} Y{_format_mm(rapid_point[1])}",
+        f"G0 Z{_format_mm(rapid_z)}",
+        "D1",
+        f"SVL {_format_mm(rapid_z - line_milling.security_plane)}",
+        f"VL6={_format_mm(rapid_z - line_milling.security_plane)}",
+        f"SVR {_format_mm(tool_radius)}",
+        f"VL7={_format_mm(tool_radius)}",
+        "?%ETK[7]=4",
+        compensation,
+        _format_polyline_xyz_move(
+            lead_start,
+            line_milling.security_plane,
+            tool.plunge_feed,
+        ),
+        _emit_line_milling_point_move(line_milling, start_point, cut_z, tool.plunge_feed),
+        _emit_line_milling_point_move(line_milling, end_point, cut_z, tool.milling_feed),
+        _emit_line_milling_point_move(
+            line_milling,
+            lead_exit,
+            line_milling.security_plane,
+            tool.milling_feed,
+        ),
+        "G40",
+        _format_polyline_xyz_move(
+            clearance_point,
+            line_milling.security_plane,
+            tool.milling_feed,
+        ),
+        "D0",
+        "SVL 0.000",
+        "VL6=0.000",
+        "SVR 0.000",
+        "VL7=0.000",
+        "?%ETK[7]=0",
+    ]
+    return tuple(lines)
 
 
 def _emit_line_milling(
@@ -2151,6 +2712,19 @@ def _line_milling_axis(line_milling: sp.LineMillingSpec) -> str | None:
 
 
 def _line_milling_has_quote_lines(line_milling: sp.LineMillingSpec) -> bool:
+    return _line_milling_has_line_leads(line_milling, approach_mode="Quote", retract_mode="Quote")
+
+
+def _line_milling_has_down_up_lines(line_milling: sp.LineMillingSpec) -> bool:
+    return _line_milling_has_line_leads(line_milling, approach_mode="Down", retract_mode="Up")
+
+
+def _line_milling_has_line_leads(
+    line_milling: sp.LineMillingSpec,
+    *,
+    approach_mode: str,
+    retract_mode: str,
+) -> bool:
     approach = line_milling.approach
     retract = line_milling.retract
     return (
@@ -2158,14 +2732,40 @@ def _line_milling_has_quote_lines(line_milling: sp.LineMillingSpec) -> bool:
         and retract.is_enabled
         and approach.approach_type == "Line"
         and retract.retract_type == "Line"
-        and approach.mode == "Quote"
-        and retract.mode == "Quote"
-        and round(float(approach.radius_multiplier), 3) == 2.0
-        and round(float(retract.radius_multiplier), 3) == 2.0
+        and approach.mode == approach_mode
+        and retract.mode == retract_mode
+        and round(float(approach.radius_multiplier), 3) in {2.0, 4.0}
+        and round(float(retract.radius_multiplier), 3) in {2.0, 4.0}
         and round(float(approach.speed), 3) == -1.0
         and round(float(retract.speed), 3) == -1.0
         and round(float(retract.overlap), 3) == 0.0
     )
+
+
+def _line_milling_lead_radius(line_milling: sp.LineMillingSpec) -> float:
+    if line_milling.approach.is_enabled:
+        return (line_milling.tool_width / 2.0) * line_milling.approach.radius_multiplier
+    return line_milling.tool_width / 2.0
+
+
+def _line_milling_line_lead_start(
+    line_milling: sp.LineMillingSpec,
+    start_point: tuple[float, float],
+    end_point: tuple[float, float],
+) -> tuple[float, float]:
+    unit_x, unit_y = _unit_vector(start_point, end_point)
+    radius = _line_milling_lead_radius(line_milling)
+    return start_point[0] - (unit_x * radius), start_point[1] - (unit_y * radius)
+
+
+def _line_milling_line_lead_exit(
+    line_milling: sp.LineMillingSpec,
+    start_point: tuple[float, float],
+    end_point: tuple[float, float],
+) -> tuple[float, float]:
+    unit_x, unit_y = _unit_vector(start_point, end_point)
+    radius = _line_milling_lead_radius(line_milling)
+    return end_point[0] + (unit_x * radius), end_point[1] + (unit_y * radius)
 
 
 def _line_milling_toolpath_points(
@@ -2957,6 +3557,208 @@ def _circle_has_arc_leads(
     )
 
 
+def _can_reuse_router_tool(
+    previous: _TopProfileOperation,
+    current: _TopProfileOperation,
+) -> bool:
+    if not isinstance(current, sp.PolylineMillingSpec):
+        return False
+    if not isinstance(previous, (sp.SquaringMillingSpec, sp.PolylineMillingSpec)):
+        return False
+    return (
+        _resolved_router_tool_name(previous) == "E001"
+        and _resolved_router_tool_name(current) == "E001"
+        and current.milling_strategy is None
+        and _polyline_has_down_up_arcs(current)
+    )
+
+
+def _is_e001_down_up_polyline(polyline_milling: sp.PolylineMillingSpec) -> bool:
+    return (
+        _resolved_router_tool_name(polyline_milling) == "E001"
+        and polyline_milling.plane_name == "Top"
+        and polyline_milling.milling_strategy is None
+        and (
+            _polyline_has_down_up_arcs(polyline_milling)
+            or _polyline_has_down_up_lines(polyline_milling)
+        )
+    )
+
+
+def _is_e001_down_up_line(line_milling: sp.LineMillingSpec) -> bool:
+    return (
+        _resolved_router_tool_name(line_milling) == "E001"
+        and line_milling.plane_name == "Top"
+        and line_milling.milling_strategy is None
+        and _line_milling_has_down_up_lines(line_milling)
+    )
+
+
+def _emit_router_polyline_after_top_drilling(
+    state: sp.PgmxState,
+    polyline_milling: sp.PolylineMillingSpec,
+) -> tuple[str, ...]:
+    tool = _polyline_milling_tool(polyline_milling, allow_e001=True)
+    rapid_z = polyline_milling.security_plane + tool.tool_offset_length
+    cut_z = _polyline_milling_cut_z(state, polyline_milling)
+    tool_radius = polyline_milling.tool_width / 2.0
+    compensation = _polyline_compensation(polyline_milling)
+    if compensation is None:
+        raise IsoEmissionNotImplemented("E001 polyline after drilling needs compensation.")
+    rapid_point = _polyline_rapid_point(polyline_milling, compensation)
+    lines: list[str] = [
+        f"?%ETK[6]={tool.spindle}",
+        f"?%ETK[18]={tool.etk18}",
+        f"S{_format_spindle_speed(tool.spindle_speed)}M3",
+        "G17",
+        "MLV=2",
+        "?%ETK[13]=1",
+        "MLV=2",
+        f"SHF[X]={_format_mm(tool.shf_x)}",
+        f"SHF[Y]={_format_mm(tool.shf_y)}",
+        f"SHF[Z]={_format_mm(tool.shf_z)}",
+        f"G0 X{_format_mm(rapid_point[0])} Y{_format_mm(rapid_point[1])}",
+        f"G0 Z{_format_mm(rapid_z)}",
+        "D1",
+        f"SVL {_format_mm(rapid_z - polyline_milling.security_plane)}",
+        f"VL6={_format_mm(rapid_z - polyline_milling.security_plane)}",
+        f"SVR {_format_mm(tool_radius)}",
+        f"VL7={_format_mm(tool_radius)}",
+    ]
+    lines.extend(
+        _emit_e001_polyline_lead_single_pass(
+            polyline_milling,
+            tool,
+            cut_z,
+            rapid_point,
+            compensation,
+        )
+    )
+    lines.extend(
+        [
+            "D0",
+            "SVL 0.000",
+            "VL6=0.000",
+            "SVR 0.000",
+            "VL7=0.000",
+            "?%ETK[7]=0",
+        ]
+    )
+    return tuple(lines)
+
+
+def _emit_same_router_polyline_milling(
+    state: sp.PgmxState,
+    polyline_milling: sp.PolylineMillingSpec,
+    *,
+    previous_profile: _TopProfileOperation,
+) -> tuple[str, ...]:
+    tool = _polyline_milling_tool(polyline_milling, allow_e001=True)
+    rapid_z = polyline_milling.security_plane + tool.tool_offset_length
+    cut_z = _polyline_milling_cut_z(state, polyline_milling)
+    tool_radius = polyline_milling.tool_width / 2.0
+    compensation = _polyline_compensation(polyline_milling)
+    if compensation is None:
+        raise IsoEmissionNotImplemented("Same-tool E001 polyline needs compensation.")
+    rapid_point = _polyline_rapid_point(polyline_milling, compensation)
+    previous_exit = _top_profile_exit_point(state, previous_profile)
+    lines: list[str] = [
+        "?%ETK[7]=0",
+        "G17",
+    ]
+    if isinstance(previous_profile, sp.SquaringMillingSpec):
+        lines.append("MLV=2")
+    lines.extend(
+        [
+            _format_top_full_rapid((previous_exit[0], previous_exit[1], rapid_z)),
+            _format_top_full_rapid((rapid_point[0], rapid_point[1], rapid_z)),
+            _format_top_full_rapid((rapid_point[0], rapid_point[1], rapid_z)),
+            "D1",
+            f"SVL {_format_mm(rapid_z - polyline_milling.security_plane)}",
+            f"VL6={_format_mm(rapid_z - polyline_milling.security_plane)}",
+            f"SVR {_format_mm(tool_radius)}",
+            f"VL7={_format_mm(tool_radius)}",
+        ]
+    )
+    lines.extend(
+        _emit_e001_polyline_lead_single_pass(
+            polyline_milling,
+            tool,
+            cut_z,
+            rapid_point,
+            compensation,
+        )
+    )
+    lines.extend(
+        [
+            "D0",
+            "SVL 0.000",
+            "VL6=0.000",
+            "SVR 0.000",
+            "VL7=0.000",
+            "?%ETK[7]=0",
+        ]
+    )
+    return tuple(lines)
+
+
+def _emit_e001_polyline_lead_single_pass(
+    polyline_milling: sp.PolylineMillingSpec,
+    tool: _LineMillingTool,
+    cut_z: float,
+    rapid_point: tuple[float, float],
+    compensation: str | None,
+) -> tuple[str, ...]:
+    if _polyline_has_down_up_arcs(polyline_milling):
+        return _emit_polyline_arc_lead_single_pass(
+            polyline_milling,
+            tool,
+            cut_z,
+            rapid_point,
+            compensation,
+            quote_mode=False,
+            include_z_on_path=True,
+        )
+    if _polyline_has_down_up_lines(polyline_milling):
+        return _emit_polyline_line_lead_single_pass(
+            polyline_milling,
+            tool,
+            cut_z,
+            rapid_point,
+            compensation,
+            quote_mode=False,
+            include_z_on_path=True,
+        )
+    raise IsoEmissionNotImplemented("E001 polyline needs observed Down/Up leads.")
+
+
+def _top_profile_exit_point(
+    state: sp.PgmxState,
+    operation: _TopProfileOperation,
+) -> tuple[float, float]:
+    if isinstance(operation, sp.SquaringMillingSpec):
+        if _squaring_has_quote_arcs(operation) or _squaring_has_down_up_arcs(operation):
+            arc_radius = _squaring_arc_radius(operation)
+            arc_center = _squaring_arc_center(state, operation, arc_radius)
+            exit_arc_point = _squaring_arc_exit_point(
+                state,
+                operation,
+                arc_center,
+                arc_radius,
+            )
+            return _squaring_arc_clearance_point(operation, exit_arc_point)
+        if _squaring_has_quote_lines(operation) or _squaring_has_down_up_lines(operation):
+            points = _squaring_points(state, operation)
+            line_radius = _squaring_arc_radius(operation)
+            return _squaring_line_clearance_point(points, line_radius)
+        return _squaring_exit_point(_squaring_points(state, operation))
+    if isinstance(operation, sp.PolylineMillingSpec):
+        if _polyline_has_quote_arcs(operation) or _polyline_has_down_up_arcs(operation):
+            return _polyline_arc_compensation_exit(operation)
+        return _polyline_exit_point(operation)
+    raise IsoEmissionNotImplemented("Cannot reuse router tool after this profile.")
+
+
 def _emit_polyline_milling(
     state: sp.PgmxState,
     polyline_milling: sp.PolylineMillingSpec,
@@ -3057,6 +3859,7 @@ def _emit_polyline_milling(
                 rapid_point,
                 compensation,
                 quote_mode=True,
+                include_z_on_path=None,
             )
         )
     elif _polyline_has_quote_lines(polyline_milling):
@@ -3079,6 +3882,7 @@ def _emit_polyline_milling(
                 rapid_point,
                 compensation,
                 quote_mode=False,
+                include_z_on_path=None,
             )
         )
     elif _polyline_has_down_up_lines(polyline_milling):
@@ -3489,11 +4293,13 @@ def _emit_polyline_line_lead_single_pass(
     compensation: str | None,
     *,
     quote_mode: bool,
+    include_z_on_path: bool | None = None,
 ) -> tuple[str, ...]:
     first_point = polyline_milling.points[0]
     lead_start = _polyline_line_lead_start(polyline_milling)
     lead_exit = _polyline_line_lead_exit(polyline_milling)
     closed = _polyline_is_closed(polyline_milling)
+    path_include_z = closed if include_z_on_path is None else include_z_on_path
     lines: list[str] = ["?%ETK[7]=4"]
     if compensation is not None:
         lines.extend(
@@ -3531,7 +4337,7 @@ def _emit_polyline_line_lead_single_pass(
             polyline_milling.points,
             tool.milling_feed,
             z=cut_z,
-            include_z=closed,
+            include_z=path_include_z,
         )
     )
     if quote_mode:
@@ -3580,6 +4386,7 @@ def _emit_polyline_arc_lead_single_pass(
     compensation: str | None,
     *,
     quote_mode: bool,
+    include_z_on_path: bool | None = None,
 ) -> tuple[str, ...]:
     first_point = polyline_milling.points[0]
     arc_start = _polyline_arc_lead_start(polyline_milling)
@@ -3588,6 +4395,7 @@ def _emit_polyline_arc_lead_single_pass(
     arc_exit = _polyline_arc_lead_exit(polyline_milling)
     arc_code = _polyline_arc_lead_code(polyline_milling)
     closed = _polyline_is_closed(polyline_milling)
+    path_include_z = closed if include_z_on_path is None else include_z_on_path
     lines: list[str] = ["?%ETK[7]=4"]
     if compensation is not None:
         lines.extend(
@@ -3618,7 +4426,7 @@ def _emit_polyline_arc_lead_single_pass(
             polyline_milling.points,
             tool.milling_feed,
             z=cut_z,
-            include_z=closed,
+            include_z=path_include_z,
         )
     )
     if quote_mode:
@@ -3913,8 +4721,8 @@ def _polyline_has_line_leads(
         and retract.retract_type == "Line"
         and approach.mode == approach_mode
         and retract.mode == retract_mode
-        and round(float(approach.radius_multiplier), 3) in {2.0, 4.0}
-        and round(float(retract.radius_multiplier), 3) in {2.0, 4.0}
+        and round(float(approach.radius_multiplier), 3) in {0.1, 2.0, 4.0}
+        and round(float(retract.radius_multiplier), 3) in {0.1, 2.0, 4.0}
         and round(float(approach.speed), 3) == -1.0
         and round(float(retract.speed), 3) == -1.0
         and round(float(retract.overlap), 3) == 0.0
@@ -4759,6 +5567,8 @@ def _emit_slot_milling(
     slot_milling: sp.SlotMillingSpec,
     *,
     include_full_setup: bool = True,
+    include_head_activation: bool = True,
+    include_observed_feed_retract: bool = False,
     include_observed_edge_cleanup: bool = False,
 ) -> tuple[str, ...]:
     tool = _slot_milling_tool(slot_milling)
@@ -4791,8 +5601,14 @@ def _emit_slot_milling(
         )
     lines.extend(
         [
-            "?%ETK[17]=257",
-            f"S{_format_spindle_speed(tool.spindle_speed)}M3",
+            *(
+                (
+                    "?%ETK[17]=257",
+                    f"S{_format_spindle_speed(tool.spindle_speed)}M3",
+                )
+                if include_head_activation
+                else ()
+            ),
             f"?%ETK[1]={tool.mask}",
             "MLV=2",
             f"SHF[X]={_format_mm(tool.shf_x)}",
@@ -4820,6 +5636,10 @@ def _emit_slot_milling(
                 f"G1 Z{_format_mm(slot_milling.security_plane)} F{_format_mm(tool.milling_feed)}",
                 f"G1 Z{_format_mm(cut_z)} F{_format_mm(tool.milling_feed)}",
             ]
+        )
+    elif include_observed_feed_retract:
+        lines.append(
+            f"G1 Z{_format_mm(slot_milling.security_plane)} F{_format_mm(tool.milling_feed)}"
         )
     lines.extend(
         [
@@ -4930,6 +5750,38 @@ def _emit_program_end(
     return tuple(lines)
 
 
+def _emit_cocina_fajx_program_end(park_x: float | None) -> tuple[str, ...]:
+    return (
+        "G61",
+        "MLV=0",
+        "?%ETK[0]=0",
+        "?%ETK[17]=0",
+        "G4F1.200",
+        "M5",
+        "D0",
+        _safe_z_line(),
+        "G64",
+        "?%ETK[8]=2",
+        "G40",
+        "MLV=0",
+        _safe_z_line(),
+        "MLV=0",
+        "T1",
+        "SYN",
+        "M06",
+        "G61",
+        "D0",
+        _safe_z_line(),
+        _park_x_line(park_x),
+        "G64",
+        "G61",
+        "D0",
+        _safe_z_line(),
+        "G64",
+        *_emit_syn_reset(),
+    )
+
+
 def _top_drill_tool(drilling: sp.DrillingSpec) -> _TopDrillTool:
     tool_name = drilling.tool_name.strip()
     if not tool_name and drilling.tool_id:
@@ -4964,7 +5816,11 @@ def _side_drill_tool(drilling: sp.DrillingSpec) -> _SideDrillTool:
     return tool
 
 
-def _line_milling_tool(line_milling: sp.LineMillingSpec) -> _LineMillingTool:
+def _line_milling_tool(
+    line_milling: sp.LineMillingSpec,
+    *,
+    allow_e001: bool = False,
+) -> _LineMillingTool:
     tool_name = line_milling.tool_name.strip().upper()
     if not tool_name and line_milling.tool_id:
         tool_name = _tool_name_from_id(line_milling.tool_id)
@@ -4974,7 +5830,10 @@ def _line_milling_tool(line_milling: sp.LineMillingSpec) -> _LineMillingTool:
             f"Line milling tool {line_milling.tool_name or line_milling.tool_id!r} "
             "is not supported yet."
         )
-    if tool.tool_name != "E004":
+    supported_tools = {"E004"}
+    if allow_e001:
+        supported_tools.add("E001")
+    if tool.tool_name not in supported_tools:
         raise IsoEmissionNotImplemented("Line milling supports only E004 for now.")
     if round(float(line_milling.tool_width), 3) != round(tool.tool_width, 3):
         raise IsoEmissionNotImplemented(
@@ -4983,17 +5842,31 @@ def _line_milling_tool(line_milling: sp.LineMillingSpec) -> _LineMillingTool:
     return tool
 
 
-def _polyline_milling_tool(polyline_milling: sp.PolylineMillingSpec) -> _LineMillingTool:
-    tool_name = polyline_milling.tool_name.strip().upper()
-    if not tool_name and polyline_milling.tool_id:
-        tool_name = _tool_name_from_id(polyline_milling.tool_id)
+def _resolved_router_tool_name(
+    operation: sp.LineMillingSpec | sp.PolylineMillingSpec | sp.CircleMillingSpec | sp.SquaringMillingSpec,
+) -> str:
+    tool_name = operation.tool_name.strip().upper()
+    if not tool_name and operation.tool_id:
+        tool_name = _tool_name_from_id(operation.tool_id)
+    return tool_name
+
+
+def _polyline_milling_tool(
+    polyline_milling: sp.PolylineMillingSpec,
+    *,
+    allow_e001: bool = False,
+) -> _LineMillingTool:
+    tool_name = _resolved_router_tool_name(polyline_milling)
     tool = load_machine_config().line_milling_tools.get(tool_name)
     if tool is None:
         raise IsoEmissionNotImplemented(
             f"Polyline milling tool {polyline_milling.tool_name or polyline_milling.tool_id!r} "
             "is not supported yet."
         )
-    if tool.tool_name not in {"E003", "E004"}:
+    supported_tools = {"E003", "E004"}
+    if allow_e001:
+        supported_tools.add("E001")
+    if tool.tool_name not in supported_tools:
         raise IsoEmissionNotImplemented("Polyline milling supports only E003/E004 for now.")
     if round(float(polyline_milling.tool_width), 3) != round(tool.tool_width, 3):
         raise IsoEmissionNotImplemented(

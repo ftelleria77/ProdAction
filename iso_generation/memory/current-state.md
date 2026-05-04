@@ -162,15 +162,17 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   `Line/Arc`, PH5, offset lateral explicito y arcos de esquina cuando Maestro
   compensa por fuera; y escuadrados `E001` con leads `Line/Arc` en modos
   `Quote` y `Down/Up`.
-- En el corpus Cocina, el emisor genera y compara exacto 57/84 piezas:
+- En el corpus Cocina, el emisor genera y compara exacto 84/84 piezas:
   escuadrados standalone, secuencias `E001` escuadrado + taladros superiores,
   secuencias con taladrado lateral de una unica cara tras perfil, y piezas que
   tenian `WorkingStep` deshabilitados que Maestro no postprocesa. Tambien
-  cubre 6 fondos simples con `E001 + taladros Top + ranura 082`. El barrido
-  queda en `tmp/cocina_iso_generated_20260504_104354`: `57 ok`, `0 diff`,
-  `27 error`. Los errores restantes son guards todavia no abiertos: `12` con
-  ranura en combinaciones mas complejas, `7` con combinaciones de escuadrado +
-  taladros multicara intercalados, `7` con polilinea y `1` con fresado lineal.
+  cubre 6 fondos simples con `E001 + taladros Top + ranura 082` y 12 laterales
+  `Lado_derecho`/`Lado_izquierdo` con polilineas `E001`, ranura `082`,
+  taladros Top antes/despues de la ranura y un grupo lateral. Tambien cubre
+  los 7 `fajx` con `E001` + taladros `Top` y laterales `Left/Right`
+  intercalados, las 7 polilineas `E001` de Torre/Alacena y el fresado lineal
+  `E001` de `mod 6 - Torre horno/Divisor_Horiz`. El barrido queda en
+  `tmp/cocina_iso_generated_20260504_complete`: `84 ok`, `0 diff`, `0 error`.
 - Para `E001 + taladros`, el emisor replica las reglas observadas de Cocina:
   herramientas verticales automaticas por familia/diametro cuando el PGMX trae
   herramienta `0`; transicion compacta de perfil superior a taladrado;
@@ -188,12 +190,12 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
 
 Sin acceso al CNC/Maestro, seguir desarrollando contra pares existentes
 `S:\Maestro\Projects\ProdAction\ISO` y `P:\USBMIX\ProdAction\ISO`. La matriz
-raiz `Pieza*.pgmx` ya quedo cerrada contra todos los pares disponibles. El
-siguiente frente recomendado es Cocina:
+raiz `Pieza*.pgmx` ya quedo cerrada contra todos los pares disponibles y el
+corpus Cocina tambien queda cerrado contra sus 84 pares.
 
-- avanzar con las 12 ranuras complejas restantes de Cocina o pasar a
-  `escuadrado + fresado lineal` / `escuadrado + polilineas` con taladros,
-  empezando por la familia que reduzca mas errores del barrido Cocina.
+- siguiente frente recomendado: postprocesar `Pieza_096` y `Pieza_097`, o elegir
+  un nuevo corpus real con pares Maestro para abrir la proxima familia que no
+  este cubierta por el contrato.
 
 Cuando vuelva el acceso a Maestro, postprocesar `Pieza_096` y `Pieza_097` para
 validar la polilinea con `E003`.
