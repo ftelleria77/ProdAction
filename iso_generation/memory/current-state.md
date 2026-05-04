@@ -149,12 +149,13 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   `Pieza_Hueco8_Origen_5_5_25` compara exacta: 30 piezas, 0 diferencias.
 - El emisor ya acepta polilinea abierta standalone con `E003` ademas de `E004`
   usando los datos de herramienta del snapshot (`T3`, `SVL=111.500`,
-  `SVR=4.760`). Se generaron fixtures PGMX pendientes de postprocesar:
-  `Pieza_096` (`Left`) y `Pieza_097` (`Right`).
+  `SVR=4.760`). `Pieza_096` (`Left`) y `Pieza_097` (`Right`) ya fueron
+  postprocesadas por Maestro y comparan exactas: 100 lineas normalizadas, 0
+  diferencias en ambas.
 - En la matriz raiz `S:\Maestro\Projects\ProdAction\ISO\Pieza*.pgmx`, todo
-  archivo con par Maestro en `P:\USBMIX\ProdAction\ISO` compara exacto:
-  101 piezas con 0 diferencias normalizadas; `Pieza_096` y `Pieza_097` quedan
-  como `miss` porque no existe ISO de referencia.
+  archivo con par Maestro en `P:\USBMIX\ProdAction\ISO` compara exacto. El
+  barrido `tmp/root_iso_generated_20260504_with_096_097` queda en `103 ok`,
+  `0 diff`, `0 missing`, `0 error`.
 - El emisor nativo ya cubre, en secuencia con `E001` cuando corresponde:
   circulos `E004` centro/izquierda/derecha, horario/antihorario, helicoidal,
   PH5 unidireccional/bidireccional y leads `Line/Arc`; polilineas abiertas
@@ -193,9 +194,5 @@ Sin acceso al CNC/Maestro, seguir desarrollando contra pares existentes
 raiz `Pieza*.pgmx` ya quedo cerrada contra todos los pares disponibles y el
 corpus Cocina tambien queda cerrado contra sus 84 pares.
 
-- siguiente frente recomendado: postprocesar `Pieza_096` y `Pieza_097`, o elegir
-  un nuevo corpus real con pares Maestro para abrir la proxima familia que no
-  este cubierta por el contrato.
-
-Cuando vuelva el acceso a Maestro, postprocesar `Pieza_096` y `Pieza_097` para
-validar la polilinea con `E003`.
+- siguiente frente recomendado: elegir un nuevo corpus real con pares Maestro
+  para abrir la proxima familia que no este cubierta por el contrato.

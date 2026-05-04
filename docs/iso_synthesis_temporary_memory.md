@@ -5744,10 +5744,10 @@ valor puntual. Sigue pendiente validar la regla general para areas distintas a
     lateral arranco inmediatamente despues de `Top`.
 - Validacion:
   - Cocina completa:
-    `tmp/cocina_iso_generated_20260503_192117` -> `29 ok`, `0 diff`,
-    `55 error`.
-  - Los `55 error` restantes son guards todavia no abiertos: `23` fresado
-    lineal combinado, `18` ranura combinada y `14` polilinea combinada.
+    `tmp/cocina_iso_generated_20260504_complete` -> `84 ok`, `0 diff`,
+    `0 error`.
   - Matriz raiz:
-    `tmp/root_iso_regression_20260503_192117` -> `101 ok`,
-    `2 missing_reference` (`Pieza_096`, `Pieza_097`).
+    `tmp/root_iso_generated_20260504_with_096_097` -> `103 ok`, `0 diff`,
+    `0 missing_reference`.
+  - `Pieza_096` y `Pieza_097` validan la polilinea abierta `E003` contra
+    Maestro: 100 lineas normalizadas, 0 diferencias en ambas.

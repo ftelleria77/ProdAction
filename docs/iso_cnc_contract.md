@@ -527,9 +527,9 @@ El emisor `iso_generation` compara exacto contra Maestro para:
   estrategias PH5, helicoidal circular y offset lateral explicito.
 
 La matriz raiz `S:\Maestro\Projects\ProdAction\ISO\Pieza*.pgmx` queda en 0
-diferencias normalizadas para todos los pares disponibles: 101 ISO exactos
-contra `P:\USBMIX\ProdAction\ISO`, sin errores ni diferencias. `Pieza_096` y
-`Pieza_097` quedan pendientes solo porque no existe ISO Maestro de referencia.
+diferencias normalizadas para todos los pares disponibles: 103 ISO exactos
+contra `P:\USBMIX\ProdAction\ISO`, sin errores, diferencias ni faltantes. El
+barrido vigente es `tmp/root_iso_generated_20260504_with_096_097`.
 
 El escuadrado `E001` ya usa el borde de arranque real (`Bottom`, `Top`, `Left`
 o `Right`) y conserva la coordenada de arranque detectada en el perfil `.pgmx`
@@ -550,10 +550,9 @@ En Cocina se observo que Maestro no postprocesa `WorkingStep` deshabilitados,
 aunque sus features queden presentes en el `.pgmx`. Para traduccion ISO se
 deben ignorar esos pasos y no reinsertar sus features como huerfanas.
 
-Tambien se generaron `Pieza_096` y `Pieza_097` como repeticion de la polilinea
-abierta de `Pieza_016..017` cambiando herramienta a `E003`. El emisor puede
-generar los candidatos, pero quedan pendientes de postprocesado Maestro para
-compararlos contra un ISO de referencia.
+Tambien se generaron y validaron `Pieza_096` y `Pieza_097` como repeticion de la
+polilinea abierta de `Pieza_016..017` cambiando herramienta a `E003`. Ambas
+comparan exactas contra Maestro: 100 lineas normalizadas, 0 diferencias.
 
 ## Huecos pendientes del contrato
 

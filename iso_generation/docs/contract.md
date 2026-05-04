@@ -109,7 +109,7 @@ horizontal `082` en `Top` con correcciones laterales observadas, y fresado
 lineal `E004` en `Top` horizontal o vertical, con corte simple y estrategia PH5
 observada con pasadas multiples. Tambien cubre, como operaciones standalone,
 polilinea abierta `E004` en `Top` con compensacion `Left`/`Right`, candidato de
-polilinea abierta `E003` pendiente de validacion Maestro, y escuadrado `E001`
+polilinea abierta `E003` validada contra Maestro, y escuadrado `E001`
 en `Top` empezando por `Bottom`, `Top`, `Left` o `Right`,
 horario/antihorario, sin leads o con los leads `Line/Arc` observados. Tambien
 cubre circulos `E004` centro/izquierda/derecha, horario/antihorario, PH5 y
@@ -157,12 +157,12 @@ matriz `Pieza`, `Pieza_001..024`, `Pieza_004_Repeticiones`,
 
 La sexta validacion compara toda la matriz raiz
 `S:\Maestro\Projects\ProdAction\ISO\Pieza*.pgmx` contra
-`P:\USBMIX\ProdAction\ISO`. Los 101 archivos con ISO Maestro de referencia
-comparan con 0 diferencias normalizadas. `Pieza_096` y `Pieza_097` quedan
-pendientes solo porque no existe su par `.iso` postprocesado. Esta validacion
-cubre `Pieza_025..095`: circulos `E004`, polilineas abiertas/cerradas
-`E003/E004`, escuadrados con leads `Line/Arc`, estrategias PH5 y combinaciones
-`E001 + perfil superior`.
+`P:\USBMIX\ProdAction\ISO`. En el barrido
+`tmp/root_iso_generated_20260504_with_096_097`, los 103 archivos con ISO Maestro
+de referencia comparan con 0 diferencias normalizadas. Esta validacion cubre
+`Pieza_025..097`: circulos `E004`, polilineas abiertas/cerradas `E003/E004`,
+escuadrados con leads `Line/Arc`, estrategias PH5 y combinaciones `E001` +
+perfil superior.
 
 El corpus Cocina se usa como corpus real de validacion sin depender del CNC:
 `S:\Maestro\Projects\ProdAction\ISO\Cocina` contra
@@ -182,7 +182,7 @@ marcan como vistos para no reinyectarlos como features huerfanas. Ese
 comportamiento replica Cocina, donde Maestro no postprocesa esos pasos aunque
 las features sigan presentes en el `.pgmx`.
 
-Validacion pendiente: `Pieza_096` y `Pieza_097` replican la polilinea abierta
-de `Pieza_016..017` cambiando la herramienta a `E003`; los `.pgmx` adaptan con
-`unsupported=0` y el emisor genera candidato ISO, pero falta comparar contra
-Maestro postprocesado.
+`Pieza_096` y `Pieza_097` replican la polilinea abierta de `Pieza_016..017`
+cambiando la herramienta a `E003`; los `.pgmx` adaptan con `unsupported=0`, el
+emisor genera candidato ISO y ambos comparan exactos contra Maestro: 100 lineas
+normalizadas, 0 diferencias.
