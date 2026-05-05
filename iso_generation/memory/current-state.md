@@ -38,7 +38,7 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
     leads o con leads `Arc/Quote` observados.
   - secuencia `E001` escuadrado + polilinea abierta `E004` en `Top`.
   - secuencia `E001` escuadrado + taladros superiores + ranura horizontal
-    `082` en `Top`, validada en fondos simples de Cocina.
+    `082` en `Top`, validada en fondos simples del corpus real.
 - `comparator.py` compara ISO Maestro vs candidato con normalizacion simple.
 - `cli.py` ofrece comandos de inspeccion, cabecera y comparacion.
 - `machine_config/` contiene el snapshot inicial de configuracion:
@@ -59,6 +59,12 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   offsets, velocidades, avances ni mapeos por `tool_id` de las familias
   soportadas. Los valores ISO observados sin fuente inequivoca permanecen
   centralizados como politica en el loader.
+- La validacion del emisor ya no usa guardas por secuencia completa del tipo
+  `escuadrado + polilinea + ranura + taladros`. Recorre las operaciones
+  ordenadas, valida cada mecanizado por familia/herramienta y construye un
+  `OperationPlan` modal inicial. Las combinaciones nuevas fallan en la
+  transicion u operacion puntual que todavia no este modelada, no por no
+  coincidir con un patron global predefinido.
 
 ## Validacion
 
@@ -97,7 +103,7 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   `ISO_MIN_010..013`, `ISO_MIN_020..023`, `Pieza`, `Pieza_001..015` y
   `Pieza_004_Repeticiones` vuelve a comparar exacta: 0 diferencias.
 - Tras conectar `Xn.X` como parking X de cierre ISO, esa misma matriz vuelve a
-  comparar exacta: 0 diferencias. En el corpus Cocina, `_source_park_x` lee
+  comparar exacta: 0 diferencias. En el corpus real, `_source_park_x` lee
   valores variables confirmados como `-2500`, `-2292` y `-3700`; el corpus aun
   no compara completo porque requiere familias pendientes como escuadrados,
   polilineas y combinaciones de ranura/fresado.
@@ -163,18 +169,18 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   `Line/Arc`, PH5, offset lateral explicito y arcos de esquina cuando Maestro
   compensa por fuera; y escuadrados `E001` con leads `Line/Arc` en modos
   `Quote` y `Down/Up`.
-- En el corpus Cocina, el emisor genera y compara exacto 84/84 piezas:
+- En el corpus real de modulos, el emisor genera y compara exacto 84/84 piezas:
   escuadrados standalone, secuencias `E001` escuadrado + taladros superiores,
   secuencias con taladrado lateral de una unica cara tras perfil, y piezas que
   tenian `WorkingStep` deshabilitados que Maestro no postprocesa. Tambien
   cubre 6 fondos simples con `E001 + taladros Top + ranura 082` y 12 laterales
-  `Lado_derecho`/`Lado_izquierdo` con polilineas `E001`, ranura `082`,
-  taladros Top antes/despues de la ranura y un grupo lateral. Tambien cubre
-  los 7 `fajx` con `E001` + taladros `Top` y laterales `Left/Right`
-  intercalados, las 7 polilineas `E001` de Torre/Alacena y el fresado lineal
-  `E001` de `mod 6 - Torre horno/Divisor_Horiz`. El barrido queda en
-  `tmp/cocina_iso_generated_20260504_complete`: `84 ok`, `0 diff`, `0 error`.
-- Para `E001 + taladros`, el emisor replica las reglas observadas de Cocina:
+  con polilineas `E001`, ranura `082`, taladros Top antes/despues de la ranura
+  y un grupo lateral. Tambien cubre los 7 `fajx` con `E001` + taladros `Top` y
+  laterales `Left/Right` intercalados, las 7 polilineas `E001` de modulos altos
+  y el fresado lineal `E001` de divisor horizontal. El barrido queda en
+  `84 ok`, `0 diff`, `0 error`.
+- Para `E001 + taladros`, el emisor replica las reglas observadas del corpus
+  real:
   herramientas verticales automaticas por familia/diametro cuando el PGMX trae
   herramienta `0`; transicion compacta de perfil superior a taladrado;
   reordenamiento Manhattan de taladros superiores solo cuando vienen despues de
@@ -182,7 +188,7 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
   profundidad y si el grupo lateral arranca luego de `Top`.
 - El adaptador ignora `WorkingStep` deshabilitados y no los reinyecta como
   features huerfanas; esto evita emitir operaciones que Maestro deja fuera del
-  ISO en Cocina.
+  ISO.
 - El adaptador de escuadrado conserva ahora la coordenada real de arranque
   cuando el perfil `.pgmx` no empieza exactamente en el centro del borde; esto
   cierra el caso `mod 5 - Bajo despensero/Tapa_despensero`.
@@ -192,7 +198,7 @@ mezclarlo con la app principal ni con `cnc_traceability/`.
 Sin acceso al CNC/Maestro, seguir desarrollando contra pares existentes
 `S:\Maestro\Projects\ProdAction\ISO` y `P:\USBMIX\ProdAction\ISO`. La matriz
 raiz `Pieza*.pgmx` ya quedo cerrada contra todos los pares disponibles y el
-corpus Cocina tambien queda cerrado contra sus 84 pares.
+corpus real de modulos tambien queda cerrado contra sus 84 pares.
 
 - siguiente frente recomendado: elegir un nuevo corpus real con pares Maestro
   para abrir la proxima familia que no este cubierta por el contrato.
