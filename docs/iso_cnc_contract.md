@@ -219,8 +219,8 @@ Valores observados:
 | `side_g53_z_fixtures` grupo B | `58.000` | `164.500` | `106.500` |
 | `side_g53_z_fixtures` grupo B | `58.000` | `164.450` | `106.450` |
 
-El corpus real de modulos agrega `149.300`, tambien con `DZ=43.000`, por lo
-que su delta es `106.300`.
+El corpus real agrega `149.300`, tambien con `DZ=43.000`, por lo que su delta
+es `106.300`.
 
 Comparacion contra `Offset Z` de Xilog Plus:
 
@@ -534,21 +534,21 @@ barrido vigente es `tmp/root_iso_generated_20260504_with_096_097`.
 El escuadrado `E001` ya usa el borde de arranque real (`Bottom`, `Top`, `Left`
 o `Right`) y conserva la coordenada de arranque detectada en el perfil `.pgmx`
 cuando no coincide exactamente con el centro del borde. Esto fue necesario para
-comparar exacto un caso real donde el perfil no arranca en el centro nominal
-del borde.
+comparar exacto `mod 5 - Bajo despensero/Tapa_despensero`.
 
-El barrido del corpus real de modulos disponible sin CNC genera 84/84 ISO
-exactos, con `0 diff`. La nueva cobertura incluye 6 fondos simples con
-`E001 + taladros Top + ranura 082` y 12 laterales con polilineas `E001`, ranura
-`082`, taladros Top antes/despues de la ranura y un grupo lateral, mas los 7
-`fajx` con `E001` + taladros `Top` y laterales `Left/Right` intercalados, las 7
-polilineas `E001` de modulos altos y el fresado lineal `E001` de divisor
-horizontal.
+El barrido del corpus real disponible sin CNC compara las carpetas equivalentes
+en `S:\Maestro\Projects\ProdAction\ISO` y `P:\USBMIX\ProdAction\ISO`: el emisor
+genera 84/84 ISO exactos en
+`tmp/real_corpus_iso_generated_20260504_complete`, con `0 diff`. La nueva cobertura
+incluye 6 fondos simples con `E001 + taladros Top + ranura 082` y 12 laterales
+`Lado_derecho`/`Lado_izquierdo` con polilineas `E001`, ranura `082`, taladros
+Top antes/despues de la ranura y un grupo lateral, mas los 7 `fajx` con `E001`
++ taladros `Top` y laterales `Left/Right` intercalados, las 7 polilineas
+`E001` de Torre/Alacena y el fresado lineal `E001` de `Divisor_Horiz`.
 
-En el corpus real se observo que Maestro no postprocesa `WorkingStep`
-deshabilitados, aunque sus features queden presentes en el `.pgmx`. Para
-traduccion ISO se deben ignorar esos pasos y no reinsertar sus features como
-huerfanas.
+En el corpus real se observo que Maestro no postprocesa `WorkingStep` deshabilitados,
+aunque sus features queden presentes en el `.pgmx`. Para traduccion ISO se
+deben ignorar esos pasos y no reinsertar sus features como huerfanas.
 
 Tambien se generaron y validaron `Pieza_096` y `Pieza_097` como repeticion de la
 polilinea abierta de `Pieza_016..017` cambiando herramienta a `E003`. Ambas

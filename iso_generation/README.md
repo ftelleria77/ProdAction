@@ -13,7 +13,6 @@ emitir solo reglas ISO ya validadas y comparar contra ISO Maestro.
 | --- | --- |
 | `pgmx_source.py` | Lector/adaptador desde `tools.pgmx_snapshot` y `tools.pgmx_adapters`. |
 | `emitter.py` | Emision ISO experimental para las familias ya validadas. |
-| `modal.py` | Planificador inicial de estado modal para transiciones entre mecanizados. |
 | `comparator.py` | Normalizacion y comparacion Maestro vs candidato. |
 | `cli.py` | CLI de inspeccion, cabecera y comparacion. |
 | `docs/contract.md` | Contrato del subsistema y MVP previsto. |
@@ -57,10 +56,6 @@ python -m iso_generation compare maestro.iso candidato.iso
   - ranura lineal horizontal `082` sobre `Top`, con correcciones `Left`/`Right`;
   - fresado lineal `E004` sobre `Top`, horizontal o vertical, incluyendo
     estrategia PH5 observada con pasadas multiples.
-- Empieza a modelar transiciones por diferencial de estado modal, con la salida
-  de ranura `082` hacia taladros `Top` y laterales como primer caso conectado.
-- La validacion del emitter se apoya en planes por operacion y ya no en guardas
-  por combinaciones completas de mecanizados.
 - Validado por comparacion exacta contra Maestro para `ISO_MIN_001..006`,
   `ISO_MIN_010..013`, `ISO_MIN_020..023`, `Pieza`, `Pieza_001`,
   `Pieza_002`, `Pieza_003`, `Pieza_004`, `Pieza_004_Repeticiones` y

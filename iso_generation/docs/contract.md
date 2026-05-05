@@ -117,12 +117,11 @@ helicoidal; polilineas abiertas `E004` con PH5 y leads `Line/Arc`; y
 polilineas cerradas `E003/E004` con leads, PH5, offset lateral explicito y
 arcos de esquina compensados. La combinacion soportada principal es `E001`
 escuadrado seguido de perfiles superiores `E004`/`E003` observados, la
-secuencia observada `E001 + taladros Top + ranura 082` de fondos simples y los
-laterales con polilineas `E001`, ranura `082`, taladros Top antes/despues de la
-ranura y un grupo lateral. La validacion ya no habilita combinaciones completas
-por nombre de patron: valida cada operacion y deja que la emision falle
-explicitamente en la operacion o transicion concreta que todavia no tenga
-contrato modal.
+secuencia observada `E001 + taladros Top + ranura 082` de fondos simples de un
+corpus real y los laterales `Lado_derecho`/`Lado_izquierdo` con polilineas `E001`,
+ranura `082`, taladros Top antes/despues de la ranura y un grupo lateral. Las
+demas combinaciones entre familias y las demas familias deben fallar
+explicitamente hasta que se agreguen al MVP.
 
 Nota de deuda tecnica: parte de `emitter.py` todavia contiene constantes
 aprendidas por comparacion ISO. La regla nueva exige migrar esas constantes a
@@ -165,21 +164,23 @@ de referencia comparan con 0 diferencias normalizadas. Esta validacion cubre
 escuadrados con leads `Line/Arc`, estrategias PH5 y combinaciones `E001` +
 perfil superior.
 
-El corpus real de modulos se usa como validacion sin depender del CNC. En el
-barrido completo del corpus real, el emisor genera y compara exacto 84/84 ISO.
-La cobertura actual incluye escuadrados standalone `E001`, escuadrados con
-taladros superiores/laterales observados, taladrado lateral de una unica cara
-inmediatamente despues del perfil, 6 fondos simples con
-`E001 + taladros Top + ranura 082` y 12 laterales con polilineas `E001`, ranura
-`082`, taladros Top antes/despues de la ranura y un grupo lateral, mas los 7
-`fajx` con `E001` + taladros `Top` y laterales `Left/Right` intercalados, las 7
-polilineas `E001` de modulos altos y el fresado lineal `E001` de divisor
-horizontal.
+Un corpus real se usa como validacion sin depender del CNC: carpetas
+equivalentes en `S:\Maestro\Projects\ProdAction\ISO` y
+`P:\USBMIX\ProdAction\ISO`. En el barrido
+`tmp/real_corpus_iso_generated_20260504_complete`, el emisor genera y compara
+exacto 84/84 ISO. La cobertura actual incluye escuadrados standalone `E001`,
+escuadrados con taladros superiores/laterales observados, taladrado lateral de
+una unica cara inmediatamente despues del perfil, 6 fondos simples con
+`E001 + taladros Top + ranura 082` y 12 laterales `Lado_derecho`/
+`Lado_izquierdo` con polilineas `E001`, ranura `082`, taladros Top
+antes/despues de la ranura y un grupo lateral, mas los 7 `fajx` con `E001` +
+taladros `Top` y laterales `Left/Right` intercalados, las 7 polilineas `E001`
+de Torre/Alacena y el fresado lineal `E001` de `Divisor_Horiz`.
 
 Los `WorkingStep` deshabilitados se ignoran para emision ISO y tambien se
 marcan como vistos para no reinyectarlos como features huerfanas. Ese
-comportamiento replica Maestro: no postprocesa esos pasos aunque las features
-sigan presentes en el `.pgmx`.
+comportamiento replica el corpus real, donde Maestro no postprocesa esos pasos aunque
+las features sigan presentes en el `.pgmx`.
 
 `Pieza_096` y `Pieza_097` replican la polilinea abierta de `Pieza_016..017`
 cambiando la herramienta a `E003`; los `.pgmx` adaptan con `unsupported=0`, el
