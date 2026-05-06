@@ -38,6 +38,9 @@ __all__ = [
     "PgmxOperationSnapshot",
     "PgmxWorkingStepSnapshot",
     "PgmxResolvedWorkingStepSnapshot",
+    "PgmxToolingTechnologySnapshot",
+    "PgmxEmbeddedToolSnapshot",
+    "PgmxEmbeddedSpindleSnapshot",
     "PgmxSnapshot",
     "read_pgmx_snapshot",
     "snapshot_to_dict",
@@ -289,10 +292,48 @@ class PgmxResolvedWorkingStepSnapshot:
 
 
 @dataclass(frozen=True)
+class PgmxToolingTechnologySnapshot:
+    spindle_speed_standard: Optional[float]
+    feed_rate_standard: Optional[float]
+    descent_speed_standard: Optional[float]
+
+
+@dataclass(frozen=True)
+class PgmxEmbeddedToolSnapshot:
+    id: str
+    name: str
+    holder_data_type: str
+    tool_key: str
+    kind: str
+    tool_offset_length: Optional[float]
+    pilot_length: Optional[float]
+    diameter: Optional[float]
+    sinking_length: Optional[float]
+    overall_assembly_length: Optional[float]
+    overall_assembly_diameter: Optional[float]
+    technology: PgmxToolingTechnologySnapshot
+
+
+@dataclass(frozen=True)
+class PgmxEmbeddedSpindleSnapshot:
+    spindle: int
+    ref_tool_id: str
+    translation_x: Optional[float]
+    translation_y: Optional[float]
+    translation_z: Optional[float]
+    pilot_length: Optional[float]
+    radius: Optional[float]
+    technology: PgmxToolingTechnologySnapshot
+
+
+@dataclass(frozen=True)
 class PgmxSnapshot:
     source_path: Path
     xml_entry_name: str
     container_entries: tuple[str, ...]
+    tooling_entry_name: Optional[str]
+    embedded_tools: tuple[PgmxEmbeddedToolSnapshot, ...]
+    embedded_spindles: tuple[PgmxEmbeddedSpindleSnapshot, ...]
     project_name: str
     state: sp.PgmxState
     workpiece: Optional[PgmxWorkpieceSnapshot]
@@ -395,6 +436,17 @@ def _first_child(node: Optional[ET.Element], local_name: str) -> Optional[ET.Ele
     return None
 
 
+def _first_descendant(node: Optional[ET.Element], local_name: str) -> Optional[ET.Element]:
+    if node is None:
+        return None
+    for child in node.iter():
+        if child is node:
+            continue
+        if _local_name(child.tag) == local_name:
+            return child
+    return None
+
+
 def _child_text(node: Optional[ET.Element], local_name: str, default: str = "") -> str:
     child = _first_child(node, local_name)
     if child is None or child.text is None:
@@ -421,6 +473,144 @@ def _optional_float_text(node: Optional[ET.Element], local_name: str) -> Optiona
     if child is None or child.text is None:
         return None
     return sp._safe_float(child.text, 0.0)
+
+
+def _first_descendant_float(node: Optional[ET.Element], local_name: str) -> Optional[float]:
+    descendant = _first_descendant(node, local_name)
+    if descendant is None or descendant.text is None:
+        return None
+    return sp._safe_float(descendant.text, 0.0)
+
+
+def _technology_standard(
+    technology_node: Optional[ET.Element],
+    group_name: str,
+) -> Optional[float]:
+    group_node = _first_child(technology_node, group_name)
+    standard_node = _first_child(group_node, "Standard")
+    if standard_node is None or standard_node.text is None:
+        return None
+    return sp._safe_float(standard_node.text, 0.0)
+
+
+def _tooling_technology_snapshot(
+    technology_node: Optional[ET.Element],
+) -> PgmxToolingTechnologySnapshot:
+    return PgmxToolingTechnologySnapshot(
+        spindle_speed_standard=_technology_standard(technology_node, "SpindleSpeed"),
+        feed_rate_standard=_technology_standard(technology_node, "FeedRate"),
+        descent_speed_standard=_technology_standard(technology_node, "DescentSpeed"),
+    )
+
+
+def _embedded_tooling_entry_name(entries: dict[str, bytes]) -> Optional[str]:
+    candidates: list[str] = []
+    for name in entries:
+        normalized = name.replace("\\", "/").lower()
+        if normalized == "def.tlgx" or normalized.endswith("/def.tlgx"):
+            candidates.append(name)
+    if not candidates:
+        return None
+    return sorted(
+        candidates,
+        key=lambda item: (item.replace("\\", "/").count("/"), item.lower()),
+    )[0]
+
+
+def _parse_embedded_tool(element: ET.Element) -> Optional[PgmxEmbeddedToolSnapshot]:
+    key_node = _first_child(element, "Key")
+    tool_id = _child_text(key_node, "ID")
+    name = _child_text(element, "Name")
+    if not tool_id and not name:
+        return None
+
+    holder_data = _first_child(element, "HolderDataTool")
+    tool_key_node = _first_descendant(holder_data, "ToolKey")
+    tool_dimension = _first_descendant(holder_data, "ToolDimension")
+    technology = _first_descendant(element, "ToolTechnology")
+    pilot_length = _optional_float_text(tool_dimension, "PilotLength")
+    diameter = _optional_float_text(tool_dimension, "Diameter")
+    sinking_length = _optional_float_text(tool_dimension, "SinkingLength")
+
+    return PgmxEmbeddedToolSnapshot(
+        id=tool_id,
+        name=name,
+        holder_data_type=sp._xsi_type(holder_data),
+        tool_key=_child_text(tool_key_node, "Key"),
+        kind=_child_text(tool_key_node, "KindOfTool")
+        or _child_text(tool_key_node, "KindOfHead"),
+        tool_offset_length=_first_descendant_float(element, "ToolOffsetLength"),
+        pilot_length=(
+            pilot_length
+            if pilot_length is not None
+            else _first_descendant_float(element, "PilotLength")
+        ),
+        diameter=(
+            diameter
+            if diameter is not None
+            else _first_descendant_float(element, "Diameter")
+        ),
+        sinking_length=sinking_length,
+        overall_assembly_length=_first_descendant_float(element, "OverallAssemblyLength"),
+        overall_assembly_diameter=_first_descendant_float(element, "OverallAssemblyDiameter"),
+        technology=_tooling_technology_snapshot(technology),
+    )
+
+
+def _parse_embedded_spindle(element: ET.Element) -> Optional[PgmxEmbeddedSpindleSnapshot]:
+    spindle_text = _child_text(element, "Id")
+    if not spindle_text:
+        return None
+    try:
+        spindle = int(spindle_text)
+    except ValueError:
+        return None
+
+    ref_key = _first_descendant(element, "RefToolKey")
+    translation = _first_descendant(element, "Translation")
+    technology = _first_descendant(element, "SpindleTechnology")
+    return PgmxEmbeddedSpindleSnapshot(
+        spindle=spindle,
+        ref_tool_id=_child_text(ref_key, "ID"),
+        translation_x=_optional_float_text(translation, "OX"),
+        translation_y=_optional_float_text(translation, "OY"),
+        translation_z=_optional_float_text(translation, "OZ"),
+        pilot_length=_optional_float_text(element, "PilotLength"),
+        radius=_first_descendant_float(element, "Radius"),
+        technology=_tooling_technology_snapshot(technology),
+    )
+
+
+def _embedded_tooling_snapshot(
+    entries: dict[str, bytes],
+) -> tuple[
+    Optional[str],
+    tuple[PgmxEmbeddedToolSnapshot, ...],
+    tuple[PgmxEmbeddedSpindleSnapshot, ...],
+]:
+    entry_name = _embedded_tooling_entry_name(entries)
+    if entry_name is None:
+        return None, (), ()
+
+    try:
+        root = ET.fromstring(entries[entry_name])
+    except ET.ParseError:
+        return entry_name, (), ()
+
+    tools: list[PgmxEmbeddedToolSnapshot] = []
+    spindles: list[PgmxEmbeddedSpindleSnapshot] = []
+    for element in root.iter():
+        local_name = _local_name(element.tag)
+        if local_name == "CoreTool":
+            tool = _parse_embedded_tool(element)
+            if tool is not None:
+                tools.append(tool)
+        elif local_name == "SpindleComponent":
+            spindle = _parse_embedded_spindle(element)
+            if spindle is not None:
+                spindles.append(spindle)
+
+    return entry_name, tuple(tools), tuple(spindles)
 
 
 def _replication_pattern_snapshot(feature: ET.Element) -> Optional[PgmxReplicationPatternSnapshot]:
@@ -674,6 +864,7 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
 
     root, entries, xml_entry_name = sp._load_pgmx_container(path)
     state = sp.read_pgmx_state(path)
+    tooling_entry_name, embedded_tools, embedded_spindles = _embedded_tooling_snapshot(entries)
 
     workpiece_node = root.find("./{*}Workpieces/{*}WorkPiece")
     workpiece = None
@@ -925,6 +1116,9 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
         source_path=path,
         xml_entry_name=xml_entry_name,
         container_entries=tuple(sorted(entries.keys())),
+        tooling_entry_name=tooling_entry_name,
+        embedded_tools=embedded_tools,
+        embedded_spindles=embedded_spindles,
         project_name=sp._text(root, "./{*}Name"),
         state=state,
         workpiece=workpiece,
