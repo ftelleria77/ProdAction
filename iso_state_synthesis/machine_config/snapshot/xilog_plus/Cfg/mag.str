@@ -1,0 +1,260 @@
+[STRUCT]
+KEY_MAG {
+        KEY_REV0;
+        KEY_REV1;
+        KEY_REV2;
+        KEY_REV3;
+        KEY_REV4;
+        KEY_REV5;
+}
+
+KEY_REV0 {
+        KEY_RV,mag0.rv;
+        KEY_TPMAP,mag0.tp;
+        KEY_KINPOCKET,mag0.dkin,6;
+        KEY_DYNTOOL,mag0.tdyn,6;
+}
+
+KEY_REV1 {
+        KEY_RV,mag1.rv;
+        KEY_TPMAP,mag1.tp;
+        KEY_KINPOCKET,mag1.dkin,6;
+        KEY_DYNTOOL,mag1.tdyn,6;
+}
+
+KEY_REV2 {
+        KEY_RV,mag2.rv;
+        KEY_TPMAP,mag2.tp;
+        KEY_KINPOCKET,mag2.dkin,6;
+        KEY_DYNTOOL,mag2.tdyn,6;
+}
+
+KEY_REV3 {
+        KEY_RV,mag3.rv;
+        KEY_TPMAP,mag3.tp;
+        KEY_KINPOCKET,mag3.dkin,6;
+        KEY_DYNTOOL,mag3.tdyn,6;
+}
+
+KEY_REV4 {
+        KEY_RV,mag4.rv;
+        KEY_TPMAP,mag4.tp;
+        KEY_KINPOCKET,mag4.dkin,6;
+        KEY_DYNTOOL,mag4.tdyn,6;
+}
+
+KEY_REV5 {
+        KEY_RV,mag5.rv;
+        KEY_TPMAP,mag5.tp;
+        KEY_KINPOCKET,mag5.dkin,6;
+        KEY_DYNTOOL,mag5.tdyn,6;
+}
+
+KEY_RV {
+        RV_TURRETS;
+        RV_GIRISP;
+        RV_GIRIRV;
+        RV_VELLIM;
+        RV_ACCTIME;
+        RV_DECTIME;
+        RV_DELAYS;
+        RV_GAINP;
+        RV_FWERR;
+        RV_TOLLERF;
+        RV_TARQUOTA;
+        RV_PARKQTA;
+        RV_VELPOS;
+        RV_VELJOG;
+        RV_VELCYCLE;
+}
+
+KEY_TPMAP {
+        TP_PROMPT0,(120,10);
+        TP_PROMPT1,(+90,+0);
+        TP_PROMPT2,(120,+20);
+        TP_PROMPT3,(+90,+0);
+        TP_MAP1, (120,+30);
+        TP_DYN1, (+90,+0);
+        TP_TOOL1,(80,+0);
+        TP_MAP2, (120,+30);
+        TP_DYN2, (+90,+0);
+        TP_TOOL2,(80,+0);
+        TP_MAP3, (120,+30);
+        TP_DYN3, (+90,+0);
+        TP_TOOL3,(80,+0);
+        TP_MAP4, (120,+30);
+        TP_DYN4, (+90,+0);
+        TP_TOOL4,(80,+0);
+        TP_MAP5, (120,+30);
+        TP_DYN5, (+90,+0);
+        TP_TOOL5,(80,+0);
+        TP_MAP6, (120,+30);
+        TP_DYN6, (+90,+0);
+        TP_TOOL6,(80,+0);
+}
+
+KEY_KINPOCKET {
+        PKIN_COMPX;
+        PKIN_COMPY;
+        PKIN_COMPZ;
+}
+
+KEY_DYNTOOL {
+        TDYN_VELLIM;
+        TDYN_ACCTIME;
+        TDYN_DECTIME;
+        TDYN_DELAYS;
+        TDYN_GAINP;
+        TDYN_FWERR;
+        TDYN_TOLLERF;
+        TDYN_VELPOS;
+}
+
+[DEFAULT]
+MSK = 0, 32
+FRM = DEC, 0
+LEN = 10
+
+[RV_TURRETS]
+ADR =   prv0
+HLP = RV_TURRETS
+[RV_GIRISP]
+ADR =   prv1
+HLP = RV_GIRISP
+[RV_GIRIRV]
+ADR =   prv2
+HLP = RV_GIRIRV
+[RV_VELLIM]
+ADR =   prv3
+HLP = RV_VELLIM
+[RV_ACCTIME]
+ADR =   prv4
+FRM = QTA, 3
+HLP = RV_ACCTIME
+[RV_DECTIME]
+ADR =   prv5
+FRM = QTA, 3
+HLP = RV_DECTIME
+[RV_DELAYS]
+ADR =   prv6
+FRM = QTA, 3
+HLP = RV_DELAYS
+[RV_GAINP]
+ADR =   prv7
+FRM = QTA, 3
+HLP = RV_GAINP
+[RV_FWERR]
+ADR =   prv8
+HLP = RV_FWERR
+[RV_TOLLERF]
+ADR =   prv9
+FRM = QTA, 1
+HLP = RV_TOLLERF
+[RV_TARQUOTA]
+ADR =   prv10
+FRM = QTA, 1
+HLP = RV_TARQUOTA
+[RV_PARKQTA]
+ADR =   prv11
+FRM = QTA, 1
+HLP = RV_PARKQTA
+[RV_VELPOS]
+ADR =   prv12
+HLP = RV_VELPOS
+[RV_VELJOG]
+ADR =   prv13
+HLP = RV_VELJOG
+[RV_VELCYCLE]
+ADR =   prv14
+HLP = RV_VELCYCLE
+[TP_MAP1]
+ADR =    map0
+LEN = 3
+HLP = TP_MAP1
+[TP_DYN1]
+ADR =    dyn0
+LEN = 3
+HLP = TP_DYN1
+[TP_MAP2]
+ADR =    map1
+LEN = 3
+HLP = TP_MAP2
+[TP_DYN2]
+ADR =    dyn1
+LEN = 3
+HLP = TP_DYN2
+[TP_MAP3]
+ADR =    map2
+LEN = 3
+HLP = TP_MAP3
+[TP_DYN3]
+ADR =    dyn2
+LEN = 3
+HLP = TP_DYN3
+[TP_MAP4]
+ADR =    map3
+LEN = 3
+HLP = TP_MAP4
+[TP_DYN4]
+ADR =    dyn3
+LEN = 3
+HLP = TP_DYN4
+[TP_MAP5]
+ADR =    map4
+LEN = 3
+HLP = TP_MAP5
+[TP_DYN5]
+ADR =    dyn4
+LEN = 3
+HLP = TP_DYN5
+[TP_MAP6]
+ADR =    map5
+LEN = 3
+HLP = TP_MAP6
+[TP_DYN6]
+ADR =    dyn5
+LEN = 3
+HLP = TP_DYN6
+
+[PKIN_COMPX]
+ADR =   pk0
+FRM = QTA, 3
+HLP = PKIN_COMPX
+[PKIN_COMPY]
+ADR =   pk1
+FRM = QTA, 3
+HLP = PKIN_COMPY
+[PKIN_COMPZ]
+ADR =   pk2
+FRM = QTA, 3
+HLP = PKIN_COMPZ
+
+[TDYN_VELLIM]
+ADR =   dy0
+HLP = TDYN_VELLIM
+[TDYN_ACCTIME]
+ADR =   dy1
+FRM = QTA, 3
+HLP = TDYN_ACCTIME
+[TDYN_DECTIME]
+ADR =   dy2
+FRM = QTA, 3
+HLP = TDYN_DECTIME
+[TDYN_DELAYS]
+ADR =   dy3
+FRM = QTA, 3
+HLP = TDYN_DELAYS
+[TDYN_GAINP]
+ADR =   dy4
+FRM = QTA, 3
+HLP = TDYN_GAINP
+[TDYN_FWERR]
+ADR =   dy5
+HLP = TDYN_FWERR
+[TDYN_TOLLERF]
+ADR =   dy6
+FRM = QTA, 1
+HLP = TDYN_TOLLERF
+[TDYN_VELPOS]
+ADR =   dy7
+HLP = TDYN_VELPOS

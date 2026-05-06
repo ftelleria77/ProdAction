@@ -1,0 +1,9 @@
+[STRUCT]
+KEY_CFGPLC {
+}
+
+[DEFAULT]
+MSK = 0, 32
+FRM = DEC, 0
+LEN = 10
+
