@@ -44,7 +44,7 @@ Crear la matriz para:
 
 - `E001`
 - `E002`
-- `E003`
+- `E003` ya tiene evidencia parcial en `Pieza_096` y `Pieza_097`
 - `E004` ya cubierto por las piezas control
 - `E005`
 - `E006`
@@ -66,9 +66,11 @@ Pieza_Tool_E001_CIRCLE_D100_CW_THRU_E05
 ```
 
 Repetir el patron reemplazando `E001` por `E002`, `E003`, `E005`, `E006` y
-`E007`. `E004` puede reutilizar `Pieza_015`, `Pieza_022`, `Pieza_025` y
-`Pieza_026` como control, o duplicarse con el mismo patron si conviene una serie
-homogenea.
+`E007`. `E003` puede omitir o reutilizar los casos ya cubiertos por
+`Pieza_096/097` para polilinea `Left/Right`, pero todavia faltan sus espejos
+`Center` y circulares. `E004` puede reutilizar `Pieza_015`, `Pieza_022`,
+`Pieza_025` y `Pieza_026` como control, o duplicarse con el mismo patron si
+conviene una serie homogenea.
 
 ## Validacion Esperada
 

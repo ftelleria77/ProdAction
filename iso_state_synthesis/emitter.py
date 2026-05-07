@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -326,6 +327,7 @@ def _emit_router_inter_work_reset(
     if approach_change is None:
         approach_change = _find_change(next_prepare.forced_values, "trabajo", "approach_enabled")
     next_approach_enabled = True if approach_change is None else bool(approach_change.after)
+    next_side = str(_optional_change_after(next_prepare, "trabajo", "side_of_feature", "Center"))
     reset_lines = [
         "?%ETK[7]=0",
         "MLV=0",
@@ -337,7 +339,7 @@ def _emit_router_inter_work_reset(
         "MLV=0",
         "G0 G53 Z201.000",
     ]
-    if next_strategy or not next_approach_enabled:
+    if next_strategy or (not next_approach_enabled and next_side not in {"Left", "Right"}):
         reset_lines = reset_lines[1:]
     for line in reset_lines:
         _append(
@@ -579,6 +581,10 @@ def _face_selection_lines(evaluation: IsoStateEvaluation, work_plane: str) -> tu
         if (
             _work_family(evaluation) == "profile_milling"
             and not _first_work_value(evaluation, "trabajo", "strategy", "")
+        ) or (
+            _work_family(evaluation) == "line_milling"
+            and _first_work_value(evaluation, "trabajo", "side_of_feature", "Center")
+            in {"Left", "Right"}
         ):
             lines.append("?%ETK[7]=0")
         lines.extend(["?%ETK[8]=1", "G40"])
@@ -1314,6 +1320,7 @@ def _emit_line_milling_trace(
     profile_winding = str(_optional_change_after(differential, "movimiento", "profile_winding", ""))
     circle_center_x = _optional_change_after(differential, "movimiento", "circle_center_x", None)
     circle_center_y = _optional_change_after(differential, "movimiento", "circle_center_y", None)
+    contour_points = _change_after(differential, "movimiento", "contour_points")
     has_lead_paths = (
         len(approach.points) > 2
         and len(lift.points) > 2
@@ -1327,7 +1334,22 @@ def _emit_line_milling_trace(
         and not strategy_name
         and side_of_feature in {"Right", "Left"}
     )
-    if uses_side_compensation:
+    uses_no_lead_side_compensation = (
+        not has_lead_paths
+        and not strategy_name
+        and side_of_feature in {"Right", "Left"}
+        and profile_family in {"OpenPolyline", "Circle"}
+    )
+    if uses_no_lead_side_compensation:
+        nominal_points = tuple((float(point[0]), float(point[1])) for point in contour_points)
+        rapid_point, _ = _no_lead_compensation_points(
+            nominal_points,
+            float(tool_radius),
+            profile_family,
+            profile_winding,
+        )
+        rapid_x, rapid_y = rapid_point
+    elif uses_side_compensation:
         rapid_x = start_x
         rapid_y = float(approach.points[0].y) - (2.0 * overcut_length)
     else:
@@ -1470,6 +1492,63 @@ def _emit_line_milling_trace(
             current_x = float(point.x)
             current_y = float(point.y)
             current_z = float(point.iso_z)
+        motion_lines = tuple(generated)
+    elif uses_no_lead_side_compensation:
+        compensation_code = "G42" if side_of_feature == "Right" else "G41"
+        nominal_points = tuple((float(point[0]), float(point[1])) for point in contour_points)
+        rapid_point, leadout_point = _no_lead_compensation_points(
+            nominal_points,
+            float(tool_radius),
+            profile_family,
+            profile_winding,
+        )
+        current_x = nominal_points[0][0]
+        current_y = nominal_points[0][1]
+        current_z = float(cut_z)
+        include_cut_z = profile_family.startswith("Line") or float(cut_z) > -float(
+            evaluation.initial_state.get("pieza", "depth")
+        )
+        generated = [
+            "?%ETK[7]=4",
+            compensation_code,
+            f"G1 X{_fmt(nominal_points[0][0])} Y{_fmt(nominal_points[0][1])} Z{_fmt(security_z)} F{_fmt(plunge_feed)}",
+            f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}",
+        ]
+        if profile_family == "Circle" and circle_center_x is not None and circle_center_y is not None:
+            for point in nominal_points[2::2] or nominal_points[1:]:
+                generated.append(
+                    _profile_milling_arc_line(
+                        "G3" if profile_winding == "CounterClockwise" else "G2",
+                        point[0],
+                        point[1],
+                        circle_center_x,
+                        circle_center_y,
+                        milling_feed,
+                    )
+                )
+                current_x, current_y = point
+        else:
+            for point in nominal_points[1:]:
+                generated.append(
+                    _line_milling_motion_line(
+                        point[0],
+                        point[1],
+                        float(cut_z),
+                        current_x,
+                        current_y,
+                        current_z,
+                        float(milling_feed),
+                        always_include_z=include_cut_z,
+                    )
+                )
+                current_x, current_y = point
+        generated.extend(
+            (
+                f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}",
+                "G40",
+                f"G1 X{_fmt(leadout_point[0])} Y{_fmt(leadout_point[1])} Z{_fmt(security_z)} F{_fmt(milling_feed)}",
+            )
+        )
         motion_lines = tuple(generated)
     elif strategy_name:
         current_x = float(start_x)
@@ -2149,6 +2228,40 @@ def _line_milling_motion_line(
         words.append(f"Z{_fmt(z)}")
     words.append(f"F{_fmt(feed)}")
     return " ".join(words)
+
+
+def _no_lead_compensation_points(
+    points: tuple[tuple[float, float], ...],
+    tool_radius: float,
+    profile_family: str,
+    profile_winding: str,
+) -> tuple[tuple[float, float], tuple[float, float]]:
+    if len(points) < 2:
+        raise IsoCandidateEmissionError("La traza sin lead no contiene puntos nominales suficientes.")
+    lead = 1.0
+    start_x, start_y = points[0]
+    end_x, end_y = points[-1]
+    if profile_family == "Circle":
+        direction = -1.0 if profile_winding == "CounterClockwise" else 1.0
+        return (start_x, start_y + direction * lead), (end_x, end_y - direction * lead)
+    first_dx, first_dy = _unit_vector(points[0], points[1])
+    last_dx, last_dy = _unit_vector(points[-2], points[-1])
+    return (
+        (start_x - first_dx * lead, start_y - first_dy * lead),
+        (end_x + last_dx * lead, end_y + last_dy * lead),
+    )
+
+
+def _unit_vector(
+    start: tuple[float, float],
+    end: tuple[float, float],
+) -> tuple[float, float]:
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    length = math.hypot(dx, dy)
+    if length < 0.0005:
+        raise IsoCandidateEmissionError("Segmento de trayectoria con longitud cero.")
+    return dx / length, dy / length
 
 
 def _profile_milling_arc_line(

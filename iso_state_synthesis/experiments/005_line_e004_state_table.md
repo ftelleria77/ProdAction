@@ -144,9 +144,9 @@ Validacion posterior:
 Nota de generalizacion: el detector ya no queda atado a `ToolKey=E004`. Para
 operaciones de fresado acepta herramientas `E00x`, incluida `E002`; el emisor
 usa `ToolOffsetLength`, diametro/radio, avances y velocidad desde el `def.tlgx`
-embebido. La evidencia exacta disponible en este corpus sigue siendo `E004`, por
-lo que faltan piezas espejo para confirmar las otras herramientas con los mismos
-recorridos.
+embebido. La evidencia exacta disponible en este corpus ya cubre `E004` y dos
+casos `E003`; faltan piezas espejo para confirmar las otras herramientas con los
+mismos recorridos.
 
 ## Ampliacion A Contornos E004 Center Sin Lead
 
@@ -172,3 +172,30 @@ Validacion:
 | `Pieza_022` | `142 vs 142 lineas`, `0 diferencias` |
 | `Pieza_025` | `141 vs 141 lineas`, `0 diferencias` |
 | `Pieza_026` | `141 vs 141 lineas`, `0 diferencias` |
+
+## Ampliacion A Contornos Sin Lead Left/Right
+
+Para `OpenPolyline` y `Circle` con `SideOfFeature=Left/Right`, Maestro vuelve a
+la coordenada nominal y activa compensacion:
+
+- `Left` emite `G41`;
+- `Right` emite `G42`;
+- el acercamiento/alejamiento corto sin lead usa una distancia fija `1.000`
+  sobre la tangente nominal, no `tool_radius / 2`;
+- en secuencia `E001 -> E004`, el reset intermedio conserva el `?%ETK[7]=0`
+  adicional para `Left/Right`.
+
+Validacion:
+
+| Variante | Resultado |
+| --- | --- |
+| `Pieza_016` | `100 vs 100 lineas`, `0 diferencias` |
+| `Pieza_017` | `100 vs 100 lineas`, `0 diferencias` |
+| `Pieza_023` | `147 vs 147 lineas`, `0 diferencias` |
+| `Pieza_024` | `147 vs 147 lineas`, `0 diferencias` |
+| `Pieza_027` | `146 vs 146 lineas`, `0 diferencias` |
+| `Pieza_028` | `146 vs 146 lineas`, `0 diferencias` |
+| `Pieza_029` | `146 vs 146 lineas`, `0 diferencias` |
+| `Pieza_030` | `146 vs 146 lineas`, `0 diferencias` |
+| `Pieza_096` | `100 vs 100 lineas`, `0 diferencias` |
+| `Pieza_097` | `100 vs 100 lineas`, `0 diferencias` |

@@ -428,7 +428,7 @@ def _line_milling_stages(
     prepare_values = [
         _pgmx_value(snapshot, "trabajo", "family", "line_milling", f"features[{feature.id}]"),
         _pgmx_value(snapshot, "trabajo", "plane", feature.plane_name or "Top", f"features[{feature.id}].plane_name"),
-        _pgmx_value(snapshot, "trabajo", "side_of_feature", feature.side_of_feature, f"features[{feature.id}].side_of_feature"),
+        _pgmx_value(snapshot, "trabajo", "side_of_feature", feature.side_of_feature, f"features[{feature.id}].side_of_feature", required=True),
         _pgmx_value(snapshot, "trabajo", "tool_width", tool_width, f"features[{feature.id}].tool_width"),
         _pgmx_value(snapshot, "trabajo", "security_plane", security_plane, f"operations[{operation.id}].approach_security_plane"),
         _pgmx_value(snapshot, "trabajo", "strategy", type(strategy).__name__ if strategy else "", f"operations[{operation.id}].milling_strategy"),
@@ -461,6 +461,7 @@ def _line_milling_stages(
                 _pgmx_value(snapshot, "movimiento", "profile_winding", geometry.profile.winding if geometry and geometry.profile else "", f"geometries[{geometry.id if geometry else ''}].profile.winding"),
                 _pgmx_value(snapshot, "movimiento", "circle_center_x", _profile_center_x(geometry), f"geometries[{geometry.id if geometry else ''}].profile.center.x"),
                 _pgmx_value(snapshot, "movimiento", "circle_center_y", _profile_center_y(geometry), f"geometries[{geometry.id if geometry else ''}].profile.center.y"),
+                _pgmx_value(snapshot, "movimiento", "contour_points", _profile_xy_points(geometry), f"geometries[{geometry.id if geometry else ''}].curve.sampled_points", required=True),
                 _rule_value("movimiento", "rapid_z", rapid_z, "Z rapida = security_plane + ToolOffsetLength.", path=LINE_MILLING_RULE_PATH, required=True),
                 _rule_value("movimiento", "cut_z", cut_z, "Z de corte E004 desde profundidad PGMX.", path=LINE_MILLING_RULE_PATH, required=True),
                 _rule_value("movimiento", "security_z", security_plane, "Plano de seguridad E004.", path=LINE_MILLING_RULE_PATH, required=True),
@@ -1179,6 +1180,10 @@ def _profile_contour_points(geometry) -> tuple[tuple[float, float, float], ...]:
     return tuple((float(x), float(y), float(z)) for x, y, z in geometry.curve.sampled_points)
 
 
+def _profile_xy_points(geometry) -> tuple[tuple[float, float], ...]:
+    return tuple((float(x), float(y)) for x, y, _ in _profile_contour_points(geometry))
+
+
 def _line_cut_z(snapshot: PgmxSnapshot, feature) -> float:
     if feature.depth_spec is not None:
         extra_depth = float(feature.depth_spec.extra_depth or 0.0)
@@ -1232,7 +1237,7 @@ def _is_line_milling(resolved_step: PgmxResolvedWorkingStepSnapshot) -> bool:
         return "Milling" in operation.operation_type
     if profile_family not in {"OpenPolyline", "Circle"}:
         return False
-    if (feature.side_of_feature or "Center") != "Center":
+    if (feature.side_of_feature or "Center") not in {"Center", "Left", "Right"}:
         return False
     if operation.milling_strategy is not None:
         return False

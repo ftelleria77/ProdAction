@@ -390,20 +390,27 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
   se agregaron los subcasos `OpenPolyline` y `Circle`: usa toolpath directo,
   omite `Z` repetida en movimientos XY y en circulos emite arcos por centro
   `I/J`.
+- Para contornos `OpenPolyline` y `Circle` sin lead con `SideOfFeature=Left` o
+  `Right`, Maestro usa coordenada nominal con `G41/G42`. El lead corto de
+  entrada/salida observado es fijo `1.000` sobre la tangente nominal, no depende
+  del radio de herramienta. Esto suma `Pieza_016`, `017`, `023`, `024`,
+  `027..030`, `096` y `097`.
 - La regla de fresado lineal/contorno ya no esta atada a `ToolKey=E004`: acepta
   herramientas `E00x`, incluida `E002`, y toma numero, largo, radio, avances y
-  velocidad desde el `def.tlgx` embebido. La validacion exacta disponible aun es
-  con `E004`; faltan piezas espejo para cada herramienta.
-- Resultado nuevo del barrido `Pieza*`: 34 pares exactos
+  velocidad desde el `def.tlgx` embebido. La validacion exacta disponible cubre
+  `E004` y dos casos `E003`; faltan piezas espejo para las demas herramientas.
+- Resultado nuevo del barrido `Pieza*`: 44 pares exactos
   (`Pieza_001`, `Pieza_001_R`, `Pieza_004`, `Pieza_012`, `Pieza_013`,
-  `Pieza_014`, `Pieza_015`, `Pieza_018`, `Pieza_019`, `Pieza_020`,
-  `Pieza_021`, `Pieza_022`, `Pieza_025`, `Pieza_026`, `Pieza_059`,
-  `Pieza_060`, `Pieza_061`, `Pieza_062`,
+  `Pieza_014`, `Pieza_015`, `Pieza_016`, `Pieza_017`, `Pieza_018`,
+  `Pieza_019`, `Pieza_020`, `Pieza_021`, `Pieza_022`, `Pieza_023`,
+  `Pieza_024`, `Pieza_025`, `Pieza_026`, `Pieza_027`, `Pieza_028`,
+  `Pieza_029`, `Pieza_030`, `Pieza_059`, `Pieza_060`, `Pieza_061`,
+  `Pieza_062`,
   `Pieza_063`, `Pieza_064`, `Pieza_065`, `Pieza_066`, `Pieza_067`,
   `Pieza_068`, `Pieza_069`, `Pieza_070`, `Pieza_071`, `Pieza_084`,
-  `Pieza_085`, `Pieza_086`, `Pieza_DosHuecos`,
+  `Pieza_085`, `Pieza_086`, `Pieza_096`, `Pieza_097`, `Pieza_DosHuecos`,
   `Pieza_DosHuecos_Origen_5_5_25`, `Pieza_Hueco8`,
-  `Pieza_Hueco8_Origen_5_5_25`) y 71 `Sin candidato` por soporte pendiente.
+  `Pieza_Hueco8_Origen_5_5_25`) y 61 `Sin candidato` por soporte pendiente.
   No quedan diferencias linea-a-linea en candidatos emitidos.
 
 ## Preguntas Abiertas
