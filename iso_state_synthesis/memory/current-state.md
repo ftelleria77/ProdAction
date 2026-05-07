@@ -402,6 +402,13 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
   `1.000` mas afuera. En `Arc`, el centro sale de desplazar el punto nominal por
   la normal del lado de compensacion y el punto rapido agrega `1.000` sobre esa
   normal. Esto suma `Pieza_092..095`.
+- Para estudiar esa regla por herramienta, se genero la matriz espejo
+  `router_compensation_tool_mirror_fixtures_2026-05-07` con
+  `tools.studies.iso.router_compensation_tool_mirror_fixtures_2026_05_07`.
+  Quedaron 24 `.pgmx` generados para `E001`, `E003`, `E004`, `E005`, `E006` y
+  `E007`; los 4 casos `E002` quedaron pendientes manuales porque la generacion
+  automatica bloquea `Sierra Horizontal`. Los 24 generados se leen con
+  `inspect-pgmx` y emiten candidato con `emit-candidate`.
 - La regla de fresado lineal/contorno ya no esta atada a `ToolKey=E004`: acepta
   herramientas `E00x`, incluida `E002`, y toma numero, largo, radio, avances y
   velocidad desde el `def.tlgx` embebido. La validacion exacta disponible cubre
@@ -497,3 +504,7 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
 - Seguir con los `Pieza*` sin candidato, priorizando los subcasos de fresado
   mas cercanos al soporte actual: circulos E004 con PH5/helicoidal,
   polilineas cerradas E003/E004 y variantes con leads `Line/Arc`.
+- Procesar en Maestro la matriz
+  `S:\Maestro\Projects\ProdAction\ISO\router_compensation_tool_mirror_fixtures_2026-05-07`,
+  agregar manualmente si hace falta los 4 `E002`, y comparar contra los ISO
+  resultantes.
