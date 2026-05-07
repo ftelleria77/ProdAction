@@ -409,6 +409,11 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
   `E007`; los 4 casos `E002` quedaron pendientes manuales porque la generacion
   automatica bloquea `Sierra Horizontal`. Los 24 generados se leen con
   `inspect-pgmx` y emiten candidato con `emit-candidate`.
+- El usuario agrego manualmente los 4 `.pgmx` `E002`; la revision estructural
+  de la carpeta completa dio 28/28 `.pgmx` correctos. Los ISO candidatos se
+  generaron en la subcarpeta `candidate_iso` y el barrido contra los ISO de
+  Maestro dio 28/28 exactos. El reporte quedo en
+  `S:\Maestro\Projects\ProdAction\ISO\router_compensation_tool_mirror_fixtures_2026-05-07\validation_report.csv`.
 - La regla de fresado lineal/contorno ya no esta atada a `ToolKey=E004`: acepta
   herramientas `E00x`, incluida `E002`, y toma numero, largo, radio, avances y
   velocidad desde el `def.tlgx` embebido. La validacion exacta disponible cubre
@@ -504,7 +509,3 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
 - Seguir con los `Pieza*` sin candidato, priorizando los subcasos de fresado
   mas cercanos al soporte actual: circulos E004 con PH5/helicoidal,
   polilineas cerradas E003/E004 y variantes con leads `Line/Arc`.
-- Procesar en Maestro la matriz
-  `S:\Maestro\Projects\ProdAction\ISO\router_compensation_tool_mirror_fixtures_2026-05-07`,
-  agregar manualmente si hace falta los 4 `E002`, y comparar contra los ISO
-  resultantes.

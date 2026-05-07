@@ -24,13 +24,16 @@ py -3 -m tools.studies.iso.router_compensation_tool_mirror_fixtures_2026_05_07 `
   --output-dir "S:\Maestro\Projects\ProdAction\ISO\router_compensation_tool_mirror_fixtures_2026-05-07"
 ```
 
-Salida:
+Salida inicial del generador:
 
 - carpeta:
   `S:\Maestro\Projects\ProdAction\ISO\router_compensation_tool_mirror_fixtures_2026-05-07`;
 - `manifest.csv`;
 - 24 archivos `.pgmx` generados;
 - 4 archivos `E002` no generados por validacion preventiva del sintetizador.
+
+Revision posterior: los 4 `.pgmx` `E002` fueron agregados manualmente por el
+usuario en la misma carpeta.
 
 ## Matriz
 
@@ -52,18 +55,15 @@ Fixtures:
 | `OPEN_POLY_LEFT_ARC_DU_R2` | `Left` / `G41` | `Arc + Down` | `Arc + Up` |
 | `OPEN_POLY_RIGHT_ARC_DU_R2` | `Right` / `G42` | `Arc + Down` | `Arc + Up` |
 
-Herramientas generadas:
+Herramientas presentes despues de la correccion manual:
 
 - `E001`
+- `E002`
 - `E003`
 - `E004`
 - `E005`
 - `E006`
 - `E007`
-
-Herramienta pendiente manual:
-
-- `E002`
 
 Motivo: el sintetizador automatico de `.pgmx` mantiene validaciones
 preventivas y bloquea `E002` porque el catalogo la clasifica como
@@ -73,13 +73,31 @@ debe bloquear por herramienta.
 ## Validacion Local
 
 - `py -3 -m py_compile` del generador: correcto.
-- `inspect-pgmx --summary` sobre los 24 generados: 24/24 correctos.
-- `emit-candidate` sobre los 24 generados: 24/24 correctos.
+- Revision estructural de los 28 `.pgmx`: 28/28 correctos.
+- `inspect-pgmx --summary` sobre los 28 `.pgmx`: 28/28 correctos.
+- `emit-candidate` sobre los 28 `.pgmx`: 28/28 correctos.
+
+## Validacion Contra Maestro
+
+Los ISO de Maestro quedaron disponibles en:
+
+`P:\USBMIX\ProdAction\ISO\router_compensation_tool_mirror_fixtures_2026-05-07`
+
+Los ISO candidatos fueron generados en:
+
+`S:\Maestro\Projects\ProdAction\ISO\router_compensation_tool_mirror_fixtures_2026-05-07\candidate_iso`
+
+Reporte:
+
+`S:\Maestro\Projects\ProdAction\ISO\router_compensation_tool_mirror_fixtures_2026-05-07\validation_report.csv`
+
+Resultado del barrido:
+
+- 28/28 `Resultado: igual`;
+- 0 `Sin candidato`;
+- 0 `Resultado: distinto`.
 
 ## Pendiente
 
-1. Crear manualmente, si corresponde, las 4 piezas `E002` equivalentes.
-2. Procesar/exportar desde Maestro los ISO de todos los `.pgmx` disponibles.
-3. Correr `compare-candidate` contra los ISO de Maestro.
-4. Registrar si las diferencias, en caso de aparecer, son regla real por
+1. Registrar si las diferencias, en una variante futura, son regla real por
    herramienta o limitacion del emisor.
