@@ -30,6 +30,7 @@ NCI_ORI_CFG_PATH = "iso_state_synthesis/machine_config/snapshot/xilog_plus/Cfg/N
 XISO_CONTRACT_PATH = "iso_state_synthesis/contracts/xiso_intermediate_contract.md"
 SIDE_DRILL_RULE_PATH = "iso_state_synthesis/experiments/004_side_drill_state_table.md"
 LINE_MILLING_RULE_PATH = "iso_state_synthesis/experiments/005_line_e004_state_table.md"
+PROFILE_MILLING_RULE_PATH = "iso_state_synthesis/experiments/006_profile_e001_state_table.md"
 PHEADS_CFG_PATH = "iso_state_synthesis/machine_config/snapshot/xilog_plus/Cfg/pheads.cfg"
 
 _SIDE_DRILL_POLICIES = {
@@ -133,6 +134,8 @@ def _stages_for_working_step(
         return _side_drill_stages(snapshot, resolved_step, order_index), ()
     if _is_line_milling(resolved_step):
         return _line_milling_stages(snapshot, resolved_step, order_index), ()
+    if _is_profile_milling_e001(resolved_step):
+        return _profile_milling_stages(snapshot, resolved_step, order_index), ()
 
     return (), (
         IsoStateWarning(
@@ -318,6 +321,7 @@ def _top_drill_stages(
         _contract_value("salida", "xiso_statement", "B", "Taladro/foratura XISO candidata."),
     ]
     prepare_values.extend(_tool_values(snapshot, operation, tool, spindle))
+    prepare_values.extend(_top_drill_output_values(spindle))
 
     prepare_stage = StateStage(
         key="top_drill_prepare",
@@ -346,7 +350,7 @@ def _top_drill_stages(
                 ),
             )
         ),
-        trace=_trace_moves(snapshot, operation, tool),
+        trace=_trace_moves(snapshot, operation, tool, feature),
         xiso_statement="B",
         feature_id=feature.id,
         operation_id=operation.id,
@@ -373,6 +377,7 @@ def _top_drill_stages(
                     ),
                     confidence="observed",
                     note="Reset comun confirmado para salida de estado de cabezal.",
+                    required=True,
                 ),
                 StateValue(
                     layer="herramienta",
@@ -427,6 +432,8 @@ def _line_milling_stages(
         _pgmx_value(snapshot, "trabajo", "tool_width", tool_width, f"features[{feature.id}].tool_width"),
         _pgmx_value(snapshot, "trabajo", "security_plane", security_plane, f"operations[{operation.id}].approach_security_plane"),
         _pgmx_value(snapshot, "trabajo", "strategy", type(strategy).__name__ if strategy else "", f"operations[{operation.id}].milling_strategy"),
+        _pgmx_value(snapshot, "trabajo", "overcut_length", operation.overcut_length, f"operations[{operation.id}].overcut_length", required=True),
+        _pgmx_value(snapshot, "trabajo", "approach_enabled", operation.approach.is_enabled, f"operations[{operation.id}].approach.enabled", required=True),
         _contract_value("salida", "xiso_statement", "G1", "Fresado lineal XISO candidato."),
     ]
     prepare_values.extend(_router_tool_values(snapshot, operation, tool, head_shf))
@@ -450,16 +457,20 @@ def _line_milling_stages(
         target_state=StateVector(
             (
                 _pgmx_value(snapshot, "movimiento", "toolpath_count", len(operation.toolpaths), f"operations[{operation.id}].toolpaths"),
-                _rule_value("movimiento", "rapid_z", rapid_z, "Z rapida = security_plane + ToolOffsetLength.", path=LINE_MILLING_RULE_PATH),
-                _rule_value("movimiento", "cut_z", cut_z, "Z de corte E004 desde profundidad PGMX.", path=LINE_MILLING_RULE_PATH),
-                _rule_value("movimiento", "security_z", security_plane, "Plano de seguridad E004.", path=LINE_MILLING_RULE_PATH),
-                _rule_value("herramienta", "tool_radius", tool_radius, "Radio E004 = ancho / 2.", path=LINE_MILLING_RULE_PATH),
-                _rule_value("movimiento", "plunge_feed", (plunge_feed or 0.0) * 1000.0, "DescentSpeed.Standard * 1000.", path=LINE_MILLING_RULE_PATH),
-                _rule_value("movimiento", "milling_feed", (milling_feed or 0.0) * 1000.0, "FeedRate.Standard * 1000.", path=LINE_MILLING_RULE_PATH),
-                _pgmx_value(snapshot, "movimiento", "start_x", start_point[0], f"geometries[{geometry.id if geometry else ''}].profile.start.x"),
-                _pgmx_value(snapshot, "movimiento", "start_y", start_point[1], f"geometries[{geometry.id if geometry else ''}].profile.start.y"),
-                _pgmx_value(snapshot, "movimiento", "end_x", end_point[0], f"geometries[{geometry.id if geometry else ''}].profile.end.x"),
-                _pgmx_value(snapshot, "movimiento", "end_y", end_point[1], f"geometries[{geometry.id if geometry else ''}].profile.end.y"),
+                _pgmx_value(snapshot, "movimiento", "profile_family", geometry.profile.family if geometry and geometry.profile else "", f"geometries[{geometry.id if geometry else ''}].profile.family", required=True),
+                _pgmx_value(snapshot, "movimiento", "profile_winding", geometry.profile.winding if geometry and geometry.profile else "", f"geometries[{geometry.id if geometry else ''}].profile.winding"),
+                _pgmx_value(snapshot, "movimiento", "circle_center_x", _profile_center_x(geometry), f"geometries[{geometry.id if geometry else ''}].profile.center.x"),
+                _pgmx_value(snapshot, "movimiento", "circle_center_y", _profile_center_y(geometry), f"geometries[{geometry.id if geometry else ''}].profile.center.y"),
+                _rule_value("movimiento", "rapid_z", rapid_z, "Z rapida = security_plane + ToolOffsetLength.", path=LINE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "cut_z", cut_z, "Z de corte E004 desde profundidad PGMX.", path=LINE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "security_z", security_plane, "Plano de seguridad E004.", path=LINE_MILLING_RULE_PATH, required=True),
+                _rule_value("herramienta", "tool_radius", tool_radius, "Radio E004 = ancho / 2.", path=LINE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "plunge_feed", (plunge_feed or 0.0) * 1000.0, "DescentSpeed.Standard * 1000.", path=LINE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "milling_feed", (milling_feed or 0.0) * 1000.0, "FeedRate.Standard * 1000.", path=LINE_MILLING_RULE_PATH, required=True),
+                _pgmx_value(snapshot, "movimiento", "start_x", start_point[0], f"geometries[{geometry.id if geometry else ''}].profile.start.x", required=True),
+                _pgmx_value(snapshot, "movimiento", "start_y", start_point[1], f"geometries[{geometry.id if geometry else ''}].profile.start.y", required=True),
+                _pgmx_value(snapshot, "movimiento", "end_x", end_point[0], f"geometries[{geometry.id if geometry else ''}].profile.end.x", required=True),
+                _pgmx_value(snapshot, "movimiento", "end_y", end_point[1], f"geometries[{geometry.id if geometry else ''}].profile.end.y", required=True),
             )
         ),
         trace=_line_trace_moves(snapshot, operation),
@@ -497,6 +508,163 @@ def _line_milling_stages(
         operation_id=operation.id,
         working_step_id=step.id,
         notes=("Reset posterior observado para fresado lineal E004.",),
+    )
+    return prepare_stage, trace_stage, reset_stage
+
+
+def _profile_milling_stages(
+    snapshot: PgmxSnapshot,
+    resolved_step: PgmxResolvedWorkingStepSnapshot,
+    order_index: int,
+) -> tuple[StateStage, ...]:
+    feature = resolved_step.feature
+    operation = resolved_step.operation
+    geometry = resolved_step.geometry
+    step = resolved_step.step
+    assert feature is not None
+    assert operation is not None
+
+    tool = _embedded_tool_for_operation(snapshot, operation)
+    head_shf = _router_head_shifts()
+    contour_points = _profile_contour_points(geometry)
+    tool_offset = float(tool.tool_offset_length if tool and tool.tool_offset_length is not None else 0.0)
+    tool_width = float(feature.tool_width or (tool.diameter if tool and tool.diameter is not None else 0.0))
+    tool_radius = tool_width / 2.0
+    overcut_length = float(operation.overcut_length or 0.0)
+    security_plane = operation.approach_security_plane
+    rapid_z = security_plane + tool_offset
+    cut_z = _line_cut_z(snapshot, feature)
+    plunge_feed = _descent_speed(tool, None)
+    milling_feed = _feed_speed(tool)
+    start_x = float(contour_points[0][0])
+    start_y = float(contour_points[0][1])
+    side_of_feature = feature.side_of_feature or "Right"
+    direction_sign = -1.0 if side_of_feature == "Right" else 1.0
+    if operation.approach.is_enabled:
+        lead_distance = 2.0 * tool_radius
+    else:
+        lead_distance = 0.0
+    if operation.approach.is_enabled and operation.approach.approach_type == "Arc":
+        entry_y = start_y - (2.0 * tool_radius)
+        rapid_y = entry_y - overcut_length
+        rapid_extra_x = 0.0
+    else:
+        entry_y = start_y
+        rapid_y = start_y
+        rapid_extra_x = overcut_length
+    entry_x = start_x + (direction_sign * lead_distance)
+    rapid_x = entry_x + (direction_sign * rapid_extra_x)
+    exit_x = start_x - (direction_sign * lead_distance)
+    exit_y = entry_y
+    if operation.retract.is_enabled and operation.retract.retract_type == "Arc":
+        leadout_y = entry_y - overcut_length
+        leadout_extra_x = 0.0
+    else:
+        leadout_y = start_y
+        leadout_extra_x = overcut_length
+    leadout_x = exit_x - (direction_sign * leadout_extra_x)
+    center_i = start_x
+    center_j = entry_y
+    compensation_code = "G42" if side_of_feature == "Right" else "G41"
+    arc_code = "G2" if compensation_code == "G42" else "G3"
+
+    prepare_values = [
+        _pgmx_value(snapshot, "trabajo", "family", "profile_milling", f"features[{feature.id}]"),
+        _pgmx_value(snapshot, "trabajo", "plane", feature.plane_name or "Top", f"features[{feature.id}].plane_name"),
+        _pgmx_value(snapshot, "trabajo", "side_of_feature", feature.side_of_feature, f"features[{feature.id}].side_of_feature"),
+        _pgmx_value(snapshot, "trabajo", "tool_width", tool_width, f"features[{feature.id}].tool_width"),
+        _pgmx_value(snapshot, "trabajo", "security_plane", security_plane, f"operations[{operation.id}].approach_security_plane"),
+        _pgmx_value(snapshot, "trabajo", "strategy", type(operation.milling_strategy).__name__ if operation.milling_strategy else "", f"operations[{operation.id}].milling_strategy", required=True),
+        _pgmx_value(snapshot, "trabajo", "approach_mode", operation.approach.mode, f"operations[{operation.id}].approach.mode"),
+        _pgmx_value(snapshot, "trabajo", "retract_mode", operation.retract.mode, f"operations[{operation.id}].retract.mode"),
+        _pgmx_value(snapshot, "trabajo", "overcut_length", overcut_length, f"operations[{operation.id}].overcut_length"),
+        _contract_value("salida", "xiso_statement", "G1", "Fresado de perfil XISO candidato."),
+    ]
+    prepare_values.extend(_router_tool_values(snapshot, operation, tool, head_shf))
+
+    prepare_stage = StateStage(
+        key="profile_milling_prepare",
+        family="profile_milling",
+        order_index=order_index,
+        target_state=StateVector(tuple(prepare_values)),
+        xiso_statement="G1",
+        feature_id=feature.id,
+        operation_id=operation.id,
+        working_step_id=step.id,
+        notes=("Preparacion de router E001 antes de ejecutar perfil cerrado.",),
+    )
+
+    trace_stage = StateStage(
+        key="profile_milling_trace",
+        family="profile_milling",
+        order_index=order_index + 1,
+        target_state=StateVector(
+            (
+                _pgmx_value(snapshot, "movimiento", "toolpath_count", len(operation.toolpaths), f"operations[{operation.id}].toolpaths"),
+                _rule_value("movimiento", "rapid_z", rapid_z, "Z rapida = security_plane + ToolOffsetLength.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "cut_z", cut_z, "Z de corte E001 desde profundidad PGMX.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "security_z", security_plane, "Plano de seguridad E001.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("herramienta", "tool_radius", tool_radius, "Radio E001 = ancho / 2.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                StateValue("herramienta", "tool_offset_length", tool_offset, _tool_source(snapshot, tool, "CoreTool"), required=True),
+                _rule_value("movimiento", "plunge_feed", (plunge_feed or 0.0) * 1000.0, "DescentSpeed.Standard * 1000.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "milling_feed", (milling_feed or 0.0) * 1000.0, "FeedRate.Standard * 1000.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "contour_points", tuple((float(x), float(y)) for x, y, _ in contour_points), "Perfil nominal cerrado usado con compensacion.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "rapid_x", rapid_x, "X rapida antes de entrada.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "rapid_y", rapid_y, "Y rapida antes del arco de entrada.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "entry_x", entry_x, "X de entrada compensada.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "entry_y", entry_y, "Y de entrada compensada.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "exit_x", exit_x, "X de salida compensada.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "exit_y", exit_y, "Y de salida compensada.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "leadout_x", leadout_x, "X de alejamiento.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "leadout_y", leadout_y, "Y de alejamiento.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "arc_i", center_i, "Centro I de arcos de entrada/salida.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "arc_j", center_j, "Centro J de arcos de entrada/salida.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("trabajo", "approach_enabled", operation.approach.is_enabled, "Acercamiento E001 habilitado.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("trabajo", "approach_type", operation.approach.approach_type, "Tipo de acercamiento E001.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("trabajo", "approach_mode", operation.approach.mode, "Modo de acercamiento E001.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("trabajo", "strategy", type(operation.milling_strategy).__name__ if operation.milling_strategy else "", "Estrategia E001.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("trabajo", "retract_enabled", operation.retract.is_enabled, "Alejamiento E001 habilitado.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("trabajo", "retract_type", operation.retract.retract_type, "Tipo de alejamiento E001.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("trabajo", "retract_mode", operation.retract.mode, "Modo de alejamiento E001.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("salida", "compensation_code", compensation_code, "Compensacion lateral del perfil.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _rule_value("salida", "arc_code", arc_code, "Sentido de arco de entrada/salida.", path=PROFILE_MILLING_RULE_PATH, required=True),
+            )
+        ),
+        trace=_line_trace_moves(snapshot, operation),
+        xiso_statement="G1",
+        feature_id=feature.id,
+        operation_id=operation.id,
+        working_step_id=step.id,
+        notes=("Traza de perfil cerrado E001 derivada de geometria nominal y toolpaths Maestro.",),
+    )
+
+    reset_stage = StateStage(
+        key="profile_milling_reset",
+        family="profile_milling",
+        order_index=order_index + 2,
+        target_state=StateVector(),
+        reset_state=StateVector(
+            (
+                StateValue(
+                    layer="herramienta",
+                    key="active",
+                    value=False,
+                    source=EvidenceSource("observed_rule", PROFILE_MILLING_RULE_PATH, "profile_milling_reset"),
+                    confidence="observed",
+                ),
+                StateValue(
+                    layer="salida",
+                    key="etk_7",
+                    value=0,
+                    source=EvidenceSource("observed_rule", PROFILE_MILLING_RULE_PATH, "profile_milling_reset"),
+                    confidence="observed",
+                ),
+            )
+        ),
+        feature_id=feature.id,
+        operation_id=operation.id,
+        working_step_id=step.id,
+        notes=("Reset posterior observado para fresado de perfil E001.",),
     )
     return prepare_stage, trace_stage, reset_stage
 
@@ -610,6 +778,7 @@ def _side_drill_stages(
                     ),
                     confidence="observed",
                     note="Reset comun confirmado para salida de estado de cabezal.",
+                    required=True,
                 ),
                 StateValue(
                     layer="herramienta",
@@ -653,9 +822,9 @@ def _tool_values(
         values.extend(
             [
                 StateValue("herramienta", "tool_id", tool.id, source),
-                StateValue("herramienta", "tool_name", tool.name, source),
+                StateValue("herramienta", "tool_name", tool.name, source, required=True),
                 StateValue("herramienta", "tool_key", tool.tool_key, source),
-                StateValue("herramienta", "tool_offset_length", tool.tool_offset_length, source),
+                StateValue("herramienta", "tool_offset_length", tool.tool_offset_length, source, required=True),
                 StateValue("herramienta", "pilot_length", tool.pilot_length, source),
                 StateValue("herramienta", "diameter", tool.diameter, source),
                 StateValue(
@@ -713,12 +882,34 @@ def _tool_values(
                 StateValue("herramienta", "spindle_translation_x", spindle.translation_x, source),
                 StateValue("herramienta", "spindle_translation_y", spindle.translation_y, source),
                 StateValue("herramienta", "spindle_translation_z", spindle.translation_z, source),
-                StateValue("herramienta", "shf_x", _negative(spindle.translation_x), source),
-                StateValue("herramienta", "shf_y", _negative(spindle.translation_y), source),
-                StateValue("herramienta", "shf_z", _negative(spindle.translation_z), source),
+                StateValue("herramienta", "shf_x", _negative(spindle.translation_x), source, required=True),
+                StateValue("herramienta", "shf_y", _negative(spindle.translation_y), source, required=True),
+                StateValue("herramienta", "shf_z", _negative(spindle.translation_z), source, required=True),
             ]
         )
     return values
+
+
+def _top_drill_output_values(
+    spindle: Optional[PgmxEmbeddedSpindleSnapshot],
+) -> list[StateValue]:
+    if spindle is None:
+        return []
+    return [
+        StateValue(
+            "salida",
+            "etk_0_mask",
+            2 ** (int(spindle.spindle) - 1),
+            EvidenceSource(
+                "observed_rule",
+                "iso_state_synthesis/experiments/001_top_drill_state_table.md",
+                "top_drill_etk_0_mask",
+            ),
+            confidence="confirmed",
+            note="Mascara de agregado vertical: ETK[0] = 2 ** (spindle - 1).",
+            required=True,
+        )
+    ]
 
 
 def _side_tool_values(
@@ -773,9 +964,9 @@ def _side_tool_values(
                 StateValue("herramienta", "spindle_translation_x", spindle.translation_x, source),
                 StateValue("herramienta", "spindle_translation_y", spindle.translation_y, source),
                 StateValue("herramienta", "spindle_translation_z", spindle.translation_z, source),
-                StateValue("herramienta", "shf_x", _negative(spindle.translation_x), source),
-                StateValue("herramienta", "shf_y", _negative(spindle.translation_y), source),
-                StateValue("herramienta", "shf_z", _negative(spindle.translation_z), source),
+                StateValue("herramienta", "shf_x", _negative(spindle.translation_x), source, required=True),
+                StateValue("herramienta", "shf_y", _negative(spindle.translation_y), source, required=True),
+                StateValue("herramienta", "shf_z", _negative(spindle.translation_z), source, required=True),
             ]
         )
     return values
@@ -797,18 +988,18 @@ def _router_tool_values(
             _pgmx_value(snapshot, "herramienta", "operation_tool_name", operation.tool_key.name if operation.tool_key else "", f"operations[{operation.id}].tool_key.name"),
             StateValue("herramienta", "tool_id", tool.id if tool else "", source),
             StateValue("herramienta", "tool_name", tool_name, source),
-            StateValue("herramienta", "tool_number", tool_number, source),
-            StateValue("herramienta", "spindle", 1, EvidenceSource("observed_rule", LINE_MILLING_RULE_PATH, "router_spindle"), confidence="confirmed"),
-            StateValue("salida", "etk_9", tool_number, EvidenceSource("observed_rule", LINE_MILLING_RULE_PATH, "router_tool_code"), confidence="confirmed"),
-            StateValue("salida", "etk_18", 1, EvidenceSource("observed_rule", LINE_MILLING_RULE_PATH, "router_etk18"), confidence="confirmed"),
-            StateValue("herramienta", "tool_offset_length", tool.tool_offset_length if tool else None, source),
+            StateValue("herramienta", "tool_number", tool_number, source, required=True),
+            StateValue("herramienta", "spindle", 1, EvidenceSource("observed_rule", LINE_MILLING_RULE_PATH, "router_spindle"), confidence="confirmed", required=True),
+            StateValue("salida", "etk_9", tool_number, EvidenceSource("observed_rule", LINE_MILLING_RULE_PATH, "router_tool_code"), confidence="confirmed", required=True),
+            StateValue("salida", "etk_18", 1, EvidenceSource("observed_rule", LINE_MILLING_RULE_PATH, "router_etk18"), confidence="confirmed", required=True),
+            StateValue("herramienta", "tool_offset_length", tool.tool_offset_length if tool else None, source, required=True),
             StateValue("herramienta", "diameter", tool.diameter if tool else None, source),
-            StateValue("herramienta", "spindle_speed_standard", tool.technology.spindle_speed_standard if tool else None, source),
+            StateValue("herramienta", "spindle_speed_standard", tool.technology.spindle_speed_standard if tool else None, source, required=True),
             StateValue("herramienta", "feed_rate_standard", tool.technology.feed_rate_standard if tool else None, source),
             StateValue("herramienta", "descent_speed_standard", tool.technology.descent_speed_standard if tool else None, source),
-            StateValue("herramienta", "shf_x", head_shf[0], EvidenceSource("machine_config", PHEADS_CFG_PATH, "pheads[308]"), confidence="observed"),
-            StateValue("herramienta", "shf_y", head_shf[1], EvidenceSource("machine_config", PHEADS_CFG_PATH, "pheads[309]"), confidence="observed"),
-            StateValue("herramienta", "shf_z", head_shf[2], EvidenceSource("machine_config", PHEADS_CFG_PATH, "pheads[310]"), confidence="observed"),
+            StateValue("herramienta", "shf_x", head_shf[0], EvidenceSource("machine_config", PHEADS_CFG_PATH, "pheads[308]"), confidence="observed", required=True),
+            StateValue("herramienta", "shf_y", head_shf[1], EvidenceSource("machine_config", PHEADS_CFG_PATH, "pheads[309]"), confidence="observed", required=True),
+            StateValue("herramienta", "shf_z", head_shf[2], EvidenceSource("machine_config", PHEADS_CFG_PATH, "pheads[310]"), confidence="observed", required=True),
         ]
     )
     return values
@@ -818,11 +1009,21 @@ def _trace_moves(
     snapshot: PgmxSnapshot,
     operation: PgmxOperationSnapshot,
     tool: Optional[PgmxEmbeddedToolSnapshot],
+    feature=None,
 ) -> tuple[TraceMove, ...]:
     offset = tool.tool_offset_length if tool is not None else None
     feed = None
-    if tool is not None and tool.technology.descent_speed_standard is not None:
-        feed = tool.technology.descent_speed_standard * 1000.0
+    if tool is not None:
+        feed_candidates = [
+            value
+            for value in (
+                tool.technology.feed_rate_standard,
+                tool.technology.descent_speed_standard,
+            )
+            if value is not None
+        ]
+        if feed_candidates:
+            feed = min(feed_candidates) * 1000.0
 
     moves: list[TraceMove] = []
     for toolpath in operation.toolpaths:
@@ -831,7 +1032,7 @@ def _trace_moves(
         if toolpath.curve is not None:
             for point in toolpath.curve.sampled_points:
                 local_z = point[2]
-                iso_z = local_z + offset if offset is not None else None
+                iso_z = _top_drill_iso_z(local_z, offset, feature)
                 points.append(
                     TracePoint(
                         x=point[0],
@@ -850,6 +1051,15 @@ def _trace_moves(
             )
         )
     return tuple(moves)
+
+
+def _top_drill_iso_z(local_z: float, offset: Optional[float], feature) -> Optional[float]:
+    if offset is None:
+        return None
+    effective_z = local_z
+    if feature is not None and feature.depth_spec is not None and feature.depth_spec.is_through:
+        effective_z = max(0.0, float(local_z))
+    return effective_z + offset
 
 
 def _side_trace_moves(
@@ -938,11 +1148,35 @@ def _router_head_shifts() -> tuple[float, float, float]:
 
 def _line_points(geometry) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
     if geometry is None or geometry.profile is None or not geometry.profile.primitives:
+        if geometry is not None and geometry.curve is not None and geometry.curve.sampled_points:
+            points = geometry.curve.sampled_points
+            return points[0], points[-1]
         raise ValueError("La geometria lineal E004 no contiene perfil/primitiva.")
     primitive = geometry.profile.primitives[0]
     if primitive.primitive_type != "Line":
+        if geometry.curve is not None and geometry.curve.sampled_points:
+            points = geometry.curve.sampled_points
+            return points[0], points[-1]
         raise ValueError(f"Primitiva E004 no soportada: {primitive.primitive_type}.")
     return primitive.start_point, primitive.end_point
+
+
+def _profile_center_x(geometry) -> Optional[float]:
+    if geometry is None or geometry.profile is None or geometry.profile.center_point is None:
+        return None
+    return float(geometry.profile.center_point[0])
+
+
+def _profile_center_y(geometry) -> Optional[float]:
+    if geometry is None or geometry.profile is None or geometry.profile.center_point is None:
+        return None
+    return float(geometry.profile.center_point[1])
+
+
+def _profile_contour_points(geometry) -> tuple[tuple[float, float, float], ...]:
+    if geometry is None or geometry.curve is None or not geometry.curve.sampled_points:
+        raise ValueError("La geometria de perfil no contiene puntos muestreados.")
+    return tuple((float(x), float(y), float(z)) for x, y, z in geometry.curve.sampled_points)
 
 
 def _line_cut_z(snapshot: PgmxSnapshot, feature) -> float:
@@ -989,11 +1223,58 @@ def _is_line_milling(resolved_step: PgmxResolvedWorkingStepSnapshot) -> bool:
         return False
     if (feature.plane_name or "Top") != "Top":
         return False
-    if operation.tool_key is None or (operation.tool_key.name or "").upper() != "E004":
+    if not _is_router_milling_tool(operation):
         return False
-    if geometry.profile is None or not geometry.profile.family.startswith("Line"):
+    if geometry.profile is None:
+        return False
+    profile_family = geometry.profile.family
+    if profile_family.startswith("Line"):
+        return "Milling" in operation.operation_type
+    if profile_family not in {"OpenPolyline", "Circle"}:
+        return False
+    if (feature.side_of_feature or "Center") != "Center":
+        return False
+    if operation.milling_strategy is not None:
+        return False
+    if operation.approach.is_enabled or operation.retract.is_enabled:
         return False
     return "Milling" in operation.operation_type
+
+
+def _is_router_milling_tool(operation: PgmxOperationSnapshot) -> bool:
+    if operation.tool_key is None:
+        return False
+    tool_name = (operation.tool_key.name or "").upper()
+    if not tool_name.startswith("E") or not tool_name[1:].isdigit():
+        return False
+    return "Milling" in operation.operation_type
+
+
+def _is_profile_milling_e001(resolved_step: PgmxResolvedWorkingStepSnapshot) -> bool:
+    feature = resolved_step.feature
+    operation = resolved_step.operation
+    geometry = resolved_step.geometry
+    if feature is None or operation is None or geometry is None:
+        return False
+    if (feature.plane_name or "Top") != "Top":
+        return False
+    if operation.tool_key is None or (operation.tool_key.name or "").upper() != "E001":
+        return False
+    if "Milling" not in operation.operation_type:
+        return False
+    if geometry.profile is None or geometry.profile.family != "ClosedPolylineMidEdgeStart":
+        return False
+    if operation.approach.is_enabled and operation.approach.approach_type not in {"Arc", "Line"}:
+        return False
+    if operation.retract.is_enabled and operation.retract.retract_type not in {"Arc", "Line"}:
+        return False
+    try:
+        points = _profile_contour_points(geometry)
+    except ValueError:
+        return False
+    if len(points) < 3:
+        return False
+    return True
 
 
 def _embedded_tool_for_operation(
@@ -1061,8 +1342,9 @@ def _pgmx_value(
     *,
     confidence: str = "observed",
     note: str = "",
+    required: bool = False,
 ) -> StateValue:
-    return StateValue(layer, key, value, _pgmx_source(snapshot, field), confidence, note)
+    return StateValue(layer, key, value, _pgmx_source(snapshot, field), confidence, note, required)
 
 
 def _rule_value(
@@ -1072,6 +1354,7 @@ def _rule_value(
     note: str,
     *,
     path: str = "iso_state_synthesis/experiments/001_top_drill_state_table.md",
+    required: bool = False,
 ) -> StateValue:
     return StateValue(
         layer=layer,
@@ -1085,6 +1368,7 @@ def _rule_value(
         ),
         confidence="confirmed",
         note=note,
+        required=required,
     )
 
 

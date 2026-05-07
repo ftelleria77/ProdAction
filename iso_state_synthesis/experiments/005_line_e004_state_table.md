@@ -106,5 +106,69 @@ Resultado:
 | `ISO_MIN_023_LineE004_OriginY10` | `94 vs 94 lineas`, `0 diferencias` |
 
 Lectura: el emisor candidato ya reproduce las 14 piezas minimas del corpus
-`ISO_MIN_*`: Top Drill, Side Drill y Line E004. Sigue acotado a una familia por
-programa.
+`ISO_MIN_*`: Top Drill, Side Drill y Line E004.
+
+## Ampliacion Con Secuencias E001 A E004
+
+En el barrido posterior contra `Pieza_063..071`, `E004` aparece despues de un
+perfil `E001`. En esa secuencia la preparacion E004 es incremental:
+
+- no repite `?%ETK[6]=1`;
+- no reemite `%Or[0]` ni `SHF[X/Y/Z]` del router;
+- conserva cambio de herramienta, `?%ETK[9]=4`, `?%ETK[18]=1`, velocidad,
+  `G17`, `MLV=2` y `?%ETK[13]=1`.
+
+La traza lineal E004 ahora distingue:
+
+- fixture minimo sin acercamiento/alejamiento real: mantiene el patron
+  `ISO_MIN_020..023`;
+- acercamiento/alejamiento lineal: emite los toolpaths `Approach`,
+  `TrajectoryPath` y `Lift`;
+- `SideOfFeature=Right/Left` sin PH5: emite coordenada nominal con `G42/G41`;
+- PH5: conserva el toolpath offset y no emite `G41/G42`.
+
+Validacion posterior:
+
+| Variante | Resultado |
+| --- | --- |
+| `Pieza_063` | `143 vs 143 lineas`, `0 diferencias` |
+| `Pieza_064` | `147 vs 147 lineas`, `0 diferencias` |
+| `Pieza_065` | `147 vs 147 lineas`, `0 diferencias` |
+| `Pieza_066` | `156 vs 156 lineas`, `0 diferencias` |
+| `Pieza_067` | `156 vs 156 lineas`, `0 diferencias` |
+| `Pieza_068` | `156 vs 156 lineas`, `0 diferencias` |
+| `Pieza_069` | `150 vs 150 lineas`, `0 diferencias` |
+| `Pieza_070` | `150 vs 150 lineas`, `0 diferencias` |
+| `Pieza_071` | `150 vs 150 lineas`, `0 diferencias` |
+
+Nota de generalizacion: el detector ya no queda atado a `ToolKey=E004`. Para
+operaciones de fresado acepta herramientas `E00x`, incluida `E002`; el emisor
+usa `ToolOffsetLength`, diametro/radio, avances y velocidad desde el `def.tlgx`
+embebido. La evidencia exacta disponible en este corpus sigue siendo `E004`, por
+lo que faltan piezas espejo para confirmar las otras herramientas con los mismos
+recorridos.
+
+## Ampliacion A Contornos E004 Center Sin Lead
+
+En el mismo corpus, se agrego un subcaso acotado para `E004` con
+`SideOfFeature=Center`, sin estrategia y sin acercamiento/alejamiento habilitado.
+La preparacion sigue siendo la incremental de router cuando viene despues de
+`E001`.
+
+Reglas observadas:
+
+- `OpenPolyline` sin compensacion usa los puntos de `TrajectoryPath`; despues de
+  la bajada inicial Maestro no repite `Z` en los movimientos XY si la cota no
+  cambia.
+- `Circle` usa el centro del perfil como `I/J` y deduce `G3` o `G2` por el
+  sentido `CounterClockwise`/`Clockwise`.
+- El reset intermedio `E001 -> E004` no duplica `?%ETK[7]=0` cuando el siguiente
+  `E004` no tiene acercamiento habilitado.
+
+Validacion:
+
+| Variante | Resultado |
+| --- | --- |
+| `Pieza_022` | `142 vs 142 lineas`, `0 diferencias` |
+| `Pieza_025` | `141 vs 141 lineas`, `0 diferencias` |
+| `Pieza_026` | `141 vs 141 lineas`, `0 diferencias` |

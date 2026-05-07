@@ -59,8 +59,8 @@ py -3 -m iso_state_synthesis emit-candidate <archivo.pgmx> --output tmp\candidat
 La salida JSON de `emit-candidate --json` conserva, para cada linea, la fuente,
 la confianza y `rule_status`. Ese campo separa reglas ya generalizadas en el
 fixture Top Drill `001` a `006` de constantes de maquina/campo e hipotesis
-pendientes. La tanda validada actual cubre `Top Drill`, `Side Drill` y
-`Line E004`.
+pendientes. La tanda validada actual cubre `Top Drill`, `Side Drill`,
+`Line E004` y un perfil `E001` acotado.
 
 Compararlo contra Maestro:
 
@@ -80,12 +80,23 @@ Estado actual del emisor candidato:
   `ISO_MIN_010` a `ISO_MIN_013`.
 - Soporta las cuatro variantes Line E004 del fixture minimo
   `ISO_MIN_020` a `ISO_MIN_023`, incluida la estrategia `PH=5`.
+- La regla de fresado lineal/contorno queda parametrizada por herramienta
+  `E00x`; la validacion exacta disponible hoy sigue siendo con `E004`.
+- Soporta subcasos de contorno `Center` sin acercamiento/alejamiento ni
+  estrategia para `OpenPolyline` y `Circle`.
+- Soporta perfil `E001` sobre `Top` para contorno cerrado
+  `ClosedPolylineMidEdgeStart`, con acercamiento/alejamiento `Arc`, `Line`,
+  deshabilitado y estrategias PH5 observadas.
+- Soporta secuencias mixtas `E001` -> `E004` del corpus historico
+  `Pieza_063..071`, incluyendo preparacion incremental de router.
 - Compara igual contra Maestro en las 14 piezas minimas `ISO_MIN_*`
   disponibles.
+- En el barrido `Pieza*`, emite 34 candidatos exactos, 71 `Sin candidato` y
+  ningun candidato distinto.
 - Clasifica cada linea emitida con `rule_status`, sin cambiar el texto ISO
   candidato.
 - El diferencial ya modela la velocidad activa del `BooringUnitHead` como
   `maquina.boring_head_speed` y genera `?%ETK[17]=257` solo cuando esa velocidad
   cambia entre trabajos.
-- Sigue siendo un emisor explicativo acotado a una familia por programa, no un
-  traductor ISO general.
+- Sigue siendo un emisor explicativo acotado a familias y secuencias
+  controladas, no un traductor ISO general.

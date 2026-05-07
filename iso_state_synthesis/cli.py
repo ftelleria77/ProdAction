@@ -8,7 +8,11 @@ from pathlib import Path
 from typing import Optional
 
 from .differential import evaluate_pgmx_state_plan
-from .emitter import compare_candidate_to_iso, emit_candidate_for_pgmx
+from .emitter import (
+    IsoCandidateEmissionError,
+    compare_candidate_to_iso,
+    emit_candidate_for_pgmx,
+)
 from .model import IsoStateEvaluation, IsoStatePlan, StageDifferential, StateStage, to_jsonable
 from .pgmx_source import build_state_plan_from_pgmx
 
@@ -112,10 +116,17 @@ def _evaluate_pgmx(args: argparse.Namespace) -> int:
 
 
 def _emit_candidate(args: argparse.Namespace) -> int:
-    program = emit_candidate_for_pgmx(
-        Path(args.pgmx_path),
-        program_name=args.program_name,
-    )
+    try:
+        program = emit_candidate_for_pgmx(
+            Path(args.pgmx_path),
+            program_name=args.program_name,
+        )
+    except IsoCandidateEmissionError as exc:
+        if args.json:
+            print(json.dumps({"error": "unsupported_candidate", "message": str(exc)}, ensure_ascii=False))
+        else:
+            print(f"Sin candidato: {exc}")
+        return 2
     if args.json:
         text = json.dumps(to_jsonable(program), indent=2, ensure_ascii=False)
     else:
@@ -128,10 +139,17 @@ def _emit_candidate(args: argparse.Namespace) -> int:
 
 
 def _compare_candidate(args: argparse.Namespace) -> int:
-    program = emit_candidate_for_pgmx(
-        Path(args.pgmx_path),
-        program_name=args.program_name,
-    )
+    try:
+        program = emit_candidate_for_pgmx(
+            Path(args.pgmx_path),
+            program_name=args.program_name,
+        )
+    except IsoCandidateEmissionError as exc:
+        if args.json:
+            print(json.dumps({"error": "unsupported_candidate", "message": str(exc)}, ensure_ascii=False))
+        else:
+            print(f"Sin candidato: {exc}")
+        return 2
     if args.candidate_output:
         program.write_text(Path(args.candidate_output))
     result = compare_candidate_to_iso(

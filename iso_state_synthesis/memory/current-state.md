@@ -348,12 +348,63 @@ Avance registrado el 2026-05-07:
   - `ISO_MIN_011` y `012`: `88 vs 88 lineas`, `0 diferencias`.
   - `ISO_MIN_020`, `021` y `023`: `94 vs 94 lineas`, `0 diferencias`.
   - `ISO_MIN_022`: `108 vs 108 lineas`, `0 diferencias`.
-- El emisor candidato sigue acotado a una sola familia de trabajo por programa.
-  La proxima capa importante es combinar multiples trabajos con el mismo modelo
-  de diferenciales.
+- En este avance el emisor candidato quedo acotado a una sola familia de
+  trabajo por programa. La siguiente capa importante era combinar multiples
+  trabajos con el mismo modelo de diferenciales.
 - El detalle queda registrado en
   `iso_state_synthesis/experiments/004_side_drill_state_table.md` y
   `iso_state_synthesis/experiments/005_line_e004_state_table.md`.
+
+Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
+
+- Se corrio `compare-candidate` sobre 105 pares `Pieza*.pgmx` /
+  `pieza*.iso` desde `S:\Maestro\Projects\ProdAction\ISO` y
+  `P:\USBMIX\ProdAction\ISO`.
+- El emisor ahora rechaza planes con `unsupported_stage_family` antes de emitir
+  un ISO parcial. Esto evita falsos `Resultado: distinto` cuando una familia no
+  soportada, por ejemplo `Escuadrado_Antihorario_E001_Estandar`, fue omitida
+  por el plan.
+- El CLI `compare-candidate` y `emit-candidate` reportan esos casos como
+  `Sin candidato: ...` en vez de mostrar traceback.
+- Para `Top Drill`, `?%ETK[0]` dejo de ser constante `16`: ahora se modela como
+  mascara de spindle vertical `2 ** (spindle - 1)`. La herramienta `005`
+  mantiene `16`; la herramienta D8 `001` emite `1`.
+- Para `Top Drill` pasante, si el toolpath local baja por debajo de `Z0` solo
+  por `extra_depth`, la Z ISO se calcula clampando `local_z` a `0` antes de
+  sumar `ToolOffsetLength`. Esto reproduce `Pieza_014`.
+- Para secuencias de varios `Top Drill`, el emisor replica la preparacion
+  incremental observada por Maestro: bloque completo solo en el primer trabajo,
+  reposicion corta si se repite herramienta, cambio incremental si cambia
+  herramienta, reset corto entre trabajos y reset completo solo al final.
+- Se agrego soporte acotado para fresado de perfil `E001` sobre `Top` con
+  contorno cerrado `ClosedPolylineMidEdgeStart`. Cubre
+  acercamiento/alejamiento `Arc`, `Line`, deshabilitados, y estrategias PH5
+  unidireccional/bidireccional observadas.
+- El emisor ahora puede recorrer secuencias mixtas soportadas. Para `E001` ->
+  `E004`, replica el reset intermedio de router y la preparacion incremental de
+  E004 sin reemitir `?%ETK[6]`, `%Or[0]` ni `SHF[X/Y/Z]`.
+- Para `E004` con acercamiento/alejamiento lineal habilitado, la traza usa
+  `Approach`, `TrajectoryPath` y `Lift`; en `Right/Left` sin PH5 emite
+  `G42/G41`, mientras que con PH5 conserva el toolpath offset y no compensa.
+- Para `E004` de contorno `Center` sin estrategia ni acercamiento/alejamiento,
+  se agregaron los subcasos `OpenPolyline` y `Circle`: usa toolpath directo,
+  omite `Z` repetida en movimientos XY y en circulos emite arcos por centro
+  `I/J`.
+- La regla de fresado lineal/contorno ya no esta atada a `ToolKey=E004`: acepta
+  herramientas `E00x`, incluida `E002`, y toma numero, largo, radio, avances y
+  velocidad desde el `def.tlgx` embebido. La validacion exacta disponible aun es
+  con `E004`; faltan piezas espejo para cada herramienta.
+- Resultado nuevo del barrido `Pieza*`: 34 pares exactos
+  (`Pieza_001`, `Pieza_001_R`, `Pieza_004`, `Pieza_012`, `Pieza_013`,
+  `Pieza_014`, `Pieza_015`, `Pieza_018`, `Pieza_019`, `Pieza_020`,
+  `Pieza_021`, `Pieza_022`, `Pieza_025`, `Pieza_026`, `Pieza_059`,
+  `Pieza_060`, `Pieza_061`, `Pieza_062`,
+  `Pieza_063`, `Pieza_064`, `Pieza_065`, `Pieza_066`, `Pieza_067`,
+  `Pieza_068`, `Pieza_069`, `Pieza_070`, `Pieza_071`, `Pieza_084`,
+  `Pieza_085`, `Pieza_086`, `Pieza_DosHuecos`,
+  `Pieza_DosHuecos_Origen_5_5_25`, `Pieza_Hueco8`,
+  `Pieza_Hueco8_Origen_5_5_25`) y 71 `Sin candidato` por soporte pendiente.
+  No quedan diferencias linea-a-linea en candidatos emitidos.
 
 ## Preguntas Abiertas
 
@@ -371,6 +422,23 @@ Avance registrado el 2026-05-07:
   esta demostrada causalmente.
 - Si conviene incorporar al snapshot de `iso_state_synthesis` una copia
   controlada de los esquemas `XISO*.xsd` del arbol instalado de Xilog Plus.
+
+## Recordatorio De Seguridad PGMX
+
+- El sintetizador/conversor ISO debe describir y reproducir lo que trae el
+  `.pgmx` sin imponer politica de uso de herramienta. La responsabilidad de
+  elegir una fresa valida para el trabajo queda fuera de la conversion.
+- La generacion automatica de `.pgmx` si debe incorporar reglas adicionales de
+  seguridad antes de producir archivos operativos. La intencion de esas reglas
+  es evitar que un ISO convertido desde un `.pgmx` generado automaticamente
+  pueda causar danos en la maquina.
+- Esas reglas deberan validarse por familia de operacion, herramienta,
+  profundidad, compensacion, acercamiento/alejamiento, plano, limites de pieza,
+  colisiones posibles, velocidades/avances y cualquier estado modal que pueda
+  dejar a la maquina en una condicion peligrosa.
+- Mantener separadas estas dos politicas: conversion de `.pgmx` existente
+  contra Maestro como evidencia; generacion automatica de `.pgmx` con guardas
+  preventivas propias.
 
 ## Plan Tentativo
 

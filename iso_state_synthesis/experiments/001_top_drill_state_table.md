@@ -419,3 +419,61 @@ py -3 -m iso_state_synthesis compare-candidate <TopDrill_001_a_006.pgmx> <Maestr
 
 Resultado: las seis variantes siguen comparando `84 vs 84 lineas`,
 `0 diferencias`.
+
+## Ampliacion Con Piezas D8 Historicas
+
+El 2026-05-07 se probo el emisor contra las piezas historicas
+`Pieza_012`, `Pieza_013`, `Pieza_014`, `Pieza_Hueco8` y
+`Pieza_Hueco8_Origen_5_5_25`, que usan taladro superior D8 con herramienta
+`001`.
+
+Reglas agregadas:
+
+- `?%ETK[0]` para taladro superior es la mascara del spindle vertical activo:
+  `2 ** (spindle - 1)`. La herramienta `005` mantiene `16`; la herramienta
+  `001` emite `1`.
+- En taladro superior pasante, si el `TrajectoryPath` local baja por debajo de
+  `Z0` solo para representar `extra_depth`, Maestro no traslada ese extra a la
+  Z ISO. La regla candidata clampa `local_z` a `0` antes de sumar
+  `ToolOffsetLength`.
+- El avance de bajada ISO usa el menor valor disponible entre
+  `feed_rate_standard` y `descent_speed_standard`, multiplicado por `1000`.
+  Esto reproduce las herramientas mixtas de `Pieza_001`.
+
+Validacion posterior:
+
+| Variante | Resultado |
+| --- | --- |
+| `Pieza_012` | `84 vs 84 lineas`, `0 diferencias` |
+| `Pieza_013` | `84 vs 84 lineas`, `0 diferencias` |
+| `Pieza_014` | `84 vs 84 lineas`, `0 diferencias` |
+| `Pieza_Hueco8` | `84 vs 84 lineas`, `0 diferencias` |
+| `Pieza_Hueco8_Origen_5_5_25` | `84 vs 84 lineas`, `0 diferencias` |
+
+## Secuencias Multi Top Drill En Piezas Historicas
+
+El mismo barrido mostro que Maestro no repite el bloque completo de
+preparacion para cada taladro superior cuando una pieza encadena varios
+trabajos `Top Drill`. La preparacion inicial sigue el patron completo
+documentado para `ISO_MIN_001..006`; los trabajos siguientes usan bloques
+incrementales:
+
+- Siempre restauran `SHF[Z]` de pieza, vuelven a `MLV=2` y activan `G17`.
+- Si cambia la herramienta, primero emiten `?%ETK[6]=<herramienta>`, reposicionan
+  en la aproximacion anterior, vuelven a `MLV=2`, aplican `SHF[X/Y/Z]`, activan
+  velocidad si corresponde y actualizan `?%ETK[0]`.
+- Si se repite la misma herramienta, solo reposicionan en la aproximacion
+  anterior con `G0 X... Y... Z...`; no repiten `?%ETK[6]`, `SHF[X/Y/Z]`,
+  velocidad ni mascara.
+- Los resets intermedios son cortos: `MLV=1`, restauracion de `SHF[Z]` de pieza
+  y `?%ETK[7]=0`. El reset completo queda solo para el ultimo trabajo.
+
+Validacion posterior:
+
+| Variante | Resultado |
+| --- | --- |
+| `Pieza_001` | `202 vs 202 lineas`, `0 diferencias` |
+| `Pieza_001_R` | `210 vs 210 lineas`, `0 diferencias` |
+| `Pieza_004` | `144 vs 144 lineas`, `0 diferencias` |
+| `Pieza_DosHuecos` | `103 vs 103 lineas`, `0 diferencias` |
+| `Pieza_DosHuecos_Origen_5_5_25` | `103 vs 103 lineas`, `0 diferencias` |
