@@ -395,6 +395,13 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
   entrada/salida observado es fijo `1.000` sobre la tangente nominal, no depende
   del radio de herramienta. Esto suma `Pieza_016`, `017`, `023`, `024`,
   `027..030`, `096` y `097`.
+- Para `OpenPolyline` con `SideOfFeature=Left/Right`, sin estrategia y con
+  acercamiento/alejamiento `Line` o `Arc` en modo `Down/Up`, Maestro tambien
+  usa coordenada nominal con `G41/G42`. En `Line`, el lead usa la tangente
+  nominal con distancia `tool_radius * radius_multiplier` y un punto rapido
+  `1.000` mas afuera. En `Arc`, el centro sale de desplazar el punto nominal por
+  la normal del lado de compensacion y el punto rapido agrega `1.000` sobre esa
+  normal. Esto suma `Pieza_092..095`.
 - La regla de fresado lineal/contorno ya no esta atada a `ToolKey=E004`: acepta
   herramientas `E00x`, incluida `E002`, y toma numero, largo, radio, avances y
   velocidad desde el `def.tlgx` embebido. La validacion exacta disponible cubre
@@ -413,7 +420,7 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
   la misma herramienta embebida, Maestro resuelve el router por `Name`
   (`E004`, `E005`, etc.). El adaptador ISO prioriza ahora `Name` unico y solo
   cae al `ID` si el nombre no resuelve.
-- Resultado nuevo del barrido `Pieza*`: 44 pares exactos
+- Resultado nuevo del barrido `Pieza*`: 48 pares exactos
   (`Pieza_001`, `Pieza_001_R`, `Pieza_004`, `Pieza_012`, `Pieza_013`,
   `Pieza_014`, `Pieza_015`, `Pieza_016`, `Pieza_017`, `Pieza_018`,
   `Pieza_019`, `Pieza_020`, `Pieza_021`, `Pieza_022`, `Pieza_023`,
@@ -422,9 +429,10 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
   `Pieza_062`,
   `Pieza_063`, `Pieza_064`, `Pieza_065`, `Pieza_066`, `Pieza_067`,
   `Pieza_068`, `Pieza_069`, `Pieza_070`, `Pieza_071`, `Pieza_084`,
-  `Pieza_085`, `Pieza_086`, `Pieza_096`, `Pieza_097`, `Pieza_DosHuecos`,
+  `Pieza_085`, `Pieza_086`, `Pieza_092`, `Pieza_093`, `Pieza_094`,
+  `Pieza_095`, `Pieza_096`, `Pieza_097`, `Pieza_DosHuecos`,
   `Pieza_DosHuecos_Origen_5_5_25`, `Pieza_Hueco8`,
-  `Pieza_Hueco8_Origen_5_5_25`) y 61 `Sin candidato` por soporte pendiente.
+  `Pieza_Hueco8_Origen_5_5_25`) y 57 `Sin candidato` por soporte pendiente.
   No quedan diferencias linea-a-linea en candidatos emitidos.
 
 ## Preguntas Abiertas
@@ -486,6 +494,6 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
 
 - Mantener como hipotesis pendientes las repeticiones `ETK[8]/G40` y resets
   `G61/G64/SYN` hasta que una variante nueva los explique.
-- Extender el emisor general a multiples trabajos usando el mismo diferencial
-  de `maquina.boring_head_speed`; el emisor candidato actual sigue acotado a
-  una familia por programa.
+- Seguir con los `Pieza*` sin candidato, priorizando los subcasos de fresado
+  mas cercanos al soporte actual: circulos E004 con PH5/helicoidal,
+  polilineas cerradas E003/E004 y variantes con leads `Line/Arc`.

@@ -123,5 +123,5 @@ Reglas agregadas despues de la primera validacion:
 | `Pieza_085` | `103 vs 103 lineas`, `0 diferencias` |
 | `Pieza_086` | `103 vs 103 lineas`, `0 diferencias` |
 
-Barrido completo posterior del corpus `Pieza*`: `34` pares exactos, `71` sin
+Barrido completo posterior del corpus `Pieza*`: `48` pares exactos, `57` sin
 candidato, `0` candidatos distintos.

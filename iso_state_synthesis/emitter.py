@@ -1321,9 +1321,14 @@ def _emit_line_milling_trace(
     circle_center_x = _optional_change_after(differential, "movimiento", "circle_center_x", None)
     circle_center_y = _optional_change_after(differential, "movimiento", "circle_center_y", None)
     contour_points = _change_after(differential, "movimiento", "contour_points")
+    nominal_points = tuple((float(point[0]), float(point[1])) for point in contour_points)
+    approach_type = str(evaluation.final_state.get("trabajo", "approach_type", "Line"))
+    approach_radius_multiplier = float(
+        evaluation.final_state.get("trabajo", "approach_radius_multiplier", 2.0) or 2.0
+    )
     has_lead_paths = (
-        len(approach.points) > 2
-        and len(lift.points) > 2
+        len(approach.points) >= 2
+        and len(lift.points) >= 2
         and (
             abs(float(approach.points[0].x) - float(approach.points[-1].x)) >= 0.0005
             or abs(float(approach.points[0].y) - float(approach.points[-1].y)) >= 0.0005
@@ -1341,7 +1346,6 @@ def _emit_line_milling_trace(
         and profile_family in {"OpenPolyline", "Circle"}
     )
     if uses_no_lead_side_compensation:
-        nominal_points = tuple((float(point[0]), float(point[1])) for point in contour_points)
         rapid_point, _ = _no_lead_compensation_points(
             nominal_points,
             float(tool_radius),
@@ -1349,6 +1353,15 @@ def _emit_line_milling_trace(
             profile_winding,
         )
         rapid_x, rapid_y = rapid_point
+    elif uses_side_compensation and profile_family == "OpenPolyline":
+        polyline_lead = _polyline_side_compensation_leads(
+            nominal_points,
+            float(tool_radius),
+            side_of_feature,
+            approach_type,
+            approach_radius_multiplier,
+        )
+        rapid_x, rapid_y = polyline_lead["entry_rapid"]
     elif uses_side_compensation:
         rapid_x = start_x
         rapid_y = float(approach.points[0].y) - (2.0 * overcut_length)
@@ -1427,6 +1440,113 @@ def _emit_line_milling_trace(
             current_z = float(point.iso_z)
         generated.append(f"G0 Z{_fmt(security_z)}")
         motion_lines = tuple(generated)
+    elif uses_side_compensation and profile_family == "OpenPolyline":
+        compensation_code = "G42" if side_of_feature == "Right" else "G41"
+        polyline_lead = _polyline_side_compensation_leads(
+            nominal_points,
+            float(tool_radius),
+            side_of_feature,
+            approach_type,
+            approach_radius_multiplier,
+        )
+        entry_point = polyline_lead["entry"]
+        exit_point = polyline_lead["exit"]
+        exit_rapid = polyline_lead["exit_rapid"]
+        arc_code = "G3" if side_of_feature == "Left" else "G2"
+        generated = [
+            "?%ETK[7]=4",
+            compensation_code,
+            _line_milling_motion_line(
+                entry_point[0],
+                entry_point[1],
+                float(security_z),
+                float(rapid_x),
+                float(rapid_y),
+                float(security_z),
+                float(plunge_feed),
+            ),
+        ]
+        if approach_type == "Arc":
+            entry_center = polyline_lead["entry_center"]
+            generated.append(
+                _profile_milling_arc_line(
+                    arc_code,
+                    nominal_points[0][0],
+                    nominal_points[0][1],
+                    entry_center[0],
+                    entry_center[1],
+                    plunge_feed,
+                    z=cut_z,
+                )
+            )
+        else:
+            generated.append(
+                _line_milling_motion_line(
+                    nominal_points[0][0],
+                    nominal_points[0][1],
+                    float(cut_z),
+                    entry_point[0],
+                    entry_point[1],
+                    float(security_z),
+                    float(plunge_feed),
+                )
+            )
+        current_x, current_y = nominal_points[0]
+        current_z = float(cut_z)
+        for point in nominal_points[1:]:
+            generated.append(
+                _line_milling_motion_line(
+                    point[0],
+                    point[1],
+                    float(cut_z),
+                    current_x,
+                    current_y,
+                    current_z,
+                    float(milling_feed),
+                    always_include_z=False,
+                )
+            )
+            current_x, current_y = point
+        if approach_type == "Arc":
+            exit_center = polyline_lead["exit_center"]
+            generated.append(
+                _profile_milling_arc_line(
+                    arc_code,
+                    exit_point[0],
+                    exit_point[1],
+                    exit_center[0],
+                    exit_center[1],
+                    milling_feed,
+                    z=security_z,
+                )
+            )
+        else:
+            generated.append(
+                _line_milling_motion_line(
+                    exit_point[0],
+                    exit_point[1],
+                    float(security_z),
+                    current_x,
+                    current_y,
+                    current_z,
+                    float(milling_feed),
+                )
+            )
+        generated.extend(
+            (
+                "G40",
+                _line_milling_motion_line(
+                    exit_rapid[0],
+                    exit_rapid[1],
+                    float(security_z),
+                    exit_point[0],
+                    exit_point[1],
+                    float(security_z),
+                    float(milling_feed),
+                ),
+            )
+        )
+        motion_lines = tuple(generated)
     elif uses_side_compensation:
         compensation_code = "G42" if side_of_feature == "Right" else "G41"
         lift_y = float(lift.points[-2].y)
@@ -1495,7 +1615,6 @@ def _emit_line_milling_trace(
         motion_lines = tuple(generated)
     elif uses_no_lead_side_compensation:
         compensation_code = "G42" if side_of_feature == "Right" else "G41"
-        nominal_points = tuple((float(point[0]), float(point[1])) for point in contour_points)
         rapid_point, leadout_point = _no_lead_compensation_points(
             nominal_points,
             float(tool_radius),
@@ -2250,6 +2369,74 @@ def _no_lead_compensation_points(
         (start_x - first_dx * lead, start_y - first_dy * lead),
         (end_x + last_dx * lead, end_y + last_dy * lead),
     )
+
+
+def _polyline_side_compensation_leads(
+    points: tuple[tuple[float, float], ...],
+    tool_radius: float,
+    side_of_feature: str,
+    approach_type: str,
+    radius_multiplier: float,
+) -> dict[str, tuple[float, float]]:
+    if len(points) < 2:
+        raise IsoCandidateEmissionError("La polilinea compensada no contiene puntos nominales suficientes.")
+    lead_distance = float(tool_radius) * float(radius_multiplier)
+    rapid_extra = 1.0
+    first_dx, first_dy = _unit_vector(points[0], points[1])
+    last_dx, last_dy = _unit_vector(points[-2], points[-1])
+    start_x, start_y = points[0]
+    end_x, end_y = points[-1]
+    if approach_type == "Arc":
+        start_nx, start_ny = _side_normal(first_dx, first_dy, side_of_feature)
+        end_nx, end_ny = _side_normal(last_dx, last_dy, side_of_feature)
+        entry_center = (
+            start_x + start_nx * lead_distance,
+            start_y + start_ny * lead_distance,
+        )
+        entry = (
+            entry_center[0] - first_dx * lead_distance,
+            entry_center[1] - first_dy * lead_distance,
+        )
+        exit_center = (
+            end_x + end_nx * lead_distance,
+            end_y + end_ny * lead_distance,
+        )
+        exit_point = (
+            exit_center[0] + last_dx * lead_distance,
+            exit_center[1] + last_dy * lead_distance,
+        )
+        return {
+            "entry_rapid": (entry[0] + start_nx * rapid_extra, entry[1] + start_ny * rapid_extra),
+            "entry": entry,
+            "entry_center": entry_center,
+            "exit": exit_point,
+            "exit_center": exit_center,
+            "exit_rapid": (exit_point[0] + end_nx * rapid_extra, exit_point[1] + end_ny * rapid_extra),
+        }
+    return {
+        "entry_rapid": (
+            start_x - first_dx * (lead_distance + rapid_extra),
+            start_y - first_dy * (lead_distance + rapid_extra),
+        ),
+        "entry": (
+            start_x - first_dx * lead_distance,
+            start_y - first_dy * lead_distance,
+        ),
+        "exit": (
+            end_x + last_dx * lead_distance,
+            end_y + last_dy * lead_distance,
+        ),
+        "exit_rapid": (
+            end_x + last_dx * (lead_distance + rapid_extra),
+            end_y + last_dy * (lead_distance + rapid_extra),
+        ),
+    }
+
+
+def _side_normal(dx: float, dy: float, side_of_feature: str) -> tuple[float, float]:
+    if side_of_feature == "Left":
+        return -dy, dx
+    return dy, -dx
 
 
 def _unit_vector(

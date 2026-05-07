@@ -434,6 +434,13 @@ def _line_milling_stages(
         _pgmx_value(snapshot, "trabajo", "strategy", type(strategy).__name__ if strategy else "", f"operations[{operation.id}].milling_strategy"),
         _pgmx_value(snapshot, "trabajo", "overcut_length", operation.overcut_length, f"operations[{operation.id}].overcut_length", required=True),
         _pgmx_value(snapshot, "trabajo", "approach_enabled", operation.approach.is_enabled, f"operations[{operation.id}].approach.enabled", required=True),
+        _pgmx_value(snapshot, "trabajo", "approach_type", operation.approach.approach_type, f"operations[{operation.id}].approach.type", required=True),
+        _pgmx_value(snapshot, "trabajo", "approach_mode", operation.approach.mode, f"operations[{operation.id}].approach.mode", required=True),
+        _pgmx_value(snapshot, "trabajo", "approach_radius_multiplier", operation.approach.radius_multiplier, f"operations[{operation.id}].approach.radius_multiplier", required=True),
+        _pgmx_value(snapshot, "trabajo", "retract_enabled", operation.retract.is_enabled, f"operations[{operation.id}].retract.enabled", required=True),
+        _pgmx_value(snapshot, "trabajo", "retract_type", operation.retract.retract_type, f"operations[{operation.id}].retract.type", required=True),
+        _pgmx_value(snapshot, "trabajo", "retract_mode", operation.retract.mode, f"operations[{operation.id}].retract.mode", required=True),
+        _pgmx_value(snapshot, "trabajo", "retract_radius_multiplier", operation.retract.radius_multiplier, f"operations[{operation.id}].retract.radius_multiplier", required=True),
         _contract_value("salida", "xiso_statement", "G1", "Fresado lineal XISO candidato."),
     ]
     prepare_values.extend(_router_tool_values(snapshot, operation, tool, head_shf))
@@ -1242,7 +1249,17 @@ def _is_line_milling(resolved_step: PgmxResolvedWorkingStepSnapshot) -> bool:
     if operation.milling_strategy is not None:
         return False
     if operation.approach.is_enabled or operation.retract.is_enabled:
-        return False
+        if not (
+            profile_family == "OpenPolyline"
+            and (feature.side_of_feature or "Center") in {"Left", "Right"}
+            and operation.approach.is_enabled
+            and operation.retract.is_enabled
+            and operation.approach.approach_type in {"Line", "Arc"}
+            and operation.retract.retract_type in {"Line", "Arc"}
+            and operation.approach.mode == "Down"
+            and operation.retract.mode == "Up"
+        ):
+            return False
     return "Milling" in operation.operation_type
 
 

@@ -81,9 +81,11 @@ Estado actual del emisor candidato:
 - Soporta las cuatro variantes Line E004 del fixture minimo
   `ISO_MIN_020` a `ISO_MIN_023`, incluida la estrategia `PH=5`.
 - La regla de fresado lineal/contorno queda parametrizada por herramienta
-  `E00x`; la validacion exacta disponible hoy sigue siendo con `E004`.
+  `E00x`; la matriz espejo valida `E001` a `E007`.
 - Soporta subcasos de contorno sin acercamiento/alejamiento ni estrategia para
   `OpenPolyline` y `Circle`, incluidos `Center`, `Left` y `Right`.
+- Soporta `OpenPolyline` E004 con compensacion `Left/Right` y leads
+  `Line/Down-Up` o `Arc/Down-Up`.
 - Soporta perfil `E001` sobre `Top` para contorno cerrado
   `ClosedPolylineMidEdgeStart`, con acercamiento/alejamiento `Arc`, `Line`,
   deshabilitado y estrategias PH5 observadas.
@@ -91,7 +93,7 @@ Estado actual del emisor candidato:
   `Pieza_063..071`, incluyendo preparacion incremental de router.
 - Compara igual contra Maestro en las 14 piezas minimas `ISO_MIN_*`
   disponibles.
-- En el barrido `Pieza*`, emite 44 candidatos exactos, 61 `Sin candidato` y
+- En el barrido `Pieza*`, emite 48 candidatos exactos, 57 `Sin candidato` y
   ningun candidato distinto.
 - Clasifica cada linea emitida con `rule_status`, sin cambiar el texto ISO
   candidato.

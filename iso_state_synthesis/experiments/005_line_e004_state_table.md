@@ -199,3 +199,29 @@ Validacion:
 | `Pieza_030` | `146 vs 146 lineas`, `0 diferencias` |
 | `Pieza_096` | `100 vs 100 lineas`, `0 diferencias` |
 | `Pieza_097` | `100 vs 100 lineas`, `0 diferencias` |
+
+## Ampliacion A OpenPolyline Left/Right Con Lead
+
+Para `OpenPolyline` con `SideOfFeature=Left/Right`, sin estrategia y con
+acercamiento/alejamiento habilitados en modo `Down/Up`, Maestro conserva la
+misma politica de compensacion:
+
+- `Left` emite `G41`;
+- `Right` emite `G42`;
+- la trayectoria de corte vuelve a la geometria nominal;
+- `Line/Down-Up` calcula entrada y salida sobre la tangente nominal con
+  distancia `tool_radius * radius_multiplier`; la posicion rapida agrega
+  `1.000` adicional sobre esa tangente;
+- `Arc/Down-Up` calcula el centro del arco desplazando el punto nominal por la
+  normal del lado de compensacion, con radio
+  `tool_radius * radius_multiplier`; la posicion rapida agrega `1.000` sobre
+  esa normal.
+
+Validacion:
+
+| Variante | Resultado |
+| --- | --- |
+| `Pieza_092` | `147 vs 147 lineas`, `0 diferencias` |
+| `Pieza_093` | `147 vs 147 lineas`, `0 diferencias` |
+| `Pieza_094` | `147 vs 147 lineas`, `0 diferencias` |
+| `Pieza_095` | `147 vs 147 lineas`, `0 diferencias` |
