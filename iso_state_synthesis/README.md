@@ -59,7 +59,8 @@ py -3 -m iso_state_synthesis emit-candidate <archivo.pgmx> --output tmp\candidat
 La salida JSON de `emit-candidate --json` conserva, para cada linea, la fuente,
 la confianza y `rule_status`. Ese campo separa reglas ya generalizadas en el
 fixture Top Drill `001` a `006` de constantes de maquina/campo e hipotesis
-pendientes.
+pendientes. La tanda validada actual cubre `Top Drill`, `Side Drill` y
+`Line E004`.
 
 Compararlo contra Maestro:
 
@@ -67,19 +68,24 @@ Compararlo contra Maestro:
 py -3 -m iso_state_synthesis compare-candidate <archivo.pgmx> <maestro.iso>
 ```
 
-Esta estructura todavia no emite ISO final. Por ahora materializa evidencia,
-fuentes, estado objetivo, traza y resets candidatos para poder validar el modelo
-antes de escribir el emisor.
+Esta estructura todavia no es un traductor ISO general. Por ahora materializa
+evidencia, fuentes, estado objetivo, traza y resets candidatos para validar el
+modelo por familias controladas.
 
 Estado actual del emisor candidato:
 
 - Soporta las seis variantes Top Drill del fixture minimo
   `ISO_MIN_001` a `ISO_MIN_006`.
-- Produce 84 lineas normalizadas por variante y compara igual contra los ISO
-  Maestro correspondientes.
+- Soporta las cuatro variantes Side Drill del fixture minimo
+  `ISO_MIN_010` a `ISO_MIN_013`.
+- Soporta las cuatro variantes Line E004 del fixture minimo
+  `ISO_MIN_020` a `ISO_MIN_023`, incluida la estrategia `PH=5`.
+- Compara igual contra Maestro en las 14 piezas minimas `ISO_MIN_*`
+  disponibles.
 - Clasifica cada linea emitida con `rule_status`, sin cambiar el texto ISO
   candidato.
 - El diferencial ya modela la velocidad activa del `BooringUnitHead` como
   `maquina.boring_head_speed` y genera `?%ETK[17]=257` solo cuando esa velocidad
   cambia entre trabajos.
-- Sigue siendo un emisor explicativo acotado, no un traductor ISO general.
+- Sigue siendo un emisor explicativo acotado a una familia por programa, no un
+  traductor ISO general.

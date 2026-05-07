@@ -196,6 +196,9 @@ Documentos de trabajo creados:
 
 - `iso_state_synthesis/experiments/001_top_drill_state_table.md`
 - `iso_state_synthesis/experiments/002_xilog_plus_documentation_survey.md`
+- `iso_state_synthesis/experiments/003_boring_head_speed_state.md`
+- `iso_state_synthesis/experiments/004_side_drill_state_table.md`
+- `iso_state_synthesis/experiments/005_line_e004_state_table.md`
 - `iso_state_synthesis/contracts/xiso_intermediate_contract.md`
 - `iso_state_synthesis/model.py`
 - `iso_state_synthesis/differential.py`
@@ -316,6 +319,42 @@ Avance registrado el 2026-05-06:
 - El detalle quedo registrado en
   `iso_state_synthesis/experiments/003_boring_head_speed_state.md`.
 
+Avance registrado el 2026-05-07:
+
+- Se agrego soporte de estado para taladros laterales D8 del fixture minimo
+  (`ISO_MIN_010` a `ISO_MIN_013`).
+- La politica lateral queda documentada como estado de trabajo: cara, `ETK[8]`,
+  spindle fisico, mascara `ETK[0]`, eje de avance, direccion y signo de la
+  coordenada fija.
+- Los offsets laterales `SHF[MLV=2]` se toman del `def.tlgx` embebido en cada
+  `.pgmx`, aplicando signo negativo a la traslacion del spindle lateral.
+- Se agrego soporte de estado para fresado lineal superior `E004`
+  (`ISO_MIN_020` a `ISO_MIN_023`).
+- El detector E004 reconoce `BottomAndSideFinishMilling` con `ToolKey=E004`,
+  no solamente tipos cuyo nombre contenga `MillingOperation`.
+- El bloque router E004 toma herramienta y tecnologia del `def.tlgx` embebido:
+  `T4`, `ETK[9]=4`, `ETK[18]=1`, `S18000M3`, `SVL/VL6=107.200` y
+  `SVR/VL7=2.000`.
+- Los offsets del router `SHF[MLV=2]=(32.050, -246.650, -125.300)` se leen de
+  `pheads.cfg`, valores numericos 308..310 con signo invertido.
+- Para lineas E004 simples, la profundidad pasante se emite como
+  `-(piece_depth + extra_depth)`.
+- Para la variante `PH=5`, la traza se emite desde los puntos `TrajectoryPath`
+  con regla `Z ISO = local_z - piece_depth`; con `SideOfFeature=Center` no hay
+  `G41/G42`.
+- Validacion completa del corpus minimo:
+  - `ISO_MIN_001` a `006`: `84 vs 84 lineas`, `0 diferencias`.
+  - `ISO_MIN_010` y `013`: `97 vs 97 lineas`, `0 diferencias`.
+  - `ISO_MIN_011` y `012`: `88 vs 88 lineas`, `0 diferencias`.
+  - `ISO_MIN_020`, `021` y `023`: `94 vs 94 lineas`, `0 diferencias`.
+  - `ISO_MIN_022`: `108 vs 108 lineas`, `0 diferencias`.
+- El emisor candidato sigue acotado a una sola familia de trabajo por programa.
+  La proxima capa importante es combinar multiples trabajos con el mismo modelo
+  de diferenciales.
+- El detalle queda registrado en
+  `iso_state_synthesis/experiments/004_side_drill_state_table.md` y
+  `iso_state_synthesis/experiments/005_line_e004_state_table.md`.
+
 ## Preguntas Abiertas
 
 - Que variables observadas son realmente estado modal y cuales son solo
@@ -354,5 +393,5 @@ Avance registrado el 2026-05-06:
 - Mantener como hipotesis pendientes las repeticiones `ETK[8]/G40` y resets
   `G61/G64/SYN` hasta que una variante nueva los explique.
 - Extender el emisor general a multiples trabajos usando el mismo diferencial
-  de `maquina.boring_head_speed`; el emisor candidato actual sigue acotado al
-  fixture minimo Top Drill.
+  de `maquina.boring_head_speed`; el emisor candidato actual sigue acotado a
+  una familia por programa.

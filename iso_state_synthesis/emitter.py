@@ -95,8 +95,9 @@ def emit_candidate_from_evaluation(
 ) -> ExplainedIsoProgram:
     """Emit candidate ISO from a state evaluation.
 
-    This first emitter is intentionally narrow: it supports the minimal top
-    drill fixture used by the state synthesis study.
+    This first emitter is intentionally narrow: it supports the minimal Top
+    Drill, Side Drill and E004 line-milling fixtures used by the state
+    synthesis study.
     """
 
     resolved_program_name = program_name or evaluation.source_path.stem.lower()
@@ -104,29 +105,74 @@ def emit_candidate_from_evaluation(
         differential.stage_key: differential
         for differential in evaluation.differentials
     }
-    required = {
-        "program_header",
-        "machine_preamble",
+    common_required = {"program_header", "machine_preamble", "program_close"}
+    has_top_drill = {
         "top_drill_prepare",
         "top_drill_trace",
         "top_drill_reset",
-        "program_close",
-    }
+    }.issubset(differentials)
+    has_side_drill = {
+        "side_drill_prepare",
+        "side_drill_trace",
+        "side_drill_reset",
+    }.issubset(differentials)
+    has_line_milling = {
+        "line_milling_prepare",
+        "line_milling_trace",
+        "line_milling_reset",
+    }.issubset(differentials)
+    active_families = [
+        name
+        for name, enabled in (
+            ("Top Drill", has_top_drill),
+            ("Side Drill", has_side_drill),
+            ("Line Milling", has_line_milling),
+        )
+        if enabled
+    ]
+    if len(active_families) > 1:
+        raise IsoCandidateEmissionError(
+            "El emisor candidato inicial no mezcla todavia familias de trabajo: "
+            f"{', '.join(active_families)}."
+        )
+    if not active_families:
+        raise IsoCandidateEmissionError(
+            "El emisor candidato inicial solo soporta planes minimos Top Drill, "
+            "Side Drill y Line Milling."
+        )
+    required = set(common_required)
+    if has_line_milling:
+        required.update({"line_milling_prepare", "line_milling_trace", "line_milling_reset"})
+    elif has_side_drill:
+        required.update({"side_drill_prepare", "side_drill_trace", "side_drill_reset"})
+    else:
+        required.update({"top_drill_prepare", "top_drill_trace", "top_drill_reset"})
     missing = sorted(required.difference(differentials))
     if missing:
         raise IsoCandidateEmissionError(
-            "El emisor candidato inicial solo soporta el plan Top Drill minimo; "
+            "El emisor candidato inicial solo soporta planes Drill minimos; "
             f"faltan etapas: {', '.join(missing)}"
         )
 
     lines: list[ExplainedIsoLine] = []
     _emit_program_header(lines, evaluation, differentials["program_header"], resolved_program_name)
     _emit_machine_preamble(lines, differentials["machine_preamble"])
-    _emit_piece_frame(lines, evaluation, differentials["program_header"])
-    _emit_top_drill_prepare(lines, evaluation, differentials["top_drill_prepare"])
-    _emit_top_drill_trace(lines, differentials["top_drill_trace"])
-    _emit_top_drill_reset(lines, evaluation, differentials["top_drill_reset"])
-    _emit_program_close(lines, differentials["program_close"])
+    work_plane = _work_plane(evaluation)
+    work_family = _work_family(evaluation)
+    _emit_piece_frame(lines, evaluation, differentials["program_header"], work_plane, work_family)
+    if has_line_milling:
+        _emit_line_milling_prepare(lines, evaluation, differentials["line_milling_prepare"])
+        _emit_line_milling_trace(lines, evaluation, differentials["line_milling_trace"])
+        _emit_line_milling_reset(lines, differentials["line_milling_reset"])
+    elif has_side_drill:
+        _emit_side_drill_prepare(lines, evaluation, differentials["side_drill_prepare"])
+        _emit_side_drill_trace(lines, differentials["side_drill_trace"])
+        _emit_side_drill_reset(lines, evaluation, differentials["side_drill_reset"])
+    else:
+        _emit_top_drill_prepare(lines, evaluation, differentials["top_drill_prepare"])
+        _emit_top_drill_trace(lines, differentials["top_drill_trace"])
+        _emit_top_drill_reset(lines, evaluation, differentials["top_drill_reset"])
+    _emit_program_close(lines, differentials["program_close"], evaluation)
     return ExplainedIsoProgram(
         source_path=evaluation.source_path,
         program_name=resolved_program_name,
@@ -246,6 +292,8 @@ def _emit_piece_frame(
     lines: list[ExplainedIsoLine],
     evaluation: IsoStateEvaluation,
     differential: StageDifferential,
+    work_plane: str,
+    work_family: str,
 ) -> None:
     length = evaluation.initial_state.get("pieza", "length")
     origin_x = evaluation.initial_state.get("pieza", "origin_x")
@@ -324,7 +372,7 @@ def _emit_piece_frame(
         confidence="confirmed",
         rule_status="generalized_top_drill_001_006",
     )
-    for line in ("?%ETK[8]=1", "G40", "?%ETK[8]=1", "G40", "?%ETK[8]=1", "G40"):
+    for line in _face_selection_lines(evaluation, work_plane):
         _append(
             lines,
             line,
@@ -334,6 +382,8 @@ def _emit_piece_frame(
             confidence="hypothesis",
             rule_status="repeated_modal_reset_hypothesis",
         )
+    if work_family == "line_milling":
+        return
     _append(
         lines,
         "MLV=1",
@@ -351,6 +401,28 @@ def _emit_piece_frame(
         confidence="confirmed",
         rule_status="generalized_top_drill_001_006",
     )
+
+
+def _face_selection_lines(evaluation: IsoStateEvaluation, work_plane: str) -> tuple[str, ...]:
+    lines: list[str] = ["?%ETK[8]=1", "G40", "?%ETK[8]=1", "G40"]
+    if work_plane == "Top":
+        lines.extend(["?%ETK[8]=1", "G40"])
+        return tuple(lines)
+
+    side_etk8 = _side_value(evaluation, "trabajo", "side_etk8")
+    if work_plane in {"Left", "Back"}:
+        side_x, side_y = _side_plane_frame_shift(evaluation, work_plane)
+        header_dz = evaluation.final_state.get("pieza", "header_dz")
+        lines.extend(
+            [
+                "MLV=1",
+                f"SHF[X]={_fmt(side_x)}",
+                f"SHF[Y]={_fmt(side_y)}",
+                f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
+            ]
+        )
+    lines.extend([f"?%ETK[8]={int(side_etk8)}", "G40"])
+    return tuple(lines)
 
 
 def _emit_top_drill_prepare(
@@ -525,6 +597,398 @@ def _emit_top_drill_trace(
         )
 
 
+def _emit_line_milling_prepare(
+    lines: list[ExplainedIsoLine],
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> None:
+    length = evaluation.initial_state.get("pieza", "length")
+    origin_x = evaluation.initial_state.get("pieza", "origin_x")
+    origin_y = evaluation.initial_state.get("pieza", "origin_y")
+    header_dz = evaluation.final_state.get("pieza", "header_dz")
+    tool_number = _change_after(differential, "herramienta", "tool_number")
+    spindle = _change_after(differential, "herramienta", "spindle")
+    etk9 = _change_after(differential, "salida", "etk_9")
+    etk18 = _change_after(differential, "salida", "etk_18")
+    spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
+    shf_x = _change_after(differential, "herramienta", "shf_x")
+    shf_y = _change_after(differential, "herramienta", "shf_y")
+    shf_z = _change_after(differential, "herramienta", "shf_z")
+    source = _change_source(differential, "herramienta", "tool_offset_length")
+    prep_origin_x = length + (2 * origin_x)
+    for line in (
+        "MLV=0",
+        f"T{int(tool_number)}",
+        "SYN",
+        "M06",
+        f"?%ETK[6]={int(spindle)}",
+        f"?%ETK[9]={int(etk9)}",
+        f"?%ETK[18]={int(etk18)}",
+        f"S{int(spindle_speed)}M3",
+        "G17",
+        "MLV=2",
+        f"%Or[0].ofX={_fmt_scaled(-prep_origin_x)}",
+        "%Or[0].ofY=-1515599.976",
+        f"%Or[0].ofZ={_fmt_scaled(header_dz)}",
+        "MLV=1",
+        f"SHF[X]={_fmt(-(length + origin_x))}",
+        f"SHF[Y]={_fmt(_base_shf_y(origin_y))}",
+        f"SHF[Z]={_fmt(header_dz)}",
+        "MLV=2",
+        "?%ETK[13]=1",
+        "MLV=2",
+        f"SHF[X]={_fmt(shf_x)}",
+        f"SHF[Y]={_fmt(shf_y)}",
+        f"SHF[Z]={_fmt(shf_z)}",
+    ):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Preparacion router E004 observada en fixtures ISO_MIN_020..023.",
+            confidence="confirmed",
+            rule_status="generalized_line_milling_020_023",
+        )
+
+
+def _emit_line_milling_trace(
+    lines: list[ExplainedIsoLine],
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> None:
+    start_x = _change_after(differential, "movimiento", "start_x")
+    start_y = _change_after(differential, "movimiento", "start_y")
+    end_x = _change_after(differential, "movimiento", "end_x")
+    end_y = _change_after(differential, "movimiento", "end_y")
+    rapid_z = _change_after(differential, "movimiento", "rapid_z")
+    cut_z = _change_after(differential, "movimiento", "cut_z")
+    security_z = _change_after(differential, "movimiento", "security_z")
+    tool_radius = _change_after(differential, "herramienta", "tool_radius")
+    plunge_feed = _change_after(differential, "movimiento", "plunge_feed")
+    milling_feed = _change_after(differential, "movimiento", "milling_feed")
+    tool_offset = evaluation.final_state.get("herramienta", "tool_offset_length")
+    trajectory = _trace_move(differential, "TrajectoryPath")
+    source = _change_source(differential, "movimiento", "cut_z")
+
+    for line in (
+        f"G0 X{_fmt(start_x)} Y{_fmt(start_y)}",
+        f"G0 Z{_fmt(rapid_z)}",
+        "D1",
+        f"SVL {_fmt(tool_offset)}",
+        f"VL6={_fmt(tool_offset)}",
+        f"SVR {_fmt(tool_radius)}",
+        f"VL7={_fmt(tool_radius)}",
+    ):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Entrada E004 calculada desde toolpath y herramienta embebida.",
+            confidence="confirmed",
+            rule_status="generalized_line_milling_020_023",
+        )
+
+    if len(trajectory.points) <= 2:
+        first_cut = f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}"
+        motion = _line_milling_motion_line(
+            float(end_x),
+            float(end_y),
+            float(cut_z),
+            float(start_x),
+            float(start_y),
+            float(cut_z),
+            float(milling_feed),
+        )
+        motion_lines = (first_cut, "?%ETK[7]=4", motion, f"G0 Z{_fmt(security_z)}")
+    else:
+        current_x = float(start_x)
+        current_y = float(start_y)
+        current_z = float(security_z)
+        generated: list[str] = [f"G1 Z{_fmt(security_z)} F{_fmt(plunge_feed)}", "?%ETK[7]=4"]
+        for point in trajectory.points:
+            line = _line_milling_motion_line(
+                float(point.x),
+                float(point.y),
+                float(point.iso_z),
+                current_x,
+                current_y,
+                current_z,
+                float(milling_feed),
+            )
+            generated.append(line)
+            current_x = float(point.x)
+            current_y = float(point.y)
+            current_z = float(point.iso_z)
+        generated.append(f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}")
+        generated.append(f"G0 Z{_fmt(security_z)}")
+        motion_lines = tuple(generated)
+
+    for line in motion_lines:
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Traza E004 derivada de toolpaths Maestro y profundidad de pieza.",
+            confidence="confirmed",
+            rule_status="generalized_line_milling_020_023",
+        )
+
+
+def _emit_line_milling_reset(
+    lines: list[ExplainedIsoLine],
+    differential: StageDifferential,
+) -> None:
+    source = _change_source(differential, "salida", "etk_7", reset=True)
+    for line in (
+        "D0",
+        "SVL 0.000",
+        "VL6=0.000",
+        "SVR 0.000",
+        "VL7=0.000",
+        "?%ETK[7]=0",
+    ):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Reset posterior router E004 observado.",
+            confidence="confirmed",
+            rule_status="generalized_line_milling_020_023",
+        )
+
+
+def _emit_side_drill_prepare(
+    lines: list[ExplainedIsoLine],
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> None:
+    length = evaluation.initial_state.get("pieza", "length")
+    origin_x = evaluation.initial_state.get("pieza", "origin_x")
+    origin_y = evaluation.initial_state.get("pieza", "origin_y")
+    origin_z = evaluation.initial_state.get("pieza", "origin_z")
+    header_dz = evaluation.final_state.get("pieza", "header_dz")
+    plane = str(_change_after(differential, "trabajo", "plane"))
+    spindle = _change_after(differential, "herramienta", "spindle")
+    spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
+    mask = _change_after(differential, "salida", "etk_0_mask")
+    shf_x = _change_after(differential, "herramienta", "shf_x")
+    shf_y = _change_after(differential, "herramienta", "shf_y")
+    shf_z = _change_after(differential, "herramienta", "shf_z")
+    frame_x, frame_y = _side_plane_frame_shift(evaluation, plane)
+    source = _change_source(differential, "herramienta", "tool_offset_length")
+    prep_origin_x = length + (2 * origin_x)
+    for line in ("MLV=2", "G17"):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Modo/plano observado en preparacion de taladro lateral.",
+            rule_status="side_drill_modal_observed",
+        )
+    for line in (f"?%ETK[6]={int(spindle)}", f"%Or[0].ofX={_fmt_scaled(-prep_origin_x)}"):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Preparacion de spindle lateral desde politica de cara y tooling embebido.",
+            confidence="confirmed",
+            rule_status="generalized_side_drill_010_013",
+        )
+    _append(
+        lines,
+        "%Or[0].ofY=-1515599.976",
+        differential,
+        _observed_rule_source("side_drill_prepare"),
+        "Constante de campo HG observada; fuente de maquina/campo pendiente.",
+        confidence="observed",
+        rule_status="field_constant_pending_source",
+    )
+    _append(
+        lines,
+        f"%Or[0].ofZ={_fmt_scaled(header_dz)}",
+        differential,
+        source,
+        "Preparacion lateral derivada de depth + origin_z.",
+        confidence="confirmed",
+        rule_status="generalized_side_drill_010_013",
+    )
+    _append(
+        lines,
+        "MLV=1",
+        differential,
+        source,
+        "Cambio modal observado durante preparacion de herramienta lateral.",
+        rule_status="side_drill_modal_observed",
+    )
+    for line in (
+        f"SHF[X]={_fmt(frame_x)}",
+        f"SHF[Y]={_fmt(frame_y)}",
+        f"SHF[Z]={_fmt(origin_z)}",
+    ):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Marco operativo lateral derivado de cara, origen y dimensiones.",
+            confidence="confirmed",
+            rule_status="generalized_side_drill_010_013",
+        )
+    for line in ("MLV=2", "MLV=2"):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Cambio modal observado durante preparacion lateral.",
+            rule_status="side_drill_modal_observed",
+        )
+    for line in (f"SHF[X]={_fmt(shf_x)}", f"SHF[Y]={_fmt(shf_y)}", f"SHF[Z]={_fmt(shf_z)}"):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Shift de herramienta lateral derivado del spindle embebido.",
+            confidence="confirmed",
+            rule_status="generalized_side_drill_010_013",
+        )
+    speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
+    if speed_activation is not None:
+        _append(
+            lines,
+            f"?%ETK[17]={int(speed_activation.after)}",
+            differential,
+            speed_activation.source,
+            "Activacion de cambio de velocidad del cabezal perforador lateral.",
+            confidence=speed_activation.confidence,
+            rule_status="boring_head_speed_change",
+        )
+        _append(
+            lines,
+            f"S{int(spindle_speed)}M3",
+            differential,
+            source,
+            "Velocidad lateral desde def.tlgx embebido.",
+            confidence="confirmed",
+            rule_status="boring_head_speed_change",
+        )
+    _append(
+        lines,
+        f"?%ETK[0]={int(mask)}",
+        differential,
+        _observed_rule_source("side_drill_prepare"),
+        "Mascara de agregado lateral observada por cara.",
+        confidence="confirmed",
+        rule_status="generalized_side_drill_010_013",
+    )
+
+
+def _emit_side_drill_trace(
+    lines: list[ExplainedIsoLine],
+    differential: StageDifferential,
+) -> None:
+    axis = str(_change_after(differential, "movimiento", "side_axis"))
+    rapid = _change_after(differential, "movimiento", "side_rapid")
+    cut = _change_after(differential, "movimiento", "side_cut")
+    fixed = _change_after(differential, "movimiento", "side_fixed")
+    z = _change_after(differential, "movimiento", "side_z")
+    feed = _change_after(differential, "movimiento", "side_feed")
+    source = _change_source(differential, "movimiento", "side_iso_rule")
+    if axis == "X":
+        rapid_line = f"G0 X{_fmt(rapid)} Y{_fmt(fixed)}"
+        cut_line = f"G1 G9 X{_fmt(cut)} F{_fmt(feed)}"
+        retract_line = f"G0 X{_fmt(rapid)} Z{_fmt(z)}"
+    else:
+        rapid_line = f"G0 X{_fmt(fixed)} Y{_fmt(rapid)}"
+        cut_line = f"G1 G9 Y{_fmt(cut)} F{_fmt(feed)}"
+        retract_line = f"G0 Y{_fmt(rapid)} Z{_fmt(z)}"
+    for line in (rapid_line, f"G0 Z{_fmt(z)}"):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Traza Side Drill calculada desde punto PGMX y spindle lateral.",
+            confidence="confirmed",
+            rule_status="generalized_side_drill_010_013",
+        )
+    for line in ("?%ETK[7]=3", "MLV=2"):
+        _append(
+            lines,
+            line,
+            differential,
+            _observed_rule_source("side_drill_trace"),
+            "Comando modal observado en traza lateral; fuente causal pendiente.",
+            confidence="hypothesis",
+            rule_status="modal_trace_hypothesis",
+        )
+    for line in (cut_line, retract_line):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Traza Side Drill calculada desde punto PGMX, profundidad y offset lateral.",
+            confidence="confirmed",
+            rule_status="generalized_side_drill_010_013",
+        )
+
+
+def _emit_side_drill_reset(
+    lines: list[ExplainedIsoLine],
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> None:
+    header_dz = evaluation.final_state.get("pieza", "header_dz")
+    etk17 = _reset_after(differential, "salida", "etk_17")
+    source = _change_source(differential, "salida", "etk_17", reset=True)
+    for line in (
+        "MLV=1",
+        f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
+        "?%ETK[7]=0",
+    ):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Reset posterior de taladro lateral observado.",
+            rule_status="side_drill_reset_observed",
+        )
+    _append(
+        lines,
+        "G61",
+        differential,
+        _observed_rule_source("side_drill_reset"),
+        "Reset observado; falta clasificar si depende de familia o plantilla.",
+        confidence="hypothesis",
+        rule_status="modal_reset_hypothesis",
+    )
+    for line in (
+        "MLV=0",
+        "?%ETK[0]=0",
+        f"?%ETK[17]={int(etk17)}",
+        "G4F1.200",
+        "M5",
+        "D0",
+    ):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Reset posterior de taladro lateral observado.",
+            rule_status="side_drill_reset_observed",
+        )
+
+
 def _emit_top_drill_reset(
     lines: list[ExplainedIsoLine],
     evaluation: IsoStateEvaluation,
@@ -576,11 +1040,83 @@ def _emit_top_drill_reset(
 def _emit_program_close(
     lines: list[ExplainedIsoLine],
     differential: StageDifferential,
+    evaluation: IsoStateEvaluation,
 ) -> None:
     source = _observed_rule_source("program_close")
-    for line in ("G0 G53 Z201.000", "G0 G53 X-3700.000"):
-        _append(lines, line, differential, source, "Cierre comun observado.", rule_status="machine_close_observed")
-    for line in ("G64", "SYN"):
+    plane = _work_plane(evaluation)
+    family = _work_family(evaluation)
+    if family == "line_milling":
+        for line in (
+            "G61",
+            "MLV=0",
+            "?%ETK[13]=0",
+            "?%ETK[18]=0",
+            "M5",
+            "D0",
+            "G0 G53 Z201.000",
+            "G0 G53 X-3700.000",
+            "G64",
+        ):
+            _append(
+                lines,
+                line,
+                differential,
+                source,
+                "Cierre router E004 observado antes del reset comun.",
+                rule_status="machine_close_observed",
+            )
+    else:
+        for line in ("G0 G53 Z201.000", "G0 G53 X-3700.000"):
+            _append(lines, line, differential, source, "Cierre comun observado.", rule_status="machine_close_observed")
+        _append(lines, "G64", differential, source, "Cierre comun observado.", rule_status="machine_close_observed")
+    if family != "line_milling" and plane != "Top":
+        if plane in {"Left", "Back"}:
+            length = evaluation.initial_state.get("pieza", "length")
+            origin_x = evaluation.initial_state.get("pieza", "origin_x")
+            origin_y = evaluation.initial_state.get("pieza", "origin_y")
+            header_dz = evaluation.final_state.get("pieza", "header_dz")
+            for line in (
+                "MLV=1",
+                f"SHF[X]={_fmt(-(length + origin_x))}",
+                f"SHF[Y]={_fmt(_base_shf_y(origin_y))}",
+                f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
+            ):
+                _append(
+                    lines,
+                    line,
+                    differential,
+                    source,
+                    "Reentrada de marco lateral antes del cierre comun.",
+                    rule_status="machine_close_observed",
+                )
+        _append(
+            lines,
+            "G61",
+            differential,
+            source,
+            "Reset lateral observado antes del cierre comun.",
+            confidence="hypothesis",
+            rule_status="modal_reset_hypothesis",
+        )
+        if plane in {"Left", "Back"}:
+            _append(
+                lines,
+                "MLV=0",
+                differential,
+                source,
+                "Reset lateral observado antes del cierre comun.",
+                rule_status="machine_close_observed",
+            )
+        for line in ("D0", "G0 G53 Z201.000", "G64"):
+            _append(
+                lines,
+                line,
+                differential,
+                source,
+                "Reset lateral observado antes del cierre comun.",
+                rule_status="machine_close_observed",
+            )
+    for line in ("SYN",):
         _append(
             lines,
             line,
@@ -700,6 +1236,67 @@ def _observed_rule_source(field: str) -> EvidenceSource:
         "iso_state_synthesis/experiments/001_top_drill_state_table.md",
         field,
     )
+
+
+def _work_plane(evaluation: IsoStateEvaluation) -> str:
+    for differential in evaluation.differentials:
+        for change in differential.target_changes + differential.forced_values:
+            if change.layer == "trabajo" and change.key == "plane":
+                return str(change.after)
+    return "Top"
+
+
+def _work_family(evaluation: IsoStateEvaluation) -> str:
+    for differential in evaluation.differentials:
+        for change in differential.target_changes + differential.forced_values:
+            if change.layer == "trabajo" and change.key == "family":
+                return str(change.after)
+    return "top_drill"
+
+
+def _side_value(evaluation: IsoStateEvaluation, layer: str, key: str) -> object:
+    for differential in evaluation.differentials:
+        for change in differential.target_changes + differential.forced_values:
+            if change.layer == layer and change.key == key:
+                return change.after
+    raise IsoCandidateEmissionError(f"El plan no contiene {layer}.{key}.")
+
+
+def _side_plane_frame_shift(evaluation: IsoStateEvaluation, plane_name: str) -> tuple[float, float]:
+    length = evaluation.initial_state.get("pieza", "length")
+    width = evaluation.initial_state.get("pieza", "width")
+    origin_x = evaluation.initial_state.get("pieza", "origin_x")
+    origin_y = evaluation.initial_state.get("pieza", "origin_y")
+    base_x = -(length + origin_x)
+    base_y = _base_shf_y(origin_y)
+    if plane_name == "Left":
+        return base_x, base_y + width
+    if plane_name == "Back":
+        return base_x + length, base_y
+    return base_x, base_y
+
+
+def _base_shf_y(origin_y: object = 0.0) -> float:
+    return -1515.6 + float(origin_y)
+
+
+def _line_milling_motion_line(
+    x: float,
+    y: float,
+    z: float,
+    previous_x: float,
+    previous_y: float,
+    previous_z: float,
+    feed: float,
+) -> str:
+    words = ["G1"]
+    if abs(x - previous_x) >= 0.0005:
+        words.append(f"X{_fmt(x)}")
+    if abs(y - previous_y) >= 0.0005:
+        words.append(f"Y{_fmt(y)}")
+    words.append(f"Z{_fmt(z)}")
+    words.append(f"F{_fmt(feed)}")
+    return " ".join(words)
 
 
 def _fmt(value: object) -> str:
