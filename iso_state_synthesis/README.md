@@ -78,19 +78,22 @@ Estado actual del emisor candidato:
   `ISO_MIN_001` a `ISO_MIN_006`.
 - Soporta las cuatro variantes Side Drill del fixture minimo
   `ISO_MIN_010` a `ISO_MIN_013`.
-- Soporta las cuatro variantes Line E004 del fixture minimo
-  `ISO_MIN_020` a `ISO_MIN_023`, incluida la estrategia `PH=5`.
+- Soporta las cuatro variantes de fresado lineal del fixture minimo
+  `ISO_MIN_020` a `ISO_MIN_023`, observadas inicialmente con `E004` e incluida
+  la estrategia `PH=5`.
 - La regla de fresado lineal/contorno queda parametrizada por herramienta
   `E00x`; la matriz espejo valida `E001` a `E007`.
 - Soporta subcasos de contorno sin acercamiento/alejamiento ni estrategia para
   `OpenPolyline` y `Circle`, incluidos `Center`, `Left` y `Right`.
-- Soporta `OpenPolyline` E004 con compensacion `Left/Right` y leads
-  `Line/Down-Up` o `Arc/Down-Up`.
-- Soporta perfil `E001` sobre `Top` para contorno cerrado
-  `ClosedPolylineMidEdgeStart`, con acercamiento/alejamiento `Arc`, `Line`,
-  deshabilitado y estrategias PH5 observadas.
-- Soporta secuencias mixtas `E001` -> `E004` del corpus historico
-  `Pieza_063..071`, incluyendo preparacion incremental de router.
+- Soporta `OpenPolyline` con compensacion `Left/Right` y leads `Line/Down-Up`
+  o `Arc/Down-Up`, observado inicialmente con `E004` y generalizado por
+  herramienta cuando la evidencia lo confirma.
+- Soporta perfiles sobre `Top` para contorno cerrado
+  `ClosedPolylineMidEdgeStart`, observados inicialmente con `E001`, con
+  acercamiento/alejamiento `Arc`, `Line`, deshabilitado y estrategias PH5.
+- Soporta secuencias mixtas del corpus historico `Pieza_063..071`, observadas
+  inicialmente como `E001` -> `E004`, incluyendo preparacion incremental de
+  router.
 - Compara igual contra Maestro en las 14 piezas minimas `ISO_MIN_*`
   disponibles.
 - En el barrido `Pieza*`, emite 48 candidatos exactos, 57 `Sin candidato` y

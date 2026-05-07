@@ -469,6 +469,13 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
 - El sintetizador/conversor ISO debe describir y reproducir lo que trae el
   `.pgmx` sin imponer politica de uso de herramienta. La responsabilidad de
   elegir una fresa valida para el trabajo queda fuera de la conversion.
+- Al final de esta investigacion, ningun trabajo del conversor ISO debe quedar
+  asociado a una herramienta o grupo de herramientas en particular. Cuando se
+  escriba `perfil E001`, `polilinea E003/E004`, `Line E004` o una frase similar,
+  debe leerse como evidencia historica del caso que permitio inferir la regla,
+  no como frontera de soporte final. La regla estable debe describir geometria,
+  operacion, compensacion, trayectoria, estado y datos de herramienta leidos del
+  `.pgmx`.
 - La generacion automatica de `.pgmx` si debe incorporar reglas adicionales de
   seguridad antes de producir archivos operativos. La intencion de esas reglas
   es evitar que un ISO convertido desde un `.pgmx` generado automaticamente
@@ -507,5 +514,6 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
 - Mantener como hipotesis pendientes las repeticiones `ETK[8]/G40` y resets
   `G61/G64/SYN` hasta que una variante nueva los explique.
 - Seguir con los `Pieza*` sin candidato, priorizando los subcasos de fresado
-  mas cercanos al soporte actual: circulos E004 con PH5/helicoidal,
-  polilineas cerradas E003/E004 y variantes con leads `Line/Arc`.
+  mas cercanos al soporte actual: circulos con PH5/helicoidal, polilineas
+  cerradas y variantes con leads `Line/Arc`, sin convertir las herramientas
+  observadas en restricciones del conversor ISO.
