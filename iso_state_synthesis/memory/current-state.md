@@ -439,6 +439,10 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
 - Mantener separadas estas dos politicas: conversion de `.pgmx` existente
   contra Maestro como evidencia; generacion automatica de `.pgmx` con guardas
   preventivas propias.
+- El plan de piezas espejo por herramienta quedo en
+  `iso_state_synthesis/experiments/007_router_tool_mirror_fixtures_plan.md`.
+  Sirve para confirmar con Maestro la generalizacion `E00x` del fresado
+  lineal/contorno.
 
 ## Plan Tentativo
 
