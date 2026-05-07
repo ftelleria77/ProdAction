@@ -8492,7 +8492,7 @@ class ProjectDetailWindow(QMainWindow):
 
     def _export_project_iso_files(self, selected_project: Project, output_root: Path) -> dict:
         from core.pgmx_processing import resolve_piece_program_path
-        from iso_generation.emitter import emit_iso_program
+        from iso_state_synthesis.emitter import emit_candidate_for_pgmx
 
         generated_paths: list[Path] = []
         skipped_missing: list[dict] = []
@@ -8537,7 +8537,7 @@ class ProjectDetailWindow(QMainWindow):
 
                 output_path = self._unique_iso_output_path(module_output_dir, source_path, used_stems, piece)
                 try:
-                    program = emit_iso_program(source_path, program_name=output_path.stem)
+                    program = emit_candidate_for_pgmx(source_path, program_name=output_path.stem)
                     program.write_text(output_path)
                 except Exception as exc:
                     skipped_failed.append(

@@ -513,7 +513,8 @@ en polilineas abiertas de varios segmentos cuando se usa `PH=5`; usar
 
 ### Validacion del emisor nativo sobre polilinea y escuadrado
 
-El emisor `iso_generation` compara exacto contra Maestro para:
+El emisor historico `iso_generation`, removido de la rama
+`iso-state-synthesis`, comparaba exacto contra Maestro para:
 
 - `Pieza_016..017`: polilinea abierta `E004` en `Top` con compensacion
   `Left`/`Right`.

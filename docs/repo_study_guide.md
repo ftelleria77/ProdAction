@@ -34,7 +34,7 @@ El sintetizador PGMX real vive en `tools/synthesize_pgmx.py` y expone
 | `tools/studies/cut_diagrams/ordering_lab.py` | Laboratorio de algoritmos de guillotina. |
 | `tools/studies/iso/minimal_fixtures_2026_05_03.py` | Generador archivado de fixtures minimos ISO. |
 | `cnc_traceability/` | Subsistema de trazabilidad CNC compatible con Windows XP 32 bits. |
-| `iso_generation/` | Subsistema experimental para futura traduccion `.pgmx -> .iso`. |
+| `iso_state_synthesis/` | Subsistema experimental por estado para futura traduccion `.pgmx -> .iso`. |
 
 ## Flujos de aplicacion
 
@@ -154,23 +154,23 @@ Caracteristicas:
 ### ISO
 
 No hay generador ISO nativo productivo. El estado actual es investigacion,
-documentacion del postprocesado Maestro/CNC y un subsistema experimental
-separado para iniciar la traduccion `.pgmx -> .iso`.
+documentacion del postprocesado Maestro/CNC y el subsistema experimental por
+estado `iso_state_synthesis/`.
 
 Fuente historica: `docs/iso_synthesis_temporary_memory.md`.
 Contrato CNC/ISO observado: `docs/iso_cnc_contract.md`.
 Plan de fixtures minimos: `docs/iso_minimal_fixtures_plan.md`.
 Generador de fixtures: `tools/studies/iso/minimal_fixtures_2026_05_03.py`.
-Subsistema experimental: `iso_generation/README.md`.
+Subsistema experimental: `iso_state_synthesis/README.md`.
 
 Estado actual documentado:
 
 - los fixtures minimos ya fueron generados, postprocesados y comparados;
 - `docs/iso_cnc_contract.md` consolida reglas de cabecera, `HG`, taladros,
   router y herramientas especiales;
-- `iso_generation/` contiene el esqueleto separado con lector/adaptador PGMX,
-  emision inicial de cabecera y comparador normalizado;
-- el siguiente paso es implementar el MVP operativo por familias.
+- `iso_state_synthesis/` contiene el esqueleto separado con adaptador PGMX,
+  diferenciales de estado y emisor candidato explicado;
+- el siguiente paso es extender el emisor multi-trabajo por diferenciales.
 
 ## Comandos utiles de verificacion
 
@@ -179,7 +179,7 @@ python -m compileall main.py app core tools
 python -c "import app.ui, core.parser, core.nesting, core.summary, core.pgmx_processing, core.en_juego_synthesis; print('core imports ok')"
 python -c "from tools import synthesize_pgmx as sp; print(sp.SYNTHESIZER_VERSION)"
 python -m tools.studies.iso.minimal_fixtures_2026_05_03 --output-dir tmp/iso_minimal_fixtures
-python -m iso_generation --help
+python -m iso_state_synthesis --help
 python -m tools.synthesize_pgmx --help
 python -m tools.pgmx_snapshot --help
 python -m tools.pgmx_adapters --help

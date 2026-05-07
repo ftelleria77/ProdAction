@@ -3,11 +3,12 @@
 Nueva memoria de trabajo para redisenar la generacion ISO desde cero sin
 arrastrar la arquitectura por patrones de `iso_generation/`.
 
-Ultima actualizacion: 2026-05-06
+Ultima actualizacion: 2026-05-07
 
 ## Alcance
 
-- Dejar `iso_generation/` como esta.
+- Retirar `iso_generation/` de esta rama y concentrar el trabajo ISO nuevo en
+  `iso_state_synthesis/`.
 - Trabajar en la rama `iso-state-synthesis` para no afectar el flujo principal
   del sistema.
 - Crear un entorno nuevo para investigar y luego implementar el enfoque por

@@ -3,8 +3,9 @@
 Entorno nuevo para investigar y disenar la generacion ISO por estado,
 parametros y diferenciales.
 
-Este trabajo queda separado de `iso_generation/`, que debe permanecer como esta
-hasta que el nuevo enfoque sea revisado y validado.
+En la rama `iso-state-synthesis`, este paquete reemplaza al laboratorio
+historico `iso_generation/`, que fue retirado del arbol de trabajo para evitar
+mantener dos enfoques paralelos en la misma rama.
 
 Punto de entrada de memoria:
 
