@@ -37,7 +37,7 @@ baseline por defecto.
 ## Ejemplo CLI minimo
 
 ```powershell
-cd C:\Users\fermi\OneDrive\Repoositorios\ProdAction
+cd C:\Dev\Repositorios\ProdAction
 python -m tools.synthesize_pgmx \
     --piece-name "Pieza" \
     --output "archive/maestro_examples/Pieza_sintetizada.pgmx"
@@ -46,7 +46,7 @@ python -m tools.synthesize_pgmx \
 ## Ejemplo CLI con fresado lineal
 
 ```powershell
-cd C:\Users\fermi\OneDrive\Repoositorios\ProdAction
+cd C:\Dev\Repositorios\ProdAction
 python -m tools.synthesize_pgmx \
     --piece-name "Pieza" \
     --length 400 \
