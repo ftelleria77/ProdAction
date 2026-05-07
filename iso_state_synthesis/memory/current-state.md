@@ -403,9 +403,16 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
   `tools.studies.iso.router_tool_mirror_fixtures_2026_05_07`: 28 `.pgmx` en
   `S:\Maestro\Projects\ProdAction\ISO\router_tool_mirror_fixtures_2026-05-07`
   mas `manifest.csv`, cubriendo `E001` a `E007` sobre linea vertical,
-  polilinea abierta, circulo antihorario y circulo horario. Los 28 `.pgmx` se
-  leen con `inspect-pgmx` y emiten candidato con `emit-candidate`; falta generar
-  los ISO desde Maestro para hacer comparacion exacta.
+  polilinea abierta, circulo antihorario y circulo horario.
+- Los ISO de Maestro para la matriz espejo quedaron en
+  `P:\USBMIX\ProdAction\ISO\router_tool_mirror_fixtures_2026-05-07`.
+  El barrido `compare-candidate` devuelve 28/28 exactos, sin candidatos
+  faltantes y sin diferencias linea-a-linea.
+- La matriz espejo confirmo una regla de resolucion de herramienta para el ISO:
+  cuando el `ToolKey` de la operacion trae un `ID` y un `Name` que no apuntan a
+  la misma herramienta embebida, Maestro resuelve el router por `Name`
+  (`E004`, `E005`, etc.). El adaptador ISO prioriza ahora `Name` unico y solo
+  cae al `ID` si el nombre no resuelve.
 - Resultado nuevo del barrido `Pieza*`: 44 pares exactos
   (`Pieza_001`, `Pieza_001_R`, `Pieza_004`, `Pieza_012`, `Pieza_013`,
   `Pieza_014`, `Pieza_015`, `Pieza_016`, `Pieza_017`, `Pieza_018`,
@@ -479,8 +486,6 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
 
 - Mantener como hipotesis pendientes las repeticiones `ETK[8]/G40` y resets
   `G61/G64/SYN` hasta que una variante nueva los explique.
-- Exportar/procesar en Maestro los 28 `.pgmx` espejo por herramienta y correr
-  `compare-candidate` contra los ISO resultantes.
 - Extender el emisor general a multiples trabajos usando el mismo diferencial
   de `maquina.boring_head_speed`; el emisor candidato actual sigue acotado a
   una familia por programa.

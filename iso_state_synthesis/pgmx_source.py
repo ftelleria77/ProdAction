@@ -1289,10 +1289,19 @@ def _embedded_tool_for_operation(
     tool_key = operation.tool_key
     if tool_key is None:
         return None
-    candidates = (tool_key.id, tool_key.name)
-    for tool in snapshot.embedded_tools:
-        if tool.id in candidates or tool.name in candidates or tool.tool_key in candidates:
-            return tool
+    tool_id = (tool_key.id or "").strip()
+    tool_name = (tool_key.name or "").strip()
+    if tool_name:
+        name_matches = [tool for tool in snapshot.embedded_tools if tool.name == tool_name]
+        if len(name_matches) == 1:
+            return name_matches[0]
+        key_matches = [tool for tool in snapshot.embedded_tools if tool.tool_key == tool_name]
+        if len(key_matches) == 1:
+            return key_matches[0]
+    if tool_id:
+        id_matches = [tool for tool in snapshot.embedded_tools if tool.id == tool_id]
+        if len(id_matches) == 1:
+            return id_matches[0]
     return None
 
 
@@ -1304,7 +1313,7 @@ def _embedded_spindle_for_tool(
     ref_ids = []
     if tool is not None:
         ref_ids.append(tool.id)
-    if operation.tool_key is not None:
+    elif operation.tool_key is not None:
         ref_ids.append(operation.tool_key.id)
     for spindle in snapshot.embedded_spindles:
         if spindle.ref_tool_id in ref_ids:

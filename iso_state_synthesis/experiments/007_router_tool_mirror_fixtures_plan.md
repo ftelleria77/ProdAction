@@ -93,8 +93,25 @@ Validacion local:
 - el script compila con
   `PYTHONDONTWRITEBYTECODE=1 py -3 -m py_compile ...`;
 - los 28 `.pgmx` se leen con `inspect-pgmx --summary`;
-- los 28 `.pgmx` emiten ISO candidato con `emit-candidate`;
-- no hay todavia ISO de Maestro para comparar exactitud linea-a-linea.
+- los 28 `.pgmx` emiten ISO candidato con `emit-candidate`.
+
+## Validacion Contra Maestro
+
+Los ISO de Maestro quedaron disponibles en:
+
+`P:\USBMIX\ProdAction\ISO\router_tool_mirror_fixtures_2026-05-07`
+
+Resultado del barrido 2026-05-07:
+
+- 28/28 `Resultado: igual`;
+- 0 `Sin candidato`;
+- 0 `Resultado: distinto`.
+
+Durante el barrido aparecio una regla importante para el traductor ISO: si el
+`ToolKey` de la operacion trae un `ID` y un `Name` que no apuntan a la misma
+herramienta embebida, Maestro resuelve el router por el `Name` (`E004`,
+`E005`, etc.). El adaptador ISO replica esa prioridad y solo cae al `ID` si el
+nombre no resuelve una herramienta unica.
 
 ## Validacion Esperada
 
@@ -114,9 +131,6 @@ Resultado esperado para cada pieza aceptada por Maestro:
   `SVL/VL6`, `SVR/VL7`, `S...M3`, feeds y coordenadas/toolpaths si Maestro los
   recalcula por radio.
 
-Si aparece `Resultado: distinto`, guardar el diff completo y clasificar si el
-cambio es una regla real por herramienta o una limitacion del emisor.
-
-Pendiente inmediato: abrir/procesar estas piezas en Maestro para obtener los ISO
-en `P:\USBMIX\ProdAction\ISO\router_tool_mirror_fixtures_2026-05-07` o una
-carpeta equivalente, y luego correr el barrido `compare-candidate`.
+Si aparece `Resultado: distinto` en una variante futura, guardar el diff
+completo y clasificar si el cambio es una regla real por herramienta o una
+limitacion del emisor.
