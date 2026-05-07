@@ -398,7 +398,14 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
 - La regla de fresado lineal/contorno ya no esta atada a `ToolKey=E004`: acepta
   herramientas `E00x`, incluida `E002`, y toma numero, largo, radio, avances y
   velocidad desde el `def.tlgx` embebido. La validacion exacta disponible cubre
-  `E004` y dos casos `E003`; faltan piezas espejo para las demas herramientas.
+  `E004` y dos casos `E003`.
+- Para ampliar esa evidencia, se genero la matriz espejo por herramienta con
+  `tools.studies.iso.router_tool_mirror_fixtures_2026_05_07`: 28 `.pgmx` en
+  `S:\Maestro\Projects\ProdAction\ISO\router_tool_mirror_fixtures_2026-05-07`
+  mas `manifest.csv`, cubriendo `E001` a `E007` sobre linea vertical,
+  polilinea abierta, circulo antihorario y circulo horario. Los 28 `.pgmx` se
+  leen con `inspect-pgmx` y emiten candidato con `emit-candidate`; falta generar
+  los ISO desde Maestro para hacer comparacion exacta.
 - Resultado nuevo del barrido `Pieza*`: 44 pares exactos
   (`Pieza_001`, `Pieza_001_R`, `Pieza_004`, `Pieza_012`, `Pieza_013`,
   `Pieza_014`, `Pieza_015`, `Pieza_016`, `Pieza_017`, `Pieza_018`,
@@ -446,10 +453,11 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
 - Mantener separadas estas dos politicas: conversion de `.pgmx` existente
   contra Maestro como evidencia; generacion automatica de `.pgmx` con guardas
   preventivas propias.
-- El plan de piezas espejo por herramienta quedo en
+- El experimento de piezas espejo por herramienta quedo en
   `iso_state_synthesis/experiments/007_router_tool_mirror_fixtures_plan.md`.
   Sirve para confirmar con Maestro la generalizacion `E00x` del fresado
-  lineal/contorno.
+  lineal/contorno. La carpeta generada de trabajo es
+  `S:\Maestro\Projects\ProdAction\ISO\router_tool_mirror_fixtures_2026-05-07`.
 
 ## Plan Tentativo
 
@@ -471,6 +479,8 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
 
 - Mantener como hipotesis pendientes las repeticiones `ETK[8]/G40` y resets
   `G61/G64/SYN` hasta que una variante nueva los explique.
+- Exportar/procesar en Maestro los 28 `.pgmx` espejo por herramienta y correr
+  `compare-candidate` contra los ISO resultantes.
 - Extender el emisor general a multiples trabajos usando el mismo diferencial
   de `maquina.boring_head_speed`; el emisor candidato actual sigue acotado a
   una familia por programa.

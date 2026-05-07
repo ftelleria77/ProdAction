@@ -4,15 +4,15 @@ Fecha: 2026-05-07
 
 ## Proposito
 
-Confirmar que las reglas de fresado lineal/contorno no dependen de `ToolKey=E004`.
-El emisor ya acepta operaciones de fresado con herramientas `E00x`, incluida
-`E002`, y toma numero, largo, radio, avances y velocidad desde el `def.tlgx`
-embebido. Falta evidencia generada por Maestro para las mismas trayectorias con
-otras herramientas.
+Confirmar que las reglas de fresado lineal/contorno no dependen de
+`ToolKey=E004`. El emisor ya acepta operaciones de fresado con herramientas
+`E00x`, incluida `E002`, y toma numero, largo, radio, avances y velocidad desde
+el `def.tlgx` embebido. Falta evidencia ISO generada por Maestro para las
+mismas trayectorias con otras herramientas.
 
-Este plan es un recordatorio operativo: crear piezas espejo en Maestro, exportar
-sus ISO y correr `compare-candidate`. No es una regla de seguridad para
-generacion automatica de `.pgmx`.
+Este experimento es un recordatorio operativo: generar piezas espejo, exportar
+sus ISO desde Maestro y correr `compare-candidate`. No es una regla de seguridad
+para generacion automatica de `.pgmx`.
 
 ## Pieza Base
 
@@ -72,6 +72,30 @@ Repetir el patron reemplazando `E001` por `E002`, `E003`, `E005`, `E006` y
 `Pieza_025` y `Pieza_026` como control, o duplicarse con el mismo patron si
 conviene una serie homogenea.
 
+## Generacion Ejecutada
+
+El 2026-05-07 se agrego el generador reproducible:
+
+```powershell
+py -3 -m tools.studies.iso.router_tool_mirror_fixtures_2026_05_07 `
+  --output-dir "S:\Maestro\Projects\ProdAction\ISO\router_tool_mirror_fixtures_2026-05-07"
+```
+
+Salida generada:
+
+- carpeta:
+  `S:\Maestro\Projects\ProdAction\ISO\router_tool_mirror_fixtures_2026-05-07`;
+- `manifest.csv`;
+- 28 archivos `.pgmx`: 7 herramientas (`E001` a `E007`) por 4 recorridos.
+
+Validacion local:
+
+- el script compila con
+  `PYTHONDONTWRITEBYTECODE=1 py -3 -m py_compile ...`;
+- los 28 `.pgmx` se leen con `inspect-pgmx --summary`;
+- los 28 `.pgmx` emiten ISO candidato con `emit-candidate`;
+- no hay todavia ISO de Maestro para comparar exactitud linea-a-linea.
+
 ## Validacion Esperada
 
 Comando por pieza:
@@ -92,3 +116,7 @@ Resultado esperado para cada pieza aceptada por Maestro:
 
 Si aparece `Resultado: distinto`, guardar el diff completo y clasificar si el
 cambio es una regla real por herramienta o una limitacion del emisor.
+
+Pendiente inmediato: abrir/procesar estas piezas en Maestro para obtener los ISO
+en `P:\USBMIX\ProdAction\ISO\router_tool_mirror_fixtures_2026-05-07` o una
+carpeta equivalente, y luego correr el barrido `compare-candidate`.
