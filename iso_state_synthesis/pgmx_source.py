@@ -112,6 +112,8 @@ def _ordered_resolved_working_steps(snapshot: PgmxSnapshot) -> tuple[PgmxResolve
     if len(families) <= 1:
         return steps
 
+    steps = _ordered_mixed_drill_neighborhoods(steps)
+
     ordered: list[PgmxResolvedWorkingStepSnapshot] = []
     index = 0
     while index < len(steps):
@@ -136,6 +138,98 @@ def _ordered_resolved_working_steps(snapshot: PgmxSnapshot) -> tuple[PgmxResolve
             index += 1
             continue
     return tuple(ordered)
+
+
+def _ordered_mixed_drill_neighborhoods(
+    steps: tuple[PgmxResolvedWorkingStepSnapshot, ...],
+) -> tuple[PgmxResolvedWorkingStepSnapshot, ...]:
+    ordered: list[PgmxResolvedWorkingStepSnapshot] = []
+    index = 0
+    while index < len(steps):
+        first_side, after_first_side = _side_plane_block(steps, index)
+        if not first_side:
+            ordered.append(steps[index])
+            index += 1
+            continue
+
+        top_block, after_top = _family_block(steps, after_first_side, "top_drill")
+        second_side, after_second_side = _side_plane_block(steps, after_top)
+        if (
+            top_block
+            and second_side
+            and _same_side_drill_plane(first_side, second_side)
+            and _side_block_extent(first_side) < _side_block_extent(second_side)
+        ):
+            ordered.extend(second_side)
+            ordered.extend(top_block)
+            ordered.extend(first_side)
+            index = after_second_side
+            continue
+
+        ordered.extend(first_side)
+        index = after_first_side
+
+    return tuple(ordered)
+
+
+def _side_plane_block(
+    steps: tuple[PgmxResolvedWorkingStepSnapshot, ...],
+    start: int,
+) -> tuple[list[PgmxResolvedWorkingStepSnapshot], int]:
+    if start >= len(steps) or _resolved_step_family(steps[start]) != "side_drill":
+        return [], start
+    plane = _side_drill_plane(steps[start])
+    block: list[PgmxResolvedWorkingStepSnapshot] = []
+    index = start
+    while (
+        index < len(steps)
+        and _resolved_step_family(steps[index]) == "side_drill"
+        and _side_drill_plane(steps[index]) == plane
+    ):
+        block.append(steps[index])
+        index += 1
+    return block, index
+
+
+def _family_block(
+    steps: tuple[PgmxResolvedWorkingStepSnapshot, ...],
+    start: int,
+    family: str,
+) -> tuple[list[PgmxResolvedWorkingStepSnapshot], int]:
+    block: list[PgmxResolvedWorkingStepSnapshot] = []
+    index = start
+    while index < len(steps) and _resolved_step_family(steps[index]) == family:
+        block.append(steps[index])
+        index += 1
+    return block, index
+
+
+def _same_side_drill_plane(
+    first: list[PgmxResolvedWorkingStepSnapshot],
+    second: list[PgmxResolvedWorkingStepSnapshot],
+) -> bool:
+    first_planes = {_side_drill_plane(step) for step in first}
+    second_planes = {_side_drill_plane(step) for step in second}
+    return len(first_planes) == 1 and first_planes == second_planes and "" not in first_planes
+
+
+def _side_drill_plane(resolved_step: PgmxResolvedWorkingStepSnapshot) -> str:
+    return (resolved_step.feature.plane_name if resolved_step.feature is not None else "") or ""
+
+
+def _side_block_extent(block: list[PgmxResolvedWorkingStepSnapshot]) -> float:
+    values = [abs(_side_drill_fixed_value(step)) for step in block]
+    return max(values) if values else 0.0
+
+
+def _side_drill_fixed_value(resolved_step: PgmxResolvedWorkingStepSnapshot) -> float:
+    feature = resolved_step.feature
+    operation = resolved_step.operation
+    plane = (feature.plane_name if feature is not None else "") or ""
+    policy = _SIDE_DRILL_POLICIES.get(plane)
+    if operation is None or policy is None:
+        return 0.0
+    return _side_fixed_from_toolpath(operation, policy)
 
 
 def _resolved_step_family(resolved_step: PgmxResolvedWorkingStepSnapshot) -> str:

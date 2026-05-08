@@ -5,7 +5,10 @@ from __future__ import annotations
 import difflib
 import math
 import struct
+import xml.etree.ElementTree as ET
+import zipfile
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -32,6 +35,7 @@ _WORK_STAGE_KEYS = {
     "profile_milling": ("profile_milling_prepare", "profile_milling_trace", "profile_milling_reset"),
 }
 _ROUTER_MILLING_FAMILIES = {"line_milling", "profile_milling"}
+PROGRAMACIONES_SETTINGSX_PATH = "iso_state_synthesis/machine_config/snapshot/maestro/Cfgx/Programaciones.settingsx"
 
 
 @dataclass(frozen=True)
@@ -380,6 +384,11 @@ def _emit_work_sequence_candidate(
             _emit_top_drill_prepare_after_router(lines, evaluation, prepare)
             _emit_top_drill_trace(lines, trace, emit_mlv_after_etk7=False)
             _emit_top_drill_reset(lines, evaluation, reset, final=next_family is None)
+        elif family == "top_drill" and previous_family == "side_drill":
+            assert previous_prepare is not None
+            _emit_top_drill_prepare_after_side(lines, evaluation, prepare, previous_prepare)
+            _emit_top_drill_trace(lines, trace, emit_mlv_after_etk7=False)
+            _emit_top_drill_reset(lines, evaluation, reset, final=next_family is None)
         elif family == "top_drill" and previous_family == "top_drill":
             assert previous_prepare is not None
             assert previous_trace is not None
@@ -399,11 +408,11 @@ def _emit_work_sequence_candidate(
             _emit_router_to_side_drill_transition(lines, evaluation, groups[index - 1][3], prepare)
             _emit_side_drill_prepare_after_router(lines, evaluation, prepare, multi_side_sequence=next_family == "side_drill")
             _emit_side_drill_trace(lines, trace, emit_mlv_after_etk7=False)
-            _emit_side_drill_reset(lines, evaluation, reset, final=next_family != "side_drill")
+            _emit_side_drill_reset(lines, evaluation, reset, final=next_family not in {"side_drill", "top_drill"})
         elif family == "side_drill" and previous_family == "top_drill":
             _emit_side_drill_prepare_after_top(lines, evaluation, prepare, multi_side_sequence=next_family == "side_drill")
             _emit_side_drill_trace(lines, trace, emit_mlv_after_etk7=False)
-            _emit_side_drill_reset(lines, evaluation, reset, final=next_family != "side_drill")
+            _emit_side_drill_reset(lines, evaluation, reset, final=next_family not in {"side_drill", "top_drill"})
         elif family == "slot_milling" and previous_family == "top_drill":
             _emit_top_to_slot_milling_transition(lines, groups[index - 1][3])
             _emit_slot_milling_prepare_after_top(lines, prepare)
@@ -418,7 +427,7 @@ def _emit_work_sequence_candidate(
                 prepare,
                 previous_prepare=previous_prepare,
                 previous_trace=previous_trace,
-                multi_side_sequence=next_family == "side_drill",
+                multi_side_sequence=next_family in {"side_drill", "top_drill"},
             )
             same_spindle = _change_after(previous_prepare, "herramienta", "spindle") == _change_after(
                 prepare, "herramienta", "spindle"
@@ -430,7 +439,7 @@ def _emit_work_sequence_candidate(
                 emit_mlv_after_etk7=False,
                 combine_rapid_z=same_spindle and axis == "X",
             )
-            _emit_side_drill_reset(lines, evaluation, reset, final=next_family != "side_drill")
+            _emit_side_drill_reset(lines, evaluation, reset, final=next_family not in {"side_drill", "top_drill"})
         else:
             _emit_work_group(lines, evaluation, family, prepare, trace, reset, previous_family=previous_family)
         if index < len(groups) - 1:
@@ -989,6 +998,108 @@ def _emit_top_drill_prepare_after_router(
         "Mascara de agregado vertical derivada del spindle activo.",
         confidence="confirmed",
         rule_status="generalized_router_to_top_drill_sequence",
+    )
+
+
+def _emit_top_drill_prepare_after_side(
+    lines: list[ExplainedIsoLine],
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+    previous_side_prepare: StageDifferential,
+) -> None:
+    origin_z = evaluation.initial_state.get("pieza", "origin_z")
+    header_dz = evaluation.final_state.get("pieza", "header_dz")
+    previous_plane = str(_change_after(previous_side_prepare, "trabajo", "plane"))
+    tool_name = str(_change_after(differential, "herramienta", "tool_name"))
+    mask = _change_after(differential, "salida", "etk_0_mask")
+    shf_x = _change_after(differential, "herramienta", "shf_x")
+    shf_y = _change_after(differential, "herramienta", "shf_y")
+    shf_z = _change_after(differential, "herramienta", "shf_z")
+    source = _change_source(differential, "herramienta", "tool_offset_length")
+    transition_source = _observed_rule_source("side_to_top_drill_transition")
+    tool_number = int(tool_name) if tool_name.isdigit() else tool_name
+
+    if previous_plane in {"Left", "Back"}:
+        length = evaluation.initial_state.get("pieza", "length")
+        origin_x = evaluation.initial_state.get("pieza", "origin_x")
+        origin_y = evaluation.initial_state.get("pieza", "origin_y")
+        for line in (
+            "MLV=1",
+            f"SHF[X]={_fmt(-(length + origin_x))}",
+            f"SHF[Y]={_fmt(_base_shf_y(origin_y))}",
+            f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
+        ):
+            _append(
+                lines,
+                line,
+                differential,
+                transition_source,
+                "Restauracion de marco lateral antes de volver a Top Drill.",
+                confidence="confirmed",
+                rule_status="generalized_side_to_top_drill_sequence",
+            )
+    for line in ("?%ETK[8]=1", "G40"):
+        _append(
+            lines,
+            line,
+            differential,
+            transition_source,
+            "Seleccion de cara superior despues de taladro lateral.",
+            confidence="confirmed",
+            rule_status="generalized_side_to_top_drill_sequence",
+        )
+    for line in (
+        "MLV=1",
+        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
+        "MLV=2",
+        "G17",
+        f"?%ETK[6]={tool_number}",
+        "MLV=0",
+        f"G0 G53 Z{_fmt(_side_drill_g53_z(evaluation, previous_side_prepare))}",
+        "MLV=2",
+        "MLV=2",
+        f"SHF[X]={_fmt(shf_x)}",
+        f"SHF[Y]={_fmt(shf_y)}",
+        f"SHF[Z]={_fmt(shf_z)}",
+    ):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Preparacion incremental de taladro superior despues de lateral; G53 Z lateral = DZ + 2*SecurityDistance + SHF_Z lateral saliente.",
+            confidence="confirmed",
+            rule_status="generalized_side_to_top_drill_sequence",
+        )
+    speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
+    if speed_activation is not None:
+        spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
+        _append(
+            lines,
+            f"?%ETK[17]={int(speed_activation.after)}",
+            differential,
+            speed_activation.source,
+            "Activacion de velocidad Top Drill despues de lateral.",
+            confidence=speed_activation.confidence,
+            rule_status="generalized_side_to_top_drill_sequence",
+        )
+        _append(
+            lines,
+            f"S{int(spindle_speed)}M3",
+            differential,
+            source,
+            "Velocidad Top Drill desde def.tlgx embebido.",
+            confidence="confirmed",
+            rule_status="generalized_side_to_top_drill_sequence",
+        )
+    _append(
+        lines,
+        f"?%ETK[0]={int(mask)}",
+        differential,
+        _change_source(differential, "salida", "etk_0_mask"),
+        "Mascara vertical despues de transicion lateral a superior.",
+        confidence="confirmed",
+        rule_status="generalized_side_to_top_drill_sequence",
     )
 
 
@@ -3068,14 +3179,14 @@ def _emit_side_drill_prepare(
             confidence="confirmed",
             rule_status="generalized_side_drill_sequence",
         )
-        park_z = 149.45 if plane == "Right" or (plane == "Left" and previous_plane == "Right") else 149.5
+        park_z = _side_drill_g53_z(evaluation, previous_prepare, differential)
         for line in ("MLV=0", f"G0 G53 Z{_fmt(park_z)}", "MLV=2", "MLV=2"):
             _append(
                 lines,
                 line,
                 differential,
                 source,
-                "Reposicion segura antes de cambiar spindle lateral.",
+                "Reposicion segura antes de cambiar spindle lateral; Z = DZ + 2*SecurityDistance + max(SHF_Z lateral involucrado).",
                 confidence="confirmed",
                 rule_status="generalized_side_drill_sequence",
             )
@@ -3382,7 +3493,7 @@ def _emit_side_drill_prepare_after_top(
         "G17",
         f"?%ETK[6]={int(spindle)}",
         "MLV=0",
-        f"G0 G53 Z{_fmt(149.45 if plane in {'Left', 'Right'} else 149.5)}",
+        f"G0 G53 Z{_fmt(_side_drill_g53_z(evaluation, differential))}",
         "MLV=2",
         "MLV=2",
         f"SHF[X]={_fmt(shf_x)}",
@@ -3394,7 +3505,7 @@ def _emit_side_drill_prepare_after_top(
             line,
             differential,
             source,
-            "Preparacion incremental de taladro lateral despues de taladro superior.",
+            "Preparacion incremental de taladro lateral despues de taladro superior; G53 Z lateral = DZ + 2*SecurityDistance + SHF_Z lateral entrante.",
             confidence="confirmed",
             rule_status="generalized_top_to_side_drill_sequence",
         )
@@ -3643,9 +3754,14 @@ def _emit_program_close(
         close_xy_line = f"G0 G53 X{_fmt(close_x)}"
         if close_y is not None:
             close_xy_line += f" Y{_fmt(close_y)}"
-        for line in ("G0 G53 Z201.000", close_xy_line):
+        mixed_side_close = plane == "Right" and _has_non_side_work(evaluation) and float(close_x) != -3700.0
+        if mixed_side_close:
+            _emit_side_program_close_prefix(lines, differential, plane)
+            close_lines = (close_xy_line, "G64")
+        else:
+            close_lines = ("G0 G53 Z201.000", close_xy_line, "G64")
+        for line in close_lines:
             _append(lines, line, differential, source, "Cierre comun observado.", rule_status="machine_close_observed")
-        _append(lines, "G64", differential, source, "Cierre comun observado.", rule_status="machine_close_observed")
     if family not in _ROUTER_MILLING_FAMILIES and plane != "Top":
         if plane in {"Left", "Back"}:
             length = evaluation.initial_state.get("pieza", "length")
@@ -3727,6 +3843,38 @@ def _emit_program_close(
         "M2",
     ):
         _append(lines, line, differential, source, "Cierre comun observado.", rule_status="machine_close_observed")
+
+
+def _emit_side_program_close_prefix(
+    lines: list[ExplainedIsoLine],
+    differential: StageDifferential,
+    plane: str,
+) -> None:
+    source = _observed_rule_source("side_program_close")
+    for line in (
+        "G0 G53 Z201.000",
+        "G64",
+        f"?%ETK[8]={_side_etk8_for_plane(plane)}",
+        "G40",
+        "MLV=0",
+        "G0 G53 Z201.000",
+        "MLV=0",
+        "T1",
+        "SYN",
+        "M06",
+        "G61",
+        "D0",
+        "G0 G53 Z201.000",
+    ):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Prefijo de cierre observado despues de taladro lateral.",
+            confidence="confirmed",
+            rule_status="generalized_side_program_close",
+        )
 
 
 def _emit_empty_program_close(
@@ -3905,6 +4053,16 @@ def _work_family(evaluation: IsoStateEvaluation) -> str:
     return "top_drill"
 
 
+def _has_non_side_work(evaluation: IsoStateEvaluation) -> bool:
+    for differential in evaluation.differentials:
+        if differential.stage_key in _COMMON_STAGE_KEYS:
+            continue
+        for change in differential.target_changes + differential.forced_values:
+            if change.layer == "trabajo" and change.key == "family" and str(change.after) != "side_drill":
+                return True
+    return False
+
+
 def _first_work_value(
     evaluation: IsoStateEvaluation,
     layer: str,
@@ -3940,6 +4098,71 @@ def _side_plane_frame_shift(evaluation: IsoStateEvaluation, plane_name: str) -> 
     if plane_name == "Back":
         return base_x + length, base_y
     return base_x, base_y
+
+
+def _side_drill_g53_z(
+    evaluation: IsoStateEvaluation,
+    *side_prepares: StageDifferential,
+) -> float:
+    shf_z_values = [
+        float(_change_after(prepare, "herramienta", "shf_z"))
+        for prepare in side_prepares
+    ]
+    if not shf_z_values:
+        raise IsoCandidateEmissionError("No hay SHF_Z lateral para calcular G53 Z.")
+    header_dz = float(evaluation.final_state.get("pieza", "header_dz"))
+    return header_dz + (2.0 * _maestro_security_distance()) + max(shf_z_values)
+
+
+@lru_cache(maxsize=1)
+def _maestro_security_distance() -> float:
+    path = _resolve_project_path(PROGRAMACIONES_SETTINGSX_PATH)
+    if not path.exists():
+        raise IsoCandidateEmissionError(f"No existe la configuracion Maestro: {PROGRAMACIONES_SETTINGSX_PATH}.")
+    for text in _settingsx_texts(path):
+        value = _xml_app_setting(text, "SecurityDistance")
+        if value is not None:
+            return float(value)
+    raise IsoCandidateEmissionError(f"No se encontro SecurityDistance en {PROGRAMACIONES_SETTINGSX_PATH}.")
+
+
+def _settingsx_texts(path: Path) -> tuple[str, ...]:
+    if zipfile.is_zipfile(path):
+        texts: list[str] = []
+        with zipfile.ZipFile(path) as archive:
+            for name in archive.namelist():
+                if not name.lower().endswith(".config"):
+                    continue
+                texts.append(archive.read(name).decode("utf-8-sig"))
+        return tuple(texts)
+    return (path.read_text(encoding="utf-8-sig"),)
+
+
+def _xml_app_setting(text: str, key: str) -> Optional[str]:
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError:
+        return None
+    for element in root.iter():
+        if element.tag.rsplit("}", 1)[-1] == "add" and element.attrib.get("key") == key:
+            return element.attrib.get("value")
+    return None
+
+
+def _resolve_project_path(relative_path: str) -> Path:
+    path = Path(relative_path)
+    if path.exists():
+        return path
+    return Path(__file__).resolve().parent.parent / path
+
+
+def _side_etk8_for_plane(plane_name: str) -> int:
+    return {
+        "Left": 3,
+        "Right": 2,
+        "Front": 5,
+        "Back": 4,
+    }.get(plane_name, 1)
 
 
 def _base_shf_y(origin_y: object = 0.0) -> float:

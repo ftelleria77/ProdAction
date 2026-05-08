@@ -3,7 +3,7 @@
 Nueva memoria de trabajo para redisenar la generacion ISO desde cero sin
 arrastrar la arquitectura por patrones de `iso_generation/`.
 
-Ultima actualizacion: 2026-05-07
+Ultima actualizacion: 2026-05-08
 
 ## Alcance
 
@@ -524,6 +524,27 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
   `fajx`, laterales con reordenamiento de grupos `side/top`, transiciones
   `profile/line` de router-router y algunos bloques top con recorrido no
   rectangular.
+- Avance del 2026-05-08 sobre `Cocina`:
+  - Se cerro el primer `fajx` pendiente:
+    `mod 1 - bajo 1 puerta IZQ/fajx 414` compara exacto
+    (`369 vs 369 lineas`, `0 diferencias`).
+  - La correccion no fue de coordenadas: se modelo el orden de vecindades
+    mixtas `side -> top -> side` para una misma cara lateral, moviendo primero
+    el bloque lateral de mayor alcance cuando Maestro lo ejecuta antes del
+    bloque superior.
+  - Se agrego la transicion incremental `side_drill -> top_drill`, el `G53 Z`
+    lateral por formula de maquina (`DZ_cabecera + 2*SecurityDistance +
+    max(SHF_Z lateral involucrado)`) y el prefijo de cierre lateral observado
+    para cierre explicito `Xn` desde `Right`. La correccion del mismo dia
+    reemplazo los valores constantes `149.*` por lectura de
+    `Programaciones.settingsx` y `SHF_Z` de los spindles laterales.
+  - Validacion especifica sobre
+    `side_g53_z_fixtures_2026-05-03`: las secuencias `G53 Z` normalizadas
+    coinciden en `20/20` fixtures. Los grupos A emiten `156.500/156.450` y los
+    grupos B emiten `164.500/164.450`, siguiendo el cambio de `DZ_cabecera`.
+  - Validacion despues del cambio: corpus raiz `Pieza*` queda `105/105`
+    exacto; corpus `Cocina` queda `55/84` exacto, con `29` diferencias
+    restantes, `0` ISO faltantes y `0` candidatos faltantes.
 
 ## Preguntas Abiertas
 
@@ -595,10 +616,10 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
   pendiente ya no es cerrar piezas sueltas de este corpus, sino ampliar la
   evidencia con nuevas matrices controladas y seguir separando reglas
   observadas de hipotesis de maquina.
-- Primera diferencia vigente de `Cocina`: `mod 1 - bajo 1 puerta IZQ/fajx 414`.
-  En linea 103 Maestro emite `G0 X-85.000 Y-181.000` y el candidato
-  `G0 X-85.000 Y-51.000`. El diagnostico no apunta a la formula del taladro
-  lateral, sino al ordenamiento de grupos mixtos `side/top/side`: Maestro
-  ejecuta primero el grupo lateral Left de `Y=-181/-149` y el candidato entra
-  por `Y=-51/-19`. Atacar este caso como regla de orden de bloques `fajx`, no
-  como correccion aislada de coordenadas.
+- `Cocina` quedo en `55/84` exactos. Pendiente inmediato actualizado: atacar
+  `mod 1 - bajo 1 puerta IZQ/Lado_derecho.pgmx`, cuya primera diferencia
+  aparece en la transicion `router/profile -> router/profile` antes de entrar
+  a los bloques de taladro. Maestro continua con `G17`, `MLV=2` y toolpath
+  router, mientras el candidato emite un reset/cambio de herramienta completo.
+  Tratarlo como regla de transicion router-router y ordenamiento posterior de
+  bloques superiores, no como correccion aislada de una linea.

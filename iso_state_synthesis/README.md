@@ -96,8 +96,11 @@ Estado actual del emisor candidato:
   router.
 - Compara igual contra Maestro en las 14 piezas minimas `ISO_MIN_*`
   disponibles.
-- En el barrido `Pieza*`, emite 48 candidatos exactos, 57 `Sin candidato` y
+- En el barrido `Pieza*`, emite 105 candidatos exactos, 0 `Sin candidato` y
   ningun candidato distinto.
+- En el corpus real `Cocina`, emite 55 candidatos exactos sobre 84 pares
+  disponibles; quedan 29 diferencias linea-a-linea para ampliar reglas de
+  transicion y ordenamiento.
 - Clasifica cada linea emitida con `rule_status`, sin cambiar el texto ISO
   candidato.
 - El diferencial ya modela la velocidad activa del `BooringUnitHead` como
