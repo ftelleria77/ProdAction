@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Optional
 
+from tools import synthesize_pgmx as sp
 from tools.pgmx_snapshot import (
     PgmxEmbeddedSpindleSnapshot,
     PgmxEmbeddedToolSnapshot,
@@ -85,7 +87,7 @@ def build_state_plan_from_snapshot(snapshot: PgmxSnapshot) -> IsoStatePlan:
     ]
 
     order_index = 100
-    for resolved_step in snapshot.resolved_working_steps:
+    for resolved_step in _ordered_resolved_working_steps(snapshot):
         step_stages, step_warnings = _stages_for_working_step(snapshot, resolved_step, order_index)
         stages.extend(step_stages)
         warnings.extend(step_warnings)
@@ -98,6 +100,122 @@ def build_state_plan_from_snapshot(snapshot: PgmxSnapshot) -> IsoStatePlan:
         stages=tuple(stages),
         warnings=tuple(warnings),
     )
+
+
+def _ordered_resolved_working_steps(snapshot: PgmxSnapshot) -> tuple[PgmxResolvedWorkingStepSnapshot, ...]:
+    steps = tuple(snapshot.resolved_working_steps)
+    families = {
+        family
+        for family in (_resolved_step_family(step) for step in steps)
+        if family not in {"program_close", "unsupported"}
+    }
+    if len(families) <= 1:
+        return steps
+
+    ordered: list[PgmxResolvedWorkingStepSnapshot] = []
+    index = 0
+    while index < len(steps):
+        step = steps[index]
+        family = _resolved_step_family(step)
+        if family == "top_drill":
+            top_block: list[PgmxResolvedWorkingStepSnapshot] = []
+            while index < len(steps) and _resolved_step_family(steps[index]) == "top_drill":
+                top_block.append(steps[index])
+                index += 1
+            ordered.extend(_ordered_top_drill_block(top_block))
+            continue
+        if family == "side_drill":
+            side_block: list[PgmxResolvedWorkingStepSnapshot] = []
+            while index < len(steps) and _resolved_step_family(steps[index]) == "side_drill":
+                side_block.append(steps[index])
+                index += 1
+            ordered.extend(_ordered_side_drill_block(side_block))
+            continue
+        else:
+            ordered.append(step)
+            index += 1
+            continue
+    return tuple(ordered)
+
+
+def _resolved_step_family(resolved_step: PgmxResolvedWorkingStepSnapshot) -> str:
+    step = resolved_step.step
+    if resolved_step.feature is None or resolved_step.operation is None:
+        return "program_close" if step.runtime_type == "Xn" else "unsupported"
+    if _is_top_drilling(resolved_step):
+        return "top_drill"
+    if _is_side_drilling(resolved_step):
+        return "side_drill"
+    if _is_slot_milling(resolved_step):
+        return "slot_milling"
+    if _is_line_milling(resolved_step):
+        return "line_milling"
+    if _is_profile_milling_e001(resolved_step):
+        return "profile_milling"
+    return "unsupported"
+
+
+def _ordered_top_drill_block(
+    block: list[PgmxResolvedWorkingStepSnapshot],
+) -> tuple[PgmxResolvedWorkingStepSnapshot, ...]:
+    by_x: dict[float, list[PgmxResolvedWorkingStepSnapshot]] = {}
+    for step in block:
+        x, _, _, _ = _top_drill_step_sort_key(step)
+        by_x.setdefault(x, []).append(step)
+
+    ordered: list[PgmxResolvedWorkingStepSnapshot] = []
+    for column_index, x in enumerate(sorted(by_x)):
+        column = by_x[x]
+        descending_y = bool(column_index % 2)
+        ordered.extend(sorted(column, key=lambda step: _top_drill_column_sort_key(step, descending_y)))
+    return tuple(ordered)
+
+
+def _top_drill_step_sort_key(resolved_step: PgmxResolvedWorkingStepSnapshot) -> tuple[float, float, str, str]:
+    geometry = resolved_step.geometry
+    x, y = (float("inf"), float("inf"))
+    if geometry is not None and geometry.point is not None:
+        x, y, _ = geometry.point
+    operation = resolved_step.operation
+    tool_name = operation.tool_key.name if operation is not None and operation.tool_key is not None else ""
+    return (round(float(x), 6), round(float(y), 6), tool_name, resolved_step.step.id)
+
+
+def _top_drill_column_sort_key(
+    resolved_step: PgmxResolvedWorkingStepSnapshot,
+    descending_y: bool,
+) -> tuple[float, str, str]:
+    _, y, tool_name, step_id = _top_drill_step_sort_key(resolved_step)
+    return ((-y if descending_y else y), tool_name, step_id)
+
+
+def _ordered_side_drill_block(
+    block: list[PgmxResolvedWorkingStepSnapshot],
+) -> tuple[PgmxResolvedWorkingStepSnapshot, ...]:
+    by_plane: dict[str, list[PgmxResolvedWorkingStepSnapshot]] = {}
+    plane_order: list[str] = []
+    for step in block:
+        plane = (step.feature.plane_name if step.feature is not None else "") or ""
+        if plane not in by_plane:
+            by_plane[plane] = []
+            plane_order.append(plane)
+        by_plane[plane].append(step)
+
+    ordered: list[PgmxResolvedWorkingStepSnapshot] = []
+    for plane in plane_order:
+        ordered.extend(sorted(by_plane[plane], key=_side_drill_step_sort_key))
+    return tuple(ordered)
+
+
+def _side_drill_step_sort_key(resolved_step: PgmxResolvedWorkingStepSnapshot) -> tuple[float, str]:
+    feature = resolved_step.feature
+    operation = resolved_step.operation
+    plane = (feature.plane_name if feature is not None else "") or ""
+    policy = _SIDE_DRILL_POLICIES.get(plane)
+    fixed = 0.0
+    if operation is not None and policy is not None:
+        fixed = _side_fixed_from_toolpath(operation, policy)
+    return (round(float(fixed), 6), resolved_step.step.id)
 
 
 def _stages_for_working_step(
@@ -132,6 +250,8 @@ def _stages_for_working_step(
         return _top_drill_stages(snapshot, resolved_step, order_index), ()
     if _is_side_drilling(resolved_step):
         return _side_drill_stages(snapshot, resolved_step, order_index), ()
+    if _is_slot_milling(resolved_step):
+        return _slot_milling_stages(snapshot, resolved_step, order_index), ()
     if _is_line_milling(resolved_step):
         return _line_milling_stages(snapshot, resolved_step, order_index), ()
     if _is_profile_milling_e001(resolved_step):
@@ -305,18 +425,43 @@ def _top_drill_stages(
     resolved_step: PgmxResolvedWorkingStepSnapshot,
     order_index: int,
 ) -> tuple[StateStage, ...]:
+    geometry = resolved_step.geometry
+    feature = resolved_step.feature
+    if feature is not None and feature.replication_pattern is not None and geometry is not None:
+        base_x, base_y, _ = geometry.point if geometry.point else (0.0, 0.0, 0.0)
+        stages: list[StateStage] = []
+        for replication_index, (x, y) in enumerate(_replicated_top_points(feature, geometry)):
+            stages.extend(
+                _single_top_drill_stages(
+                    snapshot,
+                    resolved_step,
+                    order_index + (replication_index * 3),
+                    xy_delta=(x - float(base_x), y - float(base_y)),
+                )
+            )
+        return tuple(stages)
+    return _single_top_drill_stages(snapshot, resolved_step, order_index)
+
+
+def _single_top_drill_stages(
+    snapshot: PgmxSnapshot,
+    resolved_step: PgmxResolvedWorkingStepSnapshot,
+    order_index: int,
+    *,
+    xy_delta: tuple[float, float] = (0.0, 0.0),
+) -> tuple[StateStage, ...]:
     feature = resolved_step.feature
     operation = resolved_step.operation
     step = resolved_step.step
     assert feature is not None
     assert operation is not None
 
-    tool = _embedded_tool_for_operation(snapshot, operation)
+    tool = _embedded_tool_for_operation(snapshot, operation) or _embedded_top_drill_tool_for_feature(snapshot, feature)
     spindle = _embedded_spindle_for_tool(snapshot, tool, operation)
     prepare_values = [
         _pgmx_value(snapshot, "trabajo", "family", "top_drill", f"features[{feature.id}]"),
         _pgmx_value(snapshot, "trabajo", "plane", feature.plane_name or "Top", f"features[{feature.id}].plane_name"),
-        _pgmx_value(snapshot, "trabajo", "feature_depth", feature.depth_end, f"features[{feature.id}].depth_end"),
+        _pgmx_value(snapshot, "trabajo", "feature_depth", _target_depth(feature), f"features[{feature.id}].depth_end"),
         _pgmx_value(snapshot, "trabajo", "security_plane", operation.approach_security_plane, f"operations[{operation.id}].approach_security_plane"),
         _contract_value("salida", "xiso_statement", "B", "Taladro/foratura XISO candidata."),
     ]
@@ -350,7 +495,7 @@ def _top_drill_stages(
                 ),
             )
         ),
-        trace=_trace_moves(snapshot, operation, tool, feature),
+        trace=_trace_moves(snapshot, operation, tool, feature, xy_delta=xy_delta),
         xiso_statement="B",
         feature_id=feature.id,
         operation_id=operation.id,
@@ -469,6 +614,10 @@ def _line_milling_stages(
                 _pgmx_value(snapshot, "movimiento", "circle_center_x", _profile_center_x(geometry), f"geometries[{geometry.id if geometry else ''}].profile.center.x"),
                 _pgmx_value(snapshot, "movimiento", "circle_center_y", _profile_center_y(geometry), f"geometries[{geometry.id if geometry else ''}].profile.center.y"),
                 _pgmx_value(snapshot, "movimiento", "contour_points", _profile_xy_points(geometry), f"geometries[{geometry.id if geometry else ''}].curve.sampled_points", required=True),
+                _pgmx_value(snapshot, "movimiento", "approach_primitives", _toolpath_primitive_records(operation, "Approach"), f"operations[{operation.id}].toolpaths[Approach]"),
+                _pgmx_value(snapshot, "movimiento", "trajectory_primitives", _toolpath_primitive_records(operation, "TrajectoryPath"), f"operations[{operation.id}].toolpaths[TrajectoryPath]"),
+                _pgmx_value(snapshot, "movimiento", "lift_primitives", _toolpath_primitive_records(operation, "Lift"), f"operations[{operation.id}].toolpaths[Lift]"),
+                _pgmx_value(snapshot, "herramienta", "tool_offset_length", tool_offset, f"operations[{operation.id}].tool_offset_length", required=True),
                 _rule_value("movimiento", "rapid_z", rapid_z, "Z rapida = security_plane + ToolOffsetLength.", path=LINE_MILLING_RULE_PATH, required=True),
                 _rule_value("movimiento", "cut_z", cut_z, "Z de corte E004 desde profundidad PGMX.", path=LINE_MILLING_RULE_PATH, required=True),
                 _rule_value("movimiento", "security_z", security_plane, "Plano de seguridad E004.", path=LINE_MILLING_RULE_PATH, required=True),
@@ -516,6 +665,116 @@ def _line_milling_stages(
         operation_id=operation.id,
         working_step_id=step.id,
         notes=("Reset posterior observado para fresado lineal E004.",),
+    )
+    return prepare_stage, trace_stage, reset_stage
+
+
+def _slot_milling_stages(
+    snapshot: PgmxSnapshot,
+    resolved_step: PgmxResolvedWorkingStepSnapshot,
+    order_index: int,
+) -> tuple[StateStage, ...]:
+    feature = resolved_step.feature
+    operation = resolved_step.operation
+    geometry = resolved_step.geometry
+    step = resolved_step.step
+    assert feature is not None
+    assert operation is not None
+    assert geometry is not None
+
+    tool = _embedded_tool_for_operation(snapshot, operation)
+    spindle_number = int((operation.tool_key.name if operation.tool_key else "82") or 82)
+    spindle = _embedded_spindle_by_number(snapshot, spindle_number)
+    start_point, end_point = _line_points(geometry)
+    tool_offset = float(tool.tool_offset_length if tool and tool.tool_offset_length is not None else 0.0)
+    tool_width = float(feature.tool_width or (spindle.radius * 2.0 if spindle and spindle.radius is not None else 0.0))
+    tool_radius = tool_width / 2.0
+    security_plane = operation.approach_security_plane
+    rapid_z = security_plane + tool_offset
+    cut_z = _line_cut_z(snapshot, feature)
+    plunge_feed = _descent_speed(tool, spindle)
+    milling_feed = _feed_speed(tool)
+    trace_points = tuple(
+        (float(point[0]), float(point[1]), float(point[2]))
+        for toolpath in operation.toolpaths
+        if toolpath.path_type == "TrajectoryPath" and toolpath.curve is not None
+        for point in toolpath.curve.sampled_points
+    )
+    if trace_points:
+        rapid_x = max(point[0] for point in trace_points)
+        cut_x = min(point[0] for point in trace_points)
+        rapid_y = trace_points[0][1]
+    else:
+        rapid_x = max(float(start_point[0]), float(end_point[0]))
+        cut_x = min(float(start_point[0]), float(end_point[0]))
+        rapid_y = float(start_point[1])
+
+    prepare_values = [
+        _pgmx_value(snapshot, "trabajo", "family", "slot_milling", f"features[{feature.id}]"),
+        _pgmx_value(snapshot, "trabajo", "plane", feature.plane_name or "Top", f"features[{feature.id}].plane_name"),
+        _pgmx_value(snapshot, "trabajo", "side_of_feature", feature.side_of_feature, f"features[{feature.id}].side_of_feature"),
+        _pgmx_value(snapshot, "trabajo", "tool_width", tool_width, f"features[{feature.id}].tool_width"),
+        _pgmx_value(snapshot, "trabajo", "security_plane", security_plane, f"operations[{operation.id}].approach_security_plane"),
+        _contract_value("salida", "xiso_statement", "G1", "Ranura SlotSide XISO candidata."),
+    ]
+    prepare_values.extend(_slot_tool_values(snapshot, operation, tool, spindle, tool_radius))
+
+    prepare_stage = StateStage(
+        key="slot_milling_prepare",
+        family="slot_milling",
+        order_index=order_index,
+        target_state=StateVector(tuple(prepare_values)),
+        xiso_statement="G1",
+        feature_id=feature.id,
+        operation_id=operation.id,
+        working_step_id=step.id,
+        notes=("Preparacion de sierra vertical SlotSide antes de ejecutar ranura.",),
+    )
+
+    trace_stage = StateStage(
+        key="slot_milling_trace",
+        family="slot_milling",
+        order_index=order_index + 1,
+        target_state=StateVector(
+            (
+                _pgmx_value(snapshot, "movimiento", "toolpath_count", len(operation.toolpaths), f"operations[{operation.id}].toolpaths"),
+                _rule_value("movimiento", "rapid_x", rapid_x, "La sierra vertical entra desde X maximo observado.", path=LINE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "rapid_y", rapid_y, "Y de ranura desde toolpath compensado.", path=LINE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "cut_x", cut_x, "La sierra vertical corta hacia X minimo observado.", path=LINE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "rapid_z", rapid_z, "Z rapida = security_plane + ToolOffsetLength.", path=LINE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "cut_z", cut_z, "Z de ranura desde profundidad PGMX.", path=LINE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "security_z", security_plane, "Plano de seguridad SlotSide.", path=LINE_MILLING_RULE_PATH, required=True),
+                _pgmx_value(snapshot, "herramienta", "tool_offset_length", tool_offset, f"operations[{operation.id}].tool_offset_length", required=True),
+                _rule_value("herramienta", "tool_radius", tool_radius, "Radio efectivo de sierra = ancho SlotSide / 2.", path=LINE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "plunge_feed", (plunge_feed or 0.0) * 1000.0, "DescentSpeed.Standard * 1000.", path=LINE_MILLING_RULE_PATH, required=True),
+                _rule_value("movimiento", "milling_feed", (milling_feed or 0.0) * 1000.0, "FeedRate.Standard * 1000.", path=LINE_MILLING_RULE_PATH, required=True),
+            )
+        ),
+        trace=_line_trace_moves(snapshot, operation),
+        xiso_statement="G1",
+        feature_id=feature.id,
+        operation_id=operation.id,
+        working_step_id=step.id,
+        notes=("Traza de ranura SlotSide derivada del toolpath compensado.",),
+    )
+
+    reset_stage = StateStage(
+        key="slot_milling_reset",
+        family="slot_milling",
+        order_index=order_index + 2,
+        target_state=StateVector(),
+        reset_state=StateVector(
+            (
+                StateValue("herramienta", "active", False, EvidenceSource("observed_rule", LINE_MILLING_RULE_PATH, "slot_milling_reset"), confidence="observed"),
+                StateValue("salida", "etk_7", 0, EvidenceSource("observed_rule", LINE_MILLING_RULE_PATH, "slot_milling_reset"), confidence="observed"),
+                StateValue("salida", "etk_1", 0, EvidenceSource("observed_rule", LINE_MILLING_RULE_PATH, "slot_milling_reset"), confidence="observed"),
+                StateValue("salida", "etk_17", 0, EvidenceSource("observed_rule", LINE_MILLING_RULE_PATH, "slot_milling_reset"), confidence="observed"),
+            )
+        ),
+        feature_id=feature.id,
+        operation_id=operation.id,
+        working_step_id=step.id,
+        notes=("Reset posterior observado para ranura con sierra vertical.",),
     )
     return prepare_stage, trace_stage, reset_stage
 
@@ -617,6 +876,9 @@ def _profile_milling_stages(
                 _rule_value("movimiento", "plunge_feed", (plunge_feed or 0.0) * 1000.0, "DescentSpeed.Standard * 1000.", path=PROFILE_MILLING_RULE_PATH, required=True),
                 _rule_value("movimiento", "milling_feed", (milling_feed or 0.0) * 1000.0, "FeedRate.Standard * 1000.", path=PROFILE_MILLING_RULE_PATH, required=True),
                 _rule_value("movimiento", "contour_points", tuple((float(x), float(y)) for x, y, _ in contour_points), "Perfil nominal cerrado usado con compensacion.", path=PROFILE_MILLING_RULE_PATH, required=True),
+                _pgmx_value(snapshot, "movimiento", "approach_primitives", _toolpath_primitive_records(operation, "Approach"), f"operations[{operation.id}].toolpaths[Approach]", required=True),
+                _pgmx_value(snapshot, "movimiento", "trajectory_primitives", _toolpath_primitive_records(operation, "TrajectoryPath"), f"operations[{operation.id}].toolpaths[TrajectoryPath]"),
+                _pgmx_value(snapshot, "movimiento", "lift_primitives", _toolpath_primitive_records(operation, "Lift"), f"operations[{operation.id}].toolpaths[Lift]", required=True),
                 _rule_value("movimiento", "rapid_x", rapid_x, "X rapida antes de entrada.", path=PROFILE_MILLING_RULE_PATH, required=True),
                 _rule_value("movimiento", "rapid_y", rapid_y, "Y rapida antes del arco de entrada.", path=PROFILE_MILLING_RULE_PATH, required=True),
                 _rule_value("movimiento", "entry_x", entry_x, "X de entrada compensada.", path=PROFILE_MILLING_RULE_PATH, required=True),
@@ -685,6 +947,33 @@ def _side_drill_stages(
     feature = resolved_step.feature
     operation = resolved_step.operation
     geometry = resolved_step.geometry
+    if feature is not None and feature.replication_pattern is not None and operation is not None:
+        stages: list[StateStage] = []
+        for replication_index, fixed in enumerate(_replicated_side_fixed_values(feature, operation)):
+            stages.extend(
+                _single_side_drill_stages(
+                    snapshot,
+                    resolved_step,
+                    order_index + (replication_index * 3),
+                    fixed_override=fixed,
+                    replication_index=replication_index,
+                )
+            )
+        return tuple(stages)
+    return _single_side_drill_stages(snapshot, resolved_step, order_index)
+
+
+def _single_side_drill_stages(
+    snapshot: PgmxSnapshot,
+    resolved_step: PgmxResolvedWorkingStepSnapshot,
+    order_index: int,
+    *,
+    fixed_override: Optional[float] = None,
+    replication_index: Optional[int] = None,
+) -> tuple[StateStage, ...]:
+    feature = resolved_step.feature
+    operation = resolved_step.operation
+    geometry = resolved_step.geometry
     step = resolved_step.step
     assert feature is not None
     assert operation is not None
@@ -693,7 +982,7 @@ def _side_drill_stages(
     policy = _SIDE_DRILL_POLICIES[plane_name]
     spindle = _embedded_spindle_by_number(snapshot, int(policy["spindle"]))
     tool = _embedded_tool_for_spindle(snapshot, spindle)
-    center_x, center_y, _ = geometry.point if geometry and geometry.point else (0.0, 0.0, 0.0)
+    _, center_y, _ = geometry.point if geometry and geometry.point else (0.0, 0.0, 0.0)
     target_depth = _target_depth(feature)
     extra_depth = _extra_depth(feature)
     tool_offset = _tool_offset_for_side(tool, spindle)
@@ -705,24 +994,35 @@ def _side_drill_stages(
         extra_depth,
         tool_offset,
     )
-    fixed = float(policy["coordinate_sign"]) * center_x
+    fixed = fixed_override if fixed_override is not None else _side_fixed_from_toolpath(operation, policy)
     z = center_y
     feed = _drill_descent_feed(tool, spindle)
 
     prepare_values = [
         _pgmx_value(snapshot, "trabajo", "family", "side_drill", f"features[{feature.id}]"),
-        _pgmx_value(snapshot, "trabajo", "plane", plane_name, f"features[{feature.id}].plane_name"),
+        _pgmx_value(snapshot, "trabajo", "plane", plane_name, f"features[{feature.id}].plane_name", required=True),
         _pgmx_value(snapshot, "trabajo", "feature_depth", target_depth, f"features[{feature.id}].depth_spec.target_depth"),
-        _pgmx_value(snapshot, "trabajo", "diameter", feature.diameter, f"features[{feature.id}].diameter"),
+        _pgmx_value(snapshot, "trabajo", "diameter", _feature_diameter(feature), f"features[{feature.id}].diameter"),
         _pgmx_value(snapshot, "trabajo", "security_plane", operation.approach_security_plane, f"operations[{operation.id}].approach_security_plane"),
-        _side_policy_value("trabajo", "side_etk8", policy["etk8"], plane_name),
-        _side_policy_value("herramienta", "spindle", policy["spindle"], plane_name),
-        _side_policy_value("salida", "etk_0_mask", policy["mask"], plane_name),
-        _side_policy_value("movimiento", "side_axis", policy["axis"], plane_name),
+        _side_policy_value("trabajo", "side_etk8", policy["etk8"], plane_name, required=True),
+        _side_policy_value("herramienta", "spindle", policy["spindle"], plane_name, required=True),
+        _side_policy_value("salida", "etk_0_mask", policy["mask"], plane_name, required=True),
+        _side_policy_value("movimiento", "side_axis", policy["axis"], plane_name, required=True),
         _side_policy_value("movimiento", "side_direction", policy["direction"], plane_name),
         _side_policy_value("movimiento", "side_coordinate_sign", policy["coordinate_sign"], plane_name),
         _contract_value("salida", "xiso_statement", "B", "Taladro lateral XISO candidato."),
     ]
+    if replication_index is not None:
+        prepare_values.append(
+            _rule_value(
+                "trabajo",
+                "replication_index",
+                replication_index,
+                "Indice expandido desde ReplicateFeature lateral.",
+                path=SIDE_DRILL_RULE_PATH,
+                required=True,
+            )
+        )
     prepare_values.extend(_side_tool_values(snapshot, tool, spindle))
 
     prepare_stage = StateStage(
@@ -752,11 +1052,11 @@ def _side_drill_stages(
                     path=SIDE_DRILL_RULE_PATH,
                 ),
                 _side_policy_value("movimiento", "side_axis", policy["axis"], plane_name, required=True),
-                _rule_value("movimiento", "side_rapid", rapid, "Cota rapida lateral calculada.", path=SIDE_DRILL_RULE_PATH),
-                _rule_value("movimiento", "side_cut", cut, "Cota de corte lateral calculada.", path=SIDE_DRILL_RULE_PATH),
-                _pgmx_value(snapshot, "movimiento", "side_fixed", fixed, f"geometries[{geometry.id if geometry else ''}].point[0]"),
-                _pgmx_value(snapshot, "movimiento", "side_z", z, f"geometries[{geometry.id if geometry else ''}].point[1]"),
-                _rule_value("movimiento", "side_feed", feed, "Feed lateral desde DescentSpeed.Standard * 1000.", path=SIDE_DRILL_RULE_PATH),
+                _rule_value("movimiento", "side_rapid", rapid, "Cota rapida lateral calculada.", path=SIDE_DRILL_RULE_PATH, required=True),
+                _rule_value("movimiento", "side_cut", cut, "Cota de corte lateral calculada.", path=SIDE_DRILL_RULE_PATH, required=True),
+                _rule_value("movimiento", "side_fixed", fixed, "Cota fija lateral desde toolpath Maestro.", path=SIDE_DRILL_RULE_PATH, required=True),
+                _pgmx_value(snapshot, "movimiento", "side_z", z, f"geometries[{geometry.id if geometry else ''}].point[1]", required=True),
+                _rule_value("movimiento", "side_feed", feed, "Feed lateral desde DescentSpeed.Standard * 1000.", path=SIDE_DRILL_RULE_PATH, required=True),
             )
         ),
         trace=_side_trace_moves(snapshot, operation, rapid, cut, fixed, z, feed),
@@ -1013,11 +1313,50 @@ def _router_tool_values(
     return values
 
 
+def _slot_tool_values(
+    snapshot: PgmxSnapshot,
+    operation: PgmxOperationSnapshot,
+    tool: Optional[PgmxEmbeddedToolSnapshot],
+    spindle: Optional[PgmxEmbeddedSpindleSnapshot],
+    tool_radius: float,
+) -> list[StateValue]:
+    values: list[StateValue] = []
+    source = _tool_source(snapshot, tool, "SlotSideTool")
+    tool_name = tool.name if tool is not None else operation.tool_key.name if operation.tool_key else "082"
+    spindle_number = spindle.spindle if spindle is not None else int(tool_name or 82)
+    translation_x = float(spindle.translation_x if spindle is not None else 0.0)
+    translation_y = float(spindle.translation_y if spindle is not None else 0.0)
+    translation_z = float(spindle.translation_z if spindle is not None else 0.0)
+    values.extend(
+        [
+            _pgmx_value(snapshot, "herramienta", "operation_tool_id", operation.tool_key.id if operation.tool_key else "", f"operations[{operation.id}].tool_key.id"),
+            _pgmx_value(snapshot, "herramienta", "operation_tool_name", operation.tool_key.name if operation.tool_key else "", f"operations[{operation.id}].tool_key.name"),
+            StateValue("herramienta", "tool_id", tool.id if tool else "", source),
+            StateValue("herramienta", "tool_name", tool_name, source),
+            StateValue("herramienta", "tool_number", int(tool_name), source, required=True),
+            StateValue("herramienta", "spindle", spindle_number, source, required=True),
+            StateValue("salida", "etk_1", 16, EvidenceSource("observed_rule", LINE_MILLING_RULE_PATH, "slot_saw_etk1"), confidence="confirmed", required=True),
+            StateValue("salida", "etk_17", 257, EvidenceSource("observed_rule", LINE_MILLING_RULE_PATH, "slot_saw_speed_activation"), confidence="confirmed", required=True),
+            StateValue("herramienta", "tool_offset_length", tool.tool_offset_length if tool else None, source, required=True),
+            StateValue("herramienta", "diameter", tool.diameter if tool else None, source),
+            StateValue("herramienta", "spindle_speed_standard", _tool_spindle_speed(tool, spindle), source, required=True),
+            StateValue("herramienta", "feed_rate_standard", tool.technology.feed_rate_standard if tool else None, source),
+            StateValue("herramienta", "descent_speed_standard", _descent_speed(tool, spindle), source),
+            StateValue("herramienta", "shf_x", -translation_x, source, required=True),
+            StateValue("herramienta", "shf_y", -translation_y - float(tool_radius), source, required=True),
+            StateValue("herramienta", "shf_z", -translation_z, source, required=True),
+        ]
+    )
+    return values
+
+
 def _trace_moves(
     snapshot: PgmxSnapshot,
     operation: PgmxOperationSnapshot,
     tool: Optional[PgmxEmbeddedToolSnapshot],
     feature=None,
+    *,
+    xy_delta: tuple[float, float] = (0.0, 0.0),
 ) -> tuple[TraceMove, ...]:
     offset = tool.tool_offset_length if tool is not None else None
     feed = None
@@ -1043,8 +1382,8 @@ def _trace_moves(
                 iso_z = _top_drill_iso_z(local_z, offset, feature)
                 points.append(
                     TracePoint(
-                        x=point[0],
-                        y=point[1],
+                        x=float(point[0]) + float(xy_delta[0]),
+                        y=float(point[1]) + float(xy_delta[1]),
                         local_z=local_z,
                         iso_z=iso_z,
                         source=source,
@@ -1065,7 +1404,7 @@ def _top_drill_iso_z(local_z: float, offset: Optional[float], feature) -> Option
     if offset is None:
         return None
     effective_z = local_z
-    if feature is not None and feature.depth_spec is not None and feature.depth_spec.is_through:
+    if _is_through_drill_feature(feature):
         effective_z = max(0.0, float(local_z))
     return effective_z + offset
 
@@ -1191,6 +1530,45 @@ def _profile_xy_points(geometry) -> tuple[tuple[float, float], ...]:
     return tuple((float(x), float(y)) for x, y, _ in _profile_contour_points(geometry))
 
 
+def _toolpath_primitive_records(
+    operation: PgmxOperationSnapshot,
+    path_type: str,
+) -> tuple[tuple[object, ...], ...]:
+    for toolpath in operation.toolpaths:
+        if toolpath.path_type != path_type or toolpath.curve is None:
+            continue
+        serializations = toolpath.curve.member_serializations
+        if not serializations and toolpath.curve.serialization:
+            serializations = (toolpath.curve.serialization,)
+        records: list[tuple[object, ...]] = []
+        for serialization in serializations:
+            primitive = sp._parse_geometry_primitive(serialization)
+            if primitive is None:
+                continue
+            center = primitive.center_point or (None, None, None)
+            normal = primitive.normal_vector or (None, None, None)
+            records.append(
+                (
+                    primitive.primitive_type,
+                    float(primitive.start_point[0]),
+                    float(primitive.start_point[1]),
+                    float(primitive.start_point[2]),
+                    float(primitive.end_point[0]),
+                    float(primitive.end_point[1]),
+                    float(primitive.end_point[2]),
+                    None if center[0] is None else float(center[0]),
+                    None if center[1] is None else float(center[1]),
+                    None if center[2] is None else float(center[2]),
+                    None if primitive.radius is None else float(primitive.radius),
+                    None if normal[0] is None else float(normal[0]),
+                    None if normal[1] is None else float(normal[1]),
+                    None if normal[2] is None else float(normal[2]),
+                )
+            )
+        return tuple(records)
+    return ()
+
+
 def _line_cut_z(snapshot: PgmxSnapshot, feature) -> float:
     if feature.depth_spec is not None:
         extra_depth = float(feature.depth_spec.extra_depth or 0.0)
@@ -1206,7 +1584,7 @@ def _is_top_drilling(resolved_step: PgmxResolvedWorkingStepSnapshot) -> bool:
     operation = resolved_step.operation
     if feature is None or operation is None:
         return False
-    if "RoundHole" not in feature.feature_type:
+    if not _is_round_hole_feature(feature):
         return False
     if "DrillingOperation" not in operation.operation_type:
         return False
@@ -1218,13 +1596,39 @@ def _is_side_drilling(resolved_step: PgmxResolvedWorkingStepSnapshot) -> bool:
     operation = resolved_step.operation
     if feature is None or operation is None:
         return False
-    if "RoundHole" not in feature.feature_type:
+    if not _is_round_hole_feature(feature):
         return False
     if "DrillingOperation" not in operation.operation_type:
         return False
     if (feature.plane_name or "") not in _SIDE_DRILL_POLICIES:
         return False
-    return round(float(feature.diameter or 0.0), 3) == 8.0
+    return round(float(_feature_diameter(feature) or 0.0), 3) == 8.0
+
+
+def _is_slot_milling(resolved_step: PgmxResolvedWorkingStepSnapshot) -> bool:
+    feature = resolved_step.feature
+    operation = resolved_step.operation
+    geometry = resolved_step.geometry
+    if feature is None or operation is None or geometry is None:
+        return False
+    if "SlotSide" not in feature.feature_type and "SlotSide" not in feature.object_type:
+        return False
+    if (feature.plane_name or "Top") != "Top":
+        return False
+    if "Milling" not in operation.operation_type:
+        return False
+    if operation.tool_key is None or (operation.tool_key.name or "") != "082":
+        return False
+    if geometry.profile is None or not geometry.profile.family.startswith("Line"):
+        return False
+    start_point, end_point = _line_points(geometry)
+    if abs(float(start_point[1]) - float(end_point[1])) >= 0.0005:
+        return False
+    if (feature.side_of_feature or "Center") not in {"Center", "Left", "Right"}:
+        return False
+    if operation.milling_strategy is not None:
+        return False
+    return not operation.approach.is_enabled and not operation.retract.is_enabled
 
 
 def _is_line_milling(resolved_step: PgmxResolvedWorkingStepSnapshot) -> bool:
@@ -1242,23 +1646,83 @@ def _is_line_milling(resolved_step: PgmxResolvedWorkingStepSnapshot) -> bool:
     profile_family = geometry.profile.family
     if profile_family.startswith("Line"):
         return "Milling" in operation.operation_type
-    if profile_family not in {"OpenPolyline", "Circle"}:
+    is_closed_polyline = profile_family.startswith("ClosedPolyline")
+    if profile_family not in {"OpenPolyline", "Circle"} and not is_closed_polyline:
         return False
-    if (feature.side_of_feature or "Center") not in {"Center", "Left", "Right"}:
+    side_of_feature = feature.side_of_feature or "Center"
+    if side_of_feature not in {"Center", "Left", "Right"}:
         return False
+    if is_closed_polyline:
+        tool_name = (operation.tool_key.name or "").upper() if operation.tool_key else ""
+        if tool_name == "E001":
+            return False
+        if operation.milling_strategy is not None:
+            return (
+                operation.approach.is_enabled
+                and operation.retract.is_enabled
+                and operation.approach.approach_type == "Line"
+                and operation.retract.retract_type == "Line"
+                and operation.approach.mode == "Down"
+                and operation.retract.mode == "Up"
+                and "Milling" in operation.operation_type
+            )
+        if operation.approach.is_enabled or operation.retract.is_enabled:
+            return (
+                side_of_feature == "Center"
+                and operation.approach.is_enabled
+                and operation.retract.is_enabled
+                and operation.approach.approach_type in {"Line", "Arc"}
+                and operation.retract.retract_type in {"Line", "Arc"}
+                and operation.approach.mode in {"Quote", "Down"}
+                and operation.retract.mode in {"Quote", "Up"}
+                and "Milling" in operation.operation_type
+            )
+        return "Milling" in operation.operation_type
+    if profile_family == "Circle":
+        if operation.milling_strategy is not None:
+            return not operation.approach.is_enabled and not operation.retract.is_enabled and "Milling" in operation.operation_type
+        if operation.approach.is_enabled or operation.retract.is_enabled:
+            return (
+                side_of_feature == "Center"
+                and operation.approach.is_enabled
+                and operation.retract.is_enabled
+                and operation.approach.approach_type in {"Line", "Arc"}
+                and operation.retract.retract_type in {"Line", "Arc"}
+                and operation.approach.mode in {"Quote", "Down"}
+                and operation.retract.mode in {"Quote", "Up"}
+                and "Milling" in operation.operation_type
+            )
+        return "Milling" in operation.operation_type
     if operation.milling_strategy is not None:
-        return False
-    if operation.approach.is_enabled or operation.retract.is_enabled:
-        if not (
+        return (
             profile_family == "OpenPolyline"
-            and (feature.side_of_feature or "Center") in {"Left", "Right"}
-            and operation.approach.is_enabled
-            and operation.retract.is_enabled
-            and operation.approach.approach_type in {"Line", "Arc"}
-            and operation.retract.retract_type in {"Line", "Arc"}
+            and side_of_feature == "Center"
+            and not operation.approach.is_enabled
+            and not operation.retract.is_enabled
+            and operation.approach.approach_type == "Line"
+            and operation.retract.retract_type == "Line"
             and operation.approach.mode == "Down"
             and operation.retract.mode == "Up"
-        ):
+            and "Milling" in operation.operation_type
+        )
+    if operation.approach.is_enabled or operation.retract.is_enabled:
+        if profile_family != "OpenPolyline":
+            return False
+        if not operation.approach.is_enabled or not operation.retract.is_enabled:
+            return False
+        if operation.approach.approach_type not in {"Line", "Arc"}:
+            return False
+        if operation.retract.retract_type not in {"Line", "Arc"}:
+            return False
+        if side_of_feature == "Center":
+            return (
+                operation.approach.mode in {"Quote", "Down"}
+                and operation.retract.mode in {"Quote", "Up"}
+                and "Milling" in operation.operation_type
+            )
+        if side_of_feature not in {"Left", "Right"}:
+            return False
+        if operation.approach.mode != "Down" or operation.retract.mode != "Up":
             return False
     return "Milling" in operation.operation_type
 
@@ -1320,6 +1784,25 @@ def _embedded_tool_for_operation(
         if len(id_matches) == 1:
             return id_matches[0]
     return None
+
+
+def _embedded_top_drill_tool_for_feature(
+    snapshot: PgmxSnapshot,
+    feature,
+) -> Optional[PgmxEmbeddedToolSnapshot]:
+    diameter = _feature_diameter(feature)
+    if diameter is None:
+        return None
+    matching_spindles = [
+        spindle
+        for spindle in snapshot.embedded_spindles
+        if 1 <= int(spindle.spindle) < 50
+        and spindle.radius is not None
+        and round(float(spindle.radius) * 2.0, 3) == round(float(diameter), 3)
+    ]
+    if not matching_spindles:
+        return None
+    return _embedded_tool_for_spindle(snapshot, sorted(matching_spindles, key=lambda item: item.spindle)[0])
 
 
 def _embedded_spindle_for_tool(
@@ -1458,12 +1941,99 @@ def _negative(value: Optional[float]) -> Optional[float]:
 def _target_depth(feature) -> float:
     if feature.depth_spec is not None and feature.depth_spec.target_depth is not None:
         return float(feature.depth_spec.target_depth)
+    if feature.base_feature is not None and feature.base_feature.depth_end is not None:
+        return float(feature.base_feature.depth_end)
     return float(feature.depth_end or 0.0)
 
 
 def _extra_depth(feature) -> float:
     if feature.depth_spec is not None:
         return float(feature.depth_spec.extra_depth or 0.0)
+    return 0.0
+
+
+def _feature_diameter(feature) -> Optional[float]:
+    if feature is None:
+        return None
+    if feature.diameter is not None:
+        return float(feature.diameter)
+    if feature.base_feature is not None and feature.base_feature.diameter is not None:
+        return float(feature.base_feature.diameter)
+    return None
+
+
+def _is_round_hole_feature(feature) -> bool:
+    if "RoundHole" in (feature.feature_type or "") or "RoundHole" in (feature.object_type or ""):
+        return True
+    return feature.base_feature is not None and "RoundHole" in (feature.base_feature.feature_type or "")
+
+
+def _is_through_drill_feature(feature) -> bool:
+    if feature is None:
+        return False
+    if feature.depth_spec is not None:
+        return bool(feature.depth_spec.is_through)
+    if feature.base_feature is not None:
+        return "ThroughHoleBottom" in (feature.base_feature.bottom_condition_type or "")
+    return False
+
+
+def _replicated_top_points(feature, geometry) -> tuple[tuple[float, float], ...]:
+    base_x, base_y, _ = geometry.point if geometry and geometry.point else (0.0, 0.0, 0.0)
+    pattern = feature.replication_pattern
+    if pattern is None:
+        return ((float(base_x), float(base_y)),)
+    column_angle = math.radians(float(pattern.rotation_angle or 0.0))
+    row_angle = math.radians(float(pattern.row_layout_angle or 90.0))
+    points: list[tuple[float, float]] = []
+    for row in range(max(1, int(pattern.number_of_rows or 1))):
+        for column in range(max(1, int(pattern.number_of_columns or 1))):
+            dx = math.cos(column_angle) * float(pattern.spacing or 0.0) * column
+            dy = math.sin(column_angle) * float(pattern.spacing or 0.0) * column
+            dx += math.cos(row_angle) * float(pattern.row_spacing or 0.0) * row
+            dy += math.sin(row_angle) * float(pattern.row_spacing or 0.0) * row
+            points.append((float(base_x) + dx, float(base_y) + dy))
+    return tuple(points)
+
+
+def _replicated_side_fixed_values(
+    feature,
+    operation: PgmxOperationSnapshot,
+) -> tuple[float, ...]:
+    plane_name = feature.plane_name or ""
+    policy = _SIDE_DRILL_POLICIES[plane_name]
+    base = _side_fixed_raw_from_toolpath(operation, policy)
+    pattern = feature.replication_pattern
+    if pattern is None:
+        return (float(policy["coordinate_sign"]) * base,)
+    mirror = -1.0 if plane_name in {"Back", "Left"} else 1.0
+    values: list[float] = []
+    for row in range(max(1, int(pattern.number_of_rows or 1))):
+        for column in range(max(1, int(pattern.number_of_columns or 1))):
+            raw = base + mirror * float(pattern.spacing or 0.0) * column
+            raw += mirror * float(pattern.row_spacing or 0.0) * row
+            values.append(float(policy["coordinate_sign"]) * raw)
+    return tuple(values)
+
+
+def _side_fixed_from_toolpath(
+    operation: PgmxOperationSnapshot,
+    policy: dict[str, object],
+) -> float:
+    return float(policy["coordinate_sign"]) * _side_fixed_raw_from_toolpath(operation, policy)
+
+
+def _side_fixed_raw_from_toolpath(
+    operation: PgmxOperationSnapshot,
+    policy: dict[str, object],
+) -> float:
+    for toolpath in operation.toolpaths:
+        if toolpath.path_type != "Approach" or toolpath.curve is None or not toolpath.curve.sampled_points:
+            continue
+        point = toolpath.curve.sampled_points[0]
+        if str(policy["axis"]) == "X":
+            return float(point[1])
+        return float(point[0])
     return 0.0
 
 

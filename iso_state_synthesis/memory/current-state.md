@@ -446,6 +446,84 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
   `Pieza_DosHuecos_Origen_5_5_25`, `Pieza_Hueco8`,
   `Pieza_Hueco8_Origen_5_5_25`) y 57 `Sin candidato` por soporte pendiente.
   No quedan diferencias linea-a-linea en candidatos emitidos.
+- Se agrego soporte para fresados circulares router con estrategia
+  `HelicalMillingStrategySpec`, `UnidirectionalMillingStrategySpec` y
+  `BidirectionalMillingStrategySpec`, incluyendo lados `Center/Left/Right`.
+  Los arcos se emiten desde las primitivas del toolpath; esto permite
+  reproducir los centros `I/J` desplazados de la bajada helicoidal y el cambio
+  de sentido por pasada en bidireccional. Validacion exacta:
+  `Pieza_031..034`, `Pieza_047..058` y `Pieza_072..075`.
+- Para circulos `Center` sin estrategia y con acercamiento/alejamiento
+  `Line/Arc` en modos `Quote` o `Down/Up`, la entrada/salida se sintetiza
+  geometricamente desde el punto inicial, el radio de herramienta y el
+  `radius_multiplier`. Esto cubre los subcasos `Arco/Linea EnCota` y
+  `Arco/Linea BajadaSubida`.
+- Se agrego soporte para polilineas cerradas `ClosedPolylineMidEdgeStart`
+  fuera de `E001`, manteniendo `E001` en la familia de perfil ya existente. En
+  `Center`, la entrada/salida se calcula sobre la tangente inicial; en
+  `Right/Left` con PH5 se usan las primitivas del toolpath para emitir esquinas
+  `G2/G3`. Validacion exacta: `Pieza_037..046` y `Pieza_080..083`.
+- Barrido actualizado de `Pieza*.pgmx` contra `pieza*.iso`: 82 pares exactos,
+  23 `Sin candidato` y 0 diferencias linea-a-linea. Los pendientes son
+  `Pieza`, `Pieza_000`, `Pieza_002`, `Pieza_003`,
+  `Pieza_004_Repeticiones`, `Pieza_005..011`, `Pieza_035`, `Pieza_036`,
+  `Pieza_076..079` y `Pieza_087..091`.
+- Se agrego soporte para polilineas abiertas router `OpenPolyline` con
+  estrategia PH5 `UnidirectionalMillingStrategySpec` /
+  `BidirectionalMillingStrategySpec` en `Center`, tomando la trayectoria
+  compensada del `TrajectoryPath` y evitando repetir `Z` en movimientos XY
+  cuando Maestro no la emite. Validacion exacta: `Pieza_035` y `Pieza_036`.
+- Para `OpenPolyline` `Center` sin estrategia y con acercamiento/alejamiento
+  `Line/Arc` en modos `Quote` o `Down/Up`, la entrada/salida se sintetiza
+  geometricamente desde la tangente inicial/final, el radio de herramienta y el
+  `radius_multiplier`. Validacion exacta: `Pieza_076..079`.
+- Se agrego soporte para ranuras `SlotSide` superiores con sierra vertical
+  `082`. La preparacion usa el cabezal de sierra observado (`?%ETK[6]=82`,
+  `S4000M3`, `?%ETK[1]=16`) y offsets del spindle embebido; el offset `Y`
+  incorpora el radio efectivo de sierra (`tool_width / 2`). La traza entra por
+  `X` maximo y corta hacia `X` minimo, como Maestro. Validacion exacta:
+  `Pieza_006..011` y `Pieza_087..091`.
+- Barrido actualizado de `Pieza*.pgmx` contra `pieza*.iso`: 99 pares exactos,
+  6 `Sin candidato` y 0 diferencias linea-a-linea. Los pendientes son
+  `Pieza`, `Pieza_000`, `Pieza_002`, `Pieza_003`,
+  `Pieza_004_Repeticiones` y `Pieza_005`.
+- Se agrego soporte para secuencias de taladros laterales D8 en varias caras
+  y repeticiones del mismo spindle. El emisor distingue primer taladro, cambio
+  de cara, cambio de mascara `ETK[0]`, repeticion de spindle y reset final.
+  Validacion exacta: `Pieza_002` y `Pieza_003`.
+- Se agrego expansion de patrones `ReplicateFeature` rectangulares para
+  taladros superiores y laterales. Cada punto repetido entra al modelo como una
+  etapa de taladro real, conservando el diferencial incremental entre puntos.
+  Validacion exacta: `Pieza_004_Repeticiones` y `Pieza_005`.
+- Se agrego emision para programas sin mecanizados, con dos variantes
+  observadas: programa vacio con `Xn` explicito (`Pieza`) y programa vacio sin
+  cierre `Xn` en el `.pgmx` (`Pieza_000`).
+- Barrido final de `Pieza*.pgmx` contra `pieza*.iso`: 105 pares exactos,
+  0 `Sin candidato`, 0 diferencias linea-a-linea y 0 ISO faltantes.
+- En el corpus real `Cocina` (`S:\Maestro\Projects\ProdAction\ISO\Cocina`
+  contra `P:\USBMIX\ProdAction\ISO\Cocina`) se paso de 0/84 exactos a
+  48/84 exactos, con 0 `Sin candidato` y 0 ISO faltantes. Los primeros cierres
+  exactos nuevos incluyen `Aplicados/Frente_Aplicado 1450x873`,
+  `Aplicados/Lat_Aplicado 873x800`, `Estante`, `Fondo`, `Puertita_izquierda`,
+  `Faja frontal` y `Tapa` de torre.
+- Correcciones confirmadas en esa tanda:
+  - Los acercamientos/alejamientos de perfil E001 ahora usan primitivas reales
+    `Approach` y `Lift` leidas del PGMX; si el PGMX trae un arco degenerado
+    con radio cero, se vuelve al calculo anterior para no abortar.
+  - El cierre `Xn` usa `program_close_x/program_close_y` leidos del PGMX tambien
+    para cierres no-router cuando Maestro los emite.
+  - `%Or[0].ofX/ofZ` usa escalado con precision `float32`, igual que Maestro.
+  - Los bloques mixtos ya tienen transiciones incrementales observadas para
+    `router -> top`, `router -> side`, `top -> side` y `top -> slot`.
+  - Los taladros superiores en secuencias mixtas se ordenan desde las
+    coordenadas PGMX con recorrido por columnas en serpiente; los laterales
+    ordenan por cara y coordenada fija dentro del bloque.
+  - `line_milling` y `slot_milling` ya no toman `tool_offset_length` del estado
+    final del programa: la traza usa el offset requerido de su propia operacion.
+- Pendiente especifico de `Cocina`: quedan 36 diferencias concentradas en
+  `fajx`, laterales con reordenamiento de grupos `side/top`, transiciones
+  `profile/line` de router-router y algunos bloques top con recorrido no
+  rectangular.
 
 ## Preguntas Abiertas
 
@@ -513,7 +591,14 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
 
 - Mantener como hipotesis pendientes las repeticiones `ETK[8]/G40` y resets
   `G61/G64/SYN` hasta que una variante nueva los explique.
-- Seguir con los `Pieza*` sin candidato, priorizando los subcasos de fresado
-  mas cercanos al soporte actual: circulos con PH5/helicoidal, polilineas
-  cerradas y variantes con leads `Line/Arc`, sin convertir las herramientas
-  observadas en restricciones del conversor ISO.
+- El corpus `Pieza*` disponible quedo completo: 105/105 exactos. El siguiente
+  pendiente ya no es cerrar piezas sueltas de este corpus, sino ampliar la
+  evidencia con nuevas matrices controladas y seguir separando reglas
+  observadas de hipotesis de maquina.
+- Primera diferencia vigente de `Cocina`: `mod 1 - bajo 1 puerta IZQ/fajx 414`.
+  En linea 103 Maestro emite `G0 X-85.000 Y-181.000` y el candidato
+  `G0 X-85.000 Y-51.000`. El diagnostico no apunta a la formula del taladro
+  lateral, sino al ordenamiento de grupos mixtos `side/top/side`: Maestro
+  ejecuta primero el grupo lateral Left de `Y=-181/-149` y el candidato entra
+  por `Y=-51/-19`. Atacar este caso como regla de orden de bloques `fajx`, no
+  como correccion aislada de coordenadas.
