@@ -252,6 +252,23 @@ def _resolved_step_family(resolved_step: PgmxResolvedWorkingStepSnapshot) -> str
 def _ordered_top_drill_block(
     block: list[PgmxResolvedWorkingStepSnapshot],
 ) -> tuple[PgmxResolvedWorkingStepSnapshot, ...]:
+    if len(block) <= 2:
+        return tuple(sorted(block, key=_top_drill_step_sort_key))
+
+    candidates = (
+        _ordered_top_drill_columns(block, first_descending=False),
+        _ordered_top_drill_columns(block, first_descending=True),
+        _ordered_top_drill_row_bands(block, first_descending=False),
+        _ordered_top_drill_row_bands(block, first_descending=True),
+    )
+    return min(candidates, key=_top_drill_path_length)
+
+
+def _ordered_top_drill_columns(
+    block: list[PgmxResolvedWorkingStepSnapshot],
+    *,
+    first_descending: bool,
+) -> tuple[PgmxResolvedWorkingStepSnapshot, ...]:
     by_x: dict[float, list[PgmxResolvedWorkingStepSnapshot]] = {}
     for step in block:
         x, _, _, _ = _top_drill_step_sort_key(step)
@@ -260,8 +277,45 @@ def _ordered_top_drill_block(
     ordered: list[PgmxResolvedWorkingStepSnapshot] = []
     for column_index, x in enumerate(sorted(by_x)):
         column = by_x[x]
-        descending_y = bool(column_index % 2)
+        descending_y = first_descending if column_index % 2 == 0 else not first_descending
         ordered.extend(sorted(column, key=lambda step: _top_drill_column_sort_key(step, descending_y)))
+    return tuple(ordered)
+
+
+def _ordered_top_drill_row_bands(
+    block: list[PgmxResolvedWorkingStepSnapshot],
+    *,
+    first_descending: bool,
+) -> tuple[PgmxResolvedWorkingStepSnapshot, ...]:
+    by_y: dict[float, list[PgmxResolvedWorkingStepSnapshot]] = {}
+    for step in block:
+        _, y, _, _ = _top_drill_step_sort_key(step)
+        by_y.setdefault(y, []).append(step)
+
+    y_values = sorted(by_y)
+    if len(y_values) <= 2:
+        bands = tuple((y,) for y in y_values)
+    else:
+        gaps = [
+            (y_values[index + 1] - y_values[index], index)
+            for index in range(len(y_values) - 1)
+        ]
+        largest_gap, split_index = max(gaps)
+        if largest_gap > 0.0:
+            bands = (tuple(y_values[: split_index + 1]), tuple(y_values[split_index + 1 :]))
+        else:
+            bands = (tuple(y_values),)
+
+    ordered: list[PgmxResolvedWorkingStepSnapshot] = []
+    for band_index, band in enumerate(bands):
+        descending_x = first_descending if band_index % 2 == 0 else not first_descending
+        band_steps = [step for y in band for step in by_y[y]]
+        ordered.extend(
+            sorted(
+                band_steps,
+                key=lambda step: _top_drill_row_sort_key(step, descending_x),
+            )
+        )
     return tuple(ordered)
 
 
@@ -281,6 +335,27 @@ def _top_drill_column_sort_key(
 ) -> tuple[float, str, str]:
     _, y, tool_name, step_id = _top_drill_step_sort_key(resolved_step)
     return ((-y if descending_y else y), tool_name, step_id)
+
+
+def _top_drill_row_sort_key(
+    resolved_step: PgmxResolvedWorkingStepSnapshot,
+    descending_x: bool,
+) -> tuple[float, float, str, str]:
+    x, y, tool_name, step_id = _top_drill_step_sort_key(resolved_step)
+    return ((-x if descending_x else x), y, tool_name, step_id)
+
+
+def _top_drill_path_length(block: tuple[PgmxResolvedWorkingStepSnapshot, ...]) -> float:
+    if len(block) <= 1:
+        return 0.0
+    points = [
+        _top_drill_step_sort_key(step)[:2]
+        for step in block
+    ]
+    return sum(
+        math.hypot(points[index][0] - points[index - 1][0], points[index][1] - points[index - 1][1])
+        for index in range(1, len(points))
+    )
 
 
 def _ordered_side_drill_block(
@@ -712,6 +787,17 @@ def _line_milling_stages(
                 _pgmx_value(snapshot, "movimiento", "trajectory_primitives", _toolpath_primitive_records(operation, "TrajectoryPath"), f"operations[{operation.id}].toolpaths[TrajectoryPath]"),
                 _pgmx_value(snapshot, "movimiento", "lift_primitives", _toolpath_primitive_records(operation, "Lift"), f"operations[{operation.id}].toolpaths[Lift]"),
                 _pgmx_value(snapshot, "herramienta", "tool_offset_length", tool_offset, f"operations[{operation.id}].tool_offset_length", required=True),
+                _pgmx_value(snapshot, "trabajo", "side_of_feature", feature.side_of_feature, f"features[{feature.id}].side_of_feature", required=True),
+                _pgmx_value(snapshot, "trabajo", "strategy", type(strategy).__name__ if strategy else "", f"operations[{operation.id}].milling_strategy", required=True),
+                _pgmx_value(snapshot, "trabajo", "overcut_length", operation.overcut_length, f"operations[{operation.id}].overcut_length", required=True),
+                _pgmx_value(snapshot, "trabajo", "approach_enabled", operation.approach.is_enabled, f"operations[{operation.id}].approach.enabled", required=True),
+                _pgmx_value(snapshot, "trabajo", "approach_type", operation.approach.approach_type, f"operations[{operation.id}].approach.type", required=True),
+                _pgmx_value(snapshot, "trabajo", "approach_mode", operation.approach.mode, f"operations[{operation.id}].approach.mode", required=True),
+                _pgmx_value(snapshot, "trabajo", "approach_radius_multiplier", operation.approach.radius_multiplier, f"operations[{operation.id}].approach.radius_multiplier", required=True),
+                _pgmx_value(snapshot, "trabajo", "retract_enabled", operation.retract.is_enabled, f"operations[{operation.id}].retract.enabled", required=True),
+                _pgmx_value(snapshot, "trabajo", "retract_type", operation.retract.retract_type, f"operations[{operation.id}].retract.type", required=True),
+                _pgmx_value(snapshot, "trabajo", "retract_mode", operation.retract.mode, f"operations[{operation.id}].retract.mode", required=True),
+                _pgmx_value(snapshot, "trabajo", "retract_radius_multiplier", operation.retract.radius_multiplier, f"operations[{operation.id}].retract.radius_multiplier", required=True),
                 _rule_value("movimiento", "rapid_z", rapid_z, "Z rapida = security_plane + ToolOffsetLength.", path=LINE_MILLING_RULE_PATH, required=True),
                 _rule_value("movimiento", "cut_z", cut_z, "Z de corte E004 desde profundidad PGMX.", path=LINE_MILLING_RULE_PATH, required=True),
                 _rule_value("movimiento", "security_z", security_plane, "Plano de seguridad E004.", path=LINE_MILLING_RULE_PATH, required=True),
@@ -1430,7 +1516,7 @@ def _slot_tool_values(
             StateValue("herramienta", "tool_number", int(tool_name), source, required=True),
             StateValue("herramienta", "spindle", spindle_number, source, required=True),
             StateValue("salida", "etk_1", 16, EvidenceSource("observed_rule", LINE_MILLING_RULE_PATH, "slot_saw_etk1"), confidence="confirmed", required=True),
-            StateValue("salida", "etk_17", 257, EvidenceSource("observed_rule", LINE_MILLING_RULE_PATH, "slot_saw_speed_activation"), confidence="confirmed", required=True),
+            StateValue("maquina", "boring_head_speed", _tool_spindle_speed(tool, spindle), source, confidence="confirmed"),
             StateValue("herramienta", "tool_offset_length", tool.tool_offset_length if tool else None, source, required=True),
             StateValue("herramienta", "diameter", tool.diameter if tool else None, source),
             StateValue("herramienta", "spindle_speed_standard", _tool_spindle_speed(tool, spindle), source, required=True),

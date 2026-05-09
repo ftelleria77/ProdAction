@@ -3,7 +3,7 @@
 Nueva memoria de trabajo para redisenar la generacion ISO desde cero sin
 arrastrar la arquitectura por patrones de `iso_generation/`.
 
-Ultima actualizacion: 2026-05-08
+Ultima actualizacion: 2026-05-09
 
 ## Alcance
 
@@ -546,6 +546,31 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
     exacto; corpus `Cocina` queda `55/84` exacto, con `29` diferencias
     restantes, `0` ISO faltantes y `0` candidatos faltantes.
 
+Avance del 2026-05-09 sobre `Cocina`:
+
+- Se cerro `mod 1 - bajo 1 puerta IZQ/Lado_derecho.pgmx`: compara exacto
+  contra Maestro (`499 vs 499 lineas`, `0 diferencias`).
+- La primera correccion fue una transicion router-router con la misma
+  herramienta (`profile_milling -> line_milling`): Maestro conserva `G17`,
+  `MLV=2` y el estado router, eleva desde el ultimo punto emitido y entra al
+  siguiente toolpath sin reset completo ni cambio `T/M06`.
+- `line_milling_trace` ya toma `side_of_feature`, estrategia y parametros de
+  acercamiento/alejamiento del trabajo actual, no del estado final del programa.
+  Esto evita que trabajos posteriores contaminen la compensacion `G41/G42`.
+- El ordenamiento de bloques `Top Drill` ahora elige la serpentina mas corta
+  entre columnas y bandas horizontales. Esto reproduce los bloques no
+  rectangulares de `Lado_derecho` sin romper el corpus raiz.
+- La sierra `082` ya modela `maquina.boring_head_speed` como las brocas: solo
+  emite `?%ETK[17]=257` + `S...M3` cuando cambia la velocidad activa. En la
+  secuencia `Top Drill 002 -> SlotSide 082`, ambos quedan a `4000`, por lo que
+  Maestro no repite la activacion.
+- Se agrego transicion incremental `slot_milling -> top_drill`: reset parcial
+  de ranura, limpieza de `ETK[1]` y preparacion del siguiente taladro superior
+  sin cierre final de slot.
+- Validacion despues del cambio: corpus raiz `Pieza*` queda `105/105` exacto;
+  corpus `Cocina` queda `59/84` exacto, con `25` diferencias restantes,
+  `0` ISO faltantes y `0` candidatos faltantes.
+
 ## Preguntas Abiertas
 
 - Que variables observadas son realmente estado modal y cuales son solo
@@ -616,10 +641,8 @@ Correccion posterior del 2026-05-07 sobre corpus `Pieza*`:
   pendiente ya no es cerrar piezas sueltas de este corpus, sino ampliar la
   evidencia con nuevas matrices controladas y seguir separando reglas
   observadas de hipotesis de maquina.
-- `Cocina` quedo en `55/84` exactos. Pendiente inmediato actualizado: atacar
-  `mod 1 - bajo 1 puerta IZQ/Lado_derecho.pgmx`, cuya primera diferencia
-  aparece en la transicion `router/profile -> router/profile` antes de entrar
-  a los bloques de taladro. Maestro continua con `G17`, `MLV=2` y toolpath
-  router, mientras el candidato emite un reset/cambio de herramienta completo.
-  Tratarlo como regla de transicion router-router y ordenamiento posterior de
-  bloques superiores, no como correccion aislada de una linea.
+- `Cocina` quedo en `59/84` exactos. Pendiente inmediato actualizado: atacar
+  el siguiente lateral con diferencias, empezando por
+  `mod 1 - bajo 1 puerta IZQ/Lado_izquierdo.pgmx` o por el primer caso de la
+  lista del barrido actual. Mantener el enfoque de regla de transicion y
+  ordenamiento, no correcciones aisladas de una linea.
