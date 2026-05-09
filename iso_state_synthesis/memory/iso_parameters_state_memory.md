@@ -100,25 +100,31 @@ Para compensacion:
 
 ## Valores De Herramienta Observados
 
-| contexto | `T` | `?%ETK[9]` | `?%ETK[6]` | `SVL/VL6` | `SVR/VL7` | `S...M3` |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| router `E001` | `1` | `1` | `1` | `125.400` | `9.180` | `18000` |
-| router `E003` | `3` | `3` | `1` | `111.500` | `4.760` | `18000` |
-| router `E004` | `4` | `4` | `1` | `107.200` | `2.000` | `18000` |
-| router `E005` | `5` | `5` | `1` | `145.900` | `38.000` | `18000` |
-| router `E006` | `6` | `6` | `1` | `120.870` | `40.000` | `18000` |
-| router `E007` | `7` | `7` | `1` | `152.100` | `8.860` | `18000` |
+|    contexto   |  `T` | `?%ETK[9]` | `?%ETK[6]` | `SVL/VL6` | `SVR/VL7` | `S...M3` |
+|       ---     | ---: |    ---:    |    ---:    |    ---:   |    ---:   |   ---:   |
+| router `E001` |  `1` |     `1`    |     `1`    | `125.400` |  `9.180`  |  `18000` |
+| router `E002` |  `2` |     `2`    |     `1`    | `107.000` | `50.000`  |   `6000` |
+| router `E003` |  `3` |     `3`    |     `1`    | `111.500` |  `4.760`  |  `18000` |
+| router `E004` |  `4` |     `4`    |     `1`    | `107.200` |  `2.000`  |  `18000` |
+| router `E005` |  `5` |     `5`    |     `1`    | `145.900` | `38.000`  |  `18000` |
+| router `E006` |  `6` |     `6`    |     `1`    | `120.870` | `40.000`  |  `18000` |
+| router `E007` |  `7` |     `7`    |     `1`    | `152.100` |  `8.860`  |  `18000` |
 | sierra vertical `082` | pendiente | pendiente | `82` | `107.000` o `60.000` observado | `1.900` | `4000` |
+
+Nota: `E002` queda registrado como valor observado para conversion ISO de un
+`.pgmx` existente que Maestro acepta. No habilita por si solo la generacion
+automatica de trazas `.pgmx` con Sierra Horizontal sin reglas preventivas
+propias.
 
 ## Valores Laterales Observados
 
-| cara | `?%ETK[8]` | `?%ETK[6]` | `?%ETK[0]` | `SHF[X]` | `SHF[Y]` | `SHF[Z]` |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `Top` | `1` | `1..7` | mascara vertical | variable | variable | variable |
-| `Right` | `2` | `60` | `2147483648` | `-66.900` | `-32.000` | `66.450` |
-| `Left` | `3` | `61` | `2147483648` | `-118.000` | `-32.000` | `66.300` |
-| `Back` | `4` | `59` | `1073741824` | `32.000` | `29.500` | `66.500` |
-| `Front` | `5` | `58` | `1073741824` | `32.000` | `-21.750` | `66.500` |
+|  cara   | `?%ETK[8]` | `?%ETK[6]` |    `?%ETK[0]`    |   `SHF[X]` |  `SHF[Y]` | `SHF[Z]` |
+|   ---   |    ---:    |    ---:    |       ---:       |     ---:   |    ---:   |   ---:   |
+|  `Top`  |     `1`    |   `1..7`   | mascara vertical |   variable |  variable | variable |
+| `Right` |     `2`    |    `60`    |   `2147483648`   |  `-66.900` | `-32.000` | `66.450` |
+| `Left`  |     `3`    |    `61`    |   `2147483648`   | `-118.000` | `-32.000` | `66.300` |
+| `Back`  |     `4`    |    `59`    |   `1073741824`   |   `32.000` |  `29.500` | `66.500` |
+| `Front` |     `5`    |    `58`    |   `1073741824`    |  `32.000` | `-21.750` | `66.500` |
 
 Parqueo lateral observado:
 
@@ -127,14 +133,14 @@ Parqueo lateral observado:
 Con `SecurityDistance=20`. Ejemplos:
 
 | `DZ_cabecera` | lateral involucrado | `G53 Z` observado |
-| ---: | --- | ---: |
-| `43.000` | `Front/Back` | `149.500` |
-| `43.000` | `Right` | `149.450` |
-| `43.000` | `Left` | `149.300` |
-| `50.000` | `Front/Back` | `156.500` |
-| `50.000` | `Right` | `156.450` |
-| `58.000` | `Front/Back` | `164.500` |
-| `58.000` | `Right` | `164.450` |
+|      ---:     |         ---         |        ---:       |
+|    `43.000`   |     `Front/Back`    |     `149.500`     |
+|    `43.000`   |        `Right`      |     `149.450`     |
+|    `43.000`   |         `Left`      |     `149.300`     |
+|    `50.000`   |     `Front/Back`    |     `156.500`     |
+|    `50.000`   |        `Right`      |     `156.450`     |
+|    `58.000`   |     `Front/Back`    |     `164.500`     |
+|    `58.000`   |        `Right`      |     `164.450`     |
 
 ## Tabla De Estados Y Transiciones
 
