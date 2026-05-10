@@ -105,7 +105,7 @@ Convencion de ids:
 | --- | --- | --- | --- | --- | --- | --- |
 | `T-RH-001` | internal router incremental | router -> router | misma herramienta | herramienta montada, cabezal router preparado | no emite `T`, `SYN`, `M06`, `?%ETK[9]`, `?%ETK[18]` ni `M5`; reactiva `D1`, offsets y `?%ETK[7]=4` | `S015` |
 | `T-RH-002` | internal router physical change | router -> router | diferente herramienta | cabezal fisico router, no la herramienta ni el motor activo | reset router saliente, `M5`, viaje/cambio con `Tn`, `SYN`, `M06`, nueva preparacion router | `S019` |
-| `T-BH-001` | internal boring head | top drill -> top drill | cambia de broca vertical en cara superior | cabezal compartido y motor si la velocidad no cambia | `?%ETK[6]=nuevo`; velocidad solo si cambia | pendiente de aislar como evidencia especifica |
+| `T-BH-001` | internal boring head | top drill -> top drill | cambia de broca vertical en cara superior | cabezal compartido y motor si la velocidad no cambia | reset corto saliente; preparacion incremental con `?%ETK[6]=nuevo`, `SHF[...]`, velocidad solo si cambia y `?%ETK[0]=mask` | `S020` |
 | `T-BH-002` | internal boring head | top drill -> side drill | cambia de broca vertical a broca horizontal | cabezal compartido | seleccion lateral, parqueo `G53 Z`, `SHF[...]`; velocidad solo si cambia | pendiente de aislar como evidencia especifica |
 | `T-BH-003` | internal boring head | side drill -> side drill | cambia de broca horizontal, lateral, cara o eje | cabezal compartido y motor si la velocidad no cambia | `?%ETK[6]=nuevo`, parqueo lateral `G53 Z`, `SHF[...]`; velocidad solo si cambia | `S011` |
 | `T-BH-004` | internal boring head | side drill -> top drill | cambia de broca horizontal a broca vertical | cabezal compartido; velocidad si coincide | `?%ETK[8]=1`, `G40`, `SHF[Z]`, `G17`, `?%ETK[6]=tool`, parqueo `G53 Z` | `S012` |
@@ -115,6 +115,22 @@ Convencion de ids:
 | `T-BH-008` | internal boring head | top slot -> side drill | cambia de sierra vertical a broca horizontal | cabezal compartido | pendiente de aislar | pendiente de aislar como evidencia especifica |
 | `T-XH-001` | switching heads | router -> boring head | cambia de fresa a broca o sierra | movimiento conjunto de cabezales, no el motor/herramienta router | reset router saliente; preparar herramienta del cabezal de perforacion/ranurado entrante | pendiente de aislar como evidencia especifica |
 | `T-XH-002` | switching heads | boring head -> router | cambia de broca o sierra a fresa | movimiento conjunto de cabezales, no el motor compartido de perforacion | reset completo o parcial del cabezal de perforacion segun caso; preparar router con `T/SYN/M06` si corresponde | pendiente de aislar como evidencia especifica |
+
+### Plan De Evidencia Pendiente
+
+| id | transicion | fixture PGMX | ISO Maestro esperado | proposito | estado |
+| --- | --- | --- | --- | --- | --- |
+| `P-TBH002-001` | `T-BH-002` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_098.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_098.iso` | `top drill 001/D8 -> Front 058/D8`, misma velocidad `6000` | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH002-002` | `T-BH-002` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_099.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_099.iso` | `top drill 001/D8 -> Right 060/D8`, misma velocidad `6000` | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH002-003` | `T-BH-002` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_100.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_100.iso` | `top drill 001/D8 -> Back 059/D8`, misma velocidad `6000` | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH002-004` | `T-BH-002` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_101.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_101.iso` | `top drill 001/D8 -> Left 061/D8`, misma velocidad `6000` | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH002-005` | `T-BH-002` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_102.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_102.iso` | control de velocidad: `top drill 002/D15` a `4000` -> `Front 058/D8` a `6000` | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+
+Manifiesto generado: `S:\Maestro\Projects\ProdAction\ISO\Pieza_098_102_TBH002_manifest.csv`.
+Generador reproducible: `tools/studies/iso/tbh002_top_to_side_fixtures_2026_05_10.py`.
+El plan interno de los cinco PGMX ya evalua como `top_drill -> side_drill` con
+`incoming_transition_id=T-BH-002`; falta evidencia ISO de Maestro para cerrar
+la regla y registrar nuevas filas `S0xx`.
 
 ## Inventario De Parametros
 
@@ -250,6 +266,7 @@ ISO, valores y secuencias observadas. Para el modelo reutilizable, usar
 | `S017` | Cocina / `Lado_derecho` | top drill -> slot sierra `082` | taladro superior `002` activo a `4000` | `?%ETK[17]`, `S...M3`, `?%ETK[1]`, `?%ETK[6]` | `maquina.boring_head_speed=4000`, `?%ETK[1]=0`, `?%ETK[6]=2` | sierra `082` activa a `4000`, `?%ETK[1]=16` | `?%ETK[8]=1`, `G40`, `MLV=0`, `G0 G53 Z201.000`, `MLV=2`, `?%ETK[0]=0`, `?%ETK[6]=82`, `G17`, `?%ETK[1]=16`, `MLV=2`, `SHF[...]`, traza slot | No se emite `?%ETK[17]=257` ni `S4000M3` si la sierra mantiene la velocidad activa del cabezal perforador. |
 | `S018` | Cocina / `Lado_derecho` | slot sierra `082` -> top drill | sierra activa, `?%ETK[1]=16`, offsets slot activos | `?%ETK[1]`, `?%ETK[8]`, `G40`, `G53 Z`, `SHF`, `?%ETK[6]`, `?%ETK[0]` | slot activo | top drill activo | `D0`, `SVL/VL6=0`, `SVR/VL7=0`, `?%ETK[7]=0`, `?%ETK[8]=1`, `G40`, `MLV=0`, `G0 G53 Z201.000`, `MLV=2`, `?%ETK[1]=0`, `MLV=1`, `SHF[Z]=origin_z+%ETK[114]/1000`, `MLV=2`, `G17`, `?%ETK[6]=tool`, `MLV=2`, `SHF[...]`, `?%ETK[0]=mask` | Reset parcial de slot y preparacion incremental de taladro superior, sin cierre final de programa. |
 | `S019` | router | router -> router con cambio `E00x -> E00y` | router activo con herramienta saliente | `D`, `SVL/VL6`, `SVR/VL7`, `?%ETK[7]`, `?%ETK[13]`, `?%ETK[18]`, `T`, `?%ETK[9]` | herramienta router saliente activa | herramienta router entrante activa | reset router saliente con `D0`, offsets a `0`, `?%ETK[7]=0`, `G61`, `MLV=0`, `?%ETK[13]=0`, `?%ETK[18]=0`, `M5`; luego preparacion entrante con `Tn`, `SYN`, `M06`, `?%ETK[6]=1`, `?%ETK[9]=n`, `?%ETK[18]=1`, `S18000M3`, `G17`, `MLV=2`, `?%ETK[13]=1` | Transicion interna del cabezal router con cambio fisico de herramienta: requiere parada completa, viaje a almacen/cambio y nueva preparacion. |
+| `S020` | `Pieza_001` / `Pieza_001_R` | top drill -> top drill con cambio de broca vertical | taladro superior activo tras reset corto intermedio | `?%ETK[6]`, `?%ETK[17]`, `S...M3`, `SHF`, `?%ETK[0]` | broca vertical anterior y velocidad activa previa | broca vertical nueva; velocidad conservada o cambiada | secuencia incremental: `MLV=1`, `SHF[Z]=origin_z+%ETK[114]/1000`, `MLV=2`, `G17`, `?%ETK[6]=nuevo`, `G0 Xprev Yprev Zrapid`, `MLV=2`, `SHF[...]`, `?%ETK[17]=257` y `S...M3` solo si cambia velocidad, `?%ETK[0]=mask`; verificado contra `S:\Maestro\Projects\ProdAction\ISO\Pieza_001*.pgmx` y `P:\USBMIX\ProdAction\ISO\pieza_001*.iso`: `Pieza_001` confirma `001,002,003,004,005,006,007` con activacion solo en `001`, `002` y `005`; `Pieza_001_R` confirma `001,002,005,003,006,004,007` con activacion en cada alternancia de velocidad; `compare-candidate` exacto: `202/202` y `210/210` lineas | Evidencia especifica de `T-BH-001`: cambio interno de broca vertical dentro del mismo cabezal, sin cierre completo ni `M5` entre trabajos. |
 
 ## Significados Pendientes
 

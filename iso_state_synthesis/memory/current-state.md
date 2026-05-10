@@ -571,6 +571,24 @@ Avance del 2026-05-09 sobre `Cocina`:
   corpus `Cocina` queda `59/84` exacto, con `25` diferencias restantes,
   `0` ISO faltantes y `0` candidatos faltantes.
 
+Avance registrado el 2026-05-10:
+
+- Se preparo la tanda controlada `Pieza_098..Pieza_102` para estudiar
+  `T-BH-002` (`top drill -> side drill`) cuando vuelva a estar disponible el
+  postprocesado manual en Maestro/CNC.
+- Los PGMX quedaron generados en `S:\Maestro\Projects\ProdAction\ISO` y el
+  manifiesto en `S:\Maestro\Projects\ProdAction\ISO\Pieza_098_102_TBH002_manifest.csv`.
+- Cobertura de la tanda: `Pieza_098` `Top -> Front`, `Pieza_099`
+  `Top -> Right`, `Pieza_100` `Top -> Back`, `Pieza_101` `Top -> Left`, todas
+  con velocidad esperada `6000 -> 6000`; `Pieza_102` controla cambio de
+  velocidad `Top 002/D15 4000 -> Front 058/D8 6000`.
+- Se agrego el generador reproducible
+  `tools/studies/iso/tbh002_top_to_side_fixtures_2026_05_10.py`.
+- Verificacion local: los cinco PGMX evaluan internamente como dos trabajos
+  `top_drill -> side_drill` y el emisor candidato marca la entrada lateral con
+  `incoming_transition_id=T-BH-002`. Los ISO `pieza_098..pieza_102` no existen
+  todavia en `P:\USBMIX\ProdAction\ISO`; quedan pendientes de postprocesado.
+
 ## Preguntas Abiertas
 
 - Que variables observadas son realmente estado modal y cuales son solo

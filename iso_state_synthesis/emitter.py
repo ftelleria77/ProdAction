@@ -313,6 +313,11 @@ def _emit_top_drill_sequence_candidate(
     previous_prepare: Optional[StageDifferential] = None
     previous_trace: Optional[StageDifferential] = None
     for index, (prepare, trace, reset) in enumerate(groups):
+        incoming_transition_id = (
+            select_transition_id("top_drill", previous_prepare, "top_drill", prepare)
+            if previous_prepare is not None
+            else None
+        )
         same_tool = (
             previous_prepare is not None
             and _change_after(previous_prepare, "herramienta", "tool_name")
@@ -324,6 +329,7 @@ def _emit_top_drill_sequence_candidate(
             prepare,
             previous_prepare=previous_prepare,
             previous_trace=previous_trace,
+            transition_id=incoming_transition_id,
         )
         _emit_top_drill_trace(
             lines,
