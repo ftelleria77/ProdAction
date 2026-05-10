@@ -15,6 +15,16 @@ from .model import (
     TracePoint,
     to_jsonable,
 )
+from .catalog import (
+    BLOCKS,
+    TRANSITIONS,
+    IsoBlockDefinition,
+    IsoTransitionDefinition,
+    block_id_for_stage_key,
+    head_for_family,
+    select_transition_id,
+    transition_id_for_rule_status,
+)
 from .pgmx_source import build_state_plan_from_pgmx, build_state_plan_from_snapshot
 from .differential import evaluate_pgmx_state_plan, evaluate_state_plan
 from .emitter import (
@@ -29,9 +39,11 @@ from .emitter import (
 )
 
 __all__ = [
+    "BLOCKS",
     "ExplainedIsoLine",
     "ExplainedIsoProgram",
     "EvidenceSource",
+    "IsoBlockDefinition",
     "IsoCandidateComparison",
     "IsoCandidateEmissionError",
     "IsoLineDifference",
@@ -39,13 +51,16 @@ __all__ = [
     "IsoStatePlan",
     "IsoStateSynthesisError",
     "IsoStateWarning",
+    "IsoTransitionDefinition",
     "StageDifferential",
     "StateStage",
     "StateChange",
     "StateValue",
     "StateVector",
+    "TRANSITIONS",
     "TraceMove",
     "TracePoint",
+    "block_id_for_stage_key",
     "build_state_plan_from_pgmx",
     "build_state_plan_from_snapshot",
     "compare_candidate_to_iso",
@@ -53,5 +68,8 @@ __all__ = [
     "emit_candidate_from_evaluation",
     "evaluate_pgmx_state_plan",
     "evaluate_state_plan",
+    "head_for_family",
+    "select_transition_id",
+    "transition_id_for_rule_status",
     "to_jsonable",
 ]

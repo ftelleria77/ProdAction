@@ -12,6 +12,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
+from .catalog import (
+    block_id_for_stage_key,
+    select_transition_id,
+    transition_id_for_rule_status,
+)
 from .differential import evaluate_pgmx_state_plan
 from .model import (
     EvidenceSource,
@@ -47,6 +52,8 @@ class ExplainedIsoLine:
     source: EvidenceSource
     confidence: str = "observed"
     rule_status: str = "observed"
+    block_id: Optional[str] = None
+    transition_id: Optional[str] = None
     note: str = ""
 
 
@@ -90,6 +97,18 @@ class IsoCandidateComparison:
     @property
     def difference_count(self) -> int:
         return len(self.differences)
+
+
+@dataclass(frozen=True)
+class _WorkGroup:
+    """Prepared work group plus catalog transitions to neighboring groups."""
+
+    family: str
+    prepare: StageDifferential
+    trace: StageDifferential
+    reset: StageDifferential
+    incoming_transition_id: Optional[str] = None
+    outgoing_transition_id: Optional[str] = None
 
 
 def emit_candidate_for_pgmx(
@@ -171,19 +190,19 @@ def emit_candidate_from_evaluation(
             "Top Drill, Side Drill, Line Milling y Profile Milling E001."
         )
 
-    if all(group[0] == "top_drill" for group in work_groups):
+    if all(group.family == "top_drill" for group in work_groups):
         return _emit_top_drill_sequence_candidate(
             evaluation,
             resolved_program_name,
             differentials,
-            tuple((group[1], group[2], group[3]) for group in work_groups),
+            tuple((group.prepare, group.trace, group.reset) for group in work_groups),
         )
-    if all(group[0] == "side_drill" for group in work_groups):
+    if all(group.family == "side_drill" for group in work_groups):
         return _emit_side_drill_sequence_candidate(
             evaluation,
             resolved_program_name,
             differentials,
-            tuple((group[1], group[2], group[3]) for group in work_groups),
+            tuple((group.prepare, group.trace, group.reset) for group in work_groups),
         )
     return _emit_work_sequence_candidate(
         evaluation,
@@ -195,7 +214,7 @@ def emit_candidate_from_evaluation(
 
 def _work_stage_groups(
     ordered_differentials: list[StageDifferential],
-) -> tuple[tuple[str, StageDifferential, StageDifferential, StageDifferential], ...]:
+) -> tuple[_WorkGroup, ...]:
     work = [
         differential
         for differential in ordered_differentials
@@ -204,18 +223,48 @@ def _work_stage_groups(
     if not work or len(work) % 3:
         return ()
 
-    groups: list[tuple[str, StageDifferential, StageDifferential, StageDifferential]] = []
+    raw_groups: list[tuple[str, StageDifferential, StageDifferential, StageDifferential]] = []
     for index in range(0, len(work), 3):
         stage_group = work[index : index + 3]
         stage_keys = tuple(differential.stage_key for differential in stage_group)
         for family, expected_keys in _WORK_STAGE_KEYS.items():
             if stage_keys == expected_keys:
                 prepare, trace, reset = stage_group
-                groups.append((family, prepare, trace, reset))
+                raw_groups.append((family, prepare, trace, reset))
                 break
         else:
             return ()
-    return tuple(groups)
+    return _plan_work_groups(tuple(raw_groups))
+
+
+def _plan_work_groups(
+    groups: tuple[tuple[str, StageDifferential, StageDifferential, StageDifferential], ...],
+) -> tuple[_WorkGroup, ...]:
+    planned: list[_WorkGroup] = []
+    for index, (family, prepare, trace, reset) in enumerate(groups):
+        previous = groups[index - 1] if index > 0 else None
+        next_group = groups[index + 1] if index < len(groups) - 1 else None
+        incoming_transition_id = (
+            select_transition_id(previous[0], previous[1], family, prepare)
+            if previous is not None
+            else None
+        )
+        outgoing_transition_id = (
+            select_transition_id(family, prepare, next_group[0], next_group[1])
+            if next_group is not None
+            else None
+        )
+        planned.append(
+            _WorkGroup(
+                family=family,
+                prepare=prepare,
+                trace=trace,
+                reset=reset,
+                incoming_transition_id=incoming_transition_id,
+                outgoing_transition_id=outgoing_transition_id,
+            )
+        )
+    return tuple(planned)
 
 
 def _emit_empty_program_candidate(
@@ -360,12 +409,12 @@ def _emit_work_sequence_candidate(
     evaluation: IsoStateEvaluation,
     program_name: str,
     differentials: dict[str, StageDifferential],
-    groups: tuple[tuple[str, StageDifferential, StageDifferential, StageDifferential], ...],
+    groups: tuple[_WorkGroup, ...],
 ) -> ExplainedIsoProgram:
     lines: list[ExplainedIsoLine] = []
     _emit_program_header(lines, evaluation, differentials["program_header"], program_name)
     _emit_machine_preamble(lines, differentials["machine_preamble"])
-    first_family = groups[0][0]
+    first_family = groups[0].family
     _emit_piece_frame(
         lines,
         evaluation,
@@ -374,100 +423,14 @@ def _emit_work_sequence_candidate(
         first_family,
     )
 
-    previous_family: Optional[str] = None
-    for index, (family, prepare, trace, reset) in enumerate(groups):
-        next_family = groups[index + 1][0] if index < len(groups) - 1 else None
-        previous_prepare = groups[index - 1][1] if index > 0 else None
-        previous_trace = groups[index - 1][2] if index > 0 else None
-        if family == "top_drill" and previous_family in _ROUTER_MILLING_FAMILIES:
-            _emit_router_to_top_drill_transition(lines, groups[index - 1][3])
-            _emit_top_drill_prepare_after_router(lines, evaluation, prepare)
-            _emit_top_drill_trace(lines, trace, emit_mlv_after_etk7=False)
-            _emit_top_drill_reset(lines, evaluation, reset, final=next_family is None)
-        elif family == "top_drill" and previous_family == "side_drill":
-            assert previous_prepare is not None
-            _emit_top_drill_prepare_after_side(lines, evaluation, prepare, previous_prepare)
-            _emit_top_drill_trace(lines, trace, emit_mlv_after_etk7=False)
-            _emit_top_drill_reset(lines, evaluation, reset, final=next_family is None)
-        elif family == "top_drill" and previous_family == "top_drill":
-            assert previous_prepare is not None
-            assert previous_trace is not None
-            same_tool = _change_after(previous_prepare, "herramienta", "tool_name") == _change_after(
-                prepare, "herramienta", "tool_name"
-            )
-            _emit_top_drill_prepare(
-                lines,
-                evaluation,
-                prepare,
-                previous_prepare=previous_prepare,
-                previous_trace=previous_trace,
-            )
-            _emit_top_drill_trace(lines, trace, emit_mlv_after_etk7=False, combine_rapid_z=same_tool)
-            _emit_top_drill_reset(lines, evaluation, reset, final=next_family is None)
-        elif family == "side_drill" and previous_family in _ROUTER_MILLING_FAMILIES:
-            _emit_router_to_side_drill_transition(lines, evaluation, groups[index - 1][3], prepare)
-            _emit_side_drill_prepare_after_router(lines, evaluation, prepare, multi_side_sequence=next_family == "side_drill")
-            _emit_side_drill_trace(lines, trace, emit_mlv_after_etk7=False)
-            _emit_side_drill_reset(lines, evaluation, reset, final=next_family not in {"side_drill", "top_drill"})
-        elif family == "side_drill" and previous_family == "top_drill":
-            _emit_side_drill_prepare_after_top(lines, evaluation, prepare, multi_side_sequence=next_family == "side_drill")
-            _emit_side_drill_trace(lines, trace, emit_mlv_after_etk7=False)
-            _emit_side_drill_reset(lines, evaluation, reset, final=next_family not in {"side_drill", "top_drill"})
-        elif family == "slot_milling" and previous_family == "top_drill":
-            _emit_top_to_slot_milling_transition(lines, groups[index - 1][3])
-            _emit_slot_milling_prepare_after_top(lines, prepare)
-            _emit_slot_milling_trace(lines, evaluation, trace, emit_transition_exit=True)
-            _emit_slot_milling_reset(lines, reset, final=next_family is None)
-        elif family == "top_drill" and previous_family == "slot_milling":
-            _emit_top_drill_prepare_after_slot(lines, evaluation, prepare)
-            _emit_top_drill_trace(lines, trace, emit_mlv_after_etk7=False)
-            _emit_top_drill_reset(lines, evaluation, reset, final=next_family is None)
-        elif family == "side_drill" and previous_family == "side_drill":
-            assert previous_prepare is not None
-            assert previous_trace is not None
-            _emit_side_drill_prepare(
-                lines,
-                evaluation,
-                prepare,
-                previous_prepare=previous_prepare,
-                previous_trace=previous_trace,
-                multi_side_sequence=next_family in {"side_drill", "top_drill"},
-            )
-            same_spindle = _change_after(previous_prepare, "herramienta", "spindle") == _change_after(
-                prepare, "herramienta", "spindle"
-            )
-            axis = str(_change_after(prepare, "movimiento", "side_axis"))
-            _emit_side_drill_trace(
-                lines,
-                trace,
-                emit_mlv_after_etk7=False,
-                combine_rapid_z=same_spindle and axis == "X",
-            )
-            _emit_side_drill_reset(lines, evaluation, reset, final=next_family not in {"side_drill", "top_drill"})
-        elif (
-            family == "line_milling"
-            and previous_family in _ROUTER_MILLING_FAMILIES
-            and previous_prepare is not None
-            and previous_trace is not None
-            and _same_router_tool(previous_prepare, prepare)
-        ):
-            _emit_line_milling_trace(
-                lines,
-                evaluation,
-                trace,
-                previous_router_trace=previous_trace,
-            )
-            _emit_line_milling_reset(lines, reset)
-        else:
-            _emit_work_group(lines, evaluation, family, prepare, trace, reset, previous_family=previous_family)
-        if index < len(groups) - 1:
-            next_family, next_prepare = groups[index + 1][0], groups[index + 1][1]
-            if family in _ROUTER_MILLING_FAMILIES and next_family in _ROUTER_MILLING_FAMILIES:
-                if not (next_family == "line_milling" and _same_router_tool(prepare, next_prepare)):
-                    _emit_router_inter_work_reset(lines, reset, next_prepare)
-        previous_family = family
+    previous_group: Optional[_WorkGroup] = None
+    for index, group in enumerate(groups):
+        next_group = groups[index + 1] if index < len(groups) - 1 else None
+        _emit_planned_work_group(lines, evaluation, group, previous_group, next_group)
+        _emit_planned_outgoing_transition(lines, group, next_group)
+        previous_group = group
 
-    last_family = groups[-1][0]
+    last_family = groups[-1].family
     last_plane = _work_group_plane(evaluation, groups[-1])
     _emit_program_close(
         lines,
@@ -484,16 +447,139 @@ def _emit_work_sequence_candidate(
     )
 
 
+def _emit_planned_work_group(
+    lines: list[ExplainedIsoLine],
+    evaluation: IsoStateEvaluation,
+    group: _WorkGroup,
+    previous_group: Optional[_WorkGroup],
+    next_group: Optional[_WorkGroup],
+) -> None:
+    family = group.family
+    prepare = group.prepare
+    trace = group.trace
+    reset = group.reset
+    next_family = next_group.family if next_group is not None else None
+    previous_family = previous_group.family if previous_group is not None else None
+    previous_prepare = previous_group.prepare if previous_group is not None else None
+    previous_trace = previous_group.trace if previous_group is not None else None
+    incoming_transition_id = group.incoming_transition_id
+
+    if family == "top_drill" and incoming_transition_id == "T-XH-001":
+        assert previous_group is not None
+        _emit_router_to_top_drill_transition(lines, previous_group.reset, transition_id=incoming_transition_id)
+        _emit_top_drill_prepare_after_router(lines, evaluation, prepare, transition_id=incoming_transition_id)
+        _emit_top_drill_trace(lines, trace, emit_mlv_after_etk7=False)
+        _emit_top_drill_reset(lines, evaluation, reset, final=next_family is None)
+    elif family == "top_drill" and incoming_transition_id == "T-BH-004":
+        assert previous_prepare is not None
+        _emit_top_drill_prepare_after_side(lines, evaluation, prepare, previous_prepare, transition_id=incoming_transition_id)
+        _emit_top_drill_trace(lines, trace, emit_mlv_after_etk7=False)
+        _emit_top_drill_reset(lines, evaluation, reset, final=next_family is None)
+    elif family == "top_drill" and previous_family == "top_drill":
+        assert previous_prepare is not None
+        assert previous_trace is not None
+        same_tool = _change_after(previous_prepare, "herramienta", "tool_name") == _change_after(
+            prepare, "herramienta", "tool_name"
+        )
+        _emit_top_drill_prepare(
+            lines,
+            evaluation,
+            prepare,
+            previous_prepare=previous_prepare,
+            previous_trace=previous_trace,
+            transition_id=incoming_transition_id,
+        )
+        _emit_top_drill_trace(lines, trace, emit_mlv_after_etk7=False, combine_rapid_z=same_tool)
+        _emit_top_drill_reset(lines, evaluation, reset, final=next_family is None)
+    elif family == "side_drill" and incoming_transition_id == "T-XH-001":
+        assert previous_group is not None
+        _emit_router_to_side_drill_transition(lines, evaluation, previous_group.reset, prepare, transition_id=incoming_transition_id)
+        _emit_side_drill_prepare_after_router(lines, evaluation, prepare, multi_side_sequence=next_family == "side_drill", transition_id=incoming_transition_id)
+        _emit_side_drill_trace(lines, trace, emit_mlv_after_etk7=False)
+        _emit_side_drill_reset(lines, evaluation, reset, final=next_family not in {"side_drill", "top_drill"})
+    elif family == "side_drill" and previous_family == "top_drill":
+        _emit_side_drill_prepare_after_top(lines, evaluation, prepare, multi_side_sequence=next_family == "side_drill", transition_id=incoming_transition_id)
+        _emit_side_drill_trace(lines, trace, emit_mlv_after_etk7=False)
+        _emit_side_drill_reset(lines, evaluation, reset, final=next_family not in {"side_drill", "top_drill"})
+    elif family == "slot_milling" and incoming_transition_id == "T-BH-005":
+        assert previous_group is not None
+        _emit_top_to_slot_milling_transition(lines, previous_group.reset, transition_id=incoming_transition_id)
+        _emit_slot_milling_prepare_after_top(lines, prepare, transition_id=incoming_transition_id)
+        _emit_slot_milling_trace(lines, evaluation, trace, emit_transition_exit=True)
+        _emit_slot_milling_reset(lines, reset, final=next_family is None)
+    elif family == "top_drill" and incoming_transition_id == "T-BH-006":
+        _emit_top_drill_prepare_after_slot(lines, evaluation, prepare, transition_id=incoming_transition_id)
+        _emit_top_drill_trace(lines, trace, emit_mlv_after_etk7=False)
+        _emit_top_drill_reset(lines, evaluation, reset, final=next_family is None)
+    elif family == "side_drill" and previous_family == "side_drill":
+        assert previous_prepare is not None
+        assert previous_trace is not None
+        _emit_side_drill_prepare(
+            lines,
+            evaluation,
+            prepare,
+            previous_prepare=previous_prepare,
+            previous_trace=previous_trace,
+            multi_side_sequence=next_family in {"side_drill", "top_drill"},
+            transition_id=incoming_transition_id,
+        )
+        same_spindle = _change_after(previous_prepare, "herramienta", "spindle") == _change_after(
+            prepare, "herramienta", "spindle"
+        )
+        axis = str(_change_after(prepare, "movimiento", "side_axis"))
+        _emit_side_drill_trace(
+            lines,
+            trace,
+            emit_mlv_after_etk7=False,
+            combine_rapid_z=same_spindle and axis == "X",
+        )
+        _emit_side_drill_reset(lines, evaluation, reset, final=next_family not in {"side_drill", "top_drill"})
+    elif (
+        family == "line_milling"
+        and previous_family in _ROUTER_MILLING_FAMILIES
+        and previous_prepare is not None
+        and previous_trace is not None
+        and _same_router_tool(previous_prepare, prepare)
+    ):
+        _emit_line_milling_trace(
+            lines,
+            evaluation,
+            trace,
+            previous_router_trace=previous_trace,
+        )
+        _emit_line_milling_reset(lines, reset)
+    else:
+        _emit_work_group(lines, evaluation, family, prepare, trace, reset, previous_family=previous_family)
+
+
+def _emit_planned_outgoing_transition(
+    lines: list[ExplainedIsoLine],
+    group: _WorkGroup,
+    next_group: Optional[_WorkGroup],
+) -> None:
+    if next_group is None:
+        return
+    if group.family not in _ROUTER_MILLING_FAMILIES or next_group.family not in _ROUTER_MILLING_FAMILIES:
+        return
+    if next_group.family == "line_milling" and _same_router_tool(group.prepare, next_group.prepare):
+        return
+    _emit_router_inter_work_reset(
+        lines,
+        group.reset,
+        next_group.prepare,
+        transition_id=group.outgoing_transition_id,
+    )
+
+
 def _work_group_plane(
     evaluation: IsoStateEvaluation,
-    group: tuple[str, StageDifferential, StageDifferential, StageDifferential],
+    group: _WorkGroup,
 ) -> str:
-    family, prepare, trace, reset = group
-    for differential in (prepare, trace, reset):
+    for differential in (group.prepare, group.trace, group.reset):
         plane = _optional_change_after(differential, "trabajo", "plane", None)
         if plane is not None:
             return str(plane)
-    if family in {"top_drill", "slot_milling", "line_milling", "profile_milling"}:
+    if group.family in {"top_drill", "slot_milling", "line_milling", "profile_milling"}:
         return "Top"
     return _work_plane(evaluation)
 
@@ -545,6 +631,8 @@ def _emit_router_inter_work_reset(
     lines: list[ExplainedIsoLine],
     differential: StageDifferential,
     next_prepare: StageDifferential,
+    *,
+    transition_id: Optional[str] = None,
 ) -> None:
     source = _observed_rule_source("router_inter_work_reset")
     strategy_change = _find_change(next_prepare.target_changes, "trabajo", "strategy")
@@ -576,6 +664,7 @@ def _emit_router_inter_work_reset(
             "Bloque observado entre dos trabajos router con cambio de herramienta.",
             confidence="observed",
             rule_status="router_inter_work_observed",
+            transition_id=transition_id,
         )
 
 
@@ -883,6 +972,7 @@ def _emit_side_plane_selection(
     plane: str,
     *,
     include_right_frame: bool = True,
+    transition_id: Optional[str] = None,
 ) -> None:
     source = _observed_rule_source("side_drill_plane_selection")
     frame_planes = {"Left", "Back"}
@@ -905,6 +995,7 @@ def _emit_side_plane_selection(
                 "Cambio de marco lateral antes de seleccionar nueva cara.",
                 confidence="confirmed",
                 rule_status="generalized_side_drill_sequence",
+                transition_id=transition_id,
             )
     side_etk8 = _change_after(differential, "trabajo", "side_etk8")
     for line in (f"?%ETK[8]={int(side_etk8)}", "G40"):
@@ -916,12 +1007,15 @@ def _emit_side_plane_selection(
             "Seleccion de cara lateral entre taladros.",
             confidence="confirmed",
             rule_status="generalized_side_drill_sequence",
+            transition_id=transition_id,
         )
 
 
 def _emit_router_to_top_drill_transition(
     lines: list[ExplainedIsoLine],
     differential: StageDifferential,
+    *,
+    transition_id: Optional[str] = None,
 ) -> None:
     source = _observed_rule_source("router_to_top_drill_transition")
     for line in (
@@ -945,6 +1039,7 @@ def _emit_router_to_top_drill_transition(
             "Transicion incremental observada entre router y taladro superior.",
             confidence="confirmed",
             rule_status="generalized_router_to_top_drill_sequence",
+            transition_id=transition_id,
         )
 
 
@@ -952,6 +1047,8 @@ def _emit_top_drill_prepare_after_router(
     lines: list[ExplainedIsoLine],
     evaluation: IsoStateEvaluation,
     differential: StageDifferential,
+    *,
+    transition_id: Optional[str] = None,
 ) -> None:
     origin_z = evaluation.initial_state.get("pieza", "origin_z")
     tool_name = str(_change_after(differential, "herramienta", "tool_name"))
@@ -977,6 +1074,7 @@ def _emit_top_drill_prepare_after_router(
             "Preparacion incremental de taladro superior despues de router.",
             confidence="confirmed",
             rule_status="generalized_router_to_top_drill_sequence",
+            transition_id=transition_id,
         )
     for line in (f"SHF[X]={_fmt(shf_x)}", f"SHF[Y]={_fmt(shf_y)}", f"SHF[Z]={_fmt(shf_z)}"):
         _append(
@@ -987,6 +1085,7 @@ def _emit_top_drill_prepare_after_router(
             "Shift de herramienta derivado de la traslacion del spindle embebido.",
             confidence="confirmed",
             rule_status="generalized_router_to_top_drill_sequence",
+            transition_id=transition_id,
         )
     speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
     if speed_activation is not None:
@@ -1017,6 +1116,7 @@ def _emit_top_drill_prepare_after_router(
         "Mascara de agregado vertical derivada del spindle activo.",
         confidence="confirmed",
         rule_status="generalized_router_to_top_drill_sequence",
+        transition_id=transition_id,
     )
 
 
@@ -1024,6 +1124,8 @@ def _emit_top_drill_prepare_after_slot(
     lines: list[ExplainedIsoLine],
     evaluation: IsoStateEvaluation,
     differential: StageDifferential,
+    *,
+    transition_id: Optional[str] = None,
 ) -> None:
     origin_z = evaluation.initial_state.get("pieza", "origin_z")
     tool_name = str(_change_after(differential, "herramienta", "tool_name"))
@@ -1056,6 +1158,7 @@ def _emit_top_drill_prepare_after_slot(
             "Preparacion incremental de taladro superior despues de ranura.",
             confidence="observed",
             rule_status="generalized_slot_to_top_drill_sequence",
+            transition_id=transition_id,
         )
     for line in (f"SHF[X]={_fmt(shf_x)}", f"SHF[Y]={_fmt(shf_y)}", f"SHF[Z]={_fmt(shf_z)}"):
         _append(
@@ -1066,6 +1169,7 @@ def _emit_top_drill_prepare_after_slot(
             "Shift de herramienta derivado de la traslacion del spindle embebido.",
             confidence="confirmed",
             rule_status="generalized_slot_to_top_drill_sequence",
+            transition_id=transition_id,
         )
     speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
     if speed_activation is not None:
@@ -1078,6 +1182,7 @@ def _emit_top_drill_prepare_after_slot(
             "Activacion de cambio de velocidad del cabezal perforador.",
             confidence=speed_activation.confidence,
             rule_status="boring_head_speed_change",
+            transition_id=transition_id,
         )
         _append(
             lines,
@@ -1087,6 +1192,7 @@ def _emit_top_drill_prepare_after_slot(
             "Velocidad de spindle desde def.tlgx embebido.",
             confidence="confirmed",
             rule_status="boring_head_speed_change",
+            transition_id=transition_id,
         )
     _append(
         lines,
@@ -1096,6 +1202,7 @@ def _emit_top_drill_prepare_after_slot(
         "Mascara de agregado vertical derivada del spindle activo.",
         confidence="confirmed",
         rule_status="generalized_slot_to_top_drill_sequence",
+        transition_id=transition_id,
     )
 
 
@@ -1104,6 +1211,8 @@ def _emit_top_drill_prepare_after_side(
     evaluation: IsoStateEvaluation,
     differential: StageDifferential,
     previous_side_prepare: StageDifferential,
+    *,
+    transition_id: Optional[str] = None,
 ) -> None:
     origin_z = evaluation.initial_state.get("pieza", "origin_z")
     header_dz = evaluation.final_state.get("pieza", "header_dz")
@@ -1135,6 +1244,7 @@ def _emit_top_drill_prepare_after_side(
                 "Restauracion de marco lateral antes de volver a Top Drill.",
                 confidence="confirmed",
                 rule_status="generalized_side_to_top_drill_sequence",
+                transition_id=transition_id,
             )
     for line in ("?%ETK[8]=1", "G40"):
         _append(
@@ -1145,6 +1255,7 @@ def _emit_top_drill_prepare_after_side(
             "Seleccion de cara superior despues de taladro lateral.",
             confidence="confirmed",
             rule_status="generalized_side_to_top_drill_sequence",
+            transition_id=transition_id,
         )
     for line in (
         "MLV=1",
@@ -1168,6 +1279,7 @@ def _emit_top_drill_prepare_after_side(
             "Preparacion incremental de taladro superior despues de lateral; G53 Z lateral = DZ + 2*SecurityDistance + SHF_Z lateral saliente.",
             confidence="confirmed",
             rule_status="generalized_side_to_top_drill_sequence",
+            transition_id=transition_id,
         )
     speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
     if speed_activation is not None:
@@ -1180,6 +1292,7 @@ def _emit_top_drill_prepare_after_side(
             "Activacion de velocidad Top Drill despues de lateral.",
             confidence=speed_activation.confidence,
             rule_status="generalized_side_to_top_drill_sequence",
+            transition_id=transition_id,
         )
         _append(
             lines,
@@ -1189,6 +1302,7 @@ def _emit_top_drill_prepare_after_side(
             "Velocidad Top Drill desde def.tlgx embebido.",
             confidence="confirmed",
             rule_status="generalized_side_to_top_drill_sequence",
+            transition_id=transition_id,
         )
     _append(
         lines,
@@ -1198,6 +1312,7 @@ def _emit_top_drill_prepare_after_side(
         "Mascara vertical despues de transicion lateral a superior.",
         confidence="confirmed",
         rule_status="generalized_side_to_top_drill_sequence",
+        transition_id=transition_id,
     )
 
 
@@ -1208,6 +1323,7 @@ def _emit_top_drill_prepare(
     *,
     previous_prepare: Optional[StageDifferential] = None,
     previous_trace: Optional[StageDifferential] = None,
+    transition_id: Optional[str] = None,
 ) -> None:
     length = evaluation.initial_state.get("pieza", "length")
     origin_x = evaluation.initial_state.get("pieza", "origin_x")
@@ -1244,6 +1360,7 @@ def _emit_top_drill_prepare(
                 "Preparacion incremental de taladro superior entre trabajos.",
                 confidence="confirmed",
                 rule_status="generalized_top_drill_sequence",
+                transition_id=transition_id,
             )
         if same_tool:
             _append(
@@ -1254,6 +1371,7 @@ def _emit_top_drill_prepare(
                 "Reposicion de seguridad antes de repetir la misma herramienta.",
                 confidence="confirmed",
                 rule_status="generalized_top_drill_same_tool_sequence",
+                transition_id=transition_id,
             )
             return
         for line in (
@@ -1269,6 +1387,7 @@ def _emit_top_drill_prepare(
                 "Preparacion incremental de taladro superior entre herramientas.",
                 confidence="confirmed",
                 rule_status="generalized_top_drill_sequence",
+                transition_id=transition_id,
             )
         for line in (f"SHF[X]={_fmt(shf_x)}", f"SHF[Y]={_fmt(shf_y)}", f"SHF[Z]={_fmt(shf_z)}"):
             _append(
@@ -1279,6 +1398,7 @@ def _emit_top_drill_prepare(
                 "Shift de herramienta derivado de la traslacion del spindle embebido.",
                 confidence="confirmed",
                 rule_status="generalized_top_drill_sequence",
+                transition_id=transition_id,
             )
         speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
         if speed_activation is not None:
@@ -1291,6 +1411,7 @@ def _emit_top_drill_prepare(
                 "Activacion de cambio de velocidad del cabezal perforador.",
                 confidence=speed_activation.confidence,
                 rule_status="boring_head_speed_change",
+                transition_id=transition_id,
             )
             _append(
                 lines,
@@ -1300,6 +1421,7 @@ def _emit_top_drill_prepare(
                 "Velocidad de spindle desde def.tlgx embebido.",
                 confidence="confirmed",
                 rule_status="boring_head_speed_change",
+                transition_id=transition_id,
             )
         _append(
             lines,
@@ -1309,6 +1431,7 @@ def _emit_top_drill_prepare(
             "Mascara de agregado vertical derivada del spindle activo.",
             confidence="confirmed",
             rule_status="generalized_top_drill_spindle_mask",
+            transition_id=transition_id,
         )
         return
 
@@ -3089,6 +3212,8 @@ def _emit_line_milling_reset(
 def _emit_top_to_slot_milling_transition(
     lines: list[ExplainedIsoLine],
     differential: StageDifferential,
+    *,
+    transition_id: Optional[str] = None,
 ) -> None:
     source = _observed_rule_source("top_to_slot_milling_transition")
     for line in (
@@ -3107,12 +3232,15 @@ def _emit_top_to_slot_milling_transition(
             "Transicion incremental observada entre taladro superior y ranura.",
             confidence="confirmed",
             rule_status="generalized_top_to_slot_milling_sequence",
+            transition_id=transition_id,
         )
 
 
 def _emit_slot_milling_prepare_after_top(
     lines: list[ExplainedIsoLine],
     differential: StageDifferential,
+    *,
+    transition_id: Optional[str] = None,
 ) -> None:
     spindle = _change_after(differential, "herramienta", "spindle")
     spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
@@ -3146,6 +3274,7 @@ def _emit_slot_milling_prepare_after_top(
             "Preparacion incremental de ranura despues de taladro superior.",
             confidence="confirmed",
             rule_status="generalized_top_to_slot_milling_sequence",
+            transition_id=transition_id,
         )
 
 
@@ -3313,6 +3442,7 @@ def _emit_side_drill_prepare(
     previous_prepare: Optional[StageDifferential] = None,
     previous_trace: Optional[StageDifferential] = None,
     multi_side_sequence: bool = False,
+    transition_id: Optional[str] = None,
 ) -> None:
     length = evaluation.initial_state.get("pieza", "length")
     origin_x = evaluation.initial_state.get("pieza", "origin_x")
@@ -3333,7 +3463,7 @@ def _emit_side_drill_prepare(
         previous_spindle = _change_after(previous_prepare, "herramienta", "spindle")
         previous_mask = _change_after(previous_prepare, "salida", "etk_0_mask")
         if plane != previous_plane:
-            _emit_side_plane_selection(lines, evaluation, differential, plane)
+            _emit_side_plane_selection(lines, evaluation, differential, plane, transition_id=transition_id)
         for line in (
             "MLV=1",
             f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
@@ -3348,6 +3478,7 @@ def _emit_side_drill_prepare(
                 "Preparacion incremental de taladro lateral entre trabajos.",
                 confidence="confirmed",
                 rule_status="generalized_side_drill_sequence",
+                transition_id=transition_id,
             )
         if spindle == previous_spindle:
             axis = str(_change_after(differential, "movimiento", "side_axis"))
@@ -3361,6 +3492,7 @@ def _emit_side_drill_prepare(
                     "Reposicion lateral antes de repetir el mismo spindle.",
                     confidence="confirmed",
                     rule_status="generalized_side_drill_sequence",
+                    transition_id=transition_id,
                 )
                 if multi_side_sequence:
                     _append(
@@ -3371,6 +3503,7 @@ def _emit_side_drill_prepare(
                         "Pausa observada antes de repetir taladro lateral.",
                         confidence="confirmed",
                         rule_status="generalized_side_drill_sequence",
+                        transition_id=transition_id,
                     )
             else:
                 reposition_lines = ["MLV=0", "G0 G53 Z201.000", "MLV=2"]
@@ -3385,6 +3518,7 @@ def _emit_side_drill_prepare(
                         "Reposicion lateral antes de repetir el mismo spindle.",
                         confidence="confirmed",
                         rule_status="generalized_side_drill_sequence",
+                        transition_id=transition_id,
                     )
             return
         _append(
@@ -3395,6 +3529,7 @@ def _emit_side_drill_prepare(
             "Cambio de spindle lateral desde politica de cara.",
             confidence="confirmed",
             rule_status="generalized_side_drill_sequence",
+            transition_id=transition_id,
         )
         park_z = _side_drill_g53_z(evaluation, previous_prepare, differential)
         for line in ("MLV=0", f"G0 G53 Z{_fmt(park_z)}", "MLV=2", "MLV=2"):
@@ -3406,6 +3541,7 @@ def _emit_side_drill_prepare(
                 "Reposicion segura antes de cambiar spindle lateral; Z = DZ + 2*SecurityDistance + max(SHF_Z lateral involucrado).",
                 confidence="confirmed",
                 rule_status="generalized_side_drill_sequence",
+                transition_id=transition_id,
             )
         for line in (f"SHF[X]={_fmt(shf_x)}", f"SHF[Y]={_fmt(shf_y)}", f"SHF[Z]={_fmt(shf_z)}"):
             _append(
@@ -3416,6 +3552,7 @@ def _emit_side_drill_prepare(
                 "Shift de herramienta lateral derivado del spindle embebido.",
                 confidence="confirmed",
                 rule_status="generalized_side_drill_sequence",
+                transition_id=transition_id,
             )
         speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
         if speed_activation is not None:
@@ -3428,6 +3565,7 @@ def _emit_side_drill_prepare(
                 "Activacion de cambio de velocidad del cabezal perforador lateral.",
                 confidence=speed_activation.confidence,
                 rule_status="boring_head_speed_change",
+                transition_id=transition_id,
             )
             _append(
                 lines,
@@ -3437,6 +3575,7 @@ def _emit_side_drill_prepare(
                 "Velocidad lateral desde def.tlgx embebido.",
                 confidence="confirmed",
                 rule_status="boring_head_speed_change",
+                transition_id=transition_id,
             )
         if mask != previous_mask:
             _append(
@@ -3447,6 +3586,7 @@ def _emit_side_drill_prepare(
                 "Mascara de agregado lateral observada por cara.",
                 confidence="confirmed",
                 rule_status="generalized_side_drill_sequence",
+                transition_id=transition_id,
             )
             if multi_side_sequence:
                 _append(
@@ -3457,6 +3597,7 @@ def _emit_side_drill_prepare(
                     "Pausa observada despues de activar mascara lateral.",
                     confidence="confirmed",
                     rule_status="generalized_side_drill_sequence",
+                    transition_id=transition_id,
                 )
         return
     for line in ("MLV=2", "G17"):
@@ -3584,6 +3725,8 @@ def _emit_router_to_side_drill_transition(
     evaluation: IsoStateEvaluation,
     router_reset: StageDifferential,
     side_prepare: StageDifferential,
+    *,
+    transition_id: Optional[str] = None,
 ) -> None:
     plane = str(_change_after(side_prepare, "trabajo", "plane"))
     source = _observed_rule_source("router_to_side_drill_transition")
@@ -3607,6 +3750,7 @@ def _emit_router_to_side_drill_transition(
             "Reset parcial de router antes de entrar a taladro lateral.",
             confidence="confirmed",
             rule_status="generalized_router_to_side_drill_transition",
+            transition_id=transition_id,
         )
 
 
@@ -3616,6 +3760,7 @@ def _emit_side_drill_prepare_after_router(
     differential: StageDifferential,
     *,
     multi_side_sequence: bool = False,
+    transition_id: Optional[str] = None,
 ) -> None:
     origin_z = evaluation.initial_state.get("pieza", "origin_z")
     header_dz = evaluation.final_state.get("pieza", "header_dz")
@@ -3644,6 +3789,7 @@ def _emit_side_drill_prepare_after_router(
             "Preparacion incremental de taladro lateral despues de router.",
             confidence="confirmed",
             rule_status="generalized_router_to_side_drill_transition",
+            transition_id=transition_id,
         )
     speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
     if speed_activation is not None:
@@ -3656,6 +3802,7 @@ def _emit_side_drill_prepare_after_router(
             "Activacion de velocidad lateral despues de router.",
             confidence=speed_activation.confidence,
             rule_status="generalized_router_to_side_drill_transition",
+            transition_id=transition_id,
         )
         _append(
             lines,
@@ -3665,6 +3812,7 @@ def _emit_side_drill_prepare_after_router(
             "Velocidad lateral desde def.tlgx embebido.",
             confidence="confirmed",
             rule_status="generalized_router_to_side_drill_transition",
+            transition_id=transition_id,
         )
     _append(
         lines,
@@ -3674,6 +3822,7 @@ def _emit_side_drill_prepare_after_router(
         "Mascara de agregado lateral observada por cara.",
         confidence="confirmed",
         rule_status="generalized_router_to_side_drill_transition",
+        transition_id=transition_id,
     )
     if multi_side_sequence:
         _append(
@@ -3684,6 +3833,7 @@ def _emit_side_drill_prepare_after_router(
             "Pausa observada despues de activar mascara lateral.",
             confidence="confirmed",
             rule_status="generalized_router_to_side_drill_transition",
+            transition_id=transition_id,
         )
 
 
@@ -3693,6 +3843,7 @@ def _emit_side_drill_prepare_after_top(
     differential: StageDifferential,
     *,
     multi_side_sequence: bool = False,
+    transition_id: Optional[str] = None,
 ) -> None:
     origin_z = evaluation.initial_state.get("pieza", "origin_z")
     plane = str(_change_after(differential, "trabajo", "plane"))
@@ -3725,6 +3876,7 @@ def _emit_side_drill_prepare_after_top(
             "Preparacion incremental de taladro lateral despues de taladro superior; G53 Z lateral = DZ + 2*SecurityDistance + SHF_Z lateral entrante.",
             confidence="confirmed",
             rule_status="generalized_top_to_side_drill_sequence",
+            transition_id=transition_id,
         )
     speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
     if speed_activation is not None:
@@ -3737,6 +3889,7 @@ def _emit_side_drill_prepare_after_top(
             "Activacion de velocidad lateral despues de taladro superior.",
             confidence=speed_activation.confidence,
             rule_status="generalized_top_to_side_drill_sequence",
+            transition_id=transition_id,
         )
         _append(
             lines,
@@ -3746,6 +3899,7 @@ def _emit_side_drill_prepare_after_top(
             "Velocidad lateral desde def.tlgx embebido.",
             confidence="confirmed",
             rule_status="generalized_top_to_side_drill_sequence",
+            transition_id=transition_id,
         )
     _append(
         lines,
@@ -3755,6 +3909,7 @@ def _emit_side_drill_prepare_after_top(
         "Mascara de agregado lateral observada por cara.",
         confidence="confirmed",
         rule_status="generalized_top_to_side_drill_sequence",
+        transition_id=transition_id,
     )
     if multi_side_sequence:
         _append(
@@ -3765,6 +3920,7 @@ def _emit_side_drill_prepare_after_top(
             "Pausa observada despues de activar mascara lateral.",
             confidence="confirmed",
             rule_status="generalized_top_to_side_drill_sequence",
+            transition_id=transition_id,
         )
 
 
@@ -4165,7 +4321,13 @@ def _append(
     *,
     confidence: str = "observed",
     rule_status: str = "observed",
+    block_id: Optional[str] = None,
+    transition_id: Optional[str] = None,
 ) -> None:
+    resolved_transition_id = transition_id or transition_id_for_rule_status(rule_status)
+    resolved_block_id = block_id
+    if resolved_block_id is None and resolved_transition_id is None:
+        resolved_block_id = block_id_for_stage_key(differential.stage_key)
     lines.append(
         ExplainedIsoLine(
             line=line,
@@ -4173,6 +4335,8 @@ def _append(
             source=source,
             confidence=confidence,
             rule_status=rule_status,
+            block_id=resolved_block_id,
+            transition_id=resolved_transition_id,
             note=note,
         )
     )

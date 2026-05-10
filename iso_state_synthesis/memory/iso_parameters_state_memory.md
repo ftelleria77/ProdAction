@@ -95,22 +95,26 @@ Convencion de ids:
 | `B-BH-003` | top drill | perforacion/ranurado | reset completo | `MLV=1`, `SHF[Z]=DZ+%ETK[114]/1000`, `?%ETK[7]=0`, `G61`, `MLV=0`, `?%ETK[0]=0`, `?%ETK[17]=0`, `G4F1.200`, `M5`, `D0` | cabezal perforacion detenido/reseteado | `S005` |
 | `B-BH-004` | side drill | perforacion/ranurado | preparacion | `?%ETK[8]=cara`, `G40`, `MLV=1`, `SHF[Z]=origin_z+%ETK[114]/1000`, `MLV=2`, `G17`, `?%ETK[6]=058..061`, parqueo `G53 Z`, `SHF[...]`, velocidad si cambia, `?%ETK[0]=mask` | broca lateral preparada | `S009` |
 | `B-BH-005` | side drill | perforacion/ranurado | traza | `G0 X/Y/Z`, `?%ETK[7]=3`, `G1 G9 ... F...`, `G0 ...` | taladro lateral ejecutado | `S010` |
-| `B-BH-006` | slot `082` | perforacion/ranurado | preparacion | `?%ETK[6]=82`, `?%ETK[1]=16`, `S4000M3` si cambia velocidad, `SHF[...]` | sierra vertical preparada | `S013`, `S017` |
-| `B-BH-007` | slot `082` | perforacion/ranurado | traza | `?%ETK[7]=1`, movimientos de ranura | ranura con sierra ejecutada | `S013` |
+| `B-BH-006` | top slot | perforacion/ranurado | preparacion | `?%ETK[6]=82`, `?%ETK[1]=16`, `S4000M3` si cambia velocidad, `SHF[...]` | sierra vertical preparada | `S013`, `S017` |
+| `B-BH-007` | top slot | perforacion/ranurado | traza | `?%ETK[7]=1`, movimientos de ranura | ranura con sierra ejecutada | `S013` |
 | `B-PG-002` | programa | maquina | cierre | `G0 G53 Z201.000`, `G0 G53 X...`, `G64`, `SYN`, resets, `M2` | programa cerrado | `S014` |
 
 ### Transiciones Internas Y Entre Cabezales
 
 | id | tipo | desde -> hacia | condicion | conserva | resetea / emite | evidencia |
 | --- | --- | --- | --- | --- | --- | --- |
-| `T-RH-001` | interna router incremental | router `E00x` -> router `E00x` | misma herramienta | herramienta montada, cabezal router preparado | no emite `T`, `SYN`, `M06`, `?%ETK[9]`, `?%ETK[18]` ni `M5`; reactiva `D1`, offsets y `?%ETK[7]=4` | `S015` |
-| `T-RH-002` | interna router con cambio fisico | router `E00x` -> router `E00y` | herramienta saliente distinta de entrante | cabezal fisico router, no la herramienta ni el motor activo | reset router saliente, `M5`, viaje/cambio con `Tn`, `SYN`, `M06`, nueva preparacion router | `S019` |
-| `T-BH-001` | interna perforacion/ranurado | side drill -> side drill | cambia broca lateral/cara o eje | cabezal compartido y motor si la velocidad no cambia | `?%ETK[6]=nuevo`, parqueo lateral `G53 Z`, `SHF[...]`; velocidad solo si cambia | `S011` |
-| `T-BH-002` | interna perforacion/ranurado | side drill -> top drill | vuelve desde cara lateral a superior | cabezal compartido; velocidad si coincide | `?%ETK[8]=1`, `G40`, `SHF[Z]`, `G17`, `?%ETK[6]=tool`, parqueo `G53 Z` | `S012` |
-| `T-BH-003` | interna perforacion/ranurado | top drill -> slot `082` | sierra usa el mismo motor; velocidad puede coincidir | velocidad activa si ya es `4000` | `?%ETK[0]=0`, `?%ETK[6]=82`, `?%ETK[1]=16`; no emite `?%ETK[17]=257` ni `S4000M3` si no cambia velocidad | `S017` |
-| `T-BH-004` | interna perforacion/ranurado | slot `082` -> top drill | salida de sierra hacia broca vertical | cabezal compartido | reset parcial de slot: `D0`, offsets a `0`, `?%ETK[7]=0`, `?%ETK[1]=0`; luego preparacion top drill sin cierre final | `S018` |
-| `T-XH-001` | entre cabezales | router -> perforacion/ranurado | siguiente trabajo usa `001..007`, `058..061` o `082` | movimiento conjunto de cabezales, no el motor/herramienta router | reset router saliente; preparar herramienta del cabezal de perforacion/ranurado entrante | pendiente de aislar como evidencia especifica |
-| `T-XH-002` | entre cabezales | perforacion/ranurado -> router | siguiente trabajo usa `E00x` | movimiento conjunto de cabezales, no el motor compartido de perforacion | reset completo o parcial del cabezal de perforacion segun caso; preparar router con `T/SYN/M06` si corresponde | pendiente de aislar como evidencia especifica |
+| `T-RH-001` | internal router incremental | router -> router | misma herramienta | herramienta montada, cabezal router preparado | no emite `T`, `SYN`, `M06`, `?%ETK[9]`, `?%ETK[18]` ni `M5`; reactiva `D1`, offsets y `?%ETK[7]=4` | `S015` |
+| `T-RH-002` | internal router physical change | router -> router | diferente herramienta | cabezal fisico router, no la herramienta ni el motor activo | reset router saliente, `M5`, viaje/cambio con `Tn`, `SYN`, `M06`, nueva preparacion router | `S019` |
+| `T-BH-001` | internal boring head | top drill -> top drill | cambia de broca vertical en cara superior | cabezal compartido y motor si la velocidad no cambia | `?%ETK[6]=nuevo`; velocidad solo si cambia | pendiente de aislar como evidencia especifica |
+| `T-BH-002` | internal boring head | top drill -> side drill | cambia de broca vertical a broca horizontal | cabezal compartido | seleccion lateral, parqueo `G53 Z`, `SHF[...]`; velocidad solo si cambia | pendiente de aislar como evidencia especifica |
+| `T-BH-003` | internal boring head | side drill -> side drill | cambia de broca horizontal, lateral, cara o eje | cabezal compartido y motor si la velocidad no cambia | `?%ETK[6]=nuevo`, parqueo lateral `G53 Z`, `SHF[...]`; velocidad solo si cambia | `S011` |
+| `T-BH-004` | internal boring head | side drill -> top drill | cambia de broca horizontal a broca vertical | cabezal compartido; velocidad si coincide | `?%ETK[8]=1`, `G40`, `SHF[Z]`, `G17`, `?%ETK[6]=tool`, parqueo `G53 Z` | `S012` |
+| `T-BH-005` | internal boring head | top drill -> top slot | cambia de broca vertical a sierra vertical | velocidad activa si ya es `4000` | `?%ETK[0]=0`, `?%ETK[6]=82`, `?%ETK[1]=16`; no emite `?%ETK[17]=257` ni `S4000M3` si no cambia velocidad | `S017` |
+| `T-BH-006` | internal boring head | top slot -> top drill | cambia de sierra vertical a broca vertical | cabezal compartido | reset parcial de slot: `D0`, offsets a `0`, `?%ETK[7]=0`, `?%ETK[1]=0`; luego preparacion top drill sin cierre final | `S018` |
+| `T-BH-007` | internal boring head | side drill -> top slot | cambia de broca horizontal a sierra vertical | cabezal compartido | pendiente de aislar | pendiente de aislar como evidencia especifica |
+| `T-BH-008` | internal boring head | top slot -> side drill | cambia de sierra vertical a broca horizontal | cabezal compartido | pendiente de aislar | pendiente de aislar como evidencia especifica |
+| `T-XH-001` | switching heads | router -> boring head | cambia de fresa a broca o sierra | movimiento conjunto de cabezales, no el motor/herramienta router | reset router saliente; preparar herramienta del cabezal de perforacion/ranurado entrante | pendiente de aislar como evidencia especifica |
+| `T-XH-002` | switching heads | boring head -> router | cambia de broca o sierra a fresa | movimiento conjunto de cabezales, no el motor compartido de perforacion | reset completo o parcial del cabezal de perforacion segun caso; preparar router con `T/SYN/M06` si corresponde | pendiente de aislar como evidencia especifica |
 
 ## Inventario De Parametros
 
