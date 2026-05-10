@@ -105,7 +105,7 @@ Convencion de ids:
 | --- | --- | --- | --- | --- | --- | --- |
 | `T-RH-001` | internal router incremental | router -> router | misma herramienta | herramienta montada, cabezal router preparado | no emite `T`, `SYN`, `M06`, `?%ETK[9]`, `?%ETK[18]` ni `M5`; reactiva `D1`, offsets y `?%ETK[7]=4` | `S015` |
 | `T-RH-002` | internal router physical change | router -> router | diferente herramienta | cabezal fisico router, no la herramienta ni el motor activo | reset router saliente, `M5`, viaje/cambio con `Tn`, `SYN`, `M06`, nueva preparacion router | `S019` |
-| `T-BH-001` | internal boring head | top drill -> top drill | cambia de broca vertical en cara superior | cabezal compartido y motor si la velocidad no cambia | reset corto saliente; preparacion incremental con `?%ETK[6]=nuevo`, `SHF[...]`, velocidad solo si cambia y `?%ETK[0]=mask` | `S020` |
+| `T-BH-001` | internal boring head | top drill -> top drill | cambia o conserva broca vertical en cara superior | cabezal compartido; motor y herramienta si no cambian | reset corto saliente; si cambia herramienta: `?%ETK[6]=nuevo`, `SHF[...]`, velocidad solo si cambia y `?%ETK[0]=mask`; si no cambia herramienta: reposicion incremental sin repetir herramienta/velocidad/mascara | `S020`; misma herramienta pendiente con `Pieza_119..122` |
 | `T-BH-002` | internal boring head | top drill -> side drill | cambia de broca vertical a broca horizontal | cabezal compartido | seleccion lateral, parqueo `G53 Z`, `SHF[...]`; velocidad solo si cambia | pendiente de aislar como evidencia especifica |
 | `T-BH-003` | internal boring head | side drill -> side drill | cambia de broca horizontal, lateral, cara o eje | cabezal compartido y motor si la velocidad no cambia | `?%ETK[6]=nuevo`, parqueo lateral `G53 Z`, `SHF[...]`; velocidad solo si cambia | `S011` |
 | `T-BH-004` | internal boring head | side drill -> top drill | cambia de broca horizontal a broca vertical | cabezal compartido; velocidad si coincide | `?%ETK[8]=1`, `G40`, `SHF[Z]`, `G17`, `?%ETK[6]=tool`, parqueo `G53 Z` | `S012` |
@@ -125,12 +125,53 @@ Convencion de ids:
 | `P-TBH002-003` | `T-BH-002` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_100.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_100.iso` | `top drill 001/D8 -> Back 059/D8`, misma velocidad `6000` | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
 | `P-TBH002-004` | `T-BH-002` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_101.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_101.iso` | `top drill 001/D8 -> Left 061/D8`, misma velocidad `6000` | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
 | `P-TBH002-005` | `T-BH-002` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_102.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_102.iso` | control de velocidad: `top drill 002/D15` a `4000` -> `Front 058/D8` a `6000` | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH001-SAME-001` | `T-BH-001` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_119.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_119.iso` | `top drill 001/D8 -> 001/D8`, dos huecos en fila, misma herramienta `6000` | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH001-SAME-002` | `T-BH-001` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_120.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_120.iso` | `top drill 001/D8 -> 001/D8`, dos huecos en columna, misma herramienta `6000` | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH001-SAME-003` | `T-BH-001` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_121.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_121.iso` | `top drill 001/D8 -> 001/D8 -> 001/D8`, continuidad repetida, misma herramienta `6000` | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH001-SAME-004` | `T-BH-001` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_122.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_122.iso` | `top drill 002/D15 -> 002/D15`, misma herramienta `4000` | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-001` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_103.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_103.iso` | `Front -> Front`, huecos consecutivos en cara frontal | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-002` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_104.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_104.iso` | `Right -> Right`, huecos consecutivos en lateral derecha | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-003` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_105.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_105.iso` | `Back -> Back`, huecos consecutivos en cara posterior | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-004` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_106.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_106.iso` | `Left -> Left`, huecos consecutivos en lateral izquierda | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-005` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_107.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_107.iso` | `Front -> Right`, frontal a lateral derecha | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-006` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_108.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_108.iso` | `Front -> Back`, frontal a posterior | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-007` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_109.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_109.iso` | `Front -> Left`, frontal a lateral izquierda | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-008` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_110.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_110.iso` | `Right -> Front`, lateral derecha a frontal | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-009` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_111.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_111.iso` | `Right -> Back`, lateral derecha a posterior | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-010` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_112.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_112.iso` | `Right -> Left`, lateral derecha a lateral izquierda | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-011` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_113.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_113.iso` | `Back -> Front`, posterior a frontal | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-012` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_114.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_114.iso` | `Back -> Right`, posterior a lateral derecha | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-013` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_115.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_115.iso` | `Back -> Left`, posterior a lateral izquierda | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-014` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_116.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_116.iso` | `Left -> Front`, lateral izquierda a frontal | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-015` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_117.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_117.iso` | `Left -> Right`, lateral izquierda a lateral derecha | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
+| `P-TBH003-016` | `T-BH-003` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_118.pgmx` | `P:\USBMIX\ProdAction\ISO\pieza_118.iso` | `Left -> Back`, lateral izquierda a posterior | PGMX generado; pendiente postprocesar en Maestro/CNC y comparar |
 
 Manifiesto generado: `S:\Maestro\Projects\ProdAction\ISO\Pieza_098_102_TBH002_manifest.csv`.
 Generador reproducible: `tools/studies/iso/tbh002_top_to_side_fixtures_2026_05_10.py`.
 El plan interno de los cinco PGMX ya evalua como `top_drill -> side_drill` con
 `incoming_transition_id=T-BH-002`; falta evidencia ISO de Maestro para cerrar
 la regla y registrar nuevas filas `S0xx`.
+
+Manifiesto generado: `S:\Maestro\Projects\ProdAction\ISO\Pieza_119_122_TBH001_same_tool_manifest.csv`.
+Generador reproducible: `tools/studies/iso/tbh001_same_tool_fixtures_2026_05_10.py`.
+La tanda `Pieza_119..Pieza_122` cubre la continuidad `top drill -> top drill`
+sin cambio de herramienta: `001/D8` en fila, `001/D8` en columna, `001/D8`
+repetido tres veces y `002/D15` a `4000`. Verificacion local: todos evaluan como
+grupos `top_drill`; las entradas posteriores a la primera quedan con
+`incoming_transition_id=T-BH-001`; los ISO `pieza_119..pieza_122` no existen
+todavia en `P:\USBMIX\ProdAction\ISO` y quedan pendientes de postprocesado
+manual en Maestro/CNC.
+
+Manifiesto generado: `S:\Maestro\Projects\ProdAction\ISO\Pieza_103_118_TBH003_manifest.csv`.
+Generador reproducible: `tools/studies/iso/tbh003_side_to_side_fixtures_2026_05_10.py`.
+La tanda `Pieza_103..Pieza_118` cubre las 16 variantes dirigidas de
+`side drill -> side drill`. Se genero usando `ordered_machinings` para preservar
+el orden solicitado `desde -> hacia`, incluidos pares inversos como
+`Right -> Front`, `Back -> Front`, `Left -> Front` y `Left -> Back`. Verificacion
+local: cada PGMX evalua como dos grupos `side_drill`; el segundo grupo queda con
+`incoming_transition_id=T-BH-003`; los ISO `pieza_103..pieza_118` no existen
+todavia en `P:\USBMIX\ProdAction\ISO` y quedan pendientes de postprocesado
+manual en Maestro/CNC.
 
 ## Inventario De Parametros
 

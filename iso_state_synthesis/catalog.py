@@ -94,8 +94,8 @@ TRANSITIONS: dict[str, IsoTransitionDefinition] = {
         BORING_HEAD,
         "top_drill",
         "top_drill",
-        "vertical_drill_tool_change",
-        (),
+        "vertical_drill_continuity_or_tool_change",
+        ("S020",),
     ),
     "T-BH-002": IsoTransitionDefinition(
         "T-BH-002",
@@ -259,9 +259,7 @@ def select_transition_id(
         return "T-RH-002"
 
     if previous_family == "top_drill" and next_family == "top_drill":
-        if _tool_name(previous_prepare) != _tool_name(next_prepare):
-            return "T-BH-001"
-        return None
+        return "T-BH-001"
     if previous_family == "top_drill" and next_family == "side_drill":
         return "T-BH-002"
     if previous_family == "side_drill" and next_family == "side_drill":

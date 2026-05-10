@@ -589,6 +589,48 @@ Avance registrado el 2026-05-10:
   `incoming_transition_id=T-BH-002`. Los ISO `pieza_098..pieza_102` no existen
   todavia en `P:\USBMIX\ProdAction\ISO`; quedan pendientes de postprocesado.
 
+Avance registrado el 2026-05-10 para `T-BH-003`:
+
+- Se amplio la serie controlada con `Pieza_103..Pieza_118`, una pieza para cada
+  variante dirigida de `side drill -> side drill` entre `Front`, `Right`,
+  `Back` y `Left`.
+- Las primeras cuatro piezas cubren huecos consecutivos en la misma cara:
+  `Front -> Front`, `Right -> Right`, `Back -> Back`, `Left -> Left`.
+- Las doce restantes cubren todas las combinaciones entre caras distintas:
+  `Front -> Right`, `Front -> Back`, `Front -> Left`, `Right -> Front`,
+  `Right -> Back`, `Right -> Left`, `Back -> Front`, `Back -> Right`,
+  `Back -> Left`, `Left -> Front`, `Left -> Right`, `Left -> Back`.
+- Los PGMX quedaron generados en `S:\Maestro\Projects\ProdAction\ISO` y el
+  manifiesto en
+  `S:\Maestro\Projects\ProdAction\ISO\Pieza_103_118_TBH003_manifest.csv`.
+- Se agrego el generador reproducible
+  `tools/studies/iso/tbh003_side_to_side_fixtures_2026_05_10.py`.
+- Verificacion local: los 16 PGMX evaluan como dos grupos `side_drill`; el
+  segundo grupo queda con `incoming_transition_id=T-BH-003`; no hay warnings.
+  Los ISO `pieza_103..pieza_118` no existen todavia en
+  `P:\USBMIX\ProdAction\ISO`; quedan pendientes de postprocesado manual en
+  Maestro/CNC para analisis y codificacion.
+
+Avance registrado el 2026-05-10 para ampliar `T-BH-001`:
+
+- Se incorporo al plan de trabajo la continuidad `top drill -> top drill` sin
+  cambio de herramienta, como subcaso de `T-BH-001`.
+- En codigo, `select_transition_id` ahora clasifica todo `top_drill ->
+  top_drill` como `T-BH-001`; el subcaso se decide por si la herramienta cambia
+  o se conserva.
+- Se preparo la tanda `Pieza_119..Pieza_122`: `001/D8` en fila, `001/D8` en
+  columna, `001/D8` repetido tres veces y `002/D15` a `4000`.
+- Los PGMX quedaron generados en `S:\Maestro\Projects\ProdAction\ISO` y el
+  manifiesto en
+  `S:\Maestro\Projects\ProdAction\ISO\Pieza_119_122_TBH001_same_tool_manifest.csv`.
+- Se agrego el generador reproducible
+  `tools/studies/iso/tbh001_same_tool_fixtures_2026_05_10.py`.
+- Verificacion local: todos los PGMX evaluan como grupos `top_drill`; las
+  entradas posteriores a la primera quedan con `incoming_transition_id=T-BH-001`;
+  no hay warnings. Los ISO `pieza_119..pieza_122` no existen todavia en
+  `P:\USBMIX\ProdAction\ISO`; quedan pendientes de postprocesado manual en
+  Maestro/CNC para analisis y cierre de la subregla.
+
 ## Preguntas Abiertas
 
 - Que variables observadas son realmente estado modal y cuales son solo
