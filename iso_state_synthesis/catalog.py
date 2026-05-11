@@ -95,7 +95,7 @@ TRANSITIONS: dict[str, IsoTransitionDefinition] = {
         "top_drill",
         "top_drill",
         "vertical_drill_continuity_or_tool_change",
-        ("S020",),
+        ("S020", "S021"),
     ),
     "T-BH-002": IsoTransitionDefinition(
         "T-BH-002",
@@ -105,7 +105,7 @@ TRANSITIONS: dict[str, IsoTransitionDefinition] = {
         "top_drill",
         "side_drill",
         "vertical_to_horizontal_drill",
-        (),
+        ("S022",),
     ),
     "T-BH-003": IsoTransitionDefinition(
         "T-BH-003",
@@ -115,7 +115,7 @@ TRANSITIONS: dict[str, IsoTransitionDefinition] = {
         "side_drill",
         "side_drill",
         "horizontal_drill_tool_face_or_axis_change",
-        ("S011",),
+        ("S011", "S023"),
     ),
     "T-BH-004": IsoTransitionDefinition(
         "T-BH-004",
@@ -125,7 +125,7 @@ TRANSITIONS: dict[str, IsoTransitionDefinition] = {
         "side_drill",
         "top_drill",
         "horizontal_to_vertical_drill",
-        ("S012",),
+        ("S012", "S024"),
     ),
     "T-BH-005": IsoTransitionDefinition(
         "T-BH-005",
@@ -155,7 +155,7 @@ TRANSITIONS: dict[str, IsoTransitionDefinition] = {
         "side_drill",
         "slot_milling",
         "horizontal_drill_to_top_slot",
-        (),
+        ("S025",),
     ),
     "T-BH-008": IsoTransitionDefinition(
         "T-BH-008",
@@ -165,7 +165,7 @@ TRANSITIONS: dict[str, IsoTransitionDefinition] = {
         "slot_milling",
         "side_drill",
         "top_slot_to_horizontal_drill",
-        (),
+        ("S026",),
     ),
     "T-XH-001": IsoTransitionDefinition(
         "T-XH-001",
@@ -175,7 +175,7 @@ TRANSITIONS: dict[str, IsoTransitionDefinition] = {
         "router",
         "boring_head",
         "router_tool_to_drill_or_saw",
-        (),
+        ("S027",),
     ),
     "T-XH-002": IsoTransitionDefinition(
         "T-XH-002",
@@ -185,7 +185,7 @@ TRANSITIONS: dict[str, IsoTransitionDefinition] = {
         "boring_head",
         "router",
         "drill_or_saw_to_router_tool",
-        (),
+        ("S028",),
     ),
 }
 
@@ -208,6 +208,10 @@ _RULE_STATUS_TRANSITION_IDS = {
     "generalized_side_to_top_drill_sequence": "T-BH-004",
     "generalized_top_to_slot_milling_sequence": "T-BH-005",
     "generalized_slot_to_top_drill_sequence": "T-BH-006",
+    "generalized_side_to_slot_milling_sequence": "T-BH-007",
+    "generalized_slot_to_side_drill_sequence": "T-BH-008",
+    "generalized_router_to_slot_milling_sequence": "T-XH-001",
+    "generalized_boring_to_router_sequence": "T-XH-002",
 }
 
 

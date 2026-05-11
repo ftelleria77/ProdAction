@@ -10,7 +10,7 @@ import zipfile
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 from .catalog import (
     block_id_for_stage_key,
@@ -369,7 +369,20 @@ def _emit_side_drill_sequence_candidate(
 
     previous_prepare: Optional[StageDifferential] = None
     previous_trace: Optional[StageDifferential] = None
+    isolated_side_transition = len(groups) == 2
     for index, (prepare, trace, reset) in enumerate(groups):
+        next_prepare = groups[index + 1][0] if index + 1 < len(groups) else None
+        plane = str(_change_after(prepare, "trabajo", "plane"))
+        previous_plane = (
+            str(_change_after(previous_prepare, "trabajo", "plane"))
+            if previous_prepare is not None
+            else None
+        )
+        next_plane = (
+            str(_change_after(next_prepare, "trabajo", "plane"))
+            if next_prepare is not None
+            else None
+        )
         _emit_side_drill_prepare(
             lines,
             evaluation,
@@ -384,11 +397,22 @@ def _emit_side_drill_sequence_candidate(
             == _change_after(prepare, "herramienta", "spindle")
         )
         axis = str(_change_after(prepare, "movimiento", "side_axis"))
+        fixed_override = None
+        if (
+            isolated_side_transition
+            and plane in {"Back", "Left"}
+            and (
+                (previous_plane is not None and previous_plane != plane)
+                or (previous_plane is None and next_plane is not None and next_plane != plane)
+            )
+        ):
+            fixed_override = _mirrored_side_fixed(evaluation, prepare, trace)
         _emit_side_drill_trace(
             lines,
             trace,
             emit_mlv_after_etk7=(index == 0),
             combine_rapid_z=same_spindle and axis == "X",
+            fixed_override=fixed_override,
         )
         _emit_side_drill_reset(lines, evaluation, reset, final=(index == len(groups) - 1))
         previous_prepare = prepare
@@ -430,10 +454,13 @@ def _emit_work_sequence_candidate(
     )
 
     previous_group: Optional[_WorkGroup] = None
+    previous_router_group: Optional[_WorkGroup] = None
     for index, group in enumerate(groups):
         next_group = groups[index + 1] if index < len(groups) - 1 else None
-        _emit_planned_work_group(lines, evaluation, group, previous_group, next_group)
+        _emit_planned_work_group(lines, evaluation, group, previous_group, next_group, previous_router_group)
         _emit_planned_outgoing_transition(lines, group, next_group)
+        if group.family in _ROUTER_MILLING_FAMILIES:
+            previous_router_group = group
         previous_group = group
 
     last_family = groups[-1].family
@@ -459,6 +486,7 @@ def _emit_planned_work_group(
     group: _WorkGroup,
     previous_group: Optional[_WorkGroup],
     next_group: Optional[_WorkGroup],
+    previous_router_group: Optional[_WorkGroup],
 ) -> None:
     family = group.family
     prepare = group.prepare
@@ -472,7 +500,16 @@ def _emit_planned_work_group(
 
     if family == "top_drill" and incoming_transition_id == "T-XH-001":
         assert previous_group is not None
-        _emit_router_to_top_drill_transition(lines, previous_group.reset, transition_id=incoming_transition_id)
+        _emit_router_to_top_drill_transition(
+            lines,
+            previous_group.reset,
+            previous_family=previous_group.family,
+            include_face_selection=(
+                previous_group.incoming_transition_id is not None
+                or _profile_to_top_requires_face_selection(evaluation, previous_group)
+            ),
+            transition_id=incoming_transition_id,
+        )
         _emit_top_drill_prepare_after_router(lines, evaluation, prepare, transition_id=incoming_transition_id)
         _emit_top_drill_trace(lines, trace, emit_mlv_after_etk7=False)
         _emit_top_drill_reset(lines, evaluation, reset, final=next_family is None)
@@ -502,11 +539,23 @@ def _emit_planned_work_group(
         _emit_router_to_side_drill_transition(lines, evaluation, previous_group.reset, prepare, transition_id=incoming_transition_id)
         _emit_side_drill_prepare_after_router(lines, evaluation, prepare, multi_side_sequence=next_family == "side_drill", transition_id=incoming_transition_id)
         _emit_side_drill_trace(lines, trace, emit_mlv_after_etk7=False)
-        _emit_side_drill_reset(lines, evaluation, reset, final=next_family not in {"side_drill", "top_drill"})
+        _emit_side_drill_reset(lines, evaluation, reset, final=next_family is None)
     elif family == "side_drill" and previous_family == "top_drill":
-        _emit_side_drill_prepare_after_top(lines, evaluation, prepare, multi_side_sequence=next_family == "side_drill", transition_id=incoming_transition_id)
+        _emit_side_drill_prepare_after_top(lines, evaluation, prepare, multi_side_sequence=next_family is not None, transition_id=incoming_transition_id)
         _emit_side_drill_trace(lines, trace, emit_mlv_after_etk7=False)
-        _emit_side_drill_reset(lines, evaluation, reset, final=next_family not in {"side_drill", "top_drill"})
+        _emit_side_drill_reset(lines, evaluation, reset, final=next_family is None)
+    elif family == "slot_milling" and incoming_transition_id == "T-BH-007":
+        assert previous_group is not None
+        _emit_side_to_slot_milling_transition(lines, evaluation, previous_group.prepare, previous_group.reset, transition_id=incoming_transition_id)
+        _emit_slot_milling_prepare_after_top(lines, prepare, transition_id=incoming_transition_id)
+        _emit_slot_milling_trace(lines, evaluation, trace)
+        _emit_slot_milling_reset(lines, reset, final=next_family is None)
+    elif family == "slot_milling" and incoming_transition_id == "T-XH-001":
+        assert previous_group is not None
+        _emit_router_to_slot_milling_transition(lines, previous_group.reset, transition_id=incoming_transition_id)
+        _emit_slot_milling_prepare_after_top(lines, prepare, transition_id=incoming_transition_id, emit_mlv_after_g17=True)
+        _emit_slot_milling_trace(lines, evaluation, trace)
+        _emit_slot_milling_reset(lines, reset, final=next_family is None)
     elif family == "slot_milling" and incoming_transition_id == "T-BH-005":
         assert previous_group is not None
         _emit_top_to_slot_milling_transition(lines, previous_group.reset, transition_id=incoming_transition_id)
@@ -517,6 +566,12 @@ def _emit_planned_work_group(
         _emit_top_drill_prepare_after_slot(lines, evaluation, prepare, transition_id=incoming_transition_id)
         _emit_top_drill_trace(lines, trace, emit_mlv_after_etk7=False)
         _emit_top_drill_reset(lines, evaluation, reset, final=next_family is None)
+    elif family == "side_drill" and incoming_transition_id == "T-BH-008":
+        assert previous_group is not None
+        _emit_slot_to_side_drill_transition(lines, evaluation, prepare, transition_id=incoming_transition_id)
+        _emit_side_drill_prepare_after_slot(lines, evaluation, prepare, transition_id=incoming_transition_id)
+        _emit_side_drill_trace(lines, trace, emit_mlv_after_etk7=False)
+        _emit_side_drill_reset(lines, evaluation, reset, final=next_family is None)
     elif family == "side_drill" and previous_family == "side_drill":
         assert previous_prepare is not None
         assert previous_trace is not None
@@ -526,7 +581,7 @@ def _emit_planned_work_group(
             prepare,
             previous_prepare=previous_prepare,
             previous_trace=previous_trace,
-            multi_side_sequence=next_family in {"side_drill", "top_drill"},
+            multi_side_sequence=next_family is not None,
             transition_id=incoming_transition_id,
         )
         same_spindle = _change_after(previous_prepare, "herramienta", "spindle") == _change_after(
@@ -539,7 +594,29 @@ def _emit_planned_work_group(
             emit_mlv_after_etk7=False,
             combine_rapid_z=same_spindle and axis == "X",
         )
-        _emit_side_drill_reset(lines, evaluation, reset, final=next_family not in {"side_drill", "top_drill"})
+        _emit_side_drill_reset(lines, evaluation, reset, final=next_family is None)
+    elif family == "line_milling" and incoming_transition_id == "T-XH-002":
+        assert previous_group is not None
+        _emit_boring_to_router_transition(
+            lines,
+            previous_group.family,
+            previous_group.reset,
+            prepare,
+            trace,
+            transition_id=incoming_transition_id,
+        )
+        _emit_line_milling_prepare_after_boring(
+            lines,
+            prepare,
+            previous_family=previous_group.family,
+            previous_prepare=previous_group.prepare,
+            previous_router_prepare=(
+                previous_router_group.prepare if previous_router_group is not None else None
+            ),
+            transition_id=incoming_transition_id,
+        )
+        _emit_line_milling_trace(lines, evaluation, trace)
+        _emit_line_milling_reset(lines, reset)
     elif (
         family == "line_milling"
         and previous_family in _ROUTER_MILLING_FAMILIES
@@ -555,7 +632,16 @@ def _emit_planned_work_group(
         )
         _emit_line_milling_reset(lines, reset)
     else:
-        _emit_work_group(lines, evaluation, family, prepare, trace, reset, previous_family=previous_family)
+        _emit_work_group(
+            lines,
+            evaluation,
+            family,
+            prepare,
+            trace,
+            reset,
+            previous_family=previous_family,
+            next_family=next_family,
+        )
 
 
 def _emit_planned_outgoing_transition(
@@ -599,21 +685,28 @@ def _emit_work_group(
     reset: StageDifferential,
     *,
     previous_family: Optional[str] = None,
+    next_family: Optional[str] = None,
 ) -> None:
     if family == "top_drill":
         _emit_top_drill_prepare(lines, evaluation, prepare)
         _emit_top_drill_trace(lines, trace)
-        _emit_top_drill_reset(lines, evaluation, reset)
+        _emit_top_drill_reset(lines, evaluation, reset, final=next_family is None)
         return
     if family == "side_drill":
-        _emit_side_drill_prepare(lines, evaluation, prepare)
+        _emit_side_drill_prepare(
+            lines,
+            evaluation,
+            prepare,
+            multi_side_sequence=next_family is not None,
+        )
         _emit_side_drill_trace(lines, trace)
-        _emit_side_drill_reset(lines, evaluation, reset)
+        _emit_side_drill_reset(lines, evaluation, reset, final=next_family is None)
         return
     if family == "slot_milling":
         _emit_slot_milling_prepare(lines, evaluation, prepare)
-        _emit_slot_milling_trace(lines, evaluation, trace)
-        _emit_slot_milling_reset(lines, reset)
+        reset_before_lift = next_family in _ROUTER_MILLING_FAMILIES
+        _emit_slot_milling_trace(lines, evaluation, trace, emit_etk7_before_lift=reset_before_lift)
+        _emit_slot_milling_reset(lines, reset, final=next_family is None, emit_etk7=not reset_before_lift)
         return
     if family == "line_milling":
         _emit_line_milling_prepare(
@@ -978,14 +1071,21 @@ def _emit_side_plane_selection(
     plane: str,
     *,
     include_right_frame: bool = True,
+    previous_plane: Optional[str] = None,
     transition_id: Optional[str] = None,
 ) -> None:
     source = _observed_rule_source("side_drill_plane_selection")
-    frame_planes = {"Left", "Back"}
-    if include_right_frame:
-        frame_planes.add("Right")
-    if plane in frame_planes:
-        side_x, side_y = _side_plane_frame_shift(evaluation, plane)
+    frame_plane: Optional[str] = None
+    if plane in {"Left", "Back"}:
+        frame_plane = plane
+    elif plane == "Right" and include_right_frame and (
+        previous_plane is None or previous_plane in {"Back", "Left"}
+    ):
+        frame_plane = "Right"
+    elif plane == "Front" and previous_plane in {"Back", "Left"}:
+        frame_plane = "Right"
+    if frame_plane is not None:
+        side_x, side_y = _side_plane_frame_shift(evaluation, frame_plane)
         header_dz = evaluation.final_state.get("pieza", "header_dz")
         for line in (
             "MLV=1",
@@ -1021,9 +1121,45 @@ def _emit_router_to_top_drill_transition(
     lines: list[ExplainedIsoLine],
     differential: StageDifferential,
     *,
+    previous_family: Optional[str] = None,
+    include_face_selection: bool = False,
     transition_id: Optional[str] = None,
 ) -> None:
     source = _observed_rule_source("router_to_top_drill_transition")
+    transition_lines: list[str] = []
+    if include_face_selection:
+        transition_lines.extend(("?%ETK[8]=1", "G40"))
+    transition_lines.extend((
+        "MLV=0",
+        "G0 G53 Z201.000",
+        "MLV=2",
+        "G61",
+        "MLV=0",
+        "?%ETK[13]=0",
+        "?%ETK[18]=0",
+        "G0 G53 Z201.000",
+        "G64",
+    ))
+    for line in transition_lines:
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Transicion incremental observada entre router y taladro superior.",
+            confidence="confirmed",
+            rule_status="generalized_router_to_top_drill_sequence",
+            transition_id=transition_id,
+        )
+
+
+def _emit_router_to_slot_milling_transition(
+    lines: list[ExplainedIsoLine],
+    differential: StageDifferential,
+    *,
+    transition_id: Optional[str] = None,
+) -> None:
+    source = _observed_rule_source("router_to_slot_milling_transition")
     for line in (
         "?%ETK[8]=1",
         "G40",
@@ -1042,9 +1178,9 @@ def _emit_router_to_top_drill_transition(
             line,
             differential,
             source,
-            "Transicion incremental observada entre router y taladro superior.",
+            "Transicion observada entre router y ranura del cabezal de perforacion.",
             confidence="confirmed",
-            rule_status="generalized_router_to_top_drill_sequence",
+            rule_status="generalized_router_to_slot_milling_sequence",
             transition_id=transition_id,
         )
 
@@ -1064,14 +1200,16 @@ def _emit_top_drill_prepare_after_router(
     shf_z = _change_after(differential, "herramienta", "shf_z")
     source = _change_source(differential, "herramienta", "tool_offset_length")
     tool_number = int(tool_name) if tool_name.isdigit() else tool_name
-    for line in (
+    prepare_lines = [
         "MLV=1",
         f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
         "MLV=2",
         "G17",
-        f"?%ETK[6]={tool_number}",
         "MLV=2",
-    ):
+    ]
+    if tool_number != 1:
+        prepare_lines.insert(4, f"?%ETK[6]={tool_number}")
+    for line in prepare_lines:
         _append(
             lines,
             line,
@@ -2041,6 +2179,149 @@ def _emit_line_milling_prepare(
         )
 
 
+def _emit_boring_to_router_transition(
+    lines: list[ExplainedIsoLine],
+    previous_family: str,
+    boring_reset: StageDifferential,
+    router_prepare: StageDifferential,
+    router_trace: StageDifferential,
+    *,
+    transition_id: Optional[str] = None,
+) -> None:
+    source = _observed_rule_source("boring_to_router_transition")
+    if previous_family == "side_drill":
+        for line in ("?%ETK[8]=1", "G40"):
+            _append(
+                lines,
+                line,
+                boring_reset,
+                source,
+                "Retorno a cara superior antes de cambiar de cabezal lateral a router.",
+                confidence="confirmed",
+                rule_status="generalized_boring_to_router_sequence",
+                transition_id=transition_id,
+            )
+    cleanup_lines: list[str] = []
+    if previous_family == "top_drill" and _router_trace_requires_pre_router_etk7_reset(
+        router_prepare,
+        router_trace,
+    ):
+        cleanup_lines.append("?%ETK[7]=0")
+    if previous_family in {"top_drill", "side_drill"}:
+        cleanup_lines.extend(("?%ETK[17]=0", "M5", "?%ETK[0]=0"))
+    elif previous_family == "slot_milling":
+        cleanup_lines.extend(("?%ETK[17]=0", "M5", "?%ETK[1]=0"))
+    cleanup_lines.extend(
+        (
+            "MLV=0",
+            "G0 G53 Z201.000",
+            "MLV=2",
+            "MLV=0",
+            "G0 G53 Z201.000",
+            "MLV=0",
+            f"T{int(_change_after(router_prepare, 'herramienta', 'tool_number'))}",
+            "SYN",
+            "M06",
+            "G61",
+            "G0 G53 Z201.000",
+            "G64",
+        )
+    )
+    for line in cleanup_lines:
+        _append(
+            lines,
+            line,
+            boring_reset,
+            source,
+            "Transicion observada desde cabezal de perforacion/ranurado hacia router.",
+            confidence="confirmed",
+            rule_status="generalized_boring_to_router_sequence",
+            transition_id=transition_id,
+        )
+
+
+def _router_trace_requires_pre_router_etk7_reset(
+    router_prepare: StageDifferential,
+    router_trace: StageDifferential,
+) -> bool:
+    profile_family = str(_optional_change_after(router_trace, "movimiento", "profile_family", ""))
+    side_of_feature = str(_optional_change_after(router_prepare, "trabajo", "side_of_feature", "Center"))
+    approach_enabled = bool(
+        _optional_change_after(router_prepare, "trabajo", "approach_enabled", False)
+    )
+    retract_enabled = bool(
+        _optional_change_after(router_prepare, "trabajo", "retract_enabled", False)
+    )
+    return profile_family == "OpenPolyline" and (
+        side_of_feature in {"Left", "Right"} or (approach_enabled and retract_enabled)
+    )
+
+
+def _profile_to_top_requires_face_selection(
+    evaluation: IsoStateEvaluation,
+    previous_group: _WorkGroup,
+) -> bool:
+    if previous_group.family != "profile_milling":
+        return False
+    contour_points = _optional_change_after(previous_group.trace, "movimiento", "contour_points", ())
+    if not contour_points:
+        return False
+    first_point = contour_points[0]
+    piece_width = float(evaluation.initial_state.get("pieza", "width"))
+    return abs(float(first_point[1]) - piece_width) <= 0.0005
+
+
+def _emit_line_milling_prepare_after_boring(
+    lines: list[ExplainedIsoLine],
+    differential: StageDifferential,
+    *,
+    previous_family: str,
+    previous_prepare: StageDifferential,
+    previous_router_prepare: Optional[StageDifferential] = None,
+    transition_id: Optional[str] = None,
+) -> None:
+    spindle = _change_after(differential, "herramienta", "spindle")
+    etk9 = _change_after(differential, "salida", "etk_9")
+    etk18 = _change_after(differential, "salida", "etk_18")
+    spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
+    shf_x = _change_after(differential, "herramienta", "shf_x")
+    shf_y = _change_after(differential, "herramienta", "shf_y")
+    shf_z = _change_after(differential, "herramienta", "shf_z")
+    source = _change_source(differential, "herramienta", "tool_offset_length")
+    prepare_lines: list[str] = []
+    previous_tool_number = _optional_change_after(previous_prepare, "herramienta", "spindle", None)
+    if previous_tool_number is None:
+        previous_tool_number = _optional_change_after(previous_prepare, "herramienta", "tool_name", None)
+    if previous_family != "top_drill" or int(previous_tool_number or 0) != 1:
+        prepare_lines.append(f"?%ETK[6]={int(spindle)}")
+    if previous_router_prepare is None or not _same_router_tool(previous_router_prepare, differential):
+        prepare_lines.append(f"?%ETK[9]={int(etk9)}")
+    prepare_lines.extend(
+        (
+            f"?%ETK[18]={int(etk18)}",
+            f"S{int(spindle_speed)}M3",
+            "G17",
+            "MLV=2",
+            "?%ETK[13]=1",
+            "MLV=2",
+            f"SHF[X]={_fmt(shf_x)}",
+            f"SHF[Y]={_fmt(shf_y)}",
+            f"SHF[Z]={_fmt(shf_z)}",
+        )
+    )
+    for line in prepare_lines:
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Preparacion incremental de router despues del cabezal de perforacion.",
+            confidence="confirmed",
+            rule_status="generalized_boring_to_router_sequence",
+            transition_id=transition_id,
+        )
+
+
 def _emit_line_milling_trace(
     lines: list[ExplainedIsoLine],
     evaluation: IsoStateEvaluation,
@@ -2094,6 +2375,10 @@ def _emit_line_milling_trace(
     circle_center_y = _optional_change_after(differential, "movimiento", "circle_center_y", None)
     contour_points = _change_after(differential, "movimiento", "contour_points")
     nominal_points = tuple((float(point[0]), float(point[1])) for point in contour_points)
+    open_polyline_outside_piece = profile_family == "OpenPolyline" and _polyline_leaves_workpiece(
+        evaluation,
+        nominal_points,
+    )
     trajectory_primitives = tuple(_optional_change_after(differential, "movimiento", "trajectory_primitives", ()))
     approach_type = str(
         _optional_change_after(
@@ -2359,7 +2644,7 @@ def _emit_line_milling_trace(
                     current_y,
                     current_z,
                     float(milling_feed),
-                    always_include_z=False,
+                    always_include_z=open_polyline_outside_piece,
                 )
             )
             current_x = float(point.x)
@@ -2884,20 +3169,7 @@ def _emit_line_milling_trace(
         generated = [
             "?%ETK[7]=4",
             compensation_code,
-            (
-                f"G1 X{_fmt(entry_point[0])} Y{_fmt(entry_point[1])} "
-                f"Z{_fmt(security_z)} F{_fmt(plunge_feed)}"
-                if previous_router_trace is not None
-                else _line_milling_motion_line(
-                    entry_point[0],
-                    entry_point[1],
-                    float(security_z),
-                    float(rapid_x),
-                    float(rapid_y),
-                    float(security_z),
-                    float(plunge_feed),
-                )
-            ),
+            f"G1 X{_fmt(entry_point[0])} Y{_fmt(entry_point[1])} Z{_fmt(security_z)} F{_fmt(plunge_feed)}",
         ]
         if approach_type == "Arc":
             entry_center = polyline_lead["entry_center"]
@@ -2936,7 +3208,7 @@ def _emit_line_milling_trace(
                     current_y,
                     current_z,
                     float(milling_feed),
-                    always_include_z=previous_router_trace is not None,
+                    always_include_z=open_polyline_outside_piece,
                 )
             )
             current_x, current_y = point
@@ -2968,20 +3240,7 @@ def _emit_line_milling_trace(
         generated.extend(
             (
                 "G40",
-                (
-                    f"G1 X{_fmt(exit_rapid[0])} Y{_fmt(exit_rapid[1])} "
-                    f"Z{_fmt(security_z)} F{_fmt(milling_feed)}"
-                    if previous_router_trace is not None
-                    else _line_milling_motion_line(
-                        exit_rapid[0],
-                        exit_rapid[1],
-                        float(security_z),
-                        exit_point[0],
-                        exit_point[1],
-                        float(security_z),
-                        float(milling_feed),
-                    )
-                ),
+                f"G1 X{_fmt(exit_rapid[0])} Y{_fmt(exit_rapid[1])} Z{_fmt(security_z)} F{_fmt(milling_feed)}",
             )
         )
         motion_lines = tuple(generated)
@@ -3062,8 +3321,10 @@ def _emit_line_milling_trace(
         current_x = nominal_points[0][0]
         current_y = nominal_points[0][1]
         current_z = float(cut_z)
-        include_cut_z = profile_family.startswith("Line") or float(cut_z) > -float(
-            evaluation.initial_state.get("pieza", "depth")
+        include_cut_z = (
+            profile_family.startswith("Line")
+            or open_polyline_outside_piece
+            or float(cut_z) > -float(evaluation.initial_state.get("pieza", "depth"))
         )
         generated = [
             "?%ETK[7]=4",
@@ -3139,6 +3400,7 @@ def _emit_line_milling_trace(
             center = None
             if profile_family == "Circle" and circle_center_x is not None and circle_center_y is not None:
                 center = (float(circle_center_x), float(circle_center_y))
+            always_include_z = profile_family.startswith("Line") or open_polyline_outside_piece
             generated.append(
                 _profile_toolpath_motion_line(
                     point,
@@ -3148,7 +3410,7 @@ def _emit_line_milling_trace(
                     float(milling_feed),
                     center=center,
                     winding=profile_winding,
-                    always_include_z=profile_family.startswith("Line"),
+                    always_include_z=always_include_z,
                 )
             )
             current_x = float(point.x)
@@ -3242,11 +3504,61 @@ def _emit_top_to_slot_milling_transition(
         )
 
 
+def _emit_side_to_slot_milling_transition(
+    lines: list[ExplainedIsoLine],
+    evaluation: IsoStateEvaluation,
+    side_prepare: StageDifferential,
+    differential: StageDifferential,
+    *,
+    transition_id: Optional[str] = None,
+) -> None:
+    source = _observed_rule_source("side_to_slot_milling_transition")
+    previous_plane = str(_change_after(side_prepare, "trabajo", "plane"))
+    if previous_plane in {"Back", "Left"}:
+        side_x, side_y = _side_plane_frame_shift(evaluation, "Right")
+        header_dz = evaluation.final_state.get("pieza", "header_dz")
+        for line in (
+            "MLV=1",
+            f"SHF[X]={_fmt(side_x)}",
+            f"SHF[Y]={_fmt(side_y)}",
+            f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
+        ):
+            _append(
+                lines,
+                line,
+                differential,
+                source,
+                "Restauracion de marco lateral antes de volver a ranura superior.",
+                confidence="confirmed",
+                rule_status="generalized_side_to_slot_milling_sequence",
+                transition_id=transition_id,
+            )
+    for line in (
+        "?%ETK[8]=1",
+        "G40",
+        "MLV=0",
+        "G0 G53 Z201.000",
+        "MLV=2",
+        "?%ETK[0]=0",
+    ):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Transicion observada entre taladro lateral y ranura superior.",
+            confidence="confirmed",
+            rule_status="generalized_side_to_slot_milling_sequence",
+            transition_id=transition_id,
+        )
+
+
 def _emit_slot_milling_prepare_after_top(
     lines: list[ExplainedIsoLine],
     differential: StageDifferential,
     *,
     transition_id: Optional[str] = None,
+    emit_mlv_after_g17: bool = False,
 ) -> None:
     spindle = _change_after(differential, "herramienta", "spindle")
     spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
@@ -3260,6 +3572,8 @@ def _emit_slot_milling_prepare_after_top(
         f"?%ETK[6]={int(spindle)}",
         "G17",
     ]
+    if emit_mlv_after_g17:
+        prepare_lines.append("MLV=2")
     if etk17 is not None:
         prepare_lines.extend((f"?%ETK[17]={int(etk17)}", f"S{int(spindle_speed)}M3"))
     prepare_lines.extend(
@@ -3345,6 +3659,7 @@ def _emit_slot_milling_trace(
     differential: StageDifferential,
     *,
     emit_transition_exit: bool = False,
+    emit_etk7_before_lift: bool = False,
 ) -> None:
     rapid_x = _change_after(differential, "movimiento", "rapid_x")
     rapid_y = _change_after(differential, "movimiento", "rapid_y")
@@ -3388,6 +3703,8 @@ def _emit_slot_milling_trace(
                 f"G1 Z{_fmt(cut_z)} F{_fmt(milling_feed)}",
             ]
         )
+    if emit_etk7_before_lift:
+        motion_lines.append("?%ETK[7]=0")
     motion_lines.append(f"G0 Z{_fmt(security_z)}")
     for line in motion_lines:
         _append(
@@ -3406,6 +3723,7 @@ def _emit_slot_milling_reset(
     differential: StageDifferential,
     *,
     final: bool = True,
+    emit_etk7: bool = True,
 ) -> None:
     source = _observed_rule_source("slot_milling_reset")
     reset_lines = [
@@ -3414,8 +3732,9 @@ def _emit_slot_milling_reset(
         "VL6=0.000",
         "SVR 0.000",
         "VL7=0.000",
-        "?%ETK[7]=0",
     ]
+    if emit_etk7:
+        reset_lines.append("?%ETK[7]=0")
     if final:
         reset_lines.extend(
             (
@@ -3469,7 +3788,14 @@ def _emit_side_drill_prepare(
         previous_spindle = _change_after(previous_prepare, "herramienta", "spindle")
         previous_mask = _change_after(previous_prepare, "salida", "etk_0_mask")
         if plane != previous_plane:
-            _emit_side_plane_selection(lines, evaluation, differential, plane, transition_id=transition_id)
+            _emit_side_plane_selection(
+                lines,
+                evaluation,
+                differential,
+                plane,
+                previous_plane=previous_plane,
+                transition_id=transition_id,
+            )
         for line in (
             "MLV=1",
             f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
@@ -3843,6 +4169,104 @@ def _emit_side_drill_prepare_after_router(
         )
 
 
+def _emit_slot_to_side_drill_transition(
+    lines: list[ExplainedIsoLine],
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+    *,
+    transition_id: Optional[str] = None,
+) -> None:
+    plane = str(_change_after(differential, "trabajo", "plane"))
+    source = _observed_rule_source("slot_to_side_drill_transition")
+    _emit_side_plane_selection(lines, evaluation, differential, plane, include_right_frame=False, transition_id=transition_id)
+    for line in (
+        "MLV=0",
+        "G0 G53 Z201.000",
+        "MLV=2",
+        "?%ETK[1]=0",
+    ):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Transicion observada entre ranura superior y taladro lateral.",
+            confidence="confirmed",
+            rule_status="generalized_slot_to_side_drill_sequence",
+            transition_id=transition_id,
+        )
+
+
+def _emit_side_drill_prepare_after_slot(
+    lines: list[ExplainedIsoLine],
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+    *,
+    transition_id: Optional[str] = None,
+) -> None:
+    origin_z = evaluation.initial_state.get("pieza", "origin_z")
+    spindle = _change_after(differential, "herramienta", "spindle")
+    mask = _change_after(differential, "salida", "etk_0_mask")
+    shf_x = _change_after(differential, "herramienta", "shf_x")
+    shf_y = _change_after(differential, "herramienta", "shf_y")
+    shf_z = _change_after(differential, "herramienta", "shf_z")
+    source = _change_source(differential, "herramienta", "tool_offset_length")
+    for line in (
+        "MLV=1",
+        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
+        "MLV=2",
+        "G17",
+        f"?%ETK[6]={int(spindle)}",
+        "MLV=2",
+        f"SHF[X]={_fmt(shf_x)}",
+        f"SHF[Y]={_fmt(shf_y)}",
+        f"SHF[Z]={_fmt(shf_z)}",
+    ):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Preparacion incremental de taladro lateral despues de ranura.",
+            confidence="confirmed",
+            rule_status="generalized_slot_to_side_drill_sequence",
+            transition_id=transition_id,
+        )
+    speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
+    if speed_activation is not None:
+        spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
+        _append(
+            lines,
+            f"?%ETK[17]={int(speed_activation.after)}",
+            differential,
+            speed_activation.source,
+            "Activacion de velocidad lateral despues de ranura.",
+            confidence=speed_activation.confidence,
+            rule_status="generalized_slot_to_side_drill_sequence",
+            transition_id=transition_id,
+        )
+        _append(
+            lines,
+            f"S{int(spindle_speed)}M3",
+            differential,
+            source,
+            "Velocidad lateral desde def.tlgx embebido.",
+            confidence="confirmed",
+            rule_status="generalized_slot_to_side_drill_sequence",
+            transition_id=transition_id,
+        )
+    _append(
+        lines,
+        f"?%ETK[0]={int(mask)}",
+        differential,
+        _observed_rule_source("side_drill_prepare"),
+        "Mascara de agregado lateral observada por cara.",
+        confidence="confirmed",
+        rule_status="generalized_slot_to_side_drill_sequence",
+        transition_id=transition_id,
+    )
+
+
 def _emit_side_drill_prepare_after_top(
     lines: list[ExplainedIsoLine],
     evaluation: IsoStateEvaluation,
@@ -3936,11 +4360,16 @@ def _emit_side_drill_trace(
     *,
     emit_mlv_after_etk7: bool = True,
     combine_rapid_z: bool = False,
+    fixed_override: Optional[float] = None,
 ) -> None:
     axis = str(_change_after(differential, "movimiento", "side_axis"))
     rapid = _change_after(differential, "movimiento", "side_rapid")
     cut = _change_after(differential, "movimiento", "side_cut")
-    fixed = _change_after(differential, "movimiento", "side_fixed")
+    fixed = (
+        fixed_override
+        if fixed_override is not None
+        else _change_after(differential, "movimiento", "side_fixed")
+    )
     z = _change_after(differential, "movimiento", "side_z")
     feed = _change_after(differential, "movimiento", "side_feed")
     source = _change_source(differential, "movimiento", "side_iso_rule")
@@ -4491,6 +4920,38 @@ def _side_plane_frame_shift(evaluation: IsoStateEvaluation, plane_name: str) -> 
     if plane_name == "Back":
         return base_x + length, base_y
     return base_x, base_y
+
+
+def _mirrored_side_fixed(
+    evaluation: IsoStateEvaluation,
+    prepare: StageDifferential,
+    trace: StageDifferential,
+) -> float:
+    axis = str(_change_after(prepare, "movimiento", "side_axis"))
+    fixed = float(_change_after(trace, "movimiento", "side_fixed"))
+    span = (
+        float(evaluation.initial_state.get("pieza", "width"))
+        if axis == "X"
+        else float(evaluation.initial_state.get("pieza", "length"))
+    )
+    sign = -1.0 if fixed < 0 else 1.0
+    return sign * (span - abs(fixed))
+
+
+def _polyline_leaves_workpiece(
+    evaluation: IsoStateEvaluation,
+    points: Sequence[tuple[float, float]],
+) -> bool:
+    length = float(evaluation.initial_state.get("pieza", "length"))
+    width = float(evaluation.initial_state.get("pieza", "width"))
+    tolerance = 0.0005
+    return any(
+        x < -tolerance
+        or y < -tolerance
+        or x > length + tolerance
+        or y > width + tolerance
+        for x, y in points
+    )
 
 
 def _side_drill_g53_z(

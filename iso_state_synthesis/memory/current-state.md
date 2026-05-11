@@ -586,8 +586,8 @@ Avance registrado el 2026-05-10:
   `tools/studies/iso/tbh002_top_to_side_fixtures_2026_05_10.py`.
 - Verificacion local: los cinco PGMX evaluan internamente como dos trabajos
   `top_drill -> side_drill` y el emisor candidato marca la entrada lateral con
-  `incoming_transition_id=T-BH-002`. Los ISO `pieza_098..pieza_102` no existen
-  todavia en `P:\USBMIX\ProdAction\ISO`; quedan pendientes de postprocesado.
+  `incoming_transition_id=T-BH-002`. Actualizacion posterior 2026-05-11: los
+  ISO `pieza_098..pieza_102` ya estan disponibles y comparan `5/5` exactos.
 
 Avance registrado el 2026-05-10 para `T-BH-003`:
 
@@ -607,9 +607,8 @@ Avance registrado el 2026-05-10 para `T-BH-003`:
   `tools/studies/iso/tbh003_side_to_side_fixtures_2026_05_10.py`.
 - Verificacion local: los 16 PGMX evaluan como dos grupos `side_drill`; el
   segundo grupo queda con `incoming_transition_id=T-BH-003`; no hay warnings.
-  Los ISO `pieza_103..pieza_118` no existen todavia en
-  `P:\USBMIX\ProdAction\ISO`; quedan pendientes de postprocesado manual en
-  Maestro/CNC para analisis y codificacion.
+  Actualizacion posterior 2026-05-11: los ISO `pieza_103..pieza_118` ya estan
+  disponibles y comparan `16/16` exactos.
 
 Avance registrado el 2026-05-10 para ampliar `T-BH-001`:
 
@@ -627,9 +626,8 @@ Avance registrado el 2026-05-10 para ampliar `T-BH-001`:
   `tools/studies/iso/tbh001_same_tool_fixtures_2026_05_10.py`.
 - Verificacion local: todos los PGMX evaluan como grupos `top_drill`; las
   entradas posteriores a la primera quedan con `incoming_transition_id=T-BH-001`;
-  no hay warnings. Los ISO `pieza_119..pieza_122` no existen todavia en
-  `P:\USBMIX\ProdAction\ISO`; quedan pendientes de postprocesado manual en
-  Maestro/CNC para analisis y cierre de la subregla.
+  no hay warnings. Actualizacion posterior 2026-05-11: los ISO
+  `pieza_119..pieza_122` ya estan disponibles y comparan `4/4` exactos.
 
 Avance registrado el 2026-05-11 para `T-BH-004`:
 
@@ -648,10 +646,131 @@ Avance registrado el 2026-05-11 para `T-BH-004`:
   `tools/studies/iso/tbh004_side_to_top_fixtures_2026_05_11.py`.
 - Verificacion local: los 28 PGMX evaluan como dos grupos `side_drill ->
   top_drill`; el segundo grupo queda con `incoming_transition_id=T-BH-004`; no
-  hay warnings. El emisor candidato genera ISO para los 28 casos. Los ISO
-  `pieza_123..pieza_150` no existen todavia en `P:\USBMIX\ProdAction\ISO`;
-  quedan pendientes de postprocesado manual en Maestro/CNC para analisis y
-  cierre de la matriz.
+  hay warnings. El emisor candidato genera ISO para los 28 casos. Actualizacion
+  posterior 2026-05-11: los ISO `pieza_123..pieza_150` ya estan disponibles y
+  comparan `28/28` exactos.
+
+Cierre registrado el 2026-05-11 para `Pieza_098..150`:
+
+- Ya estan disponibles los ISO Maestro `pieza_098..pieza_150.iso` en
+  `P:\USBMIX\ProdAction\ISO`.
+- Se cerraron contra Maestro las tandas pendientes:
+  - `T-BH-002` (`top drill -> side drill`): `Pieza_098..102`, `5/5` exactos.
+  - `T-BH-003` (`side drill -> side drill`): `Pieza_103..118`, `16/16`
+    exactos.
+  - `T-BH-001` sin cambio de herramienta: `Pieza_119..122`, `4/4` exactos.
+  - `T-BH-004` (`side drill -> top drill`): `Pieza_123..150`, `28/28`
+    exactos.
+- El emisor ahora usa reset parcial del cabezal de perforacion/ranurado en
+  transiciones mixtas internas: no cierra con `G61`, `?%ETK[0]=0`,
+  `?%ETK[17]=0`, `G4F1.200`, `M5` ni `D0` cuando el siguiente trabajo sigue en
+  el mismo cabezal.
+- Para `T-BH-003` aislado, el marco lateral se restaura segun cara saliente y
+  cara entrante; las transiciones aisladas de dos laterales hacia o desde
+  `Back/Left` usan la cota fija espejo necesaria para reproducir Maestro sin
+  alterar bloques laterales largos.
+- Validacion de regresion en ese punto: corpus raiz `Pieza*.pgmx` con ISO
+  Maestro disponible quedo `157/157` exacto; `Cocina` se conservo en `59/84`
+  exactos.
+
+Avance registrado el 2026-05-11 para `T-BH-007` y `T-BH-008`:
+
+- Se preparo la tanda controlada `Pieza_151..Pieza_158` para estudiar las
+  transiciones internas pendientes con sierra vertical:
+  - `T-BH-007` (`side drill -> top slot`): `Pieza_151..154`, una por cada cara
+    lateral `Front/Right/Back/Left`, con cambio esperado `6000 -> 4000`.
+  - `T-BH-008` (`top slot -> side drill`): `Pieza_155..158`, una por cada cara
+    lateral `Front/Right/Back/Left`, con cambio esperado `4000 -> 6000`.
+- Los PGMX quedaron generados en `S:\Maestro\Projects\ProdAction\ISO` y el
+  manifiesto en
+  `S:\Maestro\Projects\ProdAction\ISO\Pieza_151_158_TBH007_008_manifest.csv`.
+- Se agrego el generador reproducible
+  `tools/studies/iso/tbh007_008_side_slot_fixtures_2026_05_11.py`.
+- Verificacion local: `Pieza_151..154` evaluan como
+  `side_drill -> slot_milling` con `incoming_transition_id=T-BH-007`;
+  `Pieza_155..158` evaluan como `slot_milling -> side_drill` con
+  `incoming_transition_id=T-BH-008`; no hay warnings y el emisor candidato
+  genera ISO preliminar para los 8 casos. Actualizacion posterior 2026-05-11:
+  los ISO `pieza_151..pieza_158` ya estan disponibles y comparan `8/8`
+  exactos.
+
+Avance registrado el 2026-05-11 para `T-XH-001` y `T-XH-002`:
+
+- Se preparo la tanda controlada `Pieza_159..Pieza_164` para estudiar cambios
+  entre cabezal router y cabezal de perforacion/ranurado:
+  - `T-XH-001` (`router -> boring head`): `Pieza_159` (`line_milling ->
+    top_drill`), `Pieza_160` (`line_milling -> side_drill`) y `Pieza_161`
+    (`line_milling -> slot_milling`).
+  - `T-XH-002` (`boring head -> router`): `Pieza_162` (`top_drill ->
+    line_milling`), `Pieza_163` (`side_drill -> line_milling`) y `Pieza_164`
+    (`slot_milling -> line_milling`).
+- Los PGMX quedaron generados en `S:\Maestro\Projects\ProdAction\ISO` y el
+  manifiesto en
+  `S:\Maestro\Projects\ProdAction\ISO\Pieza_159_164_TXH001_002_manifest.csv`.
+- Se agrego el generador reproducible
+  `tools/studies/iso/txh001_002_router_boring_fixtures_2026_05_11.py`.
+- Verificacion local: las piezas evaluan como dos grupos con el
+  `incoming_transition_id` esperado (`T-XH-001` en `Pieza_159..161` y
+  `T-XH-002` en `Pieza_162..164`); no hay warnings y el emisor candidato
+  genera ISO preliminar para los 6 casos. Actualizacion posterior 2026-05-11:
+  los ISO `pieza_159..pieza_164` ya estan disponibles y comparan `6/6`
+  exactos.
+
+Cierre registrado el 2026-05-11 para `Pieza_151..164`:
+
+- Ya estan disponibles los ISO Maestro `pieza_151..pieza_164.iso` en
+  `P:\USBMIX\ProdAction\ISO`.
+- Se cerraron contra Maestro las cuatro transiciones pendientes:
+  - `T-BH-007` (`side drill -> top slot`): `Pieza_151..154`, `4/4` exactos.
+  - `T-BH-008` (`top slot -> side drill`): `Pieza_155..158`, `4/4` exactos.
+  - `T-XH-001` (`router -> boring head`): `Pieza_159..161`, `3/3` exactos.
+  - `T-XH-002` (`boring head -> router`): `Pieza_162..164`, `3/3` exactos.
+- Reglas nuevas codificadas:
+  - `side drill -> top slot` conserva el cabezal compartido, emite pausa
+    lateral si viene otro trabajo, retorna a Top con reset parcial y, desde
+    `Back/Left`, restaura marco lateral derecho antes de `?%ETK[8]=1`.
+  - `top slot -> side drill` usa reset parcial de sierra, limpia `?%ETK[1]` y
+    prepara lateral sin cierre completo del cabezal.
+  - `router -> boring head` distingue `line_milling` inicial de router previo
+    encadenado: la seleccion `?%ETK[8]=1/G40` se conserva cuando el router
+    saliente ya venia de otra transicion router, pero no en el fixture aislado
+    `line_milling -> top_drill`.
+  - `boring head -> router` emite limpieza segun familia saliente y preparacion
+    router incremental sin recomponer el marco completo.
+- Validacion de regresion actualizada: corpus raiz `Pieza*.pgmx` queda
+  `171/171` exacto; `Cocina` mejora a `61/84` exactos.
+
+Avance registrado el 2026-05-11 para `T-XH-002` con `OpenPolyline`:
+
+- Se volco al emisor el cierre de la serie controlada `Pieza_192..208`, que
+  aisla `top_drill -> OpenPolyline E001` con router previo opcional,
+  compensacion `Right/Left/Center`, approach/retract `Arc Down/Up` y controles
+  sin approach/retract.
+- El doble `?%ETK[7]=0` antes de volver al router quedo modelado como regla de
+  entrada a `OpenPolyline`: se emite cuando `SideOfFeature` es `Left/Right` o
+  cuando `Center` mantiene approach/retract activo; no se emite para `Center`
+  sin approach/retract.
+- La preparacion `boring head -> router` ahora distingue:
+  - `?%ETK[6]=1` se emite al volver de brocas superiores distintas de `001`;
+  - `?%ETK[9]=n` se omite cuando un router previo ya habia seleccionado la
+    misma herramienta;
+  - el orden confirmado es `?%ETK[6]=1`, luego `?%ETK[9]=n` cuando ambas lineas
+    aplican.
+- La traza `OpenPolyline` ahora separa compensacion CNC de trayectoria:
+  `Right -> G42 ... G40`, `Left -> G41 ... G40`, `Center` sin
+  `G41/G42/G40`. Las `OpenPolyline` que salen del rectangulo nominal de la
+  pieza repiten `Z` en los segmentos de corte; las internas conservan `Z`
+  modal.
+- Se ajusto la seleccion `?%ETK[8]=1/G40` en `router -> top_drill` para no
+  romper la tanda controlada `Pieza_192..208` y conservar el caso real de
+  perfil de Cocina que empieza sobre el borde superior.
+- Validacion especifica: `Pieza_192..208` compara `17/17` exacto contra
+  Maestro.
+- Validacion de regresion raiz: `Pieza*.pgmx` con ISO disponible queda
+  `210/215` exacto. Los residuales son `Pieza_181..185`, con diferencias
+  geometricas de 1 mm en una tanda de perfil previa a este cierre.
+- Validacion de `Cocina` tras este avance: `47/84` exactos, con diferencias
+  abiertas fuera de la regla controlada de `OpenPolyline`.
 
 ## Preguntas Abiertas
 
@@ -719,12 +838,27 @@ Avance registrado el 2026-05-11 para `T-BH-004`:
 
 - Mantener como hipotesis pendientes las repeticiones `ETK[8]/G40` y resets
   `G61/G64/SYN` hasta que una variante nueva los explique.
-- El corpus `Pieza*` disponible quedo completo: 105/105 exactos. El siguiente
-  pendiente ya no es cerrar piezas sueltas de este corpus, sino ampliar la
-  evidencia con nuevas matrices controladas y seguir separando reglas
-  observadas de hipotesis de maquina.
-- `Cocina` quedo en `59/84` exactos. Pendiente inmediato actualizado: atacar
-  el siguiente lateral con diferencias, empezando por
-  `mod 1 - bajo 1 puerta IZQ/Lado_izquierdo.pgmx` o por el primer caso de la
-  lista del barrido actual. Mantener el enfoque de regla de transicion y
-  ordenamiento, no correcciones aisladas de una linea.
+- La serie controlada `Pieza_192..208` quedo cerrada `17/17` exacta para
+  `T-XH-002` con `OpenPolyline`, compensacion `Right/Left/Center` y
+  approach/retract activo o deshabilitado.
+- El corpus `Pieza*` con ISO Maestro disponible queda `210/215` exacto; quedan
+  fuera `Pieza_181..185`, que pertenecen a una diferencia geometrica de perfil
+  previa a este cierre.
+- `Cocina` quedo en `47/84` exactos en la validacion posterior a este avance,
+  por debajo del estado previo `61/84`. Diagnostico para la proxima tarea:
+  `32/37` diferencias actuales tienen la firma de seleccion/cierre de cara
+  antes del reset (`?%ETK[8]=1` y/o `G40`) en la transicion
+  `router/profile_milling -> top_drill`; el candidato salta directo al
+  reset/limpieza (`?%ETK[17]=0`, `MLV=0`, etc.).
+- Siguiente tarea a ejecutar: aislar esa transicion como regla de estado, no
+  como correccion puntual. Empezar por
+  `mod 1 - bajo 1 puerta IZQ/Lado_izquierdo.pgmx` y contrastar con un caso
+  compacto como `mod 1 - bajo 1 puerta IZQ/Puertita_izquierda.pgmx`.
+  Comparar contra la serie sintetica `Pieza_193..198`, donde Maestro no emite
+  esa seleccion de cara, para definir la condicion que distingue Cocina real
+  de los perfiles sinteticos ya cerrados.
+- Criterio de cierre de la tarea: recuperar como minimo el piso previo de
+  `Cocina` (`61/84` exactos), mantener `Pieza_192..208` en `17/17` exactos y
+  conservar el estado general de `Pieza*` (`210/215`, con `Pieza_181..185`
+  fuera por la diferencia geometrica previa). Despues de eso, continuar con
+  los `5` fallos restantes que no tienen firma `ETK[8]/G40`.
