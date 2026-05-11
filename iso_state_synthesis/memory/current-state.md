@@ -3,7 +3,7 @@
 Nueva memoria de trabajo para redisenar la generacion ISO desde cero sin
 arrastrar la arquitectura por patrones de `iso_generation/`.
 
-Ultima actualizacion: 2026-05-09
+Ultima actualizacion: 2026-05-11
 
 ## Alcance
 
@@ -630,6 +630,28 @@ Avance registrado el 2026-05-10 para ampliar `T-BH-001`:
   no hay warnings. Los ISO `pieza_119..pieza_122` no existen todavia en
   `P:\USBMIX\ProdAction\ISO`; quedan pendientes de postprocesado manual en
   Maestro/CNC para analisis y cierre de la subregla.
+
+Avance registrado el 2026-05-11 para `T-BH-004`:
+
+- Se analizo la matriz completa `side drill -> top drill`: cuatro caras
+  laterales (`Front`, `Right`, `Back`, `Left`) por siete brocas verticales
+  superiores (`001..007`), total 28 variantes.
+- Las brocas laterales salen siempre de velocidad `6000`; las llegadas a
+  `001`, `005`, `006` y `007` conservan `6000`, mientras que las llegadas a
+  `002`, `003` y `004` prueban cambio `6000 -> 4000`.
+- Se preparo la tanda `Pieza_123..Pieza_150`: `Front/Right/Back/Left` hacia
+  `001`, `002`, `003`, `004`, `005`, `006` y `007`.
+- Los PGMX quedaron generados en `S:\Maestro\Projects\ProdAction\ISO` y el
+  manifiesto en
+  `S:\Maestro\Projects\ProdAction\ISO\Pieza_123_150_TBH004_manifest.csv`.
+- Se agrego el generador reproducible
+  `tools/studies/iso/tbh004_side_to_top_fixtures_2026_05_11.py`.
+- Verificacion local: los 28 PGMX evaluan como dos grupos `side_drill ->
+  top_drill`; el segundo grupo queda con `incoming_transition_id=T-BH-004`; no
+  hay warnings. El emisor candidato genera ISO para los 28 casos. Los ISO
+  `pieza_123..pieza_150` no existen todavia en `P:\USBMIX\ProdAction\ISO`;
+  quedan pendientes de postprocesado manual en Maestro/CNC para analisis y
+  cierre de la matriz.
 
 ## Preguntas Abiertas
 
