@@ -838,27 +838,44 @@ Avance registrado el 2026-05-11 para `T-XH-002` con `OpenPolyline`:
 
 - Mantener como hipotesis pendientes las repeticiones `ETK[8]/G40` y resets
   `G61/G64/SYN` hasta que una variante nueva los explique.
-- La serie controlada `Pieza_192..208` quedo cerrada `17/17` exacta para
-  `T-XH-002` con `OpenPolyline`, compensacion `Right/Left/Center` y
-  approach/retract activo o deshabilitado.
-- El corpus `Pieza*` con ISO Maestro disponible queda `210/215` exacto; quedan
-  fuera `Pieza_181..185`, que pertenecen a una diferencia geometrica de perfil
-  previa a este cierre.
-- `Cocina` quedo en `47/84` exactos en la validacion posterior a este avance,
-  por debajo del estado previo `61/84`. Diagnostico para la proxima tarea:
-  `32/37` diferencias actuales tienen la firma de seleccion/cierre de cara
-  antes del reset (`?%ETK[8]=1` y/o `G40`) en la transicion
-  `router/profile_milling -> top_drill`; el candidato salta directo al
-  reset/limpieza (`?%ETK[17]=0`, `MLV=0`, etc.).
-- Siguiente tarea a ejecutar: aislar esa transicion como regla de estado, no
-  como correccion puntual. Empezar por
-  `mod 1 - bajo 1 puerta IZQ/Lado_izquierdo.pgmx` y contrastar con un caso
-  compacto como `mod 1 - bajo 1 puerta IZQ/Puertita_izquierda.pgmx`.
-  Comparar contra la serie sintetica `Pieza_193..198`, donde Maestro no emite
-  esa seleccion de cara, para definir la condicion que distingue Cocina real
-  de los perfiles sinteticos ya cerrados.
-- Criterio de cierre de la tarea: recuperar como minimo el piso previo de
-  `Cocina` (`61/84` exactos), mantener `Pieza_192..208` en `17/17` exactos y
-  conservar el estado general de `Pieza*` (`210/215`, con `Pieza_181..185`
-  fuera por la diferencia geometrica previa). Despues de eso, continuar con
-  los `5` fallos restantes que no tienen firma `ETK[8]/G40`.
+- Avance registrado el 2026-05-12: se recupero la regla de seleccion de cara
+  superior en las transiciones desde perfiles router reales hacia taladro
+  superior, y en el retorno posterior desde taladro superior a router cuando
+  hereda esa misma condicion del perfil previo. La condicion observada que no
+  rompe las piezas sinteticas es: perfil cerrado sin desplazamiento extra de
+  salida (`leadout == exit`) o primer punto del contorno sobre el borde superior
+  de pieza. La serie sintetica `Pieza_190/191/193/198` queda protegida porque
+  conserva el desplazamiento extra de salida donde Maestro no emite
+  `?%ETK[8]=1/G40`.
+- Validacion posterior al avance 2026-05-12:
+  - `Cocina`: `65/84` exactos; se supera el piso previo `61/84`.
+  - Corpus raiz `Pieza*`: `210/215` exactos; siguen fuera solo
+    `Pieza_181..185` por la diferencia geometrica previa.
+  - Controles puntuales exactos: `mod 1 - bajo 1 puerta IZQ/Puertita_izquierda`,
+    `Pieza_190`, `Pieza_191`, `Pieza_193` y `Pieza_198`.
+- Analisis manual posterior, sin tocar codigo: los `19` residuales de `Cocina`
+  se agrupan en cinco frentes, no en una sola transicion:
+  - `9` casos de ordenamiento de taladros superiores: aplicar/estudiar
+    `B-BH-001/002/003`, `T-XH-001` y `T-BH-001`. Maestro mezcla brocas
+    `005/002/001` por recorrido espacial; el candidato todavia conserva un
+    orden que a veces prioriza herramienta o recorrido incorrecto. Punto de
+    decision: `iso_state_synthesis/pgmx_source.py::_ordered_top_drill_block`.
+  - `7` casos de traza router incremental: aplicar/estudiar `B-RH-002` con
+    `T-RH-001`. En algunas entradas sobra `MLV=2` tras `G17`; en otras falta
+    repetir `Z` en el tramo largo de corte. Punto de decision:
+    `iso_state_synthesis/emitter.py::_emit_line_milling_trace`.
+  - `1` caso de ordenamiento de laterales: aplicar/estudiar `B-BH-005` y
+    posiblemente `T-BH-003`. Maestro no ejecuta todo `Back` y luego todo
+    `Front`; parte el bloque para optimizar recorrido. Punto de decision:
+    `iso_state_synthesis/pgmx_source.py::_ordered_side_drill_block`.
+  - `1` caso de traza de sierra vertical: aplicar/estudiar `B-BH-007`; Maestro
+    hace una salida con `G0 Z20` donde el candidato la mantiene como `G1`.
+    Punto de decision: `iso_state_synthesis/emitter.py::_emit_slot_milling_trace`.
+  - `1` caso `side_drill -> router`: aplicar/estudiar `T-XH-002`; Maestro
+    restaura marco lateral antes de volver a Top/router, mientras el candidato
+    selecciona Top demasiado temprano. Punto de decision:
+    `iso_state_synthesis/emitter.py::_emit_boring_to_router_transition`.
+- Proximo paso recomendado: no avanzar automaticamente. Primero armar una mini
+  tanda aislada de ordenamiento `top_drill` mixto (`005/002/001`), con perfil
+  router previo y sin perfil router previo. Si Maestro confirma la hipotesis,
+  aplicar una regla reusable de ordenamiento antes de tocar el emisor.

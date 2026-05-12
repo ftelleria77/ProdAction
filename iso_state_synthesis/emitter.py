@@ -603,6 +603,10 @@ def _emit_planned_work_group(
             previous_group.reset,
             prepare,
             trace,
+            include_face_selection=(
+                previous_group.family == "top_drill"
+                and _prior_profile_to_top_requires_face_selection(evaluation, previous_router_group)
+            ),
             transition_id=incoming_transition_id,
         )
         _emit_line_milling_prepare_after_boring(
@@ -2186,6 +2190,7 @@ def _emit_boring_to_router_transition(
     router_prepare: StageDifferential,
     router_trace: StageDifferential,
     *,
+    include_face_selection: bool = False,
     transition_id: Optional[str] = None,
 ) -> None:
     source = _observed_rule_source("boring_to_router_transition")
@@ -2207,6 +2212,8 @@ def _emit_boring_to_router_transition(
         router_trace,
     ):
         cleanup_lines.append("?%ETK[7]=0")
+    if include_face_selection:
+        cleanup_lines.extend(("?%ETK[8]=1", "G40"))
     if previous_family in {"top_drill", "side_drill"}:
         cleanup_lines.extend(("?%ETK[17]=0", "M5", "?%ETK[0]=0"))
     elif previous_family == "slot_milling":
@@ -2266,9 +2273,33 @@ def _profile_to_top_requires_face_selection(
     contour_points = _optional_change_after(previous_group.trace, "movimiento", "contour_points", ())
     if not contour_points:
         return False
+    exit_x = _optional_change_after(previous_group.trace, "movimiento", "exit_x", None)
+    exit_y = _optional_change_after(previous_group.trace, "movimiento", "exit_y", None)
+    leadout_x = _optional_change_after(previous_group.trace, "movimiento", "leadout_x", None)
+    leadout_y = _optional_change_after(previous_group.trace, "movimiento", "leadout_y", None)
+    if (
+        exit_x is not None
+        and exit_y is not None
+        and leadout_x is not None
+        and leadout_y is not None
+        and abs(float(leadout_x) - float(exit_x)) <= 0.0005
+        and abs(float(leadout_y) - float(exit_y)) <= 0.0005
+    ):
+        return True
     first_point = contour_points[0]
     piece_width = float(evaluation.initial_state.get("pieza", "width"))
     return abs(float(first_point[1]) - piece_width) <= 0.0005
+
+
+def _prior_profile_to_top_requires_face_selection(
+    evaluation: IsoStateEvaluation,
+    previous_router_group: Optional[_WorkGroup],
+) -> bool:
+    return (
+        previous_router_group is not None
+        and previous_router_group.family == "profile_milling"
+        and _profile_to_top_requires_face_selection(evaluation, previous_router_group)
+    )
 
 
 def _emit_line_milling_prepare_after_boring(

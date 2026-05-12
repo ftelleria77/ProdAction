@@ -113,8 +113,8 @@ Convencion de ids:
 | `T-BH-006` | internal boring head | top slot -> top drill | cambia de sierra vertical a broca vertical | cabezal compartido | reset parcial de slot: `D0`, offsets a `0`, `?%ETK[7]=0`, `?%ETK[1]=0`; luego preparacion top drill sin cierre final | `S018` |
 | `T-BH-007` | internal boring head | side drill -> top slot | cambia de broca horizontal a sierra vertical | cabezal compartido | reset lateral parcial, retorno a Top, `?%ETK[0]=0`, preparacion sierra con cambio `6000 -> 4000`; `Back/Left` restauran marco lateral derecho antes de Top | `S025` |
 | `T-BH-008` | internal boring head | top slot -> side drill | cambia de sierra vertical a broca horizontal | cabezal compartido | reset parcial de sierra, seleccion lateral, `?%ETK[1]=0`, preparacion lateral con cambio `4000 -> 6000` | `S026` |
-| `T-XH-001` | switching heads | router -> boring head | cambia de fresa a broca o sierra | movimiento conjunto de cabezales, no el motor/herramienta router | reset router saliente; preparar herramienta del cabezal de perforacion/ranurado entrante; la seleccion `?%ETK[8]=1/G40` depende de si el router ya venia encadenado | `S027` |
-| `T-XH-002` | switching heads | boring head -> router | cambia de broca o sierra a fresa | movimiento conjunto de cabezales, no el motor compartido de perforacion | limpieza segun familia saliente y preparacion router incremental sin recomponer marco completo; al entrar a `OpenPolyline` aplica reglas de reset, herramienta router y compensacion segun `S029/S030` | `S028`, `S029`, `S030` |
+| `T-XH-001` | switching heads | router -> boring head | cambia de fresa a broca o sierra | movimiento conjunto de cabezales, no el motor/herramienta router | reset router saliente; preparar herramienta del cabezal de perforacion/ranurado entrante; la seleccion `?%ETK[8]=1/G40` depende del perfil router saliente y de su salida geometrica | `S027`, `S031` |
+| `T-XH-002` | switching heads | boring head -> router | cambia de broca o sierra a fresa | movimiento conjunto de cabezales, no el motor compartido de perforacion | limpieza segun familia saliente y preparacion router incremental sin recomponer marco completo; al entrar a `OpenPolyline` aplica reglas de reset, herramienta router y compensacion segun `S029/S030`; puede heredar seleccion Top desde el perfil router previo segun `S031` | `S028`, `S029`, `S030`, `S031` |
 
 ### Evidencia Controlada Cerrada
 
@@ -130,12 +130,13 @@ Convencion de ids:
 | `T-XH-002` | `Pieza_162..164` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_159_164_TXH001_002_manifest.csv` | `tools/studies/iso/txh001_002_router_boring_fixtures_2026_05_11.py` | `3/3` exactos contra `pieza_162..164.iso`; evidencia `S028` |
 | `T-XH-002` OpenPolyline | `Pieza_192..208` | `S:\Maestro\Projects\ProdAction\ISO\Pieza_192_198_TXH_open_profile_reentry_manifest.csv`; `S:\Maestro\Projects\ProdAction\ISO\Pieza_199_205_TXH_open_profile_center_reentry_manifest.csv`; `S:\Maestro\Projects\ProdAction\ISO\Pieza_206_208_TXH_top_open_profile_direct_manifest.csv` | `tools/studies/iso/txh_open_profile_reentry_fixtures_2026_05_11.py`; `tools/studies/iso/txh_open_profile_center_reentry_fixtures_2026_05_11.py`; `tools/studies/iso/txh_top_open_profile_direct_fixtures_2026_05_11.py` | `17/17` exactos contra `pieza_192..208.iso`; evidencia `S029/S030` |
 
-Validacion de regresion posterior a `S029/S030`: la serie controlada
+Validacion de regresion posterior a `S031`: la serie controlada
 `Pieza_192..208` queda `17/17` exacta. El corpus raiz `Pieza*.pgmx` con ISO
 Maestro disponible queda `210/215` exacto; los cinco residuales son
 `Pieza_181..185`, con diferencias geometricas de 1 mm en perfil previas a esta
-regla. El corpus `Cocina` queda `47/84` exactos y mantiene diferencias abiertas
-fuera del cierre `OpenPolyline` controlado.
+regla. El corpus `Cocina` queda `65/84` exactos; los residuales ya no son la
+firma masiva `?%ETK[8]/G40`, sino diferencias de ordenamiento, herramienta,
+traza o laterales.
 
 ## Inventario De Parametros
 
@@ -282,6 +283,7 @@ ISO, valores y secuencias observadas. Para el modelo reutilizable, usar
 | `S028` | `Pieza_162..164` | boring head -> router | top drill, side drill o slot activo | `?%ETK[17]`, `M5`, `?%ETK[0]`/`?%ETK[1]`, `T4`, `SYN`, `M06`, `G61/G64`, `?%ETK[9]`, `?%ETK[18]`, `?%ETK[13]` | cabezal de perforacion/ranurado activo | router `E004` activo | `3/3` exactos; Maestro limpia el estado saliente segun familia, hace cambio fisico a router y prepara `E004` incrementalmente sin recomponer `%Or`/marco completo; en `slot -> router`, `?%ETK[7]=0` se emite antes del lift final de la ranura | Evidencia especifica de `T-XH-002`: cambio de cabezal de perforacion/ranurado a router. |
 | `S029` | `Pieza_192..208` | top drill -> router OpenPolyline | taladro superior activo tras reset corto o cierre de cadena superior | `?%ETK[7]`, `?%ETK[6]`, `?%ETK[9]`, `?%ETK[17]`, `M5`, `?%ETK[0]` | cabezal de perforacion activo; router anterior opcional | router `E001` preparado | si el router entrante es `OpenPolyline`, Maestro duplica `?%ETK[7]=0` antes de `?%ETK[17]=0/M5` cuando `SideOfFeature` es `Left/Right` o cuando `Center` tiene approach/retract activo; no duplica en `Center` sin approach/retract; `?%ETK[6]=1` se emite si la broca superior saliente no es `001`; `?%ETK[9]=n` se omite si el router anterior ya habia seleccionado la misma herramienta | Cierra subcasos de `T-XH-002` para retorno desde taladro superior a router `OpenPolyline`. |
 | `S030` | `Pieza_192..208` | traza router OpenPolyline | router `E001` preparado | `G41/G42/G40`, `Z` modal en segmentos | compensacion segun PGMX | traza ejecutada | `SideOfFeature=Right` emite `G42 ... G40`; `Left` emite `G41 ... G40`; `Center` no emite `G41/G42/G40` dentro de la traza; en `OpenPolyline` que sale del rectangulo nominal de la pieza Maestro repite `Z` en los segmentos de corte, mientras que las polilineas internas conservan `Z` modal | Regla de compensacion y modalidad de coordenadas para `OpenPolyline`, independiente de la transicion de cabezal. |
+| `S031` | `Cocina` + controles `Pieza_190/191/193/198` | profile milling -> top drill; top drill -> router posterior | router `E001` de perfil cerrado; posible cadena superior intermedia | `?%ETK[8]=1`, `G40`, `?%ETK[7]=0` | router perfil reseteado o taladro superior activo tras cadena | cara Top seleccionada antes de preparar BH o antes de volver al router | Maestro emite `?%ETK[8]=1/G40` al salir de perfiles cerrados reales cuando la salida no agrega desplazamiento extra (`leadout == exit`) o cuando el primer punto del contorno esta sobre el borde superior de pieza; en retornos `top drill -> router OpenPolyline`, esa seleccion se hereda del perfil previo y va despues del reset extra `?%ETK[7]=0`; `Pieza_190/191/193/198` confirman que no debe emitirse cuando el perfil sintetico conserva el desplazamiento extra de salida | Generaliza la seleccion Top que recupera `Cocina` a `65/84` sin romper el corpus raiz `Pieza*` (`210/215`). |
 
 ## Significados Pendientes
 
