@@ -879,3 +879,79 @@ Avance registrado el 2026-05-11 para `T-XH-002` con `OpenPolyline`:
   tanda aislada de ordenamiento `top_drill` mixto (`005/002/001`), con perfil
   router previo y sin perfil router previo. Si Maestro confirma la hipotesis,
   aplicar una regla reusable de ordenamiento antes de tocar el emisor.
+- Avance 2026-05-13: se agrego la mini tanda reproducible de ordenamiento
+  `top_drill` mixto en
+  `tools/studies/iso/top_drill_ordering_fixtures_2026_05_13.py` y la ficha
+  `iso_state_synthesis/experiments/009_top_drill_ordering_fixtures.md`.
+  Genera `Pieza_209..214` con huecos `005/002/001`, orden fuente mezclado o
+  inverso, y contextos sin router previo, con linea previa y con perfil previo.
+  El script tambien puede analizar `pieza_209..214.iso` cuando Maestro los haya
+  postprocesado. No se debe tocar `_ordered_top_drill_block` hasta leer esa
+  comparacion.
+- Resultado 2026-05-13 de `Pieza_209..214`: Maestro conservo el orden fuente
+  del `.pgmx` en `6/6` casos. En `209..210`, el candidato ya coincidia porque
+  no reordena archivos solo `top_drill`; en `211..214`, el candidato actual
+  falla porque reordena el bloque superior al haber router previo. Se probo
+  localmente preservar orden fuente de forma global: la mini tanda quedaba
+  `6/6`, la matriz raiz `Pieza*` quedaba `217/222` con residuales `181..185`,
+  pero `Cocina` caia a `30/84`. Ese cambio no se conserva. La regla queda
+  abierta. Estado estable posterior: `Pieza* 213/222` exactos, con residuales
+  `181..185` y `211..214`; `Cocina 65/84` exactos. Antes de tocar
+  `_ordered_top_drill_block`, comparar el orden de
+  `WorkingStep` crudo contra el orden ISO en una pieza residual real de
+  `Cocina` para detectar que metadato distingue PGMX sinteticos de PGMX reales.
+- Seguimiento 2026-05-13 con Cazaux: se agrego
+  `tools/studies/iso/top_drill_corpus_order_analysis_2026_05_13.py` y la ficha
+  `iso_state_synthesis/experiments/010_top_drill_cazaux_corpus.md`. El corpus
+  `S:\Maestro\Projects\ProdAction\Prod 26-01-01 Cazaux` tiene `104/104` pares
+  PGMX/ISO contra `P:\USBMIX\ProdAction\Prod 26-01-01 Cazaux`. En los `60`
+  casos comparables de top drill, el orden crudo del PGMX coincide `0/60` y la
+  regla candidata coincide `58/60`; los `34` `count_mismatch` quedan fuera de
+  la decision de orden. Todos los casos Cazaux con top drill tienen
+  `top_tool_key_mode=auto`, a diferencia de `Pieza_209..214`, que usan
+  `ToolKey` explicito.
+- Regla aplicada 2026-05-13: `_ordered_top_drill_block` conserva el orden fuente
+  cuando todos los pasos del bloque tienen `Operation.ToolKey.name` explicito;
+  si el bloque viene automatico/embebido, usa vecino mas cercano desde la menor
+  coordenada `(X,Y)`. Validacion despues del cambio: `Pieza_209..214` `6/6`,
+  matriz raiz `Pieza*` `217/222`, `Cocina` `68/84`, Cazaux completo `62/104`.
+  Los dos residuales de orden Cazaux son `Cocina\mod 8 - Abierto\Lat_Der.pgmx`
+  y `Cocina\mod 8 - Abierto\Lat_Izq.pgmx`; parecen requerir una regla
+  secundaria de arranque, no cambiar la regla general.
+- Seguimiento 2026-05-13 por bloques/transiciones: se agrego
+  `tools/studies/iso/block_transition_corpus_analysis_2026_05_13.py` y
+  `iso_state_synthesis/experiments/011_block_transition_cazaux_strategy.md`.
+  El clasificador usa las explicaciones del emisor (`stage_key`, `block_id`,
+  `transition_id`) para ubicar la primera diferencia significativa. Separando
+  deltas menores de cabecera `%Or`, Cazaux queda `62` exactos, `20`
+  `header_only` y `22` residuales operativos. Frentes operativos: `B-RH-002`
+  `9`, `T-XH-001` `4`, `B-BH-005` `3`, `B-BH-007` `3`, `B-BH-002` `2` y
+  `T-XH-002` `1`. Orden recomendado: primero `B-RH-002`
+  (`_emit_line_milling_trace`), luego `T-XH-001`
+  (`_emit_top_drill_prepare_after_router`), despues `B-BH-007`, `B-BH-005`,
+  `B-BH-002` residual y `T-XH-002`.
+- Mejora 2026-05-13 de `B-RH-002`: se agrego la ficha
+  `iso_state_synthesis/experiments/012_b_rh_002_cazaux_router_trace.md` y se
+  ajusto `iso_state_synthesis/emitter.py::_emit_line_milling_trace`. Maestro
+  conserva `MLV=2` en `profile_milling -> line_milling`, pero lo omite en
+  `line_milling -> line_milling`; ademas, las `OpenPolyline` compensadas
+  repiten `Z` cuando salen del rectangulo nominal o cuando el corte es
+  superficial (`cut_z > -pieza.depth`). Validacion Cazaux: `65` exactos, `21`
+  `header_only`, `18` residuales operativos, con `B-RH-002` bajando de `9` a
+  `0` como primer frente. La nueva prioridad queda en `T-XH-001`
+  (`5/18` residuales).
+- Mejora 2026-05-13 de `T-XH-001`: se agrego
+  `tools/studies/iso/txh001_transition_audit_2026_05_13.py` y la ficha
+  `iso_state_synthesis/experiments/013_txh001_cazaux_transition_audit.md`.
+  La lista base de Cazaux tiene `71` candidatos con `T-XH-001`: `33` exactos,
+  `20` `header_only`, `13` con otros frentes y `5` con diferencia propia de
+  `T-XH-001`. Se ajusto
+  `iso_state_synthesis/emitter.py::_emit_top_drill_prepare_after_router` para
+  reactivar `?%ETK[17]=257`/`S...M3` cuando la entrada a `top_drill` viene de
+  `line_milling` y el diferencial no trae cambio explicito de `etk_17`. Lista
+  posterior: `33` siguen exactos, `20` siguen `header_only`, `13` quedan sin
+  cambio en otros frentes, `5` despejan `T-XH-001` hacia el siguiente frente y
+  `0` empeoran. El corpus completo queda `65` exactos, `21` `header_only`,
+  `18` residuales; primeros frentes: `B-BH-007` `8`, `T-XH-002` `5`,
+  `B-BH-005` `3`, `B-BH-002` `2`. Validacion ampliada: raiz `Pieza*`
+  estable en `217/222`; `ISO\Cocina` sube de `68/84` a `72/84`.

@@ -510,7 +510,13 @@ def _emit_planned_work_group(
             ),
             transition_id=incoming_transition_id,
         )
-        _emit_top_drill_prepare_after_router(lines, evaluation, prepare, transition_id=incoming_transition_id)
+        _emit_top_drill_prepare_after_router(
+            lines,
+            evaluation,
+            prepare,
+            previous_family=previous_group.family,
+            transition_id=incoming_transition_id,
+        )
         _emit_top_drill_trace(lines, trace, emit_mlv_after_etk7=False)
         _emit_top_drill_reset(lines, evaluation, reset, final=next_family is None)
     elif family == "top_drill" and incoming_transition_id == "T-BH-004":
@@ -1194,6 +1200,7 @@ def _emit_top_drill_prepare_after_router(
     evaluation: IsoStateEvaluation,
     differential: StageDifferential,
     *,
+    previous_family: Optional[str] = None,
     transition_id: Optional[str] = None,
 ) -> None:
     origin_z = evaluation.initial_state.get("pieza", "origin_z")
@@ -1236,16 +1243,25 @@ def _emit_top_drill_prepare_after_router(
             transition_id=transition_id,
         )
     speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
-    if speed_activation is not None:
+    force_speed_reactivation = speed_activation is None and previous_family == "line_milling"
+    if speed_activation is not None or force_speed_reactivation:
         spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
+        etk_17 = int(speed_activation.after) if speed_activation is not None else 257
+        speed_source = (
+            speed_activation.source
+            if speed_activation is not None
+            else _change_source(differential, "herramienta", "spindle_speed_standard")
+        )
+        speed_confidence = speed_activation.confidence if speed_activation is not None else "confirmed"
         _append(
             lines,
-            f"?%ETK[17]={int(speed_activation.after)}",
+            f"?%ETK[17]={etk_17}",
             differential,
-            speed_activation.source,
+            speed_source,
             "Activacion de cambio de velocidad del cabezal perforador.",
-            confidence=speed_activation.confidence,
+            confidence=speed_confidence,
             rule_status="boring_head_speed_change",
+            transition_id=transition_id,
         )
         _append(
             lines,
@@ -1255,6 +1271,7 @@ def _emit_top_drill_prepare_after_router(
             "Velocidad de spindle desde def.tlgx embebido.",
             confidence="confirmed",
             rule_status="boring_head_speed_change",
+            transition_id=transition_id,
         )
     _append(
         lines,
@@ -2560,10 +2577,10 @@ def _emit_line_milling_trace(
             previous_lift = _trace_move(previous_router_trace, "Lift")
             previous_x = previous_lift.points[-1].x
             previous_y = previous_lift.points[-1].y
-        entry_lines = (
-            "?%ETK[7]=0",
-            "G17",
-            "MLV=2",
+        entry_prefix = ["?%ETK[7]=0", "G17"]
+        if previous_router_trace.family != "line_milling":
+            entry_prefix.append("MLV=2")
+        entry_lines = tuple(entry_prefix) + (
             f"G0 X{_fmt(previous_x)} Y{_fmt(previous_y)} Z{_fmt(rapid_z)}",
             f"G0 X{_fmt(rapid_x)} Y{_fmt(rapid_y)} Z{_fmt(rapid_z)}",
             f"G0 X{_fmt(rapid_x)} Y{_fmt(rapid_y)} Z{_fmt(rapid_z)}",
@@ -3229,6 +3246,10 @@ def _emit_line_milling_trace(
             )
         current_x, current_y = nominal_points[0]
         current_z = float(cut_z)
+        include_cut_z = (
+            open_polyline_outside_piece
+            or float(cut_z) > -float(evaluation.initial_state.get("pieza", "depth"))
+        )
         for point in nominal_points[1:]:
             generated.append(
                 _line_milling_motion_line(
@@ -3239,7 +3260,7 @@ def _emit_line_milling_trace(
                     current_y,
                     current_z,
                     float(milling_feed),
-                    always_include_z=open_polyline_outside_piece,
+                    always_include_z=include_cut_z,
                 )
             )
             current_x, current_y = point

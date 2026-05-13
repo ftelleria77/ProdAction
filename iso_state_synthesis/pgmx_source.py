@@ -252,6 +252,50 @@ def _resolved_step_family(resolved_step: PgmxResolvedWorkingStepSnapshot) -> str
 def _ordered_top_drill_block(
     block: list[PgmxResolvedWorkingStepSnapshot],
 ) -> tuple[PgmxResolvedWorkingStepSnapshot, ...]:
+    if _top_drill_block_has_explicit_tool_keys(block):
+        return tuple(block)
+    if len(block) <= 2:
+        return tuple(sorted(block, key=_top_drill_step_sort_key))
+
+    return _ordered_top_drill_nearest_neighbor(block)
+
+
+def _top_drill_block_has_explicit_tool_keys(
+    block: list[PgmxResolvedWorkingStepSnapshot],
+) -> bool:
+    if not block:
+        return False
+    for step in block:
+        operation = step.operation
+        if operation is None or operation.tool_key is None or not (operation.tool_key.name or "").strip():
+            return False
+    return True
+
+
+def _ordered_top_drill_nearest_neighbor(
+    block: list[PgmxResolvedWorkingStepSnapshot],
+) -> tuple[PgmxResolvedWorkingStepSnapshot, ...]:
+    remaining = sorted(block, key=_top_drill_step_sort_key)
+    ordered = [remaining.pop(0)]
+    while remaining:
+        previous_x, previous_y, _, _ = _top_drill_step_sort_key(ordered[-1])
+        next_index, _ = min(
+            enumerate(remaining),
+            key=lambda item: (
+                math.hypot(
+                    _top_drill_step_sort_key(item[1])[0] - previous_x,
+                    _top_drill_step_sort_key(item[1])[1] - previous_y,
+                ),
+                _top_drill_step_sort_key(item[1]),
+            ),
+        )
+        ordered.append(remaining.pop(next_index))
+    return tuple(ordered)
+
+
+def _ordered_top_drill_geometric_block(
+    block: list[PgmxResolvedWorkingStepSnapshot],
+) -> tuple[PgmxResolvedWorkingStepSnapshot, ...]:
     if len(block) <= 2:
         return tuple(sorted(block, key=_top_drill_step_sort_key))
 
