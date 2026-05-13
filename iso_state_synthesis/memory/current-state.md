@@ -955,3 +955,25 @@ Avance registrado el 2026-05-11 para `T-XH-002` con `OpenPolyline`:
   `18` residuales; primeros frentes: `B-BH-007` `8`, `T-XH-002` `5`,
   `B-BH-005` `3`, `B-BH-002` `2`. Validacion ampliada: raiz `Pieza*`
   estable en `217/222`; `ISO\Cocina` sube de `68/84` a `72/84`.
+- Mejora 2026-05-13 de `B-BH-007`: se agrego la ficha
+  `iso_state_synthesis/experiments/014_b_bh_007_cazaux_slot_exit.md` y se
+  ajusto `iso_state_synthesis/emitter.py` para separar `lift` y salida completa
+  en `T-BH-005`. Maestro siempre conserva `G1 Z20...` despues del corte de
+  ranura; la salida lateral/reentrada completa se suprime solo cuando el
+  siguiente trabajo es `top_drill` con herramienta distinta de `001`. Si la
+  ranura termina el programa o pasa a `side_drill`, la salida completa queda.
+  El corpus Cazaux queda `65` exactos, `21` `header_only`, `18` residuales,
+  con `B-BH-007` en `0`; primeros frentes actuales: `B-PG-002` `8`,
+  `T-XH-002` `5`, `B-BH-005` `3`, `B-BH-002` `2`. Controles: `Pieza_151`,
+  `Pieza_155` y `Pieza_162` exactos; raiz `Pieza*` estable en `217/222` e
+  `ISO\Cocina` estable en `72/84`.
+- Mejora 2026-05-13 de `B-PG-002`: se agrego la ficha
+  `iso_state_synthesis/experiments/015_b_pg_002_cazaux_program_close.md` y se
+  ajusto `_emit_program_close` para que el prefijo especial de cierre lateral
+  derecho solo se emita cuando el `Xn` no trae `program_close_y`. Los `fajx`
+  con cierre `X=-2500` sin `Y` conservan el prefijo y siguen exactos; los
+  `Lado_izquierdo` con `Y0.000` usan cierre comun directo. El corpus Cazaux
+  queda `73` exactos, `21` `header_only`, `10` residuales, con `B-PG-002` en
+  `0`; primeros frentes actuales: `T-XH-002` `5`, `B-BH-005` `3`,
+  `B-BH-002` `2`. Validacion ampliada: raiz `Pieza*` estable en `217/222`;
+  `ISO\Cocina` mejora a `78/84`.

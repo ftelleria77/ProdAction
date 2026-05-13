@@ -183,3 +183,18 @@ cabecera. No deben mezclarse con decisiones de bloque/transicion.
   `0` empeorados. El corpus general queda `65` exactos, `21` `header_only` y
   `18` residuales; los primeros frentes son ahora `B-BH-007` `8`,
   `T-XH-002` `5`, `B-BH-005` `3` y `B-BH-002` `2`.
+- 2026-05-13: `B-BH-007` quedo cerrado como primer frente. La salida de
+  `SlotSide` en `T-BH-005` siempre conserva el lift a `Z20`; la salida
+  lateral/reentrada completa solo se omite cuando el trabajo siguiente es
+  `top_drill` con herramienta distinta de `001`. La validacion esta registrada
+  en `iso_state_synthesis/experiments/014_b_bh_007_cazaux_slot_exit.md`.
+  El corpus general sigue `65` exactos, `21` `header_only` y `18`
+  residuales, pero `B-BH-007` baja a `0`. Los primeros frentes son ahora
+  `B-PG-002` `8`, `T-XH-002` `5`, `B-BH-005` `3` y `B-BH-002` `2`.
+- 2026-05-13: `B-PG-002` quedo cerrado como primer frente. El prefijo especial
+  de cierre lateral derecho se conserva para los `fajx` con `Xn` sin `Y`, pero
+  se omite cuando el cierre trae `program_close_y=0.0`. La validacion esta en
+  `iso_state_synthesis/experiments/015_b_pg_002_cazaux_program_close.md`.
+  El corpus general sube a `73` exactos, `21` `header_only` y `10`
+  residuales; los primeros frentes son ahora `T-XH-002` `5`, `B-BH-005` `3` y
+  `B-BH-002` `2`.

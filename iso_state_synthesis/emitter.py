@@ -566,7 +566,13 @@ def _emit_planned_work_group(
         assert previous_group is not None
         _emit_top_to_slot_milling_transition(lines, previous_group.reset, transition_id=incoming_transition_id)
         _emit_slot_milling_prepare_after_top(lines, prepare, transition_id=incoming_transition_id)
-        _emit_slot_milling_trace(lines, evaluation, trace, emit_transition_exit=True)
+        _emit_slot_milling_trace(
+            lines,
+            evaluation,
+            trace,
+            emit_transition_lift=True,
+            emit_transition_exit=_slot_milling_transition_exit_required(next_group),
+        )
         _emit_slot_milling_reset(lines, reset, final=next_family is None)
     elif family == "top_drill" and incoming_transition_id == "T-BH-006":
         _emit_top_drill_prepare_after_slot(lines, evaluation, prepare, transition_id=incoming_transition_id)
@@ -3710,6 +3716,7 @@ def _emit_slot_milling_trace(
     evaluation: IsoStateEvaluation,
     differential: StageDifferential,
     *,
+    emit_transition_lift: bool = False,
     emit_transition_exit: bool = False,
     emit_etk7_before_lift: bool = False,
 ) -> None:
@@ -3744,11 +3751,12 @@ def _emit_slot_milling_trace(
             float(milling_feed),
         ),
     ]
+    if emit_transition_lift:
+        motion_lines.append(f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}")
     if emit_transition_exit:
         clearance_x = float(rapid_x) - 0.75
         motion_lines.extend(
             [
-                f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}",
                 f"G1 X{_fmt(clearance_x)} Z{_fmt(security_z)} F{_fmt(milling_feed)}",
                 f"G1 X{_fmt(rapid_x)} Z{_fmt(security_z)} F{_fmt(milling_feed)}",
                 f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}",
@@ -3768,6 +3776,13 @@ def _emit_slot_milling_trace(
             confidence="confirmed",
             rule_status="generalized_slot_milling_006_011_087_091",
         )
+
+
+def _slot_milling_transition_exit_required(next_group: Optional[_WorkGroup]) -> bool:
+    if next_group is None or next_group.family != "top_drill":
+        return True
+    tool_name = str(_change_after(next_group.prepare, "herramienta", "tool_name"))
+    return tool_name == "001"
 
 
 def _emit_slot_milling_reset(
@@ -4614,7 +4629,12 @@ def _emit_program_close(
         close_xy_line = f"G0 G53 X{_fmt(close_x)}"
         if close_y is not None:
             close_xy_line += f" Y{_fmt(close_y)}"
-        mixed_side_close = plane == "Right" and _has_non_side_work(evaluation) and float(close_x) != -3700.0
+        mixed_side_close = (
+            plane == "Right"
+            and _has_non_side_work(evaluation)
+            and float(close_x) != -3700.0
+            and close_y is None
+        )
         if mixed_side_close:
             _emit_side_program_close_prefix(lines, differential, plane)
             close_lines = (close_xy_line, "G64")
