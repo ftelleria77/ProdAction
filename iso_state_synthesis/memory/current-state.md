@@ -977,3 +977,14 @@ Avance registrado el 2026-05-11 para `T-XH-002` con `OpenPolyline`:
   `0`; primeros frentes actuales: `T-XH-002` `5`, `B-BH-005` `3`,
   `B-BH-002` `2`. Validacion ampliada: raiz `Pieza*` estable en `217/222`;
   `ISO\Cocina` mejora a `78/84`.
+- Mejora 2026-05-13 de `T-XH-002`: se agrego la ficha
+  `iso_state_synthesis/experiments/016_txh002_cazaux_boring_to_router.md` y se
+  ajusto `_emit_boring_to_router_transition`. Para `top_drill -> line_milling`
+  despues de una cadena router `OpenPolyline` (`T-RH-001`), se hereda la
+  seleccion Top antes de limpiar velocidad. Para `side_drill Back/Left ->
+  line_milling`, se restaura el marco lateral derecho y se repite
+  `?%ETK[7]=0` antes de `?%ETK[8]=1/G40`. El corpus Cazaux queda `76`
+  exactos, `21` `header_only`, `7` residuales, con `T-XH-002` en `0`;
+  primeros frentes actuales: `B-BH-005` `3`, `B-BH-002` `2`, `B-RH-002` `1`,
+  `T-XH-001` `1`. Validacion ampliada: `Pieza_162..164` exactos, raiz
+  `Pieza*` estable en `217/222`; `ISO\Cocina` mejora a `79/84`.

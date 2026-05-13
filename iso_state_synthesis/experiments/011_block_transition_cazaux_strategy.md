@@ -198,3 +198,11 @@ cabecera. No deben mezclarse con decisiones de bloque/transicion.
   El corpus general sube a `73` exactos, `21` `header_only` y `10`
   residuales; los primeros frentes son ahora `T-XH-002` `5`, `B-BH-005` `3` y
   `B-BH-002` `2`.
+- 2026-05-13: `T-XH-002` quedo cerrado como primer frente. La regla agrega
+  seleccion Top al volver desde `top_drill` a router cuando el router previo es
+  una cadena `OpenPolyline` (`T-RH-001`), y restaura marco lateral derecho al
+  volver desde `side_drill Back/Left` a router. La validacion esta en
+  `iso_state_synthesis/experiments/016_txh002_cazaux_boring_to_router.md`.
+  El corpus general sube a `76` exactos, `21` `header_only` y `7`
+  residuales; los primeros frentes son ahora `B-BH-005` `3`, `B-BH-002` `2`,
+  `B-RH-002` `1` y `T-XH-001` `1`.

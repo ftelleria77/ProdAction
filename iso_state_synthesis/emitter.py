@@ -611,13 +611,15 @@ def _emit_planned_work_group(
         assert previous_group is not None
         _emit_boring_to_router_transition(
             lines,
+            evaluation,
             previous_group.family,
+            previous_group.prepare,
             previous_group.reset,
             prepare,
             trace,
             include_face_selection=(
                 previous_group.family == "top_drill"
-                and _prior_profile_to_top_requires_face_selection(evaluation, previous_router_group)
+                and _prior_router_to_top_requires_face_selection(evaluation, previous_router_group)
             ),
             transition_id=incoming_transition_id,
         )
@@ -2208,7 +2210,9 @@ def _emit_line_milling_prepare(
 
 def _emit_boring_to_router_transition(
     lines: list[ExplainedIsoLine],
+    evaluation: IsoStateEvaluation,
     previous_family: str,
+    previous_prepare: StageDifferential,
     boring_reset: StageDifferential,
     router_prepare: StageDifferential,
     router_trace: StageDifferential,
@@ -2218,6 +2222,27 @@ def _emit_boring_to_router_transition(
 ) -> None:
     source = _observed_rule_source("boring_to_router_transition")
     if previous_family == "side_drill":
+        previous_plane = str(_optional_change_after(previous_prepare, "trabajo", "plane", ""))
+        if previous_plane in {"Back", "Left"}:
+            side_x, side_y = _side_plane_frame_shift(evaluation, "Right")
+            header_dz = evaluation.final_state.get("pieza", "header_dz")
+            for line in (
+                "MLV=1",
+                f"SHF[X]={_fmt(side_x)}",
+                f"SHF[Y]={_fmt(side_y)}",
+                f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
+                "?%ETK[7]=0",
+            ):
+                _append(
+                    lines,
+                    line,
+                    boring_reset,
+                    source,
+                    "Restauracion de marco lateral antes de cambiar de cabezal lateral a router.",
+                    confidence="confirmed",
+                    rule_status="generalized_boring_to_router_sequence",
+                    transition_id=transition_id,
+                )
         for line in ("?%ETK[8]=1", "G40"):
             _append(
                 lines,
@@ -2314,14 +2339,26 @@ def _profile_to_top_requires_face_selection(
     return abs(float(first_point[1]) - piece_width) <= 0.0005
 
 
-def _prior_profile_to_top_requires_face_selection(
+def _prior_router_to_top_requires_face_selection(
     evaluation: IsoStateEvaluation,
     previous_router_group: Optional[_WorkGroup],
 ) -> bool:
+    if previous_router_group is None:
+        return False
+    if previous_router_group.family == "profile_milling":
+        return _profile_to_top_requires_face_selection(evaluation, previous_router_group)
+    if previous_router_group.family != "line_milling":
+        return False
+    profile_family = str(
+        _optional_change_after(previous_router_group.trace, "movimiento", "profile_family", "")
+    )
+    side_of_feature = str(
+        _optional_change_after(previous_router_group.prepare, "trabajo", "side_of_feature", "Center")
+    )
     return (
-        previous_router_group is not None
-        and previous_router_group.family == "profile_milling"
-        and _profile_to_top_requires_face_selection(evaluation, previous_router_group)
+        previous_router_group.incoming_transition_id == "T-RH-001"
+        and profile_family == "OpenPolyline"
+        and side_of_feature in {"Left", "Right"}
     )
 
 
