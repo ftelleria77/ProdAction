@@ -352,6 +352,7 @@ def _build_summary(rows: Sequence[dict[str, str]], pgmx_root: Path, iso_root: Pa
     kind_counts = Counter(row["first_diff_kind"] for row in operational)
     transition_sequence_counts = Counter(row["transition_sequence"] for row in operational)
     work_sequence_counts = Counter(row["work_sequence"] for row in operational)
+    block_usage_counts, block_example_counts = _block_usage_counts(rows)
 
     lines = [
         "# Block And Transition Corpus Analysis",
@@ -370,6 +371,17 @@ def _build_summary(rows: Sequence[dict[str, str]], pgmx_root: Path, iso_root: Pa
     lines.extend(["", "## Header Only", ""])
     if header_only:
         lines.append(f"- Rows with only minor `%Or` header deltas: `{len(header_only)}`")
+    else:
+        lines.append("- none")
+
+    lines.extend(["", "## Block Usage Counts", ""])
+    if block_usage_counts:
+        lines.append("| block | occurrences | rows |")
+        lines.append("| --- | ---: | ---: |")
+        for block in sorted(block_usage_counts):
+            lines.append(
+                f"| `{block}` | `{block_usage_counts[block]}` | `{block_example_counts[block]}` |"
+            )
     else:
         lines.append("- none")
 
@@ -404,6 +416,18 @@ def _build_summary(rows: Sequence[dict[str, str]], pgmx_root: Path, iso_root: Pa
     lines.extend(["", "## Strategy", ""])
     lines.extend(_strategy_lines(operational, front_counts, kind_counts, header_only))
     return "\n".join(lines) + "\n"
+
+
+def _block_usage_counts(rows: Sequence[dict[str, str]]) -> tuple[Counter[str], dict[str, int]]:
+    occurrence_counts: Counter[str] = Counter()
+    row_indexes: dict[str, set[int]] = defaultdict(set)
+    for row_index, row in enumerate(rows):
+        for token in (part.strip() for part in row["block_sequence"].split("->")):
+            if not token.startswith("B-"):
+                continue
+            occurrence_counts[token] += 1
+            row_indexes[token].add(row_index)
+    return occurrence_counts, {block: len(indexes) for block, indexes in row_indexes.items()}
 
 
 def _strategy_lines(

@@ -57,11 +57,16 @@ BLOCKS: dict[str, IsoBlockDefinition] = {
     "B-RH-003": IsoBlockDefinition("B-RH-003", "router", ROUTER_HEAD, "reset", ("S008", "S019")),
     "B-BH-001": IsoBlockDefinition("B-BH-001", "top_drill", BORING_HEAD, "prepare", ("S003",)),
     "B-BH-002": IsoBlockDefinition("B-BH-002", "top_drill", BORING_HEAD, "trace", ("S004",)),
-    "B-BH-003": IsoBlockDefinition("B-BH-003", "top_drill", BORING_HEAD, "reset_complete", ("S005",)),
+    "B-BH-003": IsoBlockDefinition("B-BH-003", "top_drill", BORING_HEAD, "reset_complete", ("S005", "S040")),
     "B-BH-004": IsoBlockDefinition("B-BH-004", "side_drill", BORING_HEAD, "prepare", ("S009",)),
-    "B-BH-005": IsoBlockDefinition("B-BH-005", "side_drill", BORING_HEAD, "trace", ("S010",)),
+    "B-BH-005": IsoBlockDefinition("B-BH-005", "side_drill", BORING_HEAD, "trace", ("S010", "S041")),
     "B-BH-006": IsoBlockDefinition("B-BH-006", "slot_milling", BORING_HEAD, "prepare", ("S013", "S017")),
     "B-BH-007": IsoBlockDefinition("B-BH-007", "slot_milling", BORING_HEAD, "trace", ("S013",)),
+    "B-BH-008": IsoBlockDefinition("B-BH-008", "top_drill", BORING_HEAD, "reset_partial", ("S021", "S022", "S040")),
+    "B-BH-009": IsoBlockDefinition("B-BH-009", "side_drill", BORING_HEAD, "reset_complete", ("S010", "S040")),
+    "B-BH-010": IsoBlockDefinition("B-BH-010", "side_drill", BORING_HEAD, "reset_partial", ("S023", "S024", "S040")),
+    "B-BH-011": IsoBlockDefinition("B-BH-011", "slot_milling", BORING_HEAD, "reset_complete", ("S013", "S040")),
+    "B-BH-012": IsoBlockDefinition("B-BH-012", "slot_milling", BORING_HEAD, "reset_partial", ("S018", "S026", "S040")),
     "B-PG-002": IsoBlockDefinition("B-PG-002", "program", MACHINE_HEAD, "close", ("S014",)),
 }
 
@@ -165,7 +170,7 @@ TRANSITIONS: dict[str, IsoTransitionDefinition] = {
         "slot_milling",
         "side_drill",
         "top_slot_to_horizontal_drill",
-        ("S026",),
+        ("S026", "S041"),
     ),
     "T-XH-001": IsoTransitionDefinition(
         "T-XH-001",

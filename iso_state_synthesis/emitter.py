@@ -581,7 +581,13 @@ def _emit_planned_work_group(
     elif family == "side_drill" and incoming_transition_id == "T-BH-008":
         assert previous_group is not None
         _emit_slot_to_side_drill_transition(lines, evaluation, prepare, transition_id=incoming_transition_id)
-        _emit_side_drill_prepare_after_slot(lines, evaluation, prepare, transition_id=incoming_transition_id)
+        _emit_side_drill_prepare_after_slot(
+            lines,
+            evaluation,
+            prepare,
+            multi_side_sequence=next_family == "side_drill",
+            transition_id=incoming_transition_id,
+        )
         _emit_side_drill_trace(lines, trace, emit_mlv_after_etk7=False)
         _emit_side_drill_reset(lines, evaluation, reset, final=next_family is None)
     elif family == "side_drill" and previous_family == "side_drill":
@@ -3830,6 +3836,7 @@ def _emit_slot_milling_reset(
     emit_etk7: bool = True,
 ) -> None:
     source = _observed_rule_source("slot_milling_reset")
+    reset_block_id = "B-BH-011" if final else "B-BH-012"
     reset_lines = [
         "D0",
         "SVL 0.000",
@@ -3860,6 +3867,7 @@ def _emit_slot_milling_reset(
             "Reset posterior SlotSide con sierra vertical observado.",
             confidence="confirmed",
             rule_status="generalized_slot_milling_006_011_087_091",
+            block_id=reset_block_id,
         )
 
 
@@ -4306,6 +4314,7 @@ def _emit_side_drill_prepare_after_slot(
     evaluation: IsoStateEvaluation,
     differential: StageDifferential,
     *,
+    multi_side_sequence: bool = False,
     transition_id: Optional[str] = None,
 ) -> None:
     origin_z = evaluation.initial_state.get("pieza", "origin_z")
@@ -4369,6 +4378,17 @@ def _emit_side_drill_prepare_after_slot(
         rule_status="generalized_slot_to_side_drill_sequence",
         transition_id=transition_id,
     )
+    if multi_side_sequence:
+        _append(
+            lines,
+            "G4F0.500",
+            differential,
+            source,
+            "Pausa observada despues de activar mascara lateral en secuencias multiples.",
+            confidence="confirmed",
+            rule_status="generalized_slot_to_side_drill_sequence",
+            transition_id=transition_id,
+        )
 
 
 def _emit_side_drill_prepare_after_top(
@@ -4530,6 +4550,7 @@ def _emit_side_drill_reset(
     header_dz = evaluation.final_state.get("pieza", "header_dz")
     etk17 = _reset_after(differential, "salida", "etk_17")
     source = _change_source(differential, "salida", "etk_17", reset=True)
+    reset_block_id = "B-BH-009" if final else "B-BH-010"
     for line in (
         "MLV=1",
         f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
@@ -4542,6 +4563,7 @@ def _emit_side_drill_reset(
             source,
             "Reset posterior de taladro lateral observado.",
             rule_status="side_drill_reset_observed",
+            block_id=reset_block_id,
         )
     if not final:
         return
@@ -4553,6 +4575,7 @@ def _emit_side_drill_reset(
         "Reset observado; falta clasificar si depende de familia o plantilla.",
         confidence="hypothesis",
         rule_status="modal_reset_hypothesis",
+        block_id=reset_block_id,
     )
     for line in (
         "MLV=0",
@@ -4569,6 +4592,7 @@ def _emit_side_drill_reset(
             source,
             "Reset posterior de taladro lateral observado.",
             rule_status="side_drill_reset_observed",
+            block_id=reset_block_id,
         )
 
 
@@ -4581,6 +4605,7 @@ def _emit_top_drill_reset(
 ) -> None:
     header_dz = evaluation.final_state.get("pieza", "header_dz")
     source = _change_source(differential, "salida", "etk_17", reset=True)
+    reset_block_id = "B-BH-003" if final else "B-BH-008"
     for line in (
         "MLV=1",
         f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
@@ -4593,6 +4618,7 @@ def _emit_top_drill_reset(
             source,
             "Reset posterior de taladro superior observado.",
             rule_status="top_drill_reset_observed",
+            block_id=reset_block_id,
         )
     if not final:
         return
@@ -4605,6 +4631,7 @@ def _emit_top_drill_reset(
         "Reset observado; falta clasificar si depende de familia o plantilla.",
         confidence="hypothesis",
         rule_status="modal_reset_hypothesis",
+        block_id=reset_block_id,
     )
     for line in (
         "MLV=0",
@@ -4621,6 +4648,7 @@ def _emit_top_drill_reset(
             source,
             "Reset posterior de taladro superior observado.",
             rule_status="top_drill_reset_observed",
+            block_id=reset_block_id,
         )
 
 

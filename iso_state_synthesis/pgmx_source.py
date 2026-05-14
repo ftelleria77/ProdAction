@@ -405,6 +405,20 @@ def _top_drill_path_length(block: tuple[PgmxResolvedWorkingStepSnapshot, ...]) -
 def _ordered_side_drill_block(
     block: list[PgmxResolvedWorkingStepSnapshot],
 ) -> tuple[PgmxResolvedWorkingStepSnapshot, ...]:
+    plane_runs: list[tuple[str, list[PgmxResolvedWorkingStepSnapshot]]] = []
+    for step in block:
+        plane = (step.feature.plane_name if step.feature is not None else "") or ""
+        if not plane_runs or plane_runs[-1][0] != plane:
+            plane_runs.append((plane, [step]))
+        else:
+            plane_runs[-1][1].append(step)
+    if len(plane_runs) >= 3 and plane_runs[0][0] == plane_runs[-1][0]:
+        rotated_runs = [plane_runs[-1], *plane_runs[1:-1], plane_runs[0]]
+        ordered: list[PgmxResolvedWorkingStepSnapshot] = []
+        for _, run in rotated_runs:
+            ordered.extend(sorted(run, key=_side_drill_step_sort_key))
+        return tuple(ordered)
+
     by_plane: dict[str, list[PgmxResolvedWorkingStepSnapshot]] = {}
     plane_order: list[str] = []
     for step in block:

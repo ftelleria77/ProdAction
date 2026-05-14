@@ -988,3 +988,27 @@ Avance registrado el 2026-05-11 para `T-XH-002` con `OpenPolyline`:
   primeros frentes actuales: `B-BH-005` `3`, `B-BH-002` `2`, `B-RH-002` `1`,
   `T-XH-001` `1`. Validacion ampliada: `Pieza_162..164` exactos, raiz
   `Pieza*` estable en `217/222`; `ISO\Cocina` mejora a `79/84`.
+- Mejora 2026-05-14 de catalogacion de resets: se agrego la ficha
+  `iso_state_synthesis/experiments/017_bh_reset_block_catalog.md` y se
+  agregaron `B-BH-008` (`top_drill` reset parcial), `B-BH-009` (`side_drill`
+  reset completo), `B-BH-010` (`side_drill` reset parcial), `B-BH-011`
+  (`top slot` reset completo) y `B-BH-012` (`top slot` reset parcial).
+  `B-BH-003` queda como reset completo de `top_drill`. Los emisores de reset
+  asignan `block_id` explicito segun `final=True/False`, sin cambiar el texto
+  ISO. Validacion Cazaux estable: `76` exactos, `21` `header_only`, `7`
+  residuales. Conteo directo en `block_sequence`: `B-BH-008` `495`,
+  `B-BH-009` `41`, `B-BH-010` `187`, `B-BH-011` `7`, `B-BH-012` `17`.
+- Mejora 2026-05-14 de `B-BH-005`: se agrego la ficha
+  `iso_state_synthesis/experiments/018_b_bh_005_cazaux_side_drill_order_pause.md`.
+  Para bloques laterales donde la misma cara abre y cierra la secuencia, el
+  orden rota la tanda final al frente antes de ordenar internamente por cota
+  fija; esto deja exacto `Cocina/mod 12 - Isla/Faja_Superior.pgmx`. En
+  `T-BH-008`, si `top slot -> side_drill` entra a una secuencia lateral
+  multiple, se emite `G4F0.500` despues de `?%ETK[0]`; esto mueve
+  `Lavadero/mod 2 - bajo 1 puerta/Fondo.pgmx` de operativo a `header_only`.
+  Hipotesis descartada: usar geometria como cota fija global para `Left`
+  arregla `Faja frontal.pgmx`, pero rompe el corpus (`67` exactos, `22`
+  `header_only`, `15` operativos). Validacion Cazaux actual: `77` exactos,
+  `22` `header_only`, `5` residuales. Primeros frentes: `B-BH-002` `2`,
+  `B-BH-005` `1`, `B-RH-002` `1`, `T-XH-001` `1`. Validacion ampliada:
+  raiz `Pieza*` estable en `217/222`; `ISO/Cocina` sube a `80/84`.
