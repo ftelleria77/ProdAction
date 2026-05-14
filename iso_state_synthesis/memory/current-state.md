@@ -1012,3 +1012,13 @@ Avance registrado el 2026-05-11 para `T-XH-002` con `OpenPolyline`:
   `22` `header_only`, `5` residuales. Primeros frentes: `B-BH-002` `2`,
   `B-BH-005` `1`, `B-RH-002` `1`, `T-XH-001` `1`. Validacion ampliada:
   raiz `Pieza*` estable en `217/222`; `ISO/Cocina` sube a `80/84`.
+- Mejora 2026-05-14 de `B-BH-002`: se agrego la ficha
+  `iso_state_synthesis/experiments/019_b_bh_002_cazaux_top_drill_corner_start.md`.
+  Para bloques automaticos de `4` top drills, una sola herramienta efectiva
+  por diametro y profundidades mixtas, Maestro arranca en maximo `X` y minimo
+  `Y`, y luego usa vecino mas cercano. Esto cierra
+  `Cocina/mod 8 - Abierto/Lat_Der.pgmx` y `Lat_Izq.pgmx`; el analisis de
+  orden top drill queda `60/60` comparables. Validacion Cazaux actual: `79`
+  exactos, `22` `header_only`, `3` residuales. Validacion ampliada: raiz
+  `Pieza*` estable en `217/222`; `ISO/Cocina` sube a `82/84`. Primeros
+  frentes restantes: `B-BH-005` `1`, `B-RH-002` `1`, `T-XH-001` `1`.

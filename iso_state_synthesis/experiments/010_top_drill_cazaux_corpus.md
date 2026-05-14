@@ -119,6 +119,18 @@ ni "Maestro siempre optimiza geometricamente":
 El proximo refinamiento puntual es entender por que los dos `mod 8 - Abierto`
 arrancan por menor `Y`/zona derecha en vez de menor `(X,Y)`.
 
+## Actualizacion 2026-05-14
+
+La ficha `iso_state_synthesis/experiments/019_b_bh_002_cazaux_top_drill_corner_start.md`
+cierra esos dos residuales. Para bloques automaticos de `4` top drills, una sola
+herramienta efectiva y profundidades mixtas, Maestro arranca en maximo `X` y
+minimo `Y`, y despues sigue vecino mas cercano.
+
+Resultado actualizado del analisis de orden:
+
+- regla candidata vs Maestro: `60/60` comparables;
+- `neither_matches`: `0`.
+
 ## Seguimiento Por Bloques
 
 La clasificacion posterior por bloques y transiciones quedo registrada en

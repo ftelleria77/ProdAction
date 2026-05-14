@@ -256,6 +256,8 @@ def _ordered_top_drill_block(
         return tuple(block)
     if len(block) <= 2:
         return tuple(sorted(block, key=_top_drill_step_sort_key))
+    if _top_drill_auto_block_has_single_tool_mixed_depth(block):
+        return _ordered_top_drill_nearest_neighbor(block, start_at_max_x_min_y=True)
 
     return _ordered_top_drill_nearest_neighbor(block)
 
@@ -272,11 +274,40 @@ def _top_drill_block_has_explicit_tool_keys(
     return True
 
 
+def _top_drill_auto_block_has_single_tool_mixed_depth(
+    block: list[PgmxResolvedWorkingStepSnapshot],
+) -> bool:
+    if len(block) != 4:
+        return False
+    diameters: set[float] = set()
+    depths: set[float] = set()
+    for step in block:
+        operation = step.operation
+        if operation is not None and operation.tool_key is not None and (operation.tool_key.name or "").strip():
+            return False
+        if step.feature is None:
+            return False
+        diameter = _feature_diameter(step.feature)
+        if diameter is None:
+            return False
+        diameters.add(round(float(diameter), 6))
+        depths.add(round(_target_depth(step.feature), 6))
+    return len(diameters) == 1 and len(depths) > 1
+
+
 def _ordered_top_drill_nearest_neighbor(
     block: list[PgmxResolvedWorkingStepSnapshot],
+    *,
+    start_at_max_x_min_y: bool = False,
 ) -> tuple[PgmxResolvedWorkingStepSnapshot, ...]:
     remaining = sorted(block, key=_top_drill_step_sort_key)
-    ordered = [remaining.pop(0)]
+    start_index = 0
+    if start_at_max_x_min_y:
+        start_index = min(
+            range(len(remaining)),
+            key=lambda index: _top_drill_max_x_min_y_start_key(remaining[index]),
+        )
+    ordered = [remaining.pop(start_index)]
     while remaining:
         previous_x, previous_y, _, _ = _top_drill_step_sort_key(ordered[-1])
         next_index, _ = min(
@@ -291,6 +322,11 @@ def _ordered_top_drill_nearest_neighbor(
         )
         ordered.append(remaining.pop(next_index))
     return tuple(ordered)
+
+
+def _top_drill_max_x_min_y_start_key(resolved_step: PgmxResolvedWorkingStepSnapshot) -> tuple[float, float, str, str]:
+    x, y, tool_name, step_id = _top_drill_step_sort_key(resolved_step)
+    return (-x, y, tool_name, step_id)
 
 
 def _ordered_top_drill_geometric_block(
