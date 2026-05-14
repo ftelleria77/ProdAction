@@ -1031,3 +1031,90 @@ Avance registrado el 2026-05-11 para `T-XH-002` con `OpenPolyline`:
   Cazaux actual: `80` exactos, `22` `header_only`, `2` residuales. Validacion
   ampliada: raiz `Pieza*` estable en `217/222`; `ISO/Cocina` estable en
   `82/84`. Primeros frentes restantes: `B-RH-002` `1`, `T-XH-001` `1`.
+- Cierre 2026-05-14 de `B-RH-002`: se agrego
+  `iso_state_synthesis/experiments/020_b_rh_002_cazaux_linear_side_compensation.md`.
+  Para `LineHorizontal`/`LineVertical` compensados con `Line Down` y `Line Up`,
+  el emisor conserva el eje normal nominal, toma el eje tangencial de
+  `Approach/Lift`, agrega `1 mm` de rapid/alejamiento y combina el avance de
+  entrada con la bajada Z. El modo `Quote` queda excluido porque regredia
+  `Pieza_064/065`. `Cocina/mod 6 - Torre horno/Divisor_Horiz.pgmx` queda
+  exacto. Validacion Cazaux actual: `81` exactos, `22` `header_only`, `1`
+  residual. Validacion ampliada: raiz `Pieza*` estable en `217/222`;
+  `ISO/Cocina` sube a `83/84`. Primer frente restante: `T-XH-001` `1`.
+- Cierre 2026-05-14 de `T-XH-001`: se agrego
+  `iso_state_synthesis/experiments/021_txh001_cazaux_router_to_side_speed.md`.
+  El residual `Cocina/mod 6 - Torre horno/Lat_Der.pgmx` era
+  `line_milling -> side_drill`, no entrada a top drill. Se extendio
+  `_emit_side_drill_prepare_after_router` para recibir `previous_family` y, si
+  viene desde `line_milling` sin `salida.etk_17` explicito, reactivar
+  `?%ETK[17]=257/S...M3` antes de `?%ETK[0]`. Auditoria `T-XH-001`
+  posterior: `50` exactos, `21` `header_only`, `0` diferencias de transicion.
+  Validacion Cazaux actual: `82` exactos, `22` `header_only`, `0` residuales
+  operativos. Validacion ampliada: raiz `Pieza*` estable en `217/222`;
+  `ISO/Cocina` queda `84/84`.
+- Analisis 2026-05-14 de ordenamiento top drill agregado: se agrego
+  `iso_state_synthesis/experiments/022_top_drill_order_strategy.md`. En el
+  agregado `S:\Maestro\Projects\ProdAction` contra `P:\USBMIX\ProdAction` hay
+  `453` comparaciones completas de top drill: el orden crudo PGMX explica
+  `106`, la regla actual explica `442`, y una hipotesis hibrida explica `451`
+  sin regresiones. La hipotesis conserva herramienta explicita, conserva la
+  excepcion de `4` huecos/una herramienta/profundidades mixtas, y para bloques
+  automaticos generales elige el primer hueco por distancia al origen antes de
+  seguir por vecino mas cercano. Quedan `2` Vargas con patron de recorrido de
+  perimetro/banda exterior, no vecino mas cercano estricto.
+- Implementacion 2026-05-14 de la hipotesis hibrida `B-BH-002`: se ajusto
+  `iso_state_synthesis/pgmx_source.py` para que los archivos solo `top_drill`
+  tambien pasen por `_ordered_top_drill_block` y para que los bloques
+  automaticos generales arranquen por distancia al origen antes de continuar
+  por vecino mas cercano. Se conservaron herramienta explicita y la excepcion
+  de `4` huecos/una herramienta/profundidades mixtas con `max X/min Y`.
+  Validacion top drill: DeMarco `224/224`, Cazaux `60/60`, ISO/Cocina
+  `47/47`, agregado `451/453` con solo `2` Vargas restantes. Comparacion ISO:
+  DeMarco mejora a `283` exactos, `2` `header_only`, `51` operativos; Cazaux
+  estable `82` exactos y `22` `header_only`; ISO/Cocina estable `84/84`;
+  raiz `Pieza*` estable `217/222`.
+- Implementacion 2026-05-14 de `T-BH-009`: se agrego la transicion interna
+  `top slot -> top slot` para los slots consecutivos de DeMarco. Despues del
+  reset parcial `B-BH-012`, el emisor no repite `B-BH-006`; emite
+  `?%ETK[8]=1`, `G40`, `G17` y reposiciona con dos rapidos `G0 X/Y/Z`, desde
+  el rapid del slot anterior hacia el rapid del slot entrante. Esto cierra los
+  `18` residuales `stage:slot_milling_prepare`: DeMarco queda en `301`
+  exactos, `2` `header_only`, `33` operativos, `2` no soportados y `46` sin ISO.
+  Validacion de regresion: Cazaux estable `82` exactos y `22` `header_only`;
+  `ISO/Cocina` estable `84/84`; raiz `Pieza*` estable `217/222`.
+- Pasada 2026-05-14 sobre los `33` operativos de DeMarco: se cerraron
+  `T-XH-002`, `B-BH-007` y `B-RH-002` como primeros frentes. `T-XH-002`
+  ahora hereda seleccion Top cuando el router previo es `line_milling`
+  `OpenPolyline` lateral con entrada `T-RH-001` o `T-XH-002`. `B-BH-007`
+  mira un grupo adelante en tandas `slot -> slot -> top_drill`: si el top
+  posterior no usa `001`, omite la salida lateral completa desde el primer
+  slot y `T-BH-009` reposiciona desde `cut_x`. `B-RH-002` habilita la
+  compensacion lateral sin leads para `LineHorizontal/LineVertical`, generando
+  rapid/alejamiento de `1 mm`, `G41/G42` y `G40`. DeMarco queda en `324`
+  exactos, `2` `header_only`, `10` operativos, `2` no soportados y `46` sin
+  ISO. Los pendientes son `B-BH-002` (`5`, redondeo selectivo de XY top drill),
+  `T-BH-003` (`4`, pausa lateral `G4F0.500` que no puede quitarse sin romper
+  Cazaux) y `B-BH-005` (`1`, orden/cota lateral intercalada por bloque).
+- Clasificacion 2026-05-14 de precision numerica en DeMarco: se agrego el
+  estado `precision_only` al analisis de corpus
+  `tools.studies.iso.block_transition_corpus_analysis_2026_05_13`. No cambia
+  el emisor ISO; solo separa diferencias donde la cantidad de lineas coincide,
+  todas las diferencias significativas son movimientos equivalentes
+  `G0/G1/G2/G3`, los tokens no numericos coinciden y las coordenadas
+  `X/Y/Z/I/J/K/R` difieren hasta `0.005 mm`. Los `5` residuales `B-BH-002` de
+  DeMarco pasan a `precision_only`: `324` exactos, `2` `header_only`, `5`
+  `precision_only`, `5` operativos, `2` no soportados y `46` sin ISO. Los
+  operativos reales restantes son `T-BH-003` (`4`) y `B-BH-005` (`1`).
+  Validacion de regresion: Cazaux estable `82` exactos y `22` `header_only`;
+  `ISO/Cocina` estable `84/84`.
+- Checkpoint 2026-05-14 para continuar: el avance acumulado de esta tanda
+  queda registrado en
+  `iso_state_synthesis/experiments/023_demarco_operational_residuals.md`. El
+  proximo frente recomendado es `T-BH-003` con auditoria enfocada de pausas
+  laterales: comparar los `4` DeMarco donde Maestro reposiciona sin
+  `G4F0.500` contra los Cazaux que si necesitan pausa, evitando una regla
+  global de quitar pausa en `side_drill -> side_drill`. Despues queda
+  `B-BH-005` con `1` caso de cota/orden lateral intercalado
+  (`Cocina\Parte 2\mod 1 - Torre heladera\Faja frontal.pgmx`). Los
+  `precision_only` quedan fuera del plan operativo salvo que se busque
+  igualdad byte-a-byte.

@@ -109,7 +109,7 @@ def _ordered_resolved_working_steps(snapshot: PgmxSnapshot) -> tuple[PgmxResolve
         for family in (_resolved_step_family(step) for step in steps)
         if family not in {"program_close", "unsupported"}
     }
-    if len(families) <= 1:
+    if len(families) <= 1 and "top_drill" not in families:
         return steps
 
     steps = _ordered_mixed_drill_neighborhoods(steps)
@@ -259,7 +259,7 @@ def _ordered_top_drill_block(
     if _top_drill_auto_block_has_single_tool_mixed_depth(block):
         return _ordered_top_drill_nearest_neighbor(block, start_at_max_x_min_y=True)
 
-    return _ordered_top_drill_nearest_neighbor(block)
+    return _ordered_top_drill_nearest_neighbor(block, start_at_origin=True)
 
 
 def _top_drill_block_has_explicit_tool_keys(
@@ -298,6 +298,7 @@ def _top_drill_auto_block_has_single_tool_mixed_depth(
 def _ordered_top_drill_nearest_neighbor(
     block: list[PgmxResolvedWorkingStepSnapshot],
     *,
+    start_at_origin: bool = False,
     start_at_max_x_min_y: bool = False,
 ) -> tuple[PgmxResolvedWorkingStepSnapshot, ...]:
     remaining = sorted(block, key=_top_drill_step_sort_key)
@@ -306,6 +307,11 @@ def _ordered_top_drill_nearest_neighbor(
         start_index = min(
             range(len(remaining)),
             key=lambda index: _top_drill_max_x_min_y_start_key(remaining[index]),
+        )
+    elif start_at_origin:
+        start_index = min(
+            range(len(remaining)),
+            key=lambda index: _top_drill_origin_start_key(remaining[index]),
         )
     ordered = [remaining.pop(start_index)]
     while remaining:
@@ -327,6 +333,13 @@ def _ordered_top_drill_nearest_neighbor(
 def _top_drill_max_x_min_y_start_key(resolved_step: PgmxResolvedWorkingStepSnapshot) -> tuple[float, float, str, str]:
     x, y, tool_name, step_id = _top_drill_step_sort_key(resolved_step)
     return (-x, y, tool_name, step_id)
+
+
+def _top_drill_origin_start_key(
+    resolved_step: PgmxResolvedWorkingStepSnapshot,
+) -> tuple[float, float, float, str, str]:
+    x, y, tool_name, step_id = _top_drill_step_sort_key(resolved_step)
+    return (math.hypot(x, y), x, y, tool_name, step_id)
 
 
 def _ordered_top_drill_geometric_block(
@@ -1651,7 +1664,7 @@ def _trace_moves(
         if toolpath.curve is not None:
             for point in toolpath.curve.sampled_points:
                 local_z = point[2]
-                iso_z = _top_drill_iso_z(local_z, offset, feature)
+                iso_z = _top_drill_iso_z(local_z, offset, feature, tool)
                 points.append(
                     TracePoint(
                         x=float(point[0]) + float(xy_delta[0]),
@@ -1672,11 +1685,16 @@ def _trace_moves(
     return tuple(moves)
 
 
-def _top_drill_iso_z(local_z: float, offset: Optional[float], feature) -> Optional[float]:
+def _top_drill_iso_z(
+    local_z: float,
+    offset: Optional[float],
+    feature,
+    tool: Optional[PgmxEmbeddedToolSnapshot],
+) -> Optional[float]:
     if offset is None:
         return None
     effective_z = local_z
-    if _is_through_drill_feature(feature):
+    if _is_through_drill_feature(feature) and (tool is None or tool.name != "007"):
         effective_z = max(0.0, float(local_z))
     return effective_z + offset
 
@@ -2074,7 +2092,28 @@ def _embedded_top_drill_tool_for_feature(
     ]
     if not matching_spindles:
         return None
-    return _embedded_tool_for_spindle(snapshot, sorted(matching_spindles, key=lambda item: item.spindle)[0])
+    selected_spindle = _select_top_drill_spindle_for_tip(snapshot, feature, matching_spindles)
+    return _embedded_tool_for_spindle(snapshot, selected_spindle)
+
+
+def _select_top_drill_spindle_for_tip(
+    snapshot: PgmxSnapshot,
+    feature,
+    matching_spindles: list[PgmxEmbeddedSpindleSnapshot],
+) -> PgmxEmbeddedSpindleSnapshot:
+    through_or_full_depth = _is_through_drill_feature(feature) or (
+        _target_depth(feature) >= float(snapshot.state.depth) - 0.0005
+    )
+    named_spindles = {
+        tool.name: spindle
+        for spindle in matching_spindles
+        if (tool := _embedded_tool_for_spindle(snapshot, spindle)) is not None
+    }
+    if round(float(_feature_diameter(feature) or 0.0), 3) == 5.0:
+        preferred_tool = "007" if through_or_full_depth else "005"
+        if preferred_tool in named_spindles:
+            return named_spindles[preferred_tool]
+    return sorted(matching_spindles, key=lambda item: item.spindle)[0]
 
 
 def _embedded_spindle_for_tool(

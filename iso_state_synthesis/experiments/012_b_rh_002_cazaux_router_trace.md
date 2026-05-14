@@ -90,3 +90,20 @@ Con `B-RH-002` cerrado, los `18` residuales operativos quedan asi:
 La prioridad recomendada pasa a `T-XH-001`, porque concentra los casos donde
 falta `?%ETK[17]=257/S6000M3` antes de `?%ETK[0]` al pasar de router a
 taladro superior.
+
+## Addendum 2026-05-14
+
+Despues de cerrar otros frentes, reaparecio un residual `B-RH-002` aislado en
+`Cocina\mod 6 - Torre horno\Divisor_Horiz.pgmx`.
+
+Se registro como ficha separada:
+
+`iso_state_synthesis/experiments/020_b_rh_002_cazaux_linear_side_compensation.md`
+
+La regla nueva cubre `LineHorizontal`/`LineVertical` con compensacion lateral,
+`Line Down` y `Line Up`, usando eje tangencial desde `Approach/Lift` y eje
+normal nominal. Resultado Cazaux: `81` exactos, `22` `header_only`, `1`
+operativo. El unico residual operativo restante pasa a `T-XH-001`.
+
+Ese residual `T-XH-001` queda cerrado en
+`iso_state_synthesis/experiments/021_txh001_cazaux_router_to_side_speed.md`.

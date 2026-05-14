@@ -457,7 +457,16 @@ def _emit_work_sequence_candidate(
     previous_router_group: Optional[_WorkGroup] = None
     for index, group in enumerate(groups):
         next_group = groups[index + 1] if index < len(groups) - 1 else None
-        _emit_planned_work_group(lines, evaluation, group, previous_group, next_group, previous_router_group)
+        following_group = groups[index + 2] if index < len(groups) - 2 else None
+        _emit_planned_work_group(
+            lines,
+            evaluation,
+            group,
+            previous_group,
+            next_group,
+            following_group,
+            previous_router_group,
+        )
         _emit_planned_outgoing_transition(lines, group, next_group)
         if group.family in _ROUTER_MILLING_FAMILIES:
             previous_router_group = group
@@ -486,6 +495,7 @@ def _emit_planned_work_group(
     group: _WorkGroup,
     previous_group: Optional[_WorkGroup],
     next_group: Optional[_WorkGroup],
+    following_group: Optional[_WorkGroup],
     previous_router_group: Optional[_WorkGroup],
 ) -> None:
     family = group.family
@@ -543,7 +553,14 @@ def _emit_planned_work_group(
     elif family == "side_drill" and incoming_transition_id == "T-XH-001":
         assert previous_group is not None
         _emit_router_to_side_drill_transition(lines, evaluation, previous_group.reset, prepare, transition_id=incoming_transition_id)
-        _emit_side_drill_prepare_after_router(lines, evaluation, prepare, multi_side_sequence=next_family == "side_drill", transition_id=incoming_transition_id)
+        _emit_side_drill_prepare_after_router(
+            lines,
+            evaluation,
+            prepare,
+            previous_family=previous_group.family,
+            multi_side_sequence=next_family == "side_drill",
+            transition_id=incoming_transition_id,
+        )
         _emit_side_drill_trace(lines, trace, emit_mlv_after_etk7=False)
         _emit_side_drill_reset(lines, evaluation, reset, final=next_family is None)
     elif family == "side_drill" and previous_family == "top_drill":
@@ -571,7 +588,20 @@ def _emit_planned_work_group(
             evaluation,
             trace,
             emit_transition_lift=True,
-            emit_transition_exit=_slot_milling_transition_exit_required(next_group),
+            emit_transition_exit=_slot_milling_transition_exit_required(next_group, following_group),
+        )
+        _emit_slot_milling_reset(lines, reset, final=next_family is None)
+    elif family == "slot_milling" and incoming_transition_id == "T-BH-009":
+        assert previous_group is not None
+        _emit_slot_to_slot_milling_transition(lines, prepare, transition_id=incoming_transition_id)
+        _emit_slot_milling_trace(
+            lines,
+            evaluation,
+            trace,
+            previous_slot_trace=previous_group.trace,
+            previous_slot_exit_emitted=_slot_milling_transition_exit_required(group, next_group),
+            emit_transition_lift=True,
+            emit_transition_exit=_slot_milling_transition_exit_required(next_group, following_group),
         )
         _emit_slot_milling_reset(lines, reset, final=next_family is None)
     elif family == "top_drill" and incoming_transition_id == "T-BH-006":
@@ -2364,7 +2394,7 @@ def _prior_router_to_top_requires_face_selection(
         _optional_change_after(previous_router_group.prepare, "trabajo", "side_of_feature", "Center")
     )
     return (
-        previous_router_group.incoming_transition_id == "T-RH-001"
+        previous_router_group.incoming_transition_id in {"T-RH-001", "T-XH-002"}
         and profile_family == "OpenPolyline"
         and side_of_feature in {"Left", "Right"}
     )
@@ -2546,7 +2576,7 @@ def _emit_line_milling_trace(
         not has_lead_paths
         and not strategy_name
         and side_of_feature in {"Right", "Left"}
-        and profile_family in {"OpenPolyline", "Circle"}
+        and (profile_family in {"OpenPolyline", "Circle"} or profile_family.startswith("Line"))
     )
     uses_center_circle_leads = (
         has_lead_paths
@@ -2600,6 +2630,18 @@ def _emit_line_milling_trace(
             profile_winding,
         )
         rapid_x, rapid_y = rapid_point
+    elif (
+        uses_side_compensation
+        and profile_family.startswith("Line")
+        and approach_type == "Line"
+        and approach_mode == "Down"
+        and retract_type == "Line"
+        and retract_mode == "Up"
+    ):
+        rapid_x, rapid_y = _linear_side_compensation_rapid_point(
+            nominal_points,
+            approach,
+        )
     elif uses_side_compensation and profile_family == "OpenPolyline":
         polyline_lead = _polyline_side_compensation_leads(
             nominal_points,
@@ -3252,6 +3294,30 @@ def _emit_line_milling_trace(
             current_z = float(point.iso_z)
         generated.append(f"G0 Z{_fmt(security_z)}")
         motion_lines = tuple(generated)
+    elif (
+        uses_side_compensation
+        and profile_family.startswith("Line")
+        and approach_type == "Line"
+        and approach_mode == "Down"
+        and retract_type == "Line"
+        and retract_mode == "Up"
+    ):
+        compensation_code = "G42" if side_of_feature == "Right" else "G41"
+        include_cut_z = (
+            open_polyline_outside_piece
+            or float(cut_z) > -float(evaluation.initial_state.get("pieza", "depth"))
+        )
+        motion_lines = _linear_side_compensation_motion_lines(
+            nominal_points,
+            approach,
+            lift,
+            compensation_code,
+            float(security_z),
+            float(cut_z),
+            float(plunge_feed),
+            float(milling_feed),
+            include_cut_z=include_cut_z,
+        )
     elif uses_side_compensation and profile_family == "OpenPolyline":
         compensation_code = "G42" if side_of_feature == "Right" else "G41"
         polyline_lead = _polyline_side_compensation_leads(
@@ -3656,6 +3722,26 @@ def _emit_side_to_slot_milling_transition(
         )
 
 
+def _emit_slot_to_slot_milling_transition(
+    lines: list[ExplainedIsoLine],
+    differential: StageDifferential,
+    *,
+    transition_id: Optional[str] = None,
+) -> None:
+    source = _observed_rule_source("slot_to_slot_milling_transition")
+    for line in ("?%ETK[8]=1", "G40", "G17"):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Transicion interna entre ranuras superiores despues de reset parcial de sierra.",
+            confidence="confirmed",
+            rule_status="generalized_slot_to_slot_milling_sequence",
+            transition_id=transition_id,
+        )
+
+
 def _emit_slot_milling_prepare_after_top(
     lines: list[ExplainedIsoLine],
     differential: StageDifferential,
@@ -3761,6 +3847,8 @@ def _emit_slot_milling_trace(
     evaluation: IsoStateEvaluation,
     differential: StageDifferential,
     *,
+    previous_slot_trace: Optional[StageDifferential] = None,
+    previous_slot_exit_emitted: bool = True,
     emit_transition_lift: bool = False,
     emit_transition_exit: bool = False,
     emit_etk7_before_lift: bool = False,
@@ -3776,26 +3864,47 @@ def _emit_slot_milling_trace(
     plunge_feed = _change_after(differential, "movimiento", "plunge_feed")
     milling_feed = _change_after(differential, "movimiento", "milling_feed")
     source = _change_source(differential, "movimiento", "cut_z")
-    motion_lines = [
-        f"G0 X{_fmt(rapid_x)} Y{_fmt(rapid_y)}",
-        f"G0 Z{_fmt(rapid_z)}",
-        "D1",
-        f"SVL {_fmt(tool_offset)}",
-        f"VL6={_fmt(tool_offset)}",
-        f"SVR {_fmt(tool_radius)}",
-        f"VL7={_fmt(tool_radius)}",
-        f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}",
-        "?%ETK[7]=1",
-        _line_milling_motion_line(
-            float(cut_x),
-            float(rapid_y),
-            float(cut_z),
-            float(rapid_x),
-            float(rapid_y),
-            float(cut_z),
-            float(milling_feed),
-        ),
-    ]
+    motion_lines: list[str] = []
+    if previous_slot_trace is not None:
+        previous_rapid_x = _change_after(
+            previous_slot_trace,
+            "movimiento",
+            "rapid_x" if previous_slot_exit_emitted else "cut_x",
+        )
+        previous_rapid_y = _change_after(previous_slot_trace, "movimiento", "rapid_y")
+        motion_lines.extend(
+            (
+                f"G0 X{_fmt(previous_rapid_x)} Y{_fmt(previous_rapid_y)} Z{_fmt(rapid_z)}",
+                f"G0 X{_fmt(rapid_x)} Y{_fmt(rapid_y)} Z{_fmt(rapid_z)}",
+            )
+        )
+    else:
+        motion_lines.extend(
+            (
+                f"G0 X{_fmt(rapid_x)} Y{_fmt(rapid_y)}",
+                f"G0 Z{_fmt(rapid_z)}",
+            )
+        )
+    motion_lines.extend(
+        (
+            "D1",
+            f"SVL {_fmt(tool_offset)}",
+            f"VL6={_fmt(tool_offset)}",
+            f"SVR {_fmt(tool_radius)}",
+            f"VL7={_fmt(tool_radius)}",
+            f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}",
+            "?%ETK[7]=1",
+            _line_milling_motion_line(
+                float(cut_x),
+                float(rapid_y),
+                float(cut_z),
+                float(rapid_x),
+                float(rapid_y),
+                float(cut_z),
+                float(milling_feed),
+            ),
+        )
+    )
     if emit_transition_lift:
         motion_lines.append(f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}")
     if emit_transition_exit:
@@ -3823,8 +3932,18 @@ def _emit_slot_milling_trace(
         )
 
 
-def _slot_milling_transition_exit_required(next_group: Optional[_WorkGroup]) -> bool:
-    if next_group is None or next_group.family != "top_drill":
+def _slot_milling_transition_exit_required(
+    next_group: Optional[_WorkGroup],
+    following_group: Optional[_WorkGroup] = None,
+) -> bool:
+    if next_group is None:
+        return True
+    if next_group.family == "slot_milling":
+        if following_group is not None and following_group.family == "top_drill":
+            tool_name = str(_change_after(following_group.prepare, "herramienta", "tool_name"))
+            return tool_name == "001"
+        return True
+    if next_group.family != "top_drill":
         return True
     tool_name = str(_change_after(next_group.prepare, "herramienta", "tool_name"))
     return tool_name == "001"
@@ -4207,6 +4326,7 @@ def _emit_side_drill_prepare_after_router(
     evaluation: IsoStateEvaluation,
     differential: StageDifferential,
     *,
+    previous_family: Optional[str] = None,
     multi_side_sequence: bool = False,
     transition_id: Optional[str] = None,
 ) -> None:
@@ -4240,15 +4360,23 @@ def _emit_side_drill_prepare_after_router(
             transition_id=transition_id,
         )
     speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
-    if speed_activation is not None:
+    force_speed_reactivation = speed_activation is None and previous_family == "line_milling"
+    if speed_activation is not None or force_speed_reactivation:
         spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
+        etk_17 = int(speed_activation.after) if speed_activation is not None else 257
+        speed_source = (
+            speed_activation.source
+            if speed_activation is not None
+            else _change_source(differential, "herramienta", "spindle_speed_standard")
+        )
+        speed_confidence = speed_activation.confidence if speed_activation is not None else "confirmed"
         _append(
             lines,
-            f"?%ETK[17]={int(speed_activation.after)}",
+            f"?%ETK[17]={etk_17}",
             differential,
-            speed_activation.source,
+            speed_source,
             "Activacion de velocidad lateral despues de router.",
-            confidence=speed_activation.confidence,
+            confidence=speed_confidence,
             rule_status="generalized_router_to_side_drill_transition",
             transition_id=transition_id,
         )
@@ -5184,6 +5312,142 @@ def _line_milling_motion_line(
         words.append(f"Z{_fmt(z)}")
     words.append(f"F{_fmt(feed)}")
     return " ".join(words)
+
+
+def _linear_side_compensation_rapid_point(
+    nominal_points: tuple[tuple[float, float], ...],
+    approach: object,
+) -> tuple[float, float]:
+    axis = _linear_profile_tangent_axis(nominal_points)
+    entry_tangent = _trace_point_tangent(approach.points[0], axis)
+    approach_unit = _trace_move_tangent_unit(approach, axis)
+    return _linear_profile_program_point(
+        nominal_points,
+        entry_tangent - approach_unit,
+        axis,
+    )
+
+
+def _linear_side_compensation_motion_lines(
+    nominal_points: tuple[tuple[float, float], ...],
+    approach: object,
+    lift: object,
+    compensation_code: str,
+    security_z: float,
+    cut_z: float,
+    plunge_feed: float,
+    milling_feed: float,
+    *,
+    include_cut_z: bool,
+) -> tuple[str, ...]:
+    if len(nominal_points) < 2:
+        raise IsoCandidateEmissionError("El perfil lineal compensado no contiene puntos suficientes.")
+    axis = _linear_profile_tangent_axis(nominal_points)
+    entry_tangent = _trace_point_tangent(approach.points[0], axis)
+    entry_x, entry_y = _linear_profile_program_point(nominal_points, entry_tangent, axis)
+    start_x, start_y = nominal_points[0]
+    generated = [
+        "?%ETK[7]=4",
+        compensation_code,
+        f"G1 X{_fmt(entry_x)} Y{_fmt(entry_y)} Z{_fmt(security_z)} F{_fmt(plunge_feed)}",
+    ]
+    current_x = entry_x
+    current_y = entry_y
+    current_z = security_z
+    generated.append(
+        _line_milling_motion_line(
+            start_x,
+            start_y,
+            cut_z,
+            current_x,
+            current_y,
+            current_z,
+            plunge_feed,
+        )
+    )
+    current_x = start_x
+    current_y = start_y
+    current_z = cut_z
+    for point in nominal_points[1:]:
+        generated.append(
+            _line_milling_motion_line(
+                point[0],
+                point[1],
+                cut_z,
+                current_x,
+                current_y,
+                current_z,
+                milling_feed,
+                always_include_z=include_cut_z,
+            )
+        )
+        current_x, current_y = point
+    current_z = cut_z
+    lift_tangent = _trace_point_tangent(lift.points[-1], axis)
+    lift_x, lift_y = _linear_profile_program_point(nominal_points, lift_tangent, axis)
+    generated.append(
+        _line_milling_motion_line(
+            lift_x,
+            lift_y,
+            security_z,
+            current_x,
+            current_y,
+            current_z,
+            milling_feed,
+        )
+    )
+    current_z = security_z
+    current_x = lift_x
+    current_y = lift_y
+    lift_unit = _trace_move_tangent_unit(lift, axis)
+    leadout_x, leadout_y = _linear_profile_program_point(
+        nominal_points,
+        lift_tangent + lift_unit,
+        axis,
+    )
+    generated.extend(
+        (
+            "G40",
+            f"G1 X{_fmt(leadout_x)} Y{_fmt(leadout_y)} Z{_fmt(current_z)} F{_fmt(milling_feed)}",
+        )
+    )
+    return tuple(generated)
+
+
+def _linear_profile_tangent_axis(points: tuple[tuple[float, float], ...]) -> str:
+    if len(points) < 2:
+        raise IsoCandidateEmissionError("El perfil lineal no contiene puntos suficientes.")
+    start_x, start_y = points[0]
+    end_x, end_y = points[-1]
+    return "X" if abs(end_x - start_x) >= abs(end_y - start_y) else "Y"
+
+
+def _linear_profile_program_point(
+    points: tuple[tuple[float, float], ...],
+    tangent: float,
+    axis: str,
+) -> tuple[float, float]:
+    if axis == "X":
+        return tangent, points[0][1]
+    return points[0][0], tangent
+
+
+def _trace_point_tangent(point: object, axis: str) -> float:
+    value = getattr(point, axis.lower(), None)
+    if value is None:
+        raise IsoCandidateEmissionError(f"El toolpath lineal compensado no contiene eje {axis}.")
+    return float(value)
+
+
+def _trace_move_tangent_unit(move: object, axis: str) -> float:
+    if len(move.points) < 2:
+        raise IsoCandidateEmissionError("El lead lineal compensado no contiene puntos suficientes.")
+    start = _trace_point_tangent(move.points[0], axis)
+    end = _trace_point_tangent(move.points[-1], axis)
+    distance = end - start
+    if abs(distance) < 0.0005:
+        raise IsoCandidateEmissionError("El lead lineal compensado no desplaza sobre el eje de corte.")
+    return 1.0 if distance > 0.0 else -1.0
 
 
 def _no_lead_compensation_points(

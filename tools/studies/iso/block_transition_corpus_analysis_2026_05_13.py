@@ -24,6 +24,8 @@ if str(ROOT) not in sys.path:
 from iso_state_synthesis.differential import evaluate_pgmx_state_plan  # noqa: E402
 from iso_state_synthesis.emitter import (  # noqa: E402
     IsoCandidateEmissionError,
+    IsoCandidateComparison,
+    IsoLineDifference,
     ExplainedIsoLine,
     compare_candidate_to_iso,
     emit_candidate_from_evaluation,
@@ -37,6 +39,9 @@ DEFAULT_PGMX_ROOT = Path(r"S:\Maestro\Projects\ProdAction\Prod 26-01-01 Cazaux")
 DEFAULT_ISO_ROOT = Path(r"P:\USBMIX\ProdAction\Prod 26-01-01 Cazaux")
 DEFAULT_OUTPUT_DIR = DEFAULT_PGMX_ROOT / "_analysis"
 COMMON_STAGE_KEYS = {"program_header", "machine_preamble", "program_close"}
+COORDINATE_PRECISION_TOLERANCE_MM = 0.005
+MOTION_COMMANDS = {"G0", "G1", "G2", "G3"}
+COORDINATE_WORDS = {"X", "Y", "Z", "I", "J", "K", "R"}
 
 
 @dataclass(frozen=True)
@@ -138,6 +143,8 @@ def _analyze_pair(pgmx_path: Path, iso_path: Path, rel_path: Path) -> dict[str, 
         status = "exact"
     elif not significant_differences:
         status = "header_only"
+    elif _is_coordinate_precision_only(comparison, significant_differences):
+        status = "precision_only"
     else:
         status = "operational_diff"
 
@@ -171,6 +178,7 @@ def _analyze_pair(pgmx_path: Path, iso_path: Path, rel_path: Path) -> dict[str, 
         block_sequence=_block_sequence(program.lines),
         work_count=str(len(groups)),
         transition_count=str(len([group for group in groups if group.incoming_transition_id])),
+        notes=_status_notes(status),
     )
 
 
@@ -301,6 +309,73 @@ def _is_minor_header_difference(expected: str | None, actual: str | None) -> boo
     return abs(float(expected_match.group(2)) - float(actual_match.group(2))) <= 0.05
 
 
+def _is_coordinate_precision_only(
+    comparison: IsoCandidateComparison,
+    significant_differences: Sequence[IsoLineDifference],
+) -> bool:
+    if comparison.expected_line_count != comparison.actual_line_count:
+        return False
+    if not significant_differences:
+        return False
+    return all(
+        _is_coordinate_precision_difference(difference.expected, difference.actual)
+        for difference in significant_differences
+    )
+
+
+def _is_coordinate_precision_difference(expected: str | None, actual: str | None) -> bool:
+    if expected is None or actual is None:
+        return False
+    expected_tokens = expected.strip().split()
+    actual_tokens = actual.strip().split()
+    if not expected_tokens or expected_tokens[0] not in MOTION_COMMANDS:
+        return False
+    if not actual_tokens:
+        return False
+    if expected_tokens[0] != actual_tokens[0] or len(expected_tokens) != len(actual_tokens):
+        return False
+
+    saw_coordinate_delta = False
+    for expected_token, actual_token in zip(expected_tokens[1:], actual_tokens[1:]):
+        expected_word = _parse_numeric_word(expected_token)
+        actual_word = _parse_numeric_word(actual_token)
+        if expected_word is None or actual_word is None:
+            if expected_token != actual_token:
+                return False
+            continue
+        expected_letter, expected_value = expected_word
+        actual_letter, actual_value = actual_word
+        if expected_letter != actual_letter:
+            return False
+        if expected_letter not in COORDINATE_WORDS:
+            if expected_token != actual_token:
+                return False
+            continue
+        delta = abs(expected_value - actual_value)
+        if delta == 0:
+            continue
+        if delta > COORDINATE_PRECISION_TOLERANCE_MM:
+            return False
+        saw_coordinate_delta = True
+    return saw_coordinate_delta
+
+
+def _parse_numeric_word(token: str) -> tuple[str, float] | None:
+    match = re.fullmatch(r"([A-Z])(-?\d+(?:\.\d+)?)", token)
+    if not match:
+        return None
+    return match.group(1), float(match.group(2))
+
+
+def _status_notes(status: str) -> str:
+    if status == "precision_only":
+        return (
+            "Only coordinate deltas <= "
+            f"{COORDINATE_PRECISION_TOLERANCE_MM:.3f} mm in matching motion lines."
+        )
+    return ""
+
+
 def _join_nonempty(values: Iterable[str], separator: str) -> str:
     return separator.join(value for value in values if value)
 
@@ -348,6 +423,7 @@ def _build_summary(rows: Sequence[dict[str, str]], pgmx_root: Path, iso_root: Pa
     status_counts = Counter(row["status"] for row in rows)
     operational = [row for row in rows if row["status"] == "operational_diff"]
     header_only = [row for row in rows if row["status"] == "header_only"]
+    precision_only = [row for row in rows if row["status"] == "precision_only"]
     front_counts = Counter(row["candidate_front"] for row in operational)
     kind_counts = Counter(row["first_diff_kind"] for row in operational)
     transition_sequence_counts = Counter(row["transition_sequence"] for row in operational)
@@ -371,6 +447,19 @@ def _build_summary(rows: Sequence[dict[str, str]], pgmx_root: Path, iso_root: Pa
     lines.extend(["", "## Header Only", ""])
     if header_only:
         lines.append(f"- Rows with only minor `%Or` header deltas: `{len(header_only)}`")
+    else:
+        lines.append("- none")
+
+    lines.extend(["", "## Coordinate Precision Only", ""])
+    if precision_only:
+        lines.append(
+            f"- Rows with only coordinate deltas <= `{COORDINATE_PRECISION_TOLERANCE_MM:.3f}` mm in matching motion lines: `{len(precision_only)}`"
+        )
+        for row in precision_only[:12]:
+            lines.append(
+                f"- `{row['relative_path']}` line `{row['first_diff_line']}`: "
+                f"Maestro `{row['expected_line']}` / candidato `{row['actual_line']}`"
+            )
     else:
         lines.append("- none")
 
@@ -414,7 +503,7 @@ def _build_summary(rows: Sequence[dict[str, str]], pgmx_root: Path, iso_root: Pa
             )
 
     lines.extend(["", "## Strategy", ""])
-    lines.extend(_strategy_lines(operational, front_counts, kind_counts, header_only))
+    lines.extend(_strategy_lines(operational, front_counts, kind_counts, header_only, precision_only))
     return "\n".join(lines) + "\n"
 
 
@@ -435,6 +524,7 @@ def _strategy_lines(
     front_counts: Counter[str],
     kind_counts: Counter[str],
     header_only: Sequence[dict[str, str]],
+    precision_only: Sequence[dict[str, str]],
 ) -> list[str]:
     lines: list[str] = []
     if front_counts:
@@ -445,6 +535,10 @@ def _strategy_lines(
     if header_only:
         lines.append(
             f"- Tratar `{len(header_only)}` casos `header_only` como frente de formato/precision de cabecera, separado de la estrategia de bloques."
+        )
+    if precision_only:
+        lines.append(
+            f"- Tratar `{len(precision_only)}` casos `precision_only` como tolerancia numerica, no como falla de bloque/transicion."
         )
     if "G1 / G1" in kind_counts or "G0 / G0" in kind_counts:
         lines.append(

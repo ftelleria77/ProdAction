@@ -206,3 +206,33 @@ cabecera. No deben mezclarse con decisiones de bloque/transicion.
   El corpus general sube a `76` exactos, `21` `header_only` y `7`
   residuales; los primeros frentes son ahora `B-BH-005` `3`, `B-BH-002` `2`,
   `B-RH-002` `1` y `T-XH-001` `1`.
+- 2026-05-14: los resets completos/parciales quedaron separados como bloques
+  `B-BH-003/008`, `B-BH-009/010` y `B-BH-011/012`, sin cambiar texto ISO.
+  La validacion esta en
+  `iso_state_synthesis/experiments/017_bh_reset_block_catalog.md`.
+- 2026-05-14: `B-BH-005` bajo como primer frente con el reorden de tandas
+  laterales `Back -> Front -> Back` y la pausa al entrar desde sierra a una
+  secuencia lateral multiple. La validacion esta en
+  `iso_state_synthesis/experiments/018_b_bh_005_cazaux_side_drill_order_pause.md`.
+  El corpus general sube a `77` exactos, `22` `header_only` y `5` residuales.
+- 2026-05-14: `B-BH-002` quedo cerrado con arranque top drill en maximo `X` y
+  minimo `Y` para bloques automaticos de cuatro perforaciones, una herramienta
+  efectiva y profundidades mixtas. La validacion esta en
+  `iso_state_synthesis/experiments/019_b_bh_002_cazaux_top_drill_corner_start.md`.
+  El corpus general sube a `79` exactos, `22` `header_only` y `3` residuales.
+- 2026-05-14: el residual final `B-BH-005` quedo cerrado con cota directa para
+  `Left` angosto sin replicacion. La validacion queda agregada en
+  `iso_state_synthesis/experiments/018_b_bh_005_cazaux_side_drill_order_pause.md`.
+  El corpus general sube a `80` exactos, `22` `header_only` y `2` residuales.
+- 2026-05-14: el residual aislado `B-RH-002` de `Divisor_Horiz.pgmx` quedo
+  cerrado con la regla de `LineHorizontal`/`LineVertical` compensado `Line Down`
+  + `Line Up`. La validacion esta en
+  `iso_state_synthesis/experiments/020_b_rh_002_cazaux_linear_side_compensation.md`.
+  El corpus general queda `81` exactos, `22` `header_only` y `1` residual. El
+  unico primer frente operativo restante es `T-XH-001`.
+- 2026-05-14: el residual final `T-XH-001` de `Lat_Der.pgmx` quedo cerrado al
+  extender la reactivacion de velocidad a `line_milling -> side_drill`. La
+  validacion esta en
+  `iso_state_synthesis/experiments/021_txh001_cazaux_router_to_side_speed.md`.
+  El corpus general queda `82` exactos, `22` `header_only` y `0` residuales
+  operativos; `ISO/Cocina` queda `84/84`.

@@ -144,3 +144,27 @@ recomendado es `B-BH-007`, porque concentra las salidas de sierra vertical
 La raiz `Pieza*` queda estable. `ISO\Cocina` sube de `68/84` a `72/84` porque
 cuatro casos que antes se detenian en `T-XH-001` ahora avanzan hasta el frente
 real siguiente (`B-BH-007`).
+
+## Addendum 2026-05-14
+
+Tras cerrar los frentes posteriores, quedo un residual `T-XH-001` aislado en
+`Cocina\mod 6 - Torre horno\Lat_Der.pgmx`, pero era una entrada
+`line_milling -> side_drill`, no `line_milling -> top_drill`.
+
+La ficha nueva es:
+
+`iso_state_synthesis/experiments/021_txh001_cazaux_router_to_side_speed.md`
+
+Regla agregada: en `_emit_side_drill_prepare_after_router`, si la transicion
+viene desde `line_milling` y el diferencial no trae `salida.etk_17`, reactivar
+`?%ETK[17]=257` y `S...M3` antes de `?%ETK[0]`.
+
+Auditoria dedicada posterior:
+
+| resultado | cantidad |
+| --- | ---: |
+| `exact` | 50 |
+| `header_only` | 21 |
+| diferencias `T-XH-001` | 0 |
+
+Corpus Cazaux: `82` exactos, `22` `header_only`, `0` operativos.

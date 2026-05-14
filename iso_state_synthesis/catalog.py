@@ -172,6 +172,16 @@ TRANSITIONS: dict[str, IsoTransitionDefinition] = {
         "top_slot_to_horizontal_drill",
         ("S026", "S041"),
     ),
+    "T-BH-009": IsoTransitionDefinition(
+        "T-BH-009",
+        "internal_boring_head",
+        BORING_HEAD,
+        BORING_HEAD,
+        "slot_milling",
+        "slot_milling",
+        "top_slot_to_top_slot_after_partial_reset",
+        ("S046",),
+    ),
     "T-XH-001": IsoTransitionDefinition(
         "T-XH-001",
         "switching_heads",
@@ -215,6 +225,7 @@ _RULE_STATUS_TRANSITION_IDS = {
     "generalized_slot_to_top_drill_sequence": "T-BH-006",
     "generalized_side_to_slot_milling_sequence": "T-BH-007",
     "generalized_slot_to_side_drill_sequence": "T-BH-008",
+    "generalized_slot_to_slot_milling_sequence": "T-BH-009",
     "generalized_router_to_slot_milling_sequence": "T-XH-001",
     "generalized_boring_to_router_sequence": "T-XH-002",
 }
@@ -283,6 +294,8 @@ def select_transition_id(
         return "T-BH-007"
     if previous_family == "slot_milling" and next_family == "side_drill":
         return "T-BH-008"
+    if previous_family == "slot_milling" and next_family == "slot_milling":
+        return "T-BH-009"
     return None
 
 
