@@ -96,3 +96,27 @@ El ultimo `B-BH-005` es `Bano/Vanitory/Faja frontal.pgmx`. Maestro usa cota
 fija `Left` espejo de geometria en una pieza angosta (`width=150`), pero no es
 seguro aplicar esa regla a todos los `Left`: hay muchos exactos donde Maestro
 usa la cota de toolpath actual.
+
+## Actualizacion 2026-05-14
+
+El residual `Bano/Vanitory/Faja frontal.pgmx` quedo cerrado con una condicion
+mas acotada que la hipotesis global descartada:
+
+- plano `Left`;
+- sin replicacion;
+- la cota fija de toolpath mas la geometria infiere ancho `<=150`;
+- en ese caso se usa la geometria directa como cota fija lateral y tambien para
+  ordenar el bloque.
+
+Ademas, para piezas de ancho `<=150`, el emisor conserva `G4F0.500` antes del
+ultimo `Left` de mismo spindle aunque el siguiente trabajo ya sea cierre de
+programa.
+
+Validacion:
+
+- `Bano/Vanitory/Faja frontal.pgmx`: exacto;
+- Cazaux completo: `80` exactos, `22` `header_only`, `2` operativos;
+- raiz `Pieza*`: `217/222` exactos;
+- `ISO/Cocina`: `82/84` exactos.
+
+Con esto `B-BH-005` queda en `0` como primer frente del corpus Cazaux.

@@ -475,9 +475,7 @@ def _side_drill_step_sort_key(resolved_step: PgmxResolvedWorkingStepSnapshot) ->
     operation = resolved_step.operation
     plane = (feature.plane_name if feature is not None else "") or ""
     policy = _SIDE_DRILL_POLICIES.get(plane)
-    fixed = 0.0
-    if operation is not None and policy is not None:
-        fixed = _side_fixed_from_toolpath(operation, policy)
+    fixed = _side_fixed_for_resolved_step(resolved_step, policy)
     return (round(float(fixed), 6), resolved_step.step.id)
 
 
@@ -1268,7 +1266,7 @@ def _single_side_drill_stages(
         extra_depth,
         tool_offset,
     )
-    fixed = fixed_override if fixed_override is not None else _side_fixed_from_toolpath(operation, policy)
+    fixed = fixed_override if fixed_override is not None else _side_fixed_for_resolved_step(resolved_step, policy)
     z = center_y
     feed = _drill_descent_feed(tool, spindle)
 
@@ -2295,6 +2293,36 @@ def _side_fixed_from_toolpath(
     policy: dict[str, object],
 ) -> float:
     return float(policy["coordinate_sign"]) * _side_fixed_raw_from_toolpath(operation, policy)
+
+
+def _side_fixed_for_resolved_step(
+    resolved_step: PgmxResolvedWorkingStepSnapshot,
+    policy: Optional[dict[str, object]],
+) -> float:
+    operation = resolved_step.operation
+    if policy is None or operation is None:
+        return 0.0
+    if _side_drill_uses_geometry_fixed_for_narrow_left(resolved_step, policy):
+        assert resolved_step.geometry is not None
+        assert resolved_step.geometry.point is not None
+        return float(policy["coordinate_sign"]) * float(resolved_step.geometry.point[0])
+    return _side_fixed_from_toolpath(operation, policy)
+
+
+def _side_drill_uses_geometry_fixed_for_narrow_left(
+    resolved_step: PgmxResolvedWorkingStepSnapshot,
+    policy: dict[str, object],
+) -> bool:
+    feature = resolved_step.feature
+    operation = resolved_step.operation
+    geometry = resolved_step.geometry
+    if operation is None or feature is None or geometry is None or geometry.point is None:
+        return False
+    if (feature.plane_name or "") != "Left" or feature.replication_pattern is not None:
+        return False
+    raw = _side_fixed_raw_from_toolpath(operation, policy)
+    inferred_width = raw + float(geometry.point[0])
+    return inferred_width <= 150.000001
 
 
 def _side_fixed_raw_from_toolpath(

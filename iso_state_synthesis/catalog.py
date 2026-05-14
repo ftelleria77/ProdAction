@@ -59,7 +59,7 @@ BLOCKS: dict[str, IsoBlockDefinition] = {
     "B-BH-002": IsoBlockDefinition("B-BH-002", "top_drill", BORING_HEAD, "trace", ("S004", "S042")),
     "B-BH-003": IsoBlockDefinition("B-BH-003", "top_drill", BORING_HEAD, "reset_complete", ("S005", "S040")),
     "B-BH-004": IsoBlockDefinition("B-BH-004", "side_drill", BORING_HEAD, "prepare", ("S009",)),
-    "B-BH-005": IsoBlockDefinition("B-BH-005", "side_drill", BORING_HEAD, "trace", ("S010", "S041")),
+    "B-BH-005": IsoBlockDefinition("B-BH-005", "side_drill", BORING_HEAD, "trace", ("S010", "S041", "S043")),
     "B-BH-006": IsoBlockDefinition("B-BH-006", "slot_milling", BORING_HEAD, "prepare", ("S013", "S017")),
     "B-BH-007": IsoBlockDefinition("B-BH-007", "slot_milling", BORING_HEAD, "trace", ("S013",)),
     "B-BH-008": IsoBlockDefinition("B-BH-008", "top_drill", BORING_HEAD, "reset_partial", ("S021", "S022", "S040")),

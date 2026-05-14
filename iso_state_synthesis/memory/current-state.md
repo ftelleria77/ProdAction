@@ -1022,3 +1022,12 @@ Avance registrado el 2026-05-11 para `T-XH-002` con `OpenPolyline`:
   exactos, `22` `header_only`, `3` residuales. Validacion ampliada: raiz
   `Pieza*` estable en `217/222`; `ISO/Cocina` sube a `82/84`. Primeros
   frentes restantes: `B-BH-005` `1`, `B-RH-002` `1`, `T-XH-001` `1`.
+- Cierre 2026-05-14 de `B-BH-005`: se actualizo
+  `iso_state_synthesis/experiments/018_b_bh_005_cazaux_side_drill_order_pause.md`.
+  El residual `Bano/Vanitory/Faja frontal.pgmx` usa cota `Left` directa desde
+  geometria cuando el toolpath lateral es espejo (`raw + geometria = ancho`) y
+  el ancho inferido es `<=150`; el emisor tambien conserva `G4F0.500` antes del
+  ultimo `Left` de mismo spindle para piezas de ancho `<=150`. Validacion
+  Cazaux actual: `80` exactos, `22` `header_only`, `2` residuales. Validacion
+  ampliada: raiz `Pieza*` estable en `217/222`; `ISO/Cocina` estable en
+  `82/84`. Primeros frentes restantes: `B-RH-002` `1`, `T-XH-001` `1`.
