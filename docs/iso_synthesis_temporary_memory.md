@@ -5468,8 +5468,8 @@ Valores observados y corregidos tras la tanda
 | `side_g53_z_fixtures` grupo B | `58.000` | `164.500` | `106.500` |
 | `side_g53_z_fixtures` grupo B | `58.000` | `164.450` | `106.450` |
 
-El corpus real de modulos agrega `149.300`, tambien con `DZ=43.000`, por lo
-que su delta es `106.300`.
+El corpus real agrega `149.300`, tambien con `DZ=43.000`, por lo que su delta
+es `106.300`.
 
 Comparacion puntual con la ventana de Xilog Plus:
 
@@ -5721,7 +5721,7 @@ Esto elimina la hipotesis de una correccion oculta desde `yzone.cfg` para ese
 valor puntual. Sigue pendiente validar la regla general para areas distintas a
 `HG` si aparecen en piezas reales.
 
-## Corpus Real: Escuadrado + Taladros - 2026-05-03
+## Corpus real: Escuadrado + Taladros - 2026-05-03
 
 - Se habilito la secuencia observada `E001` escuadrado + taladros
   superiores/laterales.
@@ -5743,7 +5743,9 @@ valor puntual. Sigue pendiente validar la regla general para areas distintas a
   - las pausas `G4F0.500` laterales dependen de cara, profundidad y si el grupo
     lateral arranco inmediatamente despues de `Top`.
 - Validacion:
-  - corpus real completo: `84 ok`, `0 diff`, `0 error`.
+  - Corpus real completo:
+    `tmp/real_corpus_iso_generated_20260504_complete` -> `84 ok`, `0 diff`,
+    `0 error`.
   - Matriz raiz:
     `tmp/root_iso_generated_20260504_with_096_097` -> `103 ok`, `0 diff`,
     `0 missing_reference`.

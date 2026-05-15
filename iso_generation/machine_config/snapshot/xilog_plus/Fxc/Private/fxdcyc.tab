@@ -1,0 +1,211 @@
+h|H|PRIVATE\AHEAD||1|0|Header
+9z|SYS|PRIVATE\AHEAD||0|0|Header
+nn|CLAMPPIECE|PRIVATE\AHEAD||0|0|
+nn|SYNCTABLE|PRIVATE\AHEAD||0|0|
+nn|LOADPIECE|PRIVATE\AHEAD||0|0|
+nn|REFPIECE|PRIVATE\AHEAD||0|0|
+nn|SWAPPIECE|PRIVATE\AHEAD||0|0|
+nn|UNLOADPIECE|PRIVATE\AHEAD||0|0|
+p|O|PRIVATE\DSPECIAL||1|0|Spostamento origine pannello in battuta
+0p|PL|PRIVATE\DSPECIAL||1|0|Piano inclinato
+2z|ROT|PRIVATE\DSPECIAL||1|0|Rotazione del profilo
+t|TA|PRIVATE\DSPECIAL||1|0|Tastatura pannello
+1o|XO|PRIVATE\DSPECIAL||0|0|Cambio origine
+1k|XPL|PRIVATE\DSPECIAL||0|0|Piano inclinato
+1d|XS|PRIVATE\DSPECIAL||0|0|Chiamata di sottoprogramma
+1t|XTA|PRIVATE\DSPECIAL||0|0|Tastatura pannello
+1z|MSG|PRIVATE\DSPECIAL||1|0|Input Messaggio
+9c|XMSG|PRIVATE\DSPECIAL||0|0|Stampa Messaggio
+3a|XDUOMAT|PRIVATE\DSPECIAL||0|0|DUOMATIC
+9y|XT|PRIVATE\DSPECIAL||0|0|Definizione numero utensile
+b|B|PRIVATE\EBORING||1|0|Foratura
+2b|BO|PRIVATE\EBORING||1|0|Foratura ottimizzata
+r|BR|PRIVATE\EBORING||1|0|Foratura inclinata
+1b|XB|PRIVATE\EBORING||2|0|Foratura
+2f|XBO|PRIVATE\EBORING||2|0|Foratura ottimizzata
+2r|XBR|PRIVATE\EBORING||0|0|Foratura inclinata
+g|G0|PRIVATE\FMILLING||1|0|Inizio fresatura
+l|G1|PRIVATE\FMILLING||1|0|Fresatura lineare
+o|G2|PRIVATE\FMILLING||1|0|Fresatura circolare oraria
+a|G3|PRIVATE\FMILLING||1|0|Fresatura circolare antioraria
+0t|G5|PRIVATE\FMILLING||1|0|tratto tangente al precedente
+0a|ATP|PRIVATE\FMILLING||1|0|Arco tangente al tratto precedente
+0g|G0R|PRIVATE\FMILLING||1|0|Inizio fresatura inclinata
+0q|G1R|PRIVATE\FMILLING||1|0|Fresatura lineare inclinata
+0x|G2R|PRIVATE\FMILLING||1|0|Fresatura circolare oraria inclinata
+0y|G3R|PRIVATE\FMILLING||1|0|Fresatura circolare antioraria inclinata
+1m|G5R|PRIVATE\FMILLING||1|0|tratto tangente al precedente inclinato
+0u|ATPR|PRIVATE\FMILLING||1|0|Arco tangente al tratto precedente inclinato
+z|N|PRIVATE\FMILLING||1|0|Operazione nulla
+1g|XG0|PRIVATE\FMILLING||0|0|Inizio fresatura
+1l|XL2P|PRIVATE\FMILLING||2|0|Fresatura lineare - estesa
+1a|XA2P|PRIVATE\FMILLING||2|0|Arco dati due punti
+1c|XAR|PRIVATE\FMILLING||2|0|Arco dato raggio
+1z|XAR2|PRIVATE\FMILLING||0|0|Arco dato raggio 2
+2h|XG5|PRIVATE\FMILLING||2|0|tratto tangente al precedente
+1h|XATP|PRIVATE\FMILLING||2|0|Arco tangente al tratto precedente
+1n|XN|PRIVATE\FMILLING||0|0|Operazione nulla
+2g|XG0R|PRIVATE\FMILLING||0|0|Inizio fresatura inclinata
+2l|XG1R|PRIVATE\FMILLING||0|0|Fresatura lineare inclinata
+2o|XG2R|PRIVATE\FMILLING||0|0|Fresatura circolare oraria inclinata
+2a|XG3R|PRIVATE\FMILLING||0|0|Fresatura circolare antioraria inclinata
+2t|XG5R|PRIVATE\FMILLING||0|0|tratto tangente al precedente inclinato
+2p|XATPR|PRIVATE\FMILLING||0|0|Arco tangente al tratto precedente inclinato
+9s|GSET|PRIVATE\FMILLING||1|0|Modifica Velocità
+9r|XGSET|PRIVATE\FMILLING||0|0|Modifica Velocità
+2y|GCHA|PRIVATE\GMILLING||1|0|Smusso tra fresature
+2x|GFIL|PRIVATE\GMILLING||1|0|Raccordo tra fresature
+1y|XA3P|PRIVATE\GMILLING||2|0|Arco dati 3 punti
+1e|XEA|PRIVATE\GMILLING||0|0|Arco di ellisse
+2d|XGCHA|PRIVATE\GMILLING||2|0|Smusso tra fresature - estesa
+2c|XGFIL|PRIVATE\GMILLING||2|0|Raccordo tra fresature - estesa
+1s|XLR|PRIVATE\GMILLING||0|0|Smusso tra segmenti
+1u|XLU|PRIVATE\GMILLING||0|0|Raccordo tra segmenti
+1r|XRAT|PRIVATE\GMILLING||0|0|Tangenza segmento-arco
+1p|XSP|PRIVATE\GMILLING||0|0|Spezzata
+1f|XTAR|PRIVATE\GMILLING||0|0|Tangenza arco-segmento
+0i|GIN|PRIVATE\HINOUTRP||1|0|Ingresso automatico nel profilo
+0j|GOUT|PRIVATE\HINOUTRP||1|0|Uscita automatica dal profilo
+0n|GREP|PRIVATE\HINOUTRP||1|0|Ripetizione di un profilo
+1i|XGIN|PRIVATE\HINOUTRP||2|0|Ingresso automatico nel profilo
+1j|XGOUT|PRIVATE\HINOUTRP||0|0|Uscita automatica dal profilo
+1w|XGREP|PRIVATE\HINOUTRP||0|0|Ripetizione di un profilo
+c|;|PRIVATE\BTXT|comment.bmp|1|0|Commento
+f|F|PRIVATE\BTXT||1|0|Faccia di lavoro
+u|C|PRIVATE\BTXT||1|0|Correzione Utensile
+x|IX|PRIVATE\BTXT||1|0|Incrementale in X
+y|IY|PRIVATE\BTXT||1|0|Incrementale in Y
+m|SX|PRIVATE\BTXT||1|0|Speculare in X
+n|SY|PRIVATE\BTXT||1|0|Speculare in Y
+i|ISO|PRIVATE\BTXT||1|0|Istruzione ISO
+d|PAR|PRIVATE\BTXT||1|0|Dichiarazione parametro
+1q|D|PRIVATE\BTXT||1|0|Dichiarazione alias
+v|L|PRIVATE\BTXT||1|0|Assegna un valore a variabile
+k|IF|PRIVATE\BTXT||1|0|Salto condizionato
+j|GOTO|PRIVATE\BTXT||1|0|Salto incondizionato
+e|.|PRIVATE\BTXT|label.bmp|1|0|Definizione di etichetta
+0s|SET|PRIVATE\BTXT||1|0|Assegna un valore a variabile
+q|VT|PRIVATE\BTXT||1|0|Apertura tabella ventose
+w|VROW|PRIVATE\BTXT||1|0|Riga di tabella ventose
+0e|ENDVT|PRIVATE\BTXT||1|0|Chiusura tabella ventose
+0k|IF REPEAT|PRIVATE\BTXT|if_rept.bmp|1|0|Ripetizione condizionata di un ciclo
+0l|IF THEN|PRIVATE\BTXT|if_then.bmp|1|0|Esecuzione condizionata
+0m|IF EXIT|PRIVATE\BTXT|if_exit.bmp|1|0|Uscita condizionata da un ciclo
+0v|ELSE|PRIVATE\BTXT||1|0|Alternativa dell'esecuzione condizionata
+0f|FI|PRIVATE\BTXT||1|0|Fine esecuzione condizionata
+0c|DO|PRIVATE\BTXT||1|0|Inizio ciclo
+0o|OD|PRIVATE\BTXT||1|0|Fine ciclo
+0h|REPEAT|PRIVATE\BTXT||1|0|Ripetizione di un ciclo
+0z|EXIT|PRIVATE\BTXT||1|0|Uscita da un ciclo
+0d|SD|PRIVATE\BTXT||1|0|Set digit
+0b|SB|PRIVATE\BTXT||1|0|Set bit
+0r|RB|PRIVATE\BTXT||1|0|Reset bit
+0w|WB|PRIVATE\BTXT||1|0|Wait bit
+s|S|PRIVATE\BTXT||1|0|Chiamata di sottoprogramma
+1v|PRINT|PRIVATE\BTXT||1|0|Visualizzazione messaggio
+1x|TRACE|PRIVATE\BTXT||1|0|Memorizzazione messaggio
+p|P||||0|Passo di MIX
+9a|SO|PRIVATE\BTXT||1|0|Sottoprogramma ottimizzato
+9b|REF|PRIVATE\BTXT||1|0|Cambia Riferimento
+4g|G03D|PRIVATE\FMILLING||1|0|Inizio fresatura 3D
+4q|G13D|PRIVATE\FMILLING||1|0|Fresatura lineare 3D
+3g|XG03D|PRIVATE\FMILLING||2|0|Inizio fresatura 3D
+3q|XG13D|PRIVATE\FMILLING||2|0|Fresatura lineare 3D
+9d|PPAR|PRIVATE\BTXT||1|0|Impostazione dei parametri per sottoprogramma o macro
+9e|PARSECTION|PRIVATE\BTXT||1|0|Impostazione di una sezione per i parametri
+9k|PB|PRIVATE\BTXT||1|0|Programmazione barra del piano motorizzato
+5a|XDEEPBORE|PRIVATE\EBORING||0|0|Selezione modalità ciclo di scarico truciolo
+nn|XSUBR|PRIVATE\DSPECIAL||0|0|xSUBR
+nn|XENDSUBR|PRIVATE\DSPECIAL||0|0|xENDSUBR
+nn|XSTOCKS|PRIVATE\PIECES||0|0|Apertura sessione di definizione pezzi
+nn|XENDSTOCKS|PRIVATE\PIECES||0|0|Chiusura sessione di definizione pezzi
+nn|XSTKBEGIN|PRIVATE\PIECES||0|0|Apertura definizione singolo pezzo
+nn|XSTKEND|PRIVATE\PIECES||0|0|Chiusura definizione singolo pezzo
+nn|XSTKONSTOP|PRIVATE\PIECES||0|0|Appoggio pezzo in battuta lungo X
+nn|XSTKPOINT|PRIVATE\PIECES||0|0|Punto iniziale del profilo pezzo
+nn|XSTKPLANE|PRIVATE\PIECES||0|0|Definizione pezzo come solido di estrusione
+nn|XSTKORG|PRIVATE\PIECES||0|0|Origine pezzo rispetto alle battute
+nn|XSTKLOCK|PRIVATE\PIECES||0|0|Dispositivo di bloccaggio pezzo
+nn|XSTKLOAD|PRIVATE\PIECES||0|0|Definizione pezzo mediante file STL
+nn|XSTKLINE|PRIVATE\PIECES||0|0|Segmento di retta
+nn|XSTKBOX|PRIVATE\PIECES||0|0|Definizione pezzo come parallelepipedo
+nn|XSTKARC|PRIVATE\PIECES||0|0|Arco di cerchio
+nn|XSTKREF|PRIVATE\PIECES||0|0|Indicazione pezzo di riferimento
+nn|XSTKSIDE|PRIVATE\PIECES||0|0|Indicazione lati di bloccaggio pezzo
+nn|XSTKMOV|PRIVATE\PIECES||0|0|Spostamento pezzo
+nn|XSTKSEP|PRIVATE\PIECES||0|0|Separazione pezzo
+nn|LOCKPIECE|PRIVATE\COMBIFLEX||0|0|
+nn|LOCKSOLUTION|PRIVATE\COMBIFLEX||0|0|
+nn|OVERDIMENSION|PRIVATE\COMBIFLEX||0|0|
+nn|SEQUENTIALPROGEXE|PRIVATE\COMBIFLEX||0|0|
+nn|WORKPIECEBEGIN|PRIVATE\COMBIFLEX||0|0|
+nn|WORKPIECEEND|PRIVATE\COMBIFLEX||0|0|
+nn|WORKPIECESIZE|PRIVATE\COMBIFLEX||0|0|
+3b|CAMLOCK|ASSEMBLAGGIO||0|0|Foratura unione con camlock
+3b|FITTING_32|ASSEMBLAGGIO||0|0|barriera fitting
+3b|FITTING_32_D|ASSEMBLAGGIO||0|0|barriera fitting doppia
+2k|TOEKICK|ASSEMBLAGGIO||0|0|Toe kick"
+3b|UNIONE_O|ASSEMBLAGGIO||0|0|Foratura di collegamento orizzontale
+3b|UNIONE_V|ASSEMBLAGGIO||0|0|Foratura di collegamento verticale faccia_1
+3b|BARROT|BORES||0|0|Barriera di fori circolare
+3b|BOANGO|BORES||0|0|Linea di fori specificando l'angolo
+3b|BOCEX|BORES||0|0|Barriera centrata in X
+3b|BOCEY|BORES||0|0|Barriera centrata in Y
+3b|BOGROUP|BORES||0|0|Foratura di collegamento
+2f|XLINEBOR|BORES||0|0|Linea di fori con angolo
+3b|BASET_1|CERNIERE||0|0|Foratura basetta tipo 1"
+3b|BASET_1_D|CERNIERE||0|0|Doppia foratura basetta tipo 1 "   
+3b|BASET_1_T|CERNIERE||0|0|Tripla foratura basetta tipo 1 
+3b|BASET_2|CERNIERE||0|0|Foratura basetta tipo 2"
+3b|BASET_2_D|CERNIERE||0|0|Doppia Foratura basetta tipo 2
+3b|BASET_2_T|CERNIERE||0|0|Tripla Foratura basetta tipo 2
+3b|CERNIE_1|CERNIERE||0|0|Foratura cerniera tipo 1
+3b|CERNIE_1_D|CERNIERE||0|0|Doppia foratura cerniera tipo 1"   
+3b|CERNIE_1_T|CERNIERE||0|0|Tripla foratura cerniera tipo 1" 
+3b|CERNIE_2|CERNIERE||0|0|Foratura cerniera tipo 2
+3b|CERNIE_2_D|CERNIERE||0|0|Doppia Foratura cerniera tipo 2
+3b|CERNIE_2_T|CERNIERE||0|0|Tripla Foratura cerniera tipo 2" 
+3b|CERNIE_3|CERNIERE||0|0|Foratura cerniera tipo 3
+3b|CERNIE_3_D|CERNIERE||0|0|Doppia Foratura cerniera tipo 3"   
+3b|CERNIE_3_T|CERNIERE||0|0|Tripla Foratura cerniera tipo 3"   
+3b|CERNIE_4|CERNIERE||0|0|Foratura cerniera tipo 4
+3b|CERNIE_4_D|CERNIERE||0|0|Doppia Foratura cerniera tipo 4"
+3b|CERNIE_4_T|CERNIERE||0|0|Tripla Foratura cerniera tipo 4
+3b|CERNIE_5|CERNIERE||0|0|Foratura cerniera tipo 5
+3b|CERNIE_5_D|CERNIERE||0|0|Doppia Foratura cerniera tipo 5" 
+3b|CERNIE_5_T|CERNIERE||0|0|Tripla Foratura cerniera tipo 5" 
+3b|CERNIE_6|CERNIERE||0|0|Foratura cerniera tipo 6
+3b|CERNIE_6_D|CERNIERE||0|0|Doppia Foratura cerniera tipo 6
+3b|CERNIE_6_T|CERNIERE||0|0|Tripla Foratura cerniera tipo 6
+3b|AGGANCIO_PP|FERRAMENTA||0|0|Aggancio per pensile
+3b|FORI_FARETTO|FERRAMENTA||0|0|fori per fissaggio faretto forma circolare
+8t|FORO_FARETTO_C|FERRAMENTA||0|0|Foro per faretto
+8t|FORO_FARETTO_R|FERRAMENTA||0|0|Foro per faretto rettangolare
+3b|GUIDA_CASSETTI|FERRAMENTA||0|0|Foratura per guida cassetti
+3b|MANIGLIA_1|FERRAMENTA||0|0|Foratura pomello/maniglia 
+3b|MANIGLIA_C|FERRAMENTA||0|0|Scasso per maniglia circolare "
+3b|MANIGLIA_R|FERRAMENTA||0|0|Scasso maniglia rettangolare"          
+3b|CANALE|MACRO_STD||0|0|Canale per schienale direzione X
+3b|SCONTORNATURA|MACRO_STD||0|0|Contornatura pezzo"           
+5b|XBRAKE|MACRO_STD||0|0|Freni
+nn|XDUSTPAN|MACRO_STD||0|0|Programmazione della paletta
+1i|XGINV|MACRO_STD||0|0|Ingresso automatico nel profilo con velocità
+1j|XGOUTV|MACRO_STD||0|0|Uscita automatica dal profilo con velocità
+nn|XNOTNOP|MACRO_STD||0|0|Elimina operazione nulla tra lavorazioni
+5a|XTSP|MACRO_STD||0|0|Tool Setting Probe
+5g|CLEAN|MBD||0|0|Clean nesting table
+6g|PARK|MBD||0|0|park
+5a|XBLOWER|MBD||0|0|SOFFIO
+2g|XNOP|MBD||0|0|Tre fori a passo fisso
+3b|CHANNELX|POURPO||0|0|Canale direzione X
+3b|CHANNELY|POURPO||0|0|Canale direzione Y
+8t|SCASSOC|POURPO||0|0|Scasso circolare
+8t|SCASSOR|POURPO||0|0|Scasso rettangolare
+3b|SCONT|POURPO||0|0|scontornatura
+3b|TASCAC|POURPO||0|0|Tasca circolare
+3b|TASCARET|POURPO||0|0|Tasca rettangolare
+2k|XTOEKICK|POURPO||0|0|Toe kick
+3b|ANTAX|RAIDOOR||0|0|Disegno antina CdG
+3b|ANTCIRC|RAIDOOR||0|0|Disegno antina semicerchio
+3b|ARCORIB|RAIDOOR||0|0|Arco ribassato
+3b|BUGNARET|RAIDOOR||0|0|Disegno antina 'bugnaret'

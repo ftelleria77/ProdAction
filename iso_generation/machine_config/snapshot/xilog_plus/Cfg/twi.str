@@ -1,0 +1,250 @@
+[STRUCT]
+KEY_TWI {
+        *,TWI_KINE;
+        if(yKine == 1) {
+                RH_X0;
+                RH_Y0;
+                RH_Z0;
+                RH_ORIENT;
+                RH_EC;
+                RH_ECREV;
+                RH_ECAX;
+        }
+        if(yKine == 2) {
+                FRH_X0;
+                FRH_Y0;
+                FRH_Z0;
+                FRH_ORIENT;
+                FRH_EC;
+                FRH_ECREV;
+                FRH_ECAX;
+                FRH_X1;
+                FRH_Y1;
+                FRH_EB;
+                FRH_EBREV;
+                FRH_EBAX;
+                FRH_X2;
+                FRH_Z2;
+        }
+        if(yKine == 3) {
+                OARH_X0;
+                OARH_Y0;
+                OARH_Z0;
+                OARH_ORIENT;
+                OARH_EC;
+                OARH_ECREV;
+                OARH_ECAX;
+                OARH_X1;
+                OARH_Y1;
+                OARH_TILT;
+                OARH_EB;
+                OARH_EBREV;
+                OARH_EBAX;
+                OARH_X2;
+                OARH_Y2;
+                OARH_Z2;
+        }
+
+        TWI_MINRPM;
+        TWI_MAXRPM;
+        TWI_CCW;
+}
+
+[DEFAULT]
+MSK = 0, 32
+FRM = DEC, 0
+LEN = 10
+[TWI_KINE]
+ADR = yKine
+RNG = {0,1,2,3}
+FRM = CBX, 4
+LST = TWI_KINELIST
+HLP = TWI_KINE
+
+[RH_X0]
+ADR =      htwi.rh.dX
+FRM = QTA, 3
+HFG = rotary head1.bmp
+HLP = RH_X0
+[RH_Y0]
+ADR =      htwi.rh.dY
+FRM = QTA, 3
+HFG = rotary head1.bmp
+HLP = RH_Y0
+[RH_Z0]
+ADR =      htwi.rh.dZ
+FRM = QTA, 3
+HFG = rotary head1.bmp
+HLP = RH_Z0
+[RH_ORIENT]
+ADR =      htwi.rh.yOrient
+HFG = orient.bmp
+RNG = {6,8,9}
+HLP = RH_ORIENT
+[RH_EC]
+ADR =      htwi.rh.dEC
+FRM = DEC, 3
+HLP = RH_EC1
+HFG = rotary head C.bmp
+[RH_ECREV]
+ADR =      htwi.rh.bECRev
+RNG = {0,1}
+HLP = RH_ECREV
+[RH_ECAX]
+ADR =      htwi.rh.yECAx
+RNG = {0,7,8,9,10,127}
+HLP = RH_ECAX
+
+[FRH_X0]
+ADR =      htwi.frh.dX
+FRM = QTA, 3
+HFG = fork rotary head X1.bmp
+HLP = FRH_X0
+[FRH_Y0]
+ADR =      htwi.frh.dY
+FRM = QTA, 3
+HFG = fork rotary head Y1.bmp
+HLP = FRH_Y0
+[FRH_Z0]
+ADR =      htwi.frh.dZ
+FRM = QTA, 3
+HFG = fork rotary head Z1.bmp
+HLP = FRH_Z0
+[FRH_ORIENT]
+ADR =      htwi.frh.yOrient
+RNG = {6,8,9}
+HFG = orient.bmp
+HLP = FRH_ORIENT
+[FRH_EC]
+ADR =      htwi.frh.dEC
+FRM = DEC, 3
+HFG = fork rotary head EC.bmp
+HLP = FRH_EC
+[FRH_ECREV]
+ADR =      htwi.frh.bECRev
+RNG = {0,1}
+HLP = FRH_ECREV
+[FRH_ECAX]
+ADR =      htwi.frh.yECAx
+RNG = {0,7,8,9,10,127}
+HLP = FRH_ECAX
+[FRH_X1]
+ADR =      htwi.frh.dXx
+FRM = QTA, 3
+HFG = fork rotary head X2.bmp
+HLP = FRH_X1
+[FRH_Y1]
+ADR =      htwi.frh.dYy
+HFG = fork rotary head Y2.bmp
+FRM = QTA, 3
+HLP = FRH_Y1
+[FRH_EB]
+ADR =      htwi.frh.dEB
+FRM = DEC, 3
+HFG = fork rotary head EB.bmp
+HLP = FRH_EB
+[FRH_EBREV]
+ADR =      htwi.frh.bEBRev
+RNG = {0,1}
+HLP = FRH_EBREV
+[FRH_EBAX]
+ADR =      htwi.frh.yEBAx
+RNG = {0,7,8,9,10,127}
+HLP = FRH_EBAX
+[FRH_X2]
+ADR =      htwi.frh.dXX
+FRM = QTA, 3
+HFG = fork rotary head portautensile X.bmp
+HLP = FRH_X2
+[FRH_Z2]
+ADR =      htwi.frh.dZZ
+FRM = QTA, 3
+HFG = fork rotary head portautensile Z.bmp
+HLP = FRH_Z2
+
+[OARH_X0]
+ADR =      htwi.oarh.dX
+FRM = QTA, 3
+HFG = oblique axis rotary head X1.bmp
+HLP = OARH_X0
+[OARH_Y0]
+ADR =      htwi.oarh.dY
+FRM = QTA, 3
+HFG = oblique axis rotary head Y1.bmp
+HLP = OARH_Y0
+[OARH_Z0]
+ADR =      htwi.oarh.dZ
+FRM = QTA, 3
+HFG = oblique axis rotary head Z1.bmp
+HLP = OARH_Z0
+[OARH_ORIENT]
+ADR =      htwi.oarh.yOrient
+RNG = {6,8,9}
+HFG = orient.bmp
+HLP = OARH_ORIENT
+[OARH_EC]
+ADR =      htwi.oarh.dEC
+FRM = DEC, 3
+HFG = oblique axis rotary head EC.bmp
+HLP = OARH_EC
+[OARH_ECREV]
+ADR =      htwi.oarh.bECRev
+RNG = {0,1}
+HLP = OARH_ECREV
+[OARH_ECAX]
+ADR =      htwi.oarh.yECAx
+RNG = {0,7,8,9,10,127}
+HLP = OARH_ECAX
+[OARH_X1]
+ADR =      htwi.oarh.dXx
+FRM = QTA, 3
+HFG = oblique axis rotary head X2.bmp
+HLP = OARH_X1
+[OARH_Y1]
+ADR =      htwi.oarh.dYy
+HFG = oblique axis rotary head Y2.bmp
+FRM = QTA, 3
+HLP = OARH_Y1
+[OARH_TILT]
+ADR =      htwi.oarh.dTilt
+FRM = DEC, 3
+HFG = oblique axis rotary head tilt.bmp
+HLP = OARH_TILT
+[OARH_EB]
+ADR =      htwi.oarh.dEB
+FRM = DEC, 3
+HFG = oblique axis rotary head EB.bmp
+HLP = OARH_EB
+[OARH_EBREV]
+ADR =      htwi.oarh.bEBRev
+RNG = {0,1}
+HLP = OARH_EBREV
+[OARH_EBAX]
+ADR =      htwi.oarh.yEBAx
+RNG = {0,7,8,9,10,127}
+HLP = OARH_EBAX
+[OARH_X2]
+ADR =      htwi.oarh.dXX
+FRM = QTA, 3
+HFG = oblique axis rotary head portautensile X.bmp
+HLP = OARH_X2
+[OARH_Y2]
+ADR =      htwi.oarh.dYY
+FRM = QTA, 3
+HFG = oblique axis rotary head portautensile Y.bmp
+HLP = OARH_Y2
+[OARH_Z2]
+ADR =      htwi.oarh.dZZ
+FRM = QTA, 3
+HFG = oblique axis rotary head portautensile Z.bmp
+HLP = OARH_Z2
+
+[TWI_MINRPM]
+ADR =       dwMinRPM
+HLP = TWI_MINRPM
+[TWI_MAXRPM]
+ADR =       dwMaxRPM
+HLP = TWI_MAXRPM
+[TWI_CCW]
+ADR =       yCCW
+HLP = TWI_CCW
