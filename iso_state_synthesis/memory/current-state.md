@@ -3,7 +3,25 @@
 Nueva memoria de trabajo para redisenar la generacion ISO desde cero sin
 arrastrar la arquitectura por patrones de `iso_generation/`.
 
-Ultima actualizacion: 2026-05-11
+Ultima actualizacion: 2026-05-15
+
+## Retiro De `iso_generation/`
+
+Decision del 2026-05-15: el laboratorio historico `iso_generation/` se retira
+por completo de la rama activa. Su emisor por patrones queda disponible en el
+historial git, pero no debe mantenerse como paquete paralelo junto al
+sintetizador por estado.
+
+Motivo: el enfoque vigente vive en `iso_state_synthesis/` y debe explicar el ISO
+mediante estados, diferenciales, bloques, transiciones y fuentes observadas. El
+codigo viejo de `iso_generation/` resolvia familias y combinaciones con reglas
+monoliticas de soporte, por lo que conservarlo en el arbol de trabajo introduce
+duplicidad tecnica y confunde cual es la arquitectura vigente.
+
+La biblioteca `Xilog Plus/Fxc` que existia solamente en el snapshot viejo no se
+migra como dependencia automatica. Si el estudio de nuevos mecanizados demuestra
+que algun archivo de `Fxc` es necesario, se debe incorporar de forma explicita y
+documentada al entorno de investigacion correspondiente.
 
 ## Alcance
 
