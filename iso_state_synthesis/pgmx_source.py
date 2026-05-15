@@ -2361,7 +2361,10 @@ def _side_drill_uses_geometry_fixed_for_narrow_left(
         return False
     raw = _side_fixed_raw_from_toolpath(operation, policy)
     inferred_width = raw + float(geometry.point[0])
-    return inferred_width <= 150.000001
+    if inferred_width <= 150.000001:
+        return True
+    plane_width = float(resolved_step.plane.x_dimension or 0.0) if resolved_step.plane is not None else 0.0
+    return resolved_step.step.name.startswith("XBO_") and abs(inferred_width - plane_width) <= 0.0005
 
 
 def _side_fixed_raw_from_toolpath(

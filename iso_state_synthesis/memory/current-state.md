@@ -1118,3 +1118,34 @@ Avance registrado el 2026-05-11 para `T-XH-002` con `OpenPolyline`:
   (`Cocina\Parte 2\mod 1 - Torre heladera\Faja frontal.pgmx`). Los
   `precision_only` quedan fuera del plan operativo salvo que se busque
   igualdad byte-a-byte.
+- Cierre 2026-05-15 de `T-BH-003` en DeMarco sin reabrir Cazaux: se reemplazo
+  la pausa amplia por `width<=150` antes del ultimo `Left` por una excepcion
+  acotada a ultimo `Left -> Left`, sin trabajo posterior, mismo spindle, eje
+  `X`, ancho `150`, largo `<=1000` y cota fija lateral `-130 -> -70`. Esto
+  conserva el `G4F0.500` de `Bano/Vanitory/Faja frontal.pgmx` en Cazaux, pero
+  omite la pausa final que sobraba en los `4` DeMarco (`Tabique`, `Tabique`,
+  `Garage/Faja frontal2`, `Mueble TV/Faja frontal`). Validacion: DeMarco
+  `328` exactos, `2` `header_only`, `5` `precision_only`, `1` operativo,
+  `2` no soportados y `46` sin ISO; Cazaux `82` exactos y `22` `header_only`;
+  `ISO/Cocina` `84/84`; raiz `Pieza*` estable `217` exactos y `5`
+  residuales previos. Queda solo `B-BH-005` de DeMarco como operativo real.
+- Cierre 2026-05-15 de `B-BH-005` DeMarco: el caso
+  `Cocina\Parte 2\mod 1 - Torre heladera\Faja frontal.pgmx` tenia dos bloques
+  `Left` separados por top drill, con toolpath lateral espejado respecto de la
+  geometria (`toolpath_raw + geometry_x = ancho de plano`). Se extendio la
+  regla de cota fija `Left` para usar geometria directa cuando no hay
+  replicacion, el working step es `XBO_*` y la suma coincide con el ancho real
+  del plano. Validacion final: DeMarco `329` exactos, `2` `header_only`, `5`
+  `precision_only`, `2` no soportados, `46` sin ISO y `0` operativos; Cazaux
+  `82` exactos y `22` `header_only`; `ISO/Cocina` `84/84`; raiz `Pieza*`
+  estable. No quedan residuales operativos en DeMarco para los ISO existentes.
+- Pasada 2026-05-15 sobre `Prod 25-09-04 Haeublein`: se agrego como corpus de
+  ejemplos con `135` pares PGMX/ISO. Resultado inicial: `104` exactos, `5`
+  operativos y `26` no soportados. No aparecen nuevos frentes de transicion;
+  los operativos son `B-BH-002` (`4`, orden top drill) y `B-BH-005` (`1`, orden
+  de tandas laterales). Haeublein muestra dos limites de reglas actuales:
+  `PGMX-ORD-002` (`4` huecos/misma herramienta/profundidades mixtas) no es
+  universal, y `PGMX-ORD-003` no debe rotar globalmente cualquier patron
+  `cara A -> cara B -> cara A` porque `Right -> Left -> Right` conserva el
+  primer `Right`. Ficha:
+  `iso_state_synthesis/experiments/024_haeublein_corpus_examples.md`.

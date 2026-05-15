@@ -108,15 +108,30 @@ mas acotada que la hipotesis global descartada:
 - en ese caso se usa la geometria directa como cota fija lateral y tambien para
   ordenar el bloque.
 
-Ademas, para piezas de ancho `<=150`, el emisor conserva `G4F0.500` antes del
-ultimo `Left` de mismo spindle aunque el siguiente trabajo ya sea cierre de
-programa.
+Actualizacion posterior 2026-05-15: esta pausa no se conserva para todos los
+anchos `<=150`. La regla amplia reabria `4` DeMarco. La condicion vigente queda
+mas estrecha: ultimo `Left -> Left`, sin trabajo posterior, mismo spindle, eje
+`X`, ancho `150`, largo `<=1000` y cota fija lateral `-130 -> -70`.
 
 Validacion:
 
 - `Bano/Vanitory/Faja frontal.pgmx`: exacto;
-- Cazaux completo: `80` exactos, `22` `header_only`, `2` operativos;
+- Cazaux completo: `82` exactos, `22` `header_only`;
 - raiz `Pieza*`: `217/222` exactos;
-- `ISO/Cocina`: `82/84` exactos.
+- `ISO/Cocina`: `84/84` exactos.
 
 Con esto `B-BH-005` queda en `0` como primer frente del corpus Cazaux.
+
+## Actualizacion 2026-05-15 DeMarco
+
+El mismo frente reaparecio en DeMarco con ancho `220`: el toolpath `Left`
+venia espejado y Maestro usaba la geometria directa por bloque. La condicion
+vigente para cota fija `Left` queda:
+
+- sin replicacion;
+- working step `XBO_*`;
+- `toolpath_raw + geometry_x` coincide con el ancho real del plano.
+
+Esta regla conserva Cazaux `82` exactos, `22` `header_only`; `ISO/Cocina`
+`84/84`; y cierra DeMarco a `329` exactos, `2` `header_only`, `5`
+`precision_only`, `0` operativos.

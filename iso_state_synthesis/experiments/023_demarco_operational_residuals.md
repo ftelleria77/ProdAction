@@ -216,7 +216,7 @@ Resultado:
 - `T-BH-003` desaparece como frente operativo DeMarco.
 - DeMarco queda con `1` operativo real: `B-BH-005` en
   `Cocina\Parte 2\mod 1 - Torre heladera\Faja frontal.pgmx`.
-- Cazaux regresa en `1` caso: `Baño\Vanitory\Faja frontal.pgmx`, donde
+- Cazaux regresaba en `1` caso: `Bano\Vanitory\Faja frontal.pgmx`, donde
   Maestro si conserva `G4F0.500` antes del ultimo `Left`.
 - `ISO/Cocina` queda estable en `84/84`.
 - Raiz `Pieza*` queda estable en `217` exactos y los `5` residuales previos
@@ -226,10 +226,80 @@ Lectura:
 
 - La pausa final `Left -> Left` no es regla general; en los corpus reales hay
   muchos finales `Left -> Left` sin pausa.
-- La excepcion Cazaux `Baño\Vanitory\Faja frontal.pgmx` sigue sin una variable
+- La excepcion Cazaux `Bano\Vanitory\Faja frontal.pgmx` sigue sin una variable
   clara en el snapshot: comparte ancho `150`, profundidad, spindle, mask,
   toolpath lateral y estructura de `4` laterales con casos DeMarco que no
   pausan.
 - No conviene restaurar una regla amplia por `width<=150`; si se quiere cerrar
   simultaneamente DeMarco y Cazaux, falta aislar una condicion adicional o
   aceptar una excepcion documentada para ese caso.
+
+## Regla Refinada 2026-05-15
+
+Se compararon los casos equivalentes `Right,Right,Left,Left` con ancho `150`:
+
+| corpus | archivo | largo | pausa final |
+| --- | --- | ---: | --- |
+| DeMarco | `Garage\mod 2\Faja frontal2.pgmx` | `1614` | no |
+| DeMarco | `Mueble TV\Faja frontal.pgmx` | `2064` | no |
+| Cazaux | `Bano\Vanitory\Faja frontal.pgmx` | `880` | si |
+
+La excepcion se acoto a:
+
+- ultimo `Left -> Left`;
+- sin trabajo posterior;
+- mismo spindle lateral;
+- eje lateral `X`;
+- ancho `150`;
+- largo `<=1000`;
+- cota fija lateral `-130 -> -70`.
+
+Validacion:
+
+- DeMarco: `328` exactos, `2` `header_only`, `5` `precision_only`, `1`
+  operativo, `2` no soportados, `46` sin ISO.
+- Cazaux: `82` exactos, `22` `header_only`.
+- `ISO/Cocina`: `84/84`.
+- Raiz `Pieza*`: estable en `217` exactos y los `5` residuales previos
+  `Pieza_181..185`.
+
+Con esto `T-BH-003` queda cerrado en los corpus actuales. El unico operativo
+DeMarco sigue siendo `B-BH-005`:
+`Cocina\Parte 2\mod 1 - Torre heladera\Faja frontal.pgmx`.
+
+## Cierre `B-BH-005` 2026-05-15
+
+El ultimo operativo DeMarco era un intercambio de cotas `Left` entre dos
+bloques laterales separados por una tanda de top drill:
+
+```text
+Right 20,80 -> Left 20,80 -> top drill -> Left 200,140 -> Right 140,200
+```
+
+El toolpath de los `Left` venia espejado respecto de la geometria:
+
+```text
+toolpath_raw + geometry_x = ancho de plano
+```
+
+La regla previa solo usaba geometria directa para `Left` si el ancho inferido
+era `<=150`. Eso cerraba Cazaux angosto, pero no este caso de ancho `220`.
+La regla vigente usa geometria directa tambien cuando:
+
+- el plano es `Left`;
+- no hay replicacion;
+- el nombre del working step empieza con `XBO_`;
+- `toolpath_raw + geometry_x` coincide con el ancho real del plano.
+
+Validacion final:
+
+- DeMarco: `329` exactos, `2` `header_only`, `5` `precision_only`, `2` no
+  soportados, `46` sin ISO, `0` operativos.
+- Cazaux: `82` exactos, `22` `header_only`.
+- `ISO/Cocina`: `84/84`.
+- Raiz `Pieza*`: estable en `217` exactos y los `5` residuales previos
+  `Pieza_181..185`.
+
+Estado restante: no quedan residuales operativos en DeMarco dentro de los ISO
+existentes. Los pendientes son candidatos no soportados, faltantes de ISO y los
+`precision_only` si alguna vez se necesita igualdad byte-a-byte.

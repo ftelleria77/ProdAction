@@ -390,6 +390,14 @@ def _emit_side_drill_sequence_candidate(
             previous_prepare=previous_prepare,
             previous_trace=previous_trace,
             multi_side_sequence=index < len(groups) - 1,
+            final_left_pause=_requires_final_short_left_pause(
+                evaluation,
+                previous_prepare,
+                previous_trace,
+                prepare,
+                trace,
+                multi_side_sequence=index < len(groups) - 1,
+            ),
         )
         same_spindle = (
             previous_prepare is not None
@@ -630,6 +638,14 @@ def _emit_planned_work_group(
             previous_prepare=previous_prepare,
             previous_trace=previous_trace,
             multi_side_sequence=next_family is not None,
+            final_left_pause=_requires_final_short_left_pause(
+                evaluation,
+                previous_prepare,
+                previous_trace,
+                prepare,
+                trace,
+                multi_side_sequence=next_family is not None,
+            ),
             transition_id=incoming_transition_id,
         )
         same_spindle = _change_after(previous_prepare, "herramienta", "spindle") == _change_after(
@@ -3999,6 +4015,7 @@ def _emit_side_drill_prepare(
     previous_prepare: Optional[StageDifferential] = None,
     previous_trace: Optional[StageDifferential] = None,
     multi_side_sequence: bool = False,
+    final_left_pause: bool = False,
     transition_id: Optional[str] = None,
 ) -> None:
     length = evaluation.initial_state.get("pieza", "length")
@@ -4059,7 +4076,7 @@ def _emit_side_drill_prepare(
                     rule_status="generalized_side_drill_sequence",
                     transition_id=transition_id,
                 )
-                if multi_side_sequence:
+                if multi_side_sequence or final_left_pause:
                     _append(
                         lines,
                         "G4F0.500",
@@ -4072,7 +4089,7 @@ def _emit_side_drill_prepare(
                     )
             else:
                 reposition_lines = ["MLV=0", "G0 G53 Z201.000", "MLV=2"]
-                if multi_side_sequence:
+                if multi_side_sequence or final_left_pause:
                     reposition_lines.append("G4F0.500")
                 for line in tuple(reposition_lines):
                     _append(
@@ -4276,13 +4293,45 @@ def _emit_side_drill_prepare(
     if multi_side_sequence:
         _append(
             lines,
-        "G4F0.500",
-        differential,
-        source,
-        "Pausa observada despues de activar mascara lateral en secuencias multiples.",
-        confidence="confirmed",
-        rule_status="generalized_side_drill_sequence",
-    )
+            "G4F0.500",
+            differential,
+            source,
+            "Pausa observada despues de activar mascara lateral en secuencias multiples.",
+            confidence="confirmed",
+            rule_status="generalized_side_drill_sequence",
+        )
+
+
+def _requires_final_short_left_pause(
+    evaluation: IsoStateEvaluation,
+    previous_prepare: Optional[StageDifferential],
+    previous_trace: Optional[StageDifferential],
+    prepare: StageDifferential,
+    trace: StageDifferential,
+    *,
+    multi_side_sequence: bool,
+) -> bool:
+    if multi_side_sequence or previous_prepare is None or previous_trace is None:
+        return False
+    if str(_change_after(previous_prepare, "trabajo", "plane")) != "Left":
+        return False
+    if str(_change_after(prepare, "trabajo", "plane")) != "Left":
+        return False
+    if _change_after(previous_prepare, "herramienta", "spindle") != _change_after(
+        prepare,
+        "herramienta",
+        "spindle",
+    ):
+        return False
+    if str(_change_after(prepare, "movimiento", "side_axis")) != "X":
+        return False
+    width = float(evaluation.initial_state.get("pieza", "width") or 0.0)
+    length = float(evaluation.initial_state.get("pieza", "length") or 0.0)
+    if abs(width - 150.0) > 0.0005 or length > 1000.0005:
+        return False
+    previous_fixed = float(_change_after(previous_trace, "movimiento", "side_fixed"))
+    current_fixed = float(_change_after(trace, "movimiento", "side_fixed"))
+    return abs(previous_fixed + 130.0) <= 0.0005 and abs(current_fixed + 70.0) <= 0.0005
 
 
 def _emit_router_to_side_drill_transition(
