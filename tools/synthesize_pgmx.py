@@ -121,6 +121,7 @@ __all__ = [
     "UnidirectionalMillingStrategySpec",
     "BidirectionalMillingStrategySpec",
     "HelicalMillingStrategySpec",
+    "ContourParallelMillingStrategySpec",
     "GeometryPrimitiveSpec",
     "GeometryProfileSpec",
     "LineMillingSpec",
@@ -140,6 +141,7 @@ __all__ = [
     "build_unidirectional_milling_strategy_spec",
     "build_bidirectional_milling_strategy_spec",
     "build_helical_milling_strategy_spec",
+    "build_contour_parallel_milling_strategy_spec",
     "build_line_geometry_primitive",
     "build_arc_geometry_primitive",
     "build_point_geometry_profile",
@@ -243,10 +245,31 @@ class HelicalMillingStrategySpec:
     axial_finish_cutting_depth: float = 0.0
 
 
+@dataclass(frozen=True)
+class ContourParallelMillingStrategySpec:
+    """Estrategia `Paralela al perfil/contorno` observada para vaciados."""
+
+    rotation_direction: str = "CounterClockwise"
+    stroke_connection_strategy: str = "LiftShiftPlunge"
+    inside_to_outside: bool = True
+    overlap: float = 0.5
+    is_helic_strategy: bool = False
+    allow_multiple_passes: bool = False
+    axial_cutting_depth: float = 0.0
+    axial_finish_cutting_depth: float = 0.0
+    cutmode: str = "Climb"
+    is_internal: bool = True
+    radial_cutting_depth: float = 0.0
+    radial_finish_cutting_depth: float = 0.0
+    allows_bidirectional: bool = False
+    allows_finish_cutting: bool = False
+
+
 MillingStrategySpec = (
     UnidirectionalMillingStrategySpec
     | BidirectionalMillingStrategySpec
     | HelicalMillingStrategySpec
+    | ContourParallelMillingStrategySpec
 )
 
 
@@ -1668,6 +1691,47 @@ def _normalize_nonnegative_strategy_depth(value: Optional[float], field_name: st
     return normalized
 
 
+def _normalize_contour_rotation_direction(value: Optional[str]) -> str:
+    raw = (value or "CounterClockwise").strip()
+    normalized = raw.lower().replace(" ", "").replace("_", "").replace("-", "")
+    mapping = {
+        "counterclockwise": "CounterClockwise",
+        "anticlockwise": "CounterClockwise",
+        "antihorario": "CounterClockwise",
+        "clockwise": "Clockwise",
+        "horario": "Clockwise",
+    }
+    return mapping.get(normalized, raw)
+
+
+def _normalize_contour_stroke_connection_strategy(value: Optional[str]) -> str:
+    raw = (value or "LiftShiftPlunge").strip()
+    normalized = raw.lower().replace(" ", "").replace("_", "").replace("-", "")
+    mapping = {
+        "liftshiftplunge": "LiftShiftPlunge",
+        "salidaacotadeseguridad": "LiftShiftPlunge",
+        "salidacotadeseguridad": "LiftShiftPlunge",
+        "safetyheight": "LiftShiftPlunge",
+        "straghtline": "Straghtline",
+        "straightline": "Straghtline",
+        "enlapieza": "Straghtline",
+        "inpiece": "Straghtline",
+    }
+    return mapping.get(normalized, raw)
+
+
+def _normalize_contour_cutmode(value: Optional[str]) -> str:
+    raw = (value or "Climb").strip()
+    normalized = raw.lower().replace(" ", "").replace("_", "").replace("-", "")
+    mapping = {
+        "climb": "Climb",
+        "concordante": "Climb",
+        "conventional": "Conventional",
+        "convencional": "Conventional",
+    }
+    return mapping.get(normalized, raw)
+
+
 def build_unidirectional_milling_strategy_spec(
     *,
     connection_mode: Optional[str] = None,
@@ -1775,6 +1839,55 @@ def build_helical_milling_strategy_spec(
     )
 
 
+def build_contour_parallel_milling_strategy_spec(
+    *,
+    rotation_direction: Optional[str] = None,
+    stroke_connection_strategy: Optional[str] = None,
+    inside_to_outside: Optional[bool] = None,
+    overlap: Optional[float] = None,
+    is_helic_strategy: Optional[bool] = None,
+    allow_multiple_passes: Optional[bool] = None,
+    axial_cutting_depth: Optional[float] = None,
+    axial_finish_cutting_depth: Optional[float] = None,
+    cutmode: Optional[str] = None,
+    is_internal: Optional[bool] = None,
+    radial_cutting_depth: Optional[float] = None,
+    radial_finish_cutting_depth: Optional[float] = None,
+    allows_bidirectional: Optional[bool] = None,
+    allows_finish_cutting: Optional[bool] = None,
+) -> ContourParallelMillingStrategySpec:
+    """Construye una estrategia `Paralela al perfil/contorno` para lectura.
+
+    La serializacion productiva de esta estrategia todavia no esta habilitada.
+    """
+
+    normalized_overlap = 0.5 if overlap is None else float(overlap)
+    if normalized_overlap < -1e-9:
+        raise ValueError("Overlap no puede ser negativo.")
+    return ContourParallelMillingStrategySpec(
+        rotation_direction=_normalize_contour_rotation_direction(rotation_direction),
+        stroke_connection_strategy=_normalize_contour_stroke_connection_strategy(stroke_connection_strategy),
+        inside_to_outside=True if inside_to_outside is None else bool(inside_to_outside),
+        overlap=normalized_overlap,
+        is_helic_strategy=False if is_helic_strategy is None else bool(is_helic_strategy),
+        allow_multiple_passes=False if allow_multiple_passes is None else bool(allow_multiple_passes),
+        axial_cutting_depth=_normalize_nonnegative_strategy_depth(axial_cutting_depth, "AxialCuttingDepth"),
+        axial_finish_cutting_depth=_normalize_nonnegative_strategy_depth(
+            axial_finish_cutting_depth,
+            "AxialFinishCuttingDepth",
+        ),
+        cutmode=_normalize_contour_cutmode(cutmode),
+        is_internal=True if is_internal is None else bool(is_internal),
+        radial_cutting_depth=_normalize_nonnegative_strategy_depth(radial_cutting_depth, "RadialCuttingDepth"),
+        radial_finish_cutting_depth=_normalize_nonnegative_strategy_depth(
+            radial_finish_cutting_depth,
+            "RadialFinishCuttingDepth",
+        ),
+        allows_bidirectional=False if allows_bidirectional is None else bool(allows_bidirectional),
+        allows_finish_cutting=False if allows_finish_cutting is None else bool(allows_finish_cutting),
+    )
+
+
 def _normalize_xn_reference(value: Optional[str]) -> str:
     raw = (value or "Absolute").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
     mapping = {
@@ -1837,6 +1950,23 @@ def _normalize_milling_strategy_spec(
             axial_cutting_depth=strategy.axial_cutting_depth,
             allows_finish_cutting=strategy.allows_finish_cutting,
             axial_finish_cutting_depth=strategy.axial_finish_cutting_depth,
+        )
+    if isinstance(strategy, ContourParallelMillingStrategySpec):
+        return build_contour_parallel_milling_strategy_spec(
+            rotation_direction=strategy.rotation_direction,
+            stroke_connection_strategy=strategy.stroke_connection_strategy,
+            inside_to_outside=strategy.inside_to_outside,
+            overlap=strategy.overlap,
+            is_helic_strategy=strategy.is_helic_strategy,
+            allow_multiple_passes=strategy.allow_multiple_passes,
+            axial_cutting_depth=strategy.axial_cutting_depth,
+            axial_finish_cutting_depth=strategy.axial_finish_cutting_depth,
+            cutmode=strategy.cutmode,
+            is_internal=strategy.is_internal,
+            radial_cutting_depth=strategy.radial_cutting_depth,
+            radial_finish_cutting_depth=strategy.radial_finish_cutting_depth,
+            allows_bidirectional=strategy.allows_bidirectional,
+            allows_finish_cutting=strategy.allows_finish_cutting,
         )
     raise ValueError(f"Tipo de estrategia de fresado no soportado: {type(strategy)!r}")
 
@@ -5721,6 +5851,23 @@ def _extract_milling_strategy_spec_from_operation(
     axial_finish_cutting_depth = _safe_float(_text(strategy_node, "./{*}AxialFinishCuttingDepth"), 0.0)
     stroke_connection_strategy = _text(strategy_node, "./{*}StrokeConnectionStrategy", "Automatic")
 
+    if "ContourParallel" in strategy_type:
+        return build_contour_parallel_milling_strategy_spec(
+            rotation_direction=_text(strategy_node, "./{*}RotationDirection", "CounterClockwise"),
+            stroke_connection_strategy=stroke_connection_strategy,
+            inside_to_outside=_safe_bool(_text(strategy_node, "./{*}InsideToOutSide"), True),
+            overlap=_safe_float(_text(strategy_node, "./{*}Overlap"), 0.5),
+            is_helic_strategy=_safe_bool(_text(strategy_node, "./{*}IsHelicStrategy"), False),
+            allow_multiple_passes=allow_multiple_passes,
+            axial_cutting_depth=axial_cutting_depth,
+            axial_finish_cutting_depth=axial_finish_cutting_depth,
+            cutmode=_text(strategy_node, "./{*}Cutmode", "Climb"),
+            is_internal=_safe_bool(_text(strategy_node, "./{*}IsInternal"), True),
+            radial_cutting_depth=_safe_float(_text(strategy_node, "./{*}RadialCuttingDepth"), 0.0),
+            radial_finish_cutting_depth=_safe_float(_text(strategy_node, "./{*}RadialFinishCuttingDepth"), 0.0),
+            allows_bidirectional=_safe_bool(_text(strategy_node, "./{*}AllowsBidirectional"), False),
+            allows_finish_cutting=_safe_bool(_text(strategy_node, "./{*}AllowsFinishCutting"), False),
+        )
     if "UnidirectionalMilling" in strategy_type:
         return build_unidirectional_milling_strategy_spec(
             connection_mode=stroke_connection_strategy,
@@ -5769,6 +5916,24 @@ def _strategy_comparison_key(
             normalized_strategy.axial_cutting_depth,
             normalized_strategy.axial_finish_cutting_depth,
         )
+    if isinstance(normalized_strategy, ContourParallelMillingStrategySpec):
+        return (
+            "ContourParallel",
+            normalized_strategy.rotation_direction,
+            normalized_strategy.stroke_connection_strategy,
+            normalized_strategy.inside_to_outside,
+            normalized_strategy.overlap,
+            normalized_strategy.is_helic_strategy,
+            normalized_strategy.allow_multiple_passes,
+            normalized_strategy.axial_cutting_depth,
+            normalized_strategy.axial_finish_cutting_depth,
+            normalized_strategy.cutmode,
+            normalized_strategy.is_internal,
+            normalized_strategy.radial_cutting_depth,
+            normalized_strategy.radial_finish_cutting_depth,
+            normalized_strategy.allows_bidirectional,
+            normalized_strategy.allows_finish_cutting,
+        )
     return (
         "Bidirectional",
         normalized_strategy.allow_multiple_passes,
@@ -5788,6 +5953,7 @@ def _can_hydrate_exact_serialization(template: dict[str, object], spec: LineMill
             UnidirectionalMillingStrategySpec,
             BidirectionalMillingStrategySpec,
             HelicalMillingStrategySpec,
+            ContourParallelMillingStrategySpec,
         ),
     ) else None
     if _strategy_comparison_key(source_strategy, is_closed_profile=False) != _strategy_comparison_key(
@@ -5833,6 +5999,7 @@ def _can_hydrate_exact_polyline_serialization(template: dict[str, object], spec:
             UnidirectionalMillingStrategySpec,
             BidirectionalMillingStrategySpec,
             HelicalMillingStrategySpec,
+            ContourParallelMillingStrategySpec,
         ),
     ) else None
     is_closed_profile = _is_closed_polyline_points(spec.points)
@@ -7192,6 +7359,11 @@ def _build_milling_strategy_node(spec) -> ET.Element:
     strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
     if strategy is None:
         return ET.Element(_qname(PGMX_NS, "MachiningStrategy"), {f"{{{XSI_NS}}}nil": "true"})
+    if isinstance(strategy, ContourParallelMillingStrategySpec):
+        raise NotImplementedError(
+            "ContourParallelMillingStrategySpec esta soportada solo para lectura; "
+            "la sintesis de Vaciado/ClosedPocket todavia no esta implementada."
+        )
 
     if isinstance(strategy, UnidirectionalMillingStrategySpec):
         strategy_type = "b:UnidirectionalMilling"

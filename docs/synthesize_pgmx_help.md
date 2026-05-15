@@ -38,6 +38,8 @@ Casos publicos soportados hoy:
   - escuadrado via `SquaringMillingSpec`
 - estrategia publica `Helicoidal` para:
   - circulo cerrado via `CircleMillingSpec`
+- estrategia de lectura `Paralela al perfil/contorno`
+  (`ContourParallelMillingStrategySpec`) para vaciados Maestro existentes
 - `Approach` y `Retract` con reglas ya volcadas desde Maestro y ya unificadas
   sobre la tangente de entrada/salida del toolpath efectivo
 - `Area` de Parametros de Maquina, con `HG` por defecto
@@ -345,6 +347,51 @@ Notas:
 - si `allows_finish_cutting = False`, no se admite
   `axial_finish_cutting_depth > 0`
 - en XML Maestro esta familia se serializa como `b:HelicMilling`
+
+### `build_contour_parallel_milling_strategy_spec(...) -> ContourParallelMillingStrategySpec`
+
+Construye la estrategia `Paralela al perfil/contorno` observada en vaciados
+Maestro (`MachiningStrategy i:type="b:ContourParallel"`).
+
+Estado: soportada para lectura y catalogacion, no para sintesis productiva.
+Si llega a la serializacion de `.pgmx`, el sintetizador falla explicitamente.
+
+Firma simplificada:
+
+```python
+build_contour_parallel_milling_strategy_spec(
+    *,
+    rotation_direction=None,
+    stroke_connection_strategy=None,
+    inside_to_outside=None,
+    overlap=None,
+    is_helic_strategy=None,
+    allow_multiple_passes=None,
+    axial_cutting_depth=None,
+    axial_finish_cutting_depth=None,
+    cutmode=None,
+    is_internal=None,
+    radial_cutting_depth=None,
+    radial_finish_cutting_depth=None,
+    allows_bidirectional=None,
+    allows_finish_cutting=None,
+)
+```
+
+Mapeo observado:
+- `rotation_direction`: `Clockwise` / `CounterClockwise`
+- `stroke_connection_strategy`: observado `LiftShiftPlunge`
+- `inside_to_outside`: `true` = desde dentro hacia afuera
+- `overlap`: valor XML, por ejemplo `0.5` para `50%`
+- `is_helic_strategy`: checkbox helicoidal
+- `allow_multiple_passes`: checkbox multipaso
+- `axial_cutting_depth`: profundidad de hueco
+- `axial_finish_cutting_depth`: ultimo hueco
+- `radial_cutting_depth`: paso radial; en los ejemplos `Vaciado_004..009`
+  coincide con el radio de herramienta
+- tambien conserva campos XML observados como `Cutmode`, `IsInternal`,
+  `RadialFinishCuttingDepth`, `AllowsBidirectional` y
+  `AllowsFinishCutting`
 
 ### `build_xn_spec(...) -> XnSpec`
 

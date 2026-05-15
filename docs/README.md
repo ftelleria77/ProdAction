@@ -11,20 +11,22 @@ tener que leer todas las memorias historicas de una vez.
    - Fuente de verdad para la API publica de sintesis `.pgmx`.
 3. `docs/pgmx_snapshot_help.md` y `docs/pgmx_adapters_help.md`
    - Lectura/adaptacion de `.pgmx` existentes hacia specs publicos.
-4. `docs/cut_diagrams_temporary_memory.md`
+4. `tools/pgmx_vaciado/README.md`
+   - Laboratorio separado para estudiar el nuevo concepto `Vaciado` en `.pgmx`.
+5. `docs/cut_diagrams_temporary_memory.md`
    - Estado del motor de diagramas de corte y algoritmos de guillotina.
-5. `cnc_traceability/README.md`
+6. `cnc_traceability/README.md`
    - Entrada del subsistema de trazabilidad CNC compatible con Windows XP.
-6. `iso_state_synthesis/README.md`
+7. `iso_state_synthesis/README.md`
    - Entrada del subsistema experimental por estado para futura traduccion
      `.pgmx -> .iso`.
-7. `docs/iso_cnc_contract.md`
+8. `docs/iso_cnc_contract.md`
    - Contrato CNC/ISO observado: configuracion Maestro, toolset, variables y
      huecos pendientes para un sintetizador ISO.
-8. `docs/iso_minimal_fixtures_plan.md`
+9. `docs/iso_minimal_fixtures_plan.md`
    - Plan de reanudacion para generar `.pgmx` minimos comparables en la compu
      de fabrica y postprocesarlos con Maestro.
-9. `docs/iso_synthesis_temporary_memory.md`
+10. `docs/iso_synthesis_temporary_memory.md`
    - Ingenieria inversa del flujo PGMX -> Maestro/postprocesador -> ISO.
 
 ## Mapa por tema
@@ -38,6 +40,7 @@ tener que leer todas las memorias historicas de una vez.
 | Dibujos de piezas | `docs/repo_study_guide.md` | `core/pgmx_processing.py` |
 | Sintesis PGMX | `docs/synthesize_pgmx_help.md` | `tools/synthesize_pgmx.py` |
 | Snapshot/adaptacion PGMX | `docs/pgmx_snapshot_help.md`, `docs/pgmx_adapters_help.md` | `tools/pgmx_snapshot.py`, `tools/pgmx_adapters.py` |
+| Vaciado PGMX | `tools/pgmx_vaciado/README.md`, `tools/pgmx_vaciado/memory/current-state.md` | `tools/pgmx_vaciado/` |
 | Reparacion SlotSide | `docs/repo_study_guide.md`, `docs/pgmx_temporary_memory.md` | `core/pgmx_processing.py`, `app/ui.py` |
 | En-Juego | `docs/en_juego_synthesis_temporary_memory.md` | `core/en_juego_synthesis.py` |
 | Diagramas de corte | `docs/cut_diagrams_temporary_memory.md` | `core/nesting.py` |
