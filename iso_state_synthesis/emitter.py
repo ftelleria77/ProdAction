@@ -936,7 +936,6 @@ def _emit_piece_frame(
     work_family: str,
 ) -> None:
     length = evaluation.initial_state.get("pieza", "length")
-    width = evaluation.initial_state.get("pieza", "width")
     origin_x = evaluation.initial_state.get("pieza", "origin_x")
     origin_z = evaluation.initial_state.get("pieza", "origin_z")
     header_dz = evaluation.final_state.get("pieza", "header_dz")
@@ -4021,7 +4020,6 @@ def _emit_side_drill_prepare(
         previous_plane = str(_change_after(previous_prepare, "trabajo", "plane"))
         previous_spindle = _change_after(previous_prepare, "herramienta", "spindle")
         previous_mask = _change_after(previous_prepare, "salida", "etk_0_mask")
-        narrow_left_sequence = plane == "Left" and float(width or 0.0) <= 150.000001
         if plane != previous_plane:
             _emit_side_plane_selection(
                 lines,
@@ -4061,7 +4059,7 @@ def _emit_side_drill_prepare(
                     rule_status="generalized_side_drill_sequence",
                     transition_id=transition_id,
                 )
-                if multi_side_sequence or narrow_left_sequence:
+                if multi_side_sequence:
                     _append(
                         lines,
                         "G4F0.500",
@@ -4074,7 +4072,7 @@ def _emit_side_drill_prepare(
                     )
             else:
                 reposition_lines = ["MLV=0", "G0 G53 Z201.000", "MLV=2"]
-                if multi_side_sequence or narrow_left_sequence:
+                if multi_side_sequence:
                     reposition_lines.append("G4F0.500")
                 for line in tuple(reposition_lines):
                     _append(

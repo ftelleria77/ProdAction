@@ -203,3 +203,33 @@ Plan restante recomendado:
 4. Precision numerica: mantenerla como clasificacion de reporte. Investigar la
    cuantizacion exacta de Maestro solo si el objetivo pasa de equivalencia
    operativa a igualdad byte-a-byte.
+
+## Prueba 2026-05-15: Pausa Final `Left -> Left`
+
+Se probo quitar la excepcion `narrow_left_sequence` que forzaba
+`G4F0.500` antes de repetir el ultimo spindle `Left` en piezas de ancho
+`<=150`.
+
+Resultado:
+
+- DeMarco mejora de `324` a `328` exactos.
+- `T-BH-003` desaparece como frente operativo DeMarco.
+- DeMarco queda con `1` operativo real: `B-BH-005` en
+  `Cocina\Parte 2\mod 1 - Torre heladera\Faja frontal.pgmx`.
+- Cazaux regresa en `1` caso: `Baño\Vanitory\Faja frontal.pgmx`, donde
+  Maestro si conserva `G4F0.500` antes del ultimo `Left`.
+- `ISO/Cocina` queda estable en `84/84`.
+- Raiz `Pieza*` queda estable en `217` exactos y los `5` residuales previos
+  `Pieza_181..185`.
+
+Lectura:
+
+- La pausa final `Left -> Left` no es regla general; en los corpus reales hay
+  muchos finales `Left -> Left` sin pausa.
+- La excepcion Cazaux `Baño\Vanitory\Faja frontal.pgmx` sigue sin una variable
+  clara en el snapshot: comparte ancho `150`, profundidad, spindle, mask,
+  toolpath lateral y estructura de `4` laterales con casos DeMarco que no
+  pausan.
+- No conviene restaurar una regla amplia por `width<=150`; si se quiere cerrar
+  simultaneamente DeMarco y Cazaux, falta aislar una condicion adicional o
+  aceptar una excepcion documentada para ese caso.
