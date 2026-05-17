@@ -559,6 +559,18 @@ Siguiente paso recomendado:
   `Vaciado_020` y `021` deben fallar por contorno distinto del rectangulo
   completo, y `Vaciado_022` debe conservar una isla `150..250 x 100..200` pero
   seguir fallando por `BossGeometryList` no productivo.
+- Avance posterior: se resolvio el primer bloque del plan, contornos
+  rectangulares parciales sin islas. El generador `ContourParallel` ahora usa
+  el bbox real del contorno en lugar de asumir siempre `0..length/0..width`.
+  Esto cubre tambien contornos que exceden los limites de la pieza: Maestro
+  aplica el offset contra el bbox del contorno, no contra el tablero. La
+  comparacion amplia `Vaciado_001..035` queda `29/35` exacta; los no exactos
+  son `022` y `027..031`, todos asociados a islas o geometria especial.
+- La sintesis productiva de `PocketMillingSpec` ya acepta contornos
+  rectangulares parciales sin islas. Casos cubiertos por test:
+  `Vaciado_001..021`, `023..026` y `032..035`, comparando la traza generada
+  contra la traza manual de Maestro. El guardrail que queda activo es
+  `BossGeometryList`/islas.
 
 ## Plan Para Terminar El Estudio De Vaciados
 
@@ -566,28 +578,20 @@ Objetivo actual: cerrar el modelo productivo de `Vaciado` sin perder
 informacion de Maestro y sin generar PGMX incompletos.
 
 1. Tests automatizados ya fijados para el hito estable:
-   - `Vaciado_001..019`: sintetizan y readaptan exacto.
-   - `Vaciado_020`, `021`: se adaptan para lectura, pero la sintesis falla
-     explicitamente por contorno distinto del rectangulo completo.
+   - `Vaciado_001..021`, `023..026` y `032..035`: sintetizan, readaptan y
+     reproducen la traza manual exacta.
    - `Vaciado_022`: se adapta conservando `boss_contours`, pero la sintesis
      falla explicitamente por islas.
 2. Ampliar tests cuando existan reglas productivas nuevas:
-   - `Vaciado_023..026` y `032..035`: corpus para estudiar el efecto de
-     herramienta sobre el mismo contorno.
    - `Vaciado_027..031`: corpus pendiente para una o varias islas.
-3. Resolver contornos rectangulares no equivalentes a pieza completa:
-   - usar bbox real del contorno, no siempre `0..length/0..width`;
-   - recortar contra limites de pieza cuando el contorno excede el tablero;
-   - reproducir orden de anillos y punto de arranque en `020`, `021`,
-     `023..026` y `032..035`.
-4. Resolver islas:
+3. Resolver islas:
    - modelar `BossGeometryList` y `BossList` de forma productiva;
    - estudiar offsets alrededor de una isla (`022`, `027`, `028`);
    - estudiar multiples islas (`029`, `030`, `031`);
    - entender segmentos diagonales/tangenciales y corredores entre exterior e
      islas.
-5. Recien despues levantar los guardrails de sintesis:
-   - primero para contornos rectangulares sin islas;
-   - luego para islas rectangulares;
+4. Recien despues levantar los guardrails de sintesis:
+   - primero para islas rectangulares simples;
+   - luego para multiples islas;
    - mantener bloqueados arcos, poligonos no rectangulares y casos sin corpus.
-6. Cuando el PGMX este estable, retomar la traduccion ISO del nuevo mecanizado.
+5. Cuando el PGMX este estable, retomar la traduccion ISO del nuevo mecanizado.

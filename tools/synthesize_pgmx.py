@@ -7772,29 +7772,6 @@ def _points_are_close_3d(
     )
 
 
-def _pocket_contour_bbox(
-    contour_points: Sequence[tuple[float, float]],
-) -> tuple[float, float, float, float]:
-    xs = [float(point[0]) for point in contour_points]
-    ys = [float(point[1]) for point in contour_points]
-    return min(xs), min(ys), max(xs), max(ys)
-
-
-def _pocket_contour_matches_workpiece(
-    state: PgmxState,
-    spec: _HydratedPocketMillingSpec,
-    *,
-    tolerance: float = 1e-6,
-) -> bool:
-    min_x, min_y, max_x, max_y = _pocket_contour_bbox(spec.contour_points)
-    return (
-        math.isclose(min_x, 0.0, abs_tol=tolerance)
-        and math.isclose(min_y, 0.0, abs_tol=tolerance)
-        and math.isclose(max_x, state.length, abs_tol=tolerance)
-        and math.isclose(max_y, state.width, abs_tol=tolerance)
-    )
-
-
 def _curve_spec_from_xyz_path(points: Sequence[tuple[float, float, float]]) -> _CurveSpec:
     descriptions: list[str] = []
     for start_point, end_point in zip(points, points[1:]):
@@ -8428,12 +8405,6 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
         raise NotImplementedError(
             "PocketMillingSpec con islas/BossGeometryList se adapta para lectura, "
             "pero la serializacion productiva de Vaciado con islas todavia no esta implementada."
-        )
-    if not _pocket_contour_matches_workpiece(state, spec):
-        raise NotImplementedError(
-            "PocketMillingSpec con contorno distinto del rectangulo completo de la pieza "
-            "se adapta para lectura, pero la serializacion productiva de ese Vaciado "
-            "todavia no esta implementada."
         )
 
     workpiece_id = _text(workpiece, "./{*}Key/{*}ID")

@@ -69,11 +69,17 @@ def generate_rectangular_contour_parallel_path(
     outer_offset = (tool_width / 2.0) + allowance_side
     if outer_offset < -1e-9:
         raise ValueError("tool radius + allowance_side must not be negative.")
+    min_x, max_x, min_y, max_y = _contour_bbox(contour_points)
+    pocket_length = max_x - min_x
+    pocket_width = max_y - min_y
+    if pocket_length <= 0.0 or pocket_width <= 0.0:
+        raise ValueError("contour bbox must have positive length and width.")
+    local_contour_points = tuple((x - min_x, y - min_y) for x, y in contour_points)
     radial_step = tool_width * (1.0 - overlap)
     radial_depth = radial_cutting_depth if radial_cutting_depth > 0.0 else radial_step
     offsets_outer_to_inner = _rectangular_offsets(
         outer_offset=outer_offset,
-        half_minor=min(length, width) / 2.0,
+        half_minor=min(pocket_length, pocket_width) / 2.0,
         radial_step=radial_step,
         radial_depth=radial_depth,
     )
@@ -86,29 +92,33 @@ def generate_rectangular_contour_parallel_path(
         return ()
 
     edge = _effective_start_edge(
-        _start_edge(contour_points, length=length, width=width),
+        _start_edge(local_contour_points, length=pocket_length, width=pocket_width),
         allowance_side=allowance_side,
         rotation_direction=rotation_direction,
     )
     anchor = _start_anchor(
-        contour_points[0],
+        local_contour_points[0],
         edge=edge,
         first_offset=offsets[0],
-        length=length,
-        width=width,
+        length=pocket_length,
+        width=pocket_width,
         allowance_side=allowance_side,
         rotation_direction=rotation_direction,
     )
 
     points: list[tuple[float, float]] = []
     if not inside_to_outside:
-        return _generate_outside_to_inside(
-            offsets=offsets,
-            anchor=anchor,
-            edge=edge,
-            length=length,
-            width=width,
-            rotation_direction=rotation_direction,
+        return _translate_points(
+            _generate_outside_to_inside(
+                offsets=offsets,
+                anchor=anchor,
+                edge=edge,
+                length=pocket_length,
+                width=pocket_width,
+                rotation_direction=rotation_direction,
+            ),
+            min_x,
+            min_y,
         )
 
     for index, offset in enumerate(offsets):
@@ -117,12 +127,12 @@ def generate_rectangular_contour_parallel_path(
                 offset=offset,
                 anchor=anchor,
                 edge=edge,
-                length=length,
-                width=width,
+                length=pocket_length,
+                width=pocket_width,
                 rotation_direction=rotation_direction,
             )
         )
-    return tuple(points)
+    return _translate_points(points, min_x, min_y)
 
 
 def generate_rectangular_contour_parallel_xyz_path(
@@ -267,6 +277,22 @@ def _compare_one(path: Path, root: Path) -> ContourParallelComparisonRow:
         )
     except Exception as exc:  # pragma: no cover - evidence script
         return ContourParallelComparisonRow(relative_path, "error", notes=str(exc))
+
+
+def _contour_bbox(contour_points: Sequence[tuple[float, float]]) -> tuple[float, float, float, float]:
+    if not contour_points:
+        raise ValueError("contour_points must not be empty.")
+    xs = [point[0] for point in contour_points]
+    ys = [point[1] for point in contour_points]
+    return (min(xs), max(xs), min(ys), max(ys))
+
+
+def _translate_points(
+    points: Sequence[tuple[float, float]],
+    offset_x: float,
+    offset_y: float,
+) -> tuple[tuple[float, float], ...]:
+    return tuple((x + offset_x, y + offset_y) for x, y in points)
 
 
 def _rectangular_offsets(
