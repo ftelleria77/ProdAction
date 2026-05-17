@@ -1,6 +1,6 @@
 # PGMX Vaciado
 
-Ultima actualizacion: 2026-05-15
+Ultima actualizacion: 2026-05-16
 
 ## Objetivo
 
@@ -239,17 +239,57 @@ Observacion de trayectoria materializada:
 - `Vaciado_017` mantiene `17` puntos y rango `X 40..360`, `Y 40..260`, pero
   cambia `Overlap` de `0.5` a `0.25` (`25%` en UI/reporte).
 
+## Soporte En Codigo
+
+Avance 2026-05-16:
+
+- `tools.synthesize_pgmx` ya expone `PocketMillingSpec` y
+  `build_pocket_milling_spec(...)` como spec publica de lectura/adaptacion para
+  `Vaciado`.
+- La spec representa `ClosedPocket + BottomAndSideRoughMilling +
+  ContourParallel`, con contorno, herramienta, profundidad, approach/retract,
+  estrategia, `AllowanceBottom`, `AllowanceSide`, `effective_contour_offset` y
+  `radial_step`.
+- `tools.pgmx_adapters` ya adapta `ClosedPocket` en plano `Top` con operacion
+  `BottomAndSideRoughMilling` y estrategia `ContourParallel` hacia
+  `PocketMillingSpec`.
+- Validacion real: `manual/Vaciado_001.pgmx` a `manual/Vaciado_019.pgmx`
+  entran como `pocket_milling` con `1` entrada adaptada y `0` unsupported cada
+  uno.
+- `tools.pgmx_vaciado.scan_samples` corrio contra
+  `S:\Maestro\Projects\ProdAction\PGMX` y genero el catalogo vigente en
+  `_analysis`.
+- Se genero una muestra de adaptacion en
+  `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_018_adaptation.json`.
+- La serializacion productiva sigue bloqueada explicitamente:
+  `synthesize_request(...)` con `PocketMillingSpec` levanta
+  `NotImplementedError`. Esto es intencional hasta cerrar la generacion de
+  geometria, operacion, estrategia y toolpaths.
+- Se agrego `tools.pgmx_vaciado.contour_parallel` como generador experimental
+  puro de trayectoria rectangular `ContourParallel` y comparador contra corpus.
+  Resultado inicial cerrado: `manual/Vaciado_001.pgmx` a
+  `manual/Vaciado_017.pgmx` comparan `17/17` exactos en secuencia XY contra
+  Maestro. El reporte vigente queda en
+  `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_contour_parallel_comparison.md`
+  y el CSV en
+  `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_contour_parallel_comparison.csv`.
+- Avance 2026-05-17: el mismo generador ahora materializa trayectoria
+  `X/Y/Z` multipaso. `manual/Vaciado_001.pgmx` a `manual/Vaciado_019.pgmx`
+  comparan `19/19` exactos contra Maestro. Quedaron cubiertos
+  `Vaciado_018` (`LiftShiftPlunge`, subidas a `Z=60`) y `Vaciado_019`
+  (`Straghtline`, conexiones internas sin subir a seguridad).
+
 ## Huecos Del Lector Actual
 
 - `tools.pgmx_snapshot.py` ya representa `b:ContourParallel` como
   `ContourParallelMillingStrategySpec`.
-- Todavia falta representar `ClosedPocket` como spec de sintesis estable y
-  serializar `BottomAndSideRoughMilling`. En esta etapa la estrategia se
-  soporta solo para lectura.
+- `ClosedPocket` ya se representa a nivel semantico mediante
+  `PocketMillingSpec`, pero la serializacion productiva de
+  `BottomAndSideRoughMilling` y sus toolpaths todavia no esta implementada.
 - Ya hay ejemplos manuales para confirmar los valores XML de `En la pieza`,
   `Desde afuera hacia adentro`, helicoidal y multipaso.
-- Falta incorporar un spec estable de `Vaciado` que agrupe feature,
-  operacion, estrategia, allowances y toolpaths.
+- Falta incorporar la generacion automatica estable de `Vaciado`: feature,
+  operacion, estrategia, toolpaths y curvas internas.
 
 ## Mapeo UI / XML De `Paralela Al Perfil`
 
@@ -376,13 +416,25 @@ Estado actual:
 
 - El lector estable ya representa `b:ContourParallel` como
   `ContourParallelMillingStrategySpec`.
-- El soporte es de lectura/catalogacion; la sintesis productiva de
-  `Vaciado/ClosedPocket` todavia debe fallar explicitamente.
+- El adaptador estable ya representa `Vaciado/ClosedPocket` como
+  `PocketMillingSpec`.
+- La sintesis productiva ya emite el subset rectangular `PocketMillingSpec`
+  sobre `Top`: feature `ClosedPocket`, operacion
+  `BottomAndSideRoughMilling`, estrategia `ContourParallel`,
+  `AllowanceSide/Bottom`, toolpaths y curvas internas.
 - El corpus manual observado llega hasta `manual/Vaciado_019.pgmx`.
 - El catalogo externo vigente esta en
   `S:\Maestro\Projects\ProdAction\PGMX\_analysis`.
 - La carpeta `tools/pgmx_vaciado/` conserva la memoria y el scanner del
   laboratorio.
+- La trayectoria rectangular `ContourParallel` ya esta modelada en
+  `tools.pgmx_vaciado.contour_parallel` y reproduce `17/17` ejemplos manuales
+  (`Vaciado_001..017`) en XY y `19/19` (`Vaciado_001..019`) en `X/Y/Z`
+  contra Maestro.
+- Se genero la tanda `generated/Vaciado_001_synth.pgmx` ..
+  `generated/Vaciado_019_synth.pgmx`; los 19 archivos se readaptan como un
+  unico `pocket_milling`, sin unsupported, y sus trayectorias `X/Y/Z` son
+  exactas contra el generador validado.
 
 Hipotesis de traza vigente:
 
@@ -399,14 +451,22 @@ Hipotesis de traza vigente:
 
 Siguiente paso recomendado:
 
-1. Ampliar `tools.pgmx_snapshot.py` para exponer una lectura mas completa de
-   `ClosedPocket` y `BottomAndSideRoughMilling`.
-2. Ampliar `tools.pgmx_adapters.py` con un adaptador semantico de `Vaciado`
-   basado en el snapshot.
-3. Agregar en `tools.synthesize_pgmx.py` un spec publico de `Vaciado`, todavia
-   sin serializacion productiva.
-4. Mantener `tools.pgmx_vaciado` como laboratorio reproducible hasta que las
-   reglas pasen a modulos estables.
+1. Diseniar la serializacion productiva de `PocketMillingSpec`: feature
+   `ClosedPocket`, operacion `BottomAndSideRoughMilling`, estrategia
+   `ContourParallel`, `AllowanceSide/Bottom`, toolpaths y curvas internas.
+2. Generar una primera tanda en `S:\Maestro\Projects\ProdAction\PGMX\generated`
+   para comparar contra los manuales.
+3. Recién despues quitar el bloqueo `NotImplementedError` de la sintesis
+   productiva.
+
+## Tareas Pendientes Registradas
+
+- Cuando `Vaciado_018/019` esten exactos, diseniar la serializacion productiva
+  de `PocketMillingSpec`: feature `ClosedPocket`, operacion
+  `BottomAndSideRoughMilling`, estrategia `ContourParallel`, toolpaths y
+  curvas internas.
+- Mantener bloqueada la sintesis productiva con `NotImplementedError` hasta
+  que el XML generado pueda validarse contra Maestro.
 
 ## Plan De Trabajo
 
@@ -418,3 +478,107 @@ Siguiente paso recomendado:
 6. Migrar soporte de lectura/adaptacion/dibujo/sintesis a los modulos
    existentes.
 7. Recien despues estudiar la traduccion ISO del nuevo mecanizado.
+
+## Actualizacion 2026-05-17
+
+- Se implemento la serializacion productiva inicial de `PocketMillingSpec`
+  para Vaciado rectangular sobre `Top`.
+- La tanda `generated/Vaciado_001_synth.pgmx` ..
+  `generated/Vaciado_019_synth.pgmx` se genero desde `Vaciado_000.pgmx` y se
+  readapto correctamente: `19/19` con un unico `pocket_milling`, `0`
+  unsupported y trayectoria `X/Y/Z` exacta.
+- La validacion de herramienta de `PocketMillingSpec` conserva la validacion de
+  profundidad, pero no aplica el filtro estricto de fresado de perfil porque
+  `Vaciado_004` usa `E002 (1901)` catalogada como `Sierra Horizontal` y Maestro
+  la acepta para este caso.
+- El primer intento fallaba al abrir en Maestro con error de deserializacion:
+  el log `C:\Program Files (x86)\Scm Group\Maestro\Log\Log20260517_010134.logx`
+  indicaba que `ClosedPocket` estaba en el namespace `Milling`. Se corrigio
+  para emitir `ManufacturingFeature i:type="a:ClosedPocket"` con namespace
+  `ScmGroup.XCam.MachiningDataModel`, igual que los manuales.
+- Se regenero `generated/Vaciado_001_synth.pgmx` .. `019_synth.pgmx` despues de
+  esa correccion y el roundtrip interno sigue en `19/19`.
+- Ante un segundo error de Maestro sin `logx` nuevo, se comparo el bloque
+  `ClosedPocket` campo por campo. Los campos propios del bolsillo
+  (`BossGeometryList`, `BossList`, `BoundaryGeometryList`, `OrthogonalRadius`,
+  `PlanarRadius`, `Slope`) estaban en `ProjectModule`; el manual los emite en
+  `ScmGroup.XCam.MachiningDataModel`. Se corrigio y se genero
+  `generated/Vaciado_001_synth_closedpocket_fields.pgmx` para prueba aislada.
+- `generated/Vaciado_001_synth_closedpocket_fields.pgmx` abrio correctamente
+  en Maestro y fue guardado sin modificaciones. La copia guardada por Maestro
+  pesa mas porque reserializa namespaces/prefijos, pero `def.tlgx` y `.epl`
+  quedan identicos y la comparacion semantica del XML contra una generacion
+  fresca de Codex da `0` diferencias.
+- Se limpio `S:\Maestro\Projects\ProdAction\PGMX\generated` y se regenero la
+  serie canonica `Vaciado_001_synth.pgmx` .. `Vaciado_019_synth.pgmx` con los
+  hallazgos de namespaces incorporados. Roundtrip automatico: `19/19` ok, un
+  unico `pocket_milling`, `0` unsupported y trayectoria `X/Y/Z` exacta.
+- Se abrieron los 19 generados en Maestro y se guardaron encima sin cambios.
+  Luego se genero una serie fresca paralela en
+  `S:\Maestro\Projects\ProdAction\PGMX\_analysis\compare_after_maestro_save`
+  y se comparo archivo por archivo contra los guardados por Maestro.
+  Resultado: XML semanticamente equivalente `19/19`, `def.tlgx` identico
+  `19/19`, `.epl` identico `19/19`. Maestro solo reserializa prefijos y
+  declaraciones de namespace, aumentando el XML entre `3561` y `7017` bytes
+  y el ZIP entre `548` y `691` bytes.
+- Reportes de esta comparacion:
+  `S:\Maestro\Projects\ProdAction\PGMX\_analysis\compare_after_maestro_save\maestro_save_diff_summary.md`
+  y `maestro_save_diff_summary.csv`.
+- Regla de dominio aclarada: los vaciados solo se hacen en plano `Top` porque
+  el CNC no cuenta con herramientas para trabajos de vaciado en otras caras.
+  Esto deja de ser una limitacion pendiente y pasa a ser una restriccion
+  esperada del modelo.
+- Tarea actual: seguir aprendiendo sobre `Vaciado`, especialmente geometria de
+  borde no rectangular y vaciados con isla. Nuevos manuales para estudiar:
+  `manual/Vaciado_020.pgmx`, `manual/Vaciado_021.pgmx` y
+  `manual/Vaciado_022.pgmx`.
+- Correccion de modelo: `PocketMillingSpec` ahora conserva `boss_contours`
+  leidos desde `BossGeometryList`. `Vaciado_022` se adapta con una isla
+  rectangular `150..250 x 100..200` y ya no se pierde esa informacion.
+- Guardrail productivo: la sintesis de `PocketMillingSpec` ahora falla
+  explicitamente si hay `boss_contours` o si el contorno no coincide con el
+  rectangulo completo de la pieza. Esto evita generar PGMX incorrectos para
+  `Vaciado_020`, `021` y `022` hasta resolver esos modelos. La serie estable
+  `Vaciado_001..019` sigue generando sin fallos.
+- Se corrigieron `manual/Vaciado_023.pgmx` .. `026` para usar herramienta
+  `E006`/`1905`/`80mm`, y se agregaron `manual/Vaciado_032.pgmx` .. `035` con
+  las mismas geometrías pero herramienta chica `E001`/`1900`/`18.36mm`.
+  Escaneo actualizado: no hay anomalías estructurales en `023..035`.
+  Pares comparables:
+  `023/032`, `024/033`, `025/034`, `026/035`. La herramienta chica conserva
+  la geometría, usa `RadialCuttingDepth=9.18` y genera muchas más pasadas:
+  `47`, `29`, `47`, `59` puntos contra `5`, `5`, `5`, `11` con E006.
+  Reporte:
+  `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_023_035\vaciado_023_035_tool_comparison.md`.
+- Pendiente real: agregar test automatizado de roundtrip para fijar la
+  cobertura estable y extender el laboratorio con los casos `020..022`.
+
+## Plan Para Terminar El Estudio De Vaciados
+
+Objetivo actual: cerrar el modelo productivo de `Vaciado` sin perder
+informacion de Maestro y sin generar PGMX incompletos.
+
+1. Fijar tests automatizados:
+   - `Vaciado_001..019`: deben sintetizar y readaptar exacto.
+   - `Vaciado_020`, `021`: deben adaptarse para lectura, pero la sintesis debe
+     fallar explicitamente por contorno distinto del rectangulo completo.
+   - `Vaciado_022`, `027..031`: deben adaptarse conservando `boss_contours`,
+     pero la sintesis debe fallar explicitamente por islas.
+   - `Vaciado_023..026` y `032..035`: deben quedar como corpus para estudiar
+     el efecto de herramienta sobre el mismo contorno.
+2. Resolver contornos rectangulares no equivalentes a pieza completa:
+   - usar bbox real del contorno, no siempre `0..length/0..width`;
+   - recortar contra limites de pieza cuando el contorno excede el tablero;
+   - reproducir orden de anillos y punto de arranque en `020`, `021`,
+     `023..026` y `032..035`.
+3. Resolver islas:
+   - modelar `BossGeometryList` y `BossList` de forma productiva;
+   - estudiar offsets alrededor de una isla (`022`, `027`, `028`);
+   - estudiar multiples islas (`029`, `030`, `031`);
+   - entender segmentos diagonales/tangenciales y corredores entre exterior e
+     islas.
+4. Recien despues levantar los guardrails de sintesis:
+   - primero para contornos rectangulares sin islas;
+   - luego para islas rectangulares;
+   - mantener bloqueados arcos, poligonos no rectangulares y casos sin corpus.
+5. Cuando el PGMX este estable, retomar la traduccion ISO del nuevo mecanizado.

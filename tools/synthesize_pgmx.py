@@ -20,6 +20,8 @@ Soporte actual de mecanizados sinteticos:
 - `PolylineMillingSpec`: polilinea lineal abierta o cerrada con su fresado asociado.
 - `CircleMillingSpec`: circulo sobre `Top` con su fresado asociado.
 - `SquaringMillingSpec`: escuadrado exterior del contorno de la pieza sobre `Top`.
+- `PocketMillingSpec`: `Vaciado` rectangular sobre `Top` (`ClosedPocket` +
+  `BottomAndSideRoughMilling` + `ContourParallel`).
 - `DrillingSpec`: taladro puntual sobre `Top`, `Front`, `Back`, `Right` o `Left`.
 - `DrillingPatternSpec`: repeticion rectangular de taladros sobre `Top`, `Front`, `Back`,
   `Right` o `Left`.
@@ -129,6 +131,7 @@ __all__ = [
     "PolylineMillingSpec",
     "CircleMillingSpec",
     "SquaringMillingSpec",
+    "PocketMillingSpec",
     "DrillingSpec",
     "DrillingPatternSpec",
     "MachiningSpec",
@@ -154,6 +157,7 @@ __all__ = [
     "build_polyline_milling_spec",
     "build_circle_milling_spec",
     "build_squaring_milling_spec",
+    "build_pocket_milling_spec",
     "build_drilling_spec",
     "build_drilling_pattern_spec",
     "build_xn_spec",
@@ -461,6 +465,44 @@ class SquaringMillingSpec:
 
 
 @dataclass(frozen=True)
+class PocketMillingSpec:
+    """Vaciado superior observado como `ClosedPocket` + `ContourParallel`.
+
+    El subset productivo validado cubre contornos rectangulares lineales sobre
+    `Top`, con trayectorias `ContourParallel` equivalentes a Maestro.
+    """
+
+    contour_points: tuple[tuple[float, float], ...]
+    feature_name: str = "Vaciado"
+    plane_name: str = "Top"
+    tool_id: str = "1900"
+    tool_name: str = "E001"
+    tool_width: float = 18.36
+    security_plane: float = 20.0
+    depth_spec: MillingDepthSpec = field(default_factory=MillingDepthSpec)
+    approach: ApproachSpec = field(default_factory=ApproachSpec)
+    retract: RetractSpec = field(default_factory=RetractSpec)
+    milling_strategy: ContourParallelMillingStrategySpec = field(
+        default_factory=ContourParallelMillingStrategySpec
+    )
+    allowance_bottom: float = 0.0
+    allowance_side: float = 0.0
+    boss_contours: tuple[tuple[tuple[float, float], ...], ...] = ()
+
+    @property
+    def effective_contour_offset(self) -> float:
+        return (float(self.tool_width) / 2.0) + float(self.allowance_side)
+
+    @property
+    def radial_step(self) -> float:
+        return float(self.tool_width) * (1.0 - float(self.milling_strategy.overlap))
+
+    @property
+    def has_bosses(self) -> bool:
+        return bool(self.boss_contours)
+
+
+@dataclass(frozen=True)
 class DrillingSpec:
     """Descripcion reutilizable de un taladro puntual sobre una cara de la pieza."""
 
@@ -504,6 +546,7 @@ MachiningSpec = Union[
     PolylineMillingSpec,
     CircleMillingSpec,
     SquaringMillingSpec,
+    PocketMillingSpec,
     DrillingSpec,
     DrillingPatternSpec,
 ]
@@ -885,6 +928,71 @@ class _HydratedSquaringMillingSpec:
 
 
 @dataclass(frozen=True)
+class _HydratedPocketMillingSpec:
+    """Datos internos de serializacion para un `PocketMillingSpec` rectangular."""
+
+    spec: PocketMillingSpec
+    preferred_id_start: Optional[int] = None
+    geometry_curve: Optional[_CurveSpec] = None
+
+    @property
+    def contour_points(self) -> tuple[tuple[float, float], ...]:
+        return self.spec.contour_points
+
+    @property
+    def feature_name(self) -> str:
+        return self.spec.feature_name
+
+    @property
+    def plane_name(self) -> str:
+        return self.spec.plane_name
+
+    @property
+    def tool_id(self) -> str:
+        return self.spec.tool_id
+
+    @property
+    def tool_name(self) -> str:
+        return self.spec.tool_name
+
+    @property
+    def tool_width(self) -> float:
+        return self.spec.tool_width
+
+    @property
+    def security_plane(self) -> float:
+        return self.spec.security_plane
+
+    @property
+    def depth_spec(self) -> MillingDepthSpec:
+        return self.spec.depth_spec
+
+    @property
+    def approach(self) -> ApproachSpec:
+        return self.spec.approach
+
+    @property
+    def retract(self) -> RetractSpec:
+        return self.spec.retract
+
+    @property
+    def milling_strategy(self) -> ContourParallelMillingStrategySpec:
+        return self.spec.milling_strategy
+
+    @property
+    def allowance_bottom(self) -> float:
+        return self.spec.allowance_bottom
+
+    @property
+    def allowance_side(self) -> float:
+        return self.spec.allowance_side
+
+    @property
+    def boss_contours(self) -> tuple[tuple[tuple[float, float], ...], ...]:
+        return self.spec.boss_contours
+
+
+@dataclass(frozen=True)
 class _HydratedDrillingSpec:
     """Datos internos de serializacion y herramienta para `DrillingSpec`."""
 
@@ -1028,10 +1136,11 @@ class PgmxSynthesisRequest:
     polyline_millings: tuple[PolylineMillingSpec, ...] = ()
     circle_millings: tuple[CircleMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
+    pocket_millings: tuple[PocketMillingSpec, ...] = ()
     drillings: tuple[DrillingSpec, ...] = ()
     drilling_patterns: tuple[DrillingPatternSpec, ...] = ()
     ordered_machinings: tuple[MachiningSpec, ...] = ()
-    machining_order: tuple[str, ...] = ("line", "slot", "polyline", "circle", "squaring", "drilling", "drilling_pattern")
+    machining_order: tuple[str, ...] = ("line", "slot", "polyline", "circle", "squaring", "pocket", "drilling", "drilling_pattern")
     xn: XnSpec = field(default_factory=XnSpec)
 
 
@@ -1047,10 +1156,11 @@ class PgmxSynthesisResult:
     polyline_millings: tuple[PolylineMillingSpec, ...] = ()
     circle_millings: tuple[CircleMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
+    pocket_millings: tuple[PocketMillingSpec, ...] = ()
     drillings: tuple[DrillingSpec, ...] = ()
     drilling_patterns: tuple[DrillingPatternSpec, ...] = ()
     ordered_machinings: tuple[MachiningSpec, ...] = ()
-    machining_order: tuple[str, ...] = ("line", "slot", "polyline", "circle", "squaring", "drilling", "drilling_pattern")
+    machining_order: tuple[str, ...] = ("line", "slot", "polyline", "circle", "squaring", "pocket", "drilling", "drilling_pattern")
     xn: XnSpec = field(default_factory=XnSpec)
 
 
@@ -3045,6 +3155,7 @@ def _validate_tool_sinking_lengths(
     polyline_millings: Sequence[_HydratedPolylineMillingSpec],
     circle_millings: Sequence[_HydratedCircleMillingSpec],
     squaring_millings: Sequence[_HydratedSquaringMillingSpec],
+    pocket_millings: Sequence[_HydratedPocketMillingSpec],
     drillings: Sequence[_HydratedDrillingSpec],
     drilling_patterns: Sequence[_HydratedDrillingPatternSpec] = (),
 ) -> None:
@@ -3065,6 +3176,8 @@ def _validate_tool_sinking_lengths(
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
     for spec in squaring_millings:
         _validate_tool_type_for_milling_spec(spec, tool_catalog)
+        _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
+    for spec in pocket_millings:
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
     for spec in drillings:
         _validate_tool_type_for_drilling_spec(spec, tool_catalog)
@@ -6187,6 +6300,28 @@ def _build_geometry_from_curve_spec(
     return geometry
 
 
+def _build_boundary_curve_holder(
+    curve_spec: _CurveSpec,
+    generated_member_keys: Sequence[str],
+) -> ET.Element:
+    if curve_spec.geometry_type != "GeomCompositeCurve":
+        raise ValueError("BoundaryGeometryList de ClosedPocket requiere GeomCompositeCurve.")
+    boundary = ET.Element(_qname(GEOMETRY_NS, "GeomCompositeCurve"))
+    _append_key(boundary, "0", "System.Object")
+    _append_blank_name(boundary)
+    _append_node(boundary, GEOMETRY_NS, "IsAbsolute", "false")
+    _append_object_ref(boundary, GEOMETRY_NS, "PlaneID", "0", "System.Object")
+    member_keys = tuple(curve_spec.member_keys or generated_member_keys)
+    if len(member_keys) != len(curve_spec.member_serializations):
+        raise ValueError("La geometria de borde requiere una clave por cada miembro serializado.")
+    keys_group = _append_node(boundary, GEOMETRY_NS, "_serializingKeys")
+    members_group = _append_node(boundary, GEOMETRY_NS, "_serializingMembers")
+    for key_id, member_serialization in zip(member_keys, curve_spec.member_serializations):
+        _append_node(keys_group, ARRAYS_NS, "unsignedInt", key_id)
+        _append_node(members_group, ARRAYS_NS, "string", member_serialization)
+    return boundary
+
+
 def _build_vector_holder(local_name: str, x_value: float, y_value: float, z_value: float) -> ET.Element:
     vector = ET.Element(_qname(BASE_MODEL_NS, local_name))
     _append_key(vector, "0", "System.Object")
@@ -6806,6 +6941,54 @@ def _build_profile_feature(
     return feature
 
 
+def _build_closed_pocket_feature(
+    state: PgmxState,
+    spec: _HydratedPocketMillingSpec,
+    feature_id: str,
+    geometry_id: str,
+    operation_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+    geometry_object_type: str,
+    boundary_curve: _CurveSpec,
+    boundary_member_keys: Sequence[str],
+) -> ET.Element:
+    feature = ET.Element(
+        _qname(PGMX_NS, "ManufacturingFeature"),
+        {f"{{{XSI_NS}}}type": "a:ClosedPocket"},
+    )
+    _set_xmlns(feature, "a", BASE_MODEL_NS)
+    _append_key(feature, feature_id, "ScmGroup.XCam.MachiningDataModel.ClosedPocket")
+    _append_blank_name(feature).text = spec.feature_name
+    _append_object_ref(feature, PGMX_NS, "GeometryID", geometry_id, geometry_object_type)
+    operation_ids = _append_node(feature, PGMX_NS, "OperationIDs")
+    _append_reference_key(
+        operation_ids,
+        operation_id,
+        "ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideRoughMilling",
+    )
+    _append_object_ref(feature, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
+    bottom_condition = _append_node(
+        feature,
+        PGMX_NS,
+        "BottomCondition",
+        attrib={f"{{{XSI_NS}}}type": "a:PlanarPocketBottomCondition"},
+    )
+    _set_xmlns(bottom_condition, "a", BASE_MODEL_NS)
+    depth = _append_node(feature, PGMX_NS, "Depth")
+    depth_value = _compact_number(_feature_depth_value(state, spec))
+    _append_node(depth, PGMX_NS, "EndDepth", depth_value)
+    _append_node(depth, PGMX_NS, "StartDepth", depth_value)
+    _append_node(feature, BASE_MODEL_NS, "BossGeometryList")
+    _append_node(feature, BASE_MODEL_NS, "BossList")
+    boundary_list = _append_node(feature, BASE_MODEL_NS, "BoundaryGeometryList")
+    boundary_list.append(_build_boundary_curve_holder(boundary_curve, boundary_member_keys))
+    _append_node(feature, BASE_MODEL_NS, "OrthogonalRadius", "0")
+    _append_node(feature, BASE_MODEL_NS, "PlanarRadius", "0")
+    _append_node(feature, BASE_MODEL_NS, "Slope", "0")
+    return feature
+
+
 def _build_slot_side_feature(
     state: PgmxState,
     spec: _HydratedSlotMillingSpec,
@@ -7360,10 +7543,26 @@ def _build_milling_strategy_node(spec) -> ET.Element:
     if strategy is None:
         return ET.Element(_qname(PGMX_NS, "MachiningStrategy"), {f"{{{XSI_NS}}}nil": "true"})
     if isinstance(strategy, ContourParallelMillingStrategySpec):
-        raise NotImplementedError(
-            "ContourParallelMillingStrategySpec esta soportada solo para lectura; "
-            "la sintesis de Vaciado/ClosedPocket todavia no esta implementada."
+        node = ET.Element(
+            _qname(PGMX_NS, "MachiningStrategy"),
+            {f"{{{XSI_NS}}}type": "b:ContourParallel"},
         )
+        _set_xmlns(node, "b", STRATEGY_NS)
+        _append_node(node, PGMX_NS, "AllowMultiplePasses", "true" if strategy.allow_multiple_passes else "false")
+        _append_node(node, PGMX_NS, "Overlap", _compact_number(strategy.overlap))
+        _append_node(node, STRATEGY_NS, "AllowsBidirectional", "true" if strategy.allows_bidirectional else "false")
+        _append_node(node, STRATEGY_NS, "AllowsFinishCutting", "true" if strategy.allows_finish_cutting else "false")
+        _append_node(node, STRATEGY_NS, "AxialCuttingDepth", _compact_number(strategy.axial_cutting_depth))
+        _append_node(node, STRATEGY_NS, "AxialFinishCuttingDepth", _compact_number(strategy.axial_finish_cutting_depth))
+        _append_node(node, STRATEGY_NS, "Cutmode", strategy.cutmode)
+        _append_node(node, STRATEGY_NS, "InsideToOutSide", "true" if strategy.inside_to_outside else "false")
+        _append_node(node, STRATEGY_NS, "IsHelicStrategy", "true" if strategy.is_helic_strategy else "false")
+        _append_node(node, STRATEGY_NS, "IsInternal", "true" if strategy.is_internal else "false")
+        _append_node(node, STRATEGY_NS, "RadialCuttingDepth", _compact_number(strategy.radial_cutting_depth))
+        _append_node(node, STRATEGY_NS, "RadialFinishCuttingDepth", _compact_number(strategy.radial_finish_cutting_depth))
+        _append_node(node, STRATEGY_NS, "RotationDirection", strategy.rotation_direction)
+        _append_node(node, STRATEGY_NS, "StrokeConnectionStrategy", strategy.stroke_connection_strategy)
+        return node
 
     if isinstance(strategy, UnidirectionalMillingStrategySpec):
         strategy_type = "b:UnidirectionalMilling"
@@ -7530,6 +7729,195 @@ def _build_line_operation(
     operation.append(_build_milling_strategy_node(spec))
     _append_node(operation, PGMX_NS, "AllowanceBottom", "0")
     _append_node(operation, PGMX_NS, "AllowanceSide", "0")
+    return operation
+
+
+def _build_contour_parallel_xyz_path(
+    state: PgmxState,
+    spec: _HydratedPocketMillingSpec,
+) -> tuple[tuple[float, float, float], ...]:
+    from tools.pgmx_vaciado.contour_parallel import generate_rectangular_contour_parallel_xyz_path
+
+    strategy = spec.milling_strategy
+    return generate_rectangular_contour_parallel_xyz_path(
+        length=state.length,
+        width=state.width,
+        depth=state.depth,
+        contour_points=spec.contour_points,
+        tool_width=spec.tool_width,
+        target_depth=float(_feature_depth_value(state, spec)),
+        security_plane=spec.security_plane,
+        allowance_side=spec.allowance_side,
+        overlap=strategy.overlap,
+        radial_cutting_depth=strategy.radial_cutting_depth,
+        rotation_direction=strategy.rotation_direction,
+        inside_to_outside=strategy.inside_to_outside,
+        stroke_connection_strategy=strategy.stroke_connection_strategy,
+        allow_multiple_passes=strategy.allow_multiple_passes,
+        axial_cutting_depth=strategy.axial_cutting_depth,
+        axial_finish_cutting_depth=strategy.axial_finish_cutting_depth,
+    )
+
+
+def _points_are_close_3d(
+    first: tuple[float, float, float],
+    second: tuple[float, float, float],
+    *,
+    tolerance: float = 1e-9,
+) -> bool:
+    return (
+        math.isclose(first[0], second[0], abs_tol=tolerance)
+        and math.isclose(first[1], second[1], abs_tol=tolerance)
+        and math.isclose(first[2], second[2], abs_tol=tolerance)
+    )
+
+
+def _pocket_contour_bbox(
+    contour_points: Sequence[tuple[float, float]],
+) -> tuple[float, float, float, float]:
+    xs = [float(point[0]) for point in contour_points]
+    ys = [float(point[1]) for point in contour_points]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _pocket_contour_matches_workpiece(
+    state: PgmxState,
+    spec: _HydratedPocketMillingSpec,
+    *,
+    tolerance: float = 1e-6,
+) -> bool:
+    min_x, min_y, max_x, max_y = _pocket_contour_bbox(spec.contour_points)
+    return (
+        math.isclose(min_x, 0.0, abs_tol=tolerance)
+        and math.isclose(min_y, 0.0, abs_tol=tolerance)
+        and math.isclose(max_x, state.length, abs_tol=tolerance)
+        and math.isclose(max_y, state.width, abs_tol=tolerance)
+    )
+
+
+def _curve_spec_from_xyz_path(points: Sequence[tuple[float, float, float]]) -> _CurveSpec:
+    descriptions: list[str] = []
+    for start_point, end_point in zip(points, points[1:]):
+        if _points_are_close_3d(start_point, end_point):
+            continue
+        descriptions.append(_build_toolpath_description(start_point, end_point))
+    if not descriptions:
+        raise ValueError("La trayectoria de Vaciado no contiene segmentos serializables.")
+    return _composite_curve_spec(descriptions)
+
+
+def _build_pocket_operation(
+    state: PgmxState,
+    spec: _HydratedPocketMillingSpec,
+    operation_id: str,
+    trajectory_curve: _CurveSpec,
+    trajectory_curve_member_keys: Sequence[str],
+) -> ET.Element:
+    operation = ET.Element(
+        _qname(PGMX_NS, "Operation"),
+        {f"{{{XSI_NS}}}type": "a:BottomAndSideRoughMilling"},
+    )
+    _set_xmlns(operation, "a", MILLING_NS)
+    _append_key(operation, operation_id, "ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideRoughMilling")
+    _append_blank_name(operation)
+    _append_node(operation, PGMX_NS, "ActivateCNCCorrection", "false")
+    _append_node(operation, PGMX_NS, "Attributes", "")
+    _append_node(operation, PGMX_NS, "ToolDirection", attrib={f"{{{XSI_NS}}}nil": "true"})
+    toolpath_list = _append_node(operation, PGMX_NS, "ToolpathList")
+    _set_xmlns(toolpath_list, "b", BASE_MODEL_NS)
+
+    xyz_path = _build_contour_parallel_xyz_path(state, spec)
+    if not xyz_path:
+        raise ValueError("La estrategia ContourParallel no genero trayectoria para el Vaciado.")
+    first_point = xyz_path[0]
+    last_point = xyz_path[-1]
+    clearance_z = state.depth + spec.security_plane
+    toolpath_list.append(
+        _build_toolpath(
+            "Approach",
+            _trimmed_curve_spec(
+                _build_toolpath_description(
+                    (first_point[0], first_point[1], clearance_z),
+                    first_point,
+                )
+            ),
+        )
+    )
+    toolpath_list.append(
+        _build_toolpath(
+            "TrajectoryPath",
+            trajectory_curve,
+            generated_member_keys=trajectory_curve_member_keys,
+        )
+    )
+    toolpath_list.append(
+        _build_toolpath(
+            "Lift",
+            _trimmed_curve_spec(
+                _build_toolpath_description(
+                    last_point,
+                    (last_point[0], last_point[1], clearance_z),
+                )
+            ),
+        )
+    )
+    _append_node(operation, PGMX_NS, "ToolpathPriority", "true")
+    _append_node(operation, PGMX_NS, "AdditionalToolKeys", "")
+    _append_node(operation, PGMX_NS, "ApproachSecurityPlane", _compact_number(spec.security_plane))
+    _append_node(operation, PGMX_NS, "Head", attrib={f"{{{XSI_NS}}}nil": "true"})
+    _append_node(operation, PGMX_NS, "HeadRotation", "0")
+    _append_node(operation, PGMX_NS, "MachineFunctions", "")
+    _append_node(operation, PGMX_NS, "RetractSecurityPlane", _compact_number(spec.security_plane))
+    operation.append(_build_start_point(0.0, 0.0, 0.0))
+    technology = _append_node(
+        operation,
+        PGMX_NS,
+        "Technology",
+        attrib={f"{{{XSI_NS}}}type": "MillingTechnology"},
+    )
+    _append_node(technology, PGMX_NS, "Feedrate", "0")
+    _append_node(technology, PGMX_NS, "CutSpeed", "0")
+    _append_node(technology, PGMX_NS, "Spindle", "0")
+    _append_object_ref(
+        operation,
+        PGMX_NS,
+        "ToolKey",
+        spec.tool_id,
+        "ScmGroup.XCam.ToolDataModel.Tool.CuttingTool",
+        include_name=True,
+        name_text=spec.tool_name,
+    )
+    _append_node(operation, PGMX_NS, "OvercutLength", _compact_number(_operation_overcut_length(spec)))
+    approach = _append_node(
+        operation,
+        PGMX_NS,
+        "Approach",
+        attrib={f"{{{XSI_NS}}}type": "b:BaseApproachStrategy"},
+    )
+    _set_xmlns(approach, "b", STRATEGY_NS)
+    _append_node(approach, STRATEGY_NS, "ApproachArcSide", spec.approach.arc_side)
+    _append_node(approach, STRATEGY_NS, "ApproachMode", spec.approach.mode)
+    _append_node(approach, STRATEGY_NS, "ApproachType", spec.approach.approach_type)
+    _append_node(approach, STRATEGY_NS, "IsEnabled", "true" if spec.approach.is_enabled else "false")
+    _append_node(approach, STRATEGY_NS, "RadiusMultiplier", _compact_number(spec.approach.radius_multiplier))
+    _append_node(approach, STRATEGY_NS, "Speed", _compact_number(spec.approach.speed))
+    retract = _append_node(
+        operation,
+        PGMX_NS,
+        "Retract",
+        attrib={f"{{{XSI_NS}}}type": "b:BaseRetractStrategy"},
+    )
+    _set_xmlns(retract, "b", STRATEGY_NS)
+    _append_node(retract, STRATEGY_NS, "IsEnabled", "true" if spec.retract.is_enabled else "false")
+    _append_node(retract, STRATEGY_NS, "OverLap", _compact_number(spec.retract.overlap))
+    _append_node(retract, STRATEGY_NS, "RadiusMultiplier", _compact_number(spec.retract.radius_multiplier))
+    _append_node(retract, STRATEGY_NS, "RetractArcSide", spec.retract.arc_side)
+    _append_node(retract, STRATEGY_NS, "RetractMode", spec.retract.mode)
+    _append_node(retract, STRATEGY_NS, "RetractType", spec.retract.retract_type)
+    _append_node(retract, STRATEGY_NS, "Speed", _compact_number(spec.retract.speed))
+    operation.append(_build_milling_strategy_node(spec))
+    _append_node(operation, PGMX_NS, "AllowanceBottom", _compact_number(spec.allowance_bottom))
+    _append_node(operation, PGMX_NS, "AllowanceSide", _compact_number(spec.allowance_side))
     return operation
 
 
@@ -8024,6 +8412,102 @@ def _append_squaring_milling(root: ET.Element, state: PgmxState, spec: _Hydrated
     )
 
 
+def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPocketMillingSpec) -> None:
+    geometries = root.find("./{*}Geometries")
+    features = root.find("./{*}Features")
+    operations = root.find("./{*}Operations")
+    expressions = root.find("./{*}Expressions")
+    elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
+    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
+    if any(node is None for node in (geometries, features, operations, expressions, elements, workpiece)):
+        raise ValueError("La plantilla no contiene todas las colecciones requeridas para sintetizar el Vaciado.")
+
+    if not _is_closed_polyline_points(spec.contour_points):
+        raise ValueError("PocketMillingSpec requiere un contorno cerrado.")
+    if spec.boss_contours:
+        raise NotImplementedError(
+            "PocketMillingSpec con islas/BossGeometryList se adapta para lectura, "
+            "pero la serializacion productiva de Vaciado con islas todavia no esta implementada."
+        )
+    if not _pocket_contour_matches_workpiece(state, spec):
+        raise NotImplementedError(
+            "PocketMillingSpec con contorno distinto del rectangulo completo de la pieza "
+            "se adapta para lectura, pero la serializacion productiva de ese Vaciado "
+            "todavia no esta implementada."
+        )
+
+    workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
+    workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
+    depth_variable_name = _workpiece_depth_name(workpiece)
+    plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
+    uses_depth_expressions = _uses_feature_depth_expressions(spec)
+
+    boundary_curve = spec.geometry_curve or _curve_spec_from_profile_geometry(
+        _build_closed_polyline_geometry_profile(spec.contour_points, z_value=0.0)
+    )
+    boundary_member_count = len(boundary_curve.member_serializations)
+    trajectory_curve = _curve_spec_from_xyz_path(_build_contour_parallel_xyz_path(state, spec))
+    trajectory_member_count = len(trajectory_curve.member_serializations)
+    reserve_count = 1 + boundary_member_count + (6 if uses_depth_expressions else 4) + trajectory_member_count
+    reserved_ids = _reserve_ids(root, reserve_count, spec.preferred_id_start)
+    geometry_id = reserved_ids[0]
+    boundary_member_keys = tuple(reserved_ids[1 : 1 + boundary_member_count])
+    operation_index = 1 + boundary_member_count
+    operation_id = reserved_ids[operation_index]
+    feature_id = reserved_ids[operation_index + 1]
+    step_id = reserved_ids[operation_index + 2]
+    start_expression_id = reserved_ids[operation_index + 3] if uses_depth_expressions else None
+    end_expression_id = reserved_ids[operation_index + 4] if uses_depth_expressions else None
+    trajectory_index = operation_index + (5 if uses_depth_expressions else 3)
+    trajectory_member_keys = tuple(reserved_ids[trajectory_index : trajectory_index + trajectory_member_count])
+
+    geometries.append(
+        _build_polyline_geometry(
+            geometry_id,
+            plane_id,
+            plane_object_type,
+            boundary_curve,
+            generated_member_keys=boundary_curve.member_keys or boundary_member_keys,
+        )
+    )
+    features.append(
+        _build_closed_pocket_feature(
+            state,
+            spec,
+            feature_id,
+            geometry_id,
+            operation_id,
+            workpiece_id,
+            workpiece_object_type,
+            _geometry_object_type(boundary_curve.geometry_type),
+            boundary_curve,
+            boundary_curve.member_keys or boundary_member_keys,
+        )
+    )
+    operations.append(
+        _build_pocket_operation(
+            state,
+            spec,
+            operation_id,
+            trajectory_curve,
+            trajectory_curve.member_keys or trajectory_member_keys,
+        )
+    )
+    elements.append(
+        _build_working_step(
+            spec.feature_name,
+            step_id,
+            feature_id,
+            operation_id,
+            feature_object_type="ScmGroup.XCam.MachiningDataModel.ClosedPocket",
+            operation_object_type="ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideRoughMilling",
+        )
+    )
+    if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
+        expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
+        expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
+
+
 def _append_drilling(root: ET.Element, state: PgmxState, spec: _HydratedDrillingSpec) -> None:
     geometries = root.find("./{*}Geometries")
     features = root.find("./{*}Features")
@@ -8450,15 +8934,81 @@ def _apply_drilling_patterns(
         _append_drilling_pattern(root, state, drilling_pattern)
 
 
+def _apply_pocket_millings(
+    root: ET.Element,
+    state: PgmxState,
+    pocket_millings: Sequence[_HydratedPocketMillingSpec],
+) -> None:
+    for pocket_milling in pocket_millings:
+        _append_pocket_milling(root, state, pocket_milling)
+
+
 HydratedMachiningSpec = Union[
     _HydratedLineMillingSpec,
     _HydratedSlotMillingSpec,
     _HydratedPolylineMillingSpec,
     _HydratedCircleMillingSpec,
     _HydratedSquaringMillingSpec,
+    _HydratedPocketMillingSpec,
     _HydratedDrillingSpec,
     _HydratedDrillingPatternSpec,
 ]
+
+
+def _extract_pocket_milling_template(source_pgmx_path: Path) -> dict[str, object]:
+    root, _, _ = _load_pgmx_container(source_pgmx_path)
+    geometry = next(
+        (
+            node
+            for node in root.findall("./{*}Geometries/{*}GeomGeometry")
+            if "GeomCompositeCurve" in _xsi_type(node)
+        ),
+        None,
+    )
+    feature = next(
+        (
+            node
+            for node in root.findall("./{*}Features/{*}ManufacturingFeature")
+            if "ClosedPocket" in _xsi_type(node)
+        ),
+        None,
+    )
+    operation = next(
+        (
+            node
+            for node in root.findall("./{*}Operations/{*}Operation")
+            if "BottomAndSideRoughMilling" in _xsi_type(node)
+        ),
+        None,
+    )
+    if geometry is None or feature is None or operation is None:
+        raise ValueError(f"El archivo '{source_pgmx_path}' no contiene una plantilla de Vaciado compatible.")
+
+    geometry_id = int(_text(geometry, "./{*}Key/{*}ID", "0") or "0")
+    return {
+        "preferred_id_start": geometry_id,
+        "geometry_curve": _composite_curve_spec(
+            [member.text or "" for member in geometry.findall("./{*}_serializingMembers/{*}string")],
+            [(key.text or "").strip() for key in geometry.findall("./{*}_serializingKeys/{*}unsignedInt")],
+        ),
+    }
+
+
+def _hydrate_pocket_milling_spec(
+    spec: PocketMillingSpec,
+    source_pgmx_path: Optional[Path],
+) -> _HydratedPocketMillingSpec:
+    if source_pgmx_path is None:
+        return _HydratedPocketMillingSpec(spec)
+    try:
+        template = _extract_pocket_milling_template(source_pgmx_path)
+    except ValueError:
+        return _HydratedPocketMillingSpec(spec)
+    return _HydratedPocketMillingSpec(
+        spec,
+        preferred_id_start=int(template["preferred_id_start"]),
+        geometry_curve=template.get("geometry_curve") if isinstance(template.get("geometry_curve"), _CurveSpec) else None,
+    )
 
 
 def _hydrate_machining_spec(
@@ -8475,6 +9025,8 @@ def _hydrate_machining_spec(
         return _hydrate_circle_milling_spec(spec, source_pgmx_path)
     if isinstance(spec, SquaringMillingSpec):
         return _hydrate_squaring_milling_spec(spec, source_pgmx_path)
+    if isinstance(spec, PocketMillingSpec):
+        return _hydrate_pocket_milling_spec(spec, source_pgmx_path)
     if isinstance(spec, DrillingSpec):
         return _hydrate_drilling_spec(spec, source_pgmx_path)
     if isinstance(spec, DrillingPatternSpec):
@@ -8502,6 +9054,9 @@ def _append_hydrated_machining(
     if isinstance(spec, _HydratedSquaringMillingSpec):
         _append_squaring_milling(root, state, spec)
         return
+    if isinstance(spec, _HydratedPocketMillingSpec):
+        _append_pocket_milling(root, state, spec)
+        return
     if isinstance(spec, _HydratedDrillingSpec):
         _append_drilling(root, state, spec)
         return
@@ -8519,6 +9074,7 @@ def _split_hydrated_machinings(
     list[_HydratedPolylineMillingSpec],
     list[_HydratedCircleMillingSpec],
     list[_HydratedSquaringMillingSpec],
+    list[_HydratedPocketMillingSpec],
     list[_HydratedDrillingSpec],
     list[_HydratedDrillingPatternSpec],
 ]:
@@ -8527,6 +9083,7 @@ def _split_hydrated_machinings(
     polyline_millings: list[_HydratedPolylineMillingSpec] = []
     circle_millings: list[_HydratedCircleMillingSpec] = []
     squaring_millings: list[_HydratedSquaringMillingSpec] = []
+    pocket_millings: list[_HydratedPocketMillingSpec] = []
     drillings: list[_HydratedDrillingSpec] = []
     drilling_patterns: list[_HydratedDrillingPatternSpec] = []
     for spec in specs:
@@ -8540,6 +9097,8 @@ def _split_hydrated_machinings(
             circle_millings.append(spec)
         elif isinstance(spec, _HydratedSquaringMillingSpec):
             squaring_millings.append(spec)
+        elif isinstance(spec, _HydratedPocketMillingSpec):
+            pocket_millings.append(spec)
         elif isinstance(spec, _HydratedDrillingSpec):
             drillings.append(spec)
         elif isinstance(spec, _HydratedDrillingPatternSpec):
@@ -8550,13 +9109,14 @@ def _split_hydrated_machinings(
         polyline_millings,
         circle_millings,
         squaring_millings,
+        pocket_millings,
         drillings,
         drilling_patterns,
     )
 
 
 def _normalize_machining_order(value: Optional[Sequence[str]]) -> tuple[str, ...]:
-    default_order = ("line", "slot", "polyline", "circle", "squaring", "drilling", "drilling_pattern")
+    default_order = ("line", "slot", "polyline", "circle", "squaring", "pocket", "drilling", "drilling_pattern")
     aliases = {
         "lines": "line",
         "line_milling": "line",
@@ -8578,6 +9138,12 @@ def _normalize_machining_order(value: Optional[Sequence[str]]) -> tuple[str, ...
         "squaring_milling": "squaring",
         "squaring_millings": "squaring",
         "square": "squaring",
+        "pocket": "pocket",
+        "pockets": "pocket",
+        "pocket_milling": "pocket",
+        "pocket_millings": "pocket",
+        "vaciado": "pocket",
+        "vaciados": "pocket",
         "drilling": "drilling",
         "drilling_millings": "drilling",
         "drilling_pattern": "drilling_pattern",
@@ -9057,6 +9623,121 @@ def build_squaring_milling_spec(
     )
 
 
+def build_pocket_milling_spec(
+    *,
+    contour_points: Sequence[tuple[float, float]],
+    feature_name: Optional[str] = None,
+    plane_name: Optional[str] = None,
+    tool_id: Optional[str] = None,
+    tool_name: Optional[str] = None,
+    tool_width: Optional[float] = None,
+    security_plane: Optional[float] = None,
+    is_through: Optional[bool] = None,
+    target_depth: Optional[float] = None,
+    extra_depth: Optional[float] = None,
+    approach_enabled: Optional[bool] = None,
+    approach_type: Optional[str] = None,
+    approach_mode: Optional[str] = None,
+    approach_radius_multiplier: Optional[float] = None,
+    approach_speed: Optional[float] = None,
+    approach_arc_side: Optional[str] = None,
+    retract_enabled: Optional[bool] = None,
+    retract_type: Optional[str] = None,
+    retract_mode: Optional[str] = None,
+    retract_radius_multiplier: Optional[float] = None,
+    retract_speed: Optional[float] = None,
+    retract_arc_side: Optional[str] = None,
+    retract_overlap: Optional[float] = None,
+    milling_strategy: Optional[ContourParallelMillingStrategySpec] = None,
+    allowance_bottom: Optional[float] = None,
+    allowance_side: Optional[float] = None,
+    boss_contours: Optional[Sequence[Sequence[tuple[float, float]]]] = None,
+) -> PocketMillingSpec:
+    """Construye la spec publica de `Vaciado` para lectura/adaptacion."""
+
+    normalized_points = tuple((float(x), float(y)) for x, y in contour_points)
+    if len(normalized_points) < 4:
+        raise ValueError("PocketMillingSpec requiere un contorno cerrado con al menos 4 puntos.")
+    if not (
+        math.isclose(normalized_points[0][0], normalized_points[-1][0], abs_tol=1e-6)
+        and math.isclose(normalized_points[0][1], normalized_points[-1][1], abs_tol=1e-6)
+    ):
+        raise ValueError("PocketMillingSpec requiere que el primer y ultimo punto coincidan.")
+    normalized_boss_contours: list[tuple[tuple[float, float], ...]] = []
+    for boss_contour in boss_contours or ():
+        normalized_boss = tuple((float(x), float(y)) for x, y in boss_contour)
+        if len(normalized_boss) < 4:
+            raise ValueError("Cada isla de PocketMillingSpec requiere un contorno cerrado con al menos 4 puntos.")
+        if not (
+            math.isclose(normalized_boss[0][0], normalized_boss[-1][0], abs_tol=1e-6)
+            and math.isclose(normalized_boss[0][1], normalized_boss[-1][1], abs_tol=1e-6)
+        ):
+            raise ValueError("Cada isla de PocketMillingSpec requiere que el primer y ultimo punto coincidan.")
+        normalized_boss_contours.append(normalized_boss)
+
+    normalized_strategy = (
+        build_contour_parallel_milling_strategy_spec()
+        if milling_strategy is None
+        else build_contour_parallel_milling_strategy_spec(
+            rotation_direction=milling_strategy.rotation_direction,
+            stroke_connection_strategy=milling_strategy.stroke_connection_strategy,
+            inside_to_outside=milling_strategy.inside_to_outside,
+            overlap=milling_strategy.overlap,
+            is_helic_strategy=milling_strategy.is_helic_strategy,
+            allow_multiple_passes=milling_strategy.allow_multiple_passes,
+            axial_cutting_depth=milling_strategy.axial_cutting_depth,
+            axial_finish_cutting_depth=milling_strategy.axial_finish_cutting_depth,
+            cutmode=milling_strategy.cutmode,
+            is_internal=milling_strategy.is_internal,
+            radial_cutting_depth=milling_strategy.radial_cutting_depth,
+            radial_finish_cutting_depth=milling_strategy.radial_finish_cutting_depth,
+            allows_bidirectional=milling_strategy.allows_bidirectional,
+            allows_finish_cutting=milling_strategy.allows_finish_cutting,
+        )
+    )
+    has_explicit_depth = any(value is not None for value in (is_through, target_depth, extra_depth))
+    depth_spec = (
+        build_milling_depth_spec(is_through=False, target_depth=10.0)
+        if not has_explicit_depth
+        else build_milling_depth_spec(
+            is_through=is_through,
+            target_depth=target_depth,
+            extra_depth=extra_depth,
+        )
+    )
+    return PocketMillingSpec(
+        contour_points=normalized_points,
+        feature_name=(feature_name or "Vaciado").strip() or "Vaciado",
+        plane_name=_normalize_plane_name(plane_name),
+        tool_id=(tool_id or "1900").strip() or "1900",
+        tool_name=(tool_name or "E001").strip() or "E001",
+        tool_width=18.36 if tool_width is None else float(tool_width),
+        security_plane=20.0 if security_plane is None else float(security_plane),
+        depth_spec=depth_spec,
+        approach=build_approach_spec(
+            enabled=approach_enabled,
+            approach_type=approach_type,
+            mode=approach_mode,
+            radius_multiplier=approach_radius_multiplier,
+            speed=approach_speed,
+            arc_side=approach_arc_side,
+        ),
+        retract=build_retract_spec(
+            enabled=retract_enabled,
+            retract_type=retract_type,
+            mode=retract_mode,
+            radius_multiplier=retract_radius_multiplier,
+            speed=retract_speed,
+            arc_side=retract_arc_side,
+            overlap=retract_overlap,
+        ),
+        milling_strategy=normalized_strategy,
+        allowance_bottom=0.0 if allowance_bottom is None else float(allowance_bottom),
+        allowance_side=0.0 if allowance_side is None else float(allowance_side),
+        boss_contours=tuple(normalized_boss_contours),
+    )
+
+
 def build_drilling_spec(
     *,
     center_x: float,
@@ -9180,6 +9861,7 @@ def build_synthesis_request(
     polyline_millings: Optional[Sequence[PolylineMillingSpec]] = None,
     circle_millings: Optional[Sequence[CircleMillingSpec]] = None,
     squaring_millings: Optional[Sequence[SquaringMillingSpec]] = None,
+    pocket_millings: Optional[Sequence[PocketMillingSpec]] = None,
     drillings: Optional[Sequence[DrillingSpec]] = None,
     drilling_patterns: Optional[Sequence[DrillingPatternSpec]] = None,
     ordered_machinings: Optional[Sequence[MachiningSpec]] = None,
@@ -9236,6 +9918,7 @@ def build_synthesis_request(
         polyline_millings=tuple(polyline_millings or ()),
         circle_millings=tuple(circle_millings or ()),
         squaring_millings=tuple(squaring_millings or ()),
+        pocket_millings=tuple(pocket_millings or ()),
         drillings=tuple(drillings or ()),
         drilling_patterns=tuple(drilling_patterns or ()),
         ordered_machinings=tuple(ordered_machinings or ()),
@@ -9271,6 +9954,10 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         _hydrate_squaring_milling_spec(squaring_milling, request.source_pgmx_path)
         for squaring_milling in request.squaring_millings
     ]
+    hydrated_pocket_millings = [
+        _hydrate_pocket_milling_spec(pocket_milling, request.source_pgmx_path)
+        for pocket_milling in request.pocket_millings
+    ]
     hydrated_drillings = [
         _hydrate_drilling_spec(drilling, request.source_pgmx_path)
         for drilling in request.drillings
@@ -9289,6 +9976,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         ordered_polyline_millings,
         ordered_circle_millings,
         ordered_squaring_millings,
+        ordered_pocket_millings,
         ordered_drillings,
         ordered_drilling_patterns,
     ) = _split_hydrated_machinings(hydrated_ordered_machinings)
@@ -9300,6 +9988,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         hydrated_polyline_millings + ordered_polyline_millings,
         hydrated_circle_millings + ordered_circle_millings,
         hydrated_squaring_millings + ordered_squaring_millings,
+        hydrated_pocket_millings + ordered_pocket_millings,
         hydrated_drillings + ordered_drillings,
         hydrated_drilling_patterns + ordered_drilling_patterns,
     )
@@ -9332,6 +10021,11 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
             baseline_root,
             request.piece,
             hydrated_squaring_millings,
+        ),
+        "pocket": lambda: _apply_pocket_millings(
+            baseline_root,
+            request.piece,
+            hydrated_pocket_millings,
         ),
         "drilling": lambda: _apply_drillings(
             baseline_root,
@@ -9370,6 +10064,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         polyline_millings=request.polyline_millings,
         circle_millings=request.circle_millings,
         squaring_millings=request.squaring_millings,
+        pocket_millings=request.pocket_millings,
         drillings=request.drillings,
         drilling_patterns=request.drilling_patterns,
         ordered_machinings=request.ordered_machinings,

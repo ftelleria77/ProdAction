@@ -238,6 +238,8 @@ class PgmxFeatureSnapshot:
     is_precise: Optional[bool]
     replication_pattern: Optional[PgmxReplicationPatternSnapshot] = None
     base_feature: Optional[PgmxReplicatedBaseFeatureSnapshot] = None
+    boss_geometry_curves: tuple[PgmxCurveSnapshot, ...] = ()
+    boss_refs: tuple[PgmxObjectRefSnapshot, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -670,7 +672,7 @@ def _field_path(property_node: Optional[ET.Element]) -> tuple[str, ...]:
 def _curve_snapshot_from_node(node: Optional[ET.Element]) -> Optional[PgmxCurveSnapshot]:
     if node is None:
         return None
-    curve_type = sp._xsi_type(node)
+    curve_type = sp._xsi_type(node) or _local_name(node.tag)
     if "GeomTrimmedCurve" in curve_type:
         serialization = sp._raw_text(node, "./{*}_serializationGeometryDescription")
         curve_spec = sp._trimmed_curve_spec(serialization)
@@ -698,6 +700,30 @@ def _curve_snapshot_from_node(node: Optional[ET.Element]) -> Optional[PgmxCurveS
         member_serializations=curve_spec.member_serializations,
         sampled_points=sampled_points,
     )
+
+
+def _curve_snapshots_from_list(feature: ET.Element, local_name: str) -> tuple[PgmxCurveSnapshot, ...]:
+    parent = _first_child(feature, local_name)
+    if parent is None:
+        return ()
+    curves: list[PgmxCurveSnapshot] = []
+    for child in list(parent):
+        curve = _curve_snapshot_from_node(child)
+        if curve is not None:
+            curves.append(curve)
+    return tuple(curves)
+
+
+def _boss_refs_from_feature(feature: ET.Element) -> tuple[PgmxObjectRefSnapshot, ...]:
+    parent = _first_child(feature, "BossList")
+    if parent is None:
+        return ()
+    refs: list[PgmxObjectRefSnapshot] = []
+    for boss in list(parent):
+        ref = _object_ref(_first_child(boss, "GeometryID"))
+        if ref is not None:
+            refs.append(ref)
+    return tuple(refs)
 
 
 def _placement_snapshot(node: Optional[ET.Element]) -> Optional[PgmxPlacementSnapshot]:
@@ -1086,6 +1112,8 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
                 ),
                 replication_pattern=_replication_pattern_snapshot(feature),
                 base_feature=_replicated_base_feature_snapshot(feature),
+                boss_geometry_curves=_curve_snapshots_from_list(feature, "BossGeometryList"),
+                boss_refs=_boss_refs_from_feature(feature),
             )
         )
 

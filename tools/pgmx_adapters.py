@@ -45,6 +45,7 @@ SupportedSynthesisSpec = (
     | sp.PolylineMillingSpec
     | sp.CircleMillingSpec
     | sp.SquaringMillingSpec
+    | sp.PocketMillingSpec
     | sp.DrillingSpec
     | sp.DrillingPatternSpec
 )
@@ -159,6 +160,14 @@ class PgmxAdaptationResult:
         )
 
     @property
+    def pocket_millings(self) -> tuple[sp.PocketMillingSpec, ...]:
+        return tuple(
+            entry.spec
+            for entry in self.adapted_entries
+            if isinstance(entry.spec, sp.PocketMillingSpec)
+        )
+
+    @property
     def drillings(self) -> tuple[sp.DrillingSpec, ...]:
         return tuple(
             entry.spec
@@ -215,6 +224,7 @@ class PgmxAdaptationResult:
             polyline_millings=self.polyline_millings,
             circle_millings=self.circle_millings,
             squaring_millings=self.squaring_millings,
+            pocket_millings=self.pocket_millings,
             drillings=self.drillings,
             drilling_patterns=self.drilling_patterns,
         )
@@ -299,6 +309,18 @@ def _effective_tool_width(value: Optional[float], fallback: float) -> float:
     if math.isclose(float(value), 0.0, abs_tol=1e-6):
         return float(fallback)
     return float(value)
+
+
+def _tool_diameter_from_snapshot(
+    snapshot: PgmxSnapshot,
+    operation: PgmxOperationSnapshot,
+) -> Optional[float]:
+    if operation.tool_key is None:
+        return None
+    for tool in snapshot.embedded_tools:
+        if tool.id == operation.tool_key.id:
+            return tool.diameter
+    return None
 
 
 def _is_horizontal_line_primitive(primitive) -> bool:
@@ -433,6 +455,10 @@ def _polyline_points_from_profile(
     for primitive in profile.primitives:
         points.append((primitive.end_point[0], primitive.end_point[1]))
     return tuple(points)
+
+
+def _xy_points_from_curve_snapshot(curve) -> tuple[tuple[float, float], ...]:
+    return tuple((float(point[0]), float(point[1])) for point in curve.sampled_points)
 
 
 def _matches_points(
@@ -834,6 +860,143 @@ def _adapt_drilling_pattern(
         step,
         order_index=order_index,
         spec_kind="drilling_pattern",
+        spec=spec,
+        warnings=warnings,
+    )
+
+
+def _adapt_pocket_milling(
+    snapshot: PgmxSnapshot,
+    feature: PgmxFeatureSnapshot,
+    operation: Optional[PgmxOperationSnapshot],
+    step: Optional[PgmxWorkingStepSnapshot],
+    *,
+    order_index: int,
+) -> PgmxAdaptationEntry:
+    reasons: list[str] = []
+    if operation is None:
+        reasons.append("La feature no referencia una operacion resoluble.")
+        return _unsupported_entry(
+            feature,
+            operation,
+            step,
+            order_index=order_index,
+            reasons=reasons,
+        )
+    if "ClosedPocket" not in feature.feature_type:
+        reasons.append("La feature no es un `ClosedPocket`.")
+    if "BottomAndSideRoughMilling" not in operation.operation_type:
+        reasons.append("La operacion vinculada no es un `BottomAndSideRoughMilling`.")
+    if not isinstance(operation.milling_strategy, sp.ContourParallelMillingStrategySpec):
+        reasons.append("La estrategia vinculada no es `ContourParallel`.")
+    if _plane_name_or_default(feature) != "Top":
+        reasons.append("El adaptador inicial de `Vaciado` solo soporta plano `Top`.")
+    if feature.geometry_ref is None:
+        reasons.append("La feature no referencia una geometria.")
+        return _unsupported_entry(
+            feature,
+            operation,
+            step,
+            order_index=order_index,
+            reasons=reasons,
+        )
+    geometry = snapshot.geometry_by_id.get(feature.geometry_ref.id)
+    if geometry is None or geometry.profile is None:
+        reasons.append("La geometria de la feature no pudo resolverse.")
+        return _unsupported_entry(
+            feature,
+            operation,
+            step,
+            order_index=order_index,
+            reasons=reasons,
+        )
+    profile = geometry.profile
+    if profile.geometry_type != "GeomCompositeCurve" or not profile.is_closed:
+        reasons.append("La geometria del `ClosedPocket` no es un contorno compuesto cerrado.")
+    if profile.has_arcs:
+        reasons.append("El adaptador inicial de `Vaciado` todavia no representa contornos con arcos.")
+    boss_contours = tuple(
+        contour
+        for contour in (_xy_points_from_curve_snapshot(curve) for curve in feature.boss_geometry_curves)
+        if contour
+    )
+    if len(boss_contours) != len(feature.boss_geometry_curves):
+        reasons.append("No se pudieron resolver todas las geometrias de isla del `ClosedPocket`.")
+    if feature.depth_spec is None:
+        reasons.append("La profundidad de la feature no pudo inferirse.")
+    if not _same_security_plane(operation):
+        reasons.append(
+            "ApproachSecurityPlane y RetractSecurityPlane difieren y la API publica solo expone uno."
+        )
+    if not _resolved_tool(operation):
+        reasons.append("La operacion no tiene una herramienta resuelta compatible.")
+
+    warnings = _tool_warning(operation) + (
+        "`PocketMillingSpec` se adapta para lectura; la serializacion productiva con islas "
+        "todavia no esta implementada.",
+    )
+    if reasons:
+        return _unsupported_entry(
+            feature,
+            operation,
+            step,
+            order_index=order_index,
+            reasons=reasons,
+            warnings=warnings,
+        )
+
+    depth_kwargs = _depth_kwargs(feature.depth_spec)
+    tool_key = operation.tool_key
+    approach = operation.approach or sp.build_approach_spec()
+    retract = operation.retract or sp.build_retract_spec()
+    try:
+        spec = sp.build_pocket_milling_spec(
+            contour_points=_polyline_points_from_profile(profile),
+            feature_name=_default_name(feature, step, "Vaciado"),
+            plane_name=_plane_name_or_default(feature),
+            tool_id=tool_key.id,
+            tool_name=tool_key.name,
+            tool_width=_effective_tool_width(
+                feature.tool_width,
+                _tool_diameter_from_snapshot(snapshot, operation) or 18.36,
+            ),
+            security_plane=float(operation.approach_security_plane),
+            is_through=bool(depth_kwargs["is_through"]),
+            target_depth=depth_kwargs["target_depth"],
+            extra_depth=depth_kwargs["extra_depth"],
+            approach_enabled=approach.is_enabled,
+            approach_type=approach.approach_type,
+            approach_mode=approach.mode,
+            approach_radius_multiplier=approach.radius_multiplier,
+            approach_speed=approach.speed,
+            approach_arc_side=approach.arc_side,
+            retract_enabled=retract.is_enabled,
+            retract_type=retract.retract_type,
+            retract_mode=retract.mode,
+            retract_radius_multiplier=retract.radius_multiplier,
+            retract_speed=retract.speed,
+            retract_arc_side=retract.arc_side,
+            retract_overlap=retract.overlap,
+            milling_strategy=operation.milling_strategy,
+            allowance_bottom=operation.allowance_bottom,
+            allowance_side=operation.allowance_side,
+            boss_contours=boss_contours,
+        )
+    except Exception as exc:
+        return _unsupported_entry(
+            feature,
+            operation,
+            step,
+            order_index=order_index,
+            reasons=[_builder_error("No se pudo construir el `PocketMillingSpec`", exc)],
+            warnings=warnings,
+        )
+    return _adapted_entry(
+        feature,
+        operation,
+        step,
+        order_index=order_index,
+        spec_kind="pocket_milling",
         spec=spec,
         warnings=warnings,
     )
@@ -1283,6 +1446,14 @@ def _adapt_feature(
             step,
             order_index=order_index,
         )
+    if "ClosedPocket" in feature.feature_type:
+        return _adapt_pocket_milling(
+            snapshot,
+            feature,
+            operation,
+            step,
+            order_index=order_index,
+        )
     if "GeneralProfileFeature" in feature.feature_type or "SlotSide" in feature.feature_type:
         return _adapt_milling(
             snapshot,
@@ -1427,6 +1598,7 @@ def adaptation_to_dict(result: PgmxAdaptationResult) -> dict[str, Any]:
             "polyline_millings": len(result.polyline_millings),
             "circle_millings": len(result.circle_millings),
             "squaring_millings": len(result.squaring_millings),
+            "pocket_millings": len(result.pocket_millings),
             "drillings": len(result.drillings),
             "drilling_patterns": len(result.drilling_patterns),
         },
