@@ -552,33 +552,42 @@ Siguiente paso recomendado:
   `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_023_035\vaciado_023_035_tool_comparison.md`.
 - Pendiente real: agregar test automatizado de roundtrip para fijar la
   cobertura estable y extender el laboratorio con los casos `020..022`.
+- Avance posterior: se agrego `tests/test_pgmx_vaciado.py` como cobertura
+  automatizada del hito actual. La prueba sintetiza/readapta
+  `Vaciado_001..019` desde `Vaciado_000.pgmx` y compara las trayectorias
+  `X/Y/Z` contra el generador rectangular validado. Tambien fija los guardrails:
+  `Vaciado_020` y `021` deben fallar por contorno distinto del rectangulo
+  completo, y `Vaciado_022` debe conservar una isla `150..250 x 100..200` pero
+  seguir fallando por `BossGeometryList` no productivo.
 
 ## Plan Para Terminar El Estudio De Vaciados
 
 Objetivo actual: cerrar el modelo productivo de `Vaciado` sin perder
 informacion de Maestro y sin generar PGMX incompletos.
 
-1. Fijar tests automatizados:
-   - `Vaciado_001..019`: deben sintetizar y readaptar exacto.
-   - `Vaciado_020`, `021`: deben adaptarse para lectura, pero la sintesis debe
-     fallar explicitamente por contorno distinto del rectangulo completo.
-   - `Vaciado_022`, `027..031`: deben adaptarse conservando `boss_contours`,
-     pero la sintesis debe fallar explicitamente por islas.
-   - `Vaciado_023..026` y `032..035`: deben quedar como corpus para estudiar
-     el efecto de herramienta sobre el mismo contorno.
-2. Resolver contornos rectangulares no equivalentes a pieza completa:
+1. Tests automatizados ya fijados para el hito estable:
+   - `Vaciado_001..019`: sintetizan y readaptan exacto.
+   - `Vaciado_020`, `021`: se adaptan para lectura, pero la sintesis falla
+     explicitamente por contorno distinto del rectangulo completo.
+   - `Vaciado_022`: se adapta conservando `boss_contours`, pero la sintesis
+     falla explicitamente por islas.
+2. Ampliar tests cuando existan reglas productivas nuevas:
+   - `Vaciado_023..026` y `032..035`: corpus para estudiar el efecto de
+     herramienta sobre el mismo contorno.
+   - `Vaciado_027..031`: corpus pendiente para una o varias islas.
+3. Resolver contornos rectangulares no equivalentes a pieza completa:
    - usar bbox real del contorno, no siempre `0..length/0..width`;
    - recortar contra limites de pieza cuando el contorno excede el tablero;
    - reproducir orden de anillos y punto de arranque en `020`, `021`,
      `023..026` y `032..035`.
-3. Resolver islas:
+4. Resolver islas:
    - modelar `BossGeometryList` y `BossList` de forma productiva;
    - estudiar offsets alrededor de una isla (`022`, `027`, `028`);
    - estudiar multiples islas (`029`, `030`, `031`);
    - entender segmentos diagonales/tangenciales y corredores entre exterior e
      islas.
-4. Recien despues levantar los guardrails de sintesis:
+5. Recien despues levantar los guardrails de sintesis:
    - primero para contornos rectangulares sin islas;
    - luego para islas rectangulares;
    - mantener bloqueados arcos, poligonos no rectangulares y casos sin corpus.
-5. Cuando el PGMX este estable, retomar la traduccion ISO del nuevo mecanizado.
+6. Cuando el PGMX este estable, retomar la traduccion ISO del nuevo mecanizado.
