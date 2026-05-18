@@ -531,10 +531,21 @@ def _actual_trajectory_xy(operation) -> tuple[tuple[float, float], ...]:
 
 
 def _actual_trajectory_xyz(operation) -> tuple[tuple[float, float, float], ...]:
+    return tuple(
+        point
+        for sequence in _actual_trajectory_xyz_sequences(operation)
+        for point in sequence
+    )
+
+
+def _actual_trajectory_xyz_sequences(operation) -> tuple[tuple[tuple[float, float, float], ...], ...]:
+    sequences: list[tuple[tuple[float, float, float], ...]] = []
     for toolpath in operation.toolpaths:
         if toolpath.path_type == "TrajectoryPath" and toolpath.curve is not None:
-            return tuple((point[0], point[1], point[2]) for point in toolpath.curve.sampled_points)
-    return ()
+            points = tuple((point[0], point[1], point[2]) for point in toolpath.curve.sampled_points)
+            if points:
+                sequences.append(points)
+    return tuple(sequences)
 
 
 def _same_points(

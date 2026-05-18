@@ -49,6 +49,19 @@ El inspector cataloga features, operaciones, geometrias, toolpaths,
 profundidades y estrategias. No intenta resolver todavia como sintetizar ni
 postprocesar `Vaciado`.
 
+Analisis especifico de islas:
+
+```powershell
+py -3 -m tools.pgmx_vaciado.island_analysis `
+  --root 'S:\Maestro\Projects\ProdAction\PGMX' `
+  --output-dir 'S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_islands_analysis'
+```
+
+Este reporte separa `BossGeometryList`, `BossList`, toolpaths y trayectorias
+para `Vaciado_022` y `Vaciado_027..031`. Es descriptivo: la sintesis
+productiva con islas sigue bloqueada hasta derivar la regla de offsets y
+puentes internos.
+
 ## Criterio De Integracion
 
 Cuando una regla sobreviva a ejemplos manuales y automaticos, se migra fuera de

@@ -10,6 +10,7 @@ from tools.pgmx_adapters import adapt_pgmx_path
 from tools.pgmx_vaciado import EXTERNAL_ROOT
 from tools.pgmx_vaciado.contour_parallel import (
     _actual_trajectory_xyz,
+    _actual_trajectory_xyz_sequences,
     generate_rectangular_contour_parallel_xyz_path,
 )
 
@@ -21,6 +22,41 @@ STABLE_RECTANGULAR_CASES = (
     + tuple(range(23, 27))
     + tuple(range(32, 36))
 )
+ISLAND_CASES = {
+    22: (
+        ((150.0, 250.0, 100.0, 200.0),),
+        (42,),
+    ),
+    27: (
+        ((150.0, 250.0, 100.0, 200.0),),
+        (12, 20),
+    ),
+    28: (
+        ((150.0, 250.0, 100.0, 200.0),),
+        (52,),
+    ),
+    29: (
+        (
+            (75.0, 125.0, 125.0, 175.0),
+            (275.0, 325.0, 125.0, 175.0),
+        ),
+        (64,),
+    ),
+    30: (
+        (
+            (75.0, 125.0, 125.0, 175.0),
+            (275.0, 325.0, 125.0, 175.0),
+        ),
+        (27,),
+    ),
+    31: (
+        (
+            (75.0, 125.0, 125.0, 175.0),
+            (275.0, 325.0, 125.0, 175.0),
+        ),
+        (5, 10),
+    ),
+}
 
 
 def _external_corpus_available() -> bool:
@@ -45,6 +81,17 @@ def _assert_same_xyz(
             ),
             f"{actual_point} != {expected_point}",
         )
+
+
+def _xy_bbox(points: tuple[tuple[float, float], ...]) -> tuple[float, float, float, float]:
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    return (
+        round(min(xs), 6),
+        round(max(xs), 6),
+        round(min(ys), 6),
+        round(max(ys), 6),
+    )
 
 
 @unittest.skipUnless(
@@ -106,31 +153,43 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                     _assert_same_xyz(self, actual_xyz, expected_xyz)
 
     def test_island_contours_are_preserved_and_stay_blocked_for_synthesis(self) -> None:
-        manual = _manual_path(22)
-        self.assertTrue(manual.exists(), manual)
-
-        adaptation = adapt_pgmx_path(manual)
-        self.assertEqual(len(adaptation.pocket_millings), 1)
-        self.assertEqual(len(adaptation.unsupported_entries), 0)
-
-        spec = adaptation.pocket_millings[0]
-        self.assertTrue(spec.has_bosses)
-        self.assertEqual(len(spec.boss_contours), 1)
-
-        boss = spec.boss_contours[0]
-        xs = [point[0] for point in boss]
-        ys = [point[1] for point in boss]
-        self.assertEqual((min(xs), max(xs)), (150.0, 250.0))
-        self.assertEqual((min(ys), max(ys)), (100.0, 200.0))
-
         with tempfile.TemporaryDirectory(prefix="vaciado_boss_guardrail_") as temp_dir:
-            request = adaptation.build_synthesis_request(
-                Path(temp_dir) / "Vaciado_022_blocked.pgmx",
-                baseline_path=BASELINE_PATH,
-                source_pgmx_path=BASELINE_PATH,
-            )
-            with self.assertRaisesRegex(
-                NotImplementedError,
-                "islas/BossGeometryList",
-            ):
-                sp.synthesize_request(request)
+            temp_root = Path(temp_dir)
+
+            for index, (expected_boss_bboxes, expected_trajectory_counts) in ISLAND_CASES.items():
+                with self.subTest(index=index):
+                    manual = _manual_path(index)
+                    self.assertTrue(manual.exists(), manual)
+
+                    adaptation = adapt_pgmx_path(manual)
+                    self.assertEqual(len(adaptation.pocket_millings), 1)
+                    self.assertEqual(len(adaptation.unsupported_entries), 0)
+
+                    spec = adaptation.pocket_millings[0]
+                    self.assertTrue(spec.has_bosses)
+                    self.assertEqual(
+                        tuple(_xy_bbox(boss) for boss in spec.boss_contours),
+                        expected_boss_bboxes,
+                    )
+
+                    operation = adaptation.snapshot.operations[0]
+                    trajectory_sequences = _actual_trajectory_xyz_sequences(operation)
+                    self.assertEqual(
+                        tuple(len(sequence) for sequence in trajectory_sequences),
+                        expected_trajectory_counts,
+                    )
+                    self.assertEqual(
+                        len(_actual_trajectory_xyz(operation)),
+                        sum(expected_trajectory_counts),
+                    )
+
+                    request = adaptation.build_synthesis_request(
+                        temp_root / f"Vaciado_{index:03d}_blocked.pgmx",
+                        baseline_path=BASELINE_PATH,
+                        source_pgmx_path=BASELINE_PATH,
+                    )
+                    with self.assertRaisesRegex(
+                        NotImplementedError,
+                        "islas/BossGeometryList",
+                    ):
+                        sp.synthesize_request(request)

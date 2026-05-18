@@ -238,17 +238,25 @@ def _toolpath_summary(operation: PgmxOperationSnapshot) -> str:
 
 
 def _trajectory_summary(operation: PgmxOperationSnapshot) -> dict[str, str]:
+    trajectory_paths: list[tuple[tuple[float, float, float], ...]] = []
     for toolpath in operation.toolpaths:
         if toolpath.path_type != "TrajectoryPath" or toolpath.curve is None:
             continue
         points = toolpath.curve.sampled_points
         if not points:
             continue
-        xs = [point[0] for point in points]
-        ys = [point[1] for point in points]
-        zs = sorted({round(point[2], 6) for point in points})
+        trajectory_paths.append(tuple(points))
+    if trajectory_paths:
+        all_points = [point for points in trajectory_paths for point in points]
+        point_counts = [len(points) for points in trajectory_paths]
+        xs = [point[0] for point in all_points]
+        ys = [point[1] for point in all_points]
+        zs = sorted({round(point[2], 6) for point in all_points})
+        points_text = str(point_counts[0])
+        if len(point_counts) > 1:
+            points_text = f"{'+'.join(str(count) for count in point_counts)}={sum(point_counts)}"
         return {
-            "points": str(len(points)),
+            "points": points_text,
             "x_range": f"{_format_value(min(xs))}..{_format_value(max(xs))}",
             "y_range": f"{_format_value(min(ys))}..{_format_value(max(ys))}",
             "z_values": ",".join(_format_value(value) for value in zs),

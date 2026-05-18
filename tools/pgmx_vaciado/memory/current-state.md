@@ -595,3 +595,49 @@ informacion de Maestro y sin generar PGMX incompletos.
    - luego para multiples islas;
    - mantener bloqueados arcos, poligonos no rectangulares y casos sin corpus.
 5. Cuando el PGMX este estable, retomar la traduccion ISO del nuevo mecanizado.
+
+## Actualizacion 2026-05-18
+
+- Se corrigio la lectura auxiliar del laboratorio para no quedarse solo con el
+  primer `TrajectoryPath` de una operacion. Esto importa para islas: Maestro
+  puede materializar varias ternas `Approach/TrajectoryPath/Lift` dentro del
+  mismo `BottomAndSideRoughMilling`.
+- El scanner de `tools.pgmx_vaciado.scan_samples` ahora resume todas las
+  trayectorias de una operacion. En el corpus con islas queda visible:
+  `Vaciado_022=42`, `Vaciado_027=12+20=32`, `Vaciado_028=52`,
+  `Vaciado_029=64`, `Vaciado_030=27`, `Vaciado_031=5+10=15`.
+- `tests/test_pgmx_vaciado.py` fija el corpus pendiente de islas:
+  `Vaciado_022`, `027` y `028` conservan una isla rectangular
+  `150..250 x 100..200`; `Vaciado_029..031` conservan dos islas
+  `75..125 x 125..175` y `275..325 x 125..175`.
+- La sintesis productiva sigue bloqueada para `BossGeometryList`/islas. El
+  nuevo test verifica explicitamente que esos seis casos se adaptan sin perder
+  geometria, pero levantan `NotImplementedError` al sintetizar.
+- Proximo paso recomendado: derivar reglas productivas de trayectoria para
+  islas antes de serializarlas. Separar primero los casos con multiples
+  trayectorias (`027`, `031`) de los casos con una sola trayectoria
+  (`022`, `028`, `029`, `030`) y estudiar como `BossList` condiciona el orden
+  de contornos y los puentes internos.
+- Se agrego `tools.pgmx_vaciado.island_analysis` y se genero el reporte:
+  `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_islands_analysis\vaciado_islands_analysis.md`.
+  El reporte confirma que `Vaciado_027` es el mejor caso de arranque: una
+  isla rectangular, dos trayectorias separadas, y la primera trayectoria
+  comparte los primeros `6` puntos con el generador rectangular sin islas.
+  Luego Maestro modifica el puente hacia el segundo anillo y corta la
+  trayectoria exterior. La segunda trayectoria alrededor de la isla tiene
+  bbox `X 95..305`, `Y 45..255` y puntos diagonales/intermedios, por lo que
+  no debe implementarse todavia como un rectangulo simple expandido.
+- Decision de continuidad: no agregar generador experimental de islas hasta
+  explicar la trayectoria secundaria de `Vaciado_027` y contrastarla contra
+  `Vaciado_031`. El guardrail de `BossGeometryList` permanece activo.
+- Avance posterior: el reporte de islas ahora detecta estructura de offsets.
+  En `Vaciado_027`, la secuencia 2 se parte en `10+10` puntos: la segunda
+  vuelta es un offset radial exterior exacto de `40 mm` respecto de la primera
+  (`max delta 0`). Ademas, la primera vuelta de esa secuencia coincide
+  exactamente en XY con la secuencia 2 de `Vaciado_031`. Esto sugiere dos
+  reglas separadas: primero generar una vuelta base de isla/corredor, y luego
+  aplicar repeticiones por `radial_step` hacia afuera cuando hay espacio.
+- Proximo frente concreto: explicar como se construye esa vuelta base de `10`
+  puntos antes de escribir generacion productiva. No alcanza con expandir el
+  bbox de `BossGeometryList`: la vuelta base incorpora diagonales y puntos de
+  transicion que tambien aparecen en configuraciones con dos islas.
