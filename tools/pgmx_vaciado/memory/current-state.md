@@ -641,3 +641,142 @@ informacion de Maestro y sin generar PGMX incompletos.
   puntos antes de escribir generacion productiva. No alcanza con expandir el
   bbox de `BossGeometryList`: la vuelta base incorpora diagonales y puntos de
   transicion que tambien aparecen en configuraciones con dos islas.
+
+## Actualizacion 2026-05-19
+
+- Revision de serie completa actual: `manual/Vaciado_001.pgmx` ..
+  `manual/Vaciado_035.pgmx`. La comparacion contra el generador rectangular
+  actual queda exacta en `29/35`; los unicos no exactos son `022` y
+  `027..031`, todos asociados a `BossGeometryList`/islas.
+  Reportes regenerados:
+  `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_001_035_trace_review\vaciado_contour_parallel_comparison.md`
+  y
+  `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_001_035_trace_review\islands\vaciado_islands_analysis.md`.
+- Se fijo la primera regla explicativa de la vuelta base compartida por
+  `Vaciado_027` y `Vaciado_031`. Los `10` puntos no salen del bbox completo
+  de `BossGeometryList`: son un contorno redondeado de radio `40` construido
+  sobre un nucleo rectangular `X 175..225, Y 125..175`.
+- En `Vaciado_027`, ese nucleo es el bbox de la isla `150..250 x 100..200`
+  reducido `25 mm` por lado. En `Vaciado_031`, el mismo nucleo aparece como
+  corredor central entre las dos islas `75..125 x 125..175` y
+  `275..325 x 125..175`, con margenes laterales de `50 mm` y el mismo tramo
+  `Y 125..175`.
+- Correccion importante de lectura: el nucleo no solo se infiere desde la
+  trayectoria. En el XML, `BossGeometryList` conserva la isla fisica, pero
+  `BossList/GeometryID` puede resolver a otra geometria que Maestro usa como
+  semilla de ruteo. Casos vistos:
+  - `Vaciado_022`: `BossList` coincide con la isla fisica `150..250 x 100..200`.
+  - `Vaciado_027`: `BossList` resuelve al nucleo `175..225 x 125..175`.
+  - `Vaciado_028`: `BossList` resuelve a `275..325 x 125..175`.
+  - `Vaciado_029`: `BossList` coincide con las dos islas fisicas.
+  - `Vaciado_030`: un ref de `BossList` no resuelve y el otro resuelve a
+    `325..375 x 125..175`.
+  - `Vaciado_031`: un ref de `BossList` no resuelve y el otro resuelve al
+    nucleo `175..225 x 125..175`.
+- La trayectoria de `Vaciado_027` confirma dos capas: primera vuelta base con
+  radio `40`, segunda vuelta por offset radial exterior exacto de `40 mm`.
+  `Vaciado_031` conserva solo la vuelta base como segunda trayectoria.
+- Se agregaron helpers de laboratorio en `tools.pgmx_vaciado.island_analysis`
+  para generar e inferir esa vuelta redondeada desde el nucleo, resolver las
+  geometrias de `BossList`, y tests que fijan la coincidencia exacta contra
+  `Vaciado_027` y `Vaciado_031`.
+- El guardrail productivo para `BossGeometryList` sigue activo. La regla nueva
+  explica la vuelta base comun, pero todavia faltan reglas de orden/puente y
+  mezcla con trayectoria exterior para `Vaciado_022`, `028`, `029` y `030`.
+- Antes de volcar esto a generacion productiva, el modelo publico deberia
+  preservar dos conceptos separados: contorno fisico de isla
+  (`BossGeometryList`) y contorno/semilla de ruteo (`BossList.GeometryID`).
+
+## Actualizacion 2026-05-20
+
+- Correccion conceptual del estudio de trazas: cuando se habla del paso radial
+  entre vueltas no debe decirse que la regla primaria es "igual al radio de
+  herramienta". La magnitud correcta es:
+  `paso_radial = diametro_herramienta * (1 - overlap)`.
+- En las variantes `Vaciado_022_E00x` y `Vaciado_027_E00x`, `overlap=0.5`.
+  Por eso el paso radial observado coincide numericamente con el radio de
+  herramienta, pero solo como consecuencia del `50%` de superposicion.
+- Para futuras reglas y generacion productiva, los radios/offsets sucesivos
+  deben expresarse como multiplos del paso radial efectivo, no necesariamente
+  como multiplos del radio de herramienta.
+- Regla clave hallada en `Vaciado_029_E00x`: con dos islas/semillas activas,
+  Maestro genera offsets alrededor de cada isla como multiplos del paso radial
+  efectivo. Mientras el offset no supera la mitad del claro entre islas, las
+  islas se comportan como obstaculos separados. Cuando el offset supera esa
+  mitad de claro, los offsets se intersectan y Maestro recorta la zona entre
+  islas usando puntos de interseccion de circunferencias como puentes.
+- Evidencia numerica de `Vaciado_029_E006`: claro entre islas `150 mm`, mitad
+  de claro `75 mm`, paso radial efectivo `40 mm`. El offset `80 mm` supera
+  `75 mm`; la interseccion de arcos superiores queda en
+  `x=200`, `y=175 + sqrt(80^2 - 75^2) = 202.838822`, punto que aparece
+  exactamente en la traza. La interseccion inferior da
+  `y=125 - sqrt(80^2 - 75^2) = 97.161178`, tambien presente.
+- Revision de `Vaciado_030_E00x`: las variantes de cambio de herramienta
+  reescriben `BossGeometryList` como una sola semilla de ruta
+  `X 325..375, Y 125..175`, y `BossList.GeometryID=10748` resuelve a la misma
+  geometria. El caso base `Vaciado_030.pgmx` conserva dos islas fisicas
+  `X 75..125, Y 125..175` y `X 275..325, Y 125..175`, mas un ref no resuelto
+  `13322` y la semilla de ruta `10748`. `Vaciado_030_E006.pgmx` reproduce
+  exactamente la traza base.
+- En `Vaciado_030_E00x`, todas las herramientas quedan en una sola
+  `TrajectoryPath`. La semilla esta pegada al lado derecho del bolsillo
+  exterior, por eso las vueltas se recortan contra la pared y los arcos de
+  mayor herramienta quedan dominados por las esquinas izquierdas de la semilla
+  `(325,125)` y `(325,175)`. Las esquinas derechas `(375,125)` y `(375,175)`
+  solo aportan arcos cuando el paso efectivo es chico; con E002/E005/E006 ya
+  no aparecen como centros de arco en la traza. La variante E004, con paso
+  `2 mm`, deja ver centros adicionales `(203,125)` y `(203,175)`; queda como
+  detalle fino de esqueleto/recorte para revisar antes de generar este caso.
+- Cierre del detalle `Vaciado_030_E004`: los centros `(203,125)` y
+  `(203,175)` no representan una semilla nueva. Aparecen una sola vez cada uno
+  con radio `2 mm`, igual al paso radial efectivo. Son empalmes de transicion
+  en el primer offset que cruza la zona de esquina de la semilla derecha: para
+  offset `124`, la recta vertical esperada queda en `x=325-124=201`, y el
+  microarco de radio `2` queda centrado en `x=203`. En el offset siguiente
+  (`122`), la interseccion con la esquina `(325,125)` ya sigue la formula
+  `x=325 - sqrt(122^2 - 3^2) = 203.036891`; con offset `120`, Maestro vuelve a
+  serializar arcos explicitos centrados en `(325,125)` y `(325,175)` de radio
+  `120`. Por lo tanto estos centros extra son un artefacto de empalme/tolerancia
+  en un caso de paso muy chico, no una regla topologica aparte.
+- Revision de `Vaciado_031_E00x`: las variantes materializan una sola semilla
+  central `X 175..225, Y 125..175`, tambien coincidente entre
+  `BossGeometryList` y `BossList.GeometryID=10748`. El caso base
+  `Vaciado_031.pgmx` conserva dos islas fisicas y usa esa semilla central como
+  corredor de ruta; `Vaciado_031_E006.pgmx` reproduce exactamente la traza
+  base en dos trayectorias de `5 + 10` puntos.
+- Regla de cierre para `Vaciado_031_E00x`: el claro vertical desde la semilla
+  central hasta el bolsillo `Y 25..275` es `100 mm`, por lo tanto la mitad de
+  claro es `50 mm`. Las vueltas completas alrededor de la semilla aparecen
+  mientras el offset efectivo no supera `50 mm`. Cuando el siguiente offset
+  supera ese umbral, Maestro intenta una vuelta parcial/puente si todavia hay
+  geometria valida. E005 (`paso 38`) genera una vuelta parcial a `76 mm` y
+  queda en una sola trayectoria; E006 (`paso 40`) conserva solo la vuelta base
+  de `40 mm` y separa el rectangulo exterior de la vuelta de isla.
+- Conclusion operativa agregada por `030/031`: para islas no alcanza con
+  serializar el contorno fisico. El modelo de lectura/generacion debe retener
+  dos conceptos: `BossGeometryList` como isla fisica y `BossList.GeometryID`
+  como semilla de ruta. En variantes editadas por herramienta, Maestro puede
+  materializar directamente esa semilla en `BossGeometryList`, pero no debe
+  confundirse con la evidencia fisica del caso base.
+
+## Actualizacion 2026-05-20 - Volcado A Codigo
+
+- La separacion `BossGeometryList` / `BossList.GeometryID` ya quedo en el
+  modelo estable. `tools.synthesize_pgmx` expone `PocketBossRouteSeedSpec` y
+  `PocketMillingSpec.boss_route_seeds`; cada semilla conserva `geometry_id`,
+  `object_type`, `name` y `contour_points` cuando la geometria resuelve.
+- `tools.pgmx_adapters` ahora llena `boss_route_seeds` al adaptar
+  `ClosedPocket + BottomAndSideRoughMilling + ContourParallel`. Los refs no
+  resueltos se preservan como semilla sin `contour_points`, en vez de
+  descartarse.
+- `tools.pgmx_vaciado.island_analysis.resolved_boss_ref_xy_contours(...)`
+  quedo como wrapper del nuevo dato estable cuando la adaptacion produce
+  `PocketMillingSpec`.
+- La sintesis productiva sigue bloqueada para `BossGeometryList` o semillas
+  `BossList.GeometryID`. El cambio de codigo actual es de modelo/lectura y
+  guardrail: evita perder la semilla de ruteo antes de implementar la
+  generacion completa de trayectorias con islas.
+- Tests fijados: `tests.test_pgmx_vaciado` comprueba las semillas resueltas de
+  `022`, `027`, `028`, `030` y `031`, las variantes `030/031_E00x`, el caso
+  exacto `E006`, la regla de paso radial efectivo y el micro-empalme de
+  `Vaciado_030_E004`.

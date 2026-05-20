@@ -461,6 +461,30 @@ def _xy_points_from_curve_snapshot(curve) -> tuple[tuple[float, float], ...]:
     return tuple((float(point[0]), float(point[1])) for point in curve.sampled_points)
 
 
+def _boss_route_seeds_from_feature(
+    snapshot: PgmxSnapshot,
+    feature: PgmxFeatureSnapshot,
+) -> tuple[sp.PocketBossRouteSeedSpec, ...]:
+    route_seeds: list[sp.PocketBossRouteSeedSpec] = []
+    for ref in feature.boss_refs:
+        geometry = snapshot.geometry_by_id.get(ref.id)
+        contour: tuple[tuple[float, float], ...] = ()
+        if geometry is not None and geometry.profile is not None:
+            try:
+                contour = _polyline_points_from_profile(geometry.profile)
+            except ValueError:
+                contour = ()
+        route_seeds.append(
+            sp.build_pocket_boss_route_seed_spec(
+                geometry_id=ref.id,
+                object_type=ref.object_type,
+                name=ref.name,
+                contour_points=contour,
+            )
+        )
+    return tuple(route_seeds)
+
+
 def _matches_points(
     points_a: tuple[tuple[float, float], ...],
     points_b: tuple[tuple[float, float], ...],
@@ -922,6 +946,7 @@ def _adapt_pocket_milling(
     )
     if len(boss_contours) != len(feature.boss_geometry_curves):
         reasons.append("No se pudieron resolver todas las geometrias de isla del `ClosedPocket`.")
+    boss_route_seeds = _boss_route_seeds_from_feature(snapshot, feature)
     if feature.depth_spec is None:
         reasons.append("La profundidad de la feature no pudo inferirse.")
     if not _same_security_plane(operation):
@@ -981,6 +1006,7 @@ def _adapt_pocket_milling(
             allowance_bottom=operation.allowance_bottom,
             allowance_side=operation.allowance_side,
             boss_contours=boss_contours,
+            boss_route_seeds=boss_route_seeds,
         )
     except Exception as exc:
         return _unsupported_entry(

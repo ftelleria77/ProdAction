@@ -39,6 +39,13 @@ class IslandSequenceRow:
     notes: str = ""
 
 
+@dataclass(frozen=True)
+class RoundedKernelLoopRule:
+    kernel_bbox: tuple[float, float, float, float]
+    radius: float
+    max_delta: float
+
+
 FIELDNAMES = tuple(IslandSequenceRow.__dataclass_fields__)
 
 
@@ -128,6 +135,12 @@ def _analyze_one(path: Path, root: Path) -> tuple[str, list[IslandSequenceRow]]:
         f"{ref.id}:{ref.object_type.rsplit('.', 1)[-1]}"
         for ref in feature.boss_refs
     ]
+    resolved_boss_ref_contours = resolved_boss_ref_xy_contours(adaptation)
+    resolved_boss_ref_bboxes = [
+        f"{ref_id}:{_bbox_text(contour)}" if contour else f"{ref_id}:unresolved"
+        for ref_id, contour in resolved_boss_ref_contours
+    ]
+    boss_ref_note = _boss_reference_note(spec.boss_contours, resolved_boss_ref_contours)
     toolpath_summary = " | ".join(
         f"{toolpath.path_type}:{len(toolpath.curve.sampled_points) if toolpath.curve else 0}"
         for toolpath in operation.toolpaths
@@ -139,8 +152,10 @@ def _analyze_one(path: Path, root: Path) -> tuple[str, list[IslandSequenceRow]]:
         "",
         f"- Pocket contour bbox: `{_bbox_text(spec.contour_points)}`",
         f"- Boss count: `{len(spec.boss_contours)}`",
-        f"- Boss bboxes: `{'; '.join(boss_bboxes) if boss_bboxes else 'none'}`",
+        f"- BossGeometryList bboxes: `{'; '.join(boss_bboxes) if boss_bboxes else 'none'}`",
         f"- Boss refs: `{'; '.join(boss_refs) if boss_refs else 'none'}`",
+        f"- BossList ref bboxes: `{'; '.join(resolved_boss_ref_bboxes) if resolved_boss_ref_bboxes else 'none'}`",
+        f"- Boss ref note: {boss_ref_note}",
         f"- Tool: `{spec.tool_name}` / `{spec.tool_id}` / width `{_num(spec.tool_width)}`",
         f"- Depth: `{_num(float(spec.depth_spec.target_depth or 0.0))}`",
         f"- Strategy: rotation `{strategy.rotation_direction}`, inside_to_outside "
@@ -243,6 +258,26 @@ def _build_cross_case_notes(root: Path) -> str:
                 "exactly in XY. This suggests a reusable base island/corridor loop before "
                 "additional radial offsets are applied."
             )
+            rule = infer_rounded_kernel_loop_xy(v027_base)
+            if rule:
+                lines.extend(
+                    [
+                        "- Base-loop rule candidate: the shared `10` points are exactly a "
+                        "rounded-kernel contour with kernel "
+                        f"`{_bbox_tuple_text(rule.kernel_bbox)}` and radius `{_num(rule.radius)}` "
+                        f"(max delta `{_num(rule.max_delta)}`).",
+                        "- `Vaciado_027`: "
+                        f"{_kernel_relation_to_bosses(rule.kernel_bbox, v027.pocket_millings[0].boss_contours)}",
+                        "- `Vaciado_031`: "
+                        f"{_kernel_relation_to_bosses(rule.kernel_bbox, v031.pocket_millings[0].boss_contours)}",
+                        "- BossList evidence: the same kernel matches a resolved "
+                        "`BossList.GeometryID` bbox in both `Vaciado_027` and `Vaciado_031`; "
+                        "`BossGeometryList` keeps the physical island geometry separately.",
+                        "- This remains a lab rule: it explains the shared base loop, but "
+                        "does not yet explain every bridge/order decision in `022`, `028`, "
+                        "`029` or `030`.",
+                    ]
+                )
         else:
             lines.append(
                 "- `Vaciado_027` sequence 2 first loop does not match `Vaciado_031` sequence 2."
@@ -251,6 +286,117 @@ def _build_cross_case_notes(root: Path) -> str:
         lines.append("- `Vaciado_027` or `Vaciado_031` does not expose the expected second trajectory.")
     lines.append("")
     return "\n".join(lines)
+
+
+def resolved_boss_ref_xy_contours(adaptation) -> tuple[tuple[str, tuple[tuple[float, float], ...]], ...]:
+    if adaptation.pocket_millings:
+        return tuple(
+            (seed.geometry_id, seed.contour_points)
+            for seed in adaptation.pocket_millings[0].boss_route_seeds
+        )
+
+    snapshot = adaptation.snapshot
+    if not snapshot.features:
+        return ()
+    feature = snapshot.features[0]
+    contours: list[tuple[str, tuple[tuple[float, float], ...]]] = []
+    for ref in feature.boss_refs:
+        geometry = snapshot.geometry_by_id.get(ref.id)
+        contour = _xy_points_from_geometry_profile(geometry.profile) if geometry and geometry.profile else ()
+        contours.append((ref.id, contour))
+    return tuple(contours)
+
+
+def generate_rounded_kernel_loop_xy(
+    kernel_bbox: tuple[float, float, float, float],
+    radius: float,
+) -> tuple[tuple[float, float], ...]:
+    """Generate the observed 10-point rounded-kernel base loop.
+
+    The kernel bbox order is `(min_x, max_x, min_y, max_y)`. This is lab-only
+    evidence for the island/corridor base loop; productive synthesis remains
+    blocked until the surrounding bridge rules are known.
+    """
+
+    min_x, max_x, min_y, max_y = kernel_bbox
+    if max_x <= min_x or max_y <= min_y:
+        raise ValueError("kernel bbox must have positive width and height.")
+    if radius <= 0.0:
+        raise ValueError("radius must be positive.")
+    diagonal = radius / math.sqrt(2.0)
+    return (
+        (min_x - radius, min_y),
+        (min_x - radius, max_y),
+        (min_x, max_y + radius),
+        (max_x, max_y + radius),
+        (max_x + diagonal, max_y + diagonal),
+        (max_x + radius, max_y),
+        (max_x + radius, min_y),
+        (max_x, min_y - radius),
+        (min_x, min_y - radius),
+        (min_x - radius, min_y),
+    )
+
+
+def infer_rounded_kernel_loop_xy(
+    loop: Sequence[Sequence[float]],
+    *,
+    tolerance: float = 1e-6,
+) -> RoundedKernelLoopRule | None:
+    if len(loop) != 10:
+        return None
+    xy = tuple((float(point[0]), float(point[1])) for point in loop)
+    if not _same_xy(xy[0], xy[-1], tolerance=tolerance):
+        return None
+
+    min_x = xy[2][0]
+    max_x = xy[3][0]
+    min_y = xy[0][1]
+    max_y = xy[1][1]
+    radius_candidates = (
+        min_x - xy[0][0],
+        min_x - xy[1][0],
+        xy[2][1] - max_y,
+        xy[3][1] - max_y,
+        xy[5][0] - max_x,
+        xy[6][0] - max_x,
+        min_y - xy[7][1],
+        min_y - xy[8][1],
+    )
+    radius = sum(radius_candidates) / len(radius_candidates)
+    if radius <= 0.0 or any(
+        not math.isclose(value, radius, abs_tol=tolerance) for value in radius_candidates
+    ):
+        return None
+    if max_x <= min_x or max_y <= min_y:
+        return None
+
+    structural_pairs = (
+        (xy[0][0], xy[1][0]),
+        (xy[2][1], xy[3][1]),
+        (xy[5][0], xy[6][0]),
+        (xy[7][1], xy[8][1]),
+        (xy[2][0], xy[8][0]),
+        (xy[3][0], xy[7][0]),
+        (xy[0][1], xy[6][1]),
+        (xy[1][1], xy[5][1]),
+    )
+    if any(not math.isclose(left, right, abs_tol=tolerance) for left, right in structural_pairs):
+        return None
+
+    generated = generate_rounded_kernel_loop_xy((min_x, max_x, min_y, max_y), radius)
+    deltas = [
+        math.hypot(actual[0] - expected[0], actual[1] - expected[1])
+        for actual, expected in zip(xy, generated)
+    ]
+    max_delta = max(deltas)
+    if max_delta > tolerance:
+        return None
+    return RoundedKernelLoopRule(
+        kernel_bbox=(min_x, max_x, min_y, max_y),
+        radius=radius,
+        max_delta=max_delta,
+    )
 
 
 def _bossless_rectangular_path(adaptation, spec) -> tuple[tuple[float, float, float], ...]:
@@ -319,6 +465,80 @@ def _offset_repeat_note(
     )
 
 
+def _boss_reference_note(
+    boss_contours: Sequence[Sequence[tuple[float, float]]],
+    boss_ref_contours: Sequence[tuple[str, Sequence[tuple[float, float]]]],
+) -> str:
+    physical_bboxes = tuple(_bbox_tuple(contour) for contour in boss_contours)
+    ref_bboxes = tuple(_bbox_tuple(contour) for _ref_id, contour in boss_ref_contours if contour)
+    unresolved = tuple(ref_id for ref_id, contour in boss_ref_contours if not contour)
+    details: list[str] = []
+    if physical_bboxes and ref_bboxes:
+        if len(physical_bboxes) == len(ref_bboxes) and all(
+            _same_bbox(left, right) for left, right in zip(physical_bboxes, ref_bboxes)
+        ):
+            details.append("resolved BossList geometry matches BossGeometryList.")
+        else:
+            details.append(
+                "resolved BossList geometry differs from BossGeometryList; treat it as route-seed evidence."
+            )
+    elif boss_ref_contours:
+        details.append("BossList has refs but no resolved geometry profile.")
+    else:
+        details.append("no BossList refs.")
+    if unresolved:
+        details.append(f"unresolved refs: `{', '.join(unresolved)}`.")
+    return " ".join(details)
+
+
+def _kernel_relation_to_bosses(
+    kernel_bbox: tuple[float, float, float, float],
+    boss_contours: Sequence[Sequence[tuple[float, float]]],
+) -> str:
+    if not boss_contours:
+        return "no boss geometry available for relation check."
+    boss_bboxes = tuple(_bbox_tuple(boss) for boss in boss_contours)
+    kernel_min_x, kernel_max_x, kernel_min_y, kernel_max_y = kernel_bbox
+    if len(boss_bboxes) == 1:
+        boss_min_x, boss_max_x, boss_min_y, boss_max_y = boss_bboxes[0]
+        insets = (
+            kernel_min_x - boss_min_x,
+            boss_max_x - kernel_max_x,
+            kernel_min_y - boss_min_y,
+            boss_max_y - kernel_max_y,
+        )
+        if all(value >= -1e-6 for value in insets):
+            return (
+                "kernel is inside the single boss bbox with insets "
+                f"`{', '.join(_num(value) for value in insets)}` "
+                "(left, right, bottom, top)."
+            )
+        return "kernel is not a simple inset of the single boss bbox."
+
+    if len(boss_bboxes) == 2:
+        ordered = tuple(sorted(boss_bboxes, key=lambda bbox: bbox[0]))
+        left, right = ordered
+        shared_y = math.isclose(left[2], right[2], abs_tol=1e-6) and math.isclose(
+            left[3],
+            right[3],
+            abs_tol=1e-6,
+        )
+        margins = (kernel_min_x - left[1], right[0] - kernel_max_x)
+        if (
+            shared_y
+            and math.isclose(kernel_min_y, left[2], abs_tol=1e-6)
+            and math.isclose(kernel_max_y, left[3], abs_tol=1e-6)
+            and all(value >= -1e-6 for value in margins)
+        ):
+            return (
+                "kernel sits in the corridor between the two boss bboxes; "
+                f"side margins are `{', '.join(_num(value) for value in margins)}` "
+                "and Y span matches the bosses."
+            )
+        return "kernel is not a simple horizontal corridor between the two boss bboxes."
+    return "kernel relation for more than two bosses is not classified yet."
+
+
 def _same_xy_sequence(
     first: Sequence[tuple[float, float, float]],
     second: Sequence[tuple[float, float, float]],
@@ -328,9 +548,21 @@ def _same_xy_sequence(
     if len(first) != len(second):
         return False
     return all(
-        math.isclose(left[0], right[0], abs_tol=tolerance)
-        and math.isclose(left[1], right[1], abs_tol=tolerance)
+        _same_xy((left[0], left[1]), (right[0], right[1]), tolerance=tolerance)
         for left, right in zip(first, second)
+    )
+
+
+def _same_xy(
+    first: tuple[float, float],
+    second: tuple[float, float],
+    *,
+    tolerance: float = 1e-6,
+) -> bool:
+    return math.isclose(first[0], second[0], abs_tol=tolerance) and math.isclose(
+        first[1],
+        second[1],
+        abs_tol=tolerance,
     )
 
 
@@ -344,11 +576,39 @@ def _same_point3(
 
 
 def _bbox_text(points: Sequence[tuple[float, float]]) -> str:
+    return _bbox_tuple_text(_bbox_tuple(points))
+
+
+def _xy_points_from_geometry_profile(profile) -> tuple[tuple[float, float], ...]:
+    if profile.geometry_type != "GeomCompositeCurve" or not profile.primitives:
+        return ()
+    points = [(primitive.start_point[0], primitive.start_point[1]) for primitive in profile.primitives]
+    points.append((profile.primitives[-1].end_point[0], profile.primitives[-1].end_point[1]))
+    return tuple(points)
+
+
+def _bbox_tuple(points: Sequence[tuple[float, float]]) -> tuple[float, float, float, float]:
     xs = [point[0] for point in points]
     ys = [point[1] for point in points]
     if not xs or not ys:
+        return (0.0, 0.0, 0.0, 0.0)
+    return (min(xs), max(xs), min(ys), max(ys))
+
+
+def _bbox_tuple_text(bbox: tuple[float, float, float, float]) -> str:
+    min_x, max_x, min_y, max_y = bbox
+    if math.isclose(min_x, max_x, abs_tol=1e-9) and math.isclose(min_y, max_y, abs_tol=1e-9):
         return "none"
-    return f"X {_num(min(xs))}..{_num(max(xs))}, Y {_num(min(ys))}..{_num(max(ys))}"
+    return f"X {_num(min_x)}..{_num(max_x)}, Y {_num(min_y)}..{_num(max_y)}"
+
+
+def _same_bbox(
+    first: tuple[float, float, float, float],
+    second: tuple[float, float, float, float],
+    *,
+    tolerance: float = 1e-6,
+) -> bool:
+    return all(math.isclose(left, right, abs_tol=tolerance) for left, right in zip(first, second))
 
 
 def _range_text(values: Iterable[float]) -> str:

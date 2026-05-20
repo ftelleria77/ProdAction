@@ -126,6 +126,7 @@ __all__ = [
     "ContourParallelMillingStrategySpec",
     "GeometryPrimitiveSpec",
     "GeometryProfileSpec",
+    "PocketBossRouteSeedSpec",
     "LineMillingSpec",
     "SlotMillingSpec",
     "PolylineMillingSpec",
@@ -152,6 +153,7 @@ __all__ = [
     "build_circle_geometry_profile",
     "build_composite_geometry_profile",
     "build_compensated_toolpath_profile",
+    "build_pocket_boss_route_seed_spec",
     "build_line_milling_spec",
     "build_slot_milling_spec",
     "build_polyline_milling_spec",
@@ -324,6 +326,24 @@ class GeometryProfileSpec:
 
 
 @dataclass(frozen=True)
+class PocketBossRouteSeedSpec:
+    """Referencia de `BossList.GeometryID` usada por Maestro como semilla de ruta.
+
+    `contour_points` queda vacio cuando el `GeometryID` no se pudo resolver en
+    el archivo. La isla fisica sigue viviendo en `PocketMillingSpec.boss_contours`.
+    """
+
+    geometry_id: str
+    object_type: str = ""
+    name: str = ""
+    contour_points: tuple[tuple[float, float], ...] = ()
+
+    @property
+    def is_resolved(self) -> bool:
+        return bool(self.contour_points)
+
+
+@dataclass(frozen=True)
 class LineMillingSpec:
     """Descripcion reutilizable de un fresado lineal sobre un plano."""
 
@@ -488,6 +508,7 @@ class PocketMillingSpec:
     allowance_bottom: float = 0.0
     allowance_side: float = 0.0
     boss_contours: tuple[tuple[tuple[float, float], ...], ...] = ()
+    boss_route_seeds: tuple[PocketBossRouteSeedSpec, ...] = ()
 
     @property
     def effective_contour_offset(self) -> float:
@@ -500,6 +521,14 @@ class PocketMillingSpec:
     @property
     def has_bosses(self) -> bool:
         return bool(self.boss_contours)
+
+    @property
+    def has_boss_route_seeds(self) -> bool:
+        return bool(self.boss_route_seeds)
+
+    @property
+    def resolved_boss_route_seed_contours(self) -> tuple[tuple[tuple[float, float], ...], ...]:
+        return tuple(seed.contour_points for seed in self.boss_route_seeds if seed.is_resolved)
 
 
 @dataclass(frozen=True)
@@ -990,6 +1019,10 @@ class _HydratedPocketMillingSpec:
     @property
     def boss_contours(self) -> tuple[tuple[tuple[float, float], ...], ...]:
         return self.spec.boss_contours
+
+    @property
+    def boss_route_seeds(self) -> tuple[PocketBossRouteSeedSpec, ...]:
+        return self.spec.boss_route_seeds
 
 
 @dataclass(frozen=True)
@@ -8401,10 +8434,11 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
 
     if not _is_closed_polyline_points(spec.contour_points):
         raise ValueError("PocketMillingSpec requiere un contorno cerrado.")
-    if spec.boss_contours:
+    if spec.boss_contours or spec.boss_route_seeds:
         raise NotImplementedError(
-            "PocketMillingSpec con islas/BossGeometryList se adapta para lectura, "
-            "pero la serializacion productiva de Vaciado con islas todavia no esta implementada."
+            "PocketMillingSpec con islas/BossGeometryList o semillas BossList.GeometryID "
+            "se adapta para lectura, pero la serializacion productiva de Vaciado con islas "
+            "todavia no esta implementada."
         )
 
     workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
@@ -9594,6 +9628,37 @@ def build_squaring_milling_spec(
     )
 
 
+def build_pocket_boss_route_seed_spec(
+    *,
+    geometry_id: str,
+    object_type: Optional[str] = None,
+    name: Optional[str] = None,
+    contour_points: Optional[Sequence[tuple[float, float]]] = None,
+) -> PocketBossRouteSeedSpec:
+    """Construye una referencia de `BossList.GeometryID` para un `Vaciado`."""
+
+    normalized_geometry_id = str(geometry_id).strip()
+    if not normalized_geometry_id:
+        raise ValueError("PocketBossRouteSeedSpec requiere geometry_id.")
+
+    normalized_points = tuple((float(x), float(y)) for x, y in contour_points or ())
+    if normalized_points:
+        if len(normalized_points) < 4:
+            raise ValueError("La semilla de ruta de Vaciado requiere un contorno cerrado con al menos 4 puntos.")
+        if not (
+            math.isclose(normalized_points[0][0], normalized_points[-1][0], abs_tol=1e-6)
+            and math.isclose(normalized_points[0][1], normalized_points[-1][1], abs_tol=1e-6)
+        ):
+            raise ValueError("La semilla de ruta de Vaciado requiere que el primer y ultimo punto coincidan.")
+
+    return PocketBossRouteSeedSpec(
+        geometry_id=normalized_geometry_id,
+        object_type=(object_type or "").strip(),
+        name=(name or "").strip(),
+        contour_points=normalized_points,
+    )
+
+
 def build_pocket_milling_spec(
     *,
     contour_points: Sequence[tuple[float, float]],
@@ -9623,6 +9688,7 @@ def build_pocket_milling_spec(
     allowance_bottom: Optional[float] = None,
     allowance_side: Optional[float] = None,
     boss_contours: Optional[Sequence[Sequence[tuple[float, float]]]] = None,
+    boss_route_seeds: Optional[Sequence[PocketBossRouteSeedSpec]] = None,
 ) -> PocketMillingSpec:
     """Construye la spec publica de `Vaciado` para lectura/adaptacion."""
 
@@ -9645,6 +9711,15 @@ def build_pocket_milling_spec(
         ):
             raise ValueError("Cada isla de PocketMillingSpec requiere que el primer y ultimo punto coincidan.")
         normalized_boss_contours.append(normalized_boss)
+    normalized_boss_route_seeds = tuple(
+        build_pocket_boss_route_seed_spec(
+            geometry_id=seed.geometry_id,
+            object_type=seed.object_type,
+            name=seed.name,
+            contour_points=seed.contour_points,
+        )
+        for seed in boss_route_seeds or ()
+    )
 
     normalized_strategy = (
         build_contour_parallel_milling_strategy_spec()
@@ -9706,6 +9781,7 @@ def build_pocket_milling_spec(
         allowance_bottom=0.0 if allowance_bottom is None else float(allowance_bottom),
         allowance_side=0.0 if allowance_side is None else float(allowance_side),
         boss_contours=tuple(normalized_boss_contours),
+        boss_route_seeds=normalized_boss_route_seeds,
     )
 
 
