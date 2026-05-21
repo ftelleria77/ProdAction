@@ -780,3 +780,35 @@ informacion de Maestro y sin generar PGMX incompletos.
   `022`, `027`, `028`, `030` y `031`, las variantes `030/031_E00x`, el caso
   exacto `E006`, la regla de paso radial efectivo y el micro-empalme de
   `Vaciado_030_E004`.
+
+## Actualizacion 2026-05-21
+
+- Primer soporte controlado de sintesis con isla/semilla para `Vaciado`:
+  `Vaciado_031_E006` ya se genera desde `PocketMillingSpec` y reproduce
+  exactamente las dos `TrajectoryPath` de Maestro (`5 + 10` puntos).
+- La compuerta sigue siendo estricta: solo se permite una semilla resuelta de
+  `BossList.GeometryID`, materializada tambien como unico `BossGeometryList`,
+  centrada en el bolsillo y en la condicion donde corresponde solo la vuelta
+  base. Los casos `027`, `029` y `030` siguen bloqueados para sintesis
+  productiva hasta codificar sus offsets/puentes/recortes.
+- La trayectoria generada para el caso soportado se divide en:
+  1. rectangulo exterior offseteado por el centro de herramienta;
+  2. vuelta base redondeada sobre la semilla `X 175..225, Y 125..175` con
+     radio igual al paso radial efectivo (`40 mm` en E006).
+- La serializacion ya escribe `BossGeometryList` y `BossList` en el `.pgmx`
+  generado para el caso soportado, no solo la trayectoria. Se genero un
+  artefacto externo para inspeccion manual:
+  `S:\Maestro\Projects\ProdAction\PGMX\generated\Vaciado_031_E006_synth.pgmx`.
+- Validacion local: `py -3 -m unittest tests.test_pgmx_vaciado` queda en `9`
+  tests OK. La suite tambien fija que `Vaciado_027_E006` permanece bloqueado
+  hasta implementar la segunda vuelta por offset. El artefacto generado
+  re-adaptado conserva secuencias `5 + 10` exactas contra
+  `manual/Vaciado_031_E006.pgmx`.
+- Correccion posterior del mismo hito: la primera implementacion comparaba
+  puntos muestreados y por eso podia generar la vuelta de isla como poligono.
+  Se corrigio `TrajectoryPath` para serializar la vuelta base con arcos Maestro
+  reales. La validacion ahora compara tambien centros/radios de arcos contra
+  el original: `(175,175,R40)`, `(225,175,R40)` dos veces, `(225,125,R40)` y
+  `(175,125,R40)`. Se regenero
+  `S:\Maestro\Projects\ProdAction\PGMX\generated\Vaciado_031_E006_synth.pgmx`
+  con esa correccion.

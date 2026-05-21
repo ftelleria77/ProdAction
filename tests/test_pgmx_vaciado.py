@@ -396,3 +396,58 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
         x_at_offset_120 = seed_left_x - math.sqrt((120.0**2) - ((seed_y_min - 120.0) ** 2))
         self.assertIn((round(x_at_offset_120, 6), 120.0), points)
         self.assertIn((325.0, 125.0, 120.0), arcs)
+
+    def test_vaciado_031_e006_single_seed_synthesis_matches_trace(self) -> None:
+        manual = _variant_path(31, 6)
+        manual_adaptation = adapt_pgmx_path(manual)
+        manual_sequences = _actual_trajectory_xyz_sequences(manual_adaptation.snapshot.operations[0])
+
+        with tempfile.TemporaryDirectory(prefix="vaciado_031_e006_") as temp_dir:
+            output = Path(temp_dir) / "Vaciado_031_E006_synth.pgmx"
+            request = manual_adaptation.build_synthesis_request(
+                output,
+                baseline_path=BASELINE_PATH,
+                source_pgmx_path=BASELINE_PATH,
+            )
+            sp.synthesize_request(request)
+
+            generated_adaptation = adapt_pgmx_path(output)
+            self.assertEqual(len(generated_adaptation.pocket_millings), 1)
+            generated_spec = generated_adaptation.pocket_millings[0]
+            self.assertEqual(
+                tuple(_xy_bbox(boss) for boss in generated_spec.boss_contours),
+                ((175.0, 225.0, 125.0, 175.0),),
+            )
+            self.assertEqual(
+                tuple(
+                    _xy_bbox(seed.contour_points)
+                    for seed in generated_spec.boss_route_seeds
+                    if seed.is_resolved
+                ),
+                ((175.0, 225.0, 125.0, 175.0),),
+            )
+
+            generated_sequences = _actual_trajectory_xyz_sequences(
+                generated_adaptation.snapshot.operations[0]
+            )
+            self.assertEqual(
+                tuple(len(sequence) for sequence in generated_sequences),
+                (5, 10),
+            )
+            for actual, expected in zip(generated_sequences, manual_sequences):
+                _assert_same_xyz(self, actual, expected)
+            self.assertEqual(
+                _trajectory_arcs(generated_adaptation),
+                _trajectory_arcs(manual_adaptation),
+            )
+
+    def test_vaciado_027_e006_single_seed_stays_blocked_until_offset_rule_exists(self) -> None:
+        adaptation = adapt_pgmx_path(_variant_path(27, 6))
+        with tempfile.TemporaryDirectory(prefix="vaciado_027_e006_") as temp_dir:
+            request = adaptation.build_synthesis_request(
+                Path(temp_dir) / "Vaciado_027_E006_blocked.pgmx",
+                baseline_path=BASELINE_PATH,
+                source_pgmx_path=BASELINE_PATH,
+            )
+            with self.assertRaisesRegex(NotImplementedError, "islas/BossGeometryList"):
+                sp.synthesize_request(request)

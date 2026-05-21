@@ -1024,6 +1024,14 @@ class _HydratedPocketMillingSpec:
     def boss_route_seeds(self) -> tuple[PocketBossRouteSeedSpec, ...]:
         return self.spec.boss_route_seeds
 
+    @property
+    def effective_contour_offset(self) -> float:
+        return self.spec.effective_contour_offset
+
+    @property
+    def radial_step(self) -> float:
+        return self.spec.radial_step
+
 
 @dataclass(frozen=True)
 class _HydratedDrillingSpec:
@@ -6985,6 +6993,8 @@ def _build_closed_pocket_feature(
     geometry_object_type: str,
     boundary_curve: _CurveSpec,
     boundary_member_keys: Sequence[str],
+    boss_geometry_curves: Sequence[tuple[_CurveSpec, Sequence[str]]] = (),
+    boss_route_seed_refs: Sequence[tuple[PocketBossRouteSeedSpec, str, str]] = (),
 ) -> ET.Element:
     feature = ET.Element(
         _qname(PGMX_NS, "ManufacturingFeature"),
@@ -7012,14 +7022,47 @@ def _build_closed_pocket_feature(
     depth_value = _compact_number(_feature_depth_value(state, spec))
     _append_node(depth, PGMX_NS, "EndDepth", depth_value)
     _append_node(depth, PGMX_NS, "StartDepth", depth_value)
-    _append_node(feature, BASE_MODEL_NS, "BossGeometryList")
-    _append_node(feature, BASE_MODEL_NS, "BossList")
+    boss_geometry_list = _append_node(feature, BASE_MODEL_NS, "BossGeometryList")
+    for boss_curve, boss_member_keys in boss_geometry_curves:
+        boss_geometry_list.append(_build_boundary_curve_holder(boss_curve, boss_member_keys))
+    boss_list = _append_node(feature, BASE_MODEL_NS, "BossList")
+    for route_seed, route_seed_geometry_id, route_seed_object_type in boss_route_seed_refs:
+        boss_list.append(
+            _build_closed_pocket_boss(
+                route_seed,
+                route_seed_geometry_id,
+                route_seed_object_type,
+                workpiece_id,
+                workpiece_object_type,
+            )
+        )
     boundary_list = _append_node(feature, BASE_MODEL_NS, "BoundaryGeometryList")
     boundary_list.append(_build_boundary_curve_holder(boundary_curve, boundary_member_keys))
     _append_node(feature, BASE_MODEL_NS, "OrthogonalRadius", "0")
     _append_node(feature, BASE_MODEL_NS, "PlanarRadius", "0")
     _append_node(feature, BASE_MODEL_NS, "Slope", "0")
     return feature
+
+
+def _build_closed_pocket_boss(
+    route_seed: PocketBossRouteSeedSpec,
+    geometry_id: str,
+    geometry_object_type: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+) -> ET.Element:
+    boss = ET.Element(_qname(BASE_MODEL_NS, "Boss"))
+    _append_key(boss, "0", "System.Object")
+    _append_blank_name(boss).text = route_seed.name or "Boss"
+    _append_object_ref(boss, PGMX_NS, "GeometryID", geometry_id, geometry_object_type)
+    _append_node(boss, PGMX_NS, "OperationIDs")
+    _append_object_ref(boss, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
+    _append_node(boss, PGMX_NS, "BottomCondition", attrib={f"{{{XSI_NS}}}nil": "true"})
+    depth = _append_node(boss, PGMX_NS, "Depth")
+    _append_node(depth, PGMX_NS, "EndDepth", "0")
+    _append_node(depth, PGMX_NS, "StartDepth", "0")
+    _append_node(boss, BASE_MODEL_NS, "Slope", "0")
+    return boss
 
 
 def _build_slot_side_feature(
@@ -7792,6 +7835,191 @@ def _build_contour_parallel_xyz_path(
     )
 
 
+def _build_pocket_trajectory_xyz_sequences(
+    state: PgmxState,
+    spec: _HydratedPocketMillingSpec,
+) -> tuple[tuple[tuple[float, float, float], ...], ...]:
+    if not spec.boss_contours and not spec.boss_route_seeds:
+        return (_build_contour_parallel_xyz_path(state, spec),)
+
+    controlled_sequences = _build_single_seed_base_loop_xyz_sequences(state, spec)
+    if controlled_sequences is None:
+        raise NotImplementedError(
+            "PocketMillingSpec con islas/BossGeometryList o semillas BossList.GeometryID "
+            "se adapta para lectura, pero la serializacion productiva de Vaciado con islas "
+            "todavia no esta implementada para esta configuracion."
+        )
+    return controlled_sequences
+
+
+def _build_single_seed_base_loop_xyz_sequences(
+    state: PgmxState,
+    spec: _HydratedPocketMillingSpec,
+) -> Optional[tuple[tuple[tuple[float, float, float], ...], ...]]:
+    seed = _supported_single_seed_base_loop_route_seed(spec)
+    if seed is None:
+        return None
+
+    contour_min_x, contour_max_x, contour_min_y, contour_max_y = _xy_bbox_minmax(spec.contour_points)
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = _xy_bbox_minmax(seed.contour_points)
+    offset = spec.effective_contour_offset
+    radial_step = spec.radial_step
+    cut_z = state.depth - float(_feature_depth_value(state, spec))
+
+    exterior = (
+        (contour_min_x + offset, contour_max_y - offset, cut_z),
+        (contour_min_x + offset, contour_min_y + offset, cut_z),
+        (contour_max_x - offset, contour_min_y + offset, cut_z),
+        (contour_max_x - offset, contour_max_y - offset, cut_z),
+        (contour_min_x + offset, contour_max_y - offset, cut_z),
+    )
+    island = tuple(
+        (x, y, cut_z)
+        for x, y in _rounded_kernel_loop_xy(
+            (seed_min_x, seed_max_x, seed_min_y, seed_max_y),
+            radial_step,
+        )
+    )
+    return (exterior, island)
+
+
+def _build_pocket_trajectory_curve_specs(
+    spec: _HydratedPocketMillingSpec,
+    trajectory_sequences: Sequence[Sequence[tuple[float, float, float]]],
+) -> tuple[_CurveSpec, ...]:
+    if not spec.boss_contours and not spec.boss_route_seeds:
+        return tuple(_curve_spec_from_xyz_path(sequence) for sequence in trajectory_sequences)
+
+    seed = _supported_single_seed_base_loop_route_seed(spec)
+    if seed is None or len(trajectory_sequences) != 2:
+        return tuple(_curve_spec_from_xyz_path(sequence) for sequence in trajectory_sequences)
+    cut_z = trajectory_sequences[1][0][2]
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = _xy_bbox_minmax(seed.contour_points)
+    return (
+        _curve_spec_from_xyz_path(trajectory_sequences[0]),
+        _rounded_kernel_loop_curve_spec(
+            (seed_min_x, seed_max_x, seed_min_y, seed_max_y),
+            spec.radial_step,
+            cut_z,
+        ),
+    )
+
+
+def _rounded_kernel_loop_curve_spec(
+    kernel_bbox: tuple[float, float, float, float],
+    radius: float,
+    z_value: float,
+) -> _CurveSpec:
+    min_x, max_x, min_y, max_y = kernel_bbox
+    diagonal = radius / math.sqrt(2.0)
+    p0 = (min_x - radius, min_y, z_value)
+    p1 = (min_x - radius, max_y, z_value)
+    p2 = (min_x, max_y + radius, z_value)
+    p3 = (max_x, max_y + radius, z_value)
+    p4 = (max_x + diagonal, max_y + diagonal, z_value)
+    p5 = (max_x + radius, max_y, z_value)
+    p6 = (max_x + radius, min_y, z_value)
+    p7 = (max_x, min_y - radius, z_value)
+    p8 = (min_x, min_y - radius, z_value)
+
+    return _composite_curve_spec(
+        [
+            _build_toolpath_description(p0, p1),
+            _build_maestro_arc_serialization(p1, p2, (min_x, max_y), -1.0, z_value),
+            _build_toolpath_description(p2, p3),
+            _build_maestro_arc_serialization(p3, p4, (max_x, max_y), -1.0, z_value),
+            _build_maestro_arc_serialization(p4, p5, (max_x, max_y), -1.0, z_value),
+            _build_toolpath_description(p5, p6),
+            _build_maestro_arc_serialization(p6, p7, (max_x, min_y), -1.0, z_value),
+            _build_toolpath_description(p7, p8),
+            _build_maestro_arc_serialization(p8, p0, (min_x, min_y), -1.0, z_value),
+        ]
+    )
+
+
+def _supported_single_seed_base_loop_route_seed(
+    spec: _HydratedPocketMillingSpec,
+) -> Optional[PocketBossRouteSeedSpec]:
+    if len(spec.boss_contours) != 1 or len(spec.boss_route_seeds) != 1:
+        return None
+    seed = spec.boss_route_seeds[0]
+    if not seed.is_resolved:
+        return None
+    if not _same_xy_bbox(spec.boss_contours[0], seed.contour_points):
+        return None
+    if spec.plane_name != "Top" or spec.milling_strategy.allow_multiple_passes:
+        return None
+    if not spec.milling_strategy.inside_to_outside:
+        return None
+    if spec.milling_strategy.stroke_connection_strategy != "LiftShiftPlunge":
+        return None
+
+    contour_min_x, contour_max_x, contour_min_y, contour_max_y = _xy_bbox_minmax(spec.contour_points)
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = _xy_bbox_minmax(seed.contour_points)
+    clearances = (
+        seed_min_x - contour_min_x,
+        contour_max_x - seed_max_x,
+        seed_min_y - contour_min_y,
+        contour_max_y - seed_max_y,
+    )
+    if min(clearances) <= 0.0:
+        return None
+    if not math.isclose(clearances[0], clearances[1], abs_tol=1e-6):
+        return None
+    if not math.isclose(clearances[2], clearances[3], abs_tol=1e-6):
+        return None
+
+    half_min_clearance = min(clearances) / 2.0
+    radial_step = spec.radial_step
+    if radial_step <= 0.0:
+        return None
+    if radial_step > half_min_clearance + 1e-6:
+        return None
+    if (radial_step * 2.0) <= half_min_clearance + 1e-6:
+        return None
+    return seed
+
+
+def _rounded_kernel_loop_xy(
+    kernel_bbox: tuple[float, float, float, float],
+    radius: float,
+) -> tuple[tuple[float, float], ...]:
+    min_x, max_x, min_y, max_y = kernel_bbox
+    diagonal = radius / math.sqrt(2.0)
+    return (
+        (min_x - radius, min_y),
+        (min_x - radius, max_y),
+        (min_x, max_y + radius),
+        (max_x, max_y + radius),
+        (max_x + diagonal, max_y + diagonal),
+        (max_x + radius, max_y),
+        (max_x + radius, min_y),
+        (max_x, min_y - radius),
+        (min_x, min_y - radius),
+        (min_x - radius, min_y),
+    )
+
+
+def _xy_bbox_minmax(points: Sequence[tuple[float, float]]) -> tuple[float, float, float, float]:
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    if not xs or not ys:
+        raise ValueError("No se puede calcular bbox de una geometria vacia.")
+    return (min(xs), max(xs), min(ys), max(ys))
+
+
+def _same_xy_bbox(
+    first: Sequence[tuple[float, float]],
+    second: Sequence[tuple[float, float]],
+    *,
+    tolerance: float = 1e-6,
+) -> bool:
+    return all(
+        math.isclose(left, right, abs_tol=tolerance)
+        for left, right in zip(_xy_bbox_minmax(first), _xy_bbox_minmax(second))
+    )
+
+
 def _points_are_close_3d(
     first: tuple[float, float, float],
     second: tuple[float, float, float],
@@ -7820,8 +8048,9 @@ def _build_pocket_operation(
     state: PgmxState,
     spec: _HydratedPocketMillingSpec,
     operation_id: str,
-    trajectory_curve: _CurveSpec,
-    trajectory_curve_member_keys: Sequence[str],
+    trajectory_curves: Sequence[_CurveSpec],
+    trajectory_curve_member_keys: Sequence[Sequence[str]],
+    trajectory_sequences: Sequence[Sequence[tuple[float, float, float]]],
 ) -> ET.Element:
     operation = ET.Element(
         _qname(PGMX_NS, "Operation"),
@@ -7836,11 +8065,14 @@ def _build_pocket_operation(
     toolpath_list = _append_node(operation, PGMX_NS, "ToolpathList")
     _set_xmlns(toolpath_list, "b", BASE_MODEL_NS)
 
-    xyz_path = _build_contour_parallel_xyz_path(state, spec)
-    if not xyz_path:
+    if not trajectory_sequences:
         raise ValueError("La estrategia ContourParallel no genero trayectoria para el Vaciado.")
-    first_point = xyz_path[0]
-    last_point = xyz_path[-1]
+    first_sequence = trajectory_sequences[0]
+    last_sequence = trajectory_sequences[-1]
+    if not first_sequence or not last_sequence:
+        raise ValueError("La estrategia ContourParallel genero una trayectoria vacia para el Vaciado.")
+    first_point = first_sequence[0]
+    last_point = last_sequence[-1]
     clearance_z = state.depth + spec.security_plane
     toolpath_list.append(
         _build_toolpath(
@@ -7853,13 +8085,16 @@ def _build_pocket_operation(
             ),
         )
     )
-    toolpath_list.append(
-        _build_toolpath(
-            "TrajectoryPath",
-            trajectory_curve,
-            generated_member_keys=trajectory_curve_member_keys,
+    if len(trajectory_curves) != len(trajectory_curve_member_keys):
+        raise ValueError("Cantidad inconsistente de curvas y claves de trayectoria para Vaciado.")
+    for trajectory_curve, member_keys in zip(trajectory_curves, trajectory_curve_member_keys):
+        toolpath_list.append(
+            _build_toolpath(
+                "TrajectoryPath",
+                trajectory_curve,
+                generated_member_keys=member_keys,
+            )
         )
-    )
     toolpath_list.append(
         _build_toolpath(
             "Lift",
@@ -8434,12 +8669,6 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
 
     if not _is_closed_polyline_points(spec.contour_points):
         raise ValueError("PocketMillingSpec requiere un contorno cerrado.")
-    if spec.boss_contours or spec.boss_route_seeds:
-        raise NotImplementedError(
-            "PocketMillingSpec con islas/BossGeometryList o semillas BossList.GeometryID "
-            "se adapta para lectura, pero la serializacion productiva de Vaciado con islas "
-            "todavia no esta implementada."
-        )
 
     workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
     workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
@@ -8447,24 +8676,50 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
     plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
     uses_depth_expressions = _uses_feature_depth_expressions(spec)
 
+    trajectory_sequences = _build_pocket_trajectory_xyz_sequences(state, spec)
     boundary_curve = spec.geometry_curve or _curve_spec_from_profile_geometry(
         _build_closed_polyline_geometry_profile(spec.contour_points, z_value=0.0)
     )
     boundary_member_count = len(boundary_curve.member_serializations)
-    trajectory_curve = _curve_spec_from_xyz_path(_build_contour_parallel_xyz_path(state, spec))
-    trajectory_member_count = len(trajectory_curve.member_serializations)
-    reserve_count = 1 + boundary_member_count + (6 if uses_depth_expressions else 4) + trajectory_member_count
+    route_seed_curves = tuple(
+        _curve_spec_from_profile_geometry(_build_closed_polyline_geometry_profile(seed.contour_points, z_value=0.0))
+        for seed in spec.boss_route_seeds
+        if seed.is_resolved
+    )
+    route_seed_member_count = sum(1 + len(curve.member_serializations) for curve in route_seed_curves)
+    trajectory_curves = _build_pocket_trajectory_curve_specs(spec, trajectory_sequences)
+    trajectory_member_counts = tuple(len(curve.member_serializations) for curve in trajectory_curves)
+    trajectory_member_count = sum(trajectory_member_counts)
+    reserve_count = (
+        1
+        + boundary_member_count
+        + route_seed_member_count
+        + (6 if uses_depth_expressions else 4)
+        + trajectory_member_count
+    )
     reserved_ids = _reserve_ids(root, reserve_count, spec.preferred_id_start)
     geometry_id = reserved_ids[0]
     boundary_member_keys = tuple(reserved_ids[1 : 1 + boundary_member_count])
-    operation_index = 1 + boundary_member_count
+    cursor = 1 + boundary_member_count
+    route_seed_geometry_specs: list[tuple[PocketBossRouteSeedSpec, str, _CurveSpec, tuple[str, ...]]] = []
+    for seed, curve in zip((seed for seed in spec.boss_route_seeds if seed.is_resolved), route_seed_curves):
+        seed_geometry_id = reserved_ids[cursor]
+        cursor += 1
+        seed_member_keys = tuple(reserved_ids[cursor : cursor + len(curve.member_serializations)])
+        cursor += len(curve.member_serializations)
+        route_seed_geometry_specs.append((seed, seed_geometry_id, curve, seed_member_keys))
+    operation_index = cursor
     operation_id = reserved_ids[operation_index]
     feature_id = reserved_ids[operation_index + 1]
     step_id = reserved_ids[operation_index + 2]
     start_expression_id = reserved_ids[operation_index + 3] if uses_depth_expressions else None
     end_expression_id = reserved_ids[operation_index + 4] if uses_depth_expressions else None
     trajectory_index = operation_index + (5 if uses_depth_expressions else 3)
-    trajectory_member_keys = tuple(reserved_ids[trajectory_index : trajectory_index + trajectory_member_count])
+    trajectory_member_keys: list[tuple[str, ...]] = []
+    cursor = trajectory_index
+    for member_count in trajectory_member_counts:
+        trajectory_member_keys.append(tuple(reserved_ids[cursor : cursor + member_count]))
+        cursor += member_count
 
     geometries.append(
         _build_polyline_geometry(
@@ -8475,6 +8730,16 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
             generated_member_keys=boundary_curve.member_keys or boundary_member_keys,
         )
     )
+    for _seed, seed_geometry_id, seed_curve, seed_member_keys in route_seed_geometry_specs:
+        geometries.append(
+            _build_polyline_geometry(
+                seed_geometry_id,
+                plane_id,
+                plane_object_type,
+                seed_curve,
+                generated_member_keys=seed_curve.member_keys or seed_member_keys,
+            )
+        )
     features.append(
         _build_closed_pocket_feature(
             state,
@@ -8487,6 +8752,18 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
             _geometry_object_type(boundary_curve.geometry_type),
             boundary_curve,
             boundary_curve.member_keys or boundary_member_keys,
+            boss_geometry_curves=tuple(
+                (seed_curve, seed_curve.member_keys or seed_member_keys)
+                for _seed, _seed_geometry_id, seed_curve, seed_member_keys in route_seed_geometry_specs
+            ),
+            boss_route_seed_refs=tuple(
+                (
+                    seed,
+                    seed_geometry_id,
+                    _geometry_object_type(seed_curve.geometry_type),
+                )
+                for seed, seed_geometry_id, seed_curve, _seed_member_keys in route_seed_geometry_specs
+            ),
         )
     )
     operations.append(
@@ -8494,8 +8771,12 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
             state,
             spec,
             operation_id,
-            trajectory_curve,
-            trajectory_curve.member_keys or trajectory_member_keys,
+            trajectory_curves,
+            tuple(
+                trajectory_curve.member_keys or member_keys
+                for trajectory_curve, member_keys in zip(trajectory_curves, trajectory_member_keys)
+            ),
+            trajectory_sequences,
         )
     )
     elements.append(
