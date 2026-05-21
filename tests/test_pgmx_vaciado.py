@@ -441,6 +441,42 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                 _trajectory_arcs(manual_adaptation),
             )
 
+    def test_vaciado_031_e001_single_seed_multiloop_synthesis_matches_trace(self) -> None:
+        expected_lengths = {
+            1: (152,),
+            2: (15,),
+            3: (332,),
+            4: (741,),
+            5: (49,),
+            7: (152,),
+        }
+
+        with tempfile.TemporaryDirectory(prefix="vaciado_031_e001_") as temp_dir:
+            temp_root = Path(temp_dir)
+            for tool_index, expected_length in expected_lengths.items():
+                with self.subTest(tool_index=tool_index):
+                    manual = _variant_path(31, tool_index)
+                    manual_adaptation = adapt_pgmx_path(manual)
+                    manual_sequences = _actual_trajectory_xyz_sequences(manual_adaptation.snapshot.operations[0])
+                    output = temp_root / f"Vaciado_031_E{tool_index:03d}_synth.pgmx"
+                    request = manual_adaptation.build_synthesis_request(
+                        output,
+                        baseline_path=BASELINE_PATH,
+                        source_pgmx_path=BASELINE_PATH,
+                    )
+                    sp.synthesize_request(request)
+
+                    generated_adaptation = adapt_pgmx_path(output)
+                    generated_sequences = _actual_trajectory_xyz_sequences(
+                        generated_adaptation.snapshot.operations[0]
+                    )
+                    self.assertEqual(tuple(len(sequence) for sequence in generated_sequences), expected_length)
+                    _assert_same_xyz(self, generated_sequences[0], manual_sequences[0])
+                    self.assertEqual(
+                        _trajectory_arcs(generated_adaptation),
+                        _trajectory_arcs(manual_adaptation),
+                    )
+
     def test_vaciado_027_e006_single_seed_stays_blocked_until_offset_rule_exists(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(27, 6))
         with tempfile.TemporaryDirectory(prefix="vaciado_027_e006_") as temp_dir:

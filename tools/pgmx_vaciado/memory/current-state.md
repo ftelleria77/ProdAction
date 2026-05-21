@@ -812,3 +812,93 @@ informacion de Maestro y sin generar PGMX incompletos.
   `(175,125,R40)`. Se regenero
   `S:\Maestro\Projects\ProdAction\PGMX\generated\Vaciado_031_E006_synth.pgmx`
   con esa correccion.
+
+## Actualizacion 2026-05-21 - Regla Multi-Vuelta
+
+- Se codifico un segundo caso controlado de sintesis con semilla central:
+  `Vaciado_031_E001`. El paso radial efectivo es
+  `diametro_herramienta * (1 - overlap) = 18.36 * 0.5 = 9.18 mm`.
+- La regla observada separa los offsets en dos familias. Las vueltas completas
+  alrededor de la semilla son los multiplos del paso que no superan la mitad
+  del claro vertical (`50 mm`): `9.18`, `18.36`, `27.54`, `36.72` y
+  `45.9`. Las vueltas parciales son los multiplos siguientes que superan esa
+  mitad vertical pero todavia caben contra la mitad del claro horizontal
+  (`75 mm`): `55.08`, `64.26` y `73.44`.
+- Maestro encadena todo en una sola `TrajectoryPath`: primero lobulos
+  parciales izquierdos descendentes, luego rectangulos exteriores completos
+  descendentes, despues lobulos parciales derechos ascendentes y finalmente
+  vueltas completas alrededor de la semilla en sentido descendente. El punto
+  angular de arranque de las vueltas internas queda fijado por la interseccion
+  de la vuelta parcial minima (`55.08`) con el borde inferior del bolsillo.
+- La serializacion generada usa arcos Maestro reales para todos los tramos
+  circulares, incluyendo las vueltas internas y los lobulos parciales. La
+  validacion compara la secuencia de `152` puntos y los `43` arcos contra
+  `manual/Vaciado_031_E001.pgmx`.
+- `Vaciado_031_E005` se identifico luego como una frontera distinta: no tiene
+  lobulos parciales completos, sino micro-puente sin lobulo parcial. Esa
+  subregla queda registrada mas abajo.
+
+## Actualizacion 2026-05-21 - Micro-Puente Multi-Vuelta
+
+- La regla multi-vuelta tambien quedo validada para `Vaciado_031_E003`
+  (`paso_radial = 4.76 mm`). Este caso usa `10` vueltas completas
+  (`4.76..47.6`), `5` lobulos parciales dentro del medio claro horizontal
+  (`52.36..71.4`) y un micro-puente adicional en `76.16 mm`, apenas por encima
+  del medio claro horizontal de `75 mm`.
+- El micro-puente agrega arcos cortos de radio `76.16` en los cuadrantes donde
+  el offset ya no puede formar un lobulo parcial completo. La traza resultante
+  conserva una sola `TrajectoryPath`, pero repite el lobulo parcial maximo para
+  conectar los microarcos superior/inferior del lado derecho y cierra con un
+  microarco superior izquierdo.
+- `tools.synthesize_pgmx` ahora sintetiza `Vaciado_031_E001` y
+  `Vaciado_031_E003` con arcos Maestro reales. Los artefactos externos
+  regenerados son:
+  `S:\Maestro\Projects\ProdAction\PGMX\generated\Vaciado_031_E001_synth.pgmx`
+  y
+  `S:\Maestro\Projects\ProdAction\PGMX\generated\Vaciado_031_E003_synth.pgmx`.
+
+## Actualizacion 2026-05-21 - Vuelta De Borde
+
+- La subregla pendiente quedo identificada y codificada: cuando una vuelta
+  completa cae exactamente sobre la mitad del claro vertical (`50 mm`), Maestro
+  la trata como `vuelta de borde`, no como una vuelta interna con angulo beta.
+- En `Vaciado_031_E002` la vuelta de borde es el caso minimo: arranca en
+  `(75,75)`, entra a la semilla por `(225,75)`, ejecuta la vuelta redondeada de
+  radio `50`, vuelve a `(225,75)` y recien despues completa el rectangulo
+  exterior de `r=50`.
+- En `Vaciado_031_E004` la misma vuelta de borde aparece dos veces: primero
+  antes del rectangulo exterior de `r=50`, y luego otra vez antes de las
+  vueltas internas `48..2`. Despues de esas vueltas internas Maestro baja por
+  el borde derecho inferior de la semilla (`x=225`) hasta `r=50`, ejecuta los
+  lobulos parciales derechos, cierra por el rectangulo exterior de borde y
+  finalmente sube por el ancla izquierda para cerrar el lobulo parcial/maximo y
+  el micro-puente.
+- El umbral de serializacion de la esquina superior derecha tambien queda
+  fijado: si el tramo desde la interseccion parcial hasta el punto diagonal de
+  45 grados es muy corto (caso `r=58` en E004), Maestro lo serializa como linea
+  y no como arco, aunque el punto diagonal exista en la secuencia.
+- Artefactos regenerados y validados contra Maestro:
+  `Vaciado_031_E001_synth.pgmx`, `Vaciado_031_E002_synth.pgmx`,
+  `Vaciado_031_E003_synth.pgmx` y `Vaciado_031_E004_synth.pgmx`.
+
+## Actualizacion 2026-05-21 - Micro-Puente Sin Lobulo Parcial
+
+- `Vaciado_031_E005` cierra la frontera entre la vuelta base y la ruta
+  multi-vuelta. Tiene `paso_radial = 38 mm`, una vuelta completa interna de
+  `38 mm` y un siguiente offset de `76 mm`, apenas por encima del medio claro
+  horizontal (`75 mm`).
+- Como no hay offset intermedio entre `50 mm` y `75 mm`, no aparecen lobulos
+  parciales completos. Maestro genera cuatro microarcos de `r=76` alrededor de
+  las esquinas de la semilla y conecta la vuelta completa de `r=38` usando el
+  mismo angulo del microarco superior izquierdo.
+- `Vaciado_031_E007` confirma que la regla comun de `E001` no depende del
+  diametro exacto: con `paso_radial = 8.86 mm` vuelve a dar `5` vueltas
+  completas, `3` lobulos parciales y ninguna vuelta de borde ni micro-puente.
+- La serie `Vaciado_031_E001..E007` queda sintetizada y validada contra
+  Maestro. Longitudes/arcos:
+  `E001=152/43`, `E002=15/5`, `E003=332/90`, `E004=741/189`,
+  `E005=49/10`, `E006=5+10/5`, `E007=152/43`.
+- Artefactos regenerados:
+  `S:\Maestro\Projects\ProdAction\PGMX\generated\Vaciado_031_E001_synth.pgmx`
+  hasta
+  `S:\Maestro\Projects\ProdAction\PGMX\generated\Vaciado_031_E007_synth.pgmx`.
