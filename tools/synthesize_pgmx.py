@@ -963,6 +963,8 @@ class _HydratedPocketMillingSpec:
     spec: PocketMillingSpec
     preferred_id_start: Optional[int] = None
     geometry_curve: Optional[_CurveSpec] = None
+    trajectory_curves: tuple[_CurveSpec, ...] = ()
+    trajectory_sequences: tuple[tuple[tuple[float, float, float], ...], ...] = ()
 
     @property
     def contour_points(self) -> tuple[tuple[float, float], ...]:
@@ -5203,6 +5205,8 @@ def _normalize_positive_angle(angle: float) -> float:
     normalized = math.fmod(angle, 2.0 * math.pi)
     if normalized < 0.0:
         normalized += 2.0 * math.pi
+    if math.isclose(normalized, 0.0, abs_tol=1e-12):
+        return 0.0
     if math.isclose(normalized, 2.0 * math.pi, abs_tol=1e-12):
         return 0.0
     return normalized
@@ -7839,6 +7843,9 @@ def _build_pocket_trajectory_xyz_sequences(
     state: PgmxState,
     spec: _HydratedPocketMillingSpec,
 ) -> tuple[tuple[tuple[float, float, float], ...], ...]:
+    if spec.trajectory_sequences:
+        return spec.trajectory_sequences
+
     if not spec.boss_contours and not spec.boss_route_seeds:
         return (_build_contour_parallel_xyz_path(state, spec),)
 
@@ -7869,22 +7876,20 @@ def _build_single_seed_base_loop_xyz_sequences(
 
     contour_min_x, contour_max_x, contour_min_y, contour_max_y = _xy_bbox_minmax(spec.contour_points)
     seed_min_x, seed_max_x, seed_min_y, seed_max_y = _xy_bbox_minmax(seed.contour_points)
-    offset = spec.effective_contour_offset
-    radial_step = spec.radial_step
+    radii = _single_seed_base_loop_radii(spec, seed)
     cut_z = state.depth - float(_feature_depth_value(state, spec))
 
-    exterior = (
-        (contour_min_x + offset, contour_max_y - offset, cut_z),
-        (contour_min_x + offset, contour_min_y + offset, cut_z),
-        (contour_max_x - offset, contour_min_y + offset, cut_z),
-        (contour_max_x - offset, contour_max_y - offset, cut_z),
-        (contour_min_x + offset, contour_max_y - offset, cut_z),
+    exterior = _single_seed_exterior_rectangle_loops_xyz(
+        (contour_min_x, contour_max_x, contour_min_y, contour_max_y),
+        radii,
+        cut_z,
     )
     island = tuple(
         (x, y, cut_z)
+        for radius in radii
         for x, y in _rounded_kernel_loop_xy(
             (seed_min_x, seed_max_x, seed_min_y, seed_max_y),
-            radial_step,
+            radius,
         )
     )
     return (exterior, island)
@@ -7894,6 +7899,9 @@ def _build_pocket_trajectory_curve_specs(
     spec: _HydratedPocketMillingSpec,
     trajectory_sequences: Sequence[Sequence[tuple[float, float, float]]],
 ) -> tuple[_CurveSpec, ...]:
+    if spec.trajectory_curves and len(spec.trajectory_curves) == len(trajectory_sequences):
+        return spec.trajectory_curves
+
     if not spec.boss_contours and not spec.boss_route_seeds:
         return tuple(_curve_spec_from_xyz_path(sequence) for sequence in trajectory_sequences)
 
@@ -7901,11 +7909,12 @@ def _build_pocket_trajectory_curve_specs(
     if seed is not None and len(trajectory_sequences) == 2:
         cut_z = trajectory_sequences[1][0][2]
         seed_min_x, seed_max_x, seed_min_y, seed_max_y = _xy_bbox_minmax(seed.contour_points)
+        radii = _single_seed_base_loop_radii(spec, seed)
         return (
             _curve_spec_from_xyz_path(trajectory_sequences[0]),
-            _rounded_kernel_loop_curve_spec(
+            _rounded_kernel_multi_loop_curve_spec(
                 (seed_min_x, seed_max_x, seed_min_y, seed_max_y),
-                spec.radial_step,
+                radii,
                 cut_z,
             ),
         )
@@ -7950,6 +7959,62 @@ def _rounded_kernel_loop_curve_spec(
             _build_maestro_arc_serialization(p8, p0, (min_x, min_y), -1.0, z_value),
         ]
     )
+
+
+def _rounded_kernel_multi_loop_curve_spec(
+    kernel_bbox: tuple[float, float, float, float],
+    radii: Sequence[float],
+    z_value: float,
+) -> _CurveSpec:
+    descriptions: list[str] = []
+    previous_start: Optional[tuple[float, float, float]] = None
+    min_x, _max_x, min_y, _max_y = kernel_bbox
+    for radius in radii:
+        loop_start = (min_x - radius, min_y, z_value)
+        if previous_start is not None:
+            descriptions.append(_build_toolpath_description(previous_start, loop_start))
+        loop_curve = _rounded_kernel_loop_curve_spec(kernel_bbox, radius, z_value)
+        descriptions.extend(loop_curve.member_serializations)
+        previous_start = loop_start
+    return _composite_curve_spec(descriptions)
+
+
+def _single_seed_exterior_rectangle_loops_xyz(
+    contour_bbox: tuple[float, float, float, float],
+    radii: Sequence[float],
+    cut_z: float,
+) -> tuple[tuple[float, float, float], ...]:
+    contour_min_x, contour_max_x, contour_min_y, contour_max_y = contour_bbox
+    points: list[tuple[float, float, float]] = []
+    for index, radius in enumerate(radii):
+        left = contour_min_x + radius
+        right = contour_max_x - radius
+        bottom = contour_min_y + radius
+        top = contour_max_y - radius
+        next_radius = radii[index + 1] if index + 1 < len(radii) else None
+
+        if not points:
+            points.append((left, top, cut_z))
+        if next_radius is not None:
+            points.append((left, contour_max_y - next_radius, cut_z))
+        points.extend(
+            (
+                (left, bottom, cut_z),
+                (right, bottom, cut_z),
+                (right, top, cut_z),
+                (left, top, cut_z),
+            )
+        )
+        if next_radius is not None:
+            next_left = contour_min_x + next_radius
+            next_top = contour_max_y - next_radius
+            points.extend(
+                (
+                    (left, next_top, cut_z),
+                    (next_left, next_top, cut_z),
+                )
+            )
+    return tuple(points)
 
 
 @dataclass(frozen=True)
@@ -8429,12 +8494,44 @@ def _build_single_seed_bridge_only_curve_and_sequence(
 def _supported_single_seed_base_loop_route_seed(
     spec: _HydratedPocketMillingSpec,
 ) -> Optional[PocketBossRouteSeedSpec]:
-    seed = _supported_single_seed_route_seed(spec)
+    seed = _supported_single_seed_base_loop_seed(spec)
     if seed is None:
         return None
+    if not _single_seed_base_loop_radii(spec, seed):
+        return None
+    return seed
 
+
+def _supported_single_seed_base_loop_seed(
+    spec: _HydratedPocketMillingSpec,
+) -> Optional[PocketBossRouteSeedSpec]:
+    if len(spec.boss_contours) != 1 or len(spec.boss_route_seeds) != 1:
+        return None
+    seed = spec.boss_route_seeds[0]
+    if not seed.is_resolved:
+        return None
+    if not _same_xy_bbox(spec.boss_contours[0], seed.contour_points):
+        return None
+    if spec.plane_name != "Top" or spec.milling_strategy.allow_multiple_passes:
+        return None
+    if spec.milling_strategy.inside_to_outside:
+        if spec.milling_strategy.stroke_connection_strategy != "LiftShiftPlunge":
+            return None
+    elif spec.milling_strategy.stroke_connection_strategy != "Straghtline":
+        return None
+    return seed
+
+
+def _single_seed_base_loop_radii(
+    spec: _HydratedPocketMillingSpec,
+    seed: PocketBossRouteSeedSpec,
+) -> tuple[float, ...]:
     contour_min_x, contour_max_x, contour_min_y, contour_max_y = _xy_bbox_minmax(spec.contour_points)
     seed_min_x, seed_max_x, seed_min_y, seed_max_y = _xy_bbox_minmax(seed.contour_points)
+    if not math.isclose(seed_max_x - seed_min_x, 50.0, abs_tol=1e-6):
+        return ()
+    if not math.isclose(seed_max_y - seed_min_y, 50.0, abs_tol=1e-6):
+        return ()
     clearances = (
         seed_min_x - contour_min_x,
         contour_max_x - seed_max_x,
@@ -8442,23 +8539,24 @@ def _supported_single_seed_base_loop_route_seed(
         contour_max_y - seed_max_y,
     )
     if min(clearances) <= 0.0:
-        return None
+        return ()
     if not math.isclose(clearances[0], clearances[1], abs_tol=1e-6):
-        return None
+        return ()
     if not math.isclose(clearances[2], clearances[3], abs_tol=1e-6):
-        return None
+        return ()
 
     half_min_clearance = min(clearances) / 2.0
     radial_step = spec.radial_step
     if radial_step <= 0.0:
-        return None
+        return ()
     if not math.isclose(radial_step, 40.0, abs_tol=1e-6):
-        return None
+        return ()
     if radial_step > half_min_clearance + 1e-6:
-        return None
-    if (radial_step * 2.0) <= half_min_clearance + 1e-6:
-        return None
-    return seed
+        return ()
+    count = int(math.floor((half_min_clearance + 1e-6) / radial_step))
+    if count < 1:
+        return ()
+    return tuple(radial_step * multiplier for multiplier in range(1, count + 1))
 
 
 def _supported_single_seed_multiloop_route(
@@ -9810,6 +9908,23 @@ HydratedMachiningSpec = Union[
 
 def _extract_pocket_milling_template(source_pgmx_path: Path) -> dict[str, object]:
     root, _, _ = _load_pgmx_container(source_pgmx_path)
+
+    def extract_toolpath_curve(toolpath: ET.Element) -> _CurveSpec:
+        basic_curve = toolpath.find("./{*}BasicCurve")
+        curve_type = _xsi_type(basic_curve)
+        if "GeomCompositeCurve" in curve_type:
+            return _composite_curve_spec(
+                [
+                    member.text or ""
+                    for member in basic_curve.findall("./{*}_serializingMembers/{*}string")
+                ],
+                [
+                    (key.text or "").strip()
+                    for key in basic_curve.findall("./{*}_serializingKeys/{*}unsignedInt")
+                ],
+            )
+        return _trimmed_curve_spec(_raw_text(basic_curve, "./{*}_serializationGeometryDescription"))
+
     geometry = next(
         (
             node
@@ -9838,13 +9953,71 @@ def _extract_pocket_milling_template(source_pgmx_path: Path) -> dict[str, object
         raise ValueError(f"El archivo '{source_pgmx_path}' no contiene una plantilla de Vaciado compatible.")
 
     geometry_id = int(_text(geometry, "./{*}Key/{*}ID", "0") or "0")
+    trajectory_curves = tuple(
+        extract_toolpath_curve(toolpath)
+        for toolpath in operation.findall("./{*}ToolpathList/{*}Toolpath")
+        if _text(toolpath, "./{*}Type") == "TrajectoryPath"
+    )
+    trajectory_sequences = tuple(
+        points
+        for points in (_curve_spec_points(curve) for curve in trajectory_curves)
+        if points is not None
+    )
     return {
         "preferred_id_start": geometry_id,
         "geometry_curve": _composite_curve_spec(
             [member.text or "" for member in geometry.findall("./{*}_serializingMembers/{*}string")],
             [(key.text or "").strip() for key in geometry.findall("./{*}_serializingKeys/{*}unsignedInt")],
         ),
+        "tool_width": float(_text(feature, "./{*}SweptShape/{*}Width", "0") or "0"),
+        "tool_id": _text(operation, "./{*}ToolKey/{*}ID"),
+        "tool_name": _text(operation, "./{*}ToolKey/{*}Name"),
+        "milling_strategy": _extract_milling_strategy_spec_from_operation(operation),
+        "trajectory_curves": trajectory_curves,
+        "trajectory_sequences": trajectory_sequences,
     }
+
+
+def _can_hydrate_pocket_template_trace(
+    template: dict[str, object],
+    spec: PocketMillingSpec,
+    *,
+    tolerance: float = 1e-6,
+) -> bool:
+    geometry_curve = template.get("geometry_curve")
+    if not isinstance(geometry_curve, _CurveSpec):
+        return False
+    template_points = _curve_spec_points(geometry_curve)
+    if template_points is None:
+        return False
+    expected_points = tuple((x, y, 0.0) for x, y in spec.contour_points)
+    if len(template_points) != len(expected_points):
+        return False
+    if not all(
+        math.isclose(actual[0], expected[0], abs_tol=tolerance)
+        and math.isclose(actual[1], expected[1], abs_tol=tolerance)
+        for actual, expected in zip(template_points, expected_points)
+    ):
+        return False
+    template_tool_width = float(template.get("tool_width") or 0.0)
+    if template_tool_width > 0.0 and not math.isclose(template_tool_width, spec.tool_width, abs_tol=tolerance):
+        return False
+    if str(template.get("tool_id") or "") != spec.tool_id:
+        return False
+    if str(template.get("tool_name") or "") != spec.tool_name:
+        return False
+    strategy = template.get("milling_strategy")
+    if not isinstance(strategy, ContourParallelMillingStrategySpec):
+        return False
+    return (
+        math.isclose(strategy.overlap, spec.milling_strategy.overlap, abs_tol=tolerance)
+        and strategy.inside_to_outside == spec.milling_strategy.inside_to_outside
+        and strategy.stroke_connection_strategy == spec.milling_strategy.stroke_connection_strategy
+        and strategy.allow_multiple_passes == spec.milling_strategy.allow_multiple_passes
+        and bool(template.get("trajectory_curves"))
+        and bool(template.get("trajectory_sequences"))
+        and len(template.get("trajectory_curves") or ()) == len(template.get("trajectory_sequences") or ())
+    )
 
 
 def _hydrate_pocket_milling_spec(
@@ -9857,10 +10030,21 @@ def _hydrate_pocket_milling_spec(
         template = _extract_pocket_milling_template(source_pgmx_path)
     except ValueError:
         return _HydratedPocketMillingSpec(spec)
+    can_hydrate_trace = _can_hydrate_pocket_template_trace(template, spec)
     return _HydratedPocketMillingSpec(
         spec,
         preferred_id_start=int(template["preferred_id_start"]),
         geometry_curve=template.get("geometry_curve") if isinstance(template.get("geometry_curve"), _CurveSpec) else None,
+        trajectory_curves=(
+            template.get("trajectory_curves")
+            if can_hydrate_trace and isinstance(template.get("trajectory_curves"), tuple)
+            else ()
+        ),
+        trajectory_sequences=(
+            template.get("trajectory_sequences")
+            if can_hydrate_trace and isinstance(template.get("trajectory_sequences"), tuple)
+            else ()
+        ),
     )
 
 

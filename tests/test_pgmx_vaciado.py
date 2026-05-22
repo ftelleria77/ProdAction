@@ -477,13 +477,66 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                         _trajectory_arcs(manual_adaptation),
                     )
 
-    def test_vaciado_027_e006_single_seed_stays_blocked_until_offset_rule_exists(self) -> None:
-        adaptation = adapt_pgmx_path(_variant_path(27, 6))
+    def test_vaciado_027_e006_single_seed_multi_base_loop_synthesis_matches_trace(self) -> None:
+        manual_adaptation = adapt_pgmx_path(_variant_path(27, 6))
+        manual_sequences = _actual_trajectory_xyz_sequences(manual_adaptation.snapshot.operations[0])
+
         with tempfile.TemporaryDirectory(prefix="vaciado_027_e006_") as temp_dir:
-            request = adaptation.build_synthesis_request(
-                Path(temp_dir) / "Vaciado_027_E006_blocked.pgmx",
+            output = Path(temp_dir) / "Vaciado_027_E006_synth.pgmx"
+            request = manual_adaptation.build_synthesis_request(
+                output,
                 baseline_path=BASELINE_PATH,
                 source_pgmx_path=BASELINE_PATH,
             )
-            with self.assertRaisesRegex(NotImplementedError, "islas/BossGeometryList"):
-                sp.synthesize_request(request)
+            sp.synthesize_request(request)
+
+            generated_adaptation = adapt_pgmx_path(output)
+            generated_sequences = _actual_trajectory_xyz_sequences(
+                generated_adaptation.snapshot.operations[0]
+            )
+            self.assertEqual(tuple(len(sequence) for sequence in generated_sequences), (12, 20))
+            for actual, expected in zip(generated_sequences, manual_sequences):
+                _assert_same_xyz(self, actual, expected)
+            self.assertEqual(
+                _trajectory_arcs(generated_adaptation),
+                _trajectory_arcs(manual_adaptation),
+            )
+
+    def test_vaciado_027_tool_series_template_trace_synthesis_matches_trace(self) -> None:
+        expected_lengths = {
+            1: (273,),
+            2: (42,),
+            3: (515,),
+            4: (1185,),
+            5: (68,),
+            6: (12, 20),
+            7: (273,),
+        }
+
+        with tempfile.TemporaryDirectory(prefix="vaciado_027_series_") as temp_dir:
+            temp_root = Path(temp_dir)
+            for tool_index, expected_length in expected_lengths.items():
+                with self.subTest(tool_index=tool_index):
+                    manual = _variant_path(27, tool_index)
+                    manual_adaptation = adapt_pgmx_path(manual)
+                    manual_sequences = _actual_trajectory_xyz_sequences(
+                        manual_adaptation.snapshot.operations[0]
+                    )
+                    output = temp_root / f"Vaciado_027_E{tool_index:03d}_synth.pgmx"
+                    request = manual_adaptation.build_synthesis_request(
+                        output,
+                        baseline_path=BASELINE_PATH,
+                    )
+                    sp.synthesize_request(request)
+
+                    generated_adaptation = adapt_pgmx_path(output)
+                    generated_sequences = _actual_trajectory_xyz_sequences(
+                        generated_adaptation.snapshot.operations[0]
+                    )
+                    self.assertEqual(tuple(len(sequence) for sequence in generated_sequences), expected_length)
+                    for actual, expected in zip(generated_sequences, manual_sequences):
+                        _assert_same_xyz(self, actual, expected)
+                    self.assertEqual(
+                        _trajectory_arcs(generated_adaptation),
+                        _trajectory_arcs(manual_adaptation),
+                    )

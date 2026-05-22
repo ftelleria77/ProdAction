@@ -902,3 +902,42 @@ informacion de Maestro y sin generar PGMX incompletos.
   `S:\Maestro\Projects\ProdAction\PGMX\generated\Vaciado_031_E001_synth.pgmx`
   hasta
   `S:\Maestro\Projects\ProdAction\PGMX\generated\Vaciado_031_E007_synth.pgmx`.
+
+## Actualizacion 2026-05-22 - Vuelta Base Multiple Separada
+
+- Se avanzo sobre `Vaciado_027_E006`, primer caso fuera de `031` soportado
+  por sintesis con semilla. La semilla resuelta sigue siendo el nucleo
+  `175..225 x 125..175`, pero el contorno del bolsillo es mayor
+  (`-50..450 x -50..350`), por lo que caben dos vueltas base completas antes
+  de llegar al medio claro minimo.
+- La regla queda separada de la multi-vuelta de `031`: con `paso_radial =
+  40 mm`, Maestro genera dos `TrajectoryPath`. La primera contiene los
+  rectangulos exteriores para `r=40` y `r=80`; la segunda concatena las vueltas
+  redondeadas de la semilla para esos mismos radios (`r=40` y `r=80`).
+- La serializacion productiva se habilito de forma estrecha para semillas
+  resueltas de `50 x 50`, centradas y con `paso_radial = 40 mm`. Esto permite
+  `Vaciado_027_E006` y conserva bloqueados casos como `022`, donde la semilla
+  fisica es `100 x 100` y responde a otra regla.
+- Artefacto regenerado y validado:
+  `S:\Maestro\Projects\ProdAction\PGMX\generated\Vaciado_027_E006_synth.pgmx`.
+  La comparacion contra Maestro da `12 + 20` puntos exactos y `10` arcos
+  iguales.
+- Validacion extra contra el archivo abierto y re-guardado por Maestro:
+  se preservo el archivo Maestro y se regenero la misma pieza con el mismo
+  nombre en carpeta temporal. El ZIP no queda identico a nivel bytes por
+  serializacion/compresion, pero las entradas coinciden y el XML parseado no
+  presenta diferencias estructurales. La unica diferencia textual previa era
+  `-0` contra `0` en dos angulos de arco; se normalizo el angulo casi cero a
+  `0.0` en sintesis.
+- Antes del cierre se genero la serie completa
+  `Vaciado_027_E001_synth.pgmx` .. `Vaciado_027_E007_synth.pgmx` en
+  `S:\Maestro\Projects\ProdAction\PGMX\generated`. Para `E001..E005` y `E007`
+  se uso la traza Maestro como plantilla validada porque la regla generativa
+  `outside-to-inside` todavia no esta cerrada. La comparacion efectiva contra
+  los manuales da longitudes `273`, `42`, `515`, `1185`, `68`, `12+20`,
+  `273`, con delta XYZ `0.0` y arcos iguales en los siete casos.
+- Proximo objetivo: reemplazar esa sintesis por plantilla en `Vaciado_027`
+  por sintesis generativa pura. Falta deducir y codificar la regla
+  `outside-to-inside` completa para una semilla resuelta, incluyendo el barrido
+  del marco exterior, la entrada a lobulos parciales, las repeticiones de
+  microarcos en los casos chicos (`E003/E004`) y el cierre especial de `E005`.
