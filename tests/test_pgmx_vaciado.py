@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import math
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from tools import synthesize_pgmx as sp
@@ -18,6 +20,7 @@ from tools.pgmx_vaciado.island_analysis import (
     infer_rounded_kernel_loop_xy,
     resolved_boss_ref_xy_contours,
 )
+from tools.pgmx_vaciado.trace_engine import generate_contour_parallel_pocket_trace
 
 
 MANUAL_ROOT = EXTERNAL_ROOT / "manual"
@@ -25,7 +28,7 @@ BASELINE_PATH = EXTERNAL_ROOT / "Vaciado_000.pgmx"
 STABLE_RECTANGULAR_CASES = (
     tuple(range(1, 22))
     + tuple(range(23, 27))
-    + tuple(range(32, 36))
+    + tuple(range(32, 35))
 )
 ISLAND_CASES = {
     22: (
@@ -144,6 +147,300 @@ def _trajectory_xy_points(adaptation) -> tuple[tuple[float, float], ...]:
     return tuple(points)
 
 
+def _trajectory_primitive_counts(adaptation) -> tuple[tuple[int, int], ...]:
+    counts: list[tuple[int, int]] = []
+    for toolpath in adaptation.snapshot.operations[0].toolpaths:
+        if toolpath.path_type != "TrajectoryPath" or toolpath.curve is None:
+            continue
+        lines = 0
+        arcs = 0
+        for serialization in toolpath.curve.member_serializations:
+            primitive = sp._parse_geometry_primitive(serialization)
+            if primitive is None:
+                continue
+            if primitive.primitive_type == "Line":
+                lines += 1
+            elif primitive.primitive_type == "Arc":
+                arcs += 1
+        counts.append((lines, arcs))
+    return tuple(counts)
+
+
+class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
+    def test_trace_engine_skeleton_preserves_contract_offsets_and_z_levels(self) -> None:
+        strategy = sp.build_contour_parallel_milling_strategy_spec(
+            rotation_direction="Clockwise",
+            stroke_connection_strategy="Straghtline",
+            inside_to_outside=False,
+            overlap=0.25,
+            allow_multiple_passes=True,
+            axial_cutting_depth=4.0,
+            axial_finish_cutting_depth=1.0,
+        )
+        spec = sp.PocketMillingSpec(
+            contour_points=((0.0, 0.0), (100.0, 0.0), (100.0, 60.0), (0.0, 60.0)),
+            tool_width=20.0,
+            allowance_side=5.0,
+            depth_spec=sp.MillingDepthSpec(target_depth=13.0),
+            milling_strategy=strategy,
+        )
+
+        plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
+
+        self.assertEqual(plan.outer.start_point, (0.0, 0.0))
+        self.assertEqual(plan.outer.bbox, (0.0, 100.0, 0.0, 60.0))
+        self.assertTrue(plan.outer.is_axis_aligned_rectangle)
+        self.assertTrue(math.isclose(plan.parameters.effective_offset, 15.0, abs_tol=1e-6))
+        self.assertTrue(math.isclose(plan.parameters.radial_step, 15.0, abs_tol=1e-6))
+        self.assertEqual(plan.outer_offset_family.offsets, (15.0, 30.0))
+        self.assertEqual(plan.depth_plan.cut_depths, (4.0, 8.0, 12.0, 13.0))
+        self.assertEqual(plan.depth_plan.z_values, (56.0, 52.0, 48.0, 47.0))
+        self.assertEqual(len(plan.primitive_sequences), 2)
+        self.assertEqual(plan.primitive_sequences[0].offset, 15.0)
+        self.assertEqual(plan.primitive_sequences[0].line_count, 4)
+        self.assertEqual(plan.primitive_sequences[0].arc_count, 0)
+        self.assertEqual(plan.primitive_sequences[1].offset, 30.0)
+        self.assertFalse(plan.can_emit_trajectory)
+        self.assertIn("topology_resolver", plan.pending_stages)
+        self.assertIn("toolpath_emitter", plan.pending_stages)
+
+    @unittest.skipUnless(
+        _external_corpus_available(),
+        f"Corpus externo de Vaciado no disponible en {EXTERNAL_ROOT}",
+    )
+    def test_trace_engine_skeleton_extracts_vaciado_027_e005_offset_families(self) -> None:
+        adaptation = adapt_pgmx_path(_variant_path(27, 5))
+        spec = adaptation.pocket_millings[0]
+
+        plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
+
+        self.assertEqual(len(plan.internal_offset_families), 1)
+        family = plan.internal_offset_families[0]
+        self.assertEqual(family.offsets, (38.0, 76.0))
+        self.assertEqual(family.complete_offsets, (38.0, 76.0))
+        self.assertEqual(family.partial_offsets, ())
+        self.assertTrue(family.bridge_offset is not None)
+        self.assertTrue(math.isclose(family.bridge_offset, 114.0, abs_tol=1e-6))
+        outer_sequences = tuple(sequence for sequence in plan.primitive_sequences if sequence.owner == "outer")
+        self.assertEqual(tuple(sequence.offset for sequence in outer_sequences), (38.0, 76.0))
+        self.assertEqual(tuple(sequence.line_count for sequence in outer_sequences), (4, 4))
+        internal_sequences = tuple(sequence for sequence in plan.primitive_sequences if sequence.owner == "internal:1")
+        self.assertEqual(tuple(sequence.offset for sequence in internal_sequences), (38.0, 76.0))
+        self.assertEqual(tuple(sequence.arc_count for sequence in internal_sequences), (5, 5))
+        self.assertEqual(tuple(sequence.line_count for sequence in internal_sequences), (4, 4))
+        arc_centers = {
+            primitive.center
+            for sequence in internal_sequences
+            for primitive in sequence.primitives
+            if primitive.primitive_type == "Arc"
+        }
+        self.assertEqual(
+            arc_centers,
+            {
+                (175.0, 125.0),
+                (175.0, 175.0),
+                (225.0, 125.0),
+                (225.0, 175.0),
+            },
+        )
+        self.assertEqual(plan.parameters.rotation_direction, "CounterClockwise")
+        self.assertFalse(plan.parameters.inside_to_outside)
+        self.assertEqual(plan.parameters.stroke_connection_strategy, "Straghtline")
+        self.assertEqual(tuple(sequence.name for sequence in plan.resolved_sequences), ("single_seed_bridge_offsets",))
+        self.assertEqual(tuple(len(sequence) for sequence in plan.trajectory_sequences), (68,))
+        self.assertEqual(plan.resolved_sequences[0].line_count, 51)
+        self.assertEqual(plan.resolved_sequences[0].arc_count, 16)
+        _assert_same_xyz(
+            self,
+            plan.trajectory_sequences[0],
+            _actual_trajectory_xyz_sequences(adaptation.snapshot.operations[0])[0],
+        )
+        self.assertEqual(plan.pending_stages, ())
+        self.assertTrue(plan.can_emit_trajectory)
+
+    @unittest.skipUnless(
+        _external_corpus_available(),
+        f"Corpus externo de Vaciado no disponible en {EXTERNAL_ROOT}",
+    )
+    def test_trace_engine_resolves_vaciado_027_e002_single_partial_topology(self) -> None:
+        adaptation = adapt_pgmx_path(_variant_path(27, 2))
+        spec = adaptation.pocket_millings[0]
+
+        plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
+
+        self.assertEqual(len(plan.internal_offset_families), 1)
+        family = plan.internal_offset_families[0]
+        self.assertEqual(family.complete_offsets, (50.0,))
+        self.assertEqual(family.partial_offsets, (100.0,))
+        self.assertIsNone(family.bridge_offset)
+        self.assertEqual(tuple(sequence.name for sequence in plan.resolved_sequences), ("single_seed_single_partial_offset",))
+        self.assertEqual(tuple(len(sequence) for sequence in plan.trajectory_sequences), (42,))
+        self.assertEqual(plan.resolved_sequences[0].line_count, 30)
+        self.assertEqual(plan.resolved_sequences[0].arc_count, 11)
+        _assert_same_xyz(
+            self,
+            plan.trajectory_sequences[0],
+            _actual_trajectory_xyz_sequences(adaptation.snapshot.operations[0])[0],
+        )
+        self.assertEqual(plan.pending_stages, ())
+        self.assertTrue(plan.can_emit_trajectory)
+
+    @unittest.skipUnless(
+        _external_corpus_available(),
+        f"Corpus externo de Vaciado no disponible en {EXTERNAL_ROOT}",
+    )
+    def test_trace_engine_resolves_vaciado_027_e006_complete_loop_topology(self) -> None:
+        adaptation = adapt_pgmx_path(_variant_path(27, 6))
+        spec = adaptation.pocket_millings[0]
+
+        plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
+
+        self.assertEqual(tuple(sequence.name for sequence in plan.resolved_sequences), (
+            "outer_complete_offsets",
+            "internal_complete_offsets",
+        ))
+        outer, internal = plan.resolved_sequences
+        self.assertEqual(outer.line_count, 11)
+        self.assertEqual(outer.arc_count, 0)
+        self.assertEqual(outer.start, (-10.0, 310.0))
+        self.assertEqual(outer.end, (30.0, 270.0))
+        self.assertEqual(internal.line_count, 9)
+        self.assertEqual(internal.arc_count, 10)
+        self.assertEqual(internal.start, (135.0, 125.0))
+        self.assertEqual(internal.end, (95.0, 125.0))
+        self.assertEqual(tuple(len(sequence) for sequence in plan.trajectory_sequences), (12, 20))
+        _assert_same_xyz(
+            self,
+            plan.trajectory_sequences[0],
+            _actual_trajectory_xyz_sequences(adaptation.snapshot.operations[0])[0],
+        )
+        _assert_same_xyz(
+            self,
+            plan.trajectory_sequences[1],
+            _actual_trajectory_xyz_sequences(adaptation.snapshot.operations[0])[1],
+        )
+        self.assertNotIn("topology_resolver", plan.pending_stages)
+        self.assertNotIn("traversal_orderer", plan.pending_stages)
+        self.assertNotIn("connector_planner", plan.pending_stages)
+        self.assertEqual(plan.pending_stages, ())
+        self.assertTrue(plan.can_emit_trajectory)
+
+    @unittest.skipUnless(
+        _external_corpus_available(),
+        f"Corpus externo de Vaciado no disponible en {EXTERNAL_ROOT}",
+    )
+    def test_trace_engine_resolves_vaciado_027_dense_partial_bridge_topology(self) -> None:
+        expectations = {
+            3: {
+                "complete_count": 18,
+                "complete_tail": (76.16, 80.92, 85.68),
+                "partial": (90.44, 95.2, 99.96, 104.72, 109.48),
+                "bridge": 114.24,
+                "trajectory_lengths": (515,),
+                "primitive_counts": ((375, 139),),
+            },
+            4: {
+                "complete_count": 43,
+                "complete_tail": (82.0, 84.0, 86.0),
+                "partial": (88.0, 90.0, 92.0, 94.0, 96.0, 98.0, 100.0, 102.0, 104.0, 106.0, 108.0, 110.0, 112.0),
+                "bridge": 114.0,
+                "trajectory_lengths": (1185,),
+                "primitive_counts": ((852, 332),),
+            },
+        }
+
+        for tool_index, expected in expectations.items():
+            with self.subTest(tool_index=tool_index):
+                adaptation = adapt_pgmx_path(_variant_path(27, tool_index))
+                spec = adaptation.pocket_millings[0]
+
+                plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
+
+                self.assertEqual(len(plan.internal_offset_families), 1)
+                family = plan.internal_offset_families[0]
+                self.assertEqual(len(family.complete_offsets), expected["complete_count"])
+                self.assertEqual(family.complete_offsets[-3:], expected["complete_tail"])
+                self.assertEqual(family.partial_offsets, expected["partial"])
+                self.assertTrue(family.bridge_offset is not None)
+                self.assertTrue(math.isclose(family.bridge_offset, expected["bridge"], abs_tol=1e-6))
+                self.assertEqual(
+                    tuple(sequence.name for sequence in plan.resolved_sequences),
+                    ("single_seed_dense_bridge_offsets",),
+                )
+                self.assertEqual(
+                    tuple(len(sequence) for sequence in plan.trajectory_sequences),
+                    expected["trajectory_lengths"],
+                )
+                self.assertEqual(
+                    tuple((sequence.line_count, sequence.arc_count) for sequence in plan.resolved_sequences),
+                    expected["primitive_counts"],
+                )
+                _assert_same_xyz(
+                    self,
+                    plan.trajectory_sequences[0],
+                    _actual_trajectory_xyz_sequences(adaptation.snapshot.operations[0])[0],
+                )
+                self.assertEqual(plan.pending_stages, ())
+                self.assertTrue(plan.can_emit_trajectory)
+                self.assertEqual(
+                    tuple(len(sequence) for sequence in _actual_trajectory_xyz_sequences(adaptation.snapshot.operations[0])),
+                    expected["trajectory_lengths"],
+                )
+                self.assertEqual(_trajectory_primitive_counts(adaptation), expected["primitive_counts"])
+
+    @unittest.skipUnless(
+        _external_corpus_available(),
+        f"Corpus externo de Vaciado no disponible en {EXTERNAL_ROOT}",
+    )
+    def test_trace_engine_resolves_vaciado_027_dense_partial_topology_without_bridge(self) -> None:
+        expectations = {
+            1: {
+                "complete": (9.18, 18.36, 27.54, 36.72, 45.9, 55.08, 64.26, 73.44, 82.62),
+                "partial": (91.8, 100.98, 110.16),
+                "trajectory_lengths": (273,),
+                "primitive_counts": ((200, 72),),
+            },
+            7: {
+                "complete": (8.86, 17.72, 26.58, 35.44, 44.3, 53.16, 62.02, 70.88, 79.74),
+                "partial": (88.6, 97.46, 106.32),
+                "trajectory_lengths": (273,),
+                "primitive_counts": ((196, 76),),
+            },
+        }
+
+        for tool_index, expected in expectations.items():
+            with self.subTest(tool_index=tool_index):
+                adaptation = adapt_pgmx_path(_variant_path(27, tool_index))
+                spec = adaptation.pocket_millings[0]
+
+                plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
+
+                self.assertEqual(len(plan.internal_offset_families), 1)
+                family = plan.internal_offset_families[0]
+                self.assertEqual(family.complete_offsets, expected["complete"])
+                self.assertEqual(family.partial_offsets, expected["partial"])
+                self.assertIsNone(family.bridge_offset)
+                self.assertEqual(
+                    tuple(sequence.name for sequence in plan.resolved_sequences),
+                    ("single_seed_dense_partial_offsets",),
+                )
+                self.assertEqual(
+                    tuple(len(sequence) for sequence in plan.trajectory_sequences),
+                    expected["trajectory_lengths"],
+                )
+                self.assertEqual(
+                    tuple((sequence.line_count, sequence.arc_count) for sequence in plan.resolved_sequences),
+                    expected["primitive_counts"],
+                )
+                _assert_same_xyz(
+                    self,
+                    plan.trajectory_sequences[0],
+                    _actual_trajectory_xyz_sequences(adaptation.snapshot.operations[0])[0],
+                )
+                self.assertEqual(plan.pending_stages, ())
+                self.assertTrue(plan.can_emit_trajectory)
+
+
 class VaciadoIslandBaseLoopRuleTests(unittest.TestCase):
     def test_rounded_kernel_loop_rule_matches_observed_base_points(self) -> None:
         expected = (
@@ -227,7 +524,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                     )
                     _assert_same_xyz(self, actual_xyz, expected_xyz)
 
-    def test_island_contours_are_preserved_and_stay_blocked_for_synthesis(self) -> None:
+    def test_island_contours_are_preserved_and_unsupported_cases_stay_blocked_for_synthesis(self) -> None:
         with tempfile.TemporaryDirectory(prefix="vaciado_boss_guardrail_") as temp_dir:
             temp_root = Path(temp_dir)
 
@@ -259,10 +556,28 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                     )
 
                     request = adaptation.build_synthesis_request(
-                        temp_root / f"Vaciado_{index:03d}_blocked.pgmx",
+                        temp_root / f"Vaciado_{index:03d}_synth.pgmx",
                         baseline_path=BASELINE_PATH,
                         source_pgmx_path=BASELINE_PATH,
                     )
+                    if index in {22, 27}:
+                        sp.synthesize_request(request)
+                        generated_adaptation = adapt_pgmx_path(request.output_path)
+                        generated_sequences = _actual_trajectory_xyz_sequences(
+                            generated_adaptation.snapshot.operations[0]
+                        )
+                        self.assertEqual(
+                            tuple(len(sequence) for sequence in generated_sequences),
+                            expected_trajectory_counts,
+                        )
+                        self.assertEqual(
+                            _trajectory_primitive_counts(generated_adaptation),
+                            _trajectory_primitive_counts(adaptation),
+                        )
+                        for actual, expected in zip(generated_sequences, trajectory_sequences):
+                            _assert_same_xyz(self, actual, expected)
+                        continue
+
                     with self.assertRaisesRegex(
                         NotImplementedError,
                         "islas/BossGeometryList",
@@ -488,7 +803,12 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                 baseline_path=BASELINE_PATH,
                 source_pgmx_path=BASELINE_PATH,
             )
-            sp.synthesize_request(request)
+            with mock.patch.object(
+                sp,
+                "_build_single_seed_base_loop_xyz_sequences",
+                side_effect=AssertionError("legacy single-seed helper should not be used"),
+            ):
+                sp.synthesize_request(request)
 
             generated_adaptation = adapt_pgmx_path(output)
             generated_sequences = _actual_trajectory_xyz_sequences(
@@ -501,6 +821,110 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                 _trajectory_arcs(generated_adaptation),
                 _trajectory_arcs(manual_adaptation),
             )
+            self.assertEqual(
+                _trajectory_primitive_counts(generated_adaptation),
+                ((11, 0), (9, 10)),
+            )
+            self.assertEqual(
+                _trajectory_primitive_counts(generated_adaptation),
+                _trajectory_primitive_counts(manual_adaptation),
+            )
+
+    def test_vaciado_027_dense_partial_synthesis_uses_trace_engine(self) -> None:
+        expected_lengths = {
+            1: (273,),
+            3: (515,),
+            4: (1185,),
+            7: (273,),
+        }
+
+        with tempfile.TemporaryDirectory(prefix="vaciado_027_dense_partial_") as temp_dir:
+            temp_root = Path(temp_dir)
+            for tool_index, expected_length in expected_lengths.items():
+                with self.subTest(tool_index=tool_index):
+                    manual_adaptation = adapt_pgmx_path(_variant_path(27, tool_index))
+                    manual_sequences = _actual_trajectory_xyz_sequences(
+                        manual_adaptation.snapshot.operations[0]
+                    )
+                    output = temp_root / f"Vaciado_027_E{tool_index:03d}_synth.pgmx"
+                    request = manual_adaptation.build_synthesis_request(
+                        output,
+                        baseline_path=BASELINE_PATH,
+                        source_pgmx_path=BASELINE_PATH,
+                    )
+                    with mock.patch.object(
+                        sp,
+                        "_build_single_seed_multiloop_curve_and_sequence",
+                        side_effect=AssertionError("legacy single-seed multiloop helper should not be used"),
+                    ):
+                        sp.synthesize_request(request)
+
+                    generated_adaptation = adapt_pgmx_path(output)
+                    generated_sequences = _actual_trajectory_xyz_sequences(
+                        generated_adaptation.snapshot.operations[0]
+                    )
+                    self.assertEqual(tuple(len(sequence) for sequence in generated_sequences), expected_length)
+                    _assert_same_xyz(self, generated_sequences[0], manual_sequences[0])
+                    self.assertEqual(
+                        _trajectory_arcs(generated_adaptation),
+                        _trajectory_arcs(manual_adaptation),
+                    )
+                    self.assertEqual(
+                        _trajectory_primitive_counts(generated_adaptation),
+                        _trajectory_primitive_counts(manual_adaptation),
+                    )
+
+    def test_vaciado_027_tool_series_trace_engine_synthesis_without_template(self) -> None:
+        expected_lengths = {
+            1: (273,),
+            2: (42,),
+            3: (515,),
+            4: (1185,),
+            5: (68,),
+            6: (12, 20),
+            7: (273,),
+        }
+
+        with tempfile.TemporaryDirectory(prefix="vaciado_027_trace_engine_series_") as temp_dir:
+            temp_root = Path(temp_dir)
+            with mock.patch.object(
+                sp,
+                "_build_single_seed_base_loop_xyz_sequences",
+                side_effect=AssertionError("legacy single-seed base-loop helper should not be used"),
+            ), mock.patch.object(
+                sp,
+                "_build_single_seed_multiloop_curve_and_sequence",
+                side_effect=AssertionError("legacy single-seed multiloop helper should not be used"),
+            ):
+                for tool_index, expected_length in expected_lengths.items():
+                    with self.subTest(tool_index=tool_index):
+                        manual_adaptation = adapt_pgmx_path(_variant_path(27, tool_index))
+                        manual_sequences = _actual_trajectory_xyz_sequences(
+                            manual_adaptation.snapshot.operations[0]
+                        )
+                        output = temp_root / f"Vaciado_027_E{tool_index:03d}_synth.pgmx"
+                        request = manual_adaptation.build_synthesis_request(
+                            output,
+                            baseline_path=BASELINE_PATH,
+                            source_pgmx_path=BASELINE_PATH,
+                        )
+                        sp.synthesize_request(request)
+
+                        generated_adaptation = adapt_pgmx_path(output)
+                        generated_sequences = _actual_trajectory_xyz_sequences(
+                            generated_adaptation.snapshot.operations[0]
+                        )
+                        self.assertEqual(tuple(len(sequence) for sequence in generated_sequences), expected_length)
+                        for actual, expected in zip(generated_sequences, manual_sequences):
+                            _assert_same_xyz(self, actual, expected)
+                        self.assertEqual(
+                            _trajectory_arcs(generated_adaptation),
+                            _trajectory_arcs(manual_adaptation),
+                        )
+                        self.assertEqual(
+                            _trajectory_primitive_counts(generated_adaptation),
+                            _trajectory_primitive_counts(manual_adaptation),
+                        )
 
     def test_vaciado_027_tool_series_template_trace_synthesis_matches_trace(self) -> None:
         expected_lengths = {
@@ -540,3 +964,65 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                         _trajectory_arcs(generated_adaptation),
                         _trajectory_arcs(manual_adaptation),
                     )
+
+    def test_pocket_template_trace_hydration_requires_full_trace_contract(self) -> None:
+        manual = _variant_path(27, 1)
+        manual_adaptation = adapt_pgmx_path(manual)
+        spec = manual_adaptation.pocket_millings[0]
+        template = sp._extract_pocket_milling_template(manual)
+
+        self.assertTrue(sp._can_hydrate_pocket_template_trace(template, spec))
+
+        strategy = spec.milling_strategy
+        changed_rotation = replace(
+            spec,
+            milling_strategy=sp.build_contour_parallel_milling_strategy_spec(
+                rotation_direction="Clockwise"
+                if strategy.rotation_direction == "CounterClockwise"
+                else "CounterClockwise",
+                stroke_connection_strategy=strategy.stroke_connection_strategy,
+                inside_to_outside=strategy.inside_to_outside,
+                overlap=strategy.overlap,
+                is_helic_strategy=strategy.is_helic_strategy,
+                allow_multiple_passes=strategy.allow_multiple_passes,
+                axial_cutting_depth=strategy.axial_cutting_depth,
+                axial_finish_cutting_depth=strategy.axial_finish_cutting_depth,
+                cutmode=strategy.cutmode,
+                is_internal=strategy.is_internal,
+                radial_cutting_depth=strategy.radial_cutting_depth,
+                radial_finish_cutting_depth=strategy.radial_finish_cutting_depth,
+                allows_bidirectional=strategy.allows_bidirectional,
+                allows_finish_cutting=strategy.allows_finish_cutting,
+            ),
+        )
+        self.assertFalse(sp._can_hydrate_pocket_template_trace(template, changed_rotation))
+
+        changed_allowance = replace(spec, allowance_side=spec.allowance_side + 1.0)
+        self.assertFalse(sp._can_hydrate_pocket_template_trace(template, changed_allowance))
+
+        changed_depth = replace(
+            spec,
+            depth_spec=sp.build_milling_depth_spec(
+                is_through=False,
+                target_depth=float(spec.depth_spec.target_depth or 0.0) + 1.0,
+            ),
+        )
+        self.assertFalse(sp._can_hydrate_pocket_template_trace(template, changed_depth))
+
+    def test_vaciado_035_circular_helical_case_stays_outside_polyline_adapter(self) -> None:
+        manual = _manual_path(35)
+        self.assertTrue(manual.exists(), manual)
+
+        adaptation = adapt_pgmx_path(manual)
+        self.assertEqual(len(adaptation.pocket_millings), 0)
+        self.assertEqual(len(adaptation.unsupported_entries), 1)
+
+        feature = adaptation.snapshot.features[0]
+        operation = adaptation.snapshot.operations[0]
+        self.assertIn("ClosedPocket", feature.feature_type)
+        self.assertEqual(feature.geometry_ref.id, "4561")
+        geometry = adaptation.snapshot.geometry_by_id[feature.geometry_ref.id]
+        self.assertEqual(geometry.geometry_type, "a:GeomCircle")
+        self.assertTrue(operation.milling_strategy.is_helic_strategy)
+        self.assertFalse(operation.milling_strategy.inside_to_outside)
+        self.assertTrue(math.isclose(operation.allowance_side, 20.0, abs_tol=1e-6))

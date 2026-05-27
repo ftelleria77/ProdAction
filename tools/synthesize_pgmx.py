@@ -7849,6 +7849,10 @@ def _build_pocket_trajectory_xyz_sequences(
     if not spec.boss_contours and not spec.boss_route_seeds:
         return (_build_contour_parallel_xyz_path(state, spec),)
 
+    trace_engine_sequences = _build_trace_engine_pocket_xyz_sequences(state, spec)
+    if trace_engine_sequences is not None:
+        return trace_engine_sequences
+
     controlled_sequences = _build_single_seed_base_loop_xyz_sequences(state, spec)
     if controlled_sequences is not None:
         return controlled_sequences
@@ -7905,6 +7909,10 @@ def _build_pocket_trajectory_curve_specs(
     if not spec.boss_contours and not spec.boss_route_seeds:
         return tuple(_curve_spec_from_xyz_path(sequence) for sequence in trajectory_sequences)
 
+    trace_engine_curves = _build_trace_engine_pocket_curve_specs(spec, trajectory_sequences)
+    if trace_engine_curves is not None:
+        return trace_engine_curves
+
     seed = _supported_single_seed_base_loop_route_seed(spec)
     if seed is not None and len(trajectory_sequences) == 2:
         cut_z = trajectory_sequences[1][0][2]
@@ -7927,6 +7935,80 @@ def _build_pocket_trajectory_curve_specs(
             return (curve_spec,)
 
     return tuple(_curve_spec_from_xyz_path(sequence) for sequence in trajectory_sequences)
+
+
+def _build_trace_engine_pocket_xyz_sequences(
+    state: PgmxState,
+    spec: _HydratedPocketMillingSpec,
+) -> Optional[tuple[tuple[tuple[float, float, float], ...], ...]]:
+    plan = _build_trace_engine_pocket_plan(spec, surface_z=state.depth)
+    if plan is None or not plan.trajectory_sequences:
+        return None
+    return plan.trajectory_sequences
+
+
+def _build_trace_engine_pocket_curve_specs(
+    spec: _HydratedPocketMillingSpec,
+    trajectory_sequences: Sequence[Sequence[tuple[float, float, float]]],
+) -> Optional[tuple[_CurveSpec, ...]]:
+    if not trajectory_sequences:
+        return None
+    plan = _build_trace_engine_pocket_plan(spec, surface_z=0.0)
+    if plan is None:
+        return None
+    if len(plan.resolved_sequences) != len(trajectory_sequences):
+        return None
+
+    curve_specs: list[_CurveSpec] = []
+    for resolved_sequence, trajectory_sequence in zip(plan.resolved_sequences, trajectory_sequences):
+        if not trajectory_sequence:
+            return None
+        z_value = float(trajectory_sequence[0][2])
+        curve_specs.append(_curve_spec_from_trace_resolved_sequence(resolved_sequence, z_value))
+    return tuple(curve_specs)
+
+
+def _build_trace_engine_pocket_plan(
+    spec: _HydratedPocketMillingSpec,
+    *,
+    surface_z: float,
+):
+    from tools.pgmx_vaciado.trace_engine import generate_contour_parallel_pocket_trace
+
+    plan = generate_contour_parallel_pocket_trace(spec, surface_z=surface_z)
+    if plan.pending_stages:
+        return None
+    if not plan.resolved_sequences:
+        return None
+    return plan
+
+
+def _curve_spec_from_trace_resolved_sequence(resolved_sequence, z_value: float) -> _CurveSpec:
+    descriptions: list[str] = []
+    for primitive in resolved_sequence.primitives:
+        start = (primitive.start[0], primitive.start[1], z_value)
+        end = (primitive.end[0], primitive.end[1], z_value)
+        if primitive.primitive_type == "Line":
+            descriptions.append(_build_toolpath_description(start, end))
+            continue
+        if primitive.primitive_type == "Arc":
+            if primitive.center is None:
+                raise ValueError("La primitiva Arc de Vaciado requiere centro.")
+            normal_z = -1.0 if primitive.orientation == "Clockwise" else 1.0
+            descriptions.append(
+                _build_maestro_arc_serialization(
+                    start,
+                    end,
+                    primitive.center,
+                    normal_z,
+                    z_value,
+                )
+            )
+            continue
+        raise ValueError(f"Tipo de primitiva de Vaciado no soportado: {primitive.primitive_type}")
+    if not descriptions:
+        raise ValueError("La secuencia resuelta de Vaciado no contiene primitivas serializables.")
+    return _composite_curve_spec(descriptions)
 
 
 def _rounded_kernel_loop_curve_spec(
@@ -9909,20 +9991,21 @@ HydratedMachiningSpec = Union[
 def _extract_pocket_milling_template(source_pgmx_path: Path) -> dict[str, object]:
     root, _, _ = _load_pgmx_container(source_pgmx_path)
 
+    def extract_composite_curve(node: ET.Element) -> _CurveSpec:
+        return _composite_curve_spec(
+            [member.text or "" for member in node.findall("./{*}_serializingMembers/{*}string")],
+            [(key.text or "").strip() for key in node.findall("./{*}_serializingKeys/{*}unsignedInt")],
+        )
+
+    def extract_curve_xy_points(node: ET.Element) -> tuple[tuple[float, float], ...]:
+        points = _curve_spec_points(extract_composite_curve(node)) or ()
+        return tuple((point[0], point[1]) for point in points)
+
     def extract_toolpath_curve(toolpath: ET.Element) -> _CurveSpec:
         basic_curve = toolpath.find("./{*}BasicCurve")
         curve_type = _xsi_type(basic_curve)
         if "GeomCompositeCurve" in curve_type:
-            return _composite_curve_spec(
-                [
-                    member.text or ""
-                    for member in basic_curve.findall("./{*}_serializingMembers/{*}string")
-                ],
-                [
-                    (key.text or "").strip()
-                    for key in basic_curve.findall("./{*}_serializingKeys/{*}unsignedInt")
-                ],
-            )
+            return extract_composite_curve(basic_curve)
         return _trimmed_curve_spec(_raw_text(basic_curve, "./{*}_serializationGeometryDescription"))
 
     geometry = next(
@@ -9953,6 +10036,30 @@ def _extract_pocket_milling_template(source_pgmx_path: Path) -> dict[str, object
         raise ValueError(f"El archivo '{source_pgmx_path}' no contiene una plantilla de Vaciado compatible.")
 
     geometry_id = int(_text(geometry, "./{*}Key/{*}ID", "0") or "0")
+    feature_id = _text(feature, "./{*}Key/{*}ID")
+    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
+    depth_variable_name = _workpiece_depth_name(workpiece)
+    matching_expressions = [
+        node
+        for node in root.findall("./{*}Expressions/{*}Expression")
+        if _text(node, "./{*}ReferencedObject/{*}ID") == feature_id
+    ]
+    expression_ids = [int(_text(node, "./{*}Key/{*}ID", "0") or "0") for node in matching_expressions]
+    preferred_start = min([geometry_id] + expression_ids) if expression_ids else geometry_id
+    geometries_by_id = {
+        _text(node, "./{*}Key/{*}ID"): node
+        for node in root.findall("./{*}Geometries/{*}GeomGeometry")
+    }
+    boss_contours = tuple(
+        extract_curve_xy_points(node)
+        for node in feature.findall("./{*}BossGeometryList/{*}GeomCompositeCurve")
+    )
+    boss_route_seed_contours: list[tuple[tuple[float, float], ...]] = []
+    for boss_node in feature.findall("./{*}BossList/{*}Boss"):
+        route_geometry_id = _text(boss_node, "./{*}GeometryID/{*}ID")
+        route_geometry = geometries_by_id.get(route_geometry_id)
+        if route_geometry is not None:
+            boss_route_seed_contours.append(extract_curve_xy_points(route_geometry))
     trajectory_curves = tuple(
         extract_toolpath_curve(toolpath)
         for toolpath in operation.findall("./{*}ToolpathList/{*}Toolpath")
@@ -9964,18 +10071,51 @@ def _extract_pocket_milling_template(source_pgmx_path: Path) -> dict[str, object
         if points is not None
     )
     return {
-        "preferred_id_start": geometry_id,
-        "geometry_curve": _composite_curve_spec(
-            [member.text or "" for member in geometry.findall("./{*}_serializingMembers/{*}string")],
-            [(key.text or "").strip() for key in geometry.findall("./{*}_serializingKeys/{*}unsignedInt")],
+        "preferred_id_start": preferred_start,
+        "depth_spec": _extract_depth_spec_from_template(
+            feature,
+            operation,
+            matching_expressions,
+            depth_variable_name,
         ),
+        "geometry_curve": extract_composite_curve(geometry),
         "tool_width": float(_text(feature, "./{*}SweptShape/{*}Width", "0") or "0"),
         "tool_id": _text(operation, "./{*}ToolKey/{*}ID"),
         "tool_name": _text(operation, "./{*}ToolKey/{*}Name"),
+        "security_plane": _safe_float(_text(operation, "./{*}ApproachSecurityPlane"), 0.0),
         "milling_strategy": _extract_milling_strategy_spec_from_operation(operation),
+        "allowance_bottom": _safe_float(_text(operation, "./{*}AllowanceBottom"), 0.0),
+        "allowance_side": _safe_float(_text(operation, "./{*}AllowanceSide"), 0.0),
+        "boss_contours": boss_contours,
+        "boss_route_seed_contours": tuple(boss_route_seed_contours),
         "trajectory_curves": trajectory_curves,
         "trajectory_sequences": trajectory_sequences,
     }
+
+
+def _same_xy_points(
+    first: Sequence[tuple[float, float]],
+    second: Sequence[tuple[float, float]],
+    *,
+    tolerance: float = 1e-6,
+) -> bool:
+    return len(first) == len(second) and all(
+        math.isclose(left[0], right[0], abs_tol=tolerance)
+        and math.isclose(left[1], right[1], abs_tol=tolerance)
+        for left, right in zip(first, second)
+    )
+
+
+def _same_xy_contours(
+    first: Sequence[Sequence[tuple[float, float]]],
+    second: Sequence[Sequence[tuple[float, float]]],
+    *,
+    tolerance: float = 1e-6,
+) -> bool:
+    return len(first) == len(second) and all(
+        _same_xy_points(left, right, tolerance=tolerance)
+        for left, right in zip(first, second)
+    )
 
 
 def _can_hydrate_pocket_template_trace(
@@ -10009,11 +10149,36 @@ def _can_hydrate_pocket_template_trace(
     strategy = template.get("milling_strategy")
     if not isinstance(strategy, ContourParallelMillingStrategySpec):
         return False
+    source_depth_spec = template.get("depth_spec") if isinstance(template.get("depth_spec"), MillingDepthSpec) else None
+    if source_depth_spec is None or _normalize_milling_depth_spec(source_depth_spec) != _normalize_milling_depth_spec(
+        spec.depth_spec
+    ):
+        return False
+    if not math.isclose(float(template.get("security_plane") or 0.0), spec.security_plane, abs_tol=tolerance):
+        return False
+    if not math.isclose(float(template.get("allowance_bottom") or 0.0), spec.allowance_bottom, abs_tol=tolerance):
+        return False
+    if not math.isclose(float(template.get("allowance_side") or 0.0), spec.allowance_side, abs_tol=tolerance):
+        return False
+    template_boss_contours = template.get("boss_contours") if isinstance(template.get("boss_contours"), tuple) else ()
+    if not _same_xy_contours(template_boss_contours, spec.boss_contours, tolerance=tolerance):
+        return False
+    template_route_seed_contours = (
+        template.get("boss_route_seed_contours")
+        if isinstance(template.get("boss_route_seed_contours"), tuple)
+        else ()
+    )
+    if len(spec.boss_route_seeds) != len(spec.resolved_boss_route_seed_contours):
+        return False
+    if not _same_xy_contours(
+        template_route_seed_contours,
+        spec.resolved_boss_route_seed_contours,
+        tolerance=tolerance,
+    ):
+        return False
     return (
-        math.isclose(strategy.overlap, spec.milling_strategy.overlap, abs_tol=tolerance)
-        and strategy.inside_to_outside == spec.milling_strategy.inside_to_outside
-        and strategy.stroke_connection_strategy == spec.milling_strategy.stroke_connection_strategy
-        and strategy.allow_multiple_passes == spec.milling_strategy.allow_multiple_passes
+        _strategy_comparison_key(strategy, is_closed_profile=True)
+        == _strategy_comparison_key(spec.milling_strategy, is_closed_profile=True)
         and bool(template.get("trajectory_curves"))
         and bool(template.get("trajectory_sequences"))
         and len(template.get("trajectory_curves") or ()) == len(template.get("trajectory_sequences") or ())

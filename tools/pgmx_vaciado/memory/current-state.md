@@ -941,3 +941,535 @@ informacion de Maestro y sin generar PGMX incompletos.
   `outside-to-inside` completa para una semilla resuelta, incluyendo el barrido
   del marco exterior, la entrada a lobulos parciales, las repeticiones de
   microarcos en los casos chicos (`E003/E004`) y el cierre especial de `E005`.
+
+## Actualizacion 2026-05-27 - Contrato De Parametros Para Vaciado
+
+- Correccion conceptual: la traza que se esta estudiando reproduce el metodo
+  que usa Maestro para estos casos, pero no debe tratarse como la unica forma
+  posible de realizar un vaciado.
+- Para llegar a una generacion completa de traza, el modelo no puede depender
+  solo de ejemplos rectangulares o de una semilla puntual. La entrada del
+  generador debe representar todos los parametros y geometrias que definen el
+  vaciado.
+- Parametros y datos geometricos que deben quedar en el contrato de generacion:
+  - polilinea cerrada exterior con punto inicial;
+  - polilineas cerradas internas con punto inicial;
+  - profundidad de vaciado;
+  - rebaba/despeje al contorno;
+  - diametro de herramienta;
+  - direccion del recorrido: horaria o antihoraria;
+  - conexion entre huecos: salida a cota de seguridad o en la pieza;
+  - direccion del vaciado: adentro hacia afuera o afuera hacia adentro;
+  - sobreposicion de trazas;
+  - estrategia helicoidal habilitada o deshabilitada;
+  - multipaso habilitado o deshabilitado;
+  - profundidad de hueco y ultimo hueco cuando multipaso esta habilitado.
+- Implicacion de diseno: la sintesis generativa debe separar el contrato
+  geometrico/productivo del algoritmo concreto de trayectoria. Maestro puede ser
+  el primer modo validado, pero el modelo debe permitir luego otras estrategias
+  de vaciado sin reescribir la representacion del mecanizado.
+- Antes de extender `Vaciado_027` mas alla de la plantilla validada, conviene
+  revisar `PocketMillingSpec` y el generador de trayectoria para asegurar que
+  estos campos existan de forma explicita, o que se documente cual queda
+  pendiente y por que.
+
+## Actualizacion 2026-05-27 - Auditoria Del Contrato En Codigo
+
+- `PocketMillingSpec` ya conserva la polilinea exterior como
+  `contour_points`. El punto inicial queda preservado por el orden de la tupla.
+- Las polilineas internas existen en dos niveles:
+  - `boss_contours` conserva las islas fisicas de `BossGeometryList`;
+  - `boss_route_seeds` conserva las referencias de ruteo de `BossList.GeometryID`.
+  Esta separacion sigue siendo necesaria porque Maestro puede rutear con una
+  semilla distinta de la isla fisica.
+- La profundidad de vaciado esta en `depth_spec`, y el XML de `ClosedPocket`
+  se serializa con `Depth.StartDepth/EndDepth`.
+- La rebaba/despeje esta en `allowance_side`; `allowance_bottom` tambien se lee
+  y serializa aunque todavia no sea parte central de la regla de traza.
+- El diametro de herramienta esta representado por `tool_width`.
+- La estrategia `ContourParallelMillingStrategySpec` ya contiene:
+  `rotation_direction`, `stroke_connection_strategy`, `inside_to_outside`,
+  `overlap`, `is_helic_strategy`, `allow_multiple_passes`,
+  `axial_cutting_depth` y `axial_finish_cutting_depth`, ademas de campos
+  auxiliares como `radial_cutting_depth`.
+- El generador rectangular sin islas ya usa direccion de recorrido, direccion
+  de vaciado, rebaba, diametro, sobreposicion y multipaso. Las transiciones
+  multipaso respetan `LiftShiftPlunge` contra `Straghtline`.
+- El soporte productivo con islas sigue acotado: hay reglas controladas para
+  semillas rectangulares resueltas de `50 x 50` en casos `031` y `027_E006`,
+  pero no hay todavia un generador general para polilineas internas multiples.
+- `is_helic_strategy` se lee y se serializa, pero no tiene una generacion de
+  traza propia para `Vaciado`; por ahora es un parametro modelado, no una regla
+  geometrica implementada.
+- Se endurecio la hidratacion por plantilla de `Vaciado`: una traza Maestro
+  validada solo puede reutilizarse si coinciden contorno exterior, islas,
+  semillas resueltas, profundidad, cota de seguridad, herramienta, rebaba y la
+  estrategia completa. Esto evita que la plantilla oculte cambios de parametros
+  que deberian modificar la traza.
+- Validacion agregada: `tests.test_pgmx_vaciado` comprueba que cambiar
+  direccion de recorrido, rebaba o profundidad bloquea la hidratacion de la
+  traza de plantilla.
+
+## Actualizacion 2026-05-27 - Revision Parametrica Del Corpus Manual
+
+- Se reviso nuevamente el corpus completo
+  `S:\Maestro\Projects\ProdAction\PGMX\manual`.
+- Archivos `Vaciado_*.pgmx` encontrados: `77`.
+- Adaptados como `PocketMillingSpec`: `76`.
+- Reportes generados:
+  - `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_parameter_trace_contract_2026_05_27\vaciado_manual_parameter_trace_catalog.csv`;
+  - `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_parameter_trace_contract_2026_05_27\vaciado_manual_parameter_trace_review.md`;
+  - `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_parameter_trace_contract_2026_05_27\vaciado_parameter_impact_study.md`.
+- Parametros confirmados en el corpus:
+  - geometria exterior con punto inicial;
+  - geometrias internas fisicas `BossGeometryList`;
+  - semillas de ruta `BossList.GeometryID`;
+  - profundidad de vaciado;
+  - `AllowanceSide` / rebaba lateral;
+  - diametro de herramienta;
+  - direccion de recorrido;
+  - conexion entre huecos;
+  - direccion de vaciado;
+  - sobreposicion;
+  - helicoidal;
+  - multipaso con `AxialCuttingDepth` y `AxialFinishCuttingDepth`.
+- Impactos confirmados:
+  - `paso_radial = diametro * (1 - overlap)`;
+  - el primer offset efectivo responde a `radio_herramienta + AllowanceSide`;
+  - `RotationDirection` cambia sentido/orden, no necesariamente cantidad de
+    puntos;
+  - `InsideToOutSide` cambia orden de barrido y enlaces entre vueltas;
+  - `StrokeConnectionStrategy` pesa especialmente en multipaso o huecos
+    separados;
+  - multipaso puede vivir dentro de una sola `TrajectoryPath` con multiples
+    niveles Z;
+  - con islas, el contorno fisico y la semilla de ruta deben conservarse como
+    datos separados.
+- Caso especial nuevo: `Vaciado_035.pgmx` es `ClosedPocket` con geometria
+  circular `GeomCircle`, `AllowanceSide=20`, `InsideToOutSide=false` e
+  `IsHelicStrategy=true`. El adaptador actual no lo convierte a
+  `PocketMillingSpec` porque el soporte inicial exige `GeomCompositeCurve`
+  cerrado. La traza observada usa arcos circulares a Z constante y un enlace
+  radial; aunque el flag helicoidal esta activo, no aparece una rampa Z
+  helicoidal en `TrajectoryPath`.
+- Implicacion: el contrato de vaciado debe poder evolucionar de polilineas
+  cerradas hacia contornos cerrados con arcos/circulos, o documentar una
+  conversion explicita a polilinea cuando se quiera mantener ese limite.
+
+## Actualizacion 2026-05-27 - Primitivas De Traza Maestro
+
+- Se agrego el analizador de laboratorio
+  `tools/pgmx_vaciado/trace_primitives.py` para descomponer las
+  `TrajectoryPath` Maestro de `Vaciado_*.pgmx` en primitivas `Line`/`Arc`,
+  clasificarlas contra el contorno exterior, semillas de ruta e islas, y
+  producir un resumen reproducible.
+- Ejecucion sobre el corpus manual completo:
+  `py -3 -m tools.pgmx_vaciado.trace_primitives --output-dir S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_trace_primitives_2026_05_27`.
+- Artefactos generados:
+  - `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_trace_primitives_2026_05_27\vaciado_trace_case_summary.csv`;
+  - `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_trace_primitives_2026_05_27\vaciado_trace_primitives.csv`;
+  - `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_trace_primitives_2026_05_27\vaciado_trace_primitives_study.md`.
+- Resultado global: `77` casos, `76` adaptados como bolsillo y
+  `1` caso `snapshot_only` (`Vaciado_035.pgmx` circular). Se extrajeron
+  `14448` primitivas: `10648` lineas y `3800` arcos.
+- La mezcla de relaciones confirma que los casos con islas no deben modelarse
+  solo como offsets del contorno exterior. En el corpus aparecen `3794` arcos
+  clasificados como `route_seed_corner_arc`; es decir, sus centros caen en las
+  esquinas de la semilla resuelta de ruta, no necesariamente en las esquinas de
+  la isla fisica.
+- Gramatica candidata de traza Maestro registrada por el informe:
+  1. normalizar el contorno y conservar su punto inicial;
+  2. calcular `effective_offset = tool_radius + AllowanceSide`;
+  3. calcular `radial_step = tool_width * (1 - overlap)`;
+  4. generar familias de offsets del contorno exterior cuando no hay islas;
+  5. con islas, usar `BossList.GeometryID` como semilla de ruteo separada de
+     `BossGeometryList`;
+  6. aplicar `InsideToOutSide` al orden de vueltas y puentes;
+  7. aplicar `RotationDirection` al sentido/orientacion de las vueltas;
+  8. aplicar `StrokeConnectionStrategy` en transiciones de niveles o huecos
+     separados;
+  9. representar multipaso como secuencias de niveles Z dentro de una o mas
+     `TrajectoryPath`.
+- `Vaciado_035.pgmx` queda caracterizado aunque no adapte a polilinea:
+  circulo nominal de radio `125`, herramienta `E006` de diametro `80`,
+  `AllowanceSide=20`, `radial_step=40`; Maestro genera radios de traza
+  `65` y `25`, coherentes con `125 - (40 + 20)` y una reduccion por paso
+  radial. El flag helicoidal esta activo, pero las primitivas quedan a Z
+  constante en la trayectoria observada.
+- Para `Vaciado_027_E006`, el analizador confirma el checkpoint generativo:
+  `12+20` puntos, `20` lineas, `10` arcos, y `10/10` arcos ligados a esquinas
+  de semilla de ruta. Para `Vaciado_027_E004`, la misma regla escala a
+  `1185` puntos, `852` lineas y `332` arcos, todos ligados a la semilla.
+- El informe deja como casos foco tambien `Vaciado_027_E002` y
+  `Vaciado_027_E005`: `E002` tiene `42` puntos, `30` lineas y `11` arcos
+  con radios de semilla `50/100`; `E005` tiene `68` puntos, `51` lineas y
+  `16` arcos con radios `38/76/114`. Estos dos son buenos candidatos para
+  cerrar primero la regla `outside-to-inside` generalizada.
+- Proxima frontera practica: convertir esta gramatica candidata en una
+  implementacion generativa pura para `outside-to-inside` en `Vaciado_027`,
+  usando el CSV de primitivas como oraculo de orden, radios, enlaces y cambios
+  de familia. La hidratacion por plantilla queda solo como red de seguridad
+  validada, no como explicacion de la traza.
+
+## Actualizacion 2026-05-27 - Esqueleto General Del Motor De Traza
+
+- Se creo `tools/pgmx_vaciado/trace_engine.py` como punto de entrada general
+  para el futuro motor de vaciado por contornos paralelos. El modulo no esta
+  nombrado ni acotado a `Vaciado_027`: acepta un `PocketMillingSpec` y
+  devuelve un `ContourParallelTracePlan`.
+- El esqueleto ya separa capas:
+  - normalizacion de contorno exterior, punto inicial, bbox, winding y forma
+    rectangular;
+  - normalizacion de contornos internos fisicos y semillas de ruta resueltas;
+  - contrato de parametros (`tool_width`, `AllowanceSide`, `effective_offset`,
+    `radial_step`, direccion, conexion, overlap, helicoidal y multipaso);
+  - familias de offsets del contorno exterior;
+  - familias de offsets por contorno interno/semilla, con offsets completos,
+    parciales y puente cercano;
+  - plan de profundidades Z para multipaso.
+- La API publica inicial es
+  `generate_contour_parallel_pocket_trace(spec, surface_z=...)`. Por ahora
+  devuelve `trajectory_sequences=()` y `pending_stages`, porque todavia faltan
+  el motor de offset geometrico real, el resolvedor topologico, el ordenador de
+  recorrido, los conectores y el emisor de `TrajectoryPath`.
+- Validacion agregada:
+  - caso sintetico sin corpus: preserva punto inicial, calcula
+    `effective_offset`, `radial_step`, offsets exteriores y niveles Z;
+  - `Vaciado_027_E005`: extrae la familia interna general con offsets
+    `38/76` y puente `114` desde el contrato real, sin hardcodear el nombre
+    del archivo en el motor.
+- Pruebas: `py -3 -m unittest tests.test_pgmx_vaciado` pasa con `15` tests.
+- Proximo paso de codigo: hacer que el `TracePlan` pueda emitir primitivas
+  2D abstractas (`Line`/`Arc`) antes de serializar PGMX. Esa capa debe usar
+  los casos foco `Vaciado_027_E002`, `E005` y `E006` como oraculos, pero la
+  implementacion debe seguir viviendo en el motor general.
+
+## Actualizacion 2026-05-27 - Primitivas Abstractas Del Motor
+
+- `ContourParallelTracePlan` ahora incluye `primitive_sequences`, una capa
+  abstracta 2D independiente de la serializacion XML. Cada
+  `TracePrimitiveSequence2D` contiene primitivas `TracePrimitive2D` de tipo
+  `Line` o `Arc`, con propietario (`outer`, `internal:n`), offset, puntos,
+  centro, radio y orientacion cuando aplica.
+- El motor emite bucles completos para contornos rectangulares exteriores y
+  bucles redondeados para semillas internas rectangulares. Para semillas, el
+  bucle completo usa cuatro centros de esquina y divide la esquina superior
+  derecha en dos arcos, reproduciendo la estructura abstracta observada en
+  Maestro (`5` arcos por radio completo).
+- Para bolsillos con internas, los bucles exteriores abstractos se acotan por
+  el medio claro minimo frente a las semillas internas. Esto evita generar
+  offsets exteriores que ya invaden la zona de ruteo de la isla; por ejemplo,
+  `Vaciado_027_E006` queda en offsets exteriores `40/80` e internos `40/80`.
+- La capa todavia no resuelve el orden global Maestro, puentes, lobulos
+  parciales ni serializacion PGMX. Esos puntos siguen en `pending_stages`
+  como topologia, recorrido, conectores y emisor de toolpath.
+- Validacion actual:
+  - caso sintetico sin corpus: emite dos bucles rectangulares de `4` lineas
+    con offsets `15/30`;
+  - `Vaciado_027_E005`: emite bucles exteriores `38/76`, bucles internos
+    `38/76`, `5` arcos por bucle interno y centros de arco en las cuatro
+    esquinas de la semilla `175..225 x 125..175`; conserva el puente pendiente
+    `114`.
+- Pruebas: `py -3 -m unittest tests.test_pgmx_vaciado` pasa con `15` tests.
+- Proximo paso de codigo: construir el resolvedor topologico que conecte estas
+  primitivas abstractas en el orden Maestro, empezando por el caso sin lobulos
+  parciales (`E002/E006`) y dejando el puente `E005` como siguiente extension.
+
+## Actualizacion 2026-05-27 - Resolvedor Topologico De Bucles Completos
+
+- `ContourParallelTracePlan` ahora incluye `resolved_sequences`, una capa que
+  conecta las primitivas abstractas en secuencias topologicas antes de llegar
+  al emisor PGMX.
+- Se implemento la primera regla resuelta de forma general: contorno exterior
+  rectangular, una semilla rectangular, direccion `outside-to-inside`
+  (`InsideToOutSide=false`), conexion `Straghtline`, offsets internos
+  completos, sin lobulos parciales y sin puente.
+- Para esa configuracion el motor produce dos secuencias:
+  - `outer_complete_offsets`: conecta los bucles exteriores completos con las
+    lineas de enlace entre offsets;
+  - `internal_complete_offsets`: concatena los bucles redondeados de la
+    semilla y agrega la linea de enlace entre radios.
+- Validacion agregada con `Vaciado_027_E006`: la secuencia exterior queda con
+  `11` lineas, de `(-10,310)` a `(30,270)`; la secuencia interna queda con
+  `9` lineas y `10` arcos, de `(135,125)` a `(95,125)`. Esto replica la
+  particion topologica `12 + 20` observada en Maestro, aunque todavia no se
+  serializa a `TrajectoryPath`.
+- Para `Vaciado_027_E005`, el motor conserva las familias `38/76` y el puente
+  `114`, pero no genera `resolved_sequences`; mantiene
+  `topology_resolver`, `traversal_orderer` y `connector_planner` como etapas
+  pendientes. Esto evita tratar el caso de puente como si fuera un bucle
+  completo simple.
+- Para `Vaciado_027_E002`, el nuevo analisis muestra que no es un caso simple:
+  tiene un offset parcial (`100`) y una sola `TrajectoryPath` que mezcla
+  contorno exterior, enlaces y arcos de semilla. Queda como frontera separada
+  junto con los lobulos parciales.
+- Pruebas: `py -3 -m unittest tests.test_pgmx_vaciado` pasa con `16` tests.
+- Proximo paso de codigo: agregar un emisor 3D/PGMX para
+  `resolved_sequences` o, antes de serializar, construir una comparacion
+  directa entre `resolved_sequences` y las primitivas Maestro de
+  `trace_primitives.csv`.
+
+## Actualizacion 2026-05-27 - Pipeline Completo Para Bucles Completos
+
+- El pipeline del motor general queda cerrado para la regla resuelta de
+  bucles completos:
+  `PocketMillingSpec -> ContourParallelTracePlan -> primitive_sequences ->
+  resolved_sequences -> trajectory_sequences -> CurveSpec PGMX`.
+- `generate_contour_parallel_pocket_trace(...)` ahora llena
+  `trajectory_sequences` 3D cuando `resolved_sequences` esta completo. En el
+  caso soportado ya no quedan `pending_stages`, y `can_emit_trajectory`
+  devuelve `True`.
+- `tools.synthesize_pgmx` ahora consulta el motor general antes de caer en los
+  helpers historicos de semillas. Si el plan no tiene pendientes, usa sus
+  `trajectory_sequences` y serializa las primitivas `Line`/`Arc` resueltas a
+  `GeomCompositeCurve`, preservando arcos Maestro en lugar de degradarlos a
+  lineas.
+- Validacion de ruteo: el test de `Vaciado_027_E006` parchea
+  `_build_single_seed_base_loop_xyz_sequences` para fallar si se usa. La
+  sintesis sigue pasando, por lo que esa pieza ya fluye por el motor general.
+- Validacion efectiva contra Maestro para `Vaciado_027_E006`:
+  - longitudes `12 + 20`;
+  - XYZ exacto contra el manual;
+  - arcos equivalentes contra el manual;
+  - conteo de primitivas por trayectoria `((11, 0), (9, 10))`, igual al
+    manual.
+- La guarda historica de islas se actualizo: los casos no soportados siguen
+  lanzando `NotImplementedError`, pero `Vaciado_027` base ya se acepta como
+  caso resuelto por motor general.
+- Frontera actual despues de cerrar el pipeline:
+  - `E006` / bucles completos: cerrado hasta PGMX;
+  - `E005` / puente `114`: familia detectada, topologia pendiente;
+  - `E002` / parcial `100` y mezcla en una sola `TrajectoryPath`: topologia
+    pendiente;
+  - `E003/E004` / lobulos parciales densos: topologia pendiente.
+- Validacion corrida:
+  - `py -3 -m unittest tests.test_pgmx_vaciado` -> `16` tests OK;
+  - `py -3 -m tools.pgmx_vaciado.trace_primitives --output-dir S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_trace_primitives_2026_05_27`
+    -> `77` casos y `14448` primitivas.
+
+## Actualizacion 2026-05-27 - Paso 1 Cerrado: Puente Y Parcial Simple
+
+- Se cerro el primer bloque del plan de finalizacion del sintetizador:
+  `outside-to-inside` con una semilla rectangular balanceada, cubriendo:
+  - bucles completos sin puente (`Vaciado_027_E006`);
+  - puente simple sin lobulos parciales (`Vaciado_027_E005`, puente `114`);
+  - un offset parcial simple (`Vaciado_027_E002`, parcial `100`).
+- `trace_engine.py` ahora tiene resolvedores topologicos para:
+  - `single_seed_bridge_offsets`: conecta los bucles exteriores, inserta los
+    cuatro microarcos de puente y recorre los bucles internos partidos por el
+    angulo radial del puente;
+  - `single_seed_single_partial_offset`: mezcla el contorno exterior, los
+    lobulos parciales izquierdo/derecho y el bucle interno completo en una
+    sola `TrajectoryPath`.
+- Validacion directa contra Maestro:
+  - `Vaciado_027_E005`: `68` puntos, `51` lineas, `16` arcos, XYZ exacto;
+  - `Vaciado_027_E002`: `42` puntos, `30` lineas, `11` arcos, XYZ exacto;
+  - `Vaciado_027_E006`: sigue cerrado con `12 + 20` puntos.
+- La misma regla balanceada tambien cubre `Vaciado_022` base (`42` puntos)
+  con XYZ y conteo de primitivas iguales a Maestro.
+- Se agrego una guarda importante: las reglas de parcial/puente requieren
+  clearances balanceados izquierda/derecha y abajo/arriba. Esto mantiene
+  `Vaciado_028` bloqueado, porque la semilla de ruta esta descentrada y su
+  topologia no coincide con la regla balanceada.
+- Pruebas: `py -3 -m unittest tests.test_pgmx_vaciado` pasa con `17` tests.
+- Frontera siguiente: `Vaciado_027_E003/E004`, donde hay multiples lobulos
+  parciales densos. Despues de eso se puede declarar cerrada la serie
+  `Vaciado_027_E001..E007` sin depender de plantilla para explicar la traza.
+
+## Actualizacion 2026-05-27 - Paso 2 Iniciado: Lobulos Parciales Densos
+
+- Se empezo el siguiente bloque sobre `Vaciado_027_E003/E004`: el motor ya
+  extrae correctamente las familias densas, pero las mantiene pendientes hasta
+  cerrar el orden exacto de Maestro.
+- Oraculos fijados en pruebas:
+  - `Vaciado_027_E003`: `18` offsets completos hasta `85.68`, parciales
+    `90.44/95.2/99.96/104.72/109.48`, puente `114.24`, `515` puntos,
+    `375` lineas y `139` arcos.
+  - `Vaciado_027_E004`: `43` offsets completos hasta `86`, parciales
+    `88..112` en paso `2`, puente `114`, `1185` puntos, `852` lineas y
+    `332` arcos.
+- Se probo un port directo del helper historico multiloop como candidato, pero
+  no queda conectado al pipeline: reproduce muchas familias de arcos, aunque
+  arranca desde el ancla inferior y no desde los bucles exteriores iniciales
+  de Maestro; ademas omite conectores densos que aparecen en `E003/E004`.
+- Proximo subpaso: construir la gramatica `outside-to-inside` densa desde el
+  CSV de primitivas: prefijo de bucles rectangulares exteriores, barrido
+  izquierdo de parciales, microconectores/puente, bucles internos completos,
+  barrido derecho de parciales y cierre de puente.
+
+## Actualizacion 2026-05-27 - Paso 2 Cerrado: Serie 027 Generativa
+
+- Se cerro la gramatica densa `outside-to-inside` para una semilla rectangular
+  balanceada:
+  - `single_seed_dense_partial_offsets` cubre los densos sin puente
+    (`Vaciado_027_E001` y `E007`);
+  - `single_seed_dense_bridge_offsets` cubre los densos con puente
+    (`Vaciado_027_E003` y `E004`).
+- Los microconectores extra se calculan geometricamente desde el siguiente
+  radio posterior al maximo parcial o al puente, conservando la regla general
+  `paso_radial = diametro_herramienta * (1 - overlap)`.
+- Validacion directa contra Maestro:
+  - `E001`: `273` puntos, `200` lineas, `72` arcos, XYZ exacto;
+  - `E003`: `515` puntos, `375` lineas, `139` arcos, XYZ exacto;
+  - `E004`: `1185` puntos, `852` lineas, `332` arcos, XYZ exacto;
+  - `E007`: `273` puntos, `196` lineas, `76` arcos, XYZ exacto.
+- La serie `Vaciado_027_E001..E007` ya sintetiza sin hidratar la plantilla del
+  manual y con los helpers historicos de semilla parcheados para fallar si se
+  usan. Esto cubre:
+  - denso sin puente (`E001`, `E007`);
+  - parcial simple (`E002`);
+  - denso con puente (`E003`, `E004`);
+  - puente simple (`E005`);
+  - bucles completos separados (`E006`).
+- Proxima frontera practica: levantar la regla desde una semilla rectangular
+  balanceada unica hacia casos no balanceados o multiples islas
+  (`Vaciado_028..031`) sin perder esta suite como oraculo.
+
+## Actualizacion 2026-05-27 - Plan De Cierre Del Sintetizador De Vaciados
+
+La ejecucion del plan sigue incompleta. Este es el registro consolidado del
+plan formulado para cerrar el sintetizador generativo de `Vaciado`, lo ya
+ejecutado y lo que queda pendiente.
+
+Objetivo general:
+
+- Sintetizar trazas de vaciado `ClosedPocket + BottomAndSideRoughMilling +
+  ContourParallel` desde parametros y geometria, sin depender de hidratacion
+  de trayectorias Maestro como explicacion de la traza.
+- Mantener Maestro como oraculo de validacion para el corpus manual, pero
+  separar el contrato del vaciado del algoritmo puntual de recorrido.
+- Preservar el modelo para futuras variantes de vaciado: polilineas externas e
+  internas, punto inicial, profundidad, rebaba, herramienta, direccion de
+  recorrido, conexion entre huecos, direccion de vaciado, sobreposicion,
+  helicoidal y multipaso.
+
+Plan completo y estado:
+
+1. Auditar el contrato de parametros y geometria.
+   - Estado: ejecutado.
+   - Se confirmo en codigo y corpus que el contrato actual conserva contorno
+     exterior con punto inicial, profundidad, `AllowanceSide`, diametro de
+     herramienta, `RotationDirection`, `StrokeConnectionStrategy`,
+     `InsideToOutSide`, `Overlap`, `IsHelicStrategy`, `AllowMultiplePasses`,
+     `AxialCuttingDepth` y `AxialFinishCuttingDepth`.
+   - Tambien se separaron islas fisicas (`BossGeometryList`) de semillas de
+     ruteo (`BossList.GeometryID`), porque Maestro puede rutear contra una
+     semilla distinta de la geometria fisica.
+
+2. Revisar nuevamente el corpus manual y documentar el impacto de parametros.
+   - Estado: ejecutado.
+   - Se revisaron `77` archivos `Vaciado_*.pgmx` en
+     `S:\Maestro\Projects\ProdAction\PGMX\manual`; `76` adaptan como
+     `PocketMillingSpec` y `Vaciado_035` quedo como caso circular especial.
+   - Quedaron reportes en
+     `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_parameter_trace_contract_2026_05_27`.
+   - Se reafirmo la regla general
+     `paso_radial = diametro_herramienta * (1 - overlap)`.
+
+3. Extraer primitivas de traza Maestro para usar como oraculo geometrico.
+   - Estado: ejecutado.
+   - Se agrego `tools/pgmx_vaciado/trace_primitives.py`.
+   - La corrida sobre el corpus extrajo `14448` primitivas:
+     `10648` lineas y `3800` arcos.
+   - Los reportes quedaron en
+     `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_trace_primitives_2026_05_27`.
+
+4. Crear el esqueleto general del motor de traza.
+   - Estado: ejecutado.
+   - Se agrego `tools/pgmx_vaciado/trace_engine.py` con la API
+     `generate_contour_parallel_pocket_trace(spec, surface_z=...)`.
+   - El motor ya separa contrato de parametros, familias de offsets,
+     primitivas abstractas, topologia resuelta, trayectorias 3D y etapas
+     pendientes.
+
+5. Implementar primitivas abstractas 2D.
+   - Estado: ejecutado.
+   - `ContourParallelTracePlan` ya incluye `primitive_sequences`.
+   - El motor emite bucles rectangulares exteriores y bucles redondeados para
+     semillas rectangulares, preservando arcos como primitivas.
+
+6. Resolver la topologia de bucles completos y emitir PGMX.
+   - Estado: ejecutado.
+   - El pipeline
+     `PocketMillingSpec -> TracePlan -> primitive_sequences ->
+     resolved_sequences -> trajectory_sequences -> CurveSpec PGMX` ya cierra
+     para bucles completos.
+   - `Vaciado_027_E006` valida exacto contra Maestro con `12 + 20` puntos,
+     `20` lineas y `10` arcos, sin usar helpers historicos de semilla.
+
+7. Cerrar puente simple y parcial simple para una semilla rectangular
+   balanceada.
+   - Estado: ejecutado.
+   - `Vaciado_027_E005` valida exacto con puente `114`.
+   - `Vaciado_027_E002` valida exacto con parcial `100`.
+   - La misma regla cubre `Vaciado_022` base.
+   - La regla queda intencionalmente guardada por clearances balanceados para
+     no aceptar falsos positivos en semillas descentradas como `Vaciado_028`.
+
+8. Cerrar lobulos parciales densos para la serie `Vaciado_027`.
+   - Estado: ejecutado.
+   - `Vaciado_027_E001`, `E003`, `E004` y `E007` validan exactos.
+   - La serie `Vaciado_027_E001..E007` queda generativa para una semilla
+     rectangular balanceada, sin hidratacion de plantilla y con tests que
+     fallan si se usan helpers historicos.
+
+9. Generar la mayor tanda posible con el sintetizador actual.
+   - Estado: ejecutado como checkpoint, no como cierre final.
+   - Se generaron en
+     `S:\Maestro\Projects\ProdAction\PGMX\generated` los casos que el
+     sintetizador actual puede emitir y validar.
+   - Resultado: `48` archivos `Vaciado_*_synth.pgmx` validados exactos contra
+     Maestro.
+   - Dos intentos escritos pero no validados (`Vaciado_022_E002_synth.pgmx` y
+     `Vaciado_028_E002_synth.pgmx`) fueron eliminados para no dejar salidas
+     invalidas.
+   - Quedaron `26` casos no soportados y `1` caso saltado (`Vaciado_035`).
+
+10. Generalizar desde una semilla rectangular balanceada hacia semilla unica
+    descentrada.
+    - Estado: pendiente.
+    - Caso guia recomendado: `Vaciado_028_E002`, porque el motor actual puede
+      generar una forma cercana pero no valida la estructura Maestro.
+    - Necesidad tecnica: modelar clearances no balanceados, orden de recorrido
+      asimetrico y mezcla correcta entre contorno exterior, semilla y parciales.
+
+11. Generalizar hacia multiples islas/semillas.
+    - Estado: pendiente.
+    - Casos guia: serie `Vaciado_029` y serie `Vaciado_030`.
+    - Necesidad tecnica: resolver crecimiento simultaneo de offsets por isla,
+      detectar puentes cuando un offset supera medio claro entre islas y usar
+      puntos de interseccion de circulos/offsets como geometria de enlace.
+
+12. Cerrar la serie `Vaciado_031`.
+    - Estado: parcial.
+    - `Vaciado_031_E001..E007` ya se generan exactos en la tanda actual.
+    - `Vaciado_031.pgmx` base sigue no soportado y debe estudiarse como caso
+      separado antes de declararlo cerrado.
+
+13. Incorporar contornos no polilineales / circulares.
+    - Estado: pendiente.
+    - Caso guia: `Vaciado_035.pgmx`.
+    - Necesidad tecnica: decidir si el contrato acepta curvas/arcos de forma
+      nativa o si el adaptador debe convertir contornos curvos a polilineas
+      bajo una tolerancia explicita.
+    - Observacion actual: el flag helicoidal esta activo en `Vaciado_035`, pero
+      la trayectoria observada queda a Z constante; no alcanza para inferir una
+      regla helicoidal general.
+
+14. Endurecer validacion de lote y ergonomia de generacion.
+    - Estado: pendiente.
+    - Agregar un comando reproducible para regenerar todos los vaciados
+      soportados, comparar contra Maestro y no dejar archivos invalidos.
+    - El comando debe reportar generados exactos, mismatches, no soportados y
+      saltados, de modo que la carpeta `generated` sea un checkpoint confiable.
+
+Estado actual del frente:
+
+- Cerrado: generacion pura para vaciados rectangulares sin islas, multipaso
+  rectangular, y serie `Vaciado_027_E001..E007` con una semilla rectangular
+  balanceada.
+- Parcial: `Vaciado_031` porque sus variantes `E001..E007` validan, pero el
+  caso base no.
+- Pendiente: semillas descentradas (`Vaciado_028`), multiples islas
+  (`Vaciado_029`/`Vaciado_030`), contornos circulares (`Vaciado_035`) y un
+  comando productivo de generacion/validacion de lote.
