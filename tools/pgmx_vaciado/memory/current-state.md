@@ -1473,3 +1473,59 @@ Estado actual del frente:
 - Pendiente: semillas descentradas (`Vaciado_028`), multiples islas
   (`Vaciado_029`/`Vaciado_030`), contornos circulares (`Vaciado_035`) y un
   comando productivo de generacion/validacion de lote.
+
+## Actualizacion 2026-05-28 - Cierre De Vaciado_028 Descentrado
+
+La familia de semilla unica rectangular descentrada queda cerrada para el caso
+guia `Vaciado_028` y para sus variantes `E001..E007`, incluyendo la familia
+original con isla desplazada hacia la derecha y la familia sintetica/manual con
+isla desplazada hacia la izquierda.
+
+Correccion implementada:
+
+- El motor de traza ya no acepta el espejo geometrico simple como regla Maestro
+  para el caso derecho no balanceado.
+- Se agrego una maestroizacion especifica del recorrido no balanceado derecho:
+  reflexion vertical del caso izquierdo, reanclaje de prefijos completos al
+  punto inicial de la polilinea exterior Maestro, y ajuste de los arcos de
+  esquina para reproducir la segmentacion top-right/bottom-left observada.
+- El caso terminal parcial de `E006` se resuelve con una regla directa para la
+  topologia Maestro observada.
+
+Evidencia manual usada:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\manual\Vaciado_028_left_manual.pgmx`.
+- `S:\Maestro\Projects\ProdAction\PGMX\generated\Vaciado_028_E001_left_manual.pgmx`
+  hasta `Vaciado_028_E007_left_manual.pgmx`.
+
+Salidas regeneradas en `S:\Maestro\Projects\ProdAction\PGMX\generated`:
+
+- `Vaciado_028_left_synth.pgmx`.
+- `Vaciado_028_E001_left_synth.pgmx` hasta
+  `Vaciado_028_E007_left_synth.pgmx`.
+
+Validacion de geometria efectiva contra Maestro:
+
+- Base: longitud `(52,)`, primitivas `((33, 18),)`.
+- `E001`: longitud `(260,)`, primitivas `((185, 74),)`.
+- `E002`: longitud `(40,)`, primitivas `((28, 11),)`.
+- `E003`: longitud `(525,)`, primitivas `((381, 143),)`.
+- `E004`: longitud `(1238,)`, primitivas `((899, 338),)`.
+- `E005`: longitud `(63,)`, primitivas `((42, 20),)`.
+- `E006`: longitud `(52,)`, primitivas `((33, 18),)`.
+- `E007`: longitud `(285,)`, primitivas `((205, 79),)`.
+
+Validacion de repo:
+
+- `py -3 -m unittest tests.test_pgmx_vaciado`: `41` tests, `OK`.
+- `git diff --check`: sin errores; solo avisos de normalizacion `LF -> CRLF`
+  en `tests/test_pgmx_vaciado.py` y
+  `tools/pgmx_vaciado/trace_engine.py`.
+
+Estado actualizado del frente:
+
+- Cerrado: semilla unica rectangular descentrada `Vaciado_028` izquierda y
+  derecha, base y `E001..E007`.
+- Sigue pendiente: multiples islas (`Vaciado_029`/`Vaciado_030`), contornos
+  circulares/no polilineales (`Vaciado_035`), el caso base pendiente de
+  `Vaciado_031`, y el comando productivo de regeneracion/validacion de lote.

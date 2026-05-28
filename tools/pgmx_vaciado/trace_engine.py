@@ -55,6 +55,10 @@ class TraceClearance:
     def minimum_half(self) -> float:
         return min(self.horizontal_half, self.vertical_half)
 
+    @property
+    def maximum_side_half(self) -> float:
+        return max(self.left, self.right, self.bottom, self.top) / 2.0
+
 
 @dataclass(frozen=True)
 class TraceInternalContour:
@@ -298,7 +302,7 @@ def _internal_offset_family(
 ) -> TraceOffsetFamily:
     route_contour = internal.effective_route_contour
     clearance = _clearance_between(outer.bbox, route_contour.bbox)
-    limit = max(clearance.horizontal_half, clearance.vertical_half)
+    limit = clearance.maximum_side_half
     offsets, bridge = _offset_series(
         first_offset=parameters.effective_offset,
         radial_step=parameters.radial_step,
@@ -414,6 +418,9 @@ def _resolved_sequences(
         bridged = _resolved_single_seed_bridge_sequence(outer.bbox, family)
         if bridged is not None:
             return (bridged,)
+        large_partial = _resolved_single_seed_large_single_partial_sequence(outer.bbox, family)
+        if large_partial is not None:
+            return (large_partial,)
         partial = _resolved_single_seed_single_partial_sequence(outer.bbox, family)
         if partial is not None:
             return (partial,)
@@ -423,6 +430,33 @@ def _resolved_sequences(
         dense_partial = _resolved_single_seed_dense_partial_sequence(outer.bbox, family)
         if dense_partial is not None:
             return (dense_partial,)
+        unbalanced_early_dense = _resolved_single_seed_unbalanced_left_early_dense_sequence(outer.bbox, family)
+        if unbalanced_early_dense is not None:
+            return (unbalanced_early_dense,)
+        unbalanced_dense_partial = _resolved_single_seed_unbalanced_left_dense_partial_sequence(outer.bbox, family)
+        if unbalanced_dense_partial is not None:
+            return (unbalanced_dense_partial,)
+        extended_dense = _resolved_single_seed_unbalanced_left_extended_dense_sequence(outer.bbox, family)
+        if extended_dense is not None:
+            return (extended_dense,)
+        terminal_partial = _resolved_single_seed_unbalanced_left_terminal_partial_sequence(outer.bbox, family)
+        if terminal_partial is not None:
+            return (terminal_partial,)
+        repeated_partial = _resolved_single_seed_unbalanced_left_repeated_partial_sequence(outer.bbox, family)
+        if repeated_partial is not None:
+            return (repeated_partial,)
+        unbalanced_left_partial = _resolved_single_seed_unbalanced_left_partial_sequence(outer.bbox, family)
+        if unbalanced_left_partial is not None:
+            return (unbalanced_left_partial,)
+        unbalanced_right_terminal = _resolved_single_seed_unbalanced_right_terminal_partial_sequence(
+            outer.bbox,
+            family,
+        )
+        if unbalanced_right_terminal is not None:
+            return (unbalanced_right_terminal,)
+        unbalanced_right = _resolved_single_seed_unbalanced_right_mirrored_sequence(outer.bbox, family)
+        if unbalanced_right is not None:
+            return (unbalanced_right,)
         return ()
 
     offsets = tuple(float(offset) for offset in family.complete_offsets)
@@ -622,6 +656,116 @@ def _resolved_single_seed_single_partial_sequence(
     )
 
 
+def _resolved_single_seed_large_single_partial_sequence(
+    outer_bbox: BBox,
+    family: TraceOffsetFamily,
+) -> TraceResolvedSequence2D | None:
+    if family.bridge_offset is not None:
+        return None
+    if family.clearance is None or not _has_balanced_clearance(family.clearance):
+        return None
+    if len(family.complete_offsets) != 1 or len(family.partial_offsets) != 1:
+        return None
+
+    complete_offset = float(family.complete_offsets[0])
+    partial_offset = float(family.partial_offsets[0])
+    if not (
+        math.isclose(family.contour.width, partial_offset, abs_tol=1e-6)
+        and math.isclose(family.contour.height, partial_offset, abs_tol=1e-6)
+    ):
+        return None
+
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = family.contour.bbox
+    left_complete, right_complete, bottom_complete, top_complete = _inset_bbox(outer_bbox, complete_offset)
+    left_partial, right_partial, bottom_partial, top_partial = _inset_bbox(outer_bbox, partial_offset)
+
+    owner = "single_seed_large_single_partial_offset"
+    primitives: list[TracePrimitive2D] = []
+    points: list[Point2] = [_round_point((left_complete, top_complete))]
+
+    def point(x_value: float, y_value: float) -> Point2:
+        return _round_point((float(x_value), float(y_value)))
+
+    def add_line(end_point: Point2, *, offset: float = 0.0) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_line(owner, offset, start_point, end_point))
+        points.append(end_point)
+
+    def add_arc(end_point: Point2, center_point: Point2, radius: float) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_arc(owner, radius, start_point, end_point, center_point, radius))
+        points.append(end_point)
+
+    top_left_center = (seed_min_x, seed_max_y)
+    bottom_left_center = (seed_min_x, seed_min_y)
+    top_right_center = (seed_max_x, seed_max_y)
+    bottom_right_center = (seed_max_x, seed_min_y)
+    left_top_partial = _circle_y_intersection_x(top_left_center, partial_offset, top_partial, left_side=True)
+    left_bottom_partial = _circle_y_intersection_x(bottom_left_center, partial_offset, bottom_partial, left_side=True)
+    right_top_partial = _circle_y_intersection_x(top_right_center, partial_offset, top_partial, left_side=False)
+    right_bottom_partial = _circle_y_intersection_x(bottom_right_center, partial_offset, bottom_partial, left_side=False)
+    top_right_mid = (
+        seed_max_x + (complete_offset / math.sqrt(2.0)),
+        seed_max_y + (complete_offset / math.sqrt(2.0)),
+    )
+
+    add_line(point(left_complete, top_partial), offset=complete_offset)
+    add_line(point(left_complete, bottom_complete), offset=complete_offset)
+    add_line(point(left_partial, bottom_complete), offset=complete_offset)
+    add_line(point(right_complete, bottom_complete), offset=complete_offset)
+    add_line(point(right_complete, top_complete), offset=complete_offset)
+    add_line(point(right_partial, top_complete), offset=complete_offset)
+    add_line(point(left_complete, top_complete), offset=complete_offset)
+    add_line(point(left_complete, top_partial), offset=complete_offset)
+    add_line(point(left_partial, top_partial), offset=partial_offset)
+    add_line(point(left_partial, seed_max_y), offset=partial_offset)
+    add_arc(left_top_partial, top_left_center, partial_offset)
+    add_line(point(left_partial, top_partial), offset=partial_offset)
+    add_line(point(left_partial, seed_max_y), offset=partial_offset)
+    add_line(point(seed_min_x - complete_offset, seed_max_y), offset=complete_offset)
+    add_arc(point(seed_min_x, seed_max_y + complete_offset), top_left_center, complete_offset)
+    add_line(point(seed_max_x, seed_max_y + complete_offset), offset=complete_offset)
+    add_arc(top_right_mid, top_right_center, complete_offset)
+    add_arc(point(seed_max_x + complete_offset, seed_max_y), top_right_center, complete_offset)
+    add_line(point(seed_max_x + complete_offset, seed_min_y), offset=complete_offset)
+    add_arc(point(seed_max_x, seed_min_y - complete_offset), bottom_right_center, complete_offset)
+    add_line(point(seed_min_x, seed_min_y - complete_offset), offset=complete_offset)
+    add_arc(point(seed_min_x - complete_offset, seed_min_y), bottom_left_center, complete_offset)
+    add_line(point(seed_min_x - complete_offset, seed_max_y), offset=complete_offset)
+    add_line(point(left_partial, seed_max_y), offset=partial_offset)
+    add_line(point(left_partial, top_partial), offset=partial_offset)
+    add_line(point(left_complete, top_partial), offset=complete_offset)
+    add_line(point(left_complete, bottom_complete), offset=complete_offset)
+    add_line(point(left_partial, bottom_complete), offset=complete_offset)
+    add_line(point(left_partial, bottom_partial), offset=partial_offset)
+    add_line(left_bottom_partial, offset=partial_offset)
+    add_arc(point(left_partial, seed_min_y), bottom_left_center, partial_offset)
+    add_line(point(left_partial, seed_max_y), offset=partial_offset)
+    add_line(point(left_partial, bottom_partial), offset=partial_offset)
+    add_line(point(left_partial, bottom_complete), offset=complete_offset)
+    add_line(point(right_complete, bottom_complete), offset=complete_offset)
+    add_line(point(right_complete, top_complete), offset=complete_offset)
+    add_line(point(right_partial, top_complete), offset=complete_offset)
+    add_line(point(right_partial, top_partial), offset=partial_offset)
+    add_line(right_top_partial, offset=partial_offset)
+    add_arc(point(right_partial, seed_max_y), top_right_center, partial_offset)
+    add_line(point(right_partial, seed_min_y), offset=partial_offset)
+    add_arc(right_bottom_partial, bottom_right_center, partial_offset)
+    add_line(point(right_partial, bottom_partial), offset=partial_offset)
+    add_line(point(right_partial, top_partial), offset=partial_offset)
+
+    return TraceResolvedSequence2D(
+        name="single_seed_large_single_partial_offset",
+        primitives=tuple(primitives),
+    )
+
+
 def _resolved_single_seed_dense_bridge_sequence(
     outer_bbox: BBox,
     family: TraceOffsetFamily,
@@ -645,6 +789,7 @@ def _resolved_single_seed_dense_bridge_sequence(
     min_partial = partial_radii[0]
     max_partial = partial_radii[-1]
     max_complete = complete_radii[-1]
+    complete_loop_min_chord = 0.0 if math.isclose(family.contour.width, max_partial, abs_tol=1e-6) else 0.5
     extra_radii = _dense_bridge_extra_radii(
         outer_bbox,
         family.contour.bbox,
@@ -749,7 +894,7 @@ def _resolved_single_seed_dense_bridge_sequence(
         add_line(point(seed_max_x + radius, seed_min_y), offset=radius)
         add_arc(point(seed_max_x, seed_min_y - radius), (seed_max_x, seed_min_y), radius)
         add_line(point(seed_min_x, seed_min_y - radius), offset=radius)
-        add_arc_or_line(beta_point(radius), (seed_min_x, seed_min_y), radius, min_chord=0.5)
+        add_arc_or_line(beta_point(radius), (seed_min_x, seed_min_y), radius, min_chord=complete_loop_min_chord)
 
     for index, radius in enumerate(complete_radii[:-1]):
         next_radius = complete_radii[index + 1]
@@ -1247,6 +1392,1687 @@ def _resolved_single_seed_dense_partial_sequence(
         name="single_seed_dense_partial_offsets",
         primitives=tuple(primitives),
     )
+
+
+def _resolved_single_seed_unbalanced_left_partial_sequence(
+    outer_bbox: BBox,
+    family: TraceOffsetFamily,
+) -> TraceResolvedSequence2D | None:
+    if family.bridge_offset is not None:
+        return None
+    if family.clearance is None:
+        return None
+    if _has_balanced_clearance(family.clearance):
+        return None
+    if not math.isclose(family.clearance.bottom, family.clearance.top, abs_tol=1e-6):
+        return None
+    if family.clearance.left <= family.clearance.right + 1e-6:
+        return None
+    if len(family.complete_offsets) != 1 or len(family.partial_offsets) != 2:
+        return None
+
+    complete_offset = float(family.complete_offsets[0])
+    partial_radii = tuple(float(value) for value in family.partial_offsets)
+    if partial_radii[0] <= (family.clearance.right / 2.0) + 1e-6:
+        return None
+    if partial_radii[-1] > (family.clearance.left / 2.0) + 1e-6:
+        return None
+    radial_step = _inferred_offset_step((complete_offset, *partial_radii))
+    if radial_step is None:
+        return None
+
+    outer_min_x, outer_max_x, outer_min_y, outer_max_y = outer_bbox
+    seed_min_x, _seed_max_x, seed_min_y, seed_max_y = family.contour.bbox
+    min_partial = partial_radii[0]
+    max_partial = partial_radii[-1]
+
+    owner = "single_seed_unbalanced_left_partial_offsets"
+    primitives: list[TracePrimitive2D] = []
+    points: list[Point2] = [_round_point((outer_min_x + complete_offset, outer_max_y - complete_offset))]
+
+    def point(x_value: float, y_value: float) -> Point2:
+        return _round_point((float(x_value), float(y_value)))
+
+    def left(radius: float) -> float:
+        return outer_min_x + radius
+
+    def right(radius: float) -> float:
+        return outer_max_x - radius
+
+    def bottom(radius: float) -> float:
+        return outer_min_y + radius
+
+    def top(radius: float) -> float:
+        return outer_max_y - radius
+
+    def add_line(end_point: Point2, *, offset: float = 0.0) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_line(owner, offset, start_point, end_point))
+        points.append(end_point)
+
+    def add_arc(end_point: Point2, center_point: Point2, radius: float) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_arc(owner, radius, start_point, end_point, center_point, radius))
+        points.append(end_point)
+
+    def left_intersection_x(radius: float, center_y: float, y_value: float) -> float:
+        delta_y = center_y - y_value
+        return seed_min_x - math.sqrt(max(0.0, (radius * radius) - (delta_y * delta_y)))
+
+    def left_bottom_intersection(radius: float) -> Point2:
+        return point(left_intersection_x(radius, seed_min_y, bottom(radius)), bottom(radius))
+
+    def left_top_intersection(radius: float) -> Point2:
+        return point(left_intersection_x(radius, seed_max_y, top(radius)), top(radius))
+
+    add_line(point(left(complete_offset), bottom(complete_offset)), offset=complete_offset)
+    add_line(point(left(min_partial), bottom(complete_offset)), offset=min_partial)
+    add_line(point(right(complete_offset), bottom(complete_offset)), offset=complete_offset)
+    add_line(point(right(complete_offset), top(complete_offset)), offset=complete_offset)
+    add_line(point(left(complete_offset), top(complete_offset)), offset=complete_offset)
+    add_line(point(left(complete_offset), bottom(complete_offset)), offset=complete_offset)
+    add_line(point(left(min_partial), bottom(complete_offset)), offset=min_partial)
+    add_line(point(left(min_partial), bottom(min_partial)), offset=min_partial)
+    add_line(point(left(max_partial), bottom(min_partial)), offset=max_partial)
+
+    for index, radius in enumerate(partial_radii):
+        add_line(left_bottom_intersection(radius), offset=radius)
+        add_arc(point(seed_min_x - radius, seed_min_y), (seed_min_x, seed_min_y), radius)
+        add_line(point(seed_min_x - radius, seed_max_y), offset=radius)
+        add_arc(left_top_intersection(radius), (seed_min_x, seed_max_y), radius)
+        add_line(point(left(radius), top(radius)), offset=radius)
+        add_line(point(left(radius), bottom(radius)), offset=radius)
+        if index + 1 < len(partial_radii):
+            next_radius = partial_radii[index + 1]
+            add_line(point(left(next_radius), bottom(radius)), offset=next_radius)
+            add_line(point(left(next_radius), bottom(next_radius)), offset=next_radius)
+
+    add_line(point(left(max_partial), bottom(min_partial)), offset=min_partial)
+    add_line(left_bottom_intersection(min_partial), offset=min_partial)
+    split_point = _radial_projection(
+        (seed_min_x, seed_min_y),
+        left_bottom_intersection(min_partial),
+        min_partial,
+        complete_offset,
+    )
+    add_line(split_point, offset=complete_offset)
+    _append_bottom_left_split_rounded_loop(primitives, family.contour.bbox, complete_offset, split_point)
+
+    return TraceResolvedSequence2D(
+        name="single_seed_unbalanced_left_partial_offsets",
+        primitives=tuple(primitives),
+    )
+
+
+def _resolved_single_seed_unbalanced_left_terminal_partial_sequence(
+    outer_bbox: BBox,
+    family: TraceOffsetFamily,
+) -> TraceResolvedSequence2D | None:
+    if family.bridge_offset is not None:
+        return None
+    if family.clearance is None:
+        return None
+    if _has_balanced_clearance(family.clearance):
+        return None
+    if not math.isclose(family.clearance.bottom, family.clearance.top, abs_tol=1e-6):
+        return None
+    if family.clearance.left <= family.clearance.right + 1e-6:
+        return None
+    if len(family.complete_offsets) != 1 or len(family.partial_offsets) != 3:
+        return None
+
+    complete_offset = float(family.complete_offsets[0])
+    partial_radii = tuple(float(value) for value in family.partial_offsets)
+    terminal_gap = (family.clearance.left / 2.0) - partial_radii[-1]
+    if terminal_gap < -1e-6 or terminal_gap > 3.0 + 1e-6:
+        return None
+    radial_step = _inferred_offset_step((complete_offset, *partial_radii))
+    if radial_step is None:
+        return None
+
+    outer_min_x, outer_max_x, outer_min_y, outer_max_y = outer_bbox
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = family.contour.bbox
+    first_partial, middle_partial, terminal_partial = partial_radii
+
+    owner = "single_seed_unbalanced_left_terminal_partial_offsets"
+    primitives: list[TracePrimitive2D] = []
+    points: list[Point2] = [_round_point((outer_min_x + complete_offset, outer_max_y - complete_offset))]
+
+    def point(x_value: float, y_value: float) -> Point2:
+        return _round_point((float(x_value), float(y_value)))
+
+    def left(radius: float) -> float:
+        return outer_min_x + radius
+
+    def right(radius: float) -> float:
+        return outer_max_x - radius
+
+    def bottom(radius: float) -> float:
+        return outer_min_y + radius
+
+    def top(radius: float) -> float:
+        return outer_max_y - radius
+
+    def add_line(end_point: Point2, *, offset: float = 0.0) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_line(owner, offset, start_point, end_point))
+        points.append(end_point)
+
+    def add_arc(end_point: Point2, center_point: Point2, radius: float) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_arc(owner, radius, start_point, end_point, center_point, radius))
+        points.append(end_point)
+
+    def left_intersection_x(radius: float, center_y: float, y_value: float) -> float:
+        delta_y = center_y - y_value
+        return seed_min_x - math.sqrt(max(0.0, (radius * radius) - (delta_y * delta_y)))
+
+    def right_intersection_y(radius: float, center_x: float, x_value: float, *, upper: bool) -> float:
+        delta_x = center_x - x_value
+        delta_y = math.sqrt(max(0.0, (radius * radius) - (delta_x * delta_x)))
+        return (seed_min_y if not upper else seed_max_y) + (delta_y if upper else -delta_y)
+
+    def left_bottom_intersection(radius: float) -> Point2:
+        return point(left_intersection_x(radius, seed_min_y, bottom(radius)), bottom(radius))
+
+    def left_top_intersection(radius: float) -> Point2:
+        return point(left_intersection_x(radius, seed_max_y, top(radius)), top(radius))
+
+    def right_bottom_intersection(radius: float) -> Point2:
+        return point(right(radius), right_intersection_y(radius, seed_max_x, right(radius), upper=False))
+
+    def right_top_intersection(radius: float) -> Point2:
+        return point(right(radius), right_intersection_y(radius, seed_max_x, right(radius), upper=True))
+
+    add_line(point(left(complete_offset), bottom(complete_offset)), offset=complete_offset)
+    add_line(point(right(complete_offset), bottom(complete_offset)), offset=complete_offset)
+    add_line(point(right(complete_offset), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(complete_offset), top(complete_offset)), offset=complete_offset)
+    add_line(point(left(complete_offset), top(complete_offset)), offset=complete_offset)
+    add_line(point(left(complete_offset), bottom(complete_offset)), offset=complete_offset)
+    add_line(point(right(complete_offset), bottom(complete_offset)), offset=complete_offset)
+    add_line(point(right(complete_offset), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(first_partial), bottom(first_partial)), offset=first_partial)
+    add_line(right_bottom_intersection(first_partial), offset=first_partial)
+    add_arc(point(seed_max_x, seed_min_y - first_partial), (seed_max_x, seed_min_y), first_partial)
+    add_line(point(seed_min_x, seed_min_y - first_partial), offset=first_partial)
+    add_arc(point(seed_min_x - first_partial, seed_min_y), (seed_min_x, seed_min_y), first_partial)
+    add_line(point(seed_min_x - first_partial, seed_max_y), offset=first_partial)
+    add_arc(point(seed_min_x, seed_max_y + first_partial), (seed_min_x, seed_max_y), first_partial)
+    add_line(point(seed_max_x, seed_max_y + first_partial), offset=first_partial)
+    add_arc(right_top_intersection(first_partial), (seed_max_x, seed_max_y), first_partial)
+    add_line(point(right(first_partial), top(first_partial)), offset=first_partial)
+    add_line(point(left(first_partial), top(first_partial)), offset=first_partial)
+    add_line(point(left(first_partial), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(first_partial), bottom(first_partial)), offset=first_partial)
+    add_line(right_bottom_intersection(first_partial), offset=first_partial)
+
+    complete_split = _radial_projection(
+        (seed_max_x, seed_min_y),
+        right_bottom_intersection(first_partial),
+        first_partial,
+        complete_offset,
+    )
+    add_line(complete_split, offset=complete_offset)
+    _append_bottom_right_split_rounded_loop(primitives, family.contour.bbox, complete_offset, complete_split)
+    points[:] = [primitives[-1].end]
+
+    add_line(right_bottom_intersection(first_partial), offset=first_partial)
+    add_arc(point(seed_max_x, seed_min_y - first_partial), (seed_max_x, seed_min_y), first_partial)
+    add_line(point(seed_min_x, seed_min_y - first_partial), offset=first_partial)
+    add_arc(point(seed_min_x - first_partial, seed_min_y), (seed_min_x, seed_min_y), first_partial)
+
+    add_line(point(seed_min_x - middle_partial, seed_min_y), offset=middle_partial)
+    add_line(point(seed_min_x - middle_partial, seed_max_y), offset=middle_partial)
+    add_arc(left_top_intersection(middle_partial), (seed_min_x, seed_max_y), middle_partial)
+    add_line(point(left(middle_partial), top(middle_partial)), offset=middle_partial)
+    add_line(point(left(middle_partial), bottom(middle_partial)), offset=middle_partial)
+    add_line(left_bottom_intersection(middle_partial), offset=middle_partial)
+    add_arc(point(seed_min_x - middle_partial, seed_min_y), (seed_min_x, seed_min_y), middle_partial)
+
+    add_line(point(seed_min_x - terminal_partial, seed_min_y), offset=terminal_partial)
+    add_line(point(seed_min_x - terminal_partial, seed_max_y), offset=terminal_partial)
+    add_arc(left_top_intersection(terminal_partial), (seed_min_x, seed_max_y), terminal_partial)
+    add_line(point(left(terminal_partial), top(terminal_partial)), offset=terminal_partial)
+    add_line(point(left(terminal_partial), bottom(terminal_partial)), offset=terminal_partial)
+    add_line(left_bottom_intersection(terminal_partial), offset=terminal_partial)
+    add_arc(point(seed_min_x - terminal_partial, seed_min_y), (seed_min_x, seed_min_y), terminal_partial)
+
+    return TraceResolvedSequence2D(
+        name="single_seed_unbalanced_left_terminal_partial_offsets",
+        primitives=tuple(primitives),
+    )
+
+
+def _resolved_single_seed_unbalanced_left_early_dense_sequence(
+    outer_bbox: BBox,
+    family: TraceOffsetFamily,
+) -> TraceResolvedSequence2D | None:
+    if family.bridge_offset is not None:
+        return None
+    if family.clearance is None:
+        return None
+    if _has_balanced_clearance(family.clearance):
+        return None
+    if not math.isclose(family.clearance.bottom, family.clearance.top, abs_tol=1e-6):
+        return None
+    if family.clearance.left <= family.clearance.right + 1e-6:
+        return None
+    if len(family.complete_offsets) != 6 or len(family.partial_offsets) != 11:
+        return None
+
+    complete_radii = tuple(float(value) for value in family.complete_offsets)
+    partial_radii = tuple(float(value) for value in family.partial_offsets)
+    radial_step = _inferred_offset_step((*complete_radii, *partial_radii))
+    if radial_step is None:
+        return None
+
+    outer_min_x, outer_max_x, outer_min_y, outer_max_y = outer_bbox
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = family.contour.bbox
+    max_complete = complete_radii[-1]
+    first_partial, second_partial, third_partial = partial_radii[:3]
+
+    owner = "single_seed_unbalanced_left_early_dense_offsets"
+    primitives: list[TracePrimitive2D] = []
+    points: list[Point2] = [_round_point((outer_min_x + complete_radii[0], outer_max_y - complete_radii[0]))]
+
+    def point(x_value: float, y_value: float) -> Point2:
+        return _round_point((float(x_value), float(y_value)))
+
+    def left(radius: float) -> float:
+        return outer_min_x + radius
+
+    def right(radius: float) -> float:
+        return outer_max_x - radius
+
+    def bottom(radius: float) -> float:
+        return outer_min_y + radius
+
+    def top(radius: float) -> float:
+        return outer_max_y - radius
+
+    def add_line(end_point: Point2, *, offset: float = 0.0) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_line(owner, offset, start_point, end_point))
+        points.append(end_point)
+
+    def add_arc(end_point: Point2, center_point: Point2, radius: float) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_arc(owner, radius, start_point, end_point, center_point, radius))
+        points.append(end_point)
+
+    def left_intersection_x(radius: float, center_y: float, y_value: float) -> float:
+        delta_y = center_y - y_value
+        return seed_min_x - math.sqrt(max(0.0, (radius * radius) - (delta_y * delta_y)))
+
+    def right_intersection_x(radius: float, center_y: float, y_value: float) -> float:
+        delta_y = center_y - y_value
+        return seed_max_x + math.sqrt(max(0.0, (radius * radius) - (delta_y * delta_y)))
+
+    def right_intersection_y(radius: float, center_x: float, x_value: float, *, upper: bool) -> float:
+        delta_x = center_x - x_value
+        delta_y = math.sqrt(max(0.0, (radius * radius) - (delta_x * delta_x)))
+        return (seed_min_y if not upper else seed_max_y) + (delta_y if upper else -delta_y)
+
+    def left_bottom_intersection(radius: float) -> Point2:
+        return point(left_intersection_x(radius, seed_min_y, bottom(radius)), bottom(radius))
+
+    def left_top_intersection(radius: float) -> Point2:
+        return point(left_intersection_x(radius, seed_max_y, top(radius)), top(radius))
+
+    def right_bottom_intersection(radius: float) -> Point2:
+        return point(right(radius), right_intersection_y(radius, seed_max_x, right(radius), upper=False))
+
+    def right_top_intersection(radius: float) -> Point2:
+        return point(right(radius), right_intersection_y(radius, seed_max_x, right(radius), upper=True))
+
+    def radial_projection(center: Point2, source: Point2, source_radius: float, radius: float) -> Point2:
+        return _radial_projection(center, source, source_radius, radius)
+
+    def top_right_diagonal(radius: float) -> Point2:
+        diagonal = radius / math.sqrt(2.0)
+        return point(seed_max_x + diagonal, seed_max_y + diagonal)
+
+    def append_clipped_right_loop(radius: float) -> None:
+        add_arc(point(seed_max_x, seed_min_y - radius), (seed_max_x, seed_min_y), radius)
+        add_line(point(seed_min_x, seed_min_y - radius), offset=radius)
+        add_arc(point(seed_min_x - radius, seed_min_y), (seed_min_x, seed_min_y), radius)
+        add_line(point(seed_min_x - radius, seed_max_y), offset=radius)
+        add_arc(point(seed_min_x, seed_max_y + radius), (seed_min_x, seed_max_y), radius)
+        add_line(point(seed_max_x, seed_max_y + radius), offset=radius)
+        diagonal = top_right_diagonal(radius)
+        if right(radius) >= diagonal[0] - 1e-6 and top(radius) >= diagonal[1] - 1e-6:
+            add_arc(diagonal, (seed_max_x, seed_max_y), radius)
+        add_arc(right_top_intersection(radius), (seed_max_x, seed_max_y), radius)
+        add_line(point(right(radius), top(radius)), offset=radius)
+
+    for index, radius in enumerate(complete_radii[:-1]):
+        next_radius = complete_radii[index + 1]
+        add_line(point(left(radius), top(next_radius)), offset=radius)
+        add_line(point(left(radius), bottom(radius)), offset=radius)
+        add_line(point(right(radius), bottom(radius)), offset=radius)
+        add_line(point(right(radius), top(radius)), offset=radius)
+        add_line(point(left(radius), top(radius)), offset=radius)
+        add_line(point(left(radius), top(next_radius)), offset=radius)
+        add_line(point(left(next_radius), top(next_radius)), offset=next_radius)
+
+    add_line(point(left(max_complete), bottom(max_complete)), offset=max_complete)
+    add_line(point(right(max_complete), bottom(max_complete)), offset=max_complete)
+    add_line(point(right(max_complete), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(max_complete), top(max_complete)), offset=max_complete)
+    add_line(point(left(max_complete), top(max_complete)), offset=max_complete)
+    add_line(point(left(max_complete), bottom(max_complete)), offset=max_complete)
+    add_line(point(right(max_complete), bottom(max_complete)), offset=max_complete)
+    add_line(point(right(max_complete), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(first_partial), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(first_partial), bottom(second_partial)), offset=second_partial)
+    add_line(right_bottom_intersection(first_partial), offset=first_partial)
+    append_clipped_right_loop(first_partial)
+    add_line(point(left(first_partial), top(first_partial)), offset=first_partial)
+    add_line(point(left(first_partial), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(first_partial), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(first_partial), bottom(second_partial)), offset=second_partial)
+    add_line(point(right(second_partial), bottom(second_partial)), offset=second_partial)
+    add_line(point(right(second_partial), bottom(third_partial)), offset=third_partial)
+    add_line(right_bottom_intersection(second_partial), offset=second_partial)
+    append_clipped_right_loop(second_partial)
+    add_line(point(left(second_partial), top(second_partial)), offset=second_partial)
+    add_line(point(left(second_partial), bottom(second_partial)), offset=second_partial)
+    add_line(point(right(second_partial), bottom(second_partial)), offset=second_partial)
+    add_line(point(right(second_partial), bottom(third_partial)), offset=third_partial)
+    add_line(point(right(third_partial), bottom(third_partial)), offset=third_partial)
+    add_line(right_bottom_intersection(third_partial), offset=third_partial)
+    append_clipped_right_loop(third_partial)
+    add_line(point(left(third_partial), top(third_partial)), offset=third_partial)
+    add_line(point(left(third_partial), bottom(third_partial)), offset=third_partial)
+    add_line(point(left(partial_radii[3]), bottom(third_partial)), offset=partial_radii[3])
+    add_line(point(right(third_partial), bottom(third_partial)), offset=third_partial)
+    add_line(right_bottom_intersection(third_partial), offset=third_partial)
+    append_clipped_right_loop(third_partial)
+    add_line(point(left(third_partial), top(third_partial)), offset=third_partial)
+    add_line(point(left(third_partial), bottom(third_partial)), offset=third_partial)
+    add_line(point(left(partial_radii[3]), bottom(third_partial)), offset=partial_radii[3])
+    add_line(point(left(partial_radii[3]), bottom(partial_radii[3])), offset=partial_radii[3])
+    add_line(point(left(partial_radii[4]), bottom(partial_radii[3])), offset=partial_radii[4])
+
+    left_partials = partial_radii[3:]
+    for index, radius in enumerate(left_partials):
+        add_line(left_bottom_intersection(radius), offset=radius)
+        add_arc(point(seed_min_x - radius, seed_min_y), (seed_min_x, seed_min_y), radius)
+        add_line(point(seed_min_x - radius, seed_max_y), offset=radius)
+        add_arc(left_top_intersection(radius), (seed_min_x, seed_max_y), radius)
+        add_line(point(left(radius), top(radius)), offset=radius)
+        add_line(point(left(radius), bottom(radius)), offset=radius)
+        if index + 1 < len(left_partials):
+            next_radius = left_partials[index + 1]
+            after_next = left_partials[index + 2] if index + 2 < len(left_partials) else None
+            add_line(point(left(next_radius), bottom(radius)), offset=next_radius)
+            add_line(point(left(next_radius), bottom(next_radius)), offset=next_radius)
+            if after_next is not None:
+                add_line(point(left(after_next), bottom(next_radius)), offset=after_next)
+
+    current_radius = partial_radii[-1]
+    for previous_radius in reversed(partial_radii[3:-1]):
+        add_line(point(left(current_radius), bottom(previous_radius)), offset=previous_radius)
+        add_line(point(left(previous_radius), bottom(previous_radius)), offset=previous_radius)
+        current_radius = previous_radius
+    add_line(point(left(partial_radii[3]), bottom(third_partial)), offset=third_partial)
+    add_line(point(right(third_partial), bottom(third_partial)), offset=third_partial)
+    add_line(point(right(second_partial), bottom(third_partial)), offset=second_partial)
+    add_line(point(right(second_partial), bottom(second_partial)), offset=second_partial)
+    add_line(point(right(first_partial), bottom(second_partial)), offset=first_partial)
+    add_line(right_bottom_intersection(first_partial), offset=first_partial)
+
+    split_source = right_bottom_intersection(first_partial)
+    for radius in reversed(complete_radii):
+        split = radial_projection((seed_max_x, seed_min_y), split_source, first_partial, radius)
+        add_line(split, offset=radius)
+        _append_bottom_right_split_rounded_loop(primitives, family.contour.bbox, radius, split)
+        points[:] = [primitives[-1].end]
+
+    return TraceResolvedSequence2D(
+        name="single_seed_unbalanced_left_early_dense_offsets",
+        primitives=tuple(primitives),
+    )
+
+
+def _resolved_single_seed_unbalanced_left_dense_partial_sequence(
+    outer_bbox: BBox,
+    family: TraceOffsetFamily,
+) -> TraceResolvedSequence2D | None:
+    if family.bridge_offset is not None:
+        return None
+    if family.clearance is None:
+        return None
+    if _has_balanced_clearance(family.clearance):
+        return None
+    if not math.isclose(family.clearance.bottom, family.clearance.top, abs_tol=1e-6):
+        return None
+    if family.clearance.left <= family.clearance.right + 1e-6:
+        return None
+    if len(family.complete_offsets) != 7 or len(family.partial_offsets) != 11:
+        return None
+
+    complete_radii = tuple(float(value) for value in family.complete_offsets)
+    partial_radii = tuple(float(value) for value in family.partial_offsets)
+    radial_step = _inferred_offset_step((*complete_radii, *partial_radii))
+    if radial_step is None:
+        return None
+
+    outer_min_x, outer_max_x, outer_min_y, outer_max_y = outer_bbox
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = family.contour.bbox
+    max_complete = complete_radii[-1]
+    first_partial, second_partial, third_partial = partial_radii[:3]
+
+    owner = "single_seed_unbalanced_left_dense_partial_offsets"
+    primitives: list[TracePrimitive2D] = []
+    points: list[Point2] = [_round_point((outer_min_x + complete_radii[0], outer_max_y - complete_radii[0]))]
+
+    def point(x_value: float, y_value: float) -> Point2:
+        return _round_point((float(x_value), float(y_value)))
+
+    def left(radius: float) -> float:
+        return outer_min_x + radius
+
+    def right(radius: float) -> float:
+        return outer_max_x - radius
+
+    def bottom(radius: float) -> float:
+        return outer_min_y + radius
+
+    def top(radius: float) -> float:
+        return outer_max_y - radius
+
+    def add_line(end_point: Point2, *, offset: float = 0.0) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_line(owner, offset, start_point, end_point))
+        points.append(end_point)
+
+    def add_arc(end_point: Point2, center_point: Point2, radius: float) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_arc(owner, radius, start_point, end_point, center_point, radius))
+        points.append(end_point)
+
+    def left_intersection_x(radius: float, center_y: float, y_value: float) -> float:
+        delta_y = center_y - y_value
+        return seed_min_x - math.sqrt(max(0.0, (radius * radius) - (delta_y * delta_y)))
+
+    def right_intersection_x(radius: float, center_y: float, y_value: float) -> float:
+        delta_y = center_y - y_value
+        return seed_max_x + math.sqrt(max(0.0, (radius * radius) - (delta_y * delta_y)))
+
+    def right_intersection_y(radius: float, center_x: float, x_value: float, *, upper: bool) -> float:
+        delta_x = center_x - x_value
+        delta_y = math.sqrt(max(0.0, (radius * radius) - (delta_x * delta_x)))
+        return (seed_min_y if not upper else seed_max_y) + (delta_y if upper else -delta_y)
+
+    def left_bottom_intersection(radius: float) -> Point2:
+        return point(left_intersection_x(radius, seed_min_y, bottom(radius)), bottom(radius))
+
+    def left_top_intersection(radius: float) -> Point2:
+        return point(left_intersection_x(radius, seed_max_y, top(radius)), top(radius))
+
+    def right_bottom_intersection(radius: float) -> Point2:
+        return point(right(radius), right_intersection_y(radius, seed_max_x, right(radius), upper=False))
+
+    def right_top_intersection(radius: float) -> Point2:
+        return point(right(radius), right_intersection_y(radius, seed_max_x, right(radius), upper=True))
+
+    def right_bottom_y_intersection(radius: float) -> Point2:
+        return point(right_intersection_x(radius, seed_min_y, bottom(radius)), bottom(radius))
+
+    def right_top_y_intersection(radius: float) -> Point2:
+        return point(right_intersection_x(radius, seed_max_y, top(radius)), top(radius))
+
+    def radial_projection(center: Point2, source: Point2, source_radius: float, radius: float) -> Point2:
+        return _radial_projection(center, source, source_radius, radius)
+
+    def top_right_diagonal(radius: float) -> Point2:
+        diagonal = radius / math.sqrt(2.0)
+        return point(seed_max_x + diagonal, seed_max_y + diagonal)
+
+    def append_clipped_right_loop(radius: float) -> None:
+        add_arc(point(seed_max_x, seed_min_y - radius), (seed_max_x, seed_min_y), radius)
+        add_line(point(seed_min_x, seed_min_y - radius), offset=radius)
+        add_arc(point(seed_min_x - radius, seed_min_y), (seed_min_x, seed_min_y), radius)
+        add_line(point(seed_min_x - radius, seed_max_y), offset=radius)
+        add_arc(point(seed_min_x, seed_max_y + radius), (seed_min_x, seed_max_y), radius)
+        add_line(point(seed_max_x, seed_max_y + radius), offset=radius)
+        diagonal = top_right_diagonal(radius)
+        if right(radius) >= diagonal[0] - 1e-6 and top(radius) >= diagonal[1] - 1e-6:
+            add_arc(diagonal, (seed_max_x, seed_max_y), radius)
+        add_arc(right_top_intersection(radius), (seed_max_x, seed_max_y), radius)
+        add_line(point(right(radius), top(radius)), offset=radius)
+
+    for index, radius in enumerate(complete_radii[:-1]):
+        next_radius = complete_radii[index + 1]
+        add_line(point(left(radius), top(next_radius)), offset=radius)
+        add_line(point(left(radius), bottom(radius)), offset=radius)
+        add_line(point(right(radius), bottom(radius)), offset=radius)
+        add_line(point(right(radius), top(radius)), offset=radius)
+        add_line(point(left(radius), top(radius)), offset=radius)
+        add_line(point(left(radius), top(next_radius)), offset=radius)
+        add_line(point(left(next_radius), top(next_radius)), offset=next_radius)
+
+    add_line(point(left(max_complete), bottom(max_complete)), offset=max_complete)
+    add_line(point(right(max_complete), bottom(max_complete)), offset=max_complete)
+    add_line(point(right(max_complete), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(max_complete), top(max_complete)), offset=max_complete)
+    add_line(point(left(max_complete), top(max_complete)), offset=max_complete)
+    add_line(point(left(max_complete), bottom(max_complete)), offset=max_complete)
+    add_line(point(right(max_complete), bottom(max_complete)), offset=max_complete)
+    add_line(point(right(max_complete), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(first_partial), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(first_partial), bottom(second_partial)), offset=second_partial)
+    add_line(right_bottom_intersection(first_partial), offset=first_partial)
+    append_clipped_right_loop(first_partial)
+    add_line(point(left(first_partial), top(first_partial)), offset=first_partial)
+    add_line(point(left(first_partial), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(first_partial), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(first_partial), bottom(second_partial)), offset=second_partial)
+    add_line(point(right(second_partial), bottom(second_partial)), offset=second_partial)
+    add_line(point(right(second_partial), bottom(third_partial)), offset=third_partial)
+    add_line(right_bottom_intersection(second_partial), offset=second_partial)
+    append_clipped_right_loop(second_partial)
+    add_line(point(right(third_partial), top(second_partial)), offset=third_partial)
+    add_line(point(left(second_partial), top(second_partial)), offset=second_partial)
+    add_line(point(left(second_partial), bottom(second_partial)), offset=second_partial)
+    add_line(point(left(third_partial), bottom(second_partial)), offset=third_partial)
+    add_line(point(right(second_partial), bottom(second_partial)), offset=second_partial)
+    add_line(point(right(second_partial), bottom(third_partial)), offset=third_partial)
+    add_line(point(right(third_partial), bottom(third_partial)), offset=third_partial)
+    add_line(right_bottom_intersection(third_partial), offset=third_partial)
+    add_arc(right_bottom_y_intersection(third_partial), (seed_max_x, seed_min_y), third_partial)
+    add_line(point(right(third_partial), bottom(third_partial)), offset=third_partial)
+    add_line(point(right(second_partial), bottom(third_partial)), offset=second_partial)
+    add_line(right_bottom_intersection(second_partial), offset=second_partial)
+    append_clipped_right_loop(second_partial)
+    add_line(point(right(third_partial), top(second_partial)), offset=third_partial)
+    add_line(point(right(third_partial), top(third_partial)), offset=third_partial)
+    add_line(right_top_y_intersection(third_partial), offset=third_partial)
+    add_arc(right_top_intersection(third_partial), (seed_max_x, seed_max_y), third_partial)
+    add_line(point(right(third_partial), top(third_partial)), offset=third_partial)
+    add_line(point(right(third_partial), top(second_partial)), offset=third_partial)
+    add_line(point(left(second_partial), top(second_partial)), offset=second_partial)
+    add_line(point(left(second_partial), bottom(second_partial)), offset=second_partial)
+    add_line(point(left(third_partial), bottom(second_partial)), offset=third_partial)
+    add_line(point(left(third_partial), bottom(third_partial)), offset=third_partial)
+
+    left_partials = partial_radii[2:]
+    for index, radius in enumerate(left_partials):
+        if index == 0:
+            add_line(point(left(partial_radii[3]), bottom(radius)), offset=partial_radii[3])
+        add_line(left_bottom_intersection(radius), offset=radius)
+        add_arc(point(seed_min_x - radius, seed_min_y), (seed_min_x, seed_min_y), radius)
+        add_line(point(seed_min_x - radius, seed_max_y), offset=radius)
+        add_arc(left_top_intersection(radius), (seed_min_x, seed_max_y), radius)
+        add_line(point(left(radius), top(radius)), offset=radius)
+        add_line(point(left(radius), bottom(radius)), offset=radius)
+        if index + 1 < len(left_partials):
+            next_radius = left_partials[index + 1]
+            after_next = left_partials[index + 2] if index + 2 < len(left_partials) else None
+            add_line(point(left(next_radius), bottom(radius)), offset=next_radius)
+            add_line(point(left(next_radius), bottom(next_radius)), offset=next_radius)
+            if after_next is not None:
+                add_line(point(left(after_next), bottom(next_radius)), offset=after_next)
+
+    current_radius = partial_radii[-1]
+    for previous_radius in reversed(partial_radii[2:-1]):
+        add_line(point(left(current_radius), bottom(previous_radius)), offset=previous_radius)
+        add_line(point(left(previous_radius), bottom(previous_radius)), offset=previous_radius)
+        current_radius = previous_radius
+    add_line(point(left(third_partial), bottom(second_partial)), offset=second_partial)
+    add_line(point(right(second_partial), bottom(second_partial)), offset=second_partial)
+    add_line(point(right(first_partial), bottom(second_partial)), offset=first_partial)
+    add_line(right_bottom_intersection(first_partial), offset=first_partial)
+
+    split_source = right_bottom_intersection(first_partial)
+    for radius in reversed(complete_radii):
+        split = radial_projection((seed_max_x, seed_min_y), split_source, first_partial, radius)
+        add_line(split, offset=radius)
+        _append_bottom_right_split_rounded_loop(primitives, family.contour.bbox, radius, split)
+        points[:] = [primitives[-1].end]
+
+    return TraceResolvedSequence2D(
+        name="single_seed_unbalanced_left_dense_partial_offsets",
+        primitives=tuple(primitives),
+    )
+
+
+def _resolved_single_seed_unbalanced_left_extended_dense_sequence(
+    outer_bbox: BBox,
+    family: TraceOffsetFamily,
+) -> TraceResolvedSequence2D | None:
+    if family.clearance is None:
+        return None
+    if _has_balanced_clearance(family.clearance):
+        return None
+    if not math.isclose(family.clearance.bottom, family.clearance.top, abs_tol=1e-6):
+        return None
+    if family.clearance.left <= family.clearance.right + 1e-6:
+        return None
+    if len(family.complete_offsets) < 13 or len(family.partial_offsets) < 21:
+        return None
+
+    complete_radii = tuple(float(value) for value in family.complete_offsets)
+    partial_radii = tuple(float(value) for value in family.partial_offsets)
+    radial_step = _inferred_offset_step((*complete_radii, *partial_radii))
+    if radial_step is None:
+        return None
+    if family.bridge_offset is not None and not math.isclose(
+        float(family.bridge_offset) - partial_radii[-1],
+        radial_step,
+        abs_tol=1e-6,
+    ):
+        return None
+
+    outer_min_x, outer_max_x, outer_min_y, outer_max_y = outer_bbox
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = family.contour.bbox
+    max_complete = complete_radii[-1]
+
+    owner = "single_seed_unbalanced_left_extended_dense_offsets"
+    primitives: list[TracePrimitive2D] = []
+    points: list[Point2] = [_round_point((outer_min_x + complete_radii[0], outer_max_y - complete_radii[0]))]
+
+    def point(x_value: float, y_value: float) -> Point2:
+        return _round_point((float(x_value), float(y_value)))
+
+    def left(radius: float) -> float:
+        return outer_min_x + radius
+
+    def right(radius: float) -> float:
+        return outer_max_x - radius
+
+    def bottom(radius: float) -> float:
+        return outer_min_y + radius
+
+    def top(radius: float) -> float:
+        return outer_max_y - radius
+
+    def add_line(end_point: Point2, *, offset: float = 0.0) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_line(owner, offset, start_point, end_point))
+        points.append(end_point)
+
+    def add_arc(end_point: Point2, center_point: Point2, radius: float) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_arc(owner, radius, start_point, end_point, center_point, radius))
+        points.append(end_point)
+
+    def add_arc_or_line(
+        end_point: Point2,
+        center_point: Point2,
+        radius: float,
+        *,
+        min_chord: float = 3.0,
+    ) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if math.hypot(end_point[0] - start_point[0], end_point[1] - start_point[1]) <= min_chord:
+            add_line(end_point, offset=radius)
+        else:
+            add_arc(end_point, center_point, radius)
+
+    def left_intersection_x(radius: float, center_y: float, y_value: float) -> float:
+        delta_y = center_y - y_value
+        return seed_min_x - math.sqrt(max(0.0, (radius * radius) - (delta_y * delta_y)))
+
+    def right_intersection_x(radius: float, center_y: float, y_value: float) -> float:
+        delta_y = center_y - y_value
+        return seed_max_x + math.sqrt(max(0.0, (radius * radius) - (delta_y * delta_y)))
+
+    def right_intersection_y(radius: float, center_x: float, x_value: float, *, upper: bool) -> float:
+        delta_x = center_x - x_value
+        delta_y = math.sqrt(max(0.0, (radius * radius) - (delta_x * delta_x)))
+        return (seed_min_y if not upper else seed_max_y) + (delta_y if upper else -delta_y)
+
+    def left_bottom_intersection(radius: float) -> Point2:
+        return point(left_intersection_x(radius, seed_min_y, bottom(radius)), bottom(radius))
+
+    def left_top_intersection(radius: float) -> Point2:
+        return point(left_intersection_x(radius, seed_max_y, top(radius)), top(radius))
+
+    def right_bottom_intersection(radius: float) -> Point2:
+        return point(right(radius), right_intersection_y(radius, seed_max_x, right(radius), upper=False))
+
+    def right_top_intersection(radius: float) -> Point2:
+        return point(right(radius), right_intersection_y(radius, seed_max_x, right(radius), upper=True))
+
+    def right_bottom_y_intersection(radius: float) -> Point2:
+        return point(right_intersection_x(radius, seed_min_y, bottom(radius)), bottom(radius))
+
+    def right_top_y_intersection(radius: float) -> Point2:
+        return point(right_intersection_x(radius, seed_max_y, top(radius)), top(radius))
+
+    def bottom_x_intersection(radius: float) -> float:
+        return right_intersection_x(radius, seed_min_y, bottom(radius))
+
+    def vertical_gap(radius: float) -> float:
+        return right_intersection_y(radius, seed_max_x, right(radius), upper=False) - bottom(radius)
+
+    def top_right_diagonal(radius: float) -> Point2:
+        diagonal = radius / math.sqrt(2.0)
+        return point(seed_max_x + diagonal, seed_max_y + diagonal)
+
+    def append_clipped_right_loop(radius: float) -> None:
+        add_arc(point(seed_max_x, seed_min_y - radius), (seed_max_x, seed_min_y), radius)
+        add_line(point(seed_min_x, seed_min_y - radius), offset=radius)
+        add_arc(point(seed_min_x - radius, seed_min_y), (seed_min_x, seed_min_y), radius)
+        add_line(point(seed_min_x - radius, seed_max_y), offset=radius)
+        add_arc(point(seed_min_x, seed_max_y + radius), (seed_min_x, seed_max_y), radius)
+        add_line(point(seed_max_x, seed_max_y + radius), offset=radius)
+        diagonal = top_right_diagonal(radius)
+        if right(radius) >= diagonal[0] - 1e-6 and top(radius) >= diagonal[1] - 1e-6:
+            add_arc(diagonal, (seed_max_x, seed_max_y), radius)
+        add_arc(right_top_intersection(radius), (seed_max_x, seed_max_y), radius)
+        add_line(point(right(radius), top(radius)), offset=radius)
+
+    transition_index = None
+    for index, radius in enumerate(partial_radii):
+        if bottom_x_intersection(radius) > seed_max_x + 1e-6:
+            transition_index = index
+            break
+    if transition_index is None or transition_index < 1 or transition_index + 1 >= len(partial_radii):
+        return None
+
+    sliver_radii: list[float] = []
+    for radius in partial_radii[transition_index:]:
+        if vertical_gap(radius) <= 1e-6:
+            break
+        sliver_radii.append(radius)
+    if not sliver_radii:
+        return None
+
+    for index, radius in enumerate(complete_radii[:-1]):
+        next_radius = complete_radii[index + 1]
+        add_line(point(left(radius), top(next_radius)), offset=radius)
+        add_line(point(left(radius), bottom(radius)), offset=radius)
+        add_line(point(right(radius), bottom(radius)), offset=radius)
+        add_line(point(right(radius), top(radius)), offset=radius)
+        add_line(point(left(radius), top(radius)), offset=radius)
+        add_line(point(left(radius), top(next_radius)), offset=radius)
+        add_line(point(left(next_radius), top(next_radius)), offset=next_radius)
+
+    first_partial = partial_radii[0]
+    add_line(point(left(max_complete), bottom(max_complete)), offset=max_complete)
+    add_line(point(right(max_complete), bottom(max_complete)), offset=max_complete)
+    add_line(point(right(max_complete), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(max_complete), top(max_complete)), offset=max_complete)
+    add_line(point(left(max_complete), top(max_complete)), offset=max_complete)
+    add_line(point(left(max_complete), bottom(max_complete)), offset=max_complete)
+    add_line(point(right(max_complete), bottom(max_complete)), offset=max_complete)
+    add_line(point(right(max_complete), bottom(first_partial)), offset=first_partial)
+
+    for index, radius in enumerate(partial_radii[:transition_index]):
+        next_radius = partial_radii[index + 1]
+        add_line(point(right(radius), bottom(radius)), offset=radius)
+        add_line(point(right(radius), bottom(next_radius)), offset=next_radius)
+        add_line(right_bottom_intersection(radius), offset=radius)
+        append_clipped_right_loop(radius)
+        if index + 1 < transition_index:
+            add_line(point(left(radius), top(radius)), offset=radius)
+            add_line(point(left(radius), bottom(radius)), offset=radius)
+            add_line(point(right(radius), bottom(radius)), offset=radius)
+            add_line(point(right(radius), bottom(next_radius)), offset=next_radius)
+
+    previous_right_radius = partial_radii[transition_index - 1]
+    left_start_radius = partial_radii[transition_index]
+    after_left_start_radius = partial_radii[transition_index + 1]
+
+    add_line(point(right(left_start_radius), top(previous_right_radius)), offset=left_start_radius)
+    add_line(point(left(previous_right_radius), top(previous_right_radius)), offset=previous_right_radius)
+    add_line(point(left(previous_right_radius), bottom(previous_right_radius)), offset=previous_right_radius)
+    add_line(point(left(left_start_radius), bottom(previous_right_radius)), offset=left_start_radius)
+    add_line(point(right(previous_right_radius), bottom(previous_right_radius)), offset=previous_right_radius)
+    add_line(point(right(previous_right_radius), bottom(left_start_radius)), offset=left_start_radius)
+
+    for index, radius in enumerate(sliver_radii):
+        next_sliver = sliver_radii[index + 1] if index + 1 < len(sliver_radii) else None
+        add_line(point(right(radius), bottom(radius)), offset=radius)
+        if next_sliver is not None:
+            add_line(point(right(radius), bottom(next_sliver)), offset=next_sliver)
+        add_line(right_bottom_intersection(radius), offset=radius)
+        add_arc_or_line(right_bottom_y_intersection(radius), (seed_max_x, seed_min_y), radius)
+        add_line(point(right(radius), bottom(radius)), offset=radius)
+        if next_sliver is not None:
+            add_line(point(right(radius), bottom(next_sliver)), offset=next_sliver)
+
+    current_sliver = sliver_radii[-1]
+    for radius in reversed(sliver_radii[:-1]):
+        add_line(point(right(radius), bottom(current_sliver)), offset=radius)
+        add_line(point(right(radius), bottom(radius)), offset=radius)
+        current_sliver = radius
+
+    add_line(point(right(previous_right_radius), bottom(sliver_radii[0])), offset=previous_right_radius)
+    add_line(right_bottom_intersection(previous_right_radius), offset=previous_right_radius)
+    append_clipped_right_loop(previous_right_radius)
+
+    add_line(point(right(left_start_radius), top(previous_right_radius)), offset=left_start_radius)
+    if len(sliver_radii) > 1:
+        add_line(point(right(left_start_radius), top(left_start_radius)), offset=left_start_radius)
+        for index, radius in enumerate(sliver_radii):
+            next_sliver = sliver_radii[index + 1] if index + 1 < len(sliver_radii) else None
+            if next_sliver is not None:
+                add_line(point(right(next_sliver), top(radius)), offset=next_sliver)
+            add_line(right_top_y_intersection(radius), offset=radius)
+            add_arc_or_line(right_top_intersection(radius), (seed_max_x, seed_max_y), radius)
+            add_line(point(right(radius), top(radius)), offset=radius)
+            if next_sliver is not None:
+                add_line(point(right(next_sliver), top(radius)), offset=next_sliver)
+                add_line(point(right(next_sliver), top(next_sliver)), offset=next_sliver)
+
+        current_sliver = sliver_radii[-1]
+        for radius in reversed(sliver_radii[:-1]):
+            add_line(point(right(current_sliver), top(radius)), offset=current_sliver)
+            add_line(point(right(radius), top(radius)), offset=radius)
+            current_sliver = radius
+        add_line(point(right(left_start_radius), top(previous_right_radius)), offset=left_start_radius)
+    else:
+        add_line(point(right(left_start_radius), top(left_start_radius)), offset=left_start_radius)
+        add_line(right_top_y_intersection(left_start_radius), offset=left_start_radius)
+        add_arc_or_line(
+            right_top_intersection(left_start_radius),
+            (seed_max_x, seed_max_y),
+            left_start_radius,
+        )
+        add_line(point(right(left_start_radius), top(left_start_radius)), offset=left_start_radius)
+        add_line(point(right(left_start_radius), top(previous_right_radius)), offset=left_start_radius)
+
+    add_line(point(left(previous_right_radius), top(previous_right_radius)), offset=previous_right_radius)
+    add_line(point(left(previous_right_radius), bottom(previous_right_radius)), offset=previous_right_radius)
+    add_line(point(left(left_start_radius), bottom(previous_right_radius)), offset=left_start_radius)
+    add_line(point(left(left_start_radius), bottom(left_start_radius)), offset=left_start_radius)
+    add_line(point(left(after_left_start_radius), bottom(left_start_radius)), offset=after_left_start_radius)
+
+    left_partials = partial_radii[transition_index:]
+    for index, radius in enumerate(left_partials):
+        add_line(left_bottom_intersection(radius), offset=radius)
+        add_arc(point(seed_min_x - radius, seed_min_y), (seed_min_x, seed_min_y), radius)
+        add_line(point(seed_min_x - radius, seed_max_y), offset=radius)
+        add_arc(left_top_intersection(radius), (seed_min_x, seed_max_y), radius)
+        add_line(point(left(radius), top(radius)), offset=radius)
+        add_line(point(left(radius), bottom(radius)), offset=radius)
+        if index + 1 < len(left_partials):
+            next_radius = left_partials[index + 1]
+            after_next = left_partials[index + 2] if index + 2 < len(left_partials) else None
+            add_line(point(left(next_radius), bottom(radius)), offset=next_radius)
+            add_line(point(left(next_radius), bottom(next_radius)), offset=next_radius)
+            if after_next is not None:
+                add_line(point(left(after_next), bottom(next_radius)), offset=after_next)
+
+    current_radius = left_partials[-1]
+    for previous_radius in reversed(left_partials[:-1]):
+        add_line(point(left(current_radius), bottom(previous_radius)), offset=previous_radius)
+        add_line(point(left(previous_radius), bottom(previous_radius)), offset=previous_radius)
+        current_radius = previous_radius
+
+    add_line(point(left(left_partials[0]), bottom(previous_right_radius)), offset=previous_right_radius)
+    add_line(point(right(previous_right_radius), bottom(previous_right_radius)), offset=previous_right_radius)
+    for index in range(transition_index - 2, -1, -1):
+        radius = partial_radii[index]
+        next_radius = partial_radii[index + 1]
+        add_line(point(right(radius), bottom(next_radius)), offset=radius)
+        if index > 0:
+            add_line(point(right(radius), bottom(radius)), offset=radius)
+
+    add_line(right_bottom_intersection(first_partial), offset=first_partial)
+
+    split_source = right_bottom_intersection(first_partial)
+    for radius in reversed(complete_radii):
+        split = _radial_projection((seed_max_x, seed_min_y), split_source, first_partial, radius)
+        add_line(split, offset=radius)
+        _append_bottom_right_split_rounded_loop(primitives, family.contour.bbox, radius, split)
+        points[:] = [primitives[-1].end]
+
+    return TraceResolvedSequence2D(
+        name="single_seed_unbalanced_left_extended_dense_offsets",
+        primitives=tuple(primitives),
+    )
+
+
+def _resolved_single_seed_unbalanced_left_repeated_partial_sequence(
+    outer_bbox: BBox,
+    family: TraceOffsetFamily,
+) -> TraceResolvedSequence2D | None:
+    if family.bridge_offset is not None:
+        return None
+    if family.clearance is None:
+        return None
+    if _has_balanced_clearance(family.clearance):
+        return None
+    if not math.isclose(family.clearance.bottom, family.clearance.top, abs_tol=1e-6):
+        return None
+    if family.clearance.left <= family.clearance.right + 1e-6:
+        return None
+    if len(family.complete_offsets) != 1 or len(family.partial_offsets) != 3:
+        return None
+
+    complete_offset = float(family.complete_offsets[0])
+    partial_radii = tuple(float(value) for value in family.partial_offsets)
+    terminal_gap = (family.clearance.left / 2.0) - partial_radii[-1]
+    if terminal_gap <= 3.0 + 1e-6:
+        return None
+    radial_step = _inferred_offset_step((complete_offset, *partial_radii))
+    if radial_step is None:
+        return None
+
+    outer_min_x, outer_max_x, outer_min_y, outer_max_y = outer_bbox
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = family.contour.bbox
+    first_partial, middle_partial, terminal_partial = partial_radii
+
+    owner = "single_seed_unbalanced_left_repeated_partial_offsets"
+    primitives: list[TracePrimitive2D] = []
+    points: list[Point2] = [_round_point((outer_min_x + complete_offset, outer_max_y - complete_offset))]
+
+    def point(x_value: float, y_value: float) -> Point2:
+        return _round_point((float(x_value), float(y_value)))
+
+    def left(radius: float) -> float:
+        return outer_min_x + radius
+
+    def right(radius: float) -> float:
+        return outer_max_x - radius
+
+    def bottom(radius: float) -> float:
+        return outer_min_y + radius
+
+    def top(radius: float) -> float:
+        return outer_max_y - radius
+
+    def add_line(end_point: Point2, *, offset: float = 0.0) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_line(owner, offset, start_point, end_point))
+        points.append(end_point)
+
+    def add_arc(end_point: Point2, center_point: Point2, radius: float) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_arc(owner, radius, start_point, end_point, center_point, radius))
+        points.append(end_point)
+
+    def left_intersection_x(radius: float, center_y: float, y_value: float) -> float:
+        delta_y = center_y - y_value
+        return seed_min_x - math.sqrt(max(0.0, (radius * radius) - (delta_y * delta_y)))
+
+    def right_intersection_y(radius: float, center_x: float, x_value: float, *, upper: bool) -> float:
+        delta_x = center_x - x_value
+        delta_y = math.sqrt(max(0.0, (radius * radius) - (delta_x * delta_x)))
+        return (seed_min_y if not upper else seed_max_y) + (delta_y if upper else -delta_y)
+
+    def left_bottom_intersection(radius: float) -> Point2:
+        return point(left_intersection_x(radius, seed_min_y, bottom(radius)), bottom(radius))
+
+    def left_top_intersection(radius: float) -> Point2:
+        return point(left_intersection_x(radius, seed_max_y, top(radius)), top(radius))
+
+    def right_bottom_intersection(radius: float) -> Point2:
+        return point(right(radius), right_intersection_y(radius, seed_max_x, right(radius), upper=False))
+
+    def right_top_intersection(radius: float) -> Point2:
+        return point(right(radius), right_intersection_y(radius, seed_max_x, right(radius), upper=True))
+
+    def append_first_partial_loop() -> None:
+        add_arc(point(seed_max_x, seed_min_y - first_partial), (seed_max_x, seed_min_y), first_partial)
+        add_line(point(seed_min_x, seed_min_y - first_partial), offset=first_partial)
+        add_arc(point(seed_min_x - first_partial, seed_min_y), (seed_min_x, seed_min_y), first_partial)
+        add_line(point(seed_min_x - first_partial, seed_max_y), offset=first_partial)
+        add_arc(point(seed_min_x, seed_max_y + first_partial), (seed_min_x, seed_max_y), first_partial)
+        add_line(point(seed_max_x, seed_max_y + first_partial), offset=first_partial)
+        add_arc(right_top_intersection(first_partial), (seed_max_x, seed_max_y), first_partial)
+        add_line(point(right(first_partial), top(first_partial)), offset=first_partial)
+        add_line(point(left(first_partial), top(first_partial)), offset=first_partial)
+        add_line(point(left(first_partial), bottom(first_partial)), offset=first_partial)
+        add_line(point(left(middle_partial), bottom(first_partial)), offset=middle_partial)
+
+    add_line(point(left(complete_offset), bottom(complete_offset)), offset=complete_offset)
+    add_line(point(right(complete_offset), bottom(complete_offset)), offset=complete_offset)
+    add_line(point(right(complete_offset), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(complete_offset), top(complete_offset)), offset=complete_offset)
+    add_line(point(left(complete_offset), top(complete_offset)), offset=complete_offset)
+    add_line(point(left(complete_offset), bottom(complete_offset)), offset=complete_offset)
+    add_line(point(right(complete_offset), bottom(complete_offset)), offset=complete_offset)
+    add_line(point(right(complete_offset), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(first_partial), bottom(first_partial)), offset=first_partial)
+    add_line(right_bottom_intersection(first_partial), offset=first_partial)
+    append_first_partial_loop()
+    add_line(point(right(first_partial), bottom(first_partial)), offset=first_partial)
+    add_line(right_bottom_intersection(first_partial), offset=first_partial)
+
+    complete_split = _radial_projection(
+        (seed_max_x, seed_min_y),
+        right_bottom_intersection(first_partial),
+        first_partial,
+        complete_offset,
+    )
+    add_line(complete_split, offset=complete_offset)
+    _append_bottom_right_split_rounded_loop(primitives, family.contour.bbox, complete_offset, complete_split)
+    points[:] = [primitives[-1].end]
+
+    add_line(right_bottom_intersection(first_partial), offset=first_partial)
+    append_first_partial_loop()
+    add_line(point(left(middle_partial), bottom(middle_partial)), offset=middle_partial)
+    add_line(point(left(terminal_partial), bottom(middle_partial)), offset=terminal_partial)
+    add_line(left_bottom_intersection(middle_partial), offset=middle_partial)
+    add_arc(point(seed_min_x - middle_partial, seed_min_y), (seed_min_x, seed_min_y), middle_partial)
+    add_line(point(seed_min_x - middle_partial, seed_max_y), offset=middle_partial)
+    add_arc(left_top_intersection(middle_partial), (seed_min_x, seed_max_y), middle_partial)
+    add_line(point(left(middle_partial), top(middle_partial)), offset=middle_partial)
+    add_line(point(left(middle_partial), bottom(middle_partial)), offset=middle_partial)
+    add_line(point(left(terminal_partial), bottom(middle_partial)), offset=terminal_partial)
+    add_line(point(left(terminal_partial), bottom(terminal_partial)), offset=terminal_partial)
+    add_line(left_bottom_intersection(terminal_partial), offset=terminal_partial)
+    add_arc(point(seed_min_x - terminal_partial, seed_min_y), (seed_min_x, seed_min_y), terminal_partial)
+    add_line(point(seed_min_x - terminal_partial, seed_max_y), offset=terminal_partial)
+    add_arc(left_top_intersection(terminal_partial), (seed_min_x, seed_max_y), terminal_partial)
+    add_line(point(left(terminal_partial), top(terminal_partial)), offset=terminal_partial)
+    add_line(point(left(terminal_partial), bottom(terminal_partial)), offset=terminal_partial)
+
+    return TraceResolvedSequence2D(
+        name="single_seed_unbalanced_left_repeated_partial_offsets",
+        primitives=tuple(primitives),
+    )
+
+
+def _resolved_single_seed_unbalanced_right_terminal_partial_sequence(
+    outer_bbox: BBox,
+    family: TraceOffsetFamily,
+) -> TraceResolvedSequence2D | None:
+    if family.bridge_offset is not None:
+        return None
+    if family.clearance is None:
+        return None
+    if _has_balanced_clearance(family.clearance):
+        return None
+    if not math.isclose(family.clearance.bottom, family.clearance.top, abs_tol=1e-6):
+        return None
+    if family.clearance.right <= family.clearance.left + 1e-6:
+        return None
+    if len(family.complete_offsets) != 1 or len(family.partial_offsets) != 3:
+        return None
+
+    complete_offset = float(family.complete_offsets[0])
+    partial_radii = tuple(float(value) for value in family.partial_offsets)
+    terminal_gap = (family.clearance.right / 2.0) - partial_radii[-1]
+    if terminal_gap < -1e-6 or terminal_gap > 3.0 + 1e-6:
+        return None
+    radial_step = _inferred_offset_step((complete_offset, *partial_radii))
+    if radial_step is None:
+        return None
+
+    outer_min_x, outer_max_x, outer_min_y, outer_max_y = outer_bbox
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = family.contour.bbox
+    first_partial, middle_partial, terminal_partial = partial_radii
+
+    owner = "single_seed_unbalanced_right_terminal_partial_offsets"
+    primitives: list[TracePrimitive2D] = []
+    points: list[Point2] = [_round_point((outer_min_x + complete_offset, outer_max_y - complete_offset))]
+
+    def point(x_value: float, y_value: float) -> Point2:
+        return _round_point((float(x_value), float(y_value)))
+
+    def left(radius: float) -> float:
+        return outer_min_x + radius
+
+    def right(radius: float) -> float:
+        return outer_max_x - radius
+
+    def bottom(radius: float) -> float:
+        return outer_min_y + radius
+
+    def top(radius: float) -> float:
+        return outer_max_y - radius
+
+    def add_line(end_point: Point2, *, offset: float = 0.0) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_line(owner, offset, start_point, end_point))
+        points.append(end_point)
+
+    def add_arc(end_point: Point2, center_point: Point2, radius: float) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_arc(owner, radius, start_point, end_point, center_point, radius))
+        points.append(end_point)
+
+    def left_intersection_y(radius: float, center_x: float, x_value: float, *, upper: bool) -> float:
+        delta_x = center_x - x_value
+        delta_y = math.sqrt(max(0.0, (radius * radius) - (delta_x * delta_x)))
+        return (seed_min_y if not upper else seed_max_y) + (delta_y if upper else -delta_y)
+
+    def right_intersection_x(radius: float, center_y: float, y_value: float) -> float:
+        delta_y = center_y - y_value
+        return seed_max_x + math.sqrt(max(0.0, (radius * radius) - (delta_y * delta_y)))
+
+    def left_top_intersection(radius: float) -> Point2:
+        return point(left(radius), left_intersection_y(radius, seed_min_x, left(radius), upper=True))
+
+    def left_bottom_intersection(radius: float) -> Point2:
+        return point(left(radius), left_intersection_y(radius, seed_min_x, left(radius), upper=False))
+
+    def right_top_intersection(radius: float) -> Point2:
+        return point(right_intersection_x(radius, seed_max_y, top(radius)), top(radius))
+
+    def right_bottom_intersection(radius: float) -> Point2:
+        return point(right_intersection_x(radius, seed_min_y, bottom(radius)), bottom(radius))
+
+    def top_right_mid(radius: float) -> Point2:
+        diagonal = radius / math.sqrt(2.0)
+        return point(seed_max_x + diagonal, seed_max_y + diagonal)
+
+    add_line(point(left(complete_offset), top(first_partial)), offset=complete_offset)
+    add_line(point(left(complete_offset), bottom(complete_offset)), offset=complete_offset)
+    add_line(point(right(complete_offset), bottom(complete_offset)), offset=complete_offset)
+    add_line(point(right(complete_offset), top(complete_offset)), offset=complete_offset)
+    add_line(point(left(complete_offset), top(complete_offset)), offset=complete_offset)
+    add_line(point(left(complete_offset), top(first_partial)), offset=first_partial)
+    add_line(point(left(first_partial), top(first_partial)), offset=first_partial)
+    add_line(left_top_intersection(first_partial), offset=first_partial)
+    add_arc(point(seed_min_x, seed_max_y + first_partial), (seed_min_x, seed_max_y), first_partial)
+    add_line(point(seed_max_x, seed_max_y + first_partial), offset=first_partial)
+    add_arc(top_right_mid(first_partial), (seed_max_x, seed_max_y), first_partial)
+    add_arc(point(seed_max_x + first_partial, seed_max_y), (seed_max_x, seed_max_y), first_partial)
+    add_line(point(seed_max_x + first_partial, seed_min_y), offset=first_partial)
+    add_arc(point(seed_max_x, seed_min_y - first_partial), (seed_max_x, seed_min_y), first_partial)
+    add_line(point(seed_min_x, seed_min_y - first_partial), offset=first_partial)
+    add_arc(left_bottom_intersection(first_partial), (seed_min_x, seed_min_y), first_partial)
+    add_line(point(left(first_partial), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(first_partial), bottom(first_partial)), offset=first_partial)
+    add_line(point(right(first_partial), top(first_partial)), offset=first_partial)
+    add_line(point(left(first_partial), top(first_partial)), offset=first_partial)
+    add_line(left_top_intersection(first_partial), offset=first_partial)
+
+    complete_split = _radial_projection(
+        (seed_min_x, seed_max_y),
+        left_top_intersection(first_partial),
+        first_partial,
+        complete_offset,
+    )
+    add_line(complete_split, offset=complete_offset)
+    _append_top_left_split_rounded_loop(primitives, family.contour.bbox, complete_offset, complete_split)
+    points[:] = [primitives[-1].end]
+
+    add_line(left_top_intersection(first_partial), offset=first_partial)
+    add_arc(point(seed_min_x, seed_max_y + first_partial), (seed_min_x, seed_max_y), first_partial)
+    add_line(point(seed_max_x, seed_max_y + first_partial), offset=first_partial)
+    add_arc(top_right_mid(first_partial), (seed_max_x, seed_max_y), first_partial)
+    add_arc(point(seed_max_x + first_partial, seed_max_y), (seed_max_x, seed_max_y), first_partial)
+
+    add_line(point(seed_max_x + middle_partial, seed_max_y), offset=middle_partial)
+    add_line(point(seed_max_x + middle_partial, seed_min_y), offset=middle_partial)
+    add_arc(right_bottom_intersection(middle_partial), (seed_max_x, seed_min_y), middle_partial)
+    add_line(point(right(middle_partial), bottom(middle_partial)), offset=middle_partial)
+    add_line(point(right(middle_partial), top(middle_partial)), offset=middle_partial)
+    add_line(right_top_intersection(middle_partial), offset=middle_partial)
+    add_arc(point(seed_max_x + middle_partial, seed_max_y), (seed_max_x, seed_max_y), middle_partial)
+
+    add_line(point(seed_max_x + terminal_partial, seed_max_y), offset=terminal_partial)
+    add_line(point(seed_max_x + terminal_partial, seed_min_y), offset=terminal_partial)
+    add_arc(right_bottom_intersection(terminal_partial), (seed_max_x, seed_min_y), terminal_partial)
+    add_line(point(right(terminal_partial), bottom(terminal_partial)), offset=terminal_partial)
+    add_line(point(right(terminal_partial), top(terminal_partial)), offset=terminal_partial)
+    add_line(right_top_intersection(terminal_partial), offset=terminal_partial)
+    add_arc(point(seed_max_x + terminal_partial, seed_max_y), (seed_max_x, seed_max_y), terminal_partial)
+
+    return TraceResolvedSequence2D(
+        name="single_seed_unbalanced_right_terminal_partial_offsets",
+        primitives=tuple(primitives),
+    )
+
+
+def _resolved_single_seed_unbalanced_right_mirrored_sequence(
+    outer_bbox: BBox,
+    family: TraceOffsetFamily,
+) -> TraceResolvedSequence2D | None:
+    if family.clearance is None:
+        return None
+    if _has_balanced_clearance(family.clearance):
+        return None
+    if not math.isclose(family.clearance.bottom, family.clearance.top, abs_tol=1e-6):
+        return None
+    if family.clearance.right <= family.clearance.left + 1e-6:
+        return None
+
+    mirrored_family = _mirror_trace_offset_family_x(family, outer_bbox)
+    mirrored_outer_bbox = _mirror_bbox_x(outer_bbox, outer_bbox)
+    for resolver in (
+        _resolved_single_seed_unbalanced_left_early_dense_sequence,
+        _resolved_single_seed_unbalanced_left_dense_partial_sequence,
+        _resolved_single_seed_unbalanced_left_extended_dense_sequence,
+        _resolved_single_seed_unbalanced_left_terminal_partial_sequence,
+        _resolved_single_seed_unbalanced_left_repeated_partial_sequence,
+        _resolved_single_seed_unbalanced_left_partial_sequence,
+    ):
+        resolved = resolver(mirrored_outer_bbox, mirrored_family)
+        if resolved is not None:
+            mirrored = _mirror_resolved_sequence_x(resolved, outer_bbox)
+            return _maestroize_unbalanced_right_sequence(outer_bbox, family, mirrored)
+    return None
+
+
+def _maestroize_unbalanced_right_sequence(
+    outer_bbox: BBox,
+    family: TraceOffsetFamily,
+    sequence: TraceResolvedSequence2D,
+) -> TraceResolvedSequence2D:
+    """Convert the geometric right mirror into Maestro's right-side traversal.
+
+    Maestro keeps the exterior polyline start when the island is shifted to the
+    left. A simple horizontal mirror produces the right geometry, but starts and
+    segmentizes the trace from the opposite side.
+    """
+
+    transformed = tuple(
+        _right_maestroize_corner_arcs(
+            tuple(_mirror_primitive_y(primitive, outer_bbox) for primitive in sequence.primitives),
+            family.contour.bbox,
+        )
+    )
+    owner = transformed[0].owner if transformed else sequence.name
+
+    if len(family.complete_offsets) > 1:
+        prefix = _right_unbalanced_complete_prefix(outer_bbox, family.complete_offsets, owner)
+        skip_count = ((len(family.complete_offsets) - 1) * 7) + 2
+        primitives = prefix + transformed[skip_count:]
+    elif len(family.complete_offsets) == 1 and len(family.partial_offsets) == 2:
+        prefix = _right_unbalanced_single_complete_entry_prefix(
+            outer_bbox,
+            float(family.complete_offsets[0]),
+            owner,
+        )
+        primitives = prefix + transformed
+    elif len(family.complete_offsets) == 1 and len(family.partial_offsets) == 3:
+        primitives = transformed[2:]
+    else:
+        primitives = transformed
+
+    return TraceResolvedSequence2D(
+        name=sequence.name,
+        primitives=tuple(primitives),
+    )
+
+
+def _right_unbalanced_complete_prefix(
+    outer_bbox: BBox,
+    complete_offsets: Sequence[float],
+    owner: str,
+) -> tuple[TracePrimitive2D, ...]:
+    if len(complete_offsets) < 2:
+        return ()
+
+    outer_min_x, outer_max_x, outer_min_y, outer_max_y = outer_bbox
+    radii = tuple(float(value) for value in complete_offsets)
+    primitives: list[TracePrimitive2D] = []
+    points: list[Point2] = [_round_point((outer_min_x + radii[0], outer_max_y - radii[0]))]
+
+    def point(x_value: float, y_value: float) -> Point2:
+        return _round_point((float(x_value), float(y_value)))
+
+    def left(radius: float) -> float:
+        return outer_min_x + radius
+
+    def right(radius: float) -> float:
+        return outer_max_x - radius
+
+    def bottom(radius: float) -> float:
+        return outer_min_y + radius
+
+    def top(radius: float) -> float:
+        return outer_max_y - radius
+
+    def add_line(end_point: Point2, *, offset: float = 0.0) -> None:
+        start_point = points[-1]
+        end_point = _round_point(end_point)
+        if _same_xy(start_point, end_point):
+            return
+        primitives.append(_line(owner, offset, start_point, end_point))
+        points.append(end_point)
+
+    for index, radius in enumerate(radii[:-1]):
+        next_radius = radii[index + 1]
+        add_line(point(left(radius), top(next_radius)), offset=radius)
+        add_line(point(left(radius), bottom(radius)), offset=radius)
+        add_line(point(right(radius), bottom(radius)), offset=radius)
+        add_line(point(right(radius), top(radius)), offset=radius)
+        add_line(point(left(radius), top(radius)), offset=radius)
+        add_line(point(left(radius), top(next_radius)), offset=radius)
+        add_line(point(left(next_radius), top(next_radius)), offset=next_radius)
+    return tuple(primitives)
+
+
+def _right_unbalanced_single_complete_entry_prefix(
+    outer_bbox: BBox,
+    complete_offset: float,
+    owner: str,
+) -> tuple[TracePrimitive2D, ...]:
+    outer_min_x, outer_max_x, outer_min_y, outer_max_y = outer_bbox
+    offset = float(complete_offset)
+    left = outer_min_x + offset
+    right = outer_max_x - offset
+    bottom = outer_min_y + offset
+    top = outer_max_y - offset
+    start = _round_point((left, top))
+    middle = _round_point((left, bottom))
+    end = _round_point((right, bottom))
+    return (
+        _line(owner, offset, start, middle),
+        _line(owner, offset, middle, end),
+    )
+
+
+def _right_maestroize_corner_arcs(
+    primitives: Sequence[TracePrimitive2D],
+    seed_bbox: BBox,
+) -> tuple[TracePrimitive2D, ...]:
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = seed_bbox
+    result: list[TracePrimitive2D] = []
+    index = 0
+    while index < len(primitives):
+        primitive = primitives[index]
+        if (
+            primitive.primitive_type == "Arc"
+            and primitive.center is not None
+            and primitive.radius is not None
+        ):
+            center = primitive.center
+            radius = float(primitive.radius)
+            diagonal = radius / math.sqrt(2.0)
+            bottom_left_diagonal = (center[0] - diagonal, center[1] - diagonal)
+            if (
+                math.isclose(center[0], seed_min_x, abs_tol=1e-6)
+                and math.isclose(center[1], seed_min_y, abs_tol=1e-6)
+                and index + 1 < len(primitives)
+            ):
+                next_primitive = primitives[index + 1]
+                if (
+                    next_primitive.primitive_type == "Arc"
+                    and next_primitive.center is not None
+                    and next_primitive.radius is not None
+                    and _same_xy(next_primitive.center, center)
+                    and math.isclose(next_primitive.radius, radius, abs_tol=1e-6)
+                    and _same_xy(primitive.end, bottom_left_diagonal)
+                    and _same_xy(next_primitive.start, bottom_left_diagonal)
+                ):
+                    result.append(
+                        TracePrimitive2D(
+                            primitive_type="Arc",
+                            owner=primitive.owner,
+                            offset=primitive.offset,
+                            start=primitive.start,
+                            end=next_primitive.end,
+                            center=center,
+                            radius=primitive.radius,
+                            orientation=primitive.orientation,
+                        )
+                    )
+                    index += 2
+                    continue
+
+            top_right_diagonal = (center[0] + diagonal, center[1] + diagonal)
+            if (
+                math.isclose(center[0], seed_max_x, abs_tol=1e-6)
+                and math.isclose(center[1], seed_max_y, abs_tol=1e-6)
+                and primitive.start[1] > center[1] + 1e-6
+                and primitive.end[0] > center[0] + 1e-6
+                and primitive.end[1] <= center[1] + 1e-6
+                and primitive.start[0] <= top_right_diagonal[0] + 1e-6
+                and primitive.start[1] >= top_right_diagonal[1] - 1e-6
+                and not _same_xy(primitive.start, top_right_diagonal)
+                and not _same_xy(primitive.end, top_right_diagonal)
+            ):
+                diagonal_point = _round_point(top_right_diagonal)
+                if math.hypot(
+                    diagonal_point[0] - primitive.start[0],
+                    diagonal_point[1] - primitive.start[1],
+                ) <= 2.0 and not (
+                    math.isclose(primitive.start[0], center[0], abs_tol=1e-6)
+                    and math.isclose(primitive.start[1], center[1] + radius, abs_tol=1e-6)
+                ):
+                    result.append(_line(primitive.owner, primitive.offset, primitive.start, diagonal_point))
+                else:
+                    result.append(
+                        TracePrimitive2D(
+                            primitive_type="Arc",
+                            owner=primitive.owner,
+                            offset=primitive.offset,
+                            start=primitive.start,
+                            end=diagonal_point,
+                            center=center,
+                            radius=primitive.radius,
+                            orientation=primitive.orientation,
+                        )
+                    )
+                result.append(
+                    TracePrimitive2D(
+                        primitive_type="Arc",
+                        owner=primitive.owner,
+                        offset=primitive.offset,
+                        start=diagonal_point,
+                        end=primitive.end,
+                        center=center,
+                        radius=primitive.radius,
+                        orientation=primitive.orientation,
+                    )
+                )
+                index += 1
+                continue
+
+        result.append(primitive)
+        index += 1
+    return tuple(result)
+
+
+def _mirror_trace_offset_family_x(
+    family: TraceOffsetFamily,
+    axis_bbox: BBox,
+) -> TraceOffsetFamily:
+    clearance = family.clearance
+    return TraceOffsetFamily(
+        owner=family.owner,
+        contour=_mirror_trace_contour_x(family.contour, axis_bbox),
+        limit=family.limit,
+        offsets=family.offsets,
+        complete_offsets=family.complete_offsets,
+        partial_offsets=family.partial_offsets,
+        bridge_offset=family.bridge_offset,
+        clearance=(
+            None
+            if clearance is None
+            else TraceClearance(
+                left=clearance.right,
+                right=clearance.left,
+                bottom=clearance.bottom,
+                top=clearance.top,
+            )
+        ),
+    )
+
+
+def _mirror_resolved_sequence_x(
+    sequence: TraceResolvedSequence2D,
+    axis_bbox: BBox,
+) -> TraceResolvedSequence2D:
+    name = sequence.name.replace("unbalanced_left", "unbalanced_right")
+    if name == sequence.name:
+        name = f"{sequence.name}_mirrored_right"
+    return TraceResolvedSequence2D(
+        name=name,
+        primitives=tuple(_mirror_primitive_x(primitive, axis_bbox) for primitive in sequence.primitives),
+    )
+
+
+def _mirror_primitive_x(
+    primitive: TracePrimitive2D,
+    axis_bbox: BBox,
+) -> TracePrimitive2D:
+    orientation = primitive.orientation
+    if primitive.primitive_type == "Arc":
+        orientation = _mirror_arc_orientation(orientation)
+    return TracePrimitive2D(
+        primitive_type=primitive.primitive_type,
+        owner=primitive.owner,
+        offset=primitive.offset,
+        start=_mirror_point_x(primitive.start, axis_bbox),
+        end=_mirror_point_x(primitive.end, axis_bbox),
+        center=(
+            None
+            if primitive.center is None
+            else _mirror_point_x(primitive.center, axis_bbox)
+        ),
+        radius=primitive.radius,
+        orientation=orientation,
+    )
+
+
+def _mirror_primitive_y(
+    primitive: TracePrimitive2D,
+    axis_bbox: BBox,
+) -> TracePrimitive2D:
+    orientation = primitive.orientation
+    if primitive.primitive_type == "Arc":
+        orientation = _mirror_arc_orientation(orientation)
+    return TracePrimitive2D(
+        primitive_type=primitive.primitive_type,
+        owner=primitive.owner,
+        offset=primitive.offset,
+        start=_mirror_point_y(primitive.start, axis_bbox),
+        end=_mirror_point_y(primitive.end, axis_bbox),
+        center=(
+            None
+            if primitive.center is None
+            else _mirror_point_y(primitive.center, axis_bbox)
+        ),
+        radius=primitive.radius,
+        orientation=orientation,
+    )
+
+
+def _mirror_trace_contour_x(
+    contour: TraceContour,
+    axis_bbox: BBox,
+) -> TraceContour:
+    return _trace_contour(tuple(_mirror_point_x(point, axis_bbox) for point in contour.points))
+
+
+def _mirror_bbox_x(
+    bbox: BBox,
+    axis_bbox: BBox,
+) -> BBox:
+    min_x, max_x, min_y, max_y = bbox
+    mirrored_min_x = _mirror_x(max_x, axis_bbox)
+    mirrored_max_x = _mirror_x(min_x, axis_bbox)
+    return (
+        min(mirrored_min_x, mirrored_max_x),
+        max(mirrored_min_x, mirrored_max_x),
+        min_y,
+        max_y,
+    )
+
+
+def _mirror_point_x(
+    point: Point2,
+    axis_bbox: BBox,
+) -> Point2:
+    return _round_point((_mirror_x(point[0], axis_bbox), point[1]))
+
+
+def _mirror_point_y(
+    point: Point2,
+    axis_bbox: BBox,
+) -> Point2:
+    return _round_point((point[0], _mirror_y(point[1], axis_bbox)))
+
+
+def _mirror_x(
+    x_value: float,
+    axis_bbox: BBox,
+) -> float:
+    axis_min_x, axis_max_x, _axis_min_y, _axis_max_y = axis_bbox
+    return axis_min_x + axis_max_x - float(x_value)
+
+
+def _mirror_y(
+    y_value: float,
+    axis_bbox: BBox,
+) -> float:
+    _axis_min_x, _axis_max_x, axis_min_y, axis_max_y = axis_bbox
+    return axis_min_y + axis_max_y - float(y_value)
+
+
+def _mirror_arc_orientation(orientation: str) -> str:
+    if orientation == "Clockwise":
+        return "CounterClockwise"
+    if orientation == "CounterClockwise":
+        return "Clockwise"
+    return orientation
+
+
+def _append_bottom_right_split_rounded_loop(
+    primitives: list[TracePrimitive2D],
+    bbox: BBox,
+    radius: float,
+    split_point: Point2,
+) -> None:
+    min_x, max_x, min_y, max_y = bbox
+    diagonal = radius / math.sqrt(2.0)
+    p0 = (min_x - radius, min_y)
+    p1 = (min_x - radius, max_y)
+    p2 = (min_x, max_y + radius)
+    p3 = (max_x, max_y + radius)
+    p4 = (max_x + diagonal, max_y + diagonal)
+    p5 = (max_x + radius, max_y)
+    p6 = (max_x + radius, min_y)
+    p7 = (max_x, min_y - radius)
+    p8 = (min_x, min_y - radius)
+    owner = "internal:1"
+    _append_arc(primitives, owner, radius, p7, (max_x, min_y), radius)
+    _append_line(primitives, owner, radius, p8)
+    _append_arc(primitives, owner, radius, p0, (min_x, min_y), radius)
+    _append_line(primitives, owner, radius, p1)
+    _append_arc(primitives, owner, radius, p2, (min_x, max_y), radius)
+    _append_line(primitives, owner, radius, p3)
+    _append_arc(primitives, owner, radius, p4, (max_x, max_y), radius)
+    _append_arc(primitives, owner, radius, p5, (max_x, max_y), radius)
+    _append_line(primitives, owner, radius, p6)
+    _append_arc(primitives, owner, radius, split_point, (max_x, min_y), radius)
 
 
 def _append_top_left_split_rounded_loop(
