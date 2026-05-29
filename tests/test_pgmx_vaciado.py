@@ -976,7 +976,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                         baseline_path=BASELINE_PATH,
                         source_pgmx_path=BASELINE_PATH,
                     )
-                    if index in {22, 27, 28}:
+                    if index in {22, 27, 28, 29}:
                         sp.synthesize_request(request)
                         generated_adaptation = adapt_pgmx_path(request.output_path)
                         generated_sequences = _actual_trajectory_xyz_sequences(
@@ -999,6 +999,152 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                         "islas/BossGeometryList",
                     ):
                         sp.synthesize_request(request)
+
+    def test_trace_engine_resolves_vaciado_029_e006_two_seed_bridge_topology(self) -> None:
+        adaptation = adapt_pgmx_path(_variant_path(29, 6))
+        spec = adaptation.pocket_millings[0]
+
+        plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
+
+        self.assertEqual(plan.pending_stages, ())
+        self.assertEqual(
+            tuple(sequence.name for sequence in plan.resolved_sequences),
+            ("two_seed_symmetric_bridge_offsets",),
+        )
+        self.assertEqual(tuple(len(sequence) for sequence in plan.trajectory_sequences), (64,))
+        self.assertEqual(plan.resolved_sequences[0].line_count, 39)
+        self.assertEqual(plan.resolved_sequences[0].arc_count, 24)
+
+        xy_points = tuple((round(x, 6), round(y, 6)) for x, y, _z in plan.trajectory_sequences[0])
+        self.assertIn((200.0, 202.838822), xy_points)
+        self.assertIn((200.0, 97.161178), xy_points)
+        self.assertIn((52.5, 208.071891), xy_points)
+        self.assertIn((237.5, 188.919411), xy_points)
+
+    def test_trace_engine_resolves_vaciado_029_e005_segmented_bridge_topology(self) -> None:
+        adaptation = adapt_pgmx_path(_variant_path(29, 5))
+        spec = adaptation.pocket_millings[0]
+
+        plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
+
+        self.assertEqual(plan.pending_stages, ())
+        self.assertEqual(
+            tuple(sequence.name for sequence in plan.resolved_sequences),
+            ("two_seed_symmetric_bridge_offsets",),
+        )
+        self.assertEqual(tuple(len(sequence) for sequence in plan.trajectory_sequences), (65,))
+        self.assertEqual(plan.resolved_sequences[0].line_count, 39)
+        self.assertEqual(plan.resolved_sequences[0].arc_count, 25)
+
+        xy_points = tuple((round(x, 6), round(y, 6)) for x, y, _z in plan.trajectory_sequences[0])
+        self.assertIn((367.408164, 238.067802), xy_points)
+        self.assertIn((200.0, 187.288208), xy_points)
+        self.assertIn((200.0, 112.711792), xy_points)
+
+    def test_trace_engine_resolves_vaciado_029_e002_large_bridge_topology(self) -> None:
+        adaptation = adapt_pgmx_path(_variant_path(29, 2))
+        spec = adaptation.pocket_millings[0]
+
+        plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
+
+        self.assertEqual(plan.pending_stages, ())
+        self.assertEqual(
+            tuple(sequence.name for sequence in plan.resolved_sequences),
+            ("two_seed_large_bridge_offsets",),
+        )
+        self.assertEqual(tuple(len(sequence) for sequence in plan.trajectory_sequences), (45,))
+        self.assertEqual(plan.resolved_sequences[0].line_count, 25)
+        self.assertEqual(plan.resolved_sequences[0].arc_count, 19)
+
+        xy_points = tuple((round(x, 6), round(y, 6)) for x, y, _z in plan.trajectory_sequences[0])
+        self.assertIn((200.0, 58.856217), xy_points)
+        self.assertIn((200.0, 241.143783), xy_points)
+        self.assertIn((241.928109, 87.5), xy_points)
+        self.assertIn((162.5, 91.928109), xy_points)
+
+    def test_trace_engine_resolves_vaciado_029_e001_separate_dense_topology(self) -> None:
+        adaptation = adapt_pgmx_path(_variant_path(29, 1))
+        spec = adaptation.pocket_millings[0]
+
+        plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
+
+        self.assertEqual(plan.pending_stages, ())
+        self.assertEqual(
+            tuple(sequence.name for sequence in plan.resolved_sequences),
+            ("two_seed_separate_dense_offsets",),
+        )
+        self.assertEqual(tuple(len(sequence) for sequence in plan.trajectory_sequences), (306,))
+        self.assertEqual(plan.resolved_sequences[0].line_count, 179)
+        self.assertEqual(plan.resolved_sequences[0].arc_count, 126)
+
+        xy_points = tuple((round(x, 6), round(y, 6)) for x, y, _z in plan.trajectory_sequences[0])
+        self.assertIn((200.0, 57.383727), xy_points)
+        self.assertIn((200.0, 242.616273), xy_points)
+        self.assertIn((172.727273, 81.971463), xy_points)
+        self.assertIn((377.062857, 107.02042), xy_points)
+
+    def test_trace_engine_resolves_vaciado_029_e007_dense_bridge_topology(self) -> None:
+        adaptation = adapt_pgmx_path(_variant_path(29, 7))
+        spec = adaptation.pocket_millings[0]
+
+        plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
+
+        self.assertEqual(plan.pending_stages, ())
+        self.assertEqual(
+            tuple(sequence.name for sequence in plan.resolved_sequences),
+            ("two_seed_dense_bridge_offsets",),
+        )
+        self.assertEqual(tuple(len(sequence) for sequence in plan.trajectory_sequences), (357,))
+        self.assertEqual(plan.resolved_sequences[0].line_count, 213)
+        self.assertEqual(plan.resolved_sequences[0].arc_count, 143)
+
+        xy_points = tuple((round(x, 6), round(y, 6)) for x, y, _z in plan.trajectory_sequences[0])
+        self.assertIn((200.0, 202.082607), xy_points)
+        self.assertIn((200.0, 77.830518), xy_points)
+        self.assertIn((187.649661, 237.649661), xy_points)
+        self.assertIn((193.181818, 68.420855), xy_points)
+
+    def test_trace_engine_resolves_vaciado_029_e003_progressive_dense_topology(self) -> None:
+        adaptation = adapt_pgmx_path(_variant_path(29, 3))
+        spec = adaptation.pocket_millings[0]
+
+        plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
+
+        self.assertEqual(plan.pending_stages, ())
+        self.assertEqual(
+            tuple(sequence.name for sequence in plan.resolved_sequences),
+            ("two_seed_progressive_dense_offsets",),
+        )
+        self.assertEqual(tuple(len(sequence) for sequence in plan.trajectory_sequences), (653,))
+        self.assertEqual(plan.resolved_sequences[0].line_count, 395)
+        self.assertEqual(plan.resolved_sequences[0].arc_count, 257)
+
+        xy_points = tuple((round(x, 6), round(y, 6)) for x, y, _z in plan.trajectory_sequences[0])
+        self.assertIn((200.0, 188.24181), xy_points)
+        self.assertIn((200.0, 58.916707), xy_points)
+        self.assertIn((185.584909, 235.584909), xy_points)
+        self.assertIn((196.052632, 77.119044), xy_points)
+
+    def test_trace_engine_resolves_vaciado_029_e004_progressive_dense_topology(self) -> None:
+        adaptation = adapt_pgmx_path(_variant_path(29, 4))
+        spec = adaptation.pocket_millings[0]
+
+        plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
+
+        self.assertEqual(plan.pending_stages, ())
+        self.assertEqual(
+            tuple(sequence.name for sequence in plan.resolved_sequences),
+            ("two_seed_progressive_dense_offsets",),
+        )
+        self.assertEqual(tuple(len(sequence) for sequence in plan.trajectory_sequences), (1478,))
+        self.assertEqual(plan.resolved_sequences[0].line_count, 904)
+        self.assertEqual(plan.resolved_sequences[0].arc_count, 573)
+
+        xy_points = tuple((round(x, 6), round(y, 6)) for x, y, _z in plan.trajectory_sequences[0])
+        self.assertIn((200.0, 187.288203), xy_points)
+        self.assertIn((200.0, 55.869688), xy_points)
+        self.assertIn((185.811183, 235.811183), xy_points)
+        self.assertIn((198.295455, 80.013598), xy_points)
 
     def test_island_base_loop_rule_matches_vaciado_027_and_031(self) -> None:
         v027 = adapt_pgmx_path(_manual_path(27))
@@ -1400,6 +1546,265 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                             _trajectory_primitive_counts(generated_adaptation),
                             _trajectory_primitive_counts(manual_adaptation),
                         )
+
+    def test_vaciado_029_e006_two_seed_synthesis_matches_trace(self) -> None:
+        manual_adaptation = adapt_pgmx_path(_variant_path(29, 6))
+        manual_sequences = _actual_trajectory_xyz_sequences(manual_adaptation.snapshot.operations[0])
+
+        with tempfile.TemporaryDirectory(prefix="vaciado_029_e006_") as temp_dir:
+            output = Path(temp_dir) / "Vaciado_029_E006_synth.pgmx"
+            request = manual_adaptation.build_synthesis_request(
+                output,
+                baseline_path=BASELINE_PATH,
+                source_pgmx_path=BASELINE_PATH,
+            )
+            with mock.patch.object(
+                sp,
+                "_build_single_seed_base_loop_xyz_sequences",
+                side_effect=AssertionError("legacy single-seed base-loop helper should not be used"),
+            ), mock.patch.object(
+                sp,
+                "_build_single_seed_multiloop_curve_and_sequence",
+                side_effect=AssertionError("legacy single-seed multiloop helper should not be used"),
+            ):
+                sp.synthesize_request(request)
+
+            generated_adaptation = adapt_pgmx_path(output)
+            generated_sequences = _actual_trajectory_xyz_sequences(
+                generated_adaptation.snapshot.operations[0]
+            )
+            self.assertEqual(tuple(len(sequence) for sequence in generated_sequences), (64,))
+            _assert_same_xyz(self, generated_sequences[0], manual_sequences[0])
+            self.assertEqual(
+                _trajectory_arcs(generated_adaptation),
+                _trajectory_arcs(manual_adaptation),
+            )
+            self.assertEqual(
+                _trajectory_primitive_counts(generated_adaptation),
+                _trajectory_primitive_counts(manual_adaptation),
+            )
+
+    def test_vaciado_029_e005_two_seed_synthesis_matches_trace(self) -> None:
+        manual_adaptation = adapt_pgmx_path(_variant_path(29, 5))
+        manual_sequences = _actual_trajectory_xyz_sequences(manual_adaptation.snapshot.operations[0])
+
+        with tempfile.TemporaryDirectory(prefix="vaciado_029_e005_") as temp_dir:
+            output = Path(temp_dir) / "Vaciado_029_E005_synth.pgmx"
+            request = manual_adaptation.build_synthesis_request(
+                output,
+                baseline_path=BASELINE_PATH,
+                source_pgmx_path=BASELINE_PATH,
+            )
+            with mock.patch.object(
+                sp,
+                "_build_single_seed_base_loop_xyz_sequences",
+                side_effect=AssertionError("legacy single-seed base-loop helper should not be used"),
+            ), mock.patch.object(
+                sp,
+                "_build_single_seed_multiloop_curve_and_sequence",
+                side_effect=AssertionError("legacy single-seed multiloop helper should not be used"),
+            ):
+                sp.synthesize_request(request)
+
+            generated_adaptation = adapt_pgmx_path(output)
+            generated_sequences = _actual_trajectory_xyz_sequences(
+                generated_adaptation.snapshot.operations[0]
+            )
+            self.assertEqual(tuple(len(sequence) for sequence in generated_sequences), (65,))
+            _assert_same_xyz(self, generated_sequences[0], manual_sequences[0])
+            self.assertEqual(
+                _trajectory_arcs(generated_adaptation),
+                _trajectory_arcs(manual_adaptation),
+            )
+            self.assertEqual(
+                _trajectory_primitive_counts(generated_adaptation),
+                _trajectory_primitive_counts(manual_adaptation),
+            )
+
+    def test_vaciado_029_e002_two_seed_synthesis_matches_trace(self) -> None:
+        manual_adaptation = adapt_pgmx_path(_variant_path(29, 2))
+        manual_sequences = _actual_trajectory_xyz_sequences(manual_adaptation.snapshot.operations[0])
+
+        with tempfile.TemporaryDirectory(prefix="vaciado_029_e002_") as temp_dir:
+            output = Path(temp_dir) / "Vaciado_029_E002_synth.pgmx"
+            request = manual_adaptation.build_synthesis_request(
+                output,
+                baseline_path=BASELINE_PATH,
+                source_pgmx_path=BASELINE_PATH,
+            )
+            with mock.patch.object(
+                sp,
+                "_build_single_seed_base_loop_xyz_sequences",
+                side_effect=AssertionError("legacy single-seed base-loop helper should not be used"),
+            ), mock.patch.object(
+                sp,
+                "_build_single_seed_multiloop_curve_and_sequence",
+                side_effect=AssertionError("legacy single-seed multiloop helper should not be used"),
+            ):
+                sp.synthesize_request(request)
+
+            generated_adaptation = adapt_pgmx_path(output)
+            generated_sequences = _actual_trajectory_xyz_sequences(
+                generated_adaptation.snapshot.operations[0]
+            )
+            self.assertEqual(tuple(len(sequence) for sequence in generated_sequences), (45,))
+            _assert_same_xyz(self, generated_sequences[0], manual_sequences[0])
+            self.assertEqual(
+                _trajectory_arcs(generated_adaptation),
+                _trajectory_arcs(manual_adaptation),
+            )
+            self.assertEqual(
+                _trajectory_primitive_counts(generated_adaptation),
+                _trajectory_primitive_counts(manual_adaptation),
+            )
+
+    def test_vaciado_029_e001_two_seed_synthesis_matches_trace(self) -> None:
+        manual_adaptation = adapt_pgmx_path(_variant_path(29, 1))
+        manual_sequences = _actual_trajectory_xyz_sequences(manual_adaptation.snapshot.operations[0])
+
+        with tempfile.TemporaryDirectory(prefix="vaciado_029_e001_") as temp_dir:
+            output = Path(temp_dir) / "Vaciado_029_E001_synth.pgmx"
+            request = manual_adaptation.build_synthesis_request(
+                output,
+                baseline_path=BASELINE_PATH,
+                source_pgmx_path=BASELINE_PATH,
+            )
+            with mock.patch.object(
+                sp,
+                "_build_single_seed_base_loop_xyz_sequences",
+                side_effect=AssertionError("legacy single-seed base-loop helper should not be used"),
+            ), mock.patch.object(
+                sp,
+                "_build_single_seed_multiloop_curve_and_sequence",
+                side_effect=AssertionError("legacy single-seed multiloop helper should not be used"),
+            ):
+                sp.synthesize_request(request)
+
+            generated_adaptation = adapt_pgmx_path(output)
+            generated_sequences = _actual_trajectory_xyz_sequences(
+                generated_adaptation.snapshot.operations[0]
+            )
+            self.assertEqual(tuple(len(sequence) for sequence in generated_sequences), (306,))
+            _assert_same_xyz(self, generated_sequences[0], manual_sequences[0])
+            self.assertEqual(
+                _trajectory_arcs(generated_adaptation),
+                _trajectory_arcs(manual_adaptation),
+            )
+            self.assertEqual(
+                _trajectory_primitive_counts(generated_adaptation),
+                _trajectory_primitive_counts(manual_adaptation),
+            )
+
+    def test_vaciado_029_e007_two_seed_synthesis_matches_trace(self) -> None:
+        manual_adaptation = adapt_pgmx_path(_variant_path(29, 7))
+        manual_sequences = _actual_trajectory_xyz_sequences(manual_adaptation.snapshot.operations[0])
+
+        with tempfile.TemporaryDirectory(prefix="vaciado_029_e007_") as temp_dir:
+            output = Path(temp_dir) / "Vaciado_029_E007_synth.pgmx"
+            request = manual_adaptation.build_synthesis_request(
+                output,
+                baseline_path=BASELINE_PATH,
+                source_pgmx_path=BASELINE_PATH,
+            )
+            with mock.patch.object(
+                sp,
+                "_build_single_seed_base_loop_xyz_sequences",
+                side_effect=AssertionError("legacy single-seed base-loop helper should not be used"),
+            ), mock.patch.object(
+                sp,
+                "_build_single_seed_multiloop_curve_and_sequence",
+                side_effect=AssertionError("legacy single-seed multiloop helper should not be used"),
+            ):
+                sp.synthesize_request(request)
+
+            generated_adaptation = adapt_pgmx_path(output)
+            generated_sequences = _actual_trajectory_xyz_sequences(
+                generated_adaptation.snapshot.operations[0]
+            )
+            self.assertEqual(tuple(len(sequence) for sequence in generated_sequences), (357,))
+            _assert_same_xyz(self, generated_sequences[0], manual_sequences[0])
+            self.assertEqual(
+                _trajectory_arcs(generated_adaptation),
+                _trajectory_arcs(manual_adaptation),
+            )
+            self.assertEqual(
+                _trajectory_primitive_counts(generated_adaptation),
+                _trajectory_primitive_counts(manual_adaptation),
+            )
+
+    def test_vaciado_029_e003_two_seed_synthesis_matches_trace(self) -> None:
+        manual_adaptation = adapt_pgmx_path(_variant_path(29, 3))
+        manual_sequences = _actual_trajectory_xyz_sequences(manual_adaptation.snapshot.operations[0])
+
+        with tempfile.TemporaryDirectory(prefix="vaciado_029_e003_") as temp_dir:
+            output = Path(temp_dir) / "Vaciado_029_E003_synth.pgmx"
+            request = manual_adaptation.build_synthesis_request(
+                output,
+                baseline_path=BASELINE_PATH,
+                source_pgmx_path=BASELINE_PATH,
+            )
+            with mock.patch.object(
+                sp,
+                "_build_single_seed_base_loop_xyz_sequences",
+                side_effect=AssertionError("legacy single-seed base-loop helper should not be used"),
+            ), mock.patch.object(
+                sp,
+                "_build_single_seed_multiloop_curve_and_sequence",
+                side_effect=AssertionError("legacy single-seed multiloop helper should not be used"),
+            ):
+                sp.synthesize_request(request)
+
+            generated_adaptation = adapt_pgmx_path(output)
+            generated_sequences = _actual_trajectory_xyz_sequences(
+                generated_adaptation.snapshot.operations[0]
+            )
+            self.assertEqual(tuple(len(sequence) for sequence in generated_sequences), (653,))
+            _assert_same_xyz(self, generated_sequences[0], manual_sequences[0])
+            self.assertEqual(
+                _trajectory_arcs(generated_adaptation),
+                _trajectory_arcs(manual_adaptation),
+            )
+            self.assertEqual(
+                _trajectory_primitive_counts(generated_adaptation),
+                _trajectory_primitive_counts(manual_adaptation),
+            )
+
+    def test_vaciado_029_e004_two_seed_synthesis_matches_trace(self) -> None:
+        manual_adaptation = adapt_pgmx_path(_variant_path(29, 4))
+        manual_sequences = _actual_trajectory_xyz_sequences(manual_adaptation.snapshot.operations[0])
+
+        with tempfile.TemporaryDirectory(prefix="vaciado_029_e004_") as temp_dir:
+            output = Path(temp_dir) / "Vaciado_029_E004_synth.pgmx"
+            request = manual_adaptation.build_synthesis_request(
+                output,
+                baseline_path=BASELINE_PATH,
+                source_pgmx_path=BASELINE_PATH,
+            )
+            with mock.patch.object(
+                sp,
+                "_build_single_seed_base_loop_xyz_sequences",
+                side_effect=AssertionError("legacy single-seed base-loop helper should not be used"),
+            ), mock.patch.object(
+                sp,
+                "_build_single_seed_multiloop_curve_and_sequence",
+                side_effect=AssertionError("legacy single-seed multiloop helper should not be used"),
+            ):
+                sp.synthesize_request(request)
+
+            generated_adaptation = adapt_pgmx_path(output)
+            generated_sequences = _actual_trajectory_xyz_sequences(
+                generated_adaptation.snapshot.operations[0]
+            )
+            self.assertEqual(tuple(len(sequence) for sequence in generated_sequences), (1478,))
+            _assert_same_xyz(self, generated_sequences[0], manual_sequences[0])
+            self.assertEqual(
+                _trajectory_arcs(generated_adaptation),
+                _trajectory_arcs(manual_adaptation),
+            )
+            self.assertEqual(
+                _trajectory_primitive_counts(generated_adaptation),
+                _trajectory_primitive_counts(manual_adaptation),
+            )
 
     def test_vaciado_028_e002_unbalanced_seed_synthesis_matches_trace(self) -> None:
         manual_adaptation = adapt_pgmx_path(_variant_path(28, 2))

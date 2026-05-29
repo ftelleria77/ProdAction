@@ -5239,9 +5239,14 @@ def _build_maestro_arc_serialization(
     center_point: tuple[float, float],
     normal_z: float,
     z_value: float = 0.0,
+    radius: Optional[float] = None,
 ) -> str:
-    radius = math.hypot(start_point[0] - center_point[0], start_point[1] - center_point[1])
-    if radius <= 1e-9:
+    resolved_radius = (
+        math.hypot(start_point[0] - center_point[0], start_point[1] - center_point[1])
+        if radius is None
+        else float(radius)
+    )
+    if resolved_radius <= 1e-9:
         raise ValueError("No se puede serializar un arco de radio cero.")
 
     start_angle = _point_to_maestro_basis_angle(center_point, start_point, normal_z)
@@ -5251,7 +5256,7 @@ def _build_maestro_arc_serialization(
     return (
         f"8 {_format_maestro_number(start_angle)} {_format_maestro_number(end_angle)}\n"
         f"2 {_format_maestro_number(center_point[0])} {_format_maestro_number(center_point[1])} {_format_maestro_number(z_value)} "
-        f"0 0 {_format_maestro_number(normal_z)} 1 0 0 0 {_format_maestro_number(normal_z)} 0 {_format_maestro_number(radius)} \n"
+        f"0 0 {_format_maestro_number(normal_z)} 1 0 0 0 {_format_maestro_number(normal_z)} 0 {_format_maestro_number(resolved_radius)} \n"
     )
 
 
@@ -8002,6 +8007,7 @@ def _curve_spec_from_trace_resolved_sequence(resolved_sequence, z_value: float) 
                     primitive.center,
                     normal_z,
                     z_value,
+                    radius=primitive.radius,
                 )
             )
             continue

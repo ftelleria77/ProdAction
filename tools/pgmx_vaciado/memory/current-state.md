@@ -1529,3 +1529,175 @@ Estado actualizado del frente:
 - Sigue pendiente: multiples islas (`Vaciado_029`/`Vaciado_030`), contornos
   circulares/no polilineales (`Vaciado_035`), el caso base pendiente de
   `Vaciado_031`, y el comando productivo de regeneracion/validacion de lote.
+
+## Actualizacion 2026-05-29 - Primer Cierre Multi-Isla Vaciado_029
+
+Se habilito la primera regla generativa exacta para multiples islas:
+`Vaciado_029` base, `Vaciado_029_E002`, `Vaciado_029_E005` y
+`Vaciado_029_E006`.
+
+Alcance cerrado:
+
+- Dos islas rectangulares simetricas.
+- `InsideToOutside=True` con conexion `LiftShiftPlunge`.
+- Radio completo `40` y primer radio de puente `80` para base/`E006`.
+- Radio completo `38` y primer radio de puente `76` para `E005`, con un
+  corte de serializacion Maestro adicional en el arco superior derecho.
+- Radio completo `50` y primer radio de puente `100` para `E002`, con
+  topologia separada: primero puente inferior interno, luego isla derecha,
+  isla izquierda y finalmente barrido exterior.
+- Puente superior e inferior entre islas con puntos de interseccion:
+  `(200, 202.838822)` y `(200, 97.161178)`.
+- Conectores hacia los loops completos de isla:
+  `(52.5, 208.071891)` y `(237.5, 188.919411)`.
+
+Salidas regeneradas en `S:\Maestro\Projects\ProdAction\PGMX\generated`:
+
+- `Vaciado_029_synth.pgmx`.
+- `Vaciado_029_E002_synth.pgmx`.
+- `Vaciado_029_E005_synth.pgmx`.
+- `Vaciado_029_E006_synth.pgmx`.
+
+Validacion contra Maestro:
+
+- Base y `E006` validan exactos con longitud `(64,)`.
+- `E002` valida exacto con longitud `(45,)`.
+- `E005` valida exacto con longitud `(65,)` por el corte extra de arco.
+- Primitivas base/`E006`: `((39, 24),)` para lineas y arcos.
+- Primitivas `E002`: `((25, 19),)` para lineas y arcos.
+- Primitivas `E005`: `((39, 25),)` para lineas y arcos.
+- `py -3 -m unittest tests.test_pgmx_vaciado`: `47` tests, `OK`.
+- `git diff --check`: sin errores; solo avisos de normalizacion `LF -> CRLF`
+  en los archivos editados.
+
+Frontera que sigue abierta:
+
+- La serie `Vaciado_029_E001`, `E003` y `E004` sigue pendiente.
+- `Vaciado_029_E007` se cierra en la actualizacion siguiente de este mismo
+  checkpoint.
+- `Vaciado_030` y el caso base multi-isla de `Vaciado_031` siguen como frentes
+  separados.
+
+## Actualizacion 2026-05-29 - Cierre Denso Multi-Isla Vaciado_029_E007
+
+Se agrego la regla generativa `two_seed_dense_bridge_offsets` para
+`Vaciado_029_E007`.
+
+Alcance cerrado:
+
+- Dos islas rectangulares simetricas `75..125 x 125..175` y
+  `275..325 x 125..175`.
+- `InsideToOutside=True` con conexion `LiftShiftPlunge`.
+- Offsets completos densos `8.86`, `17.72`, `26.58`, `35.44`, `44.3`,
+  `53.16` y `62.02`.
+- Radio de transicion `70.88`, radio de puente `79.74` y lobulos Maestro
+  superiores/inferiores con radios `88.6` y `97.46`.
+- Puntos de puente y cortes de serializacion Maestro preservados:
+  `(200, 202.082607)`, `(200, 77.830518)`,
+  `(187.649661, 237.649661)` y `(193.181818, 68.420855)`.
+
+Salida regenerada en `S:\Maestro\Projects\ProdAction\PGMX\generated`:
+
+- `Vaciado_029_E007_synth.pgmx`.
+
+Validacion contra Maestro:
+
+- Longitud `(357,)`.
+- Primitivas `((213, 143),)` para lineas y arcos.
+- Secuencia XYZ igual dentro de tolerancia `1e-6`; las diferencias exactas son
+  solo representacion flotante de los mismos puntos Maestro.
+- Arcos y conteo de primitivas iguales a Maestro.
+- `py -3 -m unittest tests.test_pgmx_vaciado`: `49` tests, `OK`.
+- `git diff --check`: sin errores; solo avisos de normalizacion `LF -> CRLF`
+  en los archivos editados.
+
+Frontera que sigue abierta:
+
+- En `Vaciado_029` quedan pendientes `E001`, `E003` y `E004`.
+- `Vaciado_030`, el caso base multi-isla de `Vaciado_031`,
+  `Vaciado_035` y el comando productivo de regeneracion/validacion de lote
+  siguen como frentes separados.
+
+## Actualizacion 2026-05-29 - Cierre Separado Denso Vaciado_029_E001
+
+Se agrego la regla generativa `two_seed_separate_dense_offsets` para
+`Vaciado_029_E001`.
+
+Alcance cerrado:
+
+- Dos islas rectangulares simetricas `75..125 x 125..175` y
+  `275..325 x 125..175`.
+- `InsideToOutside=True` con conexion `LiftShiftPlunge`.
+- Offsets completos densos `9.18`, `18.36`, `27.54`, `36.72`, `45.9` y
+  `55.08`.
+- Radios parciales `64.26` y `73.44` antes del primer cruce entre islas.
+- Primer radio que cruza el claro `82.62`, con lobulos superiores/inferiores
+  adicionales `91.8` y `100.98`.
+- Puntos caracteristicos preservados:
+  `(200, 57.383727)`, `(200, 242.616273)`,
+  `(172.727273, 81.971463)` y `(377.062857, 107.02042)`.
+
+Salida regenerada en `S:\Maestro\Projects\ProdAction\PGMX\generated`:
+
+- `Vaciado_029_E001_synth.pgmx`.
+
+Validacion contra Maestro:
+
+- Longitud `(306,)`.
+- Primitivas `((179, 126),)` para lineas y arcos.
+- Secuencia XYZ igual dentro de tolerancia `1e-6`.
+- Arcos y conteo de primitivas iguales a Maestro.
+- `py -3 -m unittest tests.test_pgmx_vaciado`: `51` tests, `OK`.
+- `git diff --check`: sin errores; solo avisos de normalizacion `LF -> CRLF`
+  en los archivos editados.
+
+Frontera que sigue abierta:
+
+- En `Vaciado_029` quedan pendientes `E003` y `E004`.
+- `E003` y `E004` comparten una familia densa progresiva con mas radios
+  parciales antes/despues del puente que `E001` y `E007`; deben cerrarse como
+  siguiente regla, no como publicacion del checkpoint.
+
+## Actualizacion 2026-05-29 - Cierre Progresivo Denso Vaciado_029_E003_E004
+
+Se agrego la regla generativa `two_seed_progressive_dense_offsets` para
+`Vaciado_029_E003` y `Vaciado_029_E004`.
+
+Alcance cerrado:
+
+- Dos islas rectangulares simetricas `75..125 x 125..175` y
+  `275..325 x 125..175`.
+- `InsideToOutside=True` con conexion `LiftShiftPlunge`.
+- Familia progresiva densa con radios completos, radios separados bajo el
+  claro entre islas, puentes completos hasta el limite vertical y lobulos
+  terminales altos.
+- `E003`: offsets completos `4.76..61.88`, primer puente en `76.16`,
+  puente completo maximo `85.68` y lobulos altos `90.44`, `95.2`, `99.96`.
+- `E004`: offsets completos `2..62`, primer puente en `76`, puente completo
+  maximo `86` y lobulos altos `88`, `90`, `92`, `94`, `96`, `98`, `100`,
+  `102`.
+- Puntos caracteristicos preservados:
+  `E003` `(200, 188.24181)`, `(200, 58.916707)`,
+  `(185.584909, 235.584909)`, `(196.052632, 77.119044)`;
+  `E004` `(200, 187.288203)`, `(200, 55.869688)`,
+  `(185.811183, 235.811183)`, `(198.295455, 80.013598)`.
+
+Salidas regeneradas en `S:\Maestro\Projects\ProdAction\PGMX\generated`:
+
+- `Vaciado_029_E003_synth.pgmx`.
+- `Vaciado_029_E004_synth.pgmx`.
+
+Validacion contra Maestro:
+
+- `E003`: longitud `(653,)`; primitivas `((395, 257),)` para lineas y arcos.
+- `E004`: longitud `(1478,)`; primitivas `((904, 573),)` para lineas y arcos.
+- Secuencias XYZ iguales dentro de tolerancia `1e-6`.
+- Arcos y conteo de primitivas iguales a Maestro.
+- `py -3 -m unittest tests.test_pgmx_vaciado`: `55` tests, `OK`.
+
+Frontera que sigue abierta:
+
+- La familia `Vaciado_029` queda cerrada para base y `E001..E007`.
+- `Vaciado_030`, el caso base multi-isla de `Vaciado_031`,
+  `Vaciado_035` y el comando productivo de regeneracion/validacion de lote
+  siguen como frentes separados.
