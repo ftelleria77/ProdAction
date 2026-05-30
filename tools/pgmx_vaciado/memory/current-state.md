@@ -1701,3 +1701,55 @@ Frontera que sigue abierta:
 - `Vaciado_030`, el caso base multi-isla de `Vaciado_031`,
   `Vaciado_035` y el comando productivo de regeneracion/validacion de lote
   siguen como frentes separados.
+
+## Actualizacion 2026-05-30 - Cierre Right-Wall Vaciado_030
+
+Se agrego la regla generativa `single_seed_right_wall_inside_out_offsets` para
+`Vaciado_030` base y `Vaciado_030_E001..E007`.
+
+Alcance cerrado:
+
+- Base con dos islas fisicas `75..125 x 125..175` y
+  `275..325 x 125..175`, mas semilla de ruta resuelta `10748`
+  en `325..375 x 125..175`.
+- Variantes `E001..E007` con `BossGeometryList` materializado como la semilla
+  lateral derecha `325..375 x 125..175`.
+- Estrategia `InsideToOutside=True` con conexion `LiftShiftPlunge`.
+- Regimen right-wall con radios grandes recortados por la izquierda, radios
+  intermedios contra pared derecha, radios estrechos con esquinas derechas y
+  la transicion de `E004` en centros `(203,125)` y `(203,175)` con radio `2`.
+- La seleccion de trazas del motor usa las semillas de ruta resueltas para no
+  desplazar la isla no resuelta del caso base.
+- La serializacion productiva conserva `BossGeometryList` fisico separado de
+  las referencias de semilla en `BossList`.
+
+Salidas regeneradas en `S:\Maestro\Projects\ProdAction\PGMX\generated`:
+
+- `Vaciado_030_synth.pgmx`.
+- `Vaciado_030_E001_synth.pgmx`.
+- `Vaciado_030_E002_synth.pgmx`.
+- `Vaciado_030_E003_synth.pgmx`.
+- `Vaciado_030_E004_synth.pgmx`.
+- `Vaciado_030_E005_synth.pgmx`.
+- `Vaciado_030_E006_synth.pgmx`.
+- `Vaciado_030_E007_synth.pgmx`.
+
+Validacion contra Maestro:
+
+- Base: longitud `(27,)`; primitivas `((20, 6),)`.
+- `E001`: longitud `(155,)`; primitivas `((122, 32),)`.
+- `E002`: longitud `(18,)`; primitivas `((13, 4),)`.
+- `E003`: longitud `(311,)`; primitivas `((248, 62),)`.
+- `E004`: longitud `(745,)`; primitivas `((587, 157),)`.
+- `E005`: longitud `(27,)`; primitivas `((20, 6),)`.
+- `E006`: longitud `(27,)`; primitivas `((20, 6),)`.
+- `E007`: longitud `(162,)`; primitivas `((129, 32),)`.
+- Secuencias XYZ, arcos y conteos iguales a Maestro para base y variantes.
+- Sintesis validada desde `Vaciado_000.pgmx`, con helpers legacy bloqueados.
+- `py -3 -m unittest tests.test_pgmx_vaciado`: `57` tests, `OK`.
+
+Frontera que sigue abierta:
+
+- Caso base multi-isla de `Vaciado_031`.
+- `Vaciado_035` circular/non-polyline.
+- Comando productivo de regeneracion/validacion de lote.

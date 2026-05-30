@@ -9434,6 +9434,11 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
         _build_closed_polyline_geometry_profile(spec.contour_points, z_value=0.0)
     )
     boundary_member_count = len(boundary_curve.member_serializations)
+    boss_geometry_curves = tuple(
+        _curve_spec_from_profile_geometry(_build_closed_polyline_geometry_profile(boss_contour, z_value=0.0))
+        for boss_contour in spec.boss_contours
+    )
+    boss_geometry_member_count = sum(len(curve.member_serializations) for curve in boss_geometry_curves)
     route_seed_curves = tuple(
         _curve_spec_from_profile_geometry(_build_closed_polyline_geometry_profile(seed.contour_points, z_value=0.0))
         for seed in spec.boss_route_seeds
@@ -9446,6 +9451,7 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
     reserve_count = (
         1
         + boundary_member_count
+        + boss_geometry_member_count
         + route_seed_member_count
         + (6 if uses_depth_expressions else 4)
         + trajectory_member_count
@@ -9454,6 +9460,11 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
     geometry_id = reserved_ids[0]
     boundary_member_keys = tuple(reserved_ids[1 : 1 + boundary_member_count])
     cursor = 1 + boundary_member_count
+    boss_geometry_specs: list[tuple[_CurveSpec, tuple[str, ...]]] = []
+    for boss_curve in boss_geometry_curves:
+        boss_member_keys = tuple(reserved_ids[cursor : cursor + len(boss_curve.member_serializations)])
+        cursor += len(boss_curve.member_serializations)
+        boss_geometry_specs.append((boss_curve, boss_member_keys))
     route_seed_geometry_specs: list[tuple[PocketBossRouteSeedSpec, str, _CurveSpec, tuple[str, ...]]] = []
     for seed, curve in zip((seed for seed in spec.boss_route_seeds if seed.is_resolved), route_seed_curves):
         seed_geometry_id = reserved_ids[cursor]
@@ -9506,8 +9517,8 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
             boundary_curve,
             boundary_curve.member_keys or boundary_member_keys,
             boss_geometry_curves=tuple(
-                (seed_curve, seed_curve.member_keys or seed_member_keys)
-                for _seed, _seed_geometry_id, seed_curve, seed_member_keys in route_seed_geometry_specs
+                (boss_curve, boss_curve.member_keys or boss_member_keys)
+                for boss_curve, boss_member_keys in boss_geometry_specs
             ),
             boss_route_seed_refs=tuple(
                 (

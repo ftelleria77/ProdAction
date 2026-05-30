@@ -976,9 +976,14 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                         baseline_path=BASELINE_PATH,
                         source_pgmx_path=BASELINE_PATH,
                     )
-                    if index in {22, 27, 28, 29}:
+                    if index in {22, 27, 28, 29, 30}:
                         sp.synthesize_request(request)
                         generated_adaptation = adapt_pgmx_path(request.output_path)
+                        generated_spec = generated_adaptation.pocket_millings[0]
+                        self.assertEqual(
+                            tuple(_xy_bbox(boss) for boss in generated_spec.boss_contours),
+                            expected_boss_bboxes,
+                        )
                         generated_sequences = _actual_trajectory_xyz_sequences(
                             generated_adaptation.snapshot.operations[0]
                         )
@@ -1273,6 +1278,140 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
         x_at_offset_120 = seed_left_x - math.sqrt((120.0**2) - ((seed_y_min - 120.0) ** 2))
         self.assertIn((round(x_at_offset_120, 6), 120.0), points)
         self.assertIn((325.0, 125.0, 120.0), arcs)
+
+    def test_trace_engine_resolves_vaciado_030_right_wall_tool_family(self) -> None:
+        expectations = {
+            "base": {
+                "path": _manual_path(30),
+                "trajectory_lengths": (27,),
+                "primitive_counts": ((20, 6),),
+            },
+            "E001": {
+                "path": _variant_path(30, 1),
+                "trajectory_lengths": (155,),
+                "primitive_counts": ((122, 32),),
+            },
+            "E002": {
+                "path": _variant_path(30, 2),
+                "trajectory_lengths": (18,),
+                "primitive_counts": ((13, 4),),
+            },
+            "E003": {
+                "path": _variant_path(30, 3),
+                "trajectory_lengths": (311,),
+                "primitive_counts": ((248, 62),),
+            },
+            "E004": {
+                "path": _variant_path(30, 4),
+                "trajectory_lengths": (745,),
+                "primitive_counts": ((587, 157),),
+            },
+            "E005": {
+                "path": _variant_path(30, 5),
+                "trajectory_lengths": (27,),
+                "primitive_counts": ((20, 6),),
+            },
+            "E006": {
+                "path": _variant_path(30, 6),
+                "trajectory_lengths": (27,),
+                "primitive_counts": ((20, 6),),
+            },
+            "E007": {
+                "path": _variant_path(30, 7),
+                "trajectory_lengths": (162,),
+                "primitive_counts": ((129, 32),),
+            },
+        }
+
+        for label, expected in expectations.items():
+            with self.subTest(label=label):
+                adaptation = adapt_pgmx_path(expected["path"])
+                plan = generate_contour_parallel_pocket_trace(
+                    adaptation.pocket_millings[0],
+                    surface_z=adaptation.snapshot.state.depth,
+                )
+                manual_sequences = _actual_trajectory_xyz_sequences(adaptation.snapshot.operations[0])
+
+                self.assertEqual(plan.pending_stages, ())
+                self.assertTrue(plan.can_emit_trajectory)
+                self.assertEqual(
+                    tuple(family.contour.bbox for family in plan.internal_offset_families),
+                    ((325.0, 375.0, 125.0, 175.0),),
+                )
+                self.assertEqual(
+                    tuple(sequence.name for sequence in plan.resolved_sequences),
+                    ("single_seed_right_wall_inside_out_offsets",),
+                )
+                self.assertEqual(
+                    tuple(len(sequence) for sequence in plan.trajectory_sequences),
+                    expected["trajectory_lengths"],
+                )
+                self.assertEqual(
+                    (
+                        (
+                            plan.resolved_sequences[0].line_count,
+                            plan.resolved_sequences[0].arc_count,
+                        ),
+                    ),
+                    expected["primitive_counts"],
+                )
+                _assert_same_xyz(self, plan.trajectory_sequences[0], manual_sequences[0])
+
+    def test_vaciado_030_right_wall_tool_family_synthesis_uses_trace_engine(self) -> None:
+        expectations = {
+            "base": (_manual_path(30), (27,)),
+            "E001": (_variant_path(30, 1), (155,)),
+            "E002": (_variant_path(30, 2), (18,)),
+            "E003": (_variant_path(30, 3), (311,)),
+            "E004": (_variant_path(30, 4), (745,)),
+            "E005": (_variant_path(30, 5), (27,)),
+            "E006": (_variant_path(30, 6), (27,)),
+            "E007": (_variant_path(30, 7), (162,)),
+        }
+
+        with tempfile.TemporaryDirectory(prefix="vaciado_030_right_wall_") as temp_dir:
+            temp_root = Path(temp_dir)
+            for label, (manual, expected_lengths) in expectations.items():
+                with self.subTest(label=label):
+                    manual_adaptation = adapt_pgmx_path(manual)
+                    manual_sequences = _actual_trajectory_xyz_sequences(
+                        manual_adaptation.snapshot.operations[0]
+                    )
+                    output = temp_root / f"{manual.stem}_synth.pgmx"
+                    request = manual_adaptation.build_synthesis_request(
+                        output,
+                        baseline_path=BASELINE_PATH,
+                        source_pgmx_path=BASELINE_PATH,
+                    )
+                    with mock.patch.object(
+                        sp,
+                        "_build_single_seed_base_loop_xyz_sequences",
+                        side_effect=AssertionError("legacy single-seed base-loop helper should not be used"),
+                    ), mock.patch.object(
+                        sp,
+                        "_build_single_seed_multiloop_curve_and_sequence",
+                        side_effect=AssertionError("legacy single-seed multiloop helper should not be used"),
+                    ):
+                        sp.synthesize_request(request)
+
+                    generated_adaptation = adapt_pgmx_path(output)
+                    self.assertEqual(
+                        tuple(_xy_bbox(boss) for boss in generated_adaptation.pocket_millings[0].boss_contours),
+                        tuple(_xy_bbox(boss) for boss in manual_adaptation.pocket_millings[0].boss_contours),
+                    )
+                    generated_sequences = _actual_trajectory_xyz_sequences(
+                        generated_adaptation.snapshot.operations[0]
+                    )
+                    self.assertEqual(tuple(len(sequence) for sequence in generated_sequences), expected_lengths)
+                    _assert_same_xyz(self, generated_sequences[0], manual_sequences[0])
+                    self.assertEqual(
+                        _trajectory_arcs(generated_adaptation),
+                        _trajectory_arcs(manual_adaptation),
+                    )
+                    self.assertEqual(
+                        _trajectory_primitive_counts(generated_adaptation),
+                        _trajectory_primitive_counts(manual_adaptation),
+                    )
 
     def test_vaciado_031_e006_single_seed_synthesis_matches_trace(self) -> None:
         manual = _variant_path(31, 6)
