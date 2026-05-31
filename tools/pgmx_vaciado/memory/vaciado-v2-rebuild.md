@@ -139,8 +139,87 @@ Eventos geometricos:
 - Se decidio reconstruir el motor de `Vaciado` desde cero en paralelo al viejo.
 - Se registro el plan para separar topologia, estrategia, profundidad y
   serializacion.
-- Proximo paso recomendado: crear la matriz de evidencia/base antes de escribir
-  codigo nuevo.
+- Se creo la matriz base inicial en
+  `tools/pgmx_vaciado/memory/vaciado-v2-baseline.md`.
+- Se recupero acceso a `S:` y `P:` remapeando las unidades persistentes contra
+  `\\gateway.mobile.local`.
+- Se encontro Python real en
+  `C:\Users\fermi\AppData\Local\Python\bin\python3.exe`; los aliases
+  `py`/`python` de `WindowsApps` siguen siendo no confiables.
+- Validacion: `python3 -B -m unittest tests.test_pgmx_vaciado` corrio `57`
+  tests `OK`.
+- Se regeneraron reportes externos en
+  `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_v2_baseline_2026_05_31`:
+  scanner `232` filas, `78` casos manuales, `77` adaptados, `1`
+  `snapshot_only`, `14499` primitivas.
+- Se creo el paquete experimental `tools/pgmx_vaciado_v2/`, sin importar
+  `tools.pgmx_vaciado.trace_engine`.
+- Primer contrato V2 implementado:
+  - `adapters.py`: adaptador desde `PocketMillingSpec` estable hacia contrato
+    V2;
+  - `geometry.py`: `BBox`, `PolylineContour`, `VaciadoGeometry`;
+  - `strategy.py`: `VaciadoStrategy`, con `effective_offset` y `radial_step`;
+  - `depth.py`: `VaciadoDepth`;
+  - `trace.py`: `plan_rectangular_no_islands`, `OffsetFamily` y
+    `RectangularNoIslandTracePlan`.
+- Se agrego `tests/test_pgmx_vaciado_v2.py` con 5 tests para:
+  - offsets rectangulares sin islas;
+  - `InsideToOutSide` como reordenamiento de recorrido;
+  - `AllowanceSide` y `Overlap` como ejes de estrategia;
+  - rechazo explicito de geometria interna en la meta 1.
+  - adaptacion de `manual/Vaciado_008.pgmx` real desde `PocketMillingSpec`.
+- Validacion:
+  - `python3 -B -m unittest tests.test_pgmx_vaciado_v2`: `5` tests `OK`;
+  - `python3 -B -m unittest tests.test_pgmx_vaciado`: `57` tests `OK`.
+- Proximo paso recomendado: ampliar la validacion V2 de
+  `rectangular_no_islands` contra `Vaciado_001..019` usando solo contrato V2 y
+  plan de offsets, antes de emitir trayectorias.
+
+### 2026-05-31 - Validacion Rectangular Estable V2
+
+- Se amplio la validacion V2 al subconjunto rectangular estable completo:
+  `Vaciado_001..021`, `Vaciado_023..026` y `Vaciado_032..034`.
+- La prueba adapta cada `.pgmx` real desde `PocketMillingSpec`, construye el
+  contrato V2 y verifica que el bbox real de `TrajectoryPath` Maestro coincida
+  con el primer offset calculado por `plan_rectangular_no_islands`.
+- Hallazgos de normalizacion:
+  - `Vaciado_002` es rectangular aunque arranca en el medio del borde inferior;
+    V2 debe aceptar rectangulos con puntos colineales extra sobre el perimetro.
+  - `Vaciado_026` conserva ruido flotante en una esquina
+    (`99.99999999999994`, `325.00000000000006`); V2 debe comparar vertices con
+    tolerancia, no por igualdad exacta.
+- Se ajusto `PolylineContour.is_axis_aligned_rectangle` para aceptar ambas
+  situaciones sin relajar a poligonos arbitrarios.
+- Validacion:
+  - `python3 -B -m unittest tests.test_pgmx_vaciado_v2`: `6` tests `OK`;
+  - `python3 -B -m unittest tests.test_pgmx_vaciado`: `57` tests `OK`.
+- Proximo paso recomendado: agregar primitivas abstractas V2 para loops
+  rectangulares, manteniendo separadas la familia de offsets y la serializacion
+  Maestro.
+
+### 2026-05-31 - Primitivas Rectangulares Abstractas V2
+
+- Se agrego `tools/pgmx_vaciado_v2/primitives.py` con:
+  - `TracePrimitive2D`;
+  - `TracePrimitiveSequence2D`;
+  - `rectangular_loop_sequence(...)`.
+- `plan_rectangular_no_islands` ahora produce `primitive_sequences` en el orden
+  de `traversal_offsets`.
+- La orientacion se modela como politica de estrategia:
+  - `CounterClockwise`: abajo -> derecha -> arriba -> izquierda;
+  - `Clockwise`: izquierda -> arriba -> derecha -> abajo.
+- La serializacion Maestro sigue fuera de V2. Esta capa solo describe
+  primitivas geometricas abstractas.
+- Tests agregados:
+  - orden de `primitive_sequences` segun `InsideToOutSide`;
+  - loop rectangular `CounterClockwise`;
+  - loop rectangular `Clockwise`.
+- Validacion:
+  - `python3 -B -m unittest tests.test_pgmx_vaciado_v2`: `8` tests `OK`;
+  - `python3 -B -m unittest tests.test_pgmx_vaciado`: `57` tests `OK`.
+- Proximo paso recomendado: crear una capa de trayectoria 3D V2 para una sola
+  profundidad, derivada de primitivas abstractas, y compararla contra puntos
+  Maestro en el subset rectangular estable.
 
 ## Preguntas Abiertas
 
