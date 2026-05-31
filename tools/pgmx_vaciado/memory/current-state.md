@@ -8,6 +8,12 @@ Abrir una investigacion separada para mecanizados `.pgmx` que todavia no estan
 soportados por las herramientas actuales y que vamos a estudiar bajo el concepto
 operativo de `Vaciado`.
 
+## Memoria Temporal Activa
+
+- Reconstruccion V2 de `Vaciado`: leer
+  `tools/pgmx_vaciado/memory/vaciado-v2-rebuild.md` antes de avanzar con el
+  nuevo motor o con decisiones sobre la estrategia de sintesis.
+
 `Vaciado` nombra, por ahora, un mecanizado de remocion de material en un area
 interior. No se asume todavia que exista un unico tipo XML Maestro con ese
 nombre. La clasificacion debe salir de evidencia: feature, operacion,
