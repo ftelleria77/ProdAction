@@ -542,7 +542,7 @@ Este camino no genera guias de cortes principales.
 
 ### Optimizacion Longitudinal / Transversal
 
-`_pack_group_into_boards_guillotine(...)`
+`core.nesting_guillotine.pack_group_into_boards_guillotine(...)`
 
 Metodologia actual:
 
@@ -556,10 +556,12 @@ Metodologia actual:
 - los helpers de secciones, puntajes, ubicaciones y guias viven en
   `core.nesting_guillotine_sections`; `core.nesting` conserva fachadas privadas
   historicas para los laboratorios
+- `core.nesting._pack_group_into_boards_guillotine` se conserva como fachada
+  compatible
 
 ### Variante Dimension Scan
 
-`_pack_group_into_boards_guillotine_dimension_scan(...)`
+`core.nesting_guillotine.pack_group_into_boards_guillotine_dimension_scan(...)`
 
 Metodologia actual:
 
