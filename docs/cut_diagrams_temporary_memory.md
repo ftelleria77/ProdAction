@@ -67,8 +67,9 @@ La UI de `BoardsDialog` administra tableros disponibles para diagramas.
 
 ## Expansion De Piezas
 
-La expansion ocurre en `_expand_project_pieces(...)` dentro de
-`core/nesting.py`.
+La expansion ocurre en `core.nesting_pieces.expand_project_pieces(...)`.
+`core.nesting._expand_project_pieces` se conserva como fachada compatible para
+los laboratorios.
 
 Reglas observadas:
 
@@ -96,7 +97,7 @@ Resumen de la regla:
 - su veta no puede ser mixta
 - aplica tanto a `Corte Manual` como a `Corte Nesting`
 
-La implementacion esta en `_build_en_juego_cut_piece(...)`.
+La implementacion esta en `core.nesting_pieces.build_en_juego_cut_piece(...)`.
 
 ## Tableros
 
@@ -138,7 +139,8 @@ mayor a menor.
 Conclusiones del codigo:
 
 - las piezas no quedan finalmente ordenadas por modulo; el orden por modulo y
-  por `PIECE_TYPE_ORDER` solo existe durante `_expand_project_pieces(...)`
+  por `PIECE_TYPE_ORDER` solo existe durante
+  `core.nesting_pieces.expand_project_pieces(...)`
 - despues, cada grupo completo de mismo material/espesor se vuelve a ordenar
   con `_order_group_pieces(...)`
 - las composiciones `En-Juego` se agregan al final del recorrido de cada modulo,
