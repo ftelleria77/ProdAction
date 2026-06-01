@@ -68,6 +68,7 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 | `core/production_sheet_pdf.py` | Planilla de produccion PDF interactiva | Renderer PDF productivo |
 | `core/production_pdf.py` | Primitivos PDF de la planilla de produccion | Helpers testeables para objetos, coordenadas y JavaScript PDF |
 | `core/nesting_model.py` | Tipos y constantes de corte/nesting | Contrato de datos compartido por empacadores y renderers |
+| `core/nesting_strategy.py` | Normalizacion de modos, veta, orientaciones y orden de piezas de corte | Estrategia compartida por empacadores y laboratorios |
 | `core/nesting_boards.py` | Normalizacion, resolucion y margen de tableros de corte | Preparacion de tableros separada del empacador |
 | `core/nesting_pieces.py` | Expansion de piezas, resolucion de dimensiones PGMX y reemplazo En-Juego para corte | Preparacion de piezas separada del empacador |
 | `core/nesting_pdf.py` | Renderer PDF imprimible de diagramas de corte | Salida visual de nesting separada del empacador |
@@ -176,6 +177,9 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
    Avance: expansion de piezas, resolucion de dimensiones PGMX, orden por tipo
    y reemplazo de composiciones En-Juego movidos a `core.nesting_pieces`;
    `core.nesting` conserva las fachadas historicas usadas por laboratorios.
+   Avance: normalizacion de modos, veta de tablero, orientaciones y orden de
+   piezas movidos a `core.nesting_strategy`; `core.nesting` conserva las
+   fachadas historicas usadas por laboratorios.
 9. Reubicar o etiquetar laboratorios sin mezclarlos con flujos productivos.
 
 ## Invariantes
@@ -185,7 +189,7 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 
 ```powershell
 python -m compileall main.py app core pgmx tools iso_state_synthesis cnc_traceability
-python -c "import app.ui, core.parser, core.nesting, core.nesting_model, core.nesting_boards, core.nesting_pieces, core.nesting_pdf, core.summary, core.production_sheet, core.production_sheet_data, core.production_sheet_images, core.production_sheet_pdf, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
+python -c "import app.ui, core.parser, core.nesting, core.nesting_model, core.nesting_strategy, core.nesting_boards, core.nesting_pieces, core.nesting_pdf, core.summary, core.production_sheet, core.production_sheet_data, core.production_sheet_images, core.production_sheet_pdf, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
 ```
 
 - Las suites de Vaciado estan pausadas por defecto. Para ejecutarlas cuando se

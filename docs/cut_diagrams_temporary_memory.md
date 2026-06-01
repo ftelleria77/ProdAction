@@ -120,8 +120,9 @@ completo de placa.
 
 ## Veta Y Rotacion
 
-La funcion `_orientation_options(...)` genera orientaciones posibles para cada
-pieza.
+La funcion `core.nesting_strategy.orientation_options(...)` genera
+orientaciones posibles para cada pieza. `core.nesting._orientation_options` se
+conserva como fachada compatible para los laboratorios.
 
 Reglas observadas:
 
@@ -142,7 +143,7 @@ Conclusiones del codigo:
   por `PIECE_TYPE_ORDER` solo existe durante
   `core.nesting_pieces.expand_project_pieces(...)`
 - despues, cada grupo completo de mismo material/espesor se vuelve a ordenar
-  con `_order_group_pieces(...)`
+  con `core.nesting_strategy.order_group_pieces(...)`
 - las composiciones `En-Juego` se agregan al final del recorrido de cada modulo,
   pero tambien entran en ese ordenamiento por grupo antes de optimizar
 - las copias de una misma pieza se agregan consecutivamente y, si empatan en la
@@ -150,7 +151,8 @@ Conclusiones del codigo:
 - cuando dos o mas piezas empatan exactamente en la clave de orden, el orden
   previo de expansion si puede sobrevivir como desempate implicito
 
-La clave actual de `_order_group_pieces(...)` en guillotina es:
+La clave actual de `core.nesting_strategy.order_group_pieces(...)` en
+guillotina es:
 
 - dimension primaria preferida
 - dimension secundaria preferida
