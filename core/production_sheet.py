@@ -2,7 +2,6 @@
 
 import io
 import re
-import json
 import tempfile
 from math import ceil
 from pathlib import Path
@@ -65,8 +64,14 @@ from core.model import (
     Piece,
     Project,
     build_piece_observations_display,
-    normalize_piece_grain_direction,
-    normalize_piece_observations,
+)
+from core.production_sheet_data import (
+    effective_piece_quantity as _effective_piece_quantity,
+    is_positive_dimension as _is_positive_dimension,
+    load_module_sheet_data as _load_module_sheet_data,
+    piece_from_sheet_row as _piece_from_sheet_row,
+    safe_float as _safe_float,
+    safe_int as _safe_int,
 )
 
 
@@ -74,71 +79,6 @@ def _excel_image_embedding_available() -> bool:
     """openpyxl requiere Pillow incluso para insertar PNG ya existentes."""
 
     return PILImage is not None
-
-
-
-def _is_valid_thickness(value) -> bool:
-    if value is None:
-        return False
-    try:
-        return float(value) > 0
-    except (TypeError, ValueError):
-        return False
-
-
-def _safe_int(value, default=1) -> int:
-    try:
-        parsed = int(float(value))
-        return parsed if parsed > 0 else default
-    except (TypeError, ValueError):
-        return default
-
-
-def _effective_piece_quantity(piece_quantity, module_quantity) -> int:
-    return _safe_int(piece_quantity, default=1) * _safe_int(module_quantity, default=1)
-
-
-def _safe_float(value):
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _confirmed_dimension(value):
-    parsed = _safe_float(value)
-    if parsed is None:
-        return None
-    return int(parsed) if parsed.is_integer() else round(parsed, 2)
-
-
-def _is_positive_dimension(value) -> bool:
-    parsed = _safe_float(value)
-    return parsed is not None and parsed > 0
-
-
-def _piece_from_sheet_row(module_name: str, piece_row: dict) -> Piece:
-    thickness = _safe_float(piece_row.get("thickness"))
-    quantity = _safe_int(piece_row.get("quantity"), default=1)
-    return Piece(
-        id=str(piece_row.get("id") or piece_row.get("name") or "pieza").strip(),
-        name=str(piece_row.get("name") or piece_row.get("id") or "pieza").strip(),
-        quantity=quantity,
-        width=_safe_float(piece_row.get("width")) or 0.0,
-        height=_safe_float(piece_row.get("height")) or 0.0,
-        thickness=thickness,
-        color=piece_row.get("color"),
-        grain_direction=normalize_piece_grain_direction(piece_row.get("grain_direction")),
-        module_name=module_name,
-        cnc_source=str(piece_row.get("source") or "").strip() or None,
-        f6_source=str(piece_row.get("f6_source") or "").strip() or None,
-        piece_type=piece_row.get("piece_type"),
-        program_width=_safe_float(piece_row.get("program_width")),
-        program_height=_safe_float(piece_row.get("program_height")),
-        program_thickness=_safe_float(piece_row.get("program_thickness")),
-    )
 
 
 def _px_to_excel_width(px: int) -> float:
@@ -395,79 +335,6 @@ def _build_en_juego_sheet_svg(
     return svg_path if svg_path.is_file() else None
 
 
-def _load_module_sheet_data(
-    project: Project,
-    module,
-    program_dimensions_cache: dict[tuple[str, str], tuple[float | None, float | None, float | None]],
-) -> dict:
-    from pgmx.processing import get_pgmx_program_dimension_notes
-
-    config_path = Path(module.path) / "module_config.json"
-    config_data = {}
-    module_settings = {
-        "herrajes_y_accesorios": "",
-        "guias_y_bisagras": "",
-        "detalles_de_obra": "",
-    }
-
-    if config_path.exists():
-        try:
-            config_data = json.loads(config_path.read_text(encoding="utf-8"))
-        except Exception:
-            config_data = {}
-        module_settings.update(config_data.get("settings", {}))
-        raw_pieces = config_data.get("pieces", [])
-        pieces = [piece for piece in raw_pieces if _is_valid_thickness(piece.get("thickness"))]
-        from core.model import PIECE_TYPE_ORDER as _PTO
-
-        type_rank = {piece_type: index for index, piece_type in enumerate(_PTO)}
-        pieces.sort(key=lambda piece: type_rank.get(piece.get("piece_type") or "", len(_PTO)))
-    else:
-        pieces = [
-            {
-                "id": piece.id,
-                "name": piece.name or piece.id,
-                "quantity": piece.quantity,
-                "width": piece.width,
-                "height": piece.height,
-                "thickness": piece.thickness,
-                "color": piece.color,
-                "grain_direction": normalize_piece_grain_direction(piece.grain_direction),
-                "source": piece.cnc_source,
-                "f6_source": piece.f6_source,
-                "program_width": piece.program_width,
-                "program_height": piece.program_height,
-                "program_thickness": piece.program_thickness,
-                "include_in_sheet": False,
-                "observations": "",
-            }
-            for piece in module.pieces
-            if _is_valid_thickness(piece.thickness)
-        ]
-
-    piece_objects = [_piece_from_sheet_row(module.name, piece) for piece in pieces]
-    program_notes = get_pgmx_program_dimension_notes(
-        project,
-        piece_objects,
-        Path(module.path),
-        cache=program_dimensions_cache,
-    )
-    for piece, program_note in zip(pieces, program_notes):
-        piece["program_dimension_note"] = program_note
-        piece["observations"] = normalize_piece_observations(piece.get("observations"))
-
-    x_inferred, y_inferred, z_inferred = _derive_module_dimensions(module.name, pieces)
-    x_val = _confirmed_dimension(module_settings.get("x")) or x_inferred
-    y_val = _confirmed_dimension(module_settings.get("y")) or y_inferred
-    z_val = _confirmed_dimension(module_settings.get("z")) or z_inferred
-    return {
-        "config_data": config_data,
-        "module_settings": module_settings,
-        "pieces": pieces,
-        "dimensions": (x_val, y_val, z_val),
-    }
-
-
 def _prepare_module_sheet_images(
     project: Project,
     module,
@@ -623,94 +490,6 @@ def _apply_outer_frame(ws, start_row: int, end_row: int, start_col: int = 1, end
             top = side if row == start_row else cell.border.top
             bottom = side if row == end_row else cell.border.bottom
             cell.border = Border(left=left, right=right, top=top, bottom=bottom)
-
-
-def _extract_named_dimensions(module_name: str):
-    """Extraer dimensiones desde nombre de módulo respetando convención ...-X-Z."""
-    raw = module_name or ""
-    cleaned = re.sub(r"^\s*mod\.?\s*\d+\s*-\s*", "", raw, flags=re.IGNORECASE)
-    parts = [part.strip() for part in cleaned.split("-")]
-
-    numeric_parts = []
-    for part in parts:
-        if re.fullmatch(r"\d+(?:[\.,]\d+)?", part):
-            try:
-                numeric_parts.append(float(part.replace(",", ".")))
-            except ValueError:
-                continue
-
-    if len(numeric_parts) >= 2:
-        return numeric_parts[-2], numeric_parts[-1]
-    if len(numeric_parts) == 1:
-        return numeric_parts[0], None
-    return None, None
-
-
-def _derive_module_dimensions(module_name: str, pieces: list[dict]):
-    """Inferir X, Y, Z según: ancho total, altura total y profundidad sin frente."""
-    x_named, z_named = _extract_named_dimensions(module_name)
-
-    widths = []
-    heights = []
-    thicknesses = []
-    lateral_heights = []
-    span_heights = []
-
-    for piece in pieces:
-        piece_name = str(piece.get("name") or piece.get("id") or "").lower()
-        width = _safe_float(piece.get("width"))
-        height = _safe_float(piece.get("height"))
-        thickness = _safe_float(piece.get("thickness"))
-
-        if width is not None and width > 0:
-            widths.append(width)
-        if height is not None and height > 0:
-            heights.append(height)
-        if thickness is not None and thickness > 0:
-            thicknesses.append(thickness)
-
-        if "lateral" in piece_name and height is not None and height > 0:
-            lateral_heights.append(height)
-
-        if any(key in piece_name for key in ["fondo", "estante", "tapa", "puerta", "frente", "faja"]):
-            if height is not None and height > 0:
-                span_heights.append(height)
-
-    max_thickness = max(thicknesses) if thicknesses else 0.0
-
-    # Z: profundidad sin frente/tapas. En la mayoría de casos coincide con el mayor ancho de pieza.
-    if z_named is not None:
-        z_val = round(z_named, 2)
-    elif widths:
-        z_val = round(max(widths), 2)
-    else:
-        z_val = None
-
-    # X: ancho total. Se prioriza nomenclatura del módulo (convención ...-X-Z).
-    if x_named is not None:
-        x_val = round(x_named, 2)
-    else:
-        # Fallback geométrico: usar piezas de "travesía" (fondo/estante/puerta/faja/tapa/frente).
-        x_base = max(span_heights) if span_heights else (max(heights) if heights else None)
-        x_val = round(x_base, 2) if x_base is not None else None
-
-    # Y: altura total. Lateral + espesor superior/inferior cuando se puede inferir.
-    if lateral_heights:
-        y_base = max(lateral_heights)
-    elif heights:
-        y_base = max(heights)
-    else:
-        y_base = None
-
-    y_val = round(y_base + max_thickness, 2) if y_base is not None else None
-
-    # Normalizar enteros visuales (150.0 -> 150)
-    def _compact_number(n):
-        if n is None:
-            return None
-        return int(n) if abs(n - int(n)) < 1e-9 else n
-
-    return _compact_number(x_val), _compact_number(y_val), _compact_number(z_val)
 
 
 
@@ -1333,13 +1112,10 @@ def export_production_sheet_pdf(project: Project, output_pdf: Path) -> Path:
 
 def export_production_sheet(project: Project, output_xlsx: Path):
     """Generar planilla Excel de producción sin plantilla, desde datos del sistema."""
-    from pgmx.processing import get_pgmx_program_dimension_notes
-
     wb = Workbook()
     ws = wb.active
     ws.title = "Planilla"
     program_dimensions_cache: dict[tuple[str, str], tuple[float | None, float | None, float | None]] = {}
-    excel_images_supported = _excel_image_embedding_available()
     observations_min_width = _px_to_excel_width(120)
     observations_max_width = _px_to_excel_width(280)
     observations_font = Font(name="Calibri", size=9, bold=True, color="FFFF0000")
@@ -1415,64 +1191,12 @@ def export_production_sheet(project: Project, output_xlsx: Path):
 
         current_row = 6
         for module in project.modules:
+            module_data = _load_module_sheet_data(project, module, program_dimensions_cache)
             module_quantity = _safe_int(getattr(module, "quantity", None), default=1)
-            config_path = Path(module.path) / "module_config.json"
-            config_data = {}
-            module_settings = {
-                "herrajes_y_accesorios": "",
-                "guias_y_bisagras": "",
-                "detalles_de_obra": "",
-            }
-
-            if config_path.exists():
-                try:
-                    config_data = json.loads(config_path.read_text(encoding="utf-8"))
-                except Exception:
-                    config_data = {}
-                module_settings.update(config_data.get("settings", {}))
-                raw_pieces = config_data.get("pieces", [])
-                pieces = [piece for piece in raw_pieces if _is_valid_thickness(piece.get("thickness"))]
-                from core.model import PIECE_TYPE_ORDER as _PTO
-                _type_rank = {t: i for i, t in enumerate(_PTO)}
-                pieces.sort(key=lambda p: _type_rank.get(p.get("piece_type") or "", len(_PTO)))
-            else:
-                pieces = [
-                    {
-                        "id": piece.id,
-                        "name": piece.name or piece.id,
-                        "quantity": piece.quantity,
-                        "width": piece.width,
-                        "height": piece.height,
-                        "thickness": piece.thickness,
-                        "color": piece.color,
-                        "grain_direction": normalize_piece_grain_direction(piece.grain_direction),
-                        "source": piece.cnc_source,
-                        "f6_source": piece.f6_source,
-                        "program_width": piece.program_width,
-                        "program_height": piece.program_height,
-                        "program_thickness": piece.program_thickness,
-                        "include_in_sheet": False,
-                        "observations": "",
-                    }
-                    for piece in module.pieces
-                    if _is_valid_thickness(piece.thickness)
-                ]
-
-            piece_objects = [_piece_from_sheet_row(module.name, piece) for piece in pieces]
-            program_notes = get_pgmx_program_dimension_notes(
-                project,
-                piece_objects,
-                Path(module.path),
-                cache=program_dimensions_cache,
-            )
-            for piece, program_note in zip(pieces, program_notes):
-                piece["program_dimension_note"] = program_note
-                piece["observations"] = normalize_piece_observations(piece.get("observations"))
-
-            x_inferred, y_inferred, z_inferred = _derive_module_dimensions(module.name, pieces)
-            x_val = _confirmed_dimension(module_settings.get("x")) or x_inferred
-            y_val = _confirmed_dimension(module_settings.get("y")) or y_inferred
-            z_val = _confirmed_dimension(module_settings.get("z")) or z_inferred
+            config_data = module_data["config_data"]
+            module_settings = module_data["module_settings"]
+            pieces = module_data["pieces"]
+            x_val, y_val, z_val = module_data["dimensions"]
 
             ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=3)
             module_title_cell = ws.cell(row=current_row, column=1, value=module.name)
@@ -1527,58 +1251,14 @@ def export_production_sheet(project: Project, output_xlsx: Path):
             images_end_row = images_start_row - 1  # No images initially
 
             # Insert drawings immediately after details: up to 3 per row, max height 4cm (150px).
-            prepared_images: list[tuple[Path, int, int, str]] = []
-            if excel_images_supported:
-                en_juego_replaced_piece_ids: set[str] = set()
-                if _en_juego_sheet_replacement_enabled(config_data, pieces):
-                    en_juego_svg_path = _build_en_juego_sheet_svg(
-                        project,
-                        module,
-                        Path(module.path),
-                        config_data,
-                        temp_dir,
-                    )
-                    if en_juego_svg_path is not None:
-                        en_juego_png_path = temp_dir / f"{_sanitize_filename(module.name)}_EnJuego.png"
-                        prepared_en_juego = _prepare_excel_drawing_image(
-                            en_juego_svg_path,
-                            en_juego_png_path,
-                            "En-Juego",
-                            max_width_px=150,
-                        )
-                        if prepared_en_juego is not None:
-                            prepared_images.append(prepared_en_juego)
-                            en_juego_replaced_piece_ids = {
-                                str(piece.get("id") or "").strip()
-                                for piece in pieces
-                                if bool(piece.get("en_juego", False))
-                            }
-
-                for idx, piece in enumerate(pieces):
-                    if not bool(piece.get("include_in_sheet", False)):
-                        continue
-                    if (
-                        bool(piece.get("en_juego", False))
-                        and str(piece.get("id") or "").strip() in en_juego_replaced_piece_ids
-                    ):
-                        continue
-
-                    piece_display_name = str(piece.get("name") or piece.get("id") or "pieza").strip()
-                    piece_slug = _sanitize_filename(piece_display_name)
-                    svg_path = Path(module.path) / f"{piece_slug}.svg"
-                    if not svg_path.is_file():
-                        continue
-
-                    # Max 4cm height (150px at 96 DPI)
-                    png_path = temp_dir / f"{_sanitize_filename(module.name)}_{idx}_{piece_slug}.png"
-                    prepared_piece = _prepare_excel_drawing_image(
-                        svg_path,
-                        png_path,
-                        piece_display_name,
-                        max_width_px=150,
-                    )
-                    if prepared_piece is not None:
-                        prepared_images.append(prepared_piece)
+            prepared_images = _prepare_module_sheet_images(
+                project,
+                module,
+                config_data,
+                pieces,
+                temp_dir,
+                max_width_px=150,
+            )
 
             # Insertar imágenes: 3 por fila
             if prepared_images:

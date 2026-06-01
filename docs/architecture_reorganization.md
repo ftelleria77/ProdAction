@@ -62,6 +62,7 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 | `app/settings.py` | Configuracion, tableros, herramientas y En-Juego | Servicio de configuracion de app |
 | `core/` | Modelo, parseo, resumen, nesting y En-Juego | Dominio productivo y servicios de aplicacion |
 | `core/summary.py` | Resumen CSV y fachadas historicas de planillas | Compatibilidad para imports existentes |
+| `core/production_sheet_data.py` | Carga normalizada de datos de planilla | Preparacion compartida por Excel y PDF |
 | `core/production_sheet.py` | Planilla de produccion Excel y PDF interactivo | Exportadores productivos de planillas |
 | `core/production_pdf.py` | Primitivos PDF de la planilla de produccion | Helpers testeables para objetos, coordenadas y JavaScript PDF |
 | `pgmx/` | Snapshot, adaptacion, sintesis, Vaciado y datos Maestro | Subsistema productivo PGMX fuera de `tools` |
@@ -150,6 +151,8 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
    Avance: exportadores Excel/PDF de planillas movidos a
    `core.production_sheet`; `core.summary` conserva el CSV y reexporta las
    funciones historicas para compatibilidad.
+   Avance: carga normalizada de piezas, cantidades, dimensiones y notas PGMX de
+   planilla movida a `core.production_sheet_data`, compartida por Excel y PDF.
 9. Reubicar o etiquetar laboratorios sin mezclarlos con flujos productivos.
 
 ## Invariantes
@@ -159,7 +162,7 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 
 ```powershell
 python -m compileall main.py app core pgmx tools iso_state_synthesis cnc_traceability
-python -c "import app.ui, core.parser, core.nesting, core.summary, core.production_sheet, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
+python -c "import app.ui, core.parser, core.nesting, core.summary, core.production_sheet, core.production_sheet_data, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
 ```
 
 - Las suites de Vaciado estan pausadas por defecto. Para ejecutarlas cuando se

@@ -8,18 +8,10 @@ import pandas as pd
 
 from core.model import Project, normalize_piece_grain_direction
 from core.production_sheet import export_production_sheet, export_production_sheet_pdf
-
-
-def _safe_int(value, default=1) -> int:
-    try:
-        parsed = int(float(value))
-        return parsed if parsed > 0 else default
-    except (TypeError, ValueError):
-        return default
-
-
-def _effective_piece_quantity(piece_quantity, module_quantity) -> int:
-    return _safe_int(piece_quantity, default=1) * _safe_int(module_quantity, default=1)
+from core.production_sheet_data import (
+    effective_piece_quantity as _effective_piece_quantity,
+    safe_int as _safe_int,
+)
 
 
 def export_summary(project: Project, output_csv: Path):
