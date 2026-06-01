@@ -687,8 +687,10 @@ Integracion al sistema principal:
 - `core.nesting` incorpora `CUT_GUILLOTINE_ALGORITHM_BRKGA_TAIL` y conserva
   fachadas privadas compatibles para laboratorios.
 - `CUT_GUILLOTINE_ALGORITHM_PREFERRED` apunta a `brkga-tail`.
-- `generate_cut_diagrams(...)` y `_pack_group_into_boards(...)` usan ese metodo
-  como default cuando el modo de optimizacion es longitudinal o transversal.
+- `generate_cut_diagrams(...)` delega en `core.nesting_dispatch`, que selecciona
+  `brkga-tail` como default cuando el modo de optimizacion es longitudinal o
+  transversal; `core.nesting._pack_group_into_boards` se conserva como fachada
+  compatible para laboratorios.
 - `app/ui.py` informa el metodo de guillotina usado al terminar la generacion.
 - El laboratorio queda como banco de pruebas; el flujo principal ya no depende
   de `tools/studies/cut_diagrams/ordering_lab.py` para usar el algoritmo genetico.

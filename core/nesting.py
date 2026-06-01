@@ -1,6 +1,5 @@
 """Algoritmos básicos de nesting/optimización de corte para tableros."""
 
-import math
 import re
 from pathlib import Path
 from typing import List
@@ -54,6 +53,7 @@ from core.nesting_brkga import (
     pack_group_into_boards_order_driven_guillotine as _pack_group_into_boards_order_driven_guillotine,
     preferred_primary_secondary as _preferred_primary_secondary,
 )
+from core.nesting_dispatch import pack_group_into_boards as _pack_group_into_boards
 from core.nesting_pdf import build_cut_diagram_pdf
 from core.nesting_pieces import (
     build_en_juego_cut_piece as _build_en_juego_cut_piece,
@@ -117,75 +117,6 @@ from core.nesting_model import (
 def _sanitize_filename(value: str) -> str:
     cleaned = re.sub(r"[^0-9A-Za-z._-]+", "_", str(value or "").strip())
     return cleaned.strip("._") or "diagrama"
-
-
-def _sections_lower_bound_width(remaining: list[CutPiece], secondary_capacity: float) -> float:
-    remaining_area = sum(piece.width * piece.height for piece in remaining)
-    if secondary_capacity <= 0:
-        return float('inf')
-    return remaining_area / secondary_capacity
-
-
-def _pack_group_into_boards(
-    material: str,
-    thickness: float,
-    pieces: list[CutPiece],
-    board_width: float,
-    board_height: float,
-    piece_spacing: float,
-    section_kerf: float,
-    grain: str = "",
-    optimization_mode: str = CUT_OPTIMIZATION_NONE,
-    guillotine_algorithm: str = CUT_GUILLOTINE_ALGORITHM_PREFERRED,
-) -> tuple[list[CutBoard], list[CutPiece]]:
-    if _uses_guillotine_mode(optimization_mode):
-        resolved_algorithm = _normalize_guillotine_algorithm(guillotine_algorithm)
-        if resolved_algorithm == CUT_GUILLOTINE_ALGORITHM_BRKGA_TAIL:
-            return _pack_group_into_boards_guillotine_brkga_tail(
-                material,
-                thickness,
-                pieces,
-                board_width,
-                board_height,
-                piece_spacing,
-                section_kerf,
-                grain=grain,
-                optimization_mode=optimization_mode,
-            )
-        if resolved_algorithm == CUT_GUILLOTINE_ALGORITHM_DIMENSION_SCAN:
-            return _pack_group_into_boards_guillotine_dimension_scan(
-                material,
-                thickness,
-                pieces,
-                board_width,
-                board_height,
-                piece_spacing,
-                section_kerf,
-                grain=grain,
-                optimization_mode=optimization_mode,
-            )
-        return _pack_group_into_boards_guillotine(
-            material,
-            thickness,
-            pieces,
-            board_width,
-            board_height,
-            piece_spacing,
-            section_kerf,
-            grain=grain,
-            optimization_mode=optimization_mode,
-        )
-
-    return _pack_group_into_boards_free_rectangles(
-        material,
-        thickness,
-        pieces,
-        board_width,
-        board_height,
-        piece_spacing,
-        grain=grain,
-        optimization_mode=optimization_mode,
-    )
 
 
 def generate_cut_diagrams(
