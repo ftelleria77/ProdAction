@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 from openpyxl import load_workbook
 
-from core import production_sheet, summary
+from core import production_sheet, production_sheet_pdf, summary
 from core.model import ModuleData, Piece, Project
 
 
@@ -50,6 +50,7 @@ class SummaryExportsTests(unittest.TestCase):
     def test_summary_keeps_production_sheet_compatibility_facade(self) -> None:
         self.assertIs(summary.export_production_sheet, production_sheet.export_production_sheet)
         self.assertIs(summary.export_production_sheet_pdf, production_sheet.export_production_sheet_pdf)
+        self.assertIs(production_sheet.export_production_sheet_pdf, production_sheet_pdf.export_production_sheet_pdf)
 
     def test_export_production_sheet_writes_basic_workbook(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
