@@ -682,7 +682,10 @@ cantidad de placas y sin omitir piezas.
 
 Integracion al sistema principal:
 
-- `core/nesting.py` incorpora `CUT_GUILLOTINE_ALGORITHM_BRKGA_TAIL`.
+- `core.nesting_brkga` contiene el decoder order-driven, la funcion de fitness
+  por sobrante completo y el packer `brkga-tail`.
+- `core.nesting` incorpora `CUT_GUILLOTINE_ALGORITHM_BRKGA_TAIL` y conserva
+  fachadas privadas compatibles para laboratorios.
 - `CUT_GUILLOTINE_ALGORITHM_PREFERRED` apunta a `brkga-tail`.
 - `generate_cut_diagrams(...)` y `_pack_group_into_boards(...)` usan ese metodo
   como default cuando el modo de optimizacion es longitudinal o transversal.

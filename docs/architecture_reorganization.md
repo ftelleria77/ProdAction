@@ -73,6 +73,7 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 | `core/nesting_free_rectangles.py` | Empacador de rectangulos libres para corte sin optimizacion guillotina | Algoritmo de ubicacion separado del orquestador de nesting |
 | `core/nesting_guillotine_sections.py` | Helpers de secciones, puntajes, ubicaciones y guias guillotina | Base compartida por packers guillotina |
 | `core/nesting_guillotine.py` | Packers guillotina `current` y `dimension-scan` | Algoritmos guillotina separados del orquestador de nesting |
+| `core/nesting_brkga.py` | Decoder order-driven y packer guillotina BRKGA `brkga-tail` | Algoritmo genetico separado del orquestador de nesting |
 | `core/nesting_boards.py` | Normalizacion, resolucion y margen de tableros de corte | Preparacion de tableros separada del empacador |
 | `core/nesting_pieces.py` | Expansion de piezas, resolucion de dimensiones PGMX y reemplazo En-Juego para corte | Preparacion de piezas separada del empacador |
 | `core/nesting_pdf.py` | Renderer PDF imprimible de diagramas de corte | Salida visual de nesting separada del empacador |
@@ -196,6 +197,9 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
    Avance: packers guillotina `current` y `dimension-scan` movidos a
    `core.nesting_guillotine`; `core.nesting` conserva las fachadas historicas y
    mantiene BRKGA como siguiente frontera.
+   Avance: decoder order-driven, fitness de sobrante completo y packer
+   genetico `brkga-tail` movidos a `core.nesting_brkga`; `core.nesting`
+   conserva las fachadas historicas usadas por laboratorios.
 9. Reubicar o etiquetar laboratorios sin mezclarlos con flujos productivos.
 
 ## Invariantes
@@ -205,7 +209,7 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 
 ```powershell
 python -m compileall main.py app core pgmx tools iso_state_synthesis cnc_traceability
-python -c "import app.ui, core.parser, core.nesting, core.nesting_model, core.nesting_strategy, core.nesting_geometry, core.nesting_free_rectangles, core.nesting_guillotine_sections, core.nesting_guillotine, core.nesting_boards, core.nesting_pieces, core.nesting_pdf, core.summary, core.production_sheet, core.production_sheet_data, core.production_sheet_images, core.production_sheet_pdf, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
+python -c "import app.ui, core.parser, core.nesting, core.nesting_model, core.nesting_strategy, core.nesting_geometry, core.nesting_free_rectangles, core.nesting_guillotine_sections, core.nesting_guillotine, core.nesting_brkga, core.nesting_boards, core.nesting_pieces, core.nesting_pdf, core.summary, core.production_sheet, core.production_sheet_data, core.production_sheet_images, core.production_sheet_pdf, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
 ```
 
 - Las suites de Vaciado estan pausadas por defecto. Para ejecutarlas cuando se
