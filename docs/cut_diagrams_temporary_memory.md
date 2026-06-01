@@ -178,7 +178,9 @@ dimensionales y ajuste de la seccion, no simplemente "siguiente pieza mas
 grande de la lista".
 
 Dentro de una seccion, `candidate.selections` se ordena con
-`_section_selection_sort_key(...)`:
+`core.nesting_guillotine_sections.section_selection_sort_key(...)`.
+`core.nesting._section_selection_sort_key` se conserva como fachada compatible
+para laboratorios:
 
 - primero piezas que coinciden exactamente con el tamano primario de la seccion
 - luego piezas similares
@@ -551,6 +553,9 @@ Metodologia actual:
 - selecciona combinaciones por area agrupada, area usada y avance sobre el eje
 - genera `main_cut_positions` y `main_cut_orientation` para dibujar cortes
   principales
+- los helpers de secciones, puntajes, ubicaciones y guias viven en
+  `core.nesting_guillotine_sections`; `core.nesting` conserva fachadas privadas
+  historicas para los laboratorios
 
 ### Variante Dimension Scan
 
