@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.synthesize_pgmx import (  # noqa: E402
+from pgmx.synthesis import (  # noqa: E402
     DrillingSpec,
     SlotMillingSpec,
     build_drilling_spec,

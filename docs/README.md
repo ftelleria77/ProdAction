@@ -59,7 +59,7 @@ tener que leer todas las memorias historicas de una vez.
 - Las guias `*_help.md` son fuente de verdad para APIs publicas.
 - Las memorias `*_temporary_memory.md` pueden ser largas e historicas; cuando
   una decision se estabiliza, conviene copiar el resumen a una guia estable.
-- Si cambia `tools.synthesize_pgmx.SYNTHESIZER_VERSION`, actualizar
+- Si cambia `pgmx.synthesis.SYNTHESIZER_VERSION`, actualizar
   `README.md`, `docs/synthesize_pgmx_help.md` y cualquier memoria externa de
   trabajo que se este usando.
 - Los scripts exploratorios o reproducibles de estudio deben vivir bajo

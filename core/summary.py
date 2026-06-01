@@ -15,6 +15,31 @@ from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
 from openpyxl.drawing.xdr import XDRPositiveSize2D
 from openpyxl.utils.units import pixels_to_EMU
 
+from core.production_pdf import (
+    PDF_CHECKBOX_GAP,
+    PDF_CHECKBOX_MARGIN_X,
+    PDF_CHECKBOX_MARGIN_Y,
+    PDF_CHECKBOX_SIZE,
+    PDF_EXPORT_DPI,
+    PDF_HEADER_HEIGHT,
+    PDF_MARGIN_BOTTOM,
+    PDF_MARGIN_TOP,
+    PDF_MARGIN_X,
+    PDF_PAGE_HEIGHT,
+    PDF_PAGE_WIDTH,
+    pdf_checkbox_appearance,
+    pdf_checkbox_changed_javascript,
+    pdf_checkbox_rect,
+    pdf_hide_popup_javascript,
+    pdf_literal_string,
+    pdf_number,
+    pdf_popup_appearance,
+    pdf_popup_rect_from_link,
+    pdf_rect_from_pixels,
+    pdf_show_popup_javascript,
+    pdf_stream_object,
+)
+
 try:
     import cairosvg
 except Exception:  # pragma: no cover - entorno sin dependencia opcional
@@ -381,7 +406,7 @@ def _build_en_juego_sheet_svg(
     if en_juego_pgmx_path is None:
         return None
 
-    from core.pgmx_processing import build_piece_svg, parse_pgmx_for_piece
+    from pgmx.processing import build_piece_svg, parse_pgmx_for_piece
 
     en_juego_piece = Piece(
         id="EN_JUEGO",
@@ -410,7 +435,7 @@ def _load_module_sheet_data(
     module,
     program_dimensions_cache: dict[tuple[str, str], tuple[float | None, float | None, float | None]],
 ) -> dict:
-    from core.pgmx_processing import get_pgmx_program_dimension_notes
+    from pgmx.processing import get_pgmx_program_dimension_notes
 
     config_path = Path(module.path) / "module_config.json"
     config_data = {}
@@ -723,14 +748,6 @@ def _derive_module_dimensions(module_name: str, pieces: list[dict]):
     return _compact_number(x_val), _compact_number(y_val), _compact_number(z_val)
 
 
-PDF_EXPORT_DPI = 150
-PDF_PAGE_WIDTH = int(round(8.27 * PDF_EXPORT_DPI))
-PDF_PAGE_HEIGHT = int(round(11.69 * PDF_EXPORT_DPI))
-PDF_MARGIN_X = int(round(0.35 * PDF_EXPORT_DPI))
-PDF_MARGIN_TOP = int(round(0.35 * PDF_EXPORT_DPI))
-PDF_MARGIN_BOTTOM = int(round(0.3 * PDF_EXPORT_DPI))
-PDF_HEADER_HEIGHT = int(round(1.05 * PDF_EXPORT_DPI))
-
 
 def _load_pdf_font(size: int, *, bold: bool = False):
     from PIL import ImageFont
@@ -798,12 +815,6 @@ def _pdf_piece_rows(pieces: list[dict]) -> list[dict | None]:
     return rows
 
 
-PDF_CHECKBOX_SIZE = 16
-PDF_CHECKBOX_GAP = 6
-PDF_CHECKBOX_MARGIN_X = 6
-PDF_CHECKBOX_MARGIN_Y = 7
-
-
 def _pdf_checkboxes_per_line(column_width: int) -> int:
     available_width = max(1, column_width - (PDF_CHECKBOX_MARGIN_X * 2))
     return max(1, (available_width + PDF_CHECKBOX_GAP) // (PDF_CHECKBOX_SIZE + PDF_CHECKBOX_GAP))
@@ -865,7 +876,7 @@ def _prepare_pdf_piece_popups(
         if not svg_path.is_file():
             svg_path = temp_dir / f"{_sanitize_filename(module.name)}_{piece_slug}.svg"
             try:
-                from core.pgmx_processing import build_piece_svg, parse_pgmx_for_piece
+                from pgmx.processing import build_piece_svg, parse_pgmx_for_piece
 
                 piece_obj = _piece_from_sheet_row(module.name, piece)
                 drawing_data = parse_pgmx_for_piece(project, piece_obj, module_path)
@@ -1054,142 +1065,6 @@ def _draw_production_pdf_header(draw, project: Project) -> int:
     return PDF_MARGIN_TOP + PDF_HEADER_HEIGHT
 
 
-def _pdf_number(value: float) -> str:
-    return f"{float(value):.4f}".rstrip("0").rstrip(".") or "0"
-
-
-def _pdf_checkbox_appearance(size_pt: float, *, checked: bool) -> bytes:
-    size = _pdf_number(size_pt)
-    inset = _pdf_number(max(0.5, size_pt * 0.08))
-    box_size = _pdf_number(max(1.0, size_pt - (2 * float(inset))))
-    commands = [
-        "q",
-        "1 1 1 rg",
-        f"0 0 {size} {size} re f",
-        "0 0 0 RG",
-        "1 w",
-        f"{inset} {inset} {box_size} {box_size} re S",
-    ]
-    if checked:
-        commands.extend([
-            "2 w",
-            f"{_pdf_number(size_pt * 0.22)} {_pdf_number(size_pt * 0.52)} m",
-            f"{_pdf_number(size_pt * 0.42)} {_pdf_number(size_pt * 0.28)} l",
-            f"{_pdf_number(size_pt * 0.78)} {_pdf_number(size_pt * 0.76)} l",
-            "S",
-        ])
-    commands.append("Q")
-    return "\n".join(commands).encode("ascii")
-
-
-def _pdf_stream_object(dictionary: str, stream_data: bytes) -> bytes:
-    return (
-        f"<< {dictionary} /Length {len(stream_data)} >>\nstream\n".encode("ascii")
-        + stream_data
-        + b"\nendstream"
-    )
-
-
-def _pdf_literal_string(value: str) -> str:
-    encoded = str(value or "").encode("cp1252", errors="replace").decode("cp1252")
-    escaped = (
-        encoded
-        .replace("\\", "\\\\")
-        .replace("(", "\\(")
-        .replace(")", "\\)")
-        .replace("\r", "\\r")
-        .replace("\n", "\\n")
-    )
-    return f"({escaped})"
-
-
-def _pdf_rect_from_pixels(
-    x_px: float,
-    y_px: float,
-    width_px: float,
-    height_px: float,
-    page_height_px: int,
-    scale: float,
-) -> str:
-    llx = x_px * scale
-    lly = (page_height_px - (y_px + height_px)) * scale
-    urx = (x_px + width_px) * scale
-    ury = (page_height_px - y_px) * scale
-    return " ".join(_pdf_number(value) for value in (llx, lly, urx, ury))
-
-
-def _pdf_checkbox_rect(x_px: int, y_px: int, page_height_px: int, scale: float) -> str:
-    return _pdf_rect_from_pixels(x_px, y_px, PDF_CHECKBOX_SIZE, PDF_CHECKBOX_SIZE, page_height_px, scale)
-
-
-def _pdf_popup_rect_from_link(
-    link_rect: tuple[float, float, float, float],
-    popup_data: dict,
-    page_width_px: int,
-    page_height_px: int,
-) -> tuple[int, int, int, int]:
-    _link_x, link_y, _link_w, _link_h = link_rect
-    image_width = int(popup_data.get("width") or 1)
-    image_height = int(popup_data.get("height") or 1)
-    popup_width = min(max(image_width + 36, 260), max(260, page_width_px - (PDF_MARGIN_X * 2) - 24))
-    popup_height = min(max(image_height + 36, 200), max(200, page_height_px - (PDF_MARGIN_TOP + PDF_MARGIN_BOTTOM)))
-    popup_x = max(PDF_MARGIN_X, page_width_px - PDF_MARGIN_X - popup_width - 12)
-    popup_y = int(min(max(PDF_MARGIN_TOP, link_y - 16), max(PDF_MARGIN_TOP, page_height_px - PDF_MARGIN_BOTTOM - popup_height)))
-    return popup_x, popup_y, popup_width, popup_height
-
-
-def _pdf_popup_appearance(
-    image_name: str,
-    popup_width_pt: float,
-    popup_height_pt: float,
-    image_width_px: int,
-    image_height_px: int,
-    scale: float,
-) -> bytes:
-    margin = 8.0
-    image_width_pt = max(1.0, image_width_px * scale)
-    image_height_pt = max(1.0, image_height_px * scale)
-    fit_ratio = min(
-        (popup_width_pt - (margin * 2)) / image_width_pt,
-        (popup_height_pt - (margin * 2)) / image_height_pt,
-    )
-    fitted_width = image_width_pt * fit_ratio
-    fitted_height = image_height_pt * fit_ratio
-    image_x = (popup_width_pt - fitted_width) / 2.0
-    image_y = (popup_height_pt - fitted_height) / 2.0
-    commands = [
-        "q",
-        "1 1 1 rg",
-        f"0 0 {_pdf_number(popup_width_pt)} {_pdf_number(popup_height_pt)} re f",
-        "0 0 0 RG",
-        "1.2 w",
-        f"0.6 0.6 {_pdf_number(popup_width_pt - 1.2)} {_pdf_number(popup_height_pt - 1.2)} re S",
-        "q",
-        f"{_pdf_number(fitted_width)} 0 0 {_pdf_number(fitted_height)} {_pdf_number(image_x)} {_pdf_number(image_y)} cm",
-        f"/{image_name} Do",
-        "Q",
-        "Q",
-    ]
-    return "\n".join(commands).encode("ascii")
-
-
-def _pdf_show_popup_javascript(active_key: str, popup_keys: list[str]) -> str:
-    lines = ["try {"]
-    for key in popup_keys:
-        lines.append(f'var f_{key}=this.getField("{key}"); if (f_{key}) f_{key}.display = display.hidden;')
-    lines.append(f'var active=this.getField("{active_key}"); if (active) active.display = display.visible;')
-    lines.append("} catch (e) {}")
-    return "\n".join(lines)
-
-
-def _pdf_hide_popup_javascript(active_key: str) -> str:
-    return f'try {{ var f=this.getField("{active_key}"); if (f) f.display = display.hidden; }} catch (e) {{}}'
-
-
-def _pdf_checkbox_changed_javascript() -> str:
-    return f'try {{ this.dirty = true; }} catch (e) {{}}'
-
-
 def _write_interactive_pdf_page(
     page,
     output_pdf: Path,
@@ -1206,7 +1081,7 @@ def _write_interactive_pdf_page(
     page_width_pt = page_rgb.width * scale
     page_height_pt = page_rgb.height * scale
     content_stream = (
-        f"q\n{_pdf_number(page_width_pt)} 0 0 {_pdf_number(page_height_pt)} 0 0 cm\n/Im0 Do\nQ\n"
+        f"q\n{pdf_number(page_width_pt)} 0 0 {pdf_number(page_height_pt)} 0 0 cm\n/Im0 Do\nQ\n"
     ).encode("ascii")
 
     objects: list[tuple[int, bytes]] = []
@@ -1241,7 +1116,7 @@ def _write_interactive_pdf_page(
 
     for key in visible_popup_keys:
         popup_data = popup_images[key]
-        popup_rect = _pdf_popup_rect_from_link(
+        popup_rect = pdf_popup_rect_from_link(
             first_link_by_key[key],
             popup_data,
             page_rgb.width,
@@ -1286,35 +1161,35 @@ def _write_interactive_pdf_page(
     annots = f" /Annots [{' '.join(annot_refs)}]" if annot_refs else ""
     page_body = (
         "<< /Type /Page /Parent 2 0 R "
-        f"/MediaBox [0 0 {_pdf_number(page_width_pt)} {_pdf_number(page_height_pt)}] "
+        f"/MediaBox [0 0 {pdf_number(page_width_pt)} {pdf_number(page_height_pt)}] "
         "/Resources << /ProcSet [/PDF /ImageC] /XObject << /Im0 5 0 R >> >> "
         f"/Contents 4 0 R{annots} >>"
     )
     objects.append((3, page_body.encode("ascii")))
-    objects.append((4, _pdf_stream_object("", content_stream)))
+    objects.append((4, pdf_stream_object("", content_stream)))
     image_dictionary = (
         f"/Type /XObject /Subtype /Image /Width {page_rgb.width} /Height {page_rgb.height} "
         "/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode"
     )
-    objects.append((5, _pdf_stream_object(image_dictionary, image_data)))
+    objects.append((5, pdf_stream_object(image_dictionary, image_data)))
 
     if checkbox_positions and off_appearance_id is not None and yes_appearance_id is not None:
         checkbox_size_pt = PDF_CHECKBOX_SIZE * scale
         appearance_dictionary = (
             f"/Type /XObject /Subtype /Form /FormType 1 /BBox [0 0 "
-            f"{_pdf_number(checkbox_size_pt)} {_pdf_number(checkbox_size_pt)}] /Resources << >>"
+            f"{pdf_number(checkbox_size_pt)} {pdf_number(checkbox_size_pt)}] /Resources << >>"
         )
         objects.append((
             off_appearance_id,
-            _pdf_stream_object(appearance_dictionary, _pdf_checkbox_appearance(checkbox_size_pt, checked=False)),
+            pdf_stream_object(appearance_dictionary, pdf_checkbox_appearance(checkbox_size_pt, checked=False)),
         ))
         objects.append((
             yes_appearance_id,
-            _pdf_stream_object(appearance_dictionary, _pdf_checkbox_appearance(checkbox_size_pt, checked=True)),
+            pdf_stream_object(appearance_dictionary, pdf_checkbox_appearance(checkbox_size_pt, checked=True)),
         ))
         for index, ((x_px, y_px), object_id) in enumerate(zip(checkbox_positions, checkbox_object_ids), start=1):
-            rect = _pdf_checkbox_rect(x_px, y_px, page_rgb.height, scale)
-            changed_js = _pdf_literal_string(_pdf_checkbox_changed_javascript())
+            rect = pdf_checkbox_rect(x_px, y_px, page_rgb.height, scale)
+            changed_js = pdf_literal_string(pdf_checkbox_changed_javascript())
             widget = (
                 "<< /Type /Annot /Subtype /Widget /FT /Btn "
                 f"/T (cb_{index:05d}) /F 4 /Ff 0 /Rect [{rect}] "
@@ -1352,28 +1227,28 @@ def _write_interactive_pdf_page(
         image_object_id = int(record["image_object_id"])
         appearance_object_id = int(record["appearance_object_id"])
         widget_object_id = int(record["widget_object_id"])
-        objects.append((image_object_id, _pdf_stream_object(image_dictionary, popup_image_data)))
+        objects.append((image_object_id, pdf_stream_object(image_dictionary, popup_image_data)))
 
         popup_x, popup_y, popup_w, popup_h = record["rect"]
         popup_w_pt = popup_w * scale
         popup_h_pt = popup_h * scale
         appearance_dictionary = (
-            f"/Type /XObject /Subtype /Form /FormType 1 /BBox [0 0 {_pdf_number(popup_w_pt)} {_pdf_number(popup_h_pt)}] "
+            f"/Type /XObject /Subtype /Form /FormType 1 /BBox [0 0 {pdf_number(popup_w_pt)} {pdf_number(popup_h_pt)}] "
             f"/Resources << /XObject << /PopupImage {image_object_id} 0 R >> >>"
         )
         objects.append((
             appearance_object_id,
-            _pdf_stream_object(
+            pdf_stream_object(
                 appearance_dictionary,
-                _pdf_popup_appearance("PopupImage", popup_w_pt, popup_h_pt, image_width, image_height, scale),
+                pdf_popup_appearance("PopupImage", popup_w_pt, popup_h_pt, image_width, image_height, scale),
             ),
         ))
 
-        popup_rect = _pdf_rect_from_pixels(popup_x, popup_y, popup_w, popup_h, page_rgb.height, scale)
-        hide_js = _pdf_literal_string(_pdf_hide_popup_javascript(key))
+        popup_rect = pdf_rect_from_pixels(popup_x, popup_y, popup_w, popup_h, page_rgb.height, scale)
+        hide_js = pdf_literal_string(pdf_hide_popup_javascript(key))
         popup_widget = (
             "<< /Type /Annot /Subtype /Widget /FT /Btn "
-            f"/T {_pdf_literal_string(key)} /F 6 /Ff 65536 /Rect [{popup_rect}] "
+            f"/T {pdf_literal_string(key)} /F 6 /Ff 65536 /Rect [{popup_rect}] "
             f"/AP << /N {appearance_object_id} 0 R >> "
             f"/A << /S /JavaScript /JS {hide_js} >> "
             f"/AA << /U << /S /JavaScript /JS {hide_js} >> >> "
@@ -1384,7 +1259,7 @@ def _write_interactive_pdf_page(
     if link_button_appearance_id is not None:
         objects.append((
             link_button_appearance_id,
-            _pdf_stream_object(
+            pdf_stream_object(
                 "/Type /XObject /Subtype /Form /FormType 1 /BBox [0 0 1 1] /Resources << >>",
                 b"",
             ),
@@ -1393,11 +1268,11 @@ def _write_interactive_pdf_page(
     for index, record in enumerate(link_button_records, start=1):
         key = record["key"]
         x_px, y_px, width_px, height_px = record["rect"]
-        rect = _pdf_rect_from_pixels(x_px, y_px, width_px, height_px, page_rgb.height, scale)
-        js = _pdf_literal_string(_pdf_show_popup_javascript(key, visible_popup_keys))
+        rect = pdf_rect_from_pixels(x_px, y_px, width_px, height_px, page_rgb.height, scale)
+        js = pdf_literal_string(pdf_show_popup_javascript(key, visible_popup_keys))
         link_button = (
             "<< /Type /Annot /Subtype /Widget /FT /Btn "
-            f"/T {_pdf_literal_string(f'open_{index:05d}_{key}')} /F 4 /Ff 65536 /Rect [{rect}] "
+            f"/T {pdf_literal_string(f'open_{index:05d}_{key}')} /F 4 /Ff 65536 /Rect [{rect}] "
             f"/AP << /N {link_button_appearance_id} 0 R >> "
             f"/A << /S /JavaScript /JS {js} >> "
             f"/AA << /U << /S /JavaScript /JS {js} >> >> "
@@ -1493,7 +1368,7 @@ def export_production_sheet_pdf(project: Project, output_pdf: Path) -> Path:
 
 def export_production_sheet(project: Project, output_xlsx: Path):
     """Generar planilla Excel de producción sin plantilla, desde datos del sistema."""
-    from core.pgmx_processing import get_pgmx_program_dimension_notes
+    from pgmx.processing import get_pgmx_program_dimension_notes
 
     wb = Workbook()
     ws = wb.active

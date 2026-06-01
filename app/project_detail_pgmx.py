@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Callable
 
-from core.pgmx_processing import get_invalid_slot_machining_issues
+from pgmx.processing import get_invalid_slot_machining_issues
 
 
 def invalid_slot_cache_key(module_path: Path, source_value: str) -> tuple[str, str]:

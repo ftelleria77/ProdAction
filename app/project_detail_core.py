@@ -57,7 +57,7 @@ from core.model import (
 )
 from core.nesting import generate_cut_diagrams
 from core.parser import inspect_project_layout, scan_project, scan_project_structure
-from core.pgmx_processing import (
+from pgmx.processing import (
     generate_project_piece_drawings,
     resolve_piece_program_path,
 )
@@ -298,7 +298,7 @@ class ProjectDetailCoreMixin:
 
     def _write_module_config_files(self, modules: list[ModuleData] | None = None):
         """Crear archivo de configuración por módulo con piezas y validación PGMX."""
-        from core.pgmx_processing import persist_piece_program_dimensions
+        from pgmx.processing import persist_piece_program_dimensions
 
         program_dimensions_cache: dict[tuple[str, str], tuple[float | None, float | None, float | None]] = {}
         target_modules = modules if modules is not None else self.project.modules

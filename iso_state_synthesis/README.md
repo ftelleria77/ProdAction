@@ -23,7 +23,7 @@ El paquete `iso_state_synthesis` contiene la estructura interna inicial del
 sintetizador por estado:
 
 - `model.py`: dataclasses de fuentes, valores de estado, etapas, trazas y plan.
-- `pgmx_source.py`: adaptador desde `tools.pgmx_snapshot` hacia un plan de
+- `pgmx_source.py`: adaptador desde `pgmx.snapshot` hacia un plan de
   estados.
 - `differential.py`: calculo de cambios entre estado activo, estado objetivo y
   resets.

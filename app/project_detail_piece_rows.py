@@ -10,7 +10,7 @@ from core.model import (
     normalize_piece_grain_direction,
     normalize_piece_observations,
 )
-from core.pgmx_processing import get_pgmx_program_dimensions
+from pgmx.processing import get_pgmx_program_dimensions
 
 
 def coerce_saved_flag(value) -> bool:

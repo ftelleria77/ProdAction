@@ -6,7 +6,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from app.project_detail_piece_rows import infer_companion_f6_source, normalize_source_path
-from core.pgmx_processing import resolve_piece_program_path
+from pgmx.processing import resolve_piece_program_path
 
 
 PGMX_FILE_FILTER = "Programas PGMX (*.pgmx);;Todos los archivos (*.*)"

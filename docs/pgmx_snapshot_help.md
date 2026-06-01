@@ -1,4 +1,4 @@
-# Ayuda `tools.pgmx_snapshot`
+# Ayuda `pgmx.snapshot`
 
 Este modulo expone una lectura integral de un `.pgmx` existente para usarlo como base de inspeccion, refactorizacion hacia el sintetizador y futuras modificaciones puntuales.
 
@@ -28,7 +28,7 @@ El snapshot incluye:
 ```python
 from pathlib import Path
 
-from tools.pgmx_snapshot import read_pgmx_snapshot
+from pgmx.snapshot import read_pgmx_snapshot
 
 snapshot = read_pgmx_snapshot(Path("archive/maestro_examples/Tapa.pgmx"))
 
@@ -87,32 +87,32 @@ Si hace falta serializarlo para inspeccion externa:
 ```python
 from pathlib import Path
 
-from tools.pgmx_snapshot import read_pgmx_snapshot, write_pgmx_snapshot_json
+from pgmx.snapshot import read_pgmx_snapshot, write_pgmx_snapshot_json
 
 snapshot = read_pgmx_snapshot(Path("archive/maestro_examples/Tapa.pgmx"))
 write_pgmx_snapshot_json(snapshot, Path("tmp/tapa_snapshot.json"))
 ```
 
-El JSON generado por `snapshot_to_dict(...)` y `write_pgmx_snapshot_json(...)` incluye una clave derivada `resolved_working_steps`. Esa clave no duplica ningun dato del `.pgmx`: solo cruza referencias para facilitar inspeccion y adaptacion hacia `tools.synthesize_pgmx`.
+El JSON generado por `snapshot_to_dict(...)` y `write_pgmx_snapshot_json(...)` incluye una clave derivada `resolved_working_steps`. Esa clave no duplica ningun dato del `.pgmx`: solo cruza referencias para facilitar inspeccion y adaptacion hacia `pgmx.synthesis`.
 
 ## CLI
 
 Volcar un snapshot a stdout:
 
 ```powershell
-python -m tools.pgmx_snapshot archive\maestro_examples\Tapa.pgmx
+python -m pgmx.snapshot archive\maestro_examples\Tapa.pgmx
 ```
 
 Guardar el snapshot en JSON:
 
 ```powershell
-python -m tools.pgmx_snapshot archive\maestro_examples\Tapa.pgmx --output tmp\tapa_snapshot.json
+python -m pgmx.snapshot archive\maestro_examples\Tapa.pgmx --output tmp\tapa_snapshot.json
 ```
 
 Incluir tambien el XML crudo:
 
 ```powershell
-python -m tools.pgmx_snapshot archive\maestro_examples\Tapa.pgmx --include-xml-text
+python -m pgmx.snapshot archive\maestro_examples\Tapa.pgmx --include-xml-text
 ```
 
 ## Nota de alcance

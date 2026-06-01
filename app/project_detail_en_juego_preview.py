@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 
 from app.project_detail_en_juego_layout import clamp, preview_dimensions_mm, safe_float, to_scene_y
 from app.project_detail_en_juego_view import EnJuegoPieceItem, make_cosmetic_pen as make_pen
-from core.pgmx_processing import parse_pgmx_for_piece, resolve_piece_grain_hatch_axis
+from pgmx.processing import parse_pgmx_for_piece, resolve_piece_grain_hatch_axis
 
 
 def load_piece_drawing_data(

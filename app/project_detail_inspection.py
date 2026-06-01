@@ -24,7 +24,6 @@ from app.project_detail_module_settings_panel import build_project_detail_module
 from app.project_detail_drawings import (
     build_piece_drawing_path,
     ensure_piece_drawing_file,
-    open_piece_drawing_dialog,
     refresh_piece_drawing_file as refresh_piece_drawing_file_for_row,
     remove_piece_drawing_file as remove_piece_drawing_file_for_row,
 )
@@ -42,14 +41,16 @@ from app.project_detail_piece_table_rows import (
     render_piece_table_rows,
     set_piece_table_observations_item,
 )
-from app.project_detail_programs import (
-    assign_program_source_to_row,
-    select_pgmx_program_file,
-)
 from app.project_detail_pgmx import (
     clear_invalid_slot_cache_entries,
     get_cached_invalid_slot_issues,
     invalid_slot_message,
+)
+from app.project_detail_selected_piece_actions import (
+    SelectedPieceActionContext,
+    repair_selected_invalid_pgmx as repair_selected_invalid_pgmx_action,
+    select_source_for_selected_piece as select_source_for_selected_piece_action,
+    view_drawing_for_selected_piece as view_drawing_for_selected_piece_action,
 )
 from app.project_detail_en_juego_state import (
     clear_persistent_en_juego_info as clear_persistent_en_juego_config_info,
@@ -426,7 +427,7 @@ class ProjectDetailInspectionMixin:
             if row_idx < 0 or row_idx >= pieces_table.rowCount():
                 return
 
-            from core.pgmx_processing import get_pgmx_program_dimension_notes
+            from pgmx.processing import get_pgmx_program_dimension_notes
 
             piece_row = all_rows[all_idx]
             notes = get_pgmx_program_dimension_notes(
@@ -452,7 +453,7 @@ class ProjectDetailInspectionMixin:
 
         def refresh_pieces_table():
             nonlocal refreshing_pieces_table
-            from core.pgmx_processing import get_pgmx_program_dimension_notes
+            from pgmx.processing import get_pgmx_program_dimension_notes
 
             clear_piece_table_widgets(pieces_table)
 
@@ -601,120 +602,30 @@ class ProjectDetailInspectionMixin:
                 row_index=row_index,
             )
 
+        def selected_piece_action_context():
+            return SelectedPieceActionContext(
+                parent=inspect_dialog,
+                project=self.project,
+                module_path=module_path,
+                all_rows=all_rows,
+                visible_row_indexes=visible_row_indexes,
+                pieces_table=pieces_table,
+                persist_module_config=persist_module_config,
+                refresh_pieces_table=refresh_pieces_table,
+                build_piece_from_row=build_piece_from_row,
+                ensure_piece_drawing=ensure_piece_drawing,
+                refresh_piece_drawing_file=refresh_piece_drawing_file,
+                get_invalid_slot_issues_for_row=get_invalid_slot_issues_for_row,
+                clear_invalid_slot_cache=clear_invalid_slot_cache,
+                refresh_repair_pgmx_button_state=refresh_repair_pgmx_button_state,
+                program_dimensions_cache=program_dimensions_cache,
+            )
+
         def select_source_for_selected_piece():
-            current_row = pieces_table.currentRow()
-            if current_row < 0:
-                QMessageBox.warning(inspect_dialog, "Source", "Seleccione una pieza de la lista.")
-                return
-            if current_row >= len(visible_row_indexes):
-                return
-
-            source_file = select_pgmx_program_file(inspect_dialog, module_path)
-            if not source_file:
-                return
-
-            all_idx = visible_row_indexes[current_row]
-            assign_program_source_to_row(all_rows[all_idx], source_file, module_path)
-            persist_module_config()
-            refresh_pieces_table()
-            pieces_table.selectRow(current_row)
-
-            drawing_path = ensure_piece_drawing(all_rows[all_idx], force_regenerate=True)
-            if drawing_path is None:
-                return
-
-            piece_display_name = str(all_rows[all_idx].get("name") or all_rows[all_idx].get("id") or "pieza").strip()
-            open_piece_drawing_dialog(inspect_dialog, drawing_path, piece_display_name)
-            return
+            select_source_for_selected_piece_action(selected_piece_action_context())
 
         def repair_selected_invalid_pgmx():
-            current_row = pieces_table.currentRow()
-            all_idx = selected_piece_all_index("Corregir PGMX")
-            if all_idx is None:
-                return
-
-            piece_row = all_rows[all_idx]
-            issues = get_invalid_slot_issues_for_row(piece_row)
-            if not issues:
-                QMessageBox.information(
-                    inspect_dialog,
-                    "Corregir PGMX",
-                    "La pieza seleccionada no tiene ranuras no ejecutables detectadas.",
-                )
-                refresh_repair_pgmx_button_state()
-                return
-
-            from core.pgmx_processing import (
-                repair_invalid_slot_machining_by_rotating_ccw,
-                resolve_piece_program_path,
-            )
-
-            piece_obj = build_piece_from_row(piece_row)
-            source_path = resolve_piece_program_path(self.project, piece_obj, module_path)
-            if source_path is None:
-                QMessageBox.warning(
-                    inspect_dialog,
-                    "Corregir PGMX",
-                    "No se encontro el archivo PGMX asociado a la pieza seleccionada.",
-                )
-                return
-
-            issue_names = ", ".join(
-                str(issue.feature_name or issue.feature_id or "ranura")
-                for issue in issues
-            )
-            answer = QMessageBox.question(
-                inspect_dialog,
-                "Corregir PGMX",
-                (
-                    "Se detecto una ranura no ejecutable por la herramienta seleccionada.\n\n"
-                    f"Archivo: {source_path}\n"
-                    f"Ranura(s): {issue_names}\n\n"
-                    "El programa va a sintetizar el PGMX girandolo 90 grados antihorario "
-                    "y va a sobreescribir el archivo original. Continuar?"
-                ),
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-            if answer != QMessageBox.Yes:
-                return
-
-            try:
-                result = repair_invalid_slot_machining_by_rotating_ccw(
-                    self.project,
-                    piece_obj,
-                    module_path,
-                )
-            except Exception as exc:
-                QMessageBox.critical(
-                    inspect_dialog,
-                    "Corregir PGMX",
-                    f"No se pudo corregir el PGMX.\n\n{exc}",
-                )
-                clear_invalid_slot_cache()
-                refresh_pieces_table()
-                if current_row >= 0 and pieces_table.rowCount() > 0:
-                    pieces_table.selectRow(max(0, min(current_row, pieces_table.rowCount() - 1)))
-                return
-
-            program_dimensions_cache.clear()
-            clear_invalid_slot_cache()
-            refresh_piece_drawing_file(piece_row, row_index=all_idx)
-            persist_module_config()
-            refresh_pieces_table()
-            if current_row >= 0 and pieces_table.rowCount() > 0:
-                pieces_table.selectRow(max(0, min(current_row, pieces_table.rowCount() - 1)))
-
-            QMessageBox.information(
-                inspect_dialog,
-                "Corregir PGMX",
-                (
-                    "PGMX corregido correctamente.\n\n"
-                    f"Archivo: {result.source_path}\n"
-                    f"Dimensiones: {result.original_length:g} x {result.original_width:g} mm -> "
-                    f"{result.rotated_length:g} x {result.rotated_width:g} mm"
-                ),
-            )
+            repair_selected_invalid_pgmx_action(selected_piece_action_context())
 
         def open_piece_editor(piece_row=None, row_index=None):
             return open_piece_editor_dialog(
@@ -859,31 +770,7 @@ class ProjectDetailInspectionMixin:
             return new_color_val
 
         def view_drawing_for_selected_piece():
-            current_row = pieces_table.currentRow()
-            if current_row < 0:
-                QMessageBox.warning(inspect_dialog, "Ver Dibujo", "Seleccione una pieza de la lista.")
-                return
-            if current_row >= len(visible_row_indexes):
-                return
-
-            all_idx = visible_row_indexes[current_row]
-            piece_row = all_rows[all_idx]
-            piece_display_name = str(piece_row.get("name") or piece_row.get("id") or "pieza").strip()
-            drawing_path = ensure_piece_drawing(piece_row, force_regenerate=False)
-
-            if drawing_path is None or not drawing_path.is_file():
-                QMessageBox.warning(
-                    inspect_dialog,
-                    "Ver Dibujo",
-                    (
-                        "No se encontró el dibujo SVG para la pieza seleccionada.\n\n"
-                        f"Ruta esperada: {drawing_path}\n\n"
-                        "Procese el proyecto para generar los dibujos."
-                    ),
-                )
-                return
-
-            open_piece_drawing_dialog(inspect_dialog, drawing_path, piece_display_name)
+            view_drawing_for_selected_piece_action(selected_piece_action_context())
 
         def open_en_juego_configuration_dialog():
             open_en_juego_configuration_dialog_flow(

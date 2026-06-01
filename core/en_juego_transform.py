@@ -10,7 +10,7 @@ import math
 from dataclasses import dataclass, replace
 from typing import Union
 
-from tools import synthesize_pgmx as sp
+from pgmx import synthesis as sp
 
 
 TransformableSpec = Union[

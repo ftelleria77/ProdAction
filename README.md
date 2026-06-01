@@ -39,28 +39,29 @@ python main.py
 
 ## Sintesis PGMX
 - Estado actual del sintetizador Maestro: `v1.6`
-- Flujo unico de generacion `.pgmx`: `python -m tools.synthesize_pgmx`
+- Flujo unico de generacion `.pgmx`: `python -m pgmx.synthesis`
+- CLI historica compatible: `python -m tools.synthesize_pgmx`
 - Guia completa del sintetizador: `docs/synthesize_pgmx_help.md`
 - Guia del snapshot integral de `.pgmx`: `docs/pgmx_snapshot_help.md`
 - Guia de adaptacion de `.pgmx` existentes hacia specs publicos: `docs/pgmx_adapters_help.md`
 - Registro de familias geometricas: `docs/pgmx_geometry_registry.md`
 - Nota historica del flujo anterior: `docs/en_juego_pgmx_export.md`
-- Baseline principal versionado: `tools/maestro_baselines/Pieza.xml` junto con `Pieza.epl` y `def.tlgx`
-- `build_synthesis_request(...)` y la CLI usan `tools/maestro_baselines` como baseline por defecto si no se indica otro
+- Baseline principal versionado: `pgmx/data/maestro_baselines/Pieza.xml` junto con `Pieza.epl` y `def.tlgx`
+- `build_synthesis_request(...)` y la CLI usan `pgmx/data/maestro_baselines` como baseline por defecto si no se indica otro
 - Ejemplos y estudios manuales para ingeniería inversa: `archive/maestro_examples/`
-- API programática para sintesis: `build_approach_spec(...)`, `build_retract_spec(...)`, `build_milling_depth_spec(...)`, `build_unidirectional_milling_strategy_spec(...)`, `build_bidirectional_milling_strategy_spec(...)`, `build_xn_spec(...)`, `build_line_milling_spec(...)`, `build_slot_milling_spec(...)`, `build_polyline_milling_spec(...)`, `build_circle_milling_spec(...)`, `build_squaring_milling_spec(...)`, `build_drilling_spec(...)`, `build_drilling_pattern_spec(...)`, `build_synthesis_request(...)` y `synthesize_request(...)` en `tools.synthesize_pgmx`
+- API programática para sintesis: `build_approach_spec(...)`, `build_retract_spec(...)`, `build_milling_depth_spec(...)`, `build_unidirectional_milling_strategy_spec(...)`, `build_bidirectional_milling_strategy_spec(...)`, `build_xn_spec(...)`, `build_line_milling_spec(...)`, `build_slot_milling_spec(...)`, `build_polyline_milling_spec(...)`, `build_circle_milling_spec(...)`, `build_squaring_milling_spec(...)`, `build_drilling_spec(...)`, `build_drilling_pattern_spec(...)`, `build_synthesis_request(...)` y `synthesize_request(...)` en `pgmx.synthesis`
 - API programatica para inspeccion/construccion geometrica: `read_pgmx_geometries(...)`, `build_point_geometry_profile(...)`, `build_line_geometry_profile(...)`, `build_circle_geometry_profile(...)`, `build_composite_geometry_profile(...)` y `build_compensated_toolpath_profile(...)`
-- API programatica para snapshot integral de un `.pgmx`: `read_pgmx_snapshot(...)`, `snapshot_to_dict(...)` y `write_pgmx_snapshot_json(...)` en `tools.pgmx_snapshot`
-- API programatica para adaptar `.pgmx` existentes al subset publico del sintetizador: `adapt_pgmx_snapshot(...)`, `adapt_pgmx_path(...)`, `adaptation_to_dict(...)` y `write_pgmx_adaptation_json(...)` en `tools.pgmx_adapters`
+- API programatica para snapshot integral de un `.pgmx`: `read_pgmx_snapshot(...)`, `snapshot_to_dict(...)` y `write_pgmx_snapshot_json(...)` en `pgmx.snapshot`
+- API programatica para adaptar `.pgmx` existentes al subset publico del sintetizador: `adapt_pgmx_snapshot(...)`, `adapt_pgmx_path(...)`, `adaptation_to_dict(...)` y `write_pgmx_adaptation_json(...)` en `pgmx.adapters`
 - `PgmxAdaptationResult.build_synthesis_request(...)` convierte el material adaptable a un `PgmxSynthesisRequest`; por defecto arma familias publicas, y `build_synthesis_request(..., ordered_machinings=...)` permite preservar una secuencia exacta cuando el flujo lo necesita
 - La sintesis de `.pgmx` permite fijar el area de `Parametros de Maquina` mediante `execution_fields` en la API o `--execution-fields/--area` en la CLI; si no se indica, usa `HG` por defecto.
-- La seguridad de profundidad usa `tools/tool_catalog.csv`: la profundidad total del fresado o del taladro no puede superar `sinking_length` de la herramienta cuando `ToolKey` queda resuelto.
-- Constante publica de version: `tools.synthesize_pgmx.SYNTHESIZER_VERSION`
+- La seguridad de profundidad usa `pgmx/data/tool_catalog.csv`: la profundidad total del fresado o del taladro no puede superar `sinking_length` de la herramienta cuando `ToolKey` queda resuelto.
+- Constante publica de version: `pgmx.synthesis.SYNTHESIZER_VERSION`
 - Nueva helper publica de estrategias: `build_helical_milling_strategy_spec(...)`
 - `Helicoidal` queda soportada por ahora para circulos cerrados via `CircleMillingSpec`
 - en `CircleMillingSpec`, `SideOfFeature` conserva el circulo nominal y desplaza el radio efectivo del toolpath segun winding + `tool_width / 2`
 - todo `.pgmx` sintetizado incluye un `Xn` final configurable via `XnSpec` / `build_xn_spec(...)`
-Estado validado hasta ahora en `tools.synthesize_pgmx`:
+Estado validado hasta ahora en `pgmx.synthesis`:
 - fresados lineales y polilineas lineales abiertas/cerradas
 - ranuras lineales `SlotSide` horizontales con `Sierra Vertical X`
 - fresados circulares cerrados via `CircleMillingSpec`

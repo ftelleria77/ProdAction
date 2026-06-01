@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.synthesize_pgmx import (  # noqa: E402
+from pgmx.synthesis import (  # noqa: E402
     build_polyline_milling_spec,
     build_synthesis_request,
     synthesize_request,
@@ -27,7 +27,7 @@ from tools.synthesize_pgmx import (  # noqa: E402
 DEFAULT_OUTPUT_DIR = Path(
     r"S:\Maestro\Projects\ProdAction\ISO\router_compensation_tool_mirror_fixtures_2026-05-07"
 )
-TOOL_CATALOG_PATH = ROOT / "tools" / "tool_catalog.csv"
+TOOL_CATALOG_PATH = ROOT / "pgmx" / "data" / "tool_catalog.csv"
 TOOL_NAMES = ("E001", "E002", "E003", "E004", "E005", "E006", "E007")
 POLYLINE_POINTS = ((150.0, 0.0), (100.0, 150.0), (300.0, 100.0), (250.0, 250.0))
 

@@ -57,7 +57,7 @@ from core.model import (
 )
 from core.nesting import generate_cut_diagrams
 from core.parser import inspect_project_layout, scan_project, scan_project_structure
-from core.pgmx_processing import (
+from pgmx.processing import (
     generate_project_piece_drawings,
     resolve_piece_program_path,
 )

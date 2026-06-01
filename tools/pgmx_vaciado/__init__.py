@@ -1,7 +1,6 @@
-"""Experimental PGMX Vaciado study helpers."""
+"""Compatibility facade for `pgmx.vaciado_lab`."""
 
-from pathlib import Path
+from __future__ import annotations
 
-EXTERNAL_ROOT = Path(r"S:\Maestro\Projects\ProdAction\PGMX")
-
-__all__ = ["EXTERNAL_ROOT"]
+from pgmx.vaciado_lab import *  # noqa: F401,F403
+from pgmx.vaciado_lab import __all__

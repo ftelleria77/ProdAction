@@ -22,8 +22,8 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.pgmx_adapters import adapt_pgmx_path  # noqa: E402
-from tools.synthesize_pgmx import (  # noqa: E402
+from pgmx.adapters import adapt_pgmx_path  # noqa: E402
+from pgmx.synthesis import (  # noqa: E402
     DrillingSpec,
     build_drilling_spec,
     build_synthesis_request,

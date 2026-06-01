@@ -11,20 +11,20 @@ from pathlib import Path
 RUN_VACIADO_TESTS = os.environ.get("PRODACTION_ENABLE_VACIADO_TESTS") == "1"
 VACIADO_TESTS_PAUSED_REASON = "Vaciado tests paused; set PRODACTION_ENABLE_VACIADO_TESTS=1 to run them."
 
-from tools import synthesize_pgmx as sp
-from tools.pgmx_adapters import adapt_pgmx_path
-from tools.pgmx_vaciado import EXTERNAL_ROOT
-from tools.pgmx_vaciado.contour_parallel import (
+from pgmx import synthesis as sp
+from pgmx.adapters import adapt_pgmx_path
+from pgmx.vaciado_lab import EXTERNAL_ROOT
+from pgmx.vaciado_lab.contour_parallel import (
     _actual_trajectory_xyz,
     _actual_trajectory_xyz_sequences,
     generate_rectangular_contour_parallel_xyz_path,
 )
-from tools.pgmx_vaciado.island_analysis import (
+from pgmx.vaciado_lab.island_analysis import (
     generate_rounded_kernel_loop_xy,
     infer_rounded_kernel_loop_xy,
     resolved_boss_ref_xy_contours,
 )
-from tools.pgmx_vaciado.trace_engine import generate_contour_parallel_pocket_trace
+from pgmx.vaciado_lab.trace_engine import generate_contour_parallel_pocket_trace
 
 
 MANUAL_ROOT = EXTERNAL_ROOT / "manual"

@@ -25,11 +25,11 @@ from iso_state_synthesis.pgmx_source import (  # noqa: E402
     _ordered_resolved_working_steps,
     _resolved_step_family,
 )
-from tools.pgmx_snapshot import (  # noqa: E402
+from pgmx.snapshot import (  # noqa: E402
     PgmxResolvedWorkingStepSnapshot,
     read_pgmx_snapshot,
 )
-from tools.synthesize_pgmx import (  # noqa: E402
+from pgmx.synthesis import (  # noqa: E402
     DrillingSpec,
     build_drilling_spec,
     build_line_milling_spec,

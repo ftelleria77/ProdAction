@@ -22,7 +22,7 @@ Estado esperado:
 
 ## Regla de organizacion
 
-- `tools/maestro_baselines` queda reservado para el baseline base del repo:
+- `pgmx/data/maestro_baselines` queda reservado para el baseline base del repo:
   `Pieza.xml`, `Pieza.epl` y `def.tlgx`
 - `archive/maestro_examples` concentra el resto de la ingeniería inversa
 
@@ -32,4 +32,4 @@ Estado esperado:
 - Si una regla ya quedó validada y documentada, mantener el archivo como referencia.
 - Cuando una síntesis necesite hidratar serialización desde un caso manual, usar estos `.pgmx` como `source_pgmx_path`.
 - No usar esta carpeta como baseline por defecto del sintetizador; para eso
-  ahora existe `tools/maestro_baselines`.
+  ahora existe `pgmx/data/maestro_baselines`.

@@ -1,6 +1,6 @@
-# Ayuda `tools.pgmx_adapters`
+# Ayuda `pgmx.adapters`
 
-Este modulo toma un `.pgmx` existente, lo pasa por `tools.pgmx_snapshot` y
+Este modulo toma un `.pgmx` existente, lo pasa por `pgmx.snapshot` y
 trata de convertir cada mecanizado al subconjunto publico del sintetizador.
 
 La idea es tener un puente practico para:
@@ -95,7 +95,7 @@ Detectar que partes de una pieza ya son reusables:
 ```python
 from pathlib import Path
 
-from tools.pgmx_adapters import adapt_pgmx_path
+from pgmx.adapters import adapt_pgmx_path
 
 result = adapt_pgmx_path(Path("archive/maestro_examples/Tapa.pgmx"))
 
@@ -111,7 +111,7 @@ Construir un request listo para el sintetizador:
 ```python
 from pathlib import Path
 
-from tools.pgmx_adapters import adapt_pgmx_path
+from pgmx.adapters import adapt_pgmx_path
 
 result = adapt_pgmx_path(Path("archive/maestro_examples/Tapa.pgmx"))
 request = result.build_synthesis_request(
@@ -152,13 +152,13 @@ intercalada de familias distintas.
 Imprimir la adaptacion en stdout:
 
 ```powershell
-python -m tools.pgmx_adapters archive\maestro_examples\Tapa.pgmx
+python -m pgmx.adapters archive\maestro_examples\Tapa.pgmx
 ```
 
 Guardar la adaptacion como JSON:
 
 ```powershell
-python -m tools.pgmx_adapters archive\maestro_examples\Tapa.pgmx --output tmp\tapa_adaptation.json
+python -m pgmx.adapters archive\maestro_examples\Tapa.pgmx --output tmp\tapa_adaptation.json
 ```
 
 ## Flujo recomendado

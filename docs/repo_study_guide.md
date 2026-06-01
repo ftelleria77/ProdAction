@@ -49,7 +49,7 @@ Flujo:
 3. preserva configuracion previa cuando corresponde;
 4. escribe `module_config.json` y `local_config.json`;
 5. exporta `resumen_piezas.csv`;
-6. genera SVG por pieza con `core.pgmx_processing.generate_project_piece_drawings`.
+6. genera SVG por pieza con `pgmx.processing.generate_project_piece_drawings`.
 
 ### Inspeccionar modulo
 
@@ -92,7 +92,7 @@ El default actual para guillotina longitudinal/transversal es
 
 Fuente de verdad: `docs/synthesize_pgmx_help.md`.
 
-Specs publicos soportados por `tools.synthesize_pgmx`:
+Specs publicos soportados por `pgmx.synthesis`:
 
 - `LineMillingSpec`;
 - `SlotMillingSpec`;
@@ -105,12 +105,12 @@ Specs publicos soportados por `tools.synthesize_pgmx`:
 
 Reglas importantes:
 
-- baseline versionado: `tools/maestro_baselines/Pieza.xml` + `Pieza.epl` +
+- baseline versionado: `pgmx/data/maestro_baselines/Pieza.xml` + `Pieza.epl` +
   `def.tlgx`;
 - `build_synthesis_request(...)` usa ese baseline por default;
 - `ordered_machinings` preserva orden exacto de worksteps;
 - `machining_order` ordena familias cuando se pasan listas separadas;
-- `ToolKey` resuelto activa validaciones contra `tools/tool_catalog.csv`.
+- `ToolKey` resuelto activa validaciones contra `pgmx/data/tool_catalog.csv`.
 
 ### Reparacion de ranuras invalidas
 
@@ -175,21 +175,21 @@ Estado actual documentado:
 ## Comandos utiles de verificacion
 
 ```powershell
-python -m compileall main.py app core tools
-python -c "import app.ui, core.parser, core.nesting, core.summary, core.pgmx_processing, core.en_juego_synthesis; print('core imports ok')"
-python -c "from tools import synthesize_pgmx as sp; print(sp.SYNTHESIZER_VERSION)"
+python -m compileall main.py app core pgmx tools
+python -c "import app.ui, core.parser, core.nesting, core.summary, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
+python -c "from pgmx import synthesis as sp; print(sp.SYNTHESIZER_VERSION)"
 python -m tools.studies.iso.minimal_fixtures_2026_05_03 --output-dir tmp/iso_minimal_fixtures
 python -m iso_state_synthesis --help
-python -m tools.synthesize_pgmx --help
-python -m tools.pgmx_snapshot --help
-python -m tools.pgmx_adapters --help
+python -m pgmx.synthesis --help
+python -m pgmx.snapshot --help
+python -m pgmx.adapters --help
 python -m tools.studies.cut_diagrams.ordering_lab --help
 ```
 
 Prueba de humo PGMX recomendada:
 
 1. sintetizar a `tmp/`;
-2. adaptar con `tools.pgmx_adapters`;
+2. adaptar con `pgmx.adapters`;
 3. borrar el archivo temporal;
 4. confirmar `git status --short --branch`.
 

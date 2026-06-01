@@ -216,7 +216,7 @@ def _resolve_cut_piece_dimensions(
     source_value = _resolve_piece_source_value(piece, module_path, module_metadata_cache)
 
     if source_value:
-        from core.pgmx_processing import get_program_piece_yield_count, resolve_piece_program_dimensions
+        from pgmx.processing import get_program_piece_yield_count, resolve_piece_program_dimensions
 
         source_piece = piece if source_value == str(piece.cnc_source or '').strip() else replace(piece, cnc_source=source_value)
         program_width, program_height, program_thickness = resolve_piece_program_dimensions(
@@ -501,7 +501,7 @@ def _derived_grain_axis_for_layout(
     piece_height = _safe_float(piece_row.get("height"))
 
     try:
-        from core.pgmx_processing import resolve_piece_grain_hatch_axis
+        from pgmx.processing import resolve_piece_grain_hatch_axis
 
         hatch_axis = resolve_piece_grain_hatch_axis(
             grain_direction,
@@ -568,7 +568,7 @@ def _resolve_layout_drawing_dimensions(
         return resolved
 
     try:
-        from core.pgmx_processing import parse_pgmx_for_piece
+        from pgmx.processing import parse_pgmx_for_piece
     except Exception:
         return resolved
 
@@ -748,7 +748,7 @@ def _expand_project_pieces(project: Project, squaring_allowance: float = 0.0) ->
     piece_type_rank = {piece_type: index for index, piece_type in enumerate(PIECE_TYPE_ORDER)}
 
     for module in project.modules:
-        from core.pgmx_processing import get_pgmx_program_dimension_annotations
+        from pgmx.processing import get_pgmx_program_dimension_annotations
 
         module_tag = _module_short_name(module.name)
         module_path = Path(module.path)

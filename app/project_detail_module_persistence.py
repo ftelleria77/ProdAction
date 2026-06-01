@@ -42,7 +42,7 @@ def sync_piece_program_dimensions_from_rows(
     persist_program_dimensions: Callable | None = None,
 ) -> None:
     if persist_program_dimensions is None:
-        from core.pgmx_processing import persist_piece_program_dimensions
+        from pgmx.processing import persist_piece_program_dimensions
 
         persist_program_dimensions = persist_piece_program_dimensions
 

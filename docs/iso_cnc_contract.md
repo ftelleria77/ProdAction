@@ -13,7 +13,7 @@ sintetizador `.iso`, no una especificacion completa del controlador.
 - Configuracion Maestro copiada: `S:\Maestro\Cfgx`
 - Toolset Maestro copiado: `S:\Maestro\Tlgx\def.tlgx`
 - Configuracion Xilog Plus/CNC: `S:\Xilog Plus`
-- Catalogo normalizado del repo: `tools/tool_catalog.csv`
+- Catalogo normalizado del repo: `pgmx/data/tool_catalog.csv`
 - Plan de fixtures minimos: `docs/iso_minimal_fixtures_plan.md`
 
 Comprobacion local:

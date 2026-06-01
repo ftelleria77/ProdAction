@@ -6,7 +6,7 @@ import unittest
 RUN_VACIADO_TESTS = os.environ.get("PRODACTION_ENABLE_VACIADO_TESTS") == "1"
 VACIADO_TESTS_PAUSED_REASON = "Vaciado tests paused; set PRODACTION_ENABLE_VACIADO_TESTS=1 to run them."
 
-from tools.pgmx_vaciado_v2 import (
+from pgmx.vaciado import (
     PolylineContour,
     VaciadoDepth,
     VaciadoGeometry,
@@ -14,8 +14,8 @@ from tools.pgmx_vaciado_v2 import (
     from_pocket_milling_spec,
     plan_rectangular_no_islands,
 )
-from tools.pgmx_adapters import adapt_pgmx_path
-from tools.pgmx_vaciado import EXTERNAL_ROOT
+from pgmx.adapters import adapt_pgmx_path
+from pgmx.vaciado_lab import EXTERNAL_ROOT
 
 
 MANUAL_ROOT = EXTERNAL_ROOT / "manual"

@@ -6,8 +6,8 @@ import math
 from pathlib import Path
 from typing import Optional
 
-from tools import synthesize_pgmx as sp
-from tools.pgmx_snapshot import (
+from pgmx import synthesis as sp
+from pgmx.snapshot import (
     PgmxEmbeddedSpindleSnapshot,
     PgmxEmbeddedToolSnapshot,
     PgmxOperationSnapshot,

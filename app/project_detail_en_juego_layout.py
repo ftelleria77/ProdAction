@@ -2,7 +2,7 @@
 
 from app.settings import _parse_piece_quantity_value
 from core.model import normalize_piece_grain_direction
-from core.pgmx_processing import resolve_piece_grain_hatch_axis
+from pgmx.processing import resolve_piece_grain_hatch_axis
 
 
 def safe_float(value) -> float | None:

@@ -1,4 +1,4 @@
-# Ayuda `tools.synthesize_pgmx`
+# Ayuda `pgmx.synthesis`
 
 Esta guia deja por escrito como usar la API publica de `tools/synthesize_pgmx.py`,
 en que orden conviene llamarla y que reglas de trabajo seguimos para no perder el
@@ -6,7 +6,7 @@ hilo de lo ya validado en Maestro.
 
 Estado de hito actual:
 - sintetizador Maestro `v1.6`
-- constante publica de version: `tools.synthesize_pgmx.SYNTHESIZER_VERSION`
+- constante publica de version: `pgmx.synthesis.SYNTHESIZER_VERSION`
 
 ## 1. Alcance actual
 
@@ -78,9 +78,9 @@ Orden recomendado para usar el sintetizador:
 Regla practica:
 - `baseline_path` define el contenedor base.
 - `source_pgmx_path` no reemplaza al baseline: solo aporta serializacion ya observada en Maestro cuando coincide con la familia del mecanizado.
-- En este repo, el baseline principal versionado vive en `tools/maestro_baselines/Pieza.xml`
+- En este repo, el baseline principal versionado vive en `pgmx/data/maestro_baselines/Pieza.xml`
   y se completa con `Pieza.epl` y `def.tlgx`.
-- `build_synthesis_request(...)` y la CLI usan `tools/maestro_baselines` como
+- `build_synthesis_request(...)` y la CLI usan `pgmx/data/maestro_baselines` como
   baseline por defecto si no se indica otro.
 - Los `.pgmx` manuales de ingeniería inversa viven en `archive/maestro_examples`.
 - la taxonomia de familias geometricas vive en `docs/pgmx_geometry_registry.md`
@@ -195,7 +195,7 @@ Reglas:
   neutro/default que Maestro guarda cuando un fresado recien creado todavia no
   tiene profundidad efectiva
 - `extra_depth` no aplica a fresados no pasantes
-- antes de sintetizar, el modulo valida contra `tools/tool_catalog.csv` que la
+- antes de sintetizar, el modulo valida contra `pgmx/data/tool_catalog.csv` que la
   profundidad total no supere `sinking_length` de la herramienta:
   - no pasante -> `target_depth`
   - pasante -> `espesor + extra_depth`
@@ -826,7 +826,7 @@ Resolucion de herramienta:
       postprocesador resuelve la herramienta lateral efectiva
 - `tool_resolution="Explicit"`:
   - usa `tool_id/tool_name` dados por el usuario
-  - valida que existan en `tools/tool_catalog.csv`
+  - valida que existan en `pgmx/data/tool_catalog.csv`
 
 Reglas practicas relevantes:
 - el centro efectivo del taladro vive en `Feature/GeometryID`, no en
@@ -834,7 +834,7 @@ Reglas practicas relevantes:
 - el `Approach` va desde el plano de seguridad hasta la cara de entrada
 - `TrajectoryPath` va desde la cara de entrada hasta la profundidad efectiva
 - `Lift` vuelve desde la profundidad efectiva hasta el mismo plano de seguridad
-- la validacion contra `tools/tool_catalog.csv` aplica solo cuando la
+- la validacion contra `pgmx/data/tool_catalog.csv` aplica solo cuando la
   herramienta queda resuelta a una herramienta real; si `ToolKey` queda vacio,
   no hay chequeo de `sinking_length`
 
@@ -941,7 +941,7 @@ build_synthesis_request(
 ```
 
 Reglas:
-- si no se indica `baseline_path`, usa `tools/maestro_baselines`
+- si no se indica `baseline_path`, usa `pgmx/data/maestro_baselines`
 - si no se indica `execution_fields`, usa `HG` por defecto
 - si no se pasa `piece`, toma el estado desde `source_pgmx_path` o desde el baseline
 - se pueden combinar mecanizados lineales, ranuras `SlotSide`, polilineas
@@ -994,7 +994,7 @@ result = synthesize_request(request)
 
 - `Area` usa `HG` por defecto.
 - Antes de escribir el `.pgmx`, la seguridad de profundidad se valida contra
-  `tools/tool_catalog.csv`:
+  `pgmx/data/tool_catalog.csv`:
   - no pasante: `target_depth <= sinking_length`
   - pasante: `espesor + Extra <= sinking_length`
   - si la herramienta no existe en el catalogo, la sintesis falla
@@ -1185,7 +1185,7 @@ Limitacion Maestro observada:
 
 ```python
 from pathlib import Path
-from tools.synthesize_pgmx import DEFAULT_BASELINE_XML_PATH, read_pgmx_state
+from pgmx.synthesis import DEFAULT_BASELINE_XML_PATH, read_pgmx_state
 
 state = read_pgmx_state(DEFAULT_BASELINE_XML_PATH)
 ```
@@ -1193,7 +1193,7 @@ state = read_pgmx_state(DEFAULT_BASELINE_XML_PATH)
 ### Ejemplo minimo: compensar una geometria nominal
 
 ```python
-from tools.synthesize_pgmx import (
+from pgmx.synthesis import (
     build_circle_geometry_profile,
     build_compensated_toolpath_profile,
 )
@@ -1214,7 +1214,7 @@ toolpath = build_compensated_toolpath_profile(
 
 ```python
 from pathlib import Path
-from tools.synthesize_pgmx import (
+from pgmx.synthesis import (
     build_line_milling_spec,
     build_synthesis_request,
     synthesize_request,
@@ -1256,7 +1256,7 @@ print(result.sha256)
 
 ```python
 from pathlib import Path
-from tools.synthesize_pgmx import (
+from pgmx.synthesis import (
     build_slot_milling_spec,
     build_synthesis_request,
     synthesize_request,
@@ -1292,7 +1292,7 @@ print(result.sha256)
 
 ```python
 from pathlib import Path
-from tools.synthesize_pgmx import (
+from pgmx.synthesis import (
     build_line_milling_spec,
     build_synthesis_request,
     build_unidirectional_milling_strategy_spec,
@@ -1339,7 +1339,7 @@ print(result.output_path)
 
 ```python
 from pathlib import Path
-from tools.synthesize_pgmx import (
+from pgmx.synthesis import (
     build_polyline_milling_spec,
     build_synthesis_request,
     synthesize_request,
@@ -1381,7 +1381,7 @@ print(result.output_path)
 
 ```python
 from pathlib import Path
-from tools.synthesize_pgmx import (
+from pgmx.synthesis import (
     build_bidirectional_milling_strategy_spec,
     build_polyline_milling_spec,
     build_synthesis_request,
@@ -1432,7 +1432,7 @@ print(result.output_path)
 
 ```python
 from pathlib import Path
-from tools.synthesize_pgmx import (
+from pgmx.synthesis import (
     build_drilling_spec,
     build_squaring_milling_spec,
     build_synthesis_request,
@@ -1543,14 +1543,14 @@ Lectura conceptual del ejemplo:
 - cada hueco vive en un `DrillingSpec`
 - `tool_resolution="Auto"` resuelve herramientas en la cara `Top`, pero deja
   `ToolKey` vacio en `Front`, `Back`, `Right` y `Left`
-- como no se indica `baseline_path`, se usa `tools/maestro_baselines`
+- como no se indica `baseline_path`, se usa `pgmx/data/maestro_baselines`
 
 ### Ejemplo minimo: dos patrones de huecos sobre `Top`
 
 ```python
 from pathlib import Path
 
-from tools.synthesize_pgmx import (
+from pgmx.synthesis import (
     build_drilling_pattern_spec,
     build_synthesis_request,
     synthesize_request,
@@ -1605,7 +1605,7 @@ Estas reglas aplican cada vez que se trabaja con esta herramienta:
 
 - Antes de inferir una regla nueva, revisar esta guia y los README del repo.
 - Toda la generacion `.pgmx` del repo debe resolverse desde `tools/synthesize_pgmx.py`.
-- El baseline principal versionado del repo es `tools/maestro_baselines/Pieza.xml`
+- El baseline principal versionado del repo es `pgmx/data/maestro_baselines/Pieza.xml`
   junto con `Pieza.epl` y `def.tlgx`.
 - Los estudios manuales y casos de comparación deben guardarse en `archive/maestro_examples`.
 - Las salidas sintéticas de prueba también conviene escribirlas en `archive/maestro_examples`.

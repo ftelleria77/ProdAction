@@ -39,6 +39,7 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 | `app/project_detail_piece_table_rows.py` | Render de filas y celdas del listado de piezas | UI reusable para poblar la tabla de piezas |
 | `app/project_detail_programs.py` | Asociacion, limpieza y apertura de PGMX por pieza | Helpers de programas asociados a piezas |
 | `app/project_detail_pgmx.py` | Cache y mensajes de inspeccion PGMX | Helpers de deteccion de ranuras no ejecutables |
+| `app/project_detail_selected_piece_actions.py` | Acciones de pieza seleccionada para dibujo, source y reparacion PGMX | Orquestacion testeable de acciones sobre la fila seleccionada |
 | `app/project_detail_en_juego_state.py` | Estado persistido En-Juego en configs de modulo | Helpers testeables para limpiar/sincronizar En-Juego |
 | `app/project_detail_en_juego_layout.py` | Cantidades, instancias, posiciones guardadas/iniciales, serializacion, cotas, separacion, dimensiones y veta de En-Juego | Helpers testeables de layout/composicion |
 | `app/project_detail_en_juego_view.py` | Vista, piezas arrastrables, cotas y plumas Qt del layout En-Juego | Componentes graficos reutilizables |
@@ -59,12 +60,21 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 | `app/project_registry.py` | Registro de proyectos | Persistencia simple del registro |
 | `app/project_store.py` | Carga/guardado de proyectos y configs locales | Servicio de persistencia de proyectos |
 | `app/settings.py` | Configuracion, tableros, herramientas y En-Juego | Servicio de configuracion de app |
-| `core/` | Modelo, parseo, resumen, nesting, PGMX y En-Juego | Dominio productivo y servicios de aplicacion |
-| `tools/synthesize_pgmx.py` | API y CLI PGMX publica, muy grande | Fachada compatible sobre submodulos internos |
-| `tools/pgmx_snapshot.py` | Snapshot PGMX publico | Herramienta publica estable |
-| `tools/pgmx_adapters.py` | Adaptadores PGMX publicos | Herramienta publica estable |
+| `core/` | Modelo, parseo, resumen, nesting y En-Juego | Dominio productivo y servicios de aplicacion |
+| `core/production_pdf.py` | Primitivos PDF de la planilla de produccion | Helpers testeables para objetos, coordenadas y JavaScript PDF |
+| `pgmx/` | Snapshot, adaptacion, sintesis, Vaciado y datos Maestro | Subsistema productivo PGMX fuera de `tools` |
+| `pgmx/synthesis/` | Implementacion interna del sintetizador PGMX | Paquete productivo para specs, serializacion y extensiones PGMX |
+| `pgmx/snapshot.py` | Snapshot PGMX publico | Herramienta publica estable |
+| `pgmx/adapters.py` | Adaptadores PGMX publicos | Herramienta publica estable |
+| `pgmx/processing.py` | Resolucion de programas PGMX, dibujos SVG, dimensiones y reparacion de slots | Servicios PGMX usados por UI, planillas y nesting |
+| `pgmx/vaciado/` | Contrato V2 de Vaciado | Handoff hacia `pgmx.synthesis.vaciado` |
+| `pgmx/vaciado_lab/` | Investigacion Vaciado y motor legado como oraculo | Laboratorio PGMX, no dependencia productiva directa |
+| `pgmx/data/` | Baseline Maestro y catalogo de herramientas | Datos versionados del subsistema PGMX |
+| `tools/synthesize_pgmx.py` | CLI y API historica de sintesis PGMX | Fachada compatible hacia `pgmx.synthesis` |
+| `tools/pgmx_snapshot.py` | CLI y API historica de snapshot PGMX | Fachada compatible hacia `pgmx.snapshot` |
+| `tools/pgmx_adapters.py` | CLI y API historica de adaptadores PGMX | Fachada compatible hacia `pgmx.adapters` |
 | `tools/studies/` | Estudios reproducibles | Laboratorio versionado |
-| `tools/pgmx_vaciado*` | Investigacion Vaciado | Laboratorio pausado |
+| `tools/pgmx_vaciado*` | Imports/CLIs historicos de Vaciado | Fachadas compatibles hacia `pgmx.vaciado*` |
 | `iso_state_synthesis/` | Investigacion ISO por estado | Subsistema experimental pausado |
 | `cnc_traceability/` | Herramienta XP standalone | Subsistema separado |
 
@@ -104,7 +114,9 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
    tabla de piezas extraidos a `app/project_detail_piece_table.py`; render de
    filas/celdas de la tabla extraido a `app/project_detail_piece_table_rows.py`;
    programas asociados a piezas extraidos a `app/project_detail_programs.py`;
-   cache/mensajes PGMX extraidos a `app/project_detail_pgmx.py`; estado
+   cache/mensajes PGMX extraidos a `app/project_detail_pgmx.py`; acciones
+   seleccionadas de dibujo/source/reparacion PGMX extraidas a
+   `app/project_detail_selected_piece_actions.py`; estado
    persistido En-Juego extraido a `app/project_detail_en_juego_state.py`;
    helpers de layout/composicion En-Juego extraidos a
    `app/project_detail_en_juego_layout.py`; componentes graficos En-Juego
@@ -120,8 +132,19 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
    `app/project_detail_en_juego_output.py`.
 7. Separar `tools/synthesize_pgmx.py` en un paquete interno manteniendo
    `tools.synthesize_pgmx` como fachada publica.
+   Hecho: el subsistema PGMX productivo vive en `pgmx/`; `pgmx/synthesis/core.py`
+   contiene la implementacion heredada, `tools/synthesize_pgmx.py` quedo como
+   fachada de compatibilidad y `pgmx/synthesis/vaciado.py` fija la frontera
+   productiva para integrar `Vaciado` desde `pgmx.vaciado` sin depender del
+   motor legado `pgmx.vaciado_lab.trace_engine`.
 8. Revisar `core/` por dominios: proyectos/piezas, planillas, corte/nesting,
-   PGMX y En-Juego.
+   En-Juego y puntos de contacto con `pgmx/`.
+   Avance: `core/pgmx_processing.py` quedo como fachada compatible y la
+   implementacion se movio a `pgmx/processing.py`; los imports productivos de
+   UI, planillas y nesting apuntan ahora a `pgmx.processing`.
+   Avance: primitivos PDF de la planilla de produccion extraidos desde
+   `core.summary` a `core.production_pdf`, con cobertura focal para
+   coordenadas, streams, apariencias y JavaScript PDF.
 9. Reubicar o etiquetar laboratorios sin mezclarlos con flujos productivos.
 
 ## Invariantes
@@ -130,8 +153,8 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 - Despues de cada etapa correr:
 
 ```powershell
-python -m compileall main.py app core tools iso_state_synthesis cnc_traceability
-python -c "import app.ui, core.parser, core.nesting, core.summary, core.pgmx_processing, core.en_juego_synthesis; print('core imports ok')"
+python -m compileall main.py app core pgmx tools iso_state_synthesis cnc_traceability
+python -c "import app.ui, core.parser, core.nesting, core.summary, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
 ```
 
 - Las suites de Vaciado estan pausadas por defecto. Para ejecutarlas cuando se
@@ -145,6 +168,7 @@ python -m unittest tests.test_pgmx_vaciado
 
 - Si una CLI publica se divide internamente, el comando viejo debe seguir
   funcionando.
-- Los frentes pausados (`iso_state_synthesis/`, `tools/pgmx_vaciado/` y
-  `tools/pgmx_vaciado_v2/`) no se usan para dirigir la arquitectura productiva
-  salvo que se reactive explicitamente ese frente.
+- Los frentes pausados (`iso_state_synthesis/` y `pgmx/vaciado_lab/`) no se
+  usan para dirigir la arquitectura productiva salvo que se reactive
+  explicitamente ese frente. `pgmx/vaciado/` puede integrarse al subsistema
+  PGMX solo a traves de `pgmx.synthesis.vaciado`.

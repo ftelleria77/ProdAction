@@ -24,7 +24,7 @@ from tools.studies.iso.txh_open_profile_reentry_fixtures_2026_05_11 import (  # 
     _open_profile_reentry,
     _top_drills,
 )
-from tools.synthesize_pgmx import build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_synthesis_request, synthesize_request  # noqa: E402
 
 
 @dataclass(frozen=True)

@@ -57,7 +57,7 @@ from core.model import (
 )
 from core.nesting import generate_cut_diagrams
 from core.parser import inspect_project_layout, scan_project, scan_project_structure
-from core.pgmx_processing import (
+from pgmx.processing import (
     generate_project_piece_drawings,
     resolve_piece_program_path,
 )
@@ -236,7 +236,7 @@ class ProjectDetailOutputMixin:
         return module_output_dir / f"{candidate_stem}.iso"
 
     def _export_project_iso_files(self, selected_project: Project, output_root: Path) -> dict:
-        from core.pgmx_processing import resolve_piece_program_path
+        from pgmx.processing import resolve_piece_program_path
         from iso_state_synthesis.emitter import emit_candidate_for_pgmx
 
         generated_paths: list[Path] = []
@@ -363,7 +363,7 @@ class ProjectDetailOutputMixin:
         while True:
             progress_dialog = None
             try:
-                from core.pgmx_processing import generate_project_piece_drawings
+                from pgmx.processing import generate_project_piece_drawings
                 from core.summary import export_production_sheet, export_production_sheet_pdf
 
                 locale_work_items = []

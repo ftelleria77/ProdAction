@@ -8,7 +8,7 @@ from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import QDialog, QLabel, QMessageBox, QPushButton, QVBoxLayout
 
 from app.qt_helpers import _apply_responsive_window_size, _exec_centered, _scaled_int
-from core.pgmx_processing import _sanitize_filename, build_piece_svg, parse_pgmx_for_piece
+from pgmx.processing import _sanitize_filename, build_piece_svg, parse_pgmx_for_piece
 
 
 def build_piece_drawing_path(module_path: Path, piece_row: Mapping[str, object]) -> Path:

@@ -5,7 +5,7 @@ Esta nota fija como identificar las familias geometricas manuales guardadas en
 
 ## API publica nueva
 
-En `tools.synthesize_pgmx` quedaron disponibles:
+En `pgmx.synthesis` quedaron disponibles:
 
 - `read_pgmx_geometries(path)`
 - `GeometryPrimitiveSpec`
@@ -122,7 +122,7 @@ Leer y clasificar un archivo:
 
 ```python
 from pathlib import Path
-from tools.synthesize_pgmx import read_pgmx_geometries
+from pgmx.synthesis import read_pgmx_geometries
 
 profiles = read_pgmx_geometries(Path("archive/maestro_examples/Pieza_LineaVertical.pgmx"))
 print(profiles[0].classification_key)
@@ -131,7 +131,7 @@ print(profiles[0].classification_key)
 Construir perfiles geometricos para sintesis futura:
 
 ```python
-from tools.synthesize_pgmx import (
+from pgmx.synthesis import (
     build_arc_geometry_primitive,
     build_circle_geometry_profile,
     build_composite_geometry_profile,

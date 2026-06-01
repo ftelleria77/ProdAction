@@ -9,10 +9,10 @@ ROOT = Path(SPECPATH).parent
 datas = [
     (str(ROOT / "packaging" / "runtime" / "app_settings.json"), "."),
     (str(ROOT / "packaging" / "runtime" / "projects_list.json"), "."),
-    (str(ROOT / "tools" / "tool_catalog.csv"), "tools"),
-    (str(ROOT / "tools" / "maestro_baselines" / "Pieza.xml"), "tools/maestro_baselines"),
-    (str(ROOT / "tools" / "maestro_baselines" / "Pieza.epl"), "tools/maestro_baselines"),
-    (str(ROOT / "tools" / "maestro_baselines" / "def.tlgx"), "tools/maestro_baselines"),
+    (str(ROOT / "pgmx" / "data" / "tool_catalog.csv"), "pgmx/data"),
+    (str(ROOT / "pgmx" / "data" / "maestro_baselines" / "Pieza.xml"), "pgmx/data/maestro_baselines"),
+    (str(ROOT / "pgmx" / "data" / "maestro_baselines" / "Pieza.epl"), "pgmx/data/maestro_baselines"),
+    (str(ROOT / "pgmx" / "data" / "maestro_baselines" / "def.tlgx"), "pgmx/data/maestro_baselines"),
 ]
 
 

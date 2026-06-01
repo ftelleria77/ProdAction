@@ -1,8 +1,7 @@
 """Sintesis En-Juego basada en snapshots reales de `.pgmx`.
 
 La visualizacion solo aporta composicion, los programas originales se leen con
-`tools.pgmx_snapshot`/`tools.pgmx_adapters` y la escritura final pasa por
-`tools.synthesize_pgmx`.
+`pgmx.snapshot`/`pgmx.adapters` y la escritura final pasa por `pgmx.synthesis`.
 """
 
 from __future__ import annotations
@@ -14,9 +13,9 @@ from typing import Optional, Sequence
 
 from core.en_juego_transform import EnJuegoTransform, transform_supported_spec
 from core.model import Project
-from tools import synthesize_pgmx as sp
-from tools.pgmx_adapters import PgmxAdaptationResult, adapt_pgmx_path
-from tools.pgmx_snapshot import PgmxSnapshot, read_pgmx_snapshot
+from pgmx import synthesis as sp
+from pgmx.adapters import PgmxAdaptationResult, adapt_pgmx_path
+from pgmx.snapshot import PgmxSnapshot, read_pgmx_snapshot
 
 
 DIVISION_TOLERANCE_MM = 0.1
