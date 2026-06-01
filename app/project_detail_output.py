@@ -61,7 +61,8 @@ from pgmx.processing import (
     generate_project_piece_drawings,
     resolve_piece_program_path,
 )
-from core.summary import export_production_sheet, export_production_sheet_pdf, export_summary
+from core.production_sheet import export_production_sheet, export_production_sheet_pdf
+from core.summary import export_summary
 from iso_state_synthesis.emitter import emit_candidate_for_pgmx
 
 class ProjectDetailOutputMixin:
@@ -364,7 +365,7 @@ class ProjectDetailOutputMixin:
             progress_dialog = None
             try:
                 from pgmx.processing import generate_project_piece_drawings
-                from core.summary import export_production_sheet, export_production_sheet_pdf
+                from core.production_sheet import export_production_sheet, export_production_sheet_pdf
 
                 locale_work_items = []
                 for locale in selected_project.locales:

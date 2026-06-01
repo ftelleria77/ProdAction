@@ -70,8 +70,8 @@ Entrada desde `ProjectDetailWindow.generate_sheets()`.
 Genera:
 
 - estructura de carpetas CNC por proyecto/local/modulo;
-- PDF por local con `core.summary.export_production_sheet_pdf`;
-- Excel opcional con `core.summary.export_production_sheet`.
+- PDF por local con `core.production_sheet.export_production_sheet_pdf`;
+- Excel opcional con `core.production_sheet.export_production_sheet`.
 
 ### Diagramas de corte
 

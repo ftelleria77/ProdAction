@@ -61,6 +61,8 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 | `app/project_store.py` | Carga/guardado de proyectos y configs locales | Servicio de persistencia de proyectos |
 | `app/settings.py` | Configuracion, tableros, herramientas y En-Juego | Servicio de configuracion de app |
 | `core/` | Modelo, parseo, resumen, nesting y En-Juego | Dominio productivo y servicios de aplicacion |
+| `core/summary.py` | Resumen CSV y fachadas historicas de planillas | Compatibilidad para imports existentes |
+| `core/production_sheet.py` | Planilla de produccion Excel y PDF interactivo | Exportadores productivos de planillas |
 | `core/production_pdf.py` | Primitivos PDF de la planilla de produccion | Helpers testeables para objetos, coordenadas y JavaScript PDF |
 | `pgmx/` | Snapshot, adaptacion, sintesis, Vaciado y datos Maestro | Subsistema productivo PGMX fuera de `tools` |
 | `pgmx/synthesis/` | Implementacion interna del sintetizador PGMX | Paquete productivo para specs, serializacion y extensiones PGMX |
@@ -145,6 +147,9 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
    Avance: primitivos PDF de la planilla de produccion extraidos desde
    `core.summary` a `core.production_pdf`, con cobertura focal para
    coordenadas, streams, apariencias y JavaScript PDF.
+   Avance: exportadores Excel/PDF de planillas movidos a
+   `core.production_sheet`; `core.summary` conserva el CSV y reexporta las
+   funciones historicas para compatibilidad.
 9. Reubicar o etiquetar laboratorios sin mezclarlos con flujos productivos.
 
 ## Invariantes
@@ -154,7 +159,7 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 
 ```powershell
 python -m compileall main.py app core pgmx tools iso_state_synthesis cnc_traceability
-python -c "import app.ui, core.parser, core.nesting, core.summary, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
+python -c "import app.ui, core.parser, core.nesting, core.summary, core.production_sheet, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
 ```
 
 - Las suites de Vaciado estan pausadas por defecto. Para ejecutarlas cuando se
