@@ -12,6 +12,12 @@ from core.nesting_boards import (
     normalize_board_definition as _normalize_board_definition,
     resolve_board_definition as _resolve_board_definition,
 )
+from core.nesting_geometry import (
+    occupied_span as _occupied_span,
+    prune_free_rectangles as _prune_free_rectangles,
+    rectangles_intersect as _rectangles_intersect,
+    split_free_rectangle as _split_free_rectangle,
+)
 from core.nesting_pdf import build_cut_diagram_pdf
 from core.nesting_pieces import (
     build_en_juego_cut_piece as _build_en_juego_cut_piece,
@@ -1049,67 +1055,6 @@ def _pack_group_into_boards_guillotine_dimension_scan(
         board_index += 1
 
     return boards, skipped
-
-
-def _rectangles_intersect(first: tuple[float, float, float, float], second: tuple[float, float, float, float]) -> bool:
-    first_x, first_y, first_w, first_h = first
-    second_x, second_y, second_w, second_h = second
-    return not (
-        second_x >= first_x + first_w
-        or second_x + second_w <= first_x
-        or second_y >= first_y + first_h
-        or second_y + second_h <= first_y
-    )
-
-
-def _split_free_rectangle(
-    free_rect: tuple[float, float, float, float],
-    used_rect: tuple[float, float, float, float],
-) -> list[tuple[float, float, float, float]]:
-    free_x, free_y, free_w, free_h = free_rect
-    used_x, used_y, used_w, used_h = used_rect
-    results: list[tuple[float, float, float, float]] = []
-
-    if used_x > free_x:
-        results.append((free_x, free_y, used_x - free_x, free_h))
-    if used_x + used_w < free_x + free_w:
-        results.append((used_x + used_w, free_y, free_x + free_w - (used_x + used_w), free_h))
-    if used_y > free_y:
-        results.append((free_x, free_y, free_w, used_y - free_y))
-    if used_y + used_h < free_y + free_h:
-        results.append((free_x, used_y + used_h, free_w, free_y + free_h - (used_y + used_h)))
-
-    return [rect for rect in results if rect[2] > 0.01 and rect[3] > 0.01]
-
-
-def _prune_free_rectangles(
-    rectangles: list[tuple[float, float, float, float]],
-) -> list[tuple[float, float, float, float]]:
-    pruned: list[tuple[float, float, float, float]] = []
-    for idx, rect in enumerate(rectangles):
-        x, y, width, height = rect
-        contained = False
-        for other_idx, other in enumerate(rectangles):
-            if idx == other_idx:
-                continue
-            other_x, other_y, other_width, other_height = other
-            if (
-                x >= other_x
-                and y >= other_y
-                and x + width <= other_x + other_width
-                and y + height <= other_y + other_height
-            ):
-                contained = True
-                break
-        if not contained:
-            pruned.append(rect)
-    return pruned
-
-
-def _occupied_span(size: float, free_size: float, spacing: float) -> float:
-    if free_size - size <= 0.01:
-        return size
-    return size + spacing
 
 
 def _placement_score(

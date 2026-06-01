@@ -530,6 +530,11 @@ Metodologia actual:
 - ubica la pieza, divide rectangulos libres y poda rectangulos contenidos
 - repite hasta no poder ubicar mas piezas en el tablero
 
+La geometria rectangular compartida por este camino vive en
+`core.nesting_geometry`: interseccion de rectangulos, division/poda de
+rectangulos libres y calculo del span ocupado con separacion. `core.nesting`
+mantiene las fachadas privadas historicas para los laboratorios existentes.
+
 Este camino no genera guias de cortes principales.
 
 ### Optimizacion Longitudinal / Transversal
