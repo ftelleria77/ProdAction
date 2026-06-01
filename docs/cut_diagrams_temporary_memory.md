@@ -100,7 +100,8 @@ La implementacion esta en `_build_en_juego_cut_piece(...)`.
 
 ## Tableros
 
-Si hay tableros configurados, `_resolve_board_definition(...)` busca uno por:
+Si hay tableros configurados, `core.nesting_boards.resolve_board_definition(...)`
+busca uno por:
 
 - mismo color/material
 - mismo espesor con tolerancia de `0.01`
@@ -113,7 +114,8 @@ Si no hay lista de tableros configurados, se usan las dimensiones base:
 - alto por defecto: `cut_board_height`
 
 El margen del tablero se descuenta antes de optimizar y luego
-`_apply_board_margin(...)` desplaza las piezas al sistema completo de placa.
+`core.nesting_boards.apply_board_margin(...)` desplaza las piezas al sistema
+completo de placa.
 
 ## Veta Y Rotacion
 
