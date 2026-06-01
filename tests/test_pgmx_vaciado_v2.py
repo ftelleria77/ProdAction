@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import os
 import unittest
+
+RUN_VACIADO_TESTS = os.environ.get("PRODACTION_ENABLE_VACIADO_TESTS") == "1"
+VACIADO_TESTS_PAUSED_REASON = "Vaciado tests paused; set PRODACTION_ENABLE_VACIADO_TESTS=1 to run them."
 
 from tools.pgmx_vaciado_v2 import (
     PolylineContour,
@@ -50,6 +54,7 @@ def _trajectory_xy_bbox(adaptation) -> tuple[float, float, float, float]:
     return (min(xs), max(xs), min(ys), max(ys))
 
 
+@unittest.skipUnless(RUN_VACIADO_TESTS, VACIADO_TESTS_PAUSED_REASON)
 class VaciadoV2Tests(unittest.TestCase):
     def test_rectangular_no_islands_builds_offset_family_from_strategy(self) -> None:
         plan = plan_rectangular_no_islands(

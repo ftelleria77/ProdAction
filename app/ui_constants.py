@@ -1,0 +1,4 @@
+"""Constantes compartidas de UI."""
+
+MAIN_ACTION_BUTTON_WIDTH = 96
+MAIN_ACTION_BUTTON_HEIGHT = 40

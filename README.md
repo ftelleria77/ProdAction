@@ -27,6 +27,7 @@ python main.py
 
 ## Orientacion rapida del repo
 - Indice ordenado de documentacion: `docs/README.md`
+- Rumbo de reorganizacion de arquitectura: `docs/architecture_reorganization.md`
 - Guia rapida para estudiar el repo: `docs/repo_study_guide.md`
 - Para PGMX, usar como fuente de verdad operativa `docs/synthesize_pgmx_help.md`, `docs/pgmx_snapshot_help.md` y `docs/pgmx_adapters_help.md`
 

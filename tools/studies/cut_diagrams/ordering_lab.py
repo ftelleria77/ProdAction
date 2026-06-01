@@ -22,7 +22,8 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.ui import _load_project, _normalize_cut_optimization_option, _read_app_settings
+from app.project_store import _load_project
+from app.settings import _normalize_cut_optimization_option, _read_app_settings
 from core import nesting
 
 
