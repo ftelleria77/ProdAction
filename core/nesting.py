@@ -18,6 +18,10 @@ from core.nesting_geometry import (
     rectangles_intersect as _rectangles_intersect,
     split_free_rectangle as _split_free_rectangle,
 )
+from core.nesting_free_rectangles import (
+    pack_group_into_boards_free_rectangles as _pack_group_into_boards_free_rectangles,
+    placement_score as _placement_score,
+)
 from core.nesting_pdf import build_cut_diagram_pdf
 from core.nesting_pieces import (
     build_en_juego_cut_piece as _build_en_juego_cut_piece,
@@ -1052,117 +1056,6 @@ def _pack_group_into_boards_guillotine_dimension_scan(
             )
         )
         remaining = list(best_state['remaining'])
-        board_index += 1
-
-    return boards, skipped
-
-
-def _placement_score(
-    free_rect: tuple[float, float, float, float],
-    occupied_width: float,
-    occupied_height: float,
-    optimization_mode: str,
-) -> tuple[float, float, float, float]:
-    _, _, free_width, free_height = free_rect
-    waste_area = free_width * free_height - occupied_width * occupied_height
-    short_side = min(free_width - occupied_width, free_height - occupied_height)
-    long_side = max(free_width - occupied_width, free_height - occupied_height)
-    if optimization_mode == CUT_OPTIMIZATION_LONGITUDINAL:
-        axis_fit = free_height - occupied_height
-    elif optimization_mode == CUT_OPTIMIZATION_TRANSVERSAL:
-        axis_fit = free_width - occupied_width
-    else:
-        axis_fit = min(free_width - occupied_width, free_height - occupied_height)
-    return (round(waste_area, 4), round(axis_fit, 4), round(short_side, 4), round(long_side, 4))
-
-
-def _pack_group_into_boards_free_rectangles(
-    material: str,
-    thickness: float,
-    pieces: list[CutPiece],
-    board_width: float,
-    board_height: float,
-    piece_spacing: float,
-    grain: str = "",
-    optimization_mode: str = CUT_OPTIMIZATION_NONE,
-) -> tuple[list[CutBoard], list[CutPiece]]:
-    remaining = list(pieces)
-    boards: list[CutBoard] = []
-    skipped: list[CutPiece] = []
-    board_index = 1
-    optimization_mode = _normalize_optimization_mode(optimization_mode)
-
-    while remaining:
-        placements: list[CutPlacement] = []
-        used_area = 0.0
-        free_rectangles: list[tuple[float, float, float, float]] = [(0.0, 0.0, float(board_width), float(board_height))]
-
-        while True:
-            found: tuple[int, float, float, bool, tuple[float, float, float, float], tuple[float, float, float, float], tuple[float, float, float, float]] | None = None
-            for idx, cut_piece in enumerate(remaining):
-                for width, height, rotated in _orientation_options(cut_piece, optimization_mode, grain):
-                    for free_rect in free_rectangles:
-                        _, _, free_width, free_height = free_rect
-                        occupied_width = _occupied_span(width, free_width, piece_spacing)
-                        occupied_height = _occupied_span(height, free_height, piece_spacing)
-                        if occupied_width > free_width or occupied_height > free_height:
-                            continue
-                        score = _placement_score(free_rect, occupied_width, occupied_height, optimization_mode)
-                        candidate = (
-                            idx,
-                            width,
-                            height,
-                            rotated,
-                            free_rect,
-                            (free_rect[0], free_rect[1], occupied_width, occupied_height),
-                            score,
-                        )
-                        if found is None or candidate[-1] < found[-1]:
-                            found = candidate
-
-            if found is not None:
-                idx, width, height, rotated, free_rect, used_rect, _ = found
-                cut_piece = remaining.pop(idx)
-                placements.append(
-                    CutPlacement(
-                        cut_piece=cut_piece,
-                        x=free_rect[0],
-                        y=free_rect[1],
-                        width=width,
-                        height=height,
-                        rotated=rotated,
-                    )
-                )
-                used_area += cut_piece.width * cut_piece.height
-
-                updated_rectangles: list[tuple[float, float, float, float]] = []
-                for free_rect_candidate in free_rectangles:
-                    if not _rectangles_intersect(free_rect_candidate, used_rect):
-                        updated_rectangles.append(free_rect_candidate)
-                        continue
-                    updated_rectangles.extend(_split_free_rectangle(free_rect_candidate, used_rect))
-                free_rectangles = _prune_free_rectangles(updated_rectangles)
-                continue
-
-            break
-
-        if not placements:
-            skipped.extend(remaining)
-            break
-
-        boards.append(
-            CutBoard(
-                material=material,
-                thickness=thickness,
-                board_width=board_width,
-                board_height=board_height,
-                board_margin=0.0,
-                grain=grain,
-                index=board_index,
-                placements=placements,
-                utilization=used_area / float(board_width * board_height),
-            )
-        )
         board_index += 1
 
     return boards, skipped

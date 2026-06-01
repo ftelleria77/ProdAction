@@ -520,7 +520,7 @@ Hay tres caminos internos.
 
 ### Sin Optimizar
 
-`_pack_group_into_boards_free_rectangles(...)`
+`core.nesting_free_rectangles.pack_group_into_boards_free_rectangles(...)`
 
 Metodologia actual:
 
@@ -533,7 +533,8 @@ Metodologia actual:
 La geometria rectangular compartida por este camino vive en
 `core.nesting_geometry`: interseccion de rectangulos, division/poda de
 rectangulos libres y calculo del span ocupado con separacion. `core.nesting`
-mantiene las fachadas privadas historicas para los laboratorios existentes.
+mantiene las fachadas privadas historicas `_pack_group_into_boards_free_rectangles`
+y `_placement_score` para los laboratorios existentes.
 
 Este camino no genera guias de cortes principales.
 
