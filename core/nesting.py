@@ -1,7 +1,6 @@
 """Compatibility facade for cut nesting services and helpers."""
 
 import re
-from typing import List
 
 from core.model import Piece, Project
 from core.nesting_boards import (
@@ -53,6 +52,7 @@ from core.nesting_brkga import (
     preferred_primary_secondary as _preferred_primary_secondary,
 )
 from core.nesting_dispatch import pack_group_into_boards as _pack_group_into_boards
+from core.nesting_first_fit import first_fit_2d
 from core.nesting_pdf import build_cut_diagram_pdf
 from core.nesting_service import generate_cut_diagrams
 from core.nesting_pieces import (
@@ -117,38 +117,3 @@ from core.nesting_model import (
 def _sanitize_filename(value: str) -> str:
     cleaned = re.sub(r"[^0-9A-Za-z._-]+", "_", str(value or "").strip())
     return cleaned.strip("._") or "diagrama"
-
-
-def first_fit_2d(pieces: List[Piece], board_width: float, board_height: float, allow_rotate: bool = True):
-    """Wrapper simple de compatibilidad para obtener ubicaciones en un solo tablero."""
-
-    cut_pieces = [
-        CutPiece(
-            piece=piece,
-            label=str(piece.name or piece.id or 'pieza'),
-            width=float(piece.width),
-            height=float(piece.height),
-            thickness=float(piece.thickness or 0),
-            color=str(piece.color or ''),
-            allow_rotate=allow_rotate,
-            grain_mode=_normalize_piece_grain_mode(piece.grain_direction),
-            final_width=float(piece.width),
-            final_height=float(piece.height),
-        )
-        for piece in pieces
-        if _is_valid_piece(piece)
-    ]
-    boards, _ = _pack_group_into_boards('TEMP', 0.0, cut_pieces, float(board_width), float(board_height), 0.0, 0.0)
-    if not boards:
-        return []
-
-    return [
-        {
-            'piece_id': placement.cut_piece.piece.id,
-            'x': placement.x,
-            'y': placement.y,
-            'width': placement.width,
-            'height': placement.height,
-        }
-        for placement in boards[0].placements
-    ]

@@ -14,7 +14,9 @@ No habia una memoria dedicada exclusivamente a diagramas de corte.
 Registros parciales existentes:
 
 - `README.md` menciona esquemas de corte basicos sobre tableros y el proximo
-  paso historico `core.nesting.first_fit_2d`.
+  paso historico `core.nesting.first_fit_2d`; la implementacion compatible
+  actual vive en `core.nesting_first_fit.first_fit_2d` y `core.nesting` la
+  reexporta.
 - `docs/en_juego_synthesis_temporary_memory.md` contiene reglas confirmadas
   para como una composicion `En-Juego` debe reemplazar piezas individuales en
   diagramas de corte.
@@ -539,6 +541,9 @@ La geometria rectangular compartida por este camino vive en
 rectangulos libres y calculo del span ocupado con separacion. `core.nesting`
 mantiene las fachadas privadas historicas `_pack_group_into_boards_free_rectangles`
 y `_placement_score` para los laboratorios existentes.
+El wrapper legacy `first_fit_2d` vive en `core.nesting_first_fit` y delega en el
+dispatcher productivo; `core.nesting.first_fit_2d` se conserva como fachada
+compatible.
 
 Este camino no genera guias de cortes principales.
 
