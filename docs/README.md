@@ -17,18 +17,20 @@ tener que leer todas las memorias historicas de una vez.
    - Laboratorio separado para estudiar el nuevo concepto `Vaciado` en `.pgmx`.
 6. `docs/cut_diagrams_temporary_memory.md`
    - Estado del motor de diagramas de corte y algoritmos de guillotina.
-7. `cnc_traceability/README.md`
+7. `docs/laboratory_frontiers.md`
+   - Fronteras entre herramientas publicas, fachadas compatibles y laboratorios.
+8. `cnc_traceability/README.md`
    - Entrada del subsistema de trazabilidad CNC compatible con Windows XP.
-8. `iso_state_synthesis/README.md`
+9. `iso_state_synthesis/README.md`
    - Entrada del subsistema experimental por estado para futura traduccion
      `.pgmx -> .iso`.
-9. `docs/iso_cnc_contract.md`
+10. `docs/iso_cnc_contract.md`
    - Contrato CNC/ISO observado: configuracion Maestro, toolset, variables y
      huecos pendientes para un sintetizador ISO.
-10. `docs/iso_minimal_fixtures_plan.md`
+11. `docs/iso_minimal_fixtures_plan.md`
    - Plan de reanudacion para generar `.pgmx` minimos comparables en la compu
      de fabrica y postprocesarlos con Maestro.
-11. `docs/iso_synthesis_temporary_memory.md`
+12. `docs/iso_synthesis_temporary_memory.md`
    - Ingenieria inversa del flujo PGMX -> Maestro/postprocesador -> ISO.
 
 ## Mapa por tema
@@ -47,7 +49,8 @@ tener que leer todas las memorias historicas de una vez.
 | Reparacion SlotSide | `docs/repo_study_guide.md`, `docs/pgmx_temporary_memory.md` | `core/pgmx_processing.py`, `app/ui.py` |
 | En-Juego | `docs/en_juego_synthesis_temporary_memory.md` | `core/en_juego_synthesis.py`, `core/en_juego_transform.py` |
 | Diagramas de corte | `docs/cut_diagrams_temporary_memory.md` | `core/nesting_service.py`, `core/nesting_compat.py` |
-| Laboratorio de corte | `docs/cut_diagrams_temporary_memory.md` | `tools/studies/cut_diagrams/ordering_lab.py` |
+| Laboratorios y fachadas | `docs/laboratory_frontiers.md` | `tools/`, `pgmx/vaciado_lab/`, `tools/studies/`, `iso_state_synthesis/` |
+| Laboratorio de corte | `docs/cut_diagrams_temporary_memory.md`, `docs/laboratory_frontiers.md` | `tools/studies/cut_diagrams/ordering_lab.py` |
 | Trazabilidad CNC | `cnc_traceability/README.md`, `cnc_traceability/docs/contract.md`, `cnc_traceability/memory/current-state.md` | `cnc_traceability/viewer_xp.py` |
 | Generacion ISO experimental | `iso_state_synthesis/README.md`, `iso_state_synthesis/memory/current-state.md`, `docs/iso_cnc_contract.md` | `iso_state_synthesis/` |
 | Contrato CNC/ISO | `docs/iso_cnc_contract.md`, `docs/iso_minimal_fixtures_plan.md`, `docs/iso_synthesis_temporary_memory.md` | `tools/studies/iso/minimal_fixtures_2026_05_03.py` |

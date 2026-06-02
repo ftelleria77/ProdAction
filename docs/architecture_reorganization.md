@@ -228,6 +228,9 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
    corte/nesting. Las fachadas historicas vigentes son `core.summary`,
    `core.pgmx_processing` y `core.nesting`.
 9. Reubicar o etiquetar laboratorios sin mezclarlos con flujos productivos.
+   Avance: catalogo inicial de herramientas publicas, fachadas compatibles y
+   laboratorios documentado en `docs/laboratory_frontiers.md`. Las fachadas PGMX
+   historicas quedan cubiertas por `tests/test_pgmx_public_facades.py`.
 
 ## Invariantes
 
@@ -250,6 +253,10 @@ python -m unittest tests.test_pgmx_vaciado
 
 - Si una CLI publica se divide internamente, el comando viejo debe seguir
   funcionando.
+- Las fronteras de laboratorios y fachadas se documentan en
+  `docs/laboratory_frontiers.md`; los scripts exploratorios nuevos deben vivir
+  en `tools/studies/<tema>/` o en un paquete experimental explicitamente
+  documentado.
 - Los frentes pausados (`iso_state_synthesis/` y `pgmx/vaciado_lab/`) no se
   usan para dirigir la arquitectura productiva salvo que se reactive
   explicitamente ese frente. `pgmx/vaciado/` puede integrarse al subsistema
