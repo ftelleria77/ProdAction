@@ -39,13 +39,13 @@ tener que leer todas las memorias historicas de una vez.
 | App desktop | `docs/repo_study_guide.md` | `app/ui.py`, `main.py` |
 | Modelo de datos | `docs/repo_study_guide.md` | `core/model.py` |
 | Escaneo de proyectos | `docs/repo_study_guide.md` | `core/parser.py` |
-| Planillas y PDF | `docs/repo_study_guide.md` | `core/summary.py` |
-| Dibujos de piezas | `docs/repo_study_guide.md` | `core/pgmx_processing.py` |
+| Planillas y PDF | `docs/repo_study_guide.md` | `core/summary.py`, `core/production_sheet.py`, `core/production_sheet_pdf.py` |
+| Dibujos de piezas | `docs/repo_study_guide.md` | `pgmx/processing.py`, `core/pgmx_processing.py` |
 | Sintesis PGMX | `docs/synthesize_pgmx_help.md` | `tools/synthesize_pgmx.py` |
 | Snapshot/adaptacion PGMX | `docs/pgmx_snapshot_help.md`, `docs/pgmx_adapters_help.md` | `tools/pgmx_snapshot.py`, `tools/pgmx_adapters.py` |
 | Vaciado PGMX | `tools/pgmx_vaciado/README.md`, `tools/pgmx_vaciado/memory/current-state.md` | `tools/pgmx_vaciado/` |
 | Reparacion SlotSide | `docs/repo_study_guide.md`, `docs/pgmx_temporary_memory.md` | `core/pgmx_processing.py`, `app/ui.py` |
-| En-Juego | `docs/en_juego_synthesis_temporary_memory.md` | `core/en_juego_synthesis.py` |
+| En-Juego | `docs/en_juego_synthesis_temporary_memory.md` | `core/en_juego_synthesis.py`, `core/en_juego_transform.py` |
 | Diagramas de corte | `docs/cut_diagrams_temporary_memory.md` | `core/nesting_service.py`, `core/nesting_compat.py` |
 | Laboratorio de corte | `docs/cut_diagrams_temporary_memory.md` | `tools/studies/cut_diagrams/ordering_lab.py` |
 | Trazabilidad CNC | `cnc_traceability/README.md`, `cnc_traceability/docs/contract.md`, `cnc_traceability/memory/current-state.md` | `cnc_traceability/viewer_xp.py` |

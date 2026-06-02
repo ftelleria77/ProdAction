@@ -1,6 +1,6 @@
 # Reorganizacion De Arquitectura
 
-Estado: 2026-06-01
+Estado: 2026-06-02
 
 Este documento fija el rumbo de reorganizacion del repo. Los frentes ISO por
 estado y Vaciado quedan pausados como investigacion; la prioridad pasa a ordenar
@@ -61,12 +61,18 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 | `app/project_store.py` | Carga/guardado de proyectos y configs locales | Servicio de persistencia de proyectos |
 | `app/settings.py` | Configuracion, tableros, herramientas y En-Juego | Servicio de configuracion de app |
 | `core/` | Modelo, parseo, resumen, nesting y En-Juego | Dominio productivo y servicios de aplicacion |
+| `core/model.py` | Dataclasses y normalizacion basica de piezas | Contrato de datos estable compartido por app y servicios |
+| `core/parser.py` | Escaneo de proyectos, locales, modulos y piezas | Entrada de datos productiva del dominio |
 | `core/summary.py` | Resumen CSV y fachadas historicas de planillas | Compatibilidad para imports existentes |
 | `core/production_sheet_data.py` | Carga normalizada de datos de planilla | Preparacion compartida por Excel y PDF |
 | `core/production_sheet_images.py` | Imagenes de planilla, conversion SVG/PNG y popups | Aisla dependencias opcionales Pillow/CairoSVG/Qt |
 | `core/production_sheet.py` | Planilla de produccion Excel y fachada PDF historica | Exportador Excel productivo |
 | `core/production_sheet_pdf.py` | Planilla de produccion PDF interactiva | Renderer PDF productivo |
 | `core/production_pdf.py` | Primitivos PDF de la planilla de produccion | Helpers testeables para objetos, coordenadas y JavaScript PDF |
+| `core/pgmx_processing.py` | Fachada compatible hacia `pgmx.processing` | Imports historicos sin logica productiva nueva |
+| `core/en_juego_synthesis.py` | Sintesis PGMX compuesta para En-Juego | Servicio productivo En-Juego apoyado en `pgmx.synthesis` |
+| `core/en_juego_transform.py` | Transformaciones geometricas En-Juego | Geometria CAM pura sin lectura/escritura PGMX |
+| `core/nesting.py` | Fachada historica de diagramas de corte | Reexporta el contrato declarado en `core.nesting_compat` |
 | `core/nesting_model.py` | Tipos y constantes de corte/nesting | Contrato de datos compartido por empacadores y renderers |
 | `core/nesting_strategy.py` | Normalizacion de modos, veta, orientaciones y orden de piezas de corte | Estrategia compartida por empacadores y laboratorios |
 | `core/nesting_geometry.py` | Interseccion, division/poda de rectangulos libres y span ocupado | Geometria rectangular compartida por empacadores |
@@ -217,6 +223,10 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
    `core.nesting_compat`; la fachada `core.nesting` reexporta solo ese contrato
    declarado. `LAB_COMPATIBILITY_NAMES` documenta los nombres que mantiene vivo
    `tools.studies.cut_diagrams.ordering_lab`.
+   Cierre: etapa 8 auditada contra los archivos actuales de `core/`; quedan
+   documentados modelo/parser, planillas, PGMX processing, En-Juego y
+   corte/nesting. Las fachadas historicas vigentes son `core.summary`,
+   `core.pgmx_processing` y `core.nesting`.
 9. Reubicar o etiquetar laboratorios sin mezclarlos con flujos productivos.
 
 ## Invariantes

@@ -24,12 +24,16 @@ El sintetizador PGMX real vive en `tools/synthesize_pgmx.py` y expone
 | `app/ui.py` | UI principal y coordinacion de flujos. Archivo grande; leer por secciones/metodos. |
 | `core/model.py` | Dataclasses: `Project`, `LocaleData`, `ModuleData`, `Piece`. |
 | `core/parser.py` | Escaneo de carpetas, CSV y modulos. |
-| `core/summary.py` | Resumen CSV, Excel y PDF de produccion. |
+| `core/summary.py` | Resumen CSV y fachada historica de planillas. |
+| `core/production_sheet.py` | Exportador Excel de planillas y fachada PDF historica. |
+| `core/production_sheet_pdf.py` | Renderer PDF interactivo de planillas. |
 | `core/nesting.py` | Fachada historica de diagramas de corte. |
 | `core/nesting_service.py` | Orquestacion productiva de diagramas de corte. |
 | `core/nesting_compat.py` | Contrato de aliases heredados de `core.nesting`. |
-| `core/pgmx_processing.py` | Lectura PGMX para dibujos/dimensiones y reparacion de ranuras invalidas. |
+| `core/pgmx_processing.py` | Fachada compatible hacia `pgmx.processing`. |
+| `pgmx/processing.py` | Lectura PGMX para dibujos/dimensiones y reparacion de ranuras invalidas. |
 | `core/en_juego_synthesis.py` | Sintesis PGMX compuesta para En-Juego. |
+| `core/en_juego_transform.py` | Transformaciones geometricas En-Juego sin IO PGMX. |
 | `tools/synthesize_pgmx.py` | API publica para escribir `.pgmx` desde baseline Maestro. |
 | `tools/pgmx_snapshot.py` | Snapshot normalizado de `.pgmx` existentes. |
 | `tools/pgmx_adapters.py` | Adaptacion de snapshots hacia specs publicos. |
@@ -129,7 +133,8 @@ Codigo:
 
 - deteccion: `get_invalid_slot_machining_issues(...)`;
 - reparacion: `repair_invalid_slot_machining_by_rotating_ccw(...)`;
-- implementacion: `core/pgmx_processing.py`;
+- implementacion: `pgmx/processing.py`;
+- fachada historica: `core/pgmx_processing.py`;
 - UI: boton `Corregir PGMX` en la inspeccion de modulo.
 
 La reparacion rota el PGMX 90 grados antihorario, re-sintetiza los mecanizados
