@@ -1,12 +1,15 @@
 # PGMX Vaciado
 
-Espacio de investigacion para entender un nuevo tipo de mecanizados `.pgmx`
-que vamos a nombrar como `Vaciado`.
+Espacio de investigacion para entender y validar mecanizados `.pgmx` que vamos
+a nombrar operativamente como `Vaciado`.
 
-Este directorio vive dentro de `tools/` porque el estudio depende del nucleo de
-lectura y sintesis PGMX. No es codigo productivo: sirve para registrar memoria,
-generar evidencia y probar estrategias antes de volcar cambios en los modulos
-estables del repo.
+Este laboratorio vive en `pgmx/vaciado_lab/`. No es codigo productivo: sirve
+para registrar memoria, generar evidencia, comparar contra Maestro y probar
+estrategias antes de volcar reglas cerradas en los modulos estables.
+
+Las fachadas historicas bajo `tools.pgmx_vaciado` se mantienen para comandos e
+imports existentes, pero la implementacion del laboratorio esta en
+`pgmx.vaciado_lab`.
 
 ## Carpeta Externa
 
@@ -29,18 +32,18 @@ Punto de entrada:
 
 - `memory/current-state.md`
 
-## Codigo Tentativo
+## Codigo De Laboratorio
 
 Primer inspector:
 
 ```powershell
-py -3 -m tools.pgmx_vaciado.scan_samples
+py -3 -m pgmx.vaciado_lab.scan_samples
 ```
 
 Con rutas explicitas:
 
 ```powershell
-py -3 -m tools.pgmx_vaciado.scan_samples `
+py -3 -m pgmx.vaciado_lab.scan_samples `
   --root 'S:\Maestro\Projects\ProdAction\PGMX' `
   --output-dir 'S:\Maestro\Projects\ProdAction\PGMX\_analysis'
 ```
@@ -52,7 +55,7 @@ postprocesar `Vaciado`.
 Analisis especifico de islas:
 
 ```powershell
-py -3 -m tools.pgmx_vaciado.island_analysis `
+py -3 -m pgmx.vaciado_lab.island_analysis `
   --root 'S:\Maestro\Projects\ProdAction\PGMX' `
   --output-dir 'S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_islands_analysis'
 ```
@@ -67,8 +70,12 @@ puentes internos.
 Cuando una regla sobreviva a ejemplos manuales y automaticos, se migra fuera de
 este laboratorio hacia los modulos correspondientes:
 
-- lectura: `tools/pgmx_snapshot.py`;
-- adaptacion: `tools/pgmx_adapters.py`;
-- sintesis PGMX: `tools/synthesize_pgmx.py`;
-- dibujo/visualizacion: `core/pgmx_processing.py`;
+- lectura: `pgmx.snapshot`;
+- adaptacion: `pgmx.adapters`;
+- sintesis PGMX: `pgmx.synthesis` y, para el contrato V2, `pgmx.synthesis.vaciado`;
+- dibujo/visualizacion: `pgmx.processing`;
 - ISO: `iso_state_synthesis/`.
+
+Las rutas `tools/pgmx_snapshot.py`, `tools/pgmx_adapters.py`,
+`tools/synthesize_pgmx.py` y `tools/pgmx_vaciado*` quedan como fachadas
+compatibles, no como lugar para logica nueva.

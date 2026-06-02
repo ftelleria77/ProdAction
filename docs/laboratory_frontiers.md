@@ -36,9 +36,9 @@ extender ese frente, leer ese archivo y `tests/test_pgmx_vaciado.py`.
 
 | Ruta | Estado | Criterio |
 | --- | --- | --- |
-| `tools/studies/cut_diagrams/ordering_lab.py` | Laboratorio vigente | Banco de pruebas de ordenamientos/packers; depende de `core.nesting_compat`. |
-| `tools/studies/iso/*.py` | Estudios historicos reproducibles | Fixtures y auditorias ISO fechadas; no son APIs productivas. |
-| `iso_state_synthesis/` | Subsistema experimental pausado | Paquete separado para futura traduccion `.pgmx -> .iso`; no dirigir arquitectura productiva salvo reactivacion explicita. |
+| `tools/studies/cut_diagrams/ordering_lab.py` | Laboratorio vigente | Banco de pruebas de ordenamientos/packers; depende de `core.nesting_compat` y de los servicios publicos de `app` para cargar proyectos/settings reales. |
+| `tools/studies/iso/*.py` | Estudios historicos reproducibles | Fixtures y auditorias ISO fechadas, catalogadas en `tools/studies/iso/README.md`; no son APIs productivas. |
+| `iso_state_synthesis/` | Subsistema experimental pausado | Paquete separado para futura traduccion `.pgmx -> .iso`; `iso_state_synthesis.emitter` aun no esta terminado y no debe dirigir arquitectura productiva salvo reactivacion explicita. |
 
 Todo estudio nuevo debe entrar bajo `tools/studies/<tema>/` con nombre fechado o
 descriptivo. Si se estabiliza como API o flujo operativo, debe migrar a `pgmx/`,

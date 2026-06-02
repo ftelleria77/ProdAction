@@ -11,7 +11,7 @@ operativo de `Vaciado`.
 ## Memoria Temporal Activa
 
 - Reconstruccion V2 de `Vaciado`: leer
-  `tools/pgmx_vaciado/memory/vaciado-v2-rebuild.md` antes de avanzar con el
+  `pgmx/vaciado_lab/memory/vaciado-v2-rebuild.md` antes de avanzar con el
   nuevo motor o con decisiones sobre la estrategia de sintesis.
 
 `Vaciado` nombra, por ahora, un mecanizado de remocion de material en un area
@@ -40,12 +40,11 @@ decision se tomo.
 ## Separacion De Responsabilidades
 
 - Este laboratorio puede tener codigo incompleto o especulativo.
-- Vive bajo `tools/pgmx_vaciado/` para quedar junto al nucleo PGMX del repo,
-  pero los modulos productivos no deben importarlo como dependencia estable.
-- Una regla solo se migra a `tools/pgmx_snapshot.py`,
-  `tools/pgmx_adapters.py`, `tools/synthesize_pgmx.py`,
-  `core/pgmx_processing.py` o `iso_state_synthesis/` cuando tenga evidencia
-  suficiente.
+- Vive bajo `pgmx/vaciado_lab/`; las rutas `tools.pgmx_vaciado.*` se mantienen
+  solo como fachadas historicas de comandos/imports.
+- Una regla solo se migra a `pgmx.snapshot`, `pgmx.adapters`,
+  `pgmx.synthesis`, `pgmx.processing` o `iso_state_synthesis/` cuando tenga
+  evidencia suficiente.
 - La sintesis automatica de `.pgmx` y la traduccion de un `.pgmx` existente a
   ISO siguen siendo problemas separados.
 

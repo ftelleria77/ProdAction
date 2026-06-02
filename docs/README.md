@@ -13,7 +13,7 @@ tener que leer todas las memorias historicas de una vez.
    - Fuente de verdad para la API publica de sintesis `.pgmx`.
 4. `docs/pgmx_snapshot_help.md` y `docs/pgmx_adapters_help.md`
    - Lectura/adaptacion de `.pgmx` existentes hacia specs publicos.
-5. `tools/pgmx_vaciado/README.md`
+5. `pgmx/vaciado_lab/README.md`
    - Laboratorio separado para estudiar el nuevo concepto `Vaciado` en `.pgmx`.
 6. `docs/cut_diagrams_temporary_memory.md`
    - Estado del motor de diagramas de corte y algoritmos de guillotina.
@@ -43,9 +43,9 @@ tener que leer todas las memorias historicas de una vez.
 | Escaneo de proyectos | `docs/repo_study_guide.md` | `core/parser.py` |
 | Planillas y PDF | `docs/repo_study_guide.md` | `core/summary.py`, `core/production_sheet.py`, `core/production_sheet_pdf.py` |
 | Dibujos de piezas | `docs/repo_study_guide.md` | `pgmx/processing.py`, `core/pgmx_processing.py` |
-| Sintesis PGMX | `docs/synthesize_pgmx_help.md` | `tools/synthesize_pgmx.py` |
-| Snapshot/adaptacion PGMX | `docs/pgmx_snapshot_help.md`, `docs/pgmx_adapters_help.md` | `tools/pgmx_snapshot.py`, `tools/pgmx_adapters.py` |
-| Vaciado PGMX | `tools/pgmx_vaciado/README.md`, `tools/pgmx_vaciado/memory/current-state.md` | `tools/pgmx_vaciado/` |
+| Sintesis PGMX | `docs/synthesize_pgmx_help.md` | `pgmx/synthesis/`, `tools/synthesize_pgmx.py` |
+| Snapshot/adaptacion PGMX | `docs/pgmx_snapshot_help.md`, `docs/pgmx_adapters_help.md` | `pgmx/snapshot.py`, `pgmx/adapters.py`, `tools/pgmx_snapshot.py`, `tools/pgmx_adapters.py` |
+| Vaciado PGMX | `pgmx/vaciado_lab/README.md`, `pgmx/vaciado_lab/memory/current-state.md`, `docs/laboratory_frontiers.md` | `pgmx/vaciado/`, `pgmx/vaciado_lab/`, `tools/pgmx_vaciado/` |
 | Reparacion SlotSide | `docs/repo_study_guide.md`, `docs/pgmx_temporary_memory.md` | `core/pgmx_processing.py`, `app/ui.py` |
 | En-Juego | `docs/en_juego_synthesis_temporary_memory.md` | `core/en_juego_synthesis.py`, `core/en_juego_transform.py` |
 | Diagramas de corte | `docs/cut_diagrams_temporary_memory.md` | `core/nesting_service.py`, `core/nesting_compat.py` |
@@ -53,7 +53,7 @@ tener que leer todas las memorias historicas de una vez.
 | Laboratorio de corte | `docs/cut_diagrams_temporary_memory.md`, `docs/laboratory_frontiers.md` | `tools/studies/cut_diagrams/ordering_lab.py` |
 | Trazabilidad CNC | `cnc_traceability/README.md`, `cnc_traceability/docs/contract.md`, `cnc_traceability/memory/current-state.md` | `cnc_traceability/viewer_xp.py` |
 | Generacion ISO experimental | `iso_state_synthesis/README.md`, `iso_state_synthesis/memory/current-state.md`, `docs/iso_cnc_contract.md` | `iso_state_synthesis/` |
-| Contrato CNC/ISO | `docs/iso_cnc_contract.md`, `docs/iso_minimal_fixtures_plan.md`, `docs/iso_synthesis_temporary_memory.md` | `tools/studies/iso/minimal_fixtures_2026_05_03.py` |
+| Contrato CNC/ISO | `docs/iso_cnc_contract.md`, `docs/iso_minimal_fixtures_plan.md`, `docs/iso_synthesis_temporary_memory.md` | `tools/studies/iso/README.md`, `tools/studies/iso/` |
 
 ## Reglas de mantenimiento
 

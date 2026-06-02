@@ -3,8 +3,8 @@
 Este directorio agrupa scripts reproducibles de investigacion que no forman
 parte del flujo productivo principal.
 
-- `iso/minimal_fixtures_2026_05_03.py`: tanda minima usada para estudiar el
-  postprocesado Maestro/ISO.
+- `iso/`: catalogo de fixtures, auditorias y analisis para estudiar el
+  postprocesado Maestro/ISO. Ver `iso/README.md`.
 - `cut_diagrams/ordering_lab.py`: laboratorio comparativo de ordenamientos y
   packers de guillotina.
 

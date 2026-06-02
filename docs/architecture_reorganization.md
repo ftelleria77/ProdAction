@@ -231,6 +231,18 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
    Avance: catalogo inicial de herramientas publicas, fachadas compatibles y
    laboratorios documentado en `docs/laboratory_frontiers.md`. Las fachadas PGMX
    historicas quedan cubiertas por `tests/test_pgmx_public_facades.py`.
+   Avance: referencias documentales de Vaciado alineadas con la mudanza a
+   `pgmx/vaciado_lab/`; `tools.pgmx_vaciado*` queda registrado como fachada
+   compatible historica.
+   Avance: estudios ISO fechados catalogados en `tools/studies/iso/README.md`
+   y enlazados desde los indices de documentacion.
+   Avance: `tools.studies.cut_diagrams.ordering_lab` dejo de importar helpers
+   privados de `app`; usa servicios publicos de `app.project_store` y
+   `app.settings`, y el contrato de aliases de nesting sigue fijado por
+   `core.nesting_compat.LAB_COMPATIBILITY_NAMES`.
+   Cierre: etapa 9 queda cerrada como limpieza de fronteras, fachadas y
+   laboratorios. `iso_state_synthesis.emitter` sigue incompleto y se mantiene
+   como frente experimental pausado; terminarlo no forma parte de esta etapa.
 
 ## Invariantes
 

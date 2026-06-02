@@ -19,6 +19,12 @@ class NestingCompatTests(unittest.TestCase):
         for name in used_names:
             getattr(nesting, name)
 
+    def test_cut_diagram_ordering_lab_uses_public_app_services(self) -> None:
+        source = inspect.getsource(ordering_lab)
+
+        self.assertNotIn("from app.project_store import _", source)
+        self.assertNotIn("from app.settings import _", source)
+
 
 if __name__ == "__main__":
     unittest.main()

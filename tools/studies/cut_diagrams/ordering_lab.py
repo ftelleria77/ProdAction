@@ -1,8 +1,8 @@
 """Laboratorio archivado para comparar ordenamientos de guillotina.
 
-Este modulo no participa del flujo principal de la aplicacion. Usa APIs internas
-de `core.nesting` para poder experimentar rapido con criterios de orden y
-compararlos contra un packer guillotina simple, guiado por el orden recibido.
+Este modulo no participa del flujo principal de la aplicacion. Usa el contrato
+compatible de `core.nesting` para experimentar rapido con criterios de orden y
+servicios publicos de `app` para cargar proyectos/settings reales.
 
 Queda bajo `tools.studies` como herramienta reproducible de investigacion, no
 como modulo productivo.
@@ -22,8 +22,8 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.project_store import _load_project
-from app.settings import _normalize_cut_optimization_option, _read_app_settings
+from app.project_store import load_project
+from app.settings import normalize_cut_optimization_option, read_app_settings
 from core import nesting
 
 
@@ -1766,9 +1766,9 @@ def _load_context(
     thickness: float,
     optimization_mode: str | None,
 ) -> tuple[ExperimentContext, list[nesting.CutPiece]]:
-    project = _load_project(project_name)
-    settings = _read_app_settings()
-    resolved_optimization_mode = _normalize_cut_optimization_option(
+    project = load_project(project_name)
+    settings = read_app_settings()
+    resolved_optimization_mode = normalize_cut_optimization_option(
         optimization_mode or settings.get("cut_optimization_mode")
     )
     board_definitions = [

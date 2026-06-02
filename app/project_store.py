@@ -370,3 +370,9 @@ def _load_project(name: str) -> Project:
     project.modules = saved_modules
 
     return project
+
+
+def load_project(name: str) -> Project:
+    """Load a registered project from disk."""
+
+    return _load_project(name)

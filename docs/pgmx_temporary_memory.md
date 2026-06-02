@@ -2806,3 +2806,44 @@ Reconstruir paso a paso:
 - relevar el mismo archivo superior despues de elegir herramienta en cada hueco
   para confirmar si Maestro vuelve a cambiar solo `Operation/ToolKey` o si en
   vertical tambien ajusta algo mas segun la familia de broca
+
+## Ronda 34 - Pendiente Arquitectonico Del Sintetizador Por Mecanizados
+
+Fecha: 2026-06-02
+
+Decision registrada:
+
+- Antes de continuar ampliando el estudio generativo de `Vaciado`, crear un
+  plan especifico para modularizar el sintetizador por familias de mecanizado.
+- `Vaciado` no debe tratarse como una excepcion aislada: es un tipo de trabajo
+  CNC igual que fresados lineales, ranuras, perfiles, escuadrados, taladros y
+  patrones de taladros.
+- Todos esos trabajos pertenecen al mismo dominio: mecanizados programables en
+  Maestro como `.pgmx` editable y postprocesables luego a ISO.
+- La separacion futura debe mantener `pgmx.synthesis` y las fachadas historicas
+  (`tools.synthesize_pgmx`, `tools.pgmx_synthesis`) como API publica estable,
+  pero mover la implementacion interna hacia modulos por familia.
+
+Plan pendiente a formular antes de reactivar `Vaciado`:
+
+1. Inventariar las familias actuales de specs publicas:
+   `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
+   `CircleMillingSpec`, `SquaringMillingSpec`, `PocketMillingSpec`,
+   `DrillingSpec` y `DrillingPatternSpec`.
+2. Separar responsabilidades comunes del sintetizador:
+   namespaces/XML, IDs, geometria, profundidad, herramientas, estrategias,
+   hidratacion desde baseline y escritura de worksteps.
+3. Proponer paquetes internos por mecanizado, por ejemplo:
+   `pgmx.synthesis.milling.line`, `slot`, `profile`, `circle`, `squaring`,
+   `pocket`/`vaciado` y `pgmx.synthesis.drilling`.
+4. Definir un orquestador de programa que preserve el orden actual de
+   worksteps y mantenga compatible `synthesize_request(...)`.
+5. Migrar por pasos sin cambiar comportamiento: primero mover codigo y tests
+   existentes, despues limpiar dependencias experimentales como
+   `pgmx.synthesis.core -> pgmx.vaciado_lab`.
+6. Recien despues de ese plan, retomar el frente `Vaciado` para migrar reglas
+   desde el laboratorio hacia el contrato productivo correcto.
+
+Estado: pendiente. No ejecutar todavia como parte de la etapa 9; queda como
+precondicion arquitectonica para continuar el frente de sintesis generativa de
+`Vaciado`.

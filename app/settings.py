@@ -79,6 +79,12 @@ def _normalize_cut_optimization_option(value) -> str:
         return CUT_OPTIMIZATION_OPTIONS[2]
     return CUT_OPTIMIZATION_OPTIONS[0]
 
+
+def normalize_cut_optimization_option(value) -> str:
+    """Return a public normalized cut optimization label."""
+
+    return _normalize_cut_optimization_option(value)
+
 def _normalize_board_entry(board_data: dict) -> dict | None:
     if not isinstance(board_data, dict):
         return None
@@ -167,6 +173,12 @@ def _read_app_settings() -> dict:
     settings["cut_squaring_allowance"] = _compact_number(_coerce_setting_number(settings.get("cut_squaring_allowance"), 10.0, minimum=0.0))
     settings["cut_saw_kerf"] = _compact_number(_coerce_setting_number(settings.get("cut_saw_kerf"), 4.0, minimum=0.0))
     return settings
+
+
+def read_app_settings() -> dict:
+    """Read normalized application settings."""
+
+    return _read_app_settings()
 
 def _write_app_settings(settings: dict):
     """Persistir configuración general de la aplicación."""
