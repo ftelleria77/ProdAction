@@ -25,7 +25,9 @@ El sintetizador PGMX real vive en `tools/synthesize_pgmx.py` y expone
 | `core/model.py` | Dataclasses: `Project`, `LocaleData`, `ModuleData`, `Piece`. |
 | `core/parser.py` | Escaneo de carpetas, CSV y modulos. |
 | `core/summary.py` | Resumen CSV, Excel y PDF de produccion. |
-| `core/nesting.py` | Expansion de piezas, nesting, guillotina y PDF de corte. |
+| `core/nesting.py` | Fachada historica de diagramas de corte. |
+| `core/nesting_service.py` | Orquestacion productiva de diagramas de corte. |
+| `core/nesting_compat.py` | Contrato de aliases heredados de `core.nesting`. |
 | `core/pgmx_processing.py` | Lectura PGMX para dibujos/dimensiones y reparacion de ranuras invalidas. |
 | `core/en_juego_synthesis.py` | Sintesis PGMX compuesta para En-Juego. |
 | `tools/synthesize_pgmx.py` | API publica para escribir `.pgmx` desde baseline Maestro. |
@@ -87,6 +89,10 @@ Motor:
 
 El default actual para guillotina longitudinal/transversal es
 `brkga-tail`, definido por `CUT_GUILLOTINE_ALGORITHM_PREFERRED`.
+
+`core.nesting` es una fachada historica. La implementacion productiva esta
+separada en modulos `core.nesting_*`, y el contrato de compatibilidad para
+laboratorios esta declarado en `core.nesting_compat`.
 
 ### Sintesis y adaptacion PGMX
 
@@ -176,7 +182,7 @@ Estado actual documentado:
 
 ```powershell
 python -m compileall main.py app core pgmx tools
-python -c "import app.ui, core.parser, core.nesting, core.summary, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
+python -c "import app.ui, core.parser, core.nesting, core.nesting_compat, core.summary, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
 python -c "from pgmx import synthesis as sp; print(sp.SYNTHESIZER_VERSION)"
 python -m tools.studies.iso.minimal_fixtures_2026_05_03 --output-dir tmp/iso_minimal_fixtures
 python -m iso_state_synthesis --help

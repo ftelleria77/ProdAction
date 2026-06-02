@@ -35,7 +35,7 @@ python main.py
 1. Crear nuevo proyecto (nombre + carpeta raíz)
 2. Escoger carpeta raíz para módulos
 3. Exportar resumen CSV con `core.summary.export_summary`
-4. (Próximo paso) Ejecutar nesting con `core.nesting.first_fit_2d`
+4. Generar diagramas de corte con `core.nesting.generate_cut_diagrams`
 
 ## Sintesis PGMX
 - Estado actual del sintetizador Maestro: `v1.6`

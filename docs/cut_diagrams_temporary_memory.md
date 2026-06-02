@@ -20,8 +20,8 @@ Registros parciales existentes:
 - `docs/en_juego_synthesis_temporary_memory.md` contiene reglas confirmadas
   para como una composicion `En-Juego` debe reemplazar piezas individuales en
   diagramas de corte.
-- `core/nesting.py` contiene la implementacion real de expansion de piezas,
-  agrupacion por material/espesor, algoritmos de ubicacion y render PDF.
+- `core/nesting.py` conserva la fachada historica; la implementacion real esta
+  repartida en `core.nesting_service` y modulos `core.nesting_*`.
 - `app/ui.py` expone la accion "Diagramas de Corte" y la configuracion de
   cortes desde la interfaz.
 
@@ -41,7 +41,8 @@ Ese metodo:
 
 `core.nesting_service.generate_cut_diagrams(...)` es la API principal actual del
 motor de corte. `core.nesting.generate_cut_diagrams` se conserva como fachada
-publica compatible.
+publica compatible; el contrato completo de aliases historicos vive en
+`core.nesting_compat`.
 
 ## Settings Actuales
 
@@ -544,6 +545,11 @@ y `_placement_score` para los laboratorios existentes.
 El wrapper legacy `first_fit_2d` vive en `core.nesting_first_fit` y delega en el
 dispatcher productivo; `core.nesting.first_fit_2d` se conserva como fachada
 compatible.
+
+La auditoria del laboratorio `tools.studies.cut_diagrams.ordering_lab` queda
+declarada en `core.nesting_compat.LAB_COMPATIBILITY_NAMES`. Ese listado cubre
+los aliases privados que el laboratorio usa para experimentar contra el motor
+productivo y tambien las constantes/tipos de `core.nesting_model` que consume.
 
 Este camino no genera guias de cortes principales.
 

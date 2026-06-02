@@ -77,6 +77,7 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 | `core/nesting_dispatch.py` | Seleccion de packer segun modo/algoritmo de corte | Dispatcher compartido por API publica y laboratorios |
 | `core/nesting_service.py` | Servicio publico `generate_cut_diagrams` | Orquestacion de diagramas separada de la fachada historica |
 | `core/nesting_first_fit.py` | Wrapper compatible `first_fit_2d` | Helper legacy aislado de la fachada historica |
+| `core/nesting_compat.py` | Contrato de aliases historicos de `core.nesting` | Fachada declarada para API publica, laboratorios y compatibilidad legacy |
 | `core/nesting_boards.py` | Normalizacion, resolucion y margen de tableros de corte | Preparacion de tableros separada del empacador |
 | `core/nesting_pieces.py` | Expansion de piezas, resolucion de dimensiones PGMX y reemplazo En-Juego para corte | Preparacion de piezas separada del empacador |
 | `core/nesting_pdf.py` | Renderer PDF imprimible de diagramas de corte | Salida visual de nesting separada del empacador |
@@ -212,6 +213,10 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
    API publica, tipos/helpers usados por laboratorios y `first_fit_2d`.
    Avance: wrapper legacy `first_fit_2d` movido a `core.nesting_first_fit`;
    `core.nesting.first_fit_2d` queda como alias compatible.
+   Avance: contrato historico de `core.nesting` movido a
+   `core.nesting_compat`; la fachada `core.nesting` reexporta solo ese contrato
+   declarado. `LAB_COMPATIBILITY_NAMES` documenta los nombres que mantiene vivo
+   `tools.studies.cut_diagrams.ordering_lab`.
 9. Reubicar o etiquetar laboratorios sin mezclarlos con flujos productivos.
 
 ## Invariantes
@@ -221,7 +226,7 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 
 ```powershell
 python -m compileall main.py app core pgmx tools iso_state_synthesis cnc_traceability
-python -c "import app.ui, core.parser, core.nesting, core.nesting_model, core.nesting_strategy, core.nesting_geometry, core.nesting_free_rectangles, core.nesting_guillotine_sections, core.nesting_guillotine, core.nesting_brkga, core.nesting_dispatch, core.nesting_service, core.nesting_first_fit, core.nesting_boards, core.nesting_pieces, core.nesting_pdf, core.summary, core.production_sheet, core.production_sheet_data, core.production_sheet_images, core.production_sheet_pdf, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
+python -c "import app.ui, core.parser, core.nesting, core.nesting_compat, core.nesting_model, core.nesting_strategy, core.nesting_geometry, core.nesting_free_rectangles, core.nesting_guillotine_sections, core.nesting_guillotine, core.nesting_brkga, core.nesting_dispatch, core.nesting_service, core.nesting_first_fit, core.nesting_boards, core.nesting_pieces, core.nesting_pdf, core.summary, core.production_sheet, core.production_sheet_data, core.production_sheet_images, core.production_sheet_pdf, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
 ```
 
 - Las suites de Vaciado estan pausadas por defecto. Para ejecutarlas cuando se

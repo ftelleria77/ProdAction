@@ -46,7 +46,7 @@ tener que leer todas las memorias historicas de una vez.
 | Vaciado PGMX | `tools/pgmx_vaciado/README.md`, `tools/pgmx_vaciado/memory/current-state.md` | `tools/pgmx_vaciado/` |
 | Reparacion SlotSide | `docs/repo_study_guide.md`, `docs/pgmx_temporary_memory.md` | `core/pgmx_processing.py`, `app/ui.py` |
 | En-Juego | `docs/en_juego_synthesis_temporary_memory.md` | `core/en_juego_synthesis.py` |
-| Diagramas de corte | `docs/cut_diagrams_temporary_memory.md` | `core/nesting.py` |
+| Diagramas de corte | `docs/cut_diagrams_temporary_memory.md` | `core/nesting_service.py`, `core/nesting_compat.py` |
 | Laboratorio de corte | `docs/cut_diagrams_temporary_memory.md` | `tools/studies/cut_diagrams/ordering_lab.py` |
 | Trazabilidad CNC | `cnc_traceability/README.md`, `cnc_traceability/docs/contract.md`, `cnc_traceability/memory/current-state.md` | `cnc_traceability/viewer_xp.py` |
 | Generacion ISO experimental | `iso_state_synthesis/README.md`, `iso_state_synthesis/memory/current-state.md`, `docs/iso_cnc_contract.md` | `iso_state_synthesis/` |
