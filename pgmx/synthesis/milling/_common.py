@@ -13,8 +13,10 @@ __all__ = [
     "_normalize_side_of_feature",
     "_feature_bottom_condition_type",
     "_feature_depth_value",
+    "_operation_overcut_length",
     "_tool_total_milling_depth",
     "_toolpath_cut_z",
+    "_uses_feature_depth_expressions",
 ]
 
 
@@ -55,3 +57,12 @@ def _toolpath_cut_z(state, spec) -> float:
 def _feature_bottom_condition_type(spec) -> str:
     depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
     return "a:ThroughMillingBottom" if depth_spec.is_through else "a:GeneralMillingBottom"
+
+
+def _operation_overcut_length(spec) -> float:
+    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
+    return depth_spec.extra_depth if depth_spec.is_through else 0.0
+
+
+def _uses_feature_depth_expressions(spec) -> bool:
+    return _normalize_milling_depth_spec(spec.depth_spec).is_through

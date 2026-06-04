@@ -294,8 +294,10 @@ from .drilling.single import (
 from .milling._common import (
     _feature_bottom_condition_type,
     _feature_depth_value,
+    _operation_overcut_length,
     _tool_total_milling_depth,
     _toolpath_cut_z,
+    _uses_feature_depth_expressions,
 )
 from .milling.line import (
     LineMillingSpec,
@@ -854,15 +856,6 @@ def _validate_tool_sinking_lengths(
     for spec in drilling_patterns:
         _validate_tool_type_for_drilling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_drilling_spec(state, spec, tool_catalog)
-
-
-def _operation_overcut_length(spec) -> float:
-    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
-    return depth_spec.extra_depth if depth_spec.is_through else 0.0
-
-
-def _uses_feature_depth_expressions(spec) -> bool:
-    return _normalize_milling_depth_spec(spec.depth_spec).is_through
 
 
 def _preferred_side_for_arc(side_of_feature: str, arc_side: str) -> str:

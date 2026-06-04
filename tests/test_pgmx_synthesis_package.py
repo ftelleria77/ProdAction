@@ -346,6 +346,8 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._tool_total_milling_depth, milling_common._tool_total_milling_depth)
         self.assertIs(core_sp._toolpath_cut_z, milling_common._toolpath_cut_z)
         self.assertIs(core_sp._feature_bottom_condition_type, milling_common._feature_bottom_condition_type)
+        self.assertIs(core_sp._operation_overcut_length, milling_common._operation_overcut_length)
+        self.assertIs(core_sp._uses_feature_depth_expressions, milling_common._uses_feature_depth_expressions)
         self.assertIs(core_sp._load_pgmx_container, common_hydration._load_pgmx_container)
         self.assertIs(core_sp.load_pgmx_template_document, common_hydration.load_pgmx_template_document)
         template = common_hydration.load_pgmx_template_document(core_sp.DEFAULT_BASELINE_XML_PATH)
