@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, replace
 from typing import Optional
 
@@ -12,6 +13,7 @@ from ..common.depth import (
 )
 from ..common.geometry import (
     GeometryProfileSpec,
+    _parse_line_serialization,
     _profile_endpoint_points,
     build_compensated_toolpath_profile,
     build_line_geometry_profile,
@@ -39,6 +41,7 @@ __all__ = [
     "LineMillingSpec",
     "build_line_milling_spec",
     "_build_line_toolpath_profile",
+    "_matches_line_geometry",
     "_normalize_line_milling_spec",
     "_offset_line_for_toolpath",
 ]
@@ -124,6 +127,21 @@ def _offset_line_for_toolpath(spec: LineMillingSpec) -> tuple[tuple[float, float
         tool_width=spec.tool_width,
     )
     return _profile_endpoint_points(toolpath_profile)
+
+
+def _matches_line_geometry(template: dict[str, object], spec: LineMillingSpec, tolerance: float = 1e-6) -> bool:
+    parsed = _parse_line_serialization(str(template.get("geometry_serialization") or ""))
+    if parsed is None:
+        return False
+    start, end = parsed
+    expected = (spec.start_x, spec.start_y, 0.0, spec.end_x, spec.end_y, 0.0)
+    direct = (start[0], start[1], start[2], end[0], end[1], end[2])
+    reverse = (end[0], end[1], end[2], start[0], start[1], start[2])
+
+    def close(a: tuple[float, ...], b: tuple[float, ...]) -> bool:
+        return all(math.isclose(x, y, abs_tol=tolerance) for x, y in zip(a, b))
+
+    return close(direct, expected) or close(reverse, expected)
 
 
 def build_line_milling_spec(

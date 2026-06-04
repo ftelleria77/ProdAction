@@ -90,6 +90,8 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._composite_curve_spec, common_geometry._composite_curve_spec)
         self.assertIs(core_sp._curve_spec_from_profile_geometry, common_geometry._curve_spec_from_profile_geometry)
         self.assertIs(core_sp._parse_geometry_primitive, common_geometry._parse_geometry_primitive)
+        self.assertIs(core_sp._parse_line_serialization, common_geometry._parse_line_serialization)
+        self.assertIs(core_sp._curve_spec_points, common_geometry._curve_spec_points)
         self.assertIs(core_sp._parse_circle_geometry_profile, common_geometry._parse_circle_geometry_profile)
         self.assertIs(core_sp._extract_geometry_profile, common_geometry._extract_geometry_profile)
         self.assertIs(core_sp.read_pgmx_geometries, common_geometry.read_pgmx_geometries)
@@ -321,6 +323,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._normalize_line_milling_spec, milling_line._normalize_line_milling_spec)
         self.assertIs(core_sp._build_line_toolpath_profile, milling_line._build_line_toolpath_profile)
         self.assertIs(core_sp._offset_line_for_toolpath, milling_line._offset_line_for_toolpath)
+        self.assertIs(core_sp._matches_line_geometry, milling_line._matches_line_geometry)
         line = milling_line.build_line_milling_spec(
             0,
             0,
@@ -363,6 +366,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.build_polyline_milling_spec, milling_profile.build_polyline_milling_spec)
         self.assertIs(core_sp._normalize_polyline_milling_spec, milling_profile._normalize_polyline_milling_spec)
         self.assertIs(core_sp._build_polyline_toolpath_profile, milling_profile._build_polyline_toolpath_profile)
+        self.assertIs(core_sp._matches_polyline_geometry, milling_profile._matches_polyline_geometry)
         self.assertIs(milling_profile._normalize_polyline_points, common_geometry._normalize_polyline_points)
         self.assertIs(milling_profile._is_closed_polyline_points, common_geometry._is_closed_polyline_points)
         polyline = milling_profile.build_polyline_milling_spec(
@@ -387,6 +391,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.build_circle_milling_spec, milling_circle.build_circle_milling_spec)
         self.assertIs(core_sp._normalize_circle_milling_spec, milling_circle._normalize_circle_milling_spec)
         self.assertIs(core_sp._build_circle_toolpath_profile, milling_circle._build_circle_toolpath_profile)
+        self.assertIs(core_sp._matches_circle_geometry, milling_circle._matches_circle_geometry)
         circle = milling_circle.build_circle_milling_spec(
             center_x=50,
             center_y=60,

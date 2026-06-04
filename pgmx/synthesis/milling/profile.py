@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, replace
 from typing import Optional, Sequence
 
 from ..common.geometry import (
+    _CurveSpec,
     GeometryProfileSpec,
     _build_closed_polyline_geometry_profile,
     _build_open_polyline_geometry_profile,
+    _curve_spec_points,
     _is_closed_polyline_points,
     _normalize_polyline_points,
     build_compensated_toolpath_profile,
@@ -43,6 +46,7 @@ __all__ = [
     "build_polyline_milling_spec",
     "_build_polyline_toolpath_profile",
     "_is_closed_polyline_points",
+    "_matches_polyline_geometry",
     "_normalize_polyline_milling_spec",
     "_normalize_polyline_points",
     "_validate_polyline_postprocessable_by_maestro",
@@ -143,6 +147,24 @@ def _build_polyline_toolpath_profile(
             strategy,
         )
     return _build_bidirectional_open_profile_strategy_toolpath(float(top_level), cut_z, base_profile, strategy)
+
+
+def _matches_polyline_geometry(template: dict[str, object], spec: PolylineMillingSpec, tolerance: float = 1e-6) -> bool:
+    geometry_curve = template.get("geometry_curve")
+    if not isinstance(geometry_curve, _CurveSpec):
+        return False
+    parsed_points = _curve_spec_points(geometry_curve)
+    if parsed_points is None:
+        return False
+    expected_points = tuple((point[0], point[1], 0.0) for point in spec.points)
+    if len(parsed_points) != len(expected_points):
+        return False
+    return all(
+        math.isclose(parsed_point[0], expected_point[0], abs_tol=tolerance)
+        and math.isclose(parsed_point[1], expected_point[1], abs_tol=tolerance)
+        and math.isclose(parsed_point[2], expected_point[2], abs_tol=tolerance)
+        for parsed_point, expected_point in zip(parsed_points, expected_points)
+    )
 
 
 def build_polyline_milling_spec(

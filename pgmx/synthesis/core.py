@@ -99,6 +99,7 @@ from .common.geometry import (
     _circle_curve_spec,
     _composite_curve_spec,
     _curve_spec_from_profile_geometry,
+    _curve_spec_points,
     _extract_geometry_profile,
     _is_closed_polyline_points,
     _normalize_polyline_points,
@@ -122,6 +123,7 @@ from .common.geometry import (
     _normalize_geometry_winding,
     _parse_circle_geometry_profile,
     _parse_geometry_primitive,
+    _parse_line_serialization,
     _points_close_2d,
     _points_close_3d,
     _primitive_end_tangent_2d,
@@ -255,6 +257,7 @@ from .drilling.single import (
 from .milling.line import (
     LineMillingSpec,
     _build_line_toolpath_profile,
+    _matches_line_geometry,
     _normalize_line_milling_spec,
     _offset_line_for_toolpath,
     build_line_milling_spec,
@@ -262,12 +265,14 @@ from .milling.line import (
 from .milling.circle import (
     CircleMillingSpec,
     _build_circle_toolpath_profile,
+    _matches_circle_geometry,
     _normalize_circle_milling_spec,
     build_circle_milling_spec,
 )
 from .milling.profile import (
     PolylineMillingSpec,
     _build_polyline_toolpath_profile,
+    _matches_polyline_geometry,
     _normalize_polyline_milling_spec,
     _validate_polyline_postprocessable_by_maestro,
     build_polyline_milling_spec,
@@ -1850,100 +1855,6 @@ def _build_up_arc_exit_curve(
                 (lift_x, lift_y, clearance_z),
             ),
         ]
-    )
-
-
-def _parse_line_serialization(text: str) -> Optional[tuple[tuple[float, float, float], tuple[float, float, float]]]:
-    primitive = _parse_trimmed_curve_line(text)
-    if primitive is None:
-        return None
-    return (primitive.start_point, primitive.end_point)
-
-
-def _matches_line_geometry(template: dict[str, object], spec: LineMillingSpec, tolerance: float = 1e-6) -> bool:
-    parsed = _parse_line_serialization(str(template.get("geometry_serialization") or ""))
-    if parsed is None:
-        return False
-    start, end = parsed
-    expected = (spec.start_x, spec.start_y, 0.0, spec.end_x, spec.end_y, 0.0)
-    direct = (start[0], start[1], start[2], end[0], end[1], end[2])
-    reverse = (end[0], end[1], end[2], start[0], start[1], start[2])
-
-    def close(a: tuple[float, ...], b: tuple[float, ...]) -> bool:
-        return all(math.isclose(x, y, abs_tol=tolerance) for x, y in zip(a, b))
-
-    return close(direct, expected) or close(reverse, expected)
-
-
-def _curve_spec_points(curve_spec: _CurveSpec) -> Optional[tuple[tuple[float, float, float], ...]]:
-    if curve_spec.geometry_type in {"GeomTrimmedCurve", "GeomCircle"}:
-        if curve_spec.serialization is None:
-            return None
-        primitive = _parse_geometry_primitive(curve_spec.serialization)
-        if primitive is not None:
-            return (primitive.start_point, primitive.end_point)
-        circle_profile = _parse_circle_geometry_profile(curve_spec.serialization)
-        if circle_profile is None or circle_profile.center_point is None or circle_profile.radius is None:
-            return None
-        center_x, center_y, center_z = circle_profile.center_point
-        radius = circle_profile.radius
-        return (
-            (center_x + radius, center_y, center_z),
-            (center_x, center_y + radius, center_z),
-            (center_x - radius, center_y, center_z),
-            (center_x, center_y - radius, center_z),
-            (center_x + radius, center_y, center_z),
-        )
-
-    if curve_spec.geometry_type != "GeomCompositeCurve":
-        return None
-
-    points: list[tuple[float, float, float]] = []
-    for member_serialization in curve_spec.member_serializations:
-        primitive = _parse_geometry_primitive(member_serialization)
-        if primitive is None:
-            return None
-        start_point = primitive.start_point
-        end_point = primitive.end_point
-        if not points:
-            points.append(start_point)
-        points.append(end_point)
-    return tuple(points)
-
-
-def _matches_polyline_geometry(template: dict[str, object], spec: PolylineMillingSpec, tolerance: float = 1e-6) -> bool:
-    geometry_curve = template.get("geometry_curve")
-    if not isinstance(geometry_curve, _CurveSpec):
-        return False
-    parsed_points = _curve_spec_points(geometry_curve)
-    if parsed_points is None:
-        return False
-    expected_points = tuple((point[0], point[1], 0.0) for point in spec.points)
-    if len(parsed_points) != len(expected_points):
-        return False
-    return all(
-        math.isclose(parsed_point[0], expected_point[0], abs_tol=tolerance)
-        and math.isclose(parsed_point[1], expected_point[1], abs_tol=tolerance)
-        and math.isclose(parsed_point[2], expected_point[2], abs_tol=tolerance)
-        for parsed_point, expected_point in zip(parsed_points, expected_points)
-    )
-
-
-def _matches_circle_geometry(template: dict[str, object], spec: CircleMillingSpec, tolerance: float = 1e-6) -> bool:
-    geometry_curve = template.get("geometry_curve")
-    if not isinstance(geometry_curve, _CurveSpec):
-        return False
-    if geometry_curve.geometry_type != "GeomCircle" or geometry_curve.serialization is None:
-        return False
-    parsed_profile = _parse_circle_geometry_profile(geometry_curve.serialization)
-    if parsed_profile is None or parsed_profile.center_point is None or parsed_profile.radius is None:
-        return False
-    return (
-        math.isclose(parsed_profile.center_point[0], spec.center_x, abs_tol=tolerance)
-        and math.isclose(parsed_profile.center_point[1], spec.center_y, abs_tol=tolerance)
-        and math.isclose(parsed_profile.center_point[2], 0.0, abs_tol=tolerance)
-        and math.isclose(parsed_profile.radius, spec.radius, abs_tol=tolerance)
-        and _normalize_geometry_winding(parsed_profile.winding) == _normalize_geometry_winding(spec.winding)
     )
 
 

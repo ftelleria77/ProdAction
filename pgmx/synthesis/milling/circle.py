@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, replace
 from typing import Optional
 
@@ -11,7 +12,9 @@ from ..common.depth import (
     build_milling_depth_spec,
 )
 from ..common.geometry import (
+    _CurveSpec,
     GeometryProfileSpec,
+    _parse_circle_geometry_profile,
     build_circle_geometry_profile,
     build_compensated_toolpath_profile,
 )
@@ -39,6 +42,7 @@ __all__ = [
     "CircleMillingSpec",
     "build_circle_milling_spec",
     "_build_circle_toolpath_profile",
+    "_matches_circle_geometry",
     "_normalize_circle_milling_spec",
 ]
 
@@ -118,6 +122,24 @@ def _build_circle_toolpath_profile(
     if isinstance(strategy, HelicalMillingStrategySpec):
         return _build_helical_circle_strategy_toolpath(float(top_level), cut_z, base_profile, strategy)
     return _build_closed_profile_strategy_toolpath(float(top_level), cut_z, base_profile, strategy)
+
+
+def _matches_circle_geometry(template: dict[str, object], spec: CircleMillingSpec, tolerance: float = 1e-6) -> bool:
+    geometry_curve = template.get("geometry_curve")
+    if not isinstance(geometry_curve, _CurveSpec):
+        return False
+    if geometry_curve.geometry_type != "GeomCircle" or geometry_curve.serialization is None:
+        return False
+    parsed_profile = _parse_circle_geometry_profile(geometry_curve.serialization)
+    if parsed_profile is None or parsed_profile.center_point is None or parsed_profile.radius is None:
+        return False
+    return (
+        math.isclose(parsed_profile.center_point[0], spec.center_x, abs_tol=tolerance)
+        and math.isclose(parsed_profile.center_point[1], spec.center_y, abs_tol=tolerance)
+        and math.isclose(parsed_profile.center_point[2], 0.0, abs_tol=tolerance)
+        and math.isclose(parsed_profile.radius, spec.radius, abs_tol=tolerance)
+        and _normalize_geometry_winding(parsed_profile.winding) == _normalize_geometry_winding(spec.winding)
+    )
 
 
 def build_circle_milling_spec(

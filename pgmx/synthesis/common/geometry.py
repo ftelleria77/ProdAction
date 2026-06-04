@@ -66,6 +66,7 @@ __all__ = [
     "_circle_curve_spec",
     "_composite_curve_spec",
     "_curve_spec_from_profile_geometry",
+    "_curve_spec_points",
     "_extract_geometry_profile",
     "_format_maestro_number",
     "_format_maestro_orientation_number",
@@ -75,6 +76,7 @@ __all__ = [
     "_normalize_polyline_points",
     "_parse_circle_geometry_profile",
     "_parse_geometry_primitive",
+    "_parse_line_serialization",
     "_parse_trimmed_curve_arc",
     "_parse_trimmed_curve_line",
     "_points_close_2d",
@@ -1912,6 +1914,13 @@ def _parse_geometry_primitive(text: str) -> Optional[GeometryPrimitiveSpec]:
     return _parse_trimmed_curve_line(text) or _parse_trimmed_curve_arc(text)
 
 
+def _parse_line_serialization(text: str) -> Optional[tuple[tuple[float, float, float], tuple[float, float, float]]]:
+    primitive = _parse_trimmed_curve_line(text)
+    if primitive is None:
+        return None
+    return (primitive.start_point, primitive.end_point)
+
+
 def _parse_circle_geometry_profile(text: str) -> Optional[GeometryProfileSpec]:
     parts = (text or "").strip().split()
     if len(parts) < 14 or parts[0] != "2":
@@ -1935,6 +1944,42 @@ def _parse_circle_geometry_profile(text: str) -> Optional[GeometryProfileSpec]:
         ),
         serialization=_normalize_curve_serialization_text(text),
     )
+
+
+def _curve_spec_points(curve_spec: _CurveSpec) -> Optional[tuple[tuple[float, float, float], ...]]:
+    if curve_spec.geometry_type in {"GeomTrimmedCurve", "GeomCircle"}:
+        if curve_spec.serialization is None:
+            return None
+        primitive = _parse_geometry_primitive(curve_spec.serialization)
+        if primitive is not None:
+            return (primitive.start_point, primitive.end_point)
+        circle_profile = _parse_circle_geometry_profile(curve_spec.serialization)
+        if circle_profile is None or circle_profile.center_point is None or circle_profile.radius is None:
+            return None
+        center_x, center_y, center_z = circle_profile.center_point
+        radius = circle_profile.radius
+        return (
+            (center_x + radius, center_y, center_z),
+            (center_x, center_y + radius, center_z),
+            (center_x - radius, center_y, center_z),
+            (center_x, center_y - radius, center_z),
+            (center_x + radius, center_y, center_z),
+        )
+
+    if curve_spec.geometry_type != "GeomCompositeCurve":
+        return None
+
+    points: list[tuple[float, float, float]] = []
+    for member_serialization in curve_spec.member_serializations:
+        primitive = _parse_geometry_primitive(member_serialization)
+        if primitive is None:
+            return None
+        start_point = primitive.start_point
+        end_point = primitive.end_point
+        if not points:
+            points.append(start_point)
+        points.append(end_point)
+    return tuple(points)
 
 
 def _parse_cartesian_point_geometry_profile(node: ET.Element) -> Optional[GeometryProfileSpec]:
