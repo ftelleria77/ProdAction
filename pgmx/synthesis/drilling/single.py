@@ -13,7 +13,18 @@ from ..common.depth import (
     _normalize_milling_depth_spec,
     build_milling_depth_spec,
 )
-from ..common.piece import _drilling_axis_span, _normalize_plane_name, _plane_local_dimensions
+from ..common.geometry import (
+    _build_start_point,
+    _build_toolpath,
+    _build_toolpath_description,
+    _trimmed_curve_spec,
+)
+from ..common.piece import (
+    _drilling_axis_span,
+    _drilling_entry_point_and_direction,
+    _normalize_plane_name,
+    _plane_local_dimensions,
+)
 from ..common.tools import (
     _load_tool_catalog,
     _normalize_tool_resolution,
@@ -21,6 +32,7 @@ from ..common.tools import (
     _validate_tool_sinking_length_for_total_depth,
 )
 from ..common.xml import (
+    BASE_MODEL_NS,
     DRILLING_NS,
     PGMX_NS,
     XSI_NS,
@@ -40,6 +52,7 @@ __all__ = [
     "_HydratedDrillingSpec",
     "_append_drilling_feature_payload",
     "_build_drilling_feature",
+    "_build_drilling_operation",
     "_default_drill_family",
     "_drilling_bottom_condition_type",
     "_drilling_feature_depth_value",
@@ -398,6 +411,92 @@ def _append_drilling_feature_payload(
     _append_node(depth, PGMX_NS, "StartDepth", depth_value)
     _append_node(parent, DRILLING_NS, "Diameter", _compact_number(spec.diameter))
     _append_node(parent, DRILLING_NS, "TaperHeight", "0")
+
+
+def _build_drilling_operation(
+    state,
+    spec: _HydratedDrillingSpec,
+    operation_id: str,
+) -> ET.Element:
+    operation = ET.Element(
+        _qname(PGMX_NS, "Operation"),
+        {f"{{{XSI_NS}}}type": "a:DrillingOperation"},
+    )
+    _set_xmlns(operation, "a", DRILLING_NS)
+    _append_key(operation, operation_id, "ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation")
+    _append_blank_name(operation)
+    _append_node(operation, PGMX_NS, "ActivateCNCCorrection", "true")
+    _append_node(operation, PGMX_NS, "Attributes", "")
+    _append_node(operation, PGMX_NS, "ToolDirection", attrib={f"{{{XSI_NS}}}nil": "true"})
+    toolpath_list = _append_node(operation, PGMX_NS, "ToolpathList")
+    _set_xmlns(toolpath_list, "b", BASE_MODEL_NS)
+
+    entry_point, direction = _drilling_entry_point_and_direction(state, spec)
+    total_depth = _drilling_total_depth(state, spec)
+    clearance_point = (
+        entry_point[0] - (direction[0] * spec.security_plane),
+        entry_point[1] - (direction[1] * spec.security_plane),
+        entry_point[2] - (direction[2] * spec.security_plane),
+    )
+    cut_point = (
+        entry_point[0] + (direction[0] * total_depth),
+        entry_point[1] + (direction[1] * total_depth),
+        entry_point[2] + (direction[2] * total_depth),
+    )
+    toolpath_list.append(
+        _build_toolpath(
+            "Approach",
+            _trimmed_curve_spec(_build_toolpath_description(clearance_point, entry_point)),
+        )
+    )
+    toolpath_list.append(
+        _build_toolpath(
+            "TrajectoryPath",
+            _trimmed_curve_spec(_build_toolpath_description(entry_point, cut_point)),
+        )
+    )
+    toolpath_list.append(
+        _build_toolpath(
+            "Lift",
+            _trimmed_curve_spec(_build_toolpath_description(cut_point, clearance_point)),
+        )
+    )
+    _append_node(operation, PGMX_NS, "ToolpathPriority", "true")
+    _append_node(operation, PGMX_NS, "AdditionalToolKeys", "")
+    _append_node(operation, PGMX_NS, "ApproachSecurityPlane", _compact_number(spec.security_plane))
+    _append_node(operation, PGMX_NS, "Head", attrib={f"{{{XSI_NS}}}nil": "true"})
+    _append_node(operation, PGMX_NS, "HeadRotation", "0")
+    _append_node(operation, PGMX_NS, "MachineFunctions", "")
+    _append_node(operation, PGMX_NS, "RetractSecurityPlane", _compact_number(spec.security_plane))
+    operation.append(_build_start_point(0.0, 0.0, 0.0))
+    technology = _append_node(
+        operation,
+        PGMX_NS,
+        "Technology",
+        attrib={f"{{{XSI_NS}}}type": "MillingTechnology"},
+    )
+    _append_node(technology, PGMX_NS, "Feedrate", "0")
+    _append_node(technology, PGMX_NS, "CutSpeed", "0")
+    _append_node(technology, PGMX_NS, "Spindle", "0")
+    _append_object_ref(
+        operation,
+        PGMX_NS,
+        "ToolKey",
+        spec.tool_id,
+        spec.tool_object_type,
+        include_name=True,
+        name_text=spec.tool_name,
+    )
+    _append_node(operation, PGMX_NS, "OvercutLength", "0")
+    _append_node(operation, DRILLING_NS, "CuttingDepth", "0")
+    machining_strategy = _append_node(
+        operation,
+        DRILLING_NS,
+        "MachiningStrategy",
+        attrib={f"{{{XSI_NS}}}type": "b:SingleStepDrilling"},
+    )
+    _set_xmlns(machining_strategy, "b", BASE_MODEL_NS)
+    return operation
 
 
 def _validate_drilling_center(state, spec: _HydratedDrillingSpec) -> None:

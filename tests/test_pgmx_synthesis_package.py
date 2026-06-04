@@ -198,6 +198,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._uses_drilling_depth_expressions, drilling_single._uses_drilling_depth_expressions)
         self.assertIs(core_sp._build_drilling_feature, drilling_single._build_drilling_feature)
         self.assertIs(core_sp._append_drilling_feature_payload, drilling_single._append_drilling_feature_payload)
+        self.assertIs(core_sp._build_drilling_operation, drilling_single._build_drilling_operation)
         self.assertIs(core_sp._validate_drilling_center, drilling_single._validate_drilling_center)
         self.assertIs(
             core_sp._validate_tool_sinking_length_for_drilling_spec,
