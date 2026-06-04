@@ -21,6 +21,7 @@ from ..common.geometry import (
 )
 from ..common.piece import (
     _drilling_axis_span,
+    _drilling_axis_variable_name,
     _drilling_entry_point_and_direction,
     _normalize_plane_name,
     _plane_local_dimensions,
@@ -41,15 +42,22 @@ from ..common.xml import (
     _append_node,
     _append_object_ref,
     _append_reference_key,
+    _build_depth_expression,
+    _build_point_geometry,
+    _build_working_step,
     _compact_number,
+    _find_plane_ref,
     _qname,
+    _reserve_ids,
     _set_xmlns,
+    _text,
 )
 
 __all__ = [
     "DrillingSpec",
     "build_drilling_spec",
     "_HydratedDrillingSpec",
+    "_append_drilling",
     "_append_drilling_feature_payload",
     "_build_drilling_feature",
     "_build_drilling_operation",
@@ -497,6 +505,82 @@ def _build_drilling_operation(
     )
     _set_xmlns(machining_strategy, "b", BASE_MODEL_NS)
     return operation
+
+
+def _append_drilling(root: ET.Element, state, spec: _HydratedDrillingSpec) -> None:
+    geometries = root.find("./{*}Geometries")
+    features = root.find("./{*}Features")
+    operations = root.find("./{*}Operations")
+    expressions = root.find("./{*}Expressions")
+    elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
+    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
+    if any(node is None for node in (geometries, features, operations, expressions, elements, workpiece)):
+        raise ValueError("La plantilla no contiene todas las colecciones requeridas para sintetizar el taladro.")
+
+    _validate_drilling_center(state, spec)
+    _drilling_feature_depth_value(state, spec)
+
+    workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
+    workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
+    depth_variable_name = _drilling_axis_variable_name(workpiece, spec.plane_name)
+    plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
+    uses_depth_expressions = _uses_drilling_depth_expressions(spec)
+    reserved_ids = _reserve_ids(root, 6 if uses_depth_expressions else 4, spec.preferred_id_start)
+    geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
+    start_expression_id = reserved_ids[4] if uses_depth_expressions else None
+    end_expression_id = reserved_ids[5] if uses_depth_expressions else None
+
+    geometries.append(
+        _build_point_geometry(
+            geometry_id,
+            plane_id,
+            plane_object_type,
+            spec.center_x,
+            spec.center_y,
+            0.0,
+        )
+    )
+    features.append(
+        _build_drilling_feature(
+            state,
+            spec,
+            feature_id,
+            geometry_id,
+            operation_id,
+            workpiece_id,
+            workpiece_object_type,
+        )
+    )
+    operations.append(_build_drilling_operation(state, spec, operation_id))
+    elements.append(
+        _build_working_step(
+            spec.feature_name,
+            step_id,
+            feature_id,
+            operation_id,
+            feature_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
+            operation_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation",
+        )
+    )
+    if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
+        expressions.append(
+            _build_depth_expression(
+                start_expression_id,
+                feature_id,
+                "StartDepth",
+                depth_variable_name,
+                referenced_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
+            )
+        )
+        expressions.append(
+            _build_depth_expression(
+                end_expression_id,
+                feature_id,
+                "EndDepth",
+                depth_variable_name,
+                referenced_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
+            )
+        )
 
 
 def _validate_drilling_center(state, spec: _HydratedDrillingSpec) -> None:

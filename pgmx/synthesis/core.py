@@ -265,6 +265,8 @@ from .common.xml import (
 from .drilling.pattern import (
     DrillingPatternSpec,
     _HydratedDrillingPatternSpec,
+    _append_drilling_pattern,
+    _build_drilling_pattern_depth_expression,
     _build_drilling_pattern_feature,
     _drilling_pattern_bottom_condition_type,
     _hydrate_drilling_pattern_spec,
@@ -275,6 +277,7 @@ from .drilling.pattern import (
 from .drilling.single import (
     DrillingSpec,
     _HydratedDrillingSpec,
+    _append_drilling,
     _append_drilling_feature_payload,
     _build_drilling_feature,
     _build_drilling_operation,
@@ -3145,53 +3148,6 @@ def _build_xn_step(
     return step
 
 
-def _build_drilling_pattern_depth_expression(
-    expression_id: str,
-    feature_id: str,
-    inner_field_name: str,
-    depth_variable_name: str,
-) -> ET.Element:
-    expression = ET.Element(_qname(PARAMETRIC_NS, "Expression"))
-    _append_key(expression, expression_id, "ScmGroup.XCam.MachiningDataModel.Parametrics.Expression")
-    _append_blank_name(expression)
-    property_node = _append_node(
-        expression,
-        PARAMETRIC_NS,
-        "Property",
-        attrib={f"{{{XSI_NS}}}type": "a:CompositeField"},
-    )
-    _set_xmlns(property_node, "a", PARAMETRIC_NS)
-    _append_node(property_node, PARAMETRIC_NS, "Index", "-1")
-    _append_node(property_node, PARAMETRIC_NS, "Key", attrib={f"{{{XSI_NS}}}nil": "true"})
-    _append_node(property_node, PARAMETRIC_NS, "Name", "BaseFeature")
-
-    depth_field = _append_node(
-        property_node,
-        PARAMETRIC_NS,
-        "InnerField",
-        attrib={f"{{{XSI_NS}}}type": "a:CompositeField"},
-    )
-    _set_xmlns(depth_field, "a", PARAMETRIC_NS)
-    _append_node(depth_field, PARAMETRIC_NS, "Index", "-1")
-    _append_node(depth_field, PARAMETRIC_NS, "Key", attrib={f"{{{XSI_NS}}}nil": "true"})
-    _append_node(depth_field, PARAMETRIC_NS, "Name", "Depth")
-
-    final_field = _append_node(depth_field, PARAMETRIC_NS, "InnerField")
-    _append_node(final_field, PARAMETRIC_NS, "Index", "-1")
-    _append_node(final_field, PARAMETRIC_NS, "Key", attrib={f"{{{XSI_NS}}}nil": "true"})
-    _append_node(final_field, PARAMETRIC_NS, "Name", inner_field_name)
-
-    _append_object_ref(
-        expression,
-        PARAMETRIC_NS,
-        "ReferencedObject",
-        feature_id,
-        "ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
-    )
-    _append_node(expression, PARAMETRIC_NS, "Value", depth_variable_name)
-    return expression
-
-
 def _append_line_milling(root: ET.Element, state: PgmxState, spec: _HydratedLineMillingSpec) -> None:
     geometries = root.find("./{*}Geometries")
     features = root.find("./{*}Features")
@@ -3654,156 +3610,6 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
     if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
         expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
         expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
-
-
-def _append_drilling(root: ET.Element, state: PgmxState, spec: _HydratedDrillingSpec) -> None:
-    geometries = root.find("./{*}Geometries")
-    features = root.find("./{*}Features")
-    operations = root.find("./{*}Operations")
-    expressions = root.find("./{*}Expressions")
-    elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
-    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
-    if any(node is None for node in (geometries, features, operations, expressions, elements, workpiece)):
-        raise ValueError("La plantilla no contiene todas las colecciones requeridas para sintetizar el taladro.")
-
-    _validate_drilling_center(state, spec)
-    _drilling_feature_depth_value(state, spec)
-
-    workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
-    workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
-    depth_variable_name = _drilling_axis_variable_name(workpiece, spec.plane_name)
-    plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
-    uses_depth_expressions = _uses_drilling_depth_expressions(spec)
-    reserved_ids = _reserve_ids(root, 6 if uses_depth_expressions else 4, spec.preferred_id_start)
-    geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
-    start_expression_id = reserved_ids[4] if uses_depth_expressions else None
-    end_expression_id = reserved_ids[5] if uses_depth_expressions else None
-
-    geometries.append(
-        _build_point_geometry(
-            geometry_id,
-            plane_id,
-            plane_object_type,
-            spec.center_x,
-            spec.center_y,
-            0.0,
-        )
-    )
-    features.append(
-        _build_drilling_feature(
-            state,
-            spec,
-            feature_id,
-            geometry_id,
-            operation_id,
-            workpiece_id,
-            workpiece_object_type,
-        )
-    )
-    operations.append(_build_drilling_operation(state, spec, operation_id))
-    elements.append(
-        _build_working_step(
-            spec.feature_name,
-            step_id,
-            feature_id,
-            operation_id,
-            feature_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
-            operation_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation",
-        )
-    )
-    if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
-        expressions.append(
-            _build_depth_expression(
-                start_expression_id,
-                feature_id,
-                "StartDepth",
-                depth_variable_name,
-                referenced_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
-            )
-        )
-        expressions.append(
-            _build_depth_expression(
-                end_expression_id,
-                feature_id,
-                "EndDepth",
-                depth_variable_name,
-                referenced_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
-            )
-        )
-
-
-def _append_drilling_pattern(root: ET.Element, state: PgmxState, spec: _HydratedDrillingPatternSpec) -> None:
-    geometries = root.find("./{*}Geometries")
-    features = root.find("./{*}Features")
-    operations = root.find("./{*}Operations")
-    expressions = root.find("./{*}Expressions")
-    elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
-    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
-    if any(node is None for node in (geometries, features, operations, expressions, elements, workpiece)):
-        raise ValueError("La plantilla no contiene todas las colecciones requeridas para sintetizar el patron.")
-
-    _validate_drilling_pattern_center(state, spec)
-    _drilling_feature_depth_value(state, spec.base_drilling)
-
-    workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
-    workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
-    depth_variable_name = _drilling_axis_variable_name(workpiece, spec.plane_name)
-    plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
-    uses_depth_expressions = _uses_drilling_depth_expressions(spec.base_drilling)
-    reserved_ids = _reserve_ids(root, 6 if uses_depth_expressions else 4)
-    geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
-    start_expression_id = reserved_ids[4] if uses_depth_expressions else None
-    end_expression_id = reserved_ids[5] if uses_depth_expressions else None
-
-    geometries.append(
-        _build_point_geometry(
-            geometry_id,
-            plane_id,
-            plane_object_type,
-            spec.center_x,
-            spec.center_y,
-            0.0,
-        )
-    )
-    features.append(
-        _build_drilling_pattern_feature(
-            state,
-            spec,
-            feature_id,
-            geometry_id,
-            operation_id,
-            workpiece_id,
-            workpiece_object_type,
-        )
-    )
-    operations.append(_build_drilling_operation(state, spec.base_drilling, operation_id))
-    elements.append(
-        _build_working_step(
-            spec.feature_name,
-            step_id,
-            feature_id,
-            operation_id,
-            feature_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
-            operation_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation",
-        )
-    )
-    if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
-        expressions.append(
-            _build_drilling_pattern_depth_expression(
-                start_expression_id,
-                feature_id,
-                "StartDepth",
-                depth_variable_name,
-            )
-        )
-        expressions.append(
-            _build_drilling_pattern_depth_expression(
-                end_expression_id,
-                feature_id,
-                "EndDepth",
-                depth_variable_name,
-            )
-        )
 
 
 # ============================================================================
