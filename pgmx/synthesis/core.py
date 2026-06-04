@@ -259,6 +259,8 @@ from .drilling.pattern import (
 )
 from .drilling.single import (
     DrillingSpec,
+    _HydratedDrillingSpec,
+    _hydrate_drilling_spec,
     _normalize_drilling_spec,
     build_drilling_spec,
 )
@@ -416,65 +418,6 @@ __all__ = [
 # ============================================================================
 # Public data model
 # ============================================================================
-
-@dataclass(frozen=True)
-class _HydratedDrillingSpec:
-    """Datos internos de serializacion y herramienta para `DrillingSpec`."""
-
-    spec: DrillingSpec
-    preferred_id_start: Optional[int] = None
-    resolved_tool_id: str = "0"
-    resolved_tool_name: str = ""
-    resolved_tool_object_type: str = "System.Object"
-
-    @property
-    def center_x(self) -> float:
-        return self.spec.center_x
-
-    @property
-    def center_y(self) -> float:
-        return self.spec.center_y
-
-    @property
-    def diameter(self) -> float:
-        return self.spec.diameter
-
-    @property
-    def feature_name(self) -> str:
-        return self.spec.feature_name
-
-    @property
-    def plane_name(self) -> str:
-        return self.spec.plane_name
-
-    @property
-    def security_plane(self) -> float:
-        return self.spec.security_plane
-
-    @property
-    def depth_spec(self) -> MillingDepthSpec:
-        return self.spec.depth_spec
-
-    @property
-    def drill_family(self) -> str:
-        return self.spec.drill_family
-
-    @property
-    def tool_resolution(self) -> str:
-        return self.spec.tool_resolution
-
-    @property
-    def tool_id(self) -> str:
-        return self.resolved_tool_id
-
-    @property
-    def tool_name(self) -> str:
-        return self.resolved_tool_name
-
-    @property
-    def tool_object_type(self) -> str:
-        return self.resolved_tool_object_type
-
 
 @dataclass(frozen=True)
 class _HydratedDrillingPatternSpec:
@@ -1598,25 +1541,6 @@ def _reserve_ids(root: ET.Element, count: int, preferred_start: Optional[int] = 
     first_default_id = int(next(_id_counter(root)))
     start_id = first_default_id if preferred_start is None else max(first_default_id, preferred_start)
     return [str(start_id + offset) for offset in range(count)]
-
-
-def _hydrate_drilling_spec(
-    drilling: DrillingSpec,
-    source_pgmx_path: Optional[Path],
-) -> _HydratedDrillingSpec:
-    del source_pgmx_path
-    normalized_drilling = _normalize_drilling_spec(drilling)
-    tool_catalog = _load_tool_catalog()
-    resolved_tool_id, resolved_tool_name, resolved_tool_object_type = _resolve_drilling_tool(
-        normalized_drilling,
-        tool_catalog,
-    )
-    return _HydratedDrillingSpec(
-        spec=normalized_drilling,
-        resolved_tool_id=resolved_tool_id,
-        resolved_tool_name=resolved_tool_name,
-        resolved_tool_object_type=resolved_tool_object_type,
-    )
 
 
 def _hydrate_drilling_pattern_spec(

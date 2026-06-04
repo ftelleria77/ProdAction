@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Optional
 
 from ..common.depth import (
@@ -12,12 +13,14 @@ from ..common.depth import (
     build_milling_depth_spec,
 )
 from ..common.piece import _normalize_plane_name
-from ..common.tools import _normalize_tool_resolution
+from ..common.tools import _load_tool_catalog, _normalize_tool_resolution, _resolve_drilling_tool
 
 __all__ = [
     "DrillingSpec",
     "build_drilling_spec",
+    "_HydratedDrillingSpec",
     "_default_drill_family",
+    "_hydrate_drilling_spec",
     "_normalize_drill_family",
     "_normalize_drilling_spec",
 ]
@@ -38,6 +41,65 @@ class DrillingSpec:
     tool_resolution: str = "Auto"
     tool_id: str = "0"
     tool_name: str = ""
+
+
+@dataclass(frozen=True)
+class _HydratedDrillingSpec:
+    """Datos internos de serializacion y herramienta para `DrillingSpec`."""
+
+    spec: DrillingSpec
+    preferred_id_start: Optional[int] = None
+    resolved_tool_id: str = "0"
+    resolved_tool_name: str = ""
+    resolved_tool_object_type: str = "System.Object"
+
+    @property
+    def center_x(self) -> float:
+        return self.spec.center_x
+
+    @property
+    def center_y(self) -> float:
+        return self.spec.center_y
+
+    @property
+    def diameter(self) -> float:
+        return self.spec.diameter
+
+    @property
+    def feature_name(self) -> str:
+        return self.spec.feature_name
+
+    @property
+    def plane_name(self) -> str:
+        return self.spec.plane_name
+
+    @property
+    def security_plane(self) -> float:
+        return self.spec.security_plane
+
+    @property
+    def depth_spec(self) -> MillingDepthSpec:
+        return self.spec.depth_spec
+
+    @property
+    def drill_family(self) -> str:
+        return self.spec.drill_family
+
+    @property
+    def tool_resolution(self) -> str:
+        return self.spec.tool_resolution
+
+    @property
+    def tool_id(self) -> str:
+        return self.resolved_tool_id
+
+    @property
+    def tool_name(self) -> str:
+        return self.resolved_tool_name
+
+    @property
+    def tool_object_type(self) -> str:
+        return self.resolved_tool_object_type
 
 
 def _normalize_drill_family(value: Optional[str]) -> str:
@@ -152,4 +214,23 @@ def build_drilling_spec(
         tool_resolution=_normalize_tool_resolution(tool_resolution or "Auto"),
         tool_id=(tool_id or "0").strip() or "0",
         tool_name=(tool_name or "").strip(),
+    )
+
+
+def _hydrate_drilling_spec(
+    drilling: DrillingSpec,
+    source_pgmx_path: Optional[Path],
+) -> _HydratedDrillingSpec:
+    del source_pgmx_path
+    normalized_drilling = _normalize_drilling_spec(drilling)
+    tool_catalog = _load_tool_catalog()
+    resolved_tool_id, resolved_tool_name, resolved_tool_object_type = _resolve_drilling_tool(
+        normalized_drilling,
+        tool_catalog,
+    )
+    return _HydratedDrillingSpec(
+        spec=normalized_drilling,
+        resolved_tool_id=resolved_tool_id,
+        resolved_tool_name=resolved_tool_name,
+        resolved_tool_object_type=resolved_tool_object_type,
     )
