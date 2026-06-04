@@ -406,6 +406,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._normalize_squaring_milling_spec, milling_squaring._normalize_squaring_milling_spec)
         self.assertIs(core_sp._build_squaring_outline_points, milling_squaring._build_squaring_outline_points)
         self.assertIs(core_sp._build_squaring_geometry_profile, milling_squaring._build_squaring_geometry_profile)
+        self.assertIs(core_sp._build_squaring_toolpath_profile, milling_squaring._build_squaring_toolpath_profile)
         self.assertIs(
             core_sp._reparameterize_squaring_toolpath_profile,
             milling_squaring._reparameterize_squaring_toolpath_profile,

@@ -10,6 +10,7 @@ from ..common.geometry import (
     GeometryPrimitiveSpec,
     GeometryProfileSpec,
     _build_parameterized_line_geometry_primitive,
+    build_compensated_toolpath_profile,
     build_composite_geometry_profile,
     build_line_geometry_primitive,
 )
@@ -31,6 +32,7 @@ from ..common.strategy import (
     MillingStrategySpec,
     UnidirectionalMillingStrategySpec,
     _ensure_milling_strategy_allowed,
+    _build_closed_profile_strategy_toolpath,
     _normalize_milling_strategy_spec,
 )
 from ._common import _normalize_geometry_winding
@@ -48,6 +50,7 @@ __all__ = [
     "_reparameterize_line_primitive_from_end",
     "_build_squaring_outline_points",
     "_build_squaring_geometry_profile",
+    "_build_squaring_toolpath_profile",
 ]
 
 
@@ -271,6 +274,28 @@ def _reparameterize_squaring_toolpath_profile(profile: GeometryProfileSpec) -> G
             ):
                 primitives[index] = _with_line_direction_hint(primitive, z_negative_zero=True)
     return build_composite_geometry_profile(tuple(primitives))
+
+
+def _build_squaring_toolpath_profile(
+    state: "PgmxState",
+    final_level: float,
+    spec: SquaringMillingSpec,
+) -> GeometryProfileSpec:
+    """Construye la trayectoria compensada para un escuadrado exterior."""
+
+    cut_z = float(final_level)
+    nominal_profile = _build_squaring_geometry_profile(state, spec, z_value=cut_z)
+    toolpath_profile = build_compensated_toolpath_profile(
+        nominal_profile,
+        side_of_feature=spec.side_of_feature,
+        tool_width=spec.tool_width,
+        z_value=cut_z,
+    )
+    toolpath_profile = _reparameterize_squaring_toolpath_profile(toolpath_profile)
+    strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
+    if strategy is None:
+        return toolpath_profile
+    return _build_closed_profile_strategy_toolpath(float(state.depth), cut_z, toolpath_profile, strategy)
 
 
 def _normalize_squaring_start_edge(value: Optional[str]) -> str:

@@ -289,6 +289,7 @@ from .milling.squaring import (
     _normalize_squaring_start_edge,
     _build_squaring_geometry_profile,
     _build_squaring_outline_points,
+    _build_squaring_toolpath_profile,
     _reparameterize_line_primitive_from_end,
     _reparameterize_squaring_toolpath_profile,
     _with_line_direction_hint,
@@ -1850,27 +1851,6 @@ def _build_up_arc_exit_curve(
             ),
         ]
     )
-
-
-def _build_squaring_toolpath_profile(
-    state: PgmxState,
-    spec: _HydratedSquaringMillingSpec,
-) -> GeometryProfileSpec:
-    """Construye la trayectoria compensada para un escuadrado exterior."""
-
-    cut_z = _toolpath_cut_z(state, spec)
-    nominal_profile = _build_squaring_geometry_profile(state, spec, z_value=cut_z)
-    toolpath_profile = build_compensated_toolpath_profile(
-        nominal_profile,
-        side_of_feature=spec.side_of_feature,
-        tool_width=spec.tool_width,
-        z_value=cut_z,
-    )
-    toolpath_profile = _reparameterize_squaring_toolpath_profile(toolpath_profile)
-    strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
-    if strategy is None:
-        return toolpath_profile
-    return _build_closed_profile_strategy_toolpath(float(state.depth), cut_z, toolpath_profile, strategy)
 
 
 def _parse_line_serialization(text: str) -> Optional[tuple[tuple[float, float, float], tuple[float, float, float]]]:
@@ -5318,7 +5298,7 @@ def _append_circle_milling(root: ET.Element, state: PgmxState, spec: _HydratedCi
 
 def _append_squaring_milling(root: ET.Element, state: PgmxState, spec: _HydratedSquaringMillingSpec) -> None:
     generated_geometry_profile = _build_squaring_geometry_profile(state, spec, z_value=0.0)
-    generated_toolpath_profile = _build_squaring_toolpath_profile(state, spec)
+    generated_toolpath_profile = _build_squaring_toolpath_profile(state, _toolpath_cut_z(state, spec), spec)
     _append_curve_profile_milling(
         root,
         state,
