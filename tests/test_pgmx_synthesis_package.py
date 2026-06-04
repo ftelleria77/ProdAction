@@ -15,6 +15,7 @@ from pgmx.synthesis.common import strategy as common_strategy
 from pgmx.synthesis.common import tools as common_tools
 from pgmx.synthesis.common import xml as common_xml
 from pgmx.synthesis.milling import line as milling_line
+from pgmx.synthesis.milling import profile as milling_profile
 from pgmx.synthesis.milling import slot as milling_slot
 from tools import synthesize_pgmx as legacy_sp
 from tools import pgmx_synthesis as legacy_pgmx_synthesis
@@ -162,6 +163,27 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIsNone(slot.milling_strategy)
         with self.assertRaisesRegex(ValueError, "longitud cero"):
             milling_slot.build_slot_milling_spec(start_x=0, start_y=0, end_x=0, end_y=0)
+        self.assertIs(core_sp.PolylineMillingSpec, milling_profile.PolylineMillingSpec)
+        self.assertIs(core_sp.build_polyline_milling_spec, milling_profile.build_polyline_milling_spec)
+        self.assertIs(core_sp._normalize_polyline_milling_spec, milling_profile._normalize_polyline_milling_spec)
+        polyline = milling_profile.build_polyline_milling_spec(
+            ((0, 0), (100, 0), (100, 50), (0, 0)),
+            side_of_feature="izquierda",
+        )
+        self.assertIsInstance(polyline, milling_profile.PolylineMillingSpec)
+        self.assertEqual(polyline.side_of_feature, "Left")
+        self.assertTrue(milling_profile._is_closed_polyline_points(polyline.points))
+        with self.assertRaisesRegex(ValueError, "Maestro no postprocesa"):
+            milling_profile.build_polyline_milling_spec(
+                ((0, 0), (100, 0), (100, 50)),
+                milling_strategy=common_strategy.build_unidirectional_milling_strategy_spec(
+                    allow_multiple_passes=True,
+                    axial_cutting_depth=5.0,
+                ),
+                retract_enabled=True,
+                retract_type="Arc",
+                retract_mode="Up",
+            )
 
 
 if __name__ == "__main__":
