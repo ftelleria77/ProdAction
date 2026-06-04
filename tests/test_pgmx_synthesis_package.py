@@ -8,6 +8,7 @@ from pgmx.synthesis import core as core_sp
 from pgmx.synthesis import drilling as synthesis_drilling
 from pgmx.synthesis import milling as synthesis_milling
 from pgmx.synthesis.common import depth as common_depth
+from pgmx.synthesis.common import geometry as common_geometry
 from pgmx.synthesis.common import hydration as common_hydration
 from pgmx.synthesis.common import leads as common_leads
 from pgmx.synthesis.common import piece as common_piece
@@ -74,6 +75,12 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             common_program.DEFAULT_MACHINING_ORDER,
             ("line", "slot", "polyline", "circle", "squaring", "pocket", "drilling", "drilling_pattern"),
         )
+        self.assertIs(core_sp.GeometryPrimitiveSpec, common_geometry.GeometryPrimitiveSpec)
+        self.assertIs(core_sp.GeometryProfileSpec, common_geometry.GeometryProfileSpec)
+        primitive = common_geometry.GeometryPrimitiveSpec("Point", (1.0, 2.0, 0.0), (1.0, 2.0, 0.0))
+        profile = common_geometry.GeometryProfileSpec("GeomCartesianPoint", "Point", primitives=(primitive,))
+        self.assertEqual(profile.primitive_count, 1)
+        self.assertEqual(profile.classification_key, "Point")
         self.assertIs(core_sp.MillingDepthSpec, common_depth.MillingDepthSpec)
         self.assertIs(common_depth.DepthSpec, common_depth.MillingDepthSpec)
         self.assertIs(core_sp.build_milling_depth_spec, common_depth.build_milling_depth_spec)
