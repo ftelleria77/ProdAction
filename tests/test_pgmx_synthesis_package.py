@@ -440,8 +440,10 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "radio"):
             milling_circle.build_circle_milling_spec(center_x=0, center_y=0, radius=0)
         self.assertIs(core_sp.SquaringMillingSpec, milling_squaring.SquaringMillingSpec)
+        self.assertIs(core_sp._HydratedSquaringMillingSpec, milling_squaring._HydratedSquaringMillingSpec)
         self.assertIs(core_sp.build_squaring_milling_spec, milling_squaring.build_squaring_milling_spec)
         self.assertIs(core_sp._normalize_squaring_milling_spec, milling_squaring._normalize_squaring_milling_spec)
+        self.assertIs(core_sp._hydrate_squaring_milling_spec, milling_squaring._hydrate_squaring_milling_spec)
         self.assertIs(core_sp._build_squaring_outline_points, milling_squaring._build_squaring_outline_points)
         self.assertIs(core_sp._build_squaring_geometry_profile, milling_squaring._build_squaring_geometry_profile)
         self.assertIs(core_sp._build_squaring_toolpath_profile, milling_squaring._build_squaring_toolpath_profile)

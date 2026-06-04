@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 from ..common.geometry import (
     GeometryPrimitiveSpec,
     GeometryProfileSpec,
+    _CurveSpec,
     _build_parameterized_line_geometry_primitive,
     build_compensated_toolpath_profile,
     build_composite_geometry_profile,
@@ -43,6 +45,8 @@ if TYPE_CHECKING:
 __all__ = [
     "SquaringMillingSpec",
     "build_squaring_milling_spec",
+    "_HydratedSquaringMillingSpec",
+    "_hydrate_squaring_milling_spec",
     "_normalize_squaring_milling_spec",
     "_normalize_squaring_start_edge",
     "_with_line_direction_hint",
@@ -95,6 +99,70 @@ class SquaringMillingSpec:
     def side_of_feature(self) -> str:
         normalized_winding = _normalize_geometry_winding(self.winding)
         return "Right" if normalized_winding == "CounterClockwise" else "Left"
+
+
+@dataclass(frozen=True)
+class _HydratedSquaringMillingSpec:
+    """Datos internos de serializacion para un `SquaringMillingSpec`."""
+
+    spec: SquaringMillingSpec
+    preferred_id_start: Optional[int] = None
+    geometry_curve: Optional[_CurveSpec] = None
+    approach_curve: Optional[_CurveSpec] = None
+    trajectory_curve: Optional[_CurveSpec] = None
+    lift_curve: Optional[_CurveSpec] = None
+
+    @property
+    def start_edge(self) -> str:
+        return self.spec.start_edge
+
+    @property
+    def winding(self) -> str:
+        return self.spec.winding
+
+    @property
+    def feature_name(self) -> str:
+        return self.spec.feature_name
+
+    @property
+    def plane_name(self) -> str:
+        return self.spec.plane_name
+
+    @property
+    def side_of_feature(self) -> str:
+        return self.spec.side_of_feature
+
+    @property
+    def tool_id(self) -> str:
+        return self.spec.tool_id
+
+    @property
+    def tool_name(self) -> str:
+        return self.spec.tool_name
+
+    @property
+    def tool_width(self) -> float:
+        return self.spec.tool_width
+
+    @property
+    def security_plane(self) -> float:
+        return self.spec.security_plane
+
+    @property
+    def depth_spec(self) -> MillingDepthSpec:
+        return self.spec.depth_spec
+
+    @property
+    def approach(self) -> ApproachSpec:
+        return self.spec.approach
+
+    @property
+    def retract(self) -> RetractSpec:
+        return self.spec.retract
+
+    @property
+    def milling_strategy(self) -> Optional[MillingStrategySpec]:
+        return self.spec.milling_strategy
 
 
 def _build_squaring_outline_points(
@@ -296,6 +364,14 @@ def _build_squaring_toolpath_profile(
     if strategy is None:
         return toolpath_profile
     return _build_closed_profile_strategy_toolpath(float(state.depth), cut_z, toolpath_profile, strategy)
+
+
+def _hydrate_squaring_milling_spec(
+    squaring_milling: SquaringMillingSpec,
+    source_pgmx_path: Optional[Path],
+) -> _HydratedSquaringMillingSpec:
+    del source_pgmx_path
+    return _HydratedSquaringMillingSpec(spec=_normalize_squaring_milling_spec(squaring_milling))
 
 
 def _normalize_squaring_start_edge(value: Optional[str]) -> str:
