@@ -291,6 +291,12 @@ from .drilling.single import (
     _validate_tool_sinking_length_for_drilling_spec,
     build_drilling_spec,
 )
+from .milling._common import (
+    _feature_bottom_condition_type,
+    _feature_depth_value,
+    _tool_total_milling_depth,
+    _toolpath_cut_z,
+)
 from .milling.line import (
     LineMillingSpec,
     _HydratedLineMillingSpec,
@@ -737,33 +743,6 @@ def _normalize_xn_spec(xn: Optional[XnSpec]) -> XnSpec:
     )
 
 
-def _feature_depth_value(state: PgmxState, spec) -> float:
-    # En Maestro, un pasante deja `Depth.StartDepth/EndDepth` igual al espesor
-    # actual de la pieza y luego agrega expresiones parametricas hacia `DepthName`.
-    # Por eso, para el feature serializado, el valor numerico base del pasante es
-    # `state.depth`, mientras que la cota real del toolpath se corrige aparte con
-    # `_toolpath_cut_z(...)`.
-    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
-    if depth_spec.is_through:
-        return state.depth
-    if depth_spec.target_depth is None:
-        raise ValueError("La profundidad del fresado no pasante no puede quedar vacia.")
-    if depth_spec.target_depth > state.depth + 1e-9:
-        raise ValueError("La profundidad del fresado no pasante no puede superar el espesor de la pieza.")
-    return depth_spec.target_depth
-
-
-def _tool_total_milling_depth(state: PgmxState, spec) -> float:
-    """Calcula la profundidad total efectiva que debe alcanzar la herramienta."""
-
-    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
-    if depth_spec.is_through:
-        return state.depth + depth_spec.extra_depth
-    if depth_spec.target_depth is None:
-        raise ValueError("La profundidad del fresado no pasante no puede quedar vacia.")
-    return depth_spec.target_depth
-
-
 def _validate_tool_sinking_length_for_spec(
     state: PgmxState,
     spec,
@@ -875,21 +854,6 @@ def _validate_tool_sinking_lengths(
     for spec in drilling_patterns:
         _validate_tool_type_for_drilling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_drilling_spec(state, spec, tool_catalog)
-
-
-def _toolpath_cut_z(state: PgmxState, spec) -> float:
-    # Regla validada en Maestro:
-    # - no pasante: `cut_z = espesor - target_depth`
-    # - pasante: `cut_z = -extra_depth`
-    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
-    if depth_spec.is_through:
-        return -depth_spec.extra_depth
-    return state.depth - _feature_depth_value(state, spec)
-
-
-def _feature_bottom_condition_type(spec) -> str:
-    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
-    return "a:ThroughMillingBottom" if depth_spec.is_through else "a:GeneralMillingBottom"
 
 
 def _operation_overcut_length(spec) -> float:
