@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Sequence
@@ -15,6 +16,7 @@ from ..common.depth import (
 )
 from ..common.geometry import (
     _CurveSpec,
+    _build_boundary_curve_holder,
     _curve_spec_from_composite_curve_node,
     _curve_spec_from_toolpath_node,
     _curve_spec_points,
@@ -33,7 +35,23 @@ from ..common.strategy import (
     _strategy_comparison_key,
     build_contour_parallel_milling_strategy_spec,
 )
-from ..common.xml import _safe_float, _text, _xsi_type
+from ..common.xml import (
+    BASE_MODEL_NS,
+    PGMX_NS,
+    XSI_NS,
+    _append_blank_name,
+    _append_key,
+    _append_node,
+    _append_object_ref,
+    _append_reference_key,
+    _compact_number,
+    _qname,
+    _safe_float,
+    _set_xmlns,
+    _text,
+    _xsi_type,
+)
+from ._common import _feature_depth_value
 
 __all__ = [
     "PocketBossRouteSeedSpec",
@@ -41,6 +59,8 @@ __all__ = [
     "build_pocket_boss_route_seed_spec",
     "build_pocket_milling_spec",
     "_HydratedPocketMillingSpec",
+    "_build_closed_pocket_boss",
+    "_build_closed_pocket_feature",
     "_can_hydrate_pocket_template_trace",
     "_extract_pocket_milling_template",
     "_hydrate_pocket_milling_spec",
@@ -191,6 +211,89 @@ class _HydratedPocketMillingSpec:
     @property
     def radial_step(self) -> float:
         return self.spec.radial_step
+
+
+def _build_closed_pocket_feature(
+    state,
+    spec: _HydratedPocketMillingSpec,
+    feature_id: str,
+    geometry_id: str,
+    operation_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+    geometry_object_type: str,
+    boundary_curve: _CurveSpec,
+    boundary_member_keys: Sequence[str],
+    boss_geometry_curves: Sequence[tuple[_CurveSpec, Sequence[str]]] = (),
+    boss_route_seed_refs: Sequence[tuple[PocketBossRouteSeedSpec, str, str]] = (),
+) -> ET.Element:
+    feature = ET.Element(
+        _qname(PGMX_NS, "ManufacturingFeature"),
+        {f"{{{XSI_NS}}}type": "a:ClosedPocket"},
+    )
+    _set_xmlns(feature, "a", BASE_MODEL_NS)
+    _append_key(feature, feature_id, "ScmGroup.XCam.MachiningDataModel.ClosedPocket")
+    _append_blank_name(feature).text = spec.feature_name
+    _append_object_ref(feature, PGMX_NS, "GeometryID", geometry_id, geometry_object_type)
+    operation_ids = _append_node(feature, PGMX_NS, "OperationIDs")
+    _append_reference_key(
+        operation_ids,
+        operation_id,
+        "ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideRoughMilling",
+    )
+    _append_object_ref(feature, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
+    bottom_condition = _append_node(
+        feature,
+        PGMX_NS,
+        "BottomCondition",
+        attrib={f"{{{XSI_NS}}}type": "a:PlanarPocketBottomCondition"},
+    )
+    _set_xmlns(bottom_condition, "a", BASE_MODEL_NS)
+    depth = _append_node(feature, PGMX_NS, "Depth")
+    depth_value = _compact_number(_feature_depth_value(state, spec))
+    _append_node(depth, PGMX_NS, "EndDepth", depth_value)
+    _append_node(depth, PGMX_NS, "StartDepth", depth_value)
+    boss_geometry_list = _append_node(feature, BASE_MODEL_NS, "BossGeometryList")
+    for boss_curve, boss_member_keys in boss_geometry_curves:
+        boss_geometry_list.append(_build_boundary_curve_holder(boss_curve, boss_member_keys))
+    boss_list = _append_node(feature, BASE_MODEL_NS, "BossList")
+    for route_seed, route_seed_geometry_id, route_seed_object_type in boss_route_seed_refs:
+        boss_list.append(
+            _build_closed_pocket_boss(
+                route_seed,
+                route_seed_geometry_id,
+                route_seed_object_type,
+                workpiece_id,
+                workpiece_object_type,
+            )
+        )
+    boundary_list = _append_node(feature, BASE_MODEL_NS, "BoundaryGeometryList")
+    boundary_list.append(_build_boundary_curve_holder(boundary_curve, boundary_member_keys))
+    _append_node(feature, BASE_MODEL_NS, "OrthogonalRadius", "0")
+    _append_node(feature, BASE_MODEL_NS, "PlanarRadius", "0")
+    _append_node(feature, BASE_MODEL_NS, "Slope", "0")
+    return feature
+
+
+def _build_closed_pocket_boss(
+    route_seed: PocketBossRouteSeedSpec,
+    geometry_id: str,
+    geometry_object_type: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+) -> ET.Element:
+    boss = ET.Element(_qname(BASE_MODEL_NS, "Boss"))
+    _append_key(boss, "0", "System.Object")
+    _append_blank_name(boss).text = route_seed.name or "Boss"
+    _append_object_ref(boss, PGMX_NS, "GeometryID", geometry_id, geometry_object_type)
+    _append_node(boss, PGMX_NS, "OperationIDs")
+    _append_object_ref(boss, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
+    _append_node(boss, PGMX_NS, "BottomCondition", attrib={f"{{{XSI_NS}}}nil": "true"})
+    depth = _append_node(boss, PGMX_NS, "Depth")
+    _append_node(depth, PGMX_NS, "EndDepth", "0")
+    _append_node(depth, PGMX_NS, "StartDepth", "0")
+    _append_node(boss, BASE_MODEL_NS, "Slope", "0")
+    return boss
 
 
 def _normalize_closed_contour(
