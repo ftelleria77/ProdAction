@@ -9,6 +9,7 @@ from pgmx.synthesis import drilling as synthesis_drilling
 from pgmx.synthesis import milling as synthesis_milling
 from pgmx.synthesis.common import depth as common_depth
 from pgmx.synthesis.common import piece as common_piece
+from pgmx.synthesis.common import strategy as common_strategy
 from pgmx.synthesis.common import tools as common_tools
 from pgmx.synthesis.common import xml as common_xml
 from tools import synthesize_pgmx as legacy_sp
@@ -78,6 +79,18 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertEqual(common_tools._normalize_tool_usage_group("Fresa Helicoidal"), "milling")
         self.assertTrue(common_tools._is_vertical_x_saw("Sierra Vertical X"))
         self.assertIn("1900", common_tools._load_tool_catalog())
+        self.assertIs(core_sp.UnidirectionalMillingStrategySpec, common_strategy.UnidirectionalMillingStrategySpec)
+        self.assertIs(core_sp.BidirectionalMillingStrategySpec, common_strategy.BidirectionalMillingStrategySpec)
+        self.assertIs(core_sp.HelicalMillingStrategySpec, common_strategy.HelicalMillingStrategySpec)
+        self.assertIs(core_sp.ContourParallelMillingStrategySpec, common_strategy.ContourParallelMillingStrategySpec)
+        self.assertIs(
+            core_sp.build_contour_parallel_milling_strategy_spec,
+            common_strategy.build_contour_parallel_milling_strategy_spec,
+        )
+        self.assertEqual(common_strategy._normalize_strategy_connection_mode("en-la-pieza"), "InPiece")
+        strategy = common_strategy.build_bidirectional_milling_strategy_spec(axial_cutting_depth=2.5)
+        self.assertTrue(strategy.allow_multiple_passes)
+        self.assertEqual(strategy.axial_cutting_depth, 2.5)
 
 
 if __name__ == "__main__":
