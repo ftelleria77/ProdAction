@@ -7,6 +7,7 @@ from pgmx.synthesis import common as synthesis_common
 from pgmx.synthesis import core as core_sp
 from pgmx.synthesis import drilling as synthesis_drilling
 from pgmx.synthesis import milling as synthesis_milling
+from pgmx.synthesis.common import depth as common_depth
 from pgmx.synthesis.common import xml as common_xml
 from tools import synthesize_pgmx as legacy_sp
 from tools import pgmx_synthesis as legacy_pgmx_synthesis
@@ -50,6 +51,9 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertEqual(common_xml.PGMX_NS, core_sp.PGMX_NS)
         self.assertIs(core_sp._append_node, common_xml._append_node)
         self.assertEqual(common_xml._compact_number(1.25), "1.25")
+        self.assertIs(core_sp.MillingDepthSpec, common_depth.MillingDepthSpec)
+        self.assertIs(common_depth.DepthSpec, common_depth.MillingDepthSpec)
+        self.assertIs(core_sp.build_milling_depth_spec, common_depth.build_milling_depth_spec)
 
 
 if __name__ == "__main__":
