@@ -14,6 +14,7 @@ from pgmx.synthesis.common import piece as common_piece
 from pgmx.synthesis.common import strategy as common_strategy
 from pgmx.synthesis.common import tools as common_tools
 from pgmx.synthesis.common import xml as common_xml
+from pgmx.synthesis.milling import line as milling_line
 from tools import synthesize_pgmx as legacy_sp
 from tools import pgmx_synthesis as legacy_pgmx_synthesis
 
@@ -119,6 +120,29 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertTrue(retract.is_enabled)
         self.assertEqual(retract.retract_type, "Arc")
         self.assertEqual(retract.overlap, 0.25)
+        self.assertIs(core_sp.LineMillingSpec, milling_line.LineMillingSpec)
+        self.assertIs(core_sp.build_line_milling_spec, milling_line.build_line_milling_spec)
+        self.assertIs(core_sp._normalize_line_milling_spec, milling_line._normalize_line_milling_spec)
+        line = milling_line.build_line_milling_spec(
+            0,
+            0,
+            100,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            line_side_of_feature="derecha",
+            line_milling_strategy=common_strategy.build_unidirectional_milling_strategy_spec(),
+        )
+        self.assertIsInstance(line, milling_line.LineMillingSpec)
+        self.assertEqual(line.side_of_feature, "Right")
+        self.assertEqual(line.tool_width, 9.52)
+        normalized_line = milling_line._normalize_line_milling_spec(
+            milling_line.LineMillingSpec(0, 0, 100, 0, side_of_feature="izquierda")
+        )
+        self.assertEqual(normalized_line.side_of_feature, "Left")
 
 
 if __name__ == "__main__":
