@@ -261,6 +261,7 @@ from .common.xml import (
 from .drilling.pattern import (
     DrillingPatternSpec,
     _HydratedDrillingPatternSpec,
+    _build_drilling_pattern_feature,
     _drilling_pattern_bottom_condition_type,
     _hydrate_drilling_pattern_spec,
     _normalize_drilling_pattern_spec,
@@ -270,6 +271,8 @@ from .drilling.pattern import (
 from .drilling.single import (
     DrillingSpec,
     _HydratedDrillingSpec,
+    _append_drilling_feature_payload,
+    _build_drilling_feature,
     _drilling_bottom_condition_type,
     _drilling_feature_depth_value,
     _drilling_total_depth,
@@ -1650,175 +1653,6 @@ def _build_slot_side_feature(
     _append_node(swept_shape, MILLING_NS, "SecondRadius", "0")
     _append_node(swept_shape, MILLING_NS, "Width", _compact_number(spec.tool_width))
     _append_node(feature, PGMX_NS, "Angle", str(float(spec.slot_angle)))
-    return feature
-
-
-def _build_drilling_feature(
-    state: PgmxState,
-    spec: _HydratedDrillingSpec,
-    feature_id: str,
-    geometry_id: str,
-    operation_id: str,
-    workpiece_id: str,
-    workpiece_object_type: str,
-) -> ET.Element:
-    feature = ET.Element(
-        _qname(PGMX_NS, "ManufacturingFeature"),
-        {f"{{{XSI_NS}}}type": "a:RoundHole"},
-    )
-    _set_xmlns(feature, "a", DRILLING_NS)
-    _append_key(feature, feature_id, "ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole")
-    _append_blank_name(feature).text = spec.feature_name
-    _append_object_ref(
-        feature,
-        PGMX_NS,
-        "GeometryID",
-        geometry_id,
-        "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCartesianPoint",
-    )
-    operation_ids = _append_node(feature, PGMX_NS, "OperationIDs")
-    _append_reference_key(
-        operation_ids,
-        operation_id,
-        "ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation",
-    )
-    _append_object_ref(feature, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
-    bottom_condition = _append_node(
-        feature,
-        PGMX_NS,
-        "BottomCondition",
-        attrib={f"{{{XSI_NS}}}type": _drilling_bottom_condition_type(spec)},
-    )
-    _set_xmlns(bottom_condition, "a", DRILLING_NS)
-    if _drilling_bottom_condition_type(spec) == "a:ConicalHoleBottom":
-        _append_node(bottom_condition, DRILLING_NS, "TipAngle", "0")
-        _append_node(bottom_condition, DRILLING_NS, "TipRadius", "0")
-    depth = _append_node(feature, PGMX_NS, "Depth")
-    depth_value = _compact_number(_drilling_feature_depth_value(state, spec))
-    _append_node(depth, PGMX_NS, "EndDepth", depth_value)
-    _append_node(depth, PGMX_NS, "StartDepth", depth_value)
-    _append_node(feature, DRILLING_NS, "Diameter", _compact_number(spec.diameter))
-    _append_node(feature, DRILLING_NS, "TaperHeight", "0")
-    return feature
-
-
-def _append_drilling_feature_payload(
-    parent: ET.Element,
-    state: PgmxState,
-    spec: _HydratedDrillingSpec,
-    feature_id: str,
-    geometry_id: str,
-    operation_id: str,
-    workpiece_id: str,
-    workpiece_object_type: str,
-    *,
-    bottom_condition_type: Optional[str] = None,
-) -> None:
-    _append_key(parent, feature_id, "ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole")
-    _append_blank_name(parent).text = spec.feature_name
-    _append_object_ref(
-        parent,
-        PGMX_NS,
-        "GeometryID",
-        geometry_id,
-        "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCartesianPoint",
-    )
-    operation_ids = _append_node(parent, PGMX_NS, "OperationIDs")
-    _append_reference_key(
-        operation_ids,
-        operation_id,
-        "ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation",
-    )
-    _append_object_ref(parent, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
-    effective_bottom_condition = bottom_condition_type or _drilling_bottom_condition_type(spec)
-    bottom_condition = _append_node(
-        parent,
-        PGMX_NS,
-        "BottomCondition",
-        attrib={f"{{{XSI_NS}}}type": effective_bottom_condition},
-    )
-    if effective_bottom_condition.startswith("b:"):
-        _set_xmlns(bottom_condition, "b", DRILLING_NS)
-    else:
-        _set_xmlns(bottom_condition, "a", DRILLING_NS)
-    if "ThroughHoleBottom" in effective_bottom_condition:
-        _append_node(bottom_condition, DRILLING_NS, "IsFlat", "false")
-    if "ConicalHoleBottom" in effective_bottom_condition:
-        _append_node(bottom_condition, DRILLING_NS, "TipAngle", "0")
-        _append_node(bottom_condition, DRILLING_NS, "TipRadius", "0")
-    depth = _append_node(parent, PGMX_NS, "Depth")
-    depth_value = _compact_number(_drilling_feature_depth_value(state, spec))
-    _append_node(depth, PGMX_NS, "EndDepth", depth_value)
-    _append_node(depth, PGMX_NS, "StartDepth", depth_value)
-    _append_node(parent, DRILLING_NS, "Diameter", _compact_number(spec.diameter))
-    _append_node(parent, DRILLING_NS, "TaperHeight", "0")
-
-
-def _build_drilling_pattern_feature(
-    state: PgmxState,
-    spec: _HydratedDrillingPatternSpec,
-    feature_id: str,
-    geometry_id: str,
-    operation_id: str,
-    workpiece_id: str,
-    workpiece_object_type: str,
-) -> ET.Element:
-    feature = ET.Element(
-        _qname(PGMX_NS, "ManufacturingFeature"),
-        {f"{{{XSI_NS}}}type": "a:ReplicateFeature"},
-    )
-    _set_xmlns(feature, "a", PATTERNS_NS)
-    _append_key(feature, feature_id, "ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole")
-    _append_blank_name(feature).text = spec.feature_name
-    _append_object_ref(
-        feature,
-        PGMX_NS,
-        "GeometryID",
-        geometry_id,
-        "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCartesianPoint",
-    )
-    operation_ids = _append_node(feature, PGMX_NS, "OperationIDs")
-    _append_reference_key(
-        operation_ids,
-        operation_id,
-        "ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation",
-    )
-    _append_object_ref(feature, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
-    _append_node(feature, PGMX_NS, "BottomCondition", attrib={f"{{{XSI_NS}}}nil": "true"})
-
-    base_feature = _append_node(
-        feature,
-        PATTERNS_NS,
-        "BaseFeature",
-        attrib={f"{{{XSI_NS}}}type": "b:RoundHole"},
-    )
-    _set_xmlns(base_feature, "b", DRILLING_NS)
-    _append_drilling_feature_payload(
-        base_feature,
-        state,
-        spec.base_drilling,
-        feature_id,
-        geometry_id,
-        operation_id,
-        workpiece_id,
-        workpiece_object_type,
-        bottom_condition_type=_drilling_pattern_bottom_condition_type(spec),
-    )
-
-    replication_pattern = _append_node(
-        feature,
-        PATTERNS_NS,
-        "ReplicationPattern",
-        attrib={f"{{{XSI_NS}}}type": "a:RectangularPattern"},
-    )
-    _set_xmlns(replication_pattern, "a", PATTERNS_NS)
-    _append_node(replication_pattern, PATTERNS_NS, "MissingBaseFeatures", "")
-    _append_node(replication_pattern, PATTERNS_NS, "NumberOfColumns", str(spec.columns))
-    _append_node(replication_pattern, PATTERNS_NS, "NumberOfRows", str(spec.rows))
-    _append_node(replication_pattern, PATTERNS_NS, "RotationAngle", "0")
-    _append_node(replication_pattern, PATTERNS_NS, "RowLayoutAngle", "90")
-    _append_node(replication_pattern, PATTERNS_NS, "RowSpacing", _compact_number(spec.row_spacing))
-    _append_node(replication_pattern, PATTERNS_NS, "Spacing", _compact_number(spec.spacing))
     return feature
 
 

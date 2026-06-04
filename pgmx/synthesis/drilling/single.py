@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Optional
@@ -19,12 +20,26 @@ from ..common.tools import (
     _resolve_drilling_tool,
     _validate_tool_sinking_length_for_total_depth,
 )
-from ..common.xml import _compact_number
+from ..common.xml import (
+    DRILLING_NS,
+    PGMX_NS,
+    XSI_NS,
+    _append_blank_name,
+    _append_key,
+    _append_node,
+    _append_object_ref,
+    _append_reference_key,
+    _compact_number,
+    _qname,
+    _set_xmlns,
+)
 
 __all__ = [
     "DrillingSpec",
     "build_drilling_spec",
     "_HydratedDrillingSpec",
+    "_append_drilling_feature_payload",
+    "_build_drilling_feature",
     "_default_drill_family",
     "_drilling_bottom_condition_type",
     "_drilling_feature_depth_value",
@@ -282,6 +297,107 @@ def _drilling_bottom_condition_type(spec: _HydratedDrillingSpec) -> str:
 
 def _uses_drilling_depth_expressions(spec: _HydratedDrillingSpec) -> bool:
     return _normalize_milling_depth_spec(spec.depth_spec).is_through
+
+
+def _build_drilling_feature(
+    state,
+    spec: _HydratedDrillingSpec,
+    feature_id: str,
+    geometry_id: str,
+    operation_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+) -> ET.Element:
+    feature = ET.Element(
+        _qname(PGMX_NS, "ManufacturingFeature"),
+        {f"{{{XSI_NS}}}type": "a:RoundHole"},
+    )
+    _set_xmlns(feature, "a", DRILLING_NS)
+    _append_key(feature, feature_id, "ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole")
+    _append_blank_name(feature).text = spec.feature_name
+    _append_object_ref(
+        feature,
+        PGMX_NS,
+        "GeometryID",
+        geometry_id,
+        "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCartesianPoint",
+    )
+    operation_ids = _append_node(feature, PGMX_NS, "OperationIDs")
+    _append_reference_key(
+        operation_ids,
+        operation_id,
+        "ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation",
+    )
+    _append_object_ref(feature, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
+    bottom_condition = _append_node(
+        feature,
+        PGMX_NS,
+        "BottomCondition",
+        attrib={f"{{{XSI_NS}}}type": _drilling_bottom_condition_type(spec)},
+    )
+    _set_xmlns(bottom_condition, "a", DRILLING_NS)
+    if _drilling_bottom_condition_type(spec) == "a:ConicalHoleBottom":
+        _append_node(bottom_condition, DRILLING_NS, "TipAngle", "0")
+        _append_node(bottom_condition, DRILLING_NS, "TipRadius", "0")
+    depth = _append_node(feature, PGMX_NS, "Depth")
+    depth_value = _compact_number(_drilling_feature_depth_value(state, spec))
+    _append_node(depth, PGMX_NS, "EndDepth", depth_value)
+    _append_node(depth, PGMX_NS, "StartDepth", depth_value)
+    _append_node(feature, DRILLING_NS, "Diameter", _compact_number(spec.diameter))
+    _append_node(feature, DRILLING_NS, "TaperHeight", "0")
+    return feature
+
+
+def _append_drilling_feature_payload(
+    parent: ET.Element,
+    state,
+    spec: _HydratedDrillingSpec,
+    feature_id: str,
+    geometry_id: str,
+    operation_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+    *,
+    bottom_condition_type: Optional[str] = None,
+) -> None:
+    _append_key(parent, feature_id, "ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole")
+    _append_blank_name(parent).text = spec.feature_name
+    _append_object_ref(
+        parent,
+        PGMX_NS,
+        "GeometryID",
+        geometry_id,
+        "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCartesianPoint",
+    )
+    operation_ids = _append_node(parent, PGMX_NS, "OperationIDs")
+    _append_reference_key(
+        operation_ids,
+        operation_id,
+        "ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation",
+    )
+    _append_object_ref(parent, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
+    effective_bottom_condition = bottom_condition_type or _drilling_bottom_condition_type(spec)
+    bottom_condition = _append_node(
+        parent,
+        PGMX_NS,
+        "BottomCondition",
+        attrib={f"{{{XSI_NS}}}type": effective_bottom_condition},
+    )
+    if effective_bottom_condition.startswith("b:"):
+        _set_xmlns(bottom_condition, "b", DRILLING_NS)
+    else:
+        _set_xmlns(bottom_condition, "a", DRILLING_NS)
+    if "ThroughHoleBottom" in effective_bottom_condition:
+        _append_node(bottom_condition, DRILLING_NS, "IsFlat", "false")
+    if "ConicalHoleBottom" in effective_bottom_condition:
+        _append_node(bottom_condition, DRILLING_NS, "TipAngle", "0")
+        _append_node(bottom_condition, DRILLING_NS, "TipRadius", "0")
+    depth = _append_node(parent, PGMX_NS, "Depth")
+    depth_value = _compact_number(_drilling_feature_depth_value(state, spec))
+    _append_node(depth, PGMX_NS, "EndDepth", depth_value)
+    _append_node(depth, PGMX_NS, "StartDepth", depth_value)
+    _append_node(parent, DRILLING_NS, "Diameter", _compact_number(spec.diameter))
+    _append_node(parent, DRILLING_NS, "TaperHeight", "0")
 
 
 def _validate_drilling_center(state, spec: _HydratedDrillingSpec) -> None:

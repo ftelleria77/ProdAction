@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Optional
@@ -9,10 +10,24 @@ from typing import Optional
 from ..common.depth import MillingDepthSpec, build_milling_depth_spec
 from ..common.piece import _normalize_plane_name, _plane_local_dimensions
 from ..common.tools import _normalize_tool_resolution
-from ..common.xml import _compact_number
+from ..common.xml import (
+    DRILLING_NS,
+    PATTERNS_NS,
+    PGMX_NS,
+    XSI_NS,
+    _append_blank_name,
+    _append_key,
+    _append_node,
+    _append_object_ref,
+    _append_reference_key,
+    _compact_number,
+    _qname,
+    _set_xmlns,
+)
 from .single import (
     DrillingSpec,
     _HydratedDrillingSpec,
+    _append_drilling_feature_payload,
     _default_drill_family,
     _drilling_bottom_condition_type,
     _hydrate_drilling_spec,
@@ -23,6 +38,7 @@ __all__ = [
     "DrillingPatternSpec",
     "build_drilling_pattern_spec",
     "_HydratedDrillingPatternSpec",
+    "_build_drilling_pattern_feature",
     "_drilling_pattern_bottom_condition_type",
     "_hydrate_drilling_pattern_spec",
     "_normalize_drilling_pattern_spec",
@@ -220,6 +236,74 @@ def _validate_drilling_pattern_center(state, spec: _HydratedDrillingPatternSpec)
 
 def _drilling_pattern_bottom_condition_type(spec: _HydratedDrillingPatternSpec) -> str:
     return _drilling_bottom_condition_type(spec.base_drilling).replace("a:", "b:", 1)
+
+
+def _build_drilling_pattern_feature(
+    state,
+    spec: _HydratedDrillingPatternSpec,
+    feature_id: str,
+    geometry_id: str,
+    operation_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+) -> ET.Element:
+    feature = ET.Element(
+        _qname(PGMX_NS, "ManufacturingFeature"),
+        {f"{{{XSI_NS}}}type": "a:ReplicateFeature"},
+    )
+    _set_xmlns(feature, "a", PATTERNS_NS)
+    _append_key(feature, feature_id, "ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole")
+    _append_blank_name(feature).text = spec.feature_name
+    _append_object_ref(
+        feature,
+        PGMX_NS,
+        "GeometryID",
+        geometry_id,
+        "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCartesianPoint",
+    )
+    operation_ids = _append_node(feature, PGMX_NS, "OperationIDs")
+    _append_reference_key(
+        operation_ids,
+        operation_id,
+        "ScmGroup.XCam.MachiningDataModel.Drilling.DrillingOperation",
+    )
+    _append_object_ref(feature, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
+    _append_node(feature, PGMX_NS, "BottomCondition", attrib={f"{{{XSI_NS}}}nil": "true"})
+
+    base_feature = _append_node(
+        feature,
+        PATTERNS_NS,
+        "BaseFeature",
+        attrib={f"{{{XSI_NS}}}type": "b:RoundHole"},
+    )
+    _set_xmlns(base_feature, "b", DRILLING_NS)
+    _append_drilling_feature_payload(
+        base_feature,
+        state,
+        spec.base_drilling,
+        feature_id,
+        geometry_id,
+        operation_id,
+        workpiece_id,
+        workpiece_object_type,
+        bottom_condition_type=_drilling_pattern_bottom_condition_type(spec),
+    )
+
+    replication_pattern = _append_node(
+        feature,
+        PATTERNS_NS,
+        "ReplicationPattern",
+        attrib={f"{{{XSI_NS}}}type": "a:RectangularPattern"},
+    )
+    _set_xmlns(replication_pattern, "a", PATTERNS_NS)
+    _append_node(replication_pattern, PATTERNS_NS, "MissingBaseFeatures", "")
+    _append_node(replication_pattern, PATTERNS_NS, "NumberOfColumns", str(spec.columns))
+    _append_node(replication_pattern, PATTERNS_NS, "NumberOfRows", str(spec.rows))
+    _append_node(replication_pattern, PATTERNS_NS, "RotationAngle", "0")
+    _append_node(replication_pattern, PATTERNS_NS, "RowLayoutAngle", "90")
+    _append_node(replication_pattern, PATTERNS_NS, "RowSpacing", _compact_number(spec.row_spacing))
+    _append_node(replication_pattern, PATTERNS_NS, "Spacing", _compact_number(spec.spacing))
+    return feature
 
 
 def build_drilling_pattern_spec(

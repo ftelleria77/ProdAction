@@ -192,6 +192,8 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._drilling_total_depth, drilling_single._drilling_total_depth)
         self.assertIs(core_sp._drilling_bottom_condition_type, drilling_single._drilling_bottom_condition_type)
         self.assertIs(core_sp._uses_drilling_depth_expressions, drilling_single._uses_drilling_depth_expressions)
+        self.assertIs(core_sp._build_drilling_feature, drilling_single._build_drilling_feature)
+        self.assertIs(core_sp._append_drilling_feature_payload, drilling_single._append_drilling_feature_payload)
         self.assertIs(core_sp._validate_drilling_center, drilling_single._validate_drilling_center)
         self.assertIs(
             core_sp._validate_tool_sinking_length_for_drilling_spec,
@@ -226,6 +228,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._hydrate_drilling_pattern_spec, drilling_pattern._hydrate_drilling_pattern_spec)
         self.assertIs(core_sp._normalize_drilling_pattern_spec, drilling_pattern._normalize_drilling_pattern_spec)
         self.assertIs(core_sp._validate_drilling_pattern_center, drilling_pattern._validate_drilling_pattern_center)
+        self.assertIs(core_sp._build_drilling_pattern_feature, drilling_pattern._build_drilling_pattern_feature)
         self.assertIs(
             core_sp._drilling_pattern_bottom_condition_type,
             drilling_pattern._drilling_pattern_bottom_condition_type,
