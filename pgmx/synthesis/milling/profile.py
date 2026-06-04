@@ -19,7 +19,9 @@ from ..common.geometry import (
     GeometryProfileSpec,
     _build_closed_polyline_geometry_profile,
     _build_geometry_from_curve_spec,
+    _build_open_polyline_descriptions,
     _build_open_polyline_geometry_profile,
+    _composite_curve_spec,
     _curve_spec_from_profile_geometry,
     _curve_spec_from_composite_curve_node,
     _curve_spec_from_toolpath_node,
@@ -66,7 +68,7 @@ from ..common.xml import (
     _text,
     _xsi_type,
 )
-from ._common import _build_profile_feature, _normalize_side_of_feature, _uses_feature_depth_expressions
+from ._common import _build_profile_feature, _normalize_side_of_feature, _toolpath_cut_z, _uses_feature_depth_expressions
 from .line import _build_line_operation
 
 __all__ = [
@@ -74,6 +76,7 @@ __all__ = [
     "build_polyline_milling_spec",
     "_HydratedPolylineMillingSpec",
     "_append_curve_profile_milling",
+    "_append_polyline_milling",
     "_build_polyline_toolpath_profile",
     "_can_hydrate_exact_polyline_serialization",
     "_extract_polyline_milling_template",
@@ -240,6 +243,25 @@ def _build_polyline_toolpath_profile(
             strategy,
         )
     return _build_bidirectional_open_profile_strategy_toolpath(float(top_level), cut_z, base_profile, strategy)
+
+
+def _append_polyline_milling(root: ET.Element, state, spec: _HydratedPolylineMillingSpec) -> None:
+    if spec.geometry_curve is not None:
+        generated_geometry_curve = spec.geometry_curve
+    elif _is_closed_polyline_points(spec.points):
+        generated_geometry_curve = _curve_spec_from_profile_geometry(
+            _build_closed_polyline_geometry_profile(spec.points, z_value=0.0)
+        )
+    else:
+        generated_geometry_curve = _composite_curve_spec(_build_open_polyline_descriptions(spec.points))
+    generated_toolpath_profile = _build_polyline_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
+    _append_curve_profile_milling(
+        root,
+        state,
+        spec,
+        generated_geometry_curve,
+        generated_toolpath_profile,
+    )
 
 
 def _append_curve_profile_milling(

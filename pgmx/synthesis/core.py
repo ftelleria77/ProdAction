@@ -355,6 +355,7 @@ from .milling.profile import (
     PolylineMillingSpec,
     _HydratedPolylineMillingSpec,
     _append_curve_profile_milling,
+    _append_polyline_milling,
     _build_polyline_toolpath_profile,
     _can_hydrate_exact_polyline_serialization,
     _extract_polyline_milling_template,
@@ -2071,25 +2072,6 @@ def _build_xn_step(
     else:
         _append_node(step, BASE_MODEL_NS, "Y", _compact_number(spec.y))
     return step
-
-
-def _append_polyline_milling(root: ET.Element, state: PgmxState, spec: _HydratedPolylineMillingSpec) -> None:
-    if spec.geometry_curve is not None:
-        generated_geometry_curve = spec.geometry_curve
-    elif _is_closed_polyline_points(spec.points):
-        generated_geometry_curve = _curve_spec_from_profile_geometry(
-            _build_closed_polyline_geometry_profile(spec.points, z_value=0.0)
-        )
-    else:
-        generated_geometry_curve = _composite_curve_spec(_build_open_polyline_descriptions(spec.points))
-    generated_toolpath_profile = _build_polyline_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
-    _append_curve_profile_milling(
-        root,
-        state,
-        spec,
-        generated_geometry_curve,
-        generated_toolpath_profile,
-    )
 
 
 def _append_circle_milling(root: ET.Element, state: PgmxState, spec: _HydratedCircleMillingSpec) -> None:
