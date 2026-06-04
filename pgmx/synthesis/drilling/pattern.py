@@ -14,6 +14,7 @@ from .single import (
     DrillingSpec,
     _HydratedDrillingSpec,
     _default_drill_family,
+    _drilling_bottom_condition_type,
     _hydrate_drilling_spec,
     _normalize_drilling_spec,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "DrillingPatternSpec",
     "build_drilling_pattern_spec",
     "_HydratedDrillingPatternSpec",
+    "_drilling_pattern_bottom_condition_type",
     "_hydrate_drilling_pattern_spec",
     "_normalize_drilling_pattern_spec",
     "_validate_drilling_pattern_center",
@@ -214,6 +216,10 @@ def _validate_drilling_pattern_center(state, spec: _HydratedDrillingPatternSpec)
             f"'{spec.plane_name}': {_compact_number(spec.center_y)}..{_compact_number(last_y)} "
             f"no pertenece a [0, {_compact_number(max_y)}]."
         )
+
+
+def _drilling_pattern_bottom_condition_type(spec: _HydratedDrillingPatternSpec) -> str:
+    return _drilling_bottom_condition_type(spec.base_drilling).replace("a:", "b:", 1)
 
 
 def build_drilling_pattern_spec(

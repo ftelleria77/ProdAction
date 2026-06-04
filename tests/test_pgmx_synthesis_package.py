@@ -155,6 +155,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.build_milling_depth_spec, common_depth.build_milling_depth_spec)
         self.assertIs(core_sp._extract_depth_spec_from_template, common_depth._extract_depth_spec_from_template)
         self.assertIs(core_sp._normalize_plane_name, common_piece._normalize_plane_name)
+        self.assertIs(core_sp._drilling_axis_span, common_piece._drilling_axis_span)
         self.assertEqual(common_piece._normalize_plane_name("cara-derecha"), "Right")
         piece = common_piece.PieceGeometry(length=500.0, width=300.0, depth=18.0)
         drill = core_sp.build_drilling_spec(
@@ -181,6 +182,10 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.build_drilling_spec, drilling_single.build_drilling_spec)
         self.assertIs(core_sp._normalize_drilling_spec, drilling_single._normalize_drilling_spec)
         self.assertIs(core_sp._hydrate_drilling_spec, drilling_single._hydrate_drilling_spec)
+        self.assertIs(core_sp._drilling_feature_depth_value, drilling_single._drilling_feature_depth_value)
+        self.assertIs(core_sp._drilling_total_depth, drilling_single._drilling_total_depth)
+        self.assertIs(core_sp._drilling_bottom_condition_type, drilling_single._drilling_bottom_condition_type)
+        self.assertIs(core_sp._uses_drilling_depth_expressions, drilling_single._uses_drilling_depth_expressions)
         self.assertIs(core_sp._validate_drilling_center, drilling_single._validate_drilling_center)
         top_drill = drilling_single.build_drilling_spec(center_x=40, center_y=60, diameter=5.0)
         self.assertIsInstance(top_drill, drilling_single.DrillingSpec)
@@ -211,6 +216,10 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._hydrate_drilling_pattern_spec, drilling_pattern._hydrate_drilling_pattern_spec)
         self.assertIs(core_sp._normalize_drilling_pattern_spec, drilling_pattern._normalize_drilling_pattern_spec)
         self.assertIs(core_sp._validate_drilling_pattern_center, drilling_pattern._validate_drilling_pattern_center)
+        self.assertIs(
+            core_sp._drilling_pattern_bottom_condition_type,
+            drilling_pattern._drilling_pattern_bottom_condition_type,
+        )
         drill_pattern = drilling_pattern.build_drilling_pattern_spec(
             20,
             30,

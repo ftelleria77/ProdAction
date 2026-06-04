@@ -255,6 +255,7 @@ from .common.xml import (
 from .drilling.pattern import (
     DrillingPatternSpec,
     _HydratedDrillingPatternSpec,
+    _drilling_pattern_bottom_condition_type,
     _hydrate_drilling_pattern_spec,
     _normalize_drilling_pattern_spec,
     _validate_drilling_pattern_center,
@@ -263,8 +264,12 @@ from .drilling.pattern import (
 from .drilling.single import (
     DrillingSpec,
     _HydratedDrillingSpec,
+    _drilling_bottom_condition_type,
+    _drilling_feature_depth_value,
+    _drilling_total_depth,
     _hydrate_drilling_spec,
     _normalize_drilling_spec,
+    _uses_drilling_depth_expressions,
     _validate_drilling_center,
     build_drilling_spec,
 )
@@ -756,42 +761,6 @@ def _tool_total_milling_depth(state: PgmxState, spec) -> float:
     if depth_spec.target_depth is None:
         raise ValueError("La profundidad del fresado no pasante no puede quedar vacia.")
     return depth_spec.target_depth
-
-
-def _drilling_feature_depth_value(state: PgmxState, spec: _HydratedDrillingSpec) -> float:
-    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
-    plane_span = _drilling_axis_span(state, spec.plane_name)
-    if depth_spec.is_through:
-        return plane_span
-    if depth_spec.target_depth is None:
-        raise ValueError("La profundidad del taladro no pasante no puede quedar vacia.")
-    if depth_spec.target_depth > plane_span + 1e-9:
-        raise ValueError(
-            "La profundidad del taladro no pasante no puede superar el espesor util de la cara."
-        )
-    return depth_spec.target_depth
-
-
-def _drilling_total_depth(state: PgmxState, spec: _HydratedDrillingSpec) -> float:
-    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
-    if depth_spec.is_through:
-        return _drilling_axis_span(state, spec.plane_name) + depth_spec.extra_depth
-    if depth_spec.target_depth is None:
-        raise ValueError("La profundidad del taladro no pasante no puede quedar vacia.")
-    return depth_spec.target_depth
-
-
-def _drilling_bottom_condition_type(spec: _HydratedDrillingSpec) -> str:
-    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
-    if depth_spec.is_through:
-        return "a:ThroughHoleBottom"
-    if spec.drill_family == "Conical" and spec.tool_object_type == "System.Object":
-        return "a:ConicalHoleBottom"
-    return "a:FlatHoleBottom"
-
-
-def _uses_drilling_depth_expressions(spec: _HydratedDrillingSpec) -> bool:
-    return _normalize_milling_depth_spec(spec.depth_spec).is_through
 
 
 def _validate_tool_sinking_length_for_spec(
@@ -1807,10 +1776,6 @@ def _build_drilling_feature(
     _append_node(feature, DRILLING_NS, "Diameter", _compact_number(spec.diameter))
     _append_node(feature, DRILLING_NS, "TaperHeight", "0")
     return feature
-
-
-def _drilling_pattern_bottom_condition_type(spec: _HydratedDrillingPatternSpec) -> str:
-    return _drilling_bottom_condition_type(spec.base_drilling).replace("a:", "b:", 1)
 
 
 def _append_drilling_feature_payload(

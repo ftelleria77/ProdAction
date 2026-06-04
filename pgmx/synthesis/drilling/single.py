@@ -12,7 +12,7 @@ from ..common.depth import (
     _normalize_milling_depth_spec,
     build_milling_depth_spec,
 )
-from ..common.piece import _normalize_plane_name, _plane_local_dimensions
+from ..common.piece import _drilling_axis_span, _normalize_plane_name, _plane_local_dimensions
 from ..common.tools import _load_tool_catalog, _normalize_tool_resolution, _resolve_drilling_tool
 from ..common.xml import _compact_number
 
@@ -21,9 +21,13 @@ __all__ = [
     "build_drilling_spec",
     "_HydratedDrillingSpec",
     "_default_drill_family",
+    "_drilling_bottom_condition_type",
+    "_drilling_feature_depth_value",
+    "_drilling_total_depth",
     "_hydrate_drilling_spec",
     "_normalize_drill_family",
     "_normalize_drilling_spec",
+    "_uses_drilling_depth_expressions",
     "_validate_drilling_center",
 ]
 
@@ -236,6 +240,42 @@ def _hydrate_drilling_spec(
         resolved_tool_name=resolved_tool_name,
         resolved_tool_object_type=resolved_tool_object_type,
     )
+
+
+def _drilling_feature_depth_value(state, spec: _HydratedDrillingSpec) -> float:
+    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
+    plane_span = _drilling_axis_span(state, spec.plane_name)
+    if depth_spec.is_through:
+        return plane_span
+    if depth_spec.target_depth is None:
+        raise ValueError("La profundidad del taladro no pasante no puede quedar vacia.")
+    if depth_spec.target_depth > plane_span + 1e-9:
+        raise ValueError(
+            "La profundidad del taladro no pasante no puede superar el espesor util de la cara."
+        )
+    return depth_spec.target_depth
+
+
+def _drilling_total_depth(state, spec: _HydratedDrillingSpec) -> float:
+    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
+    if depth_spec.is_through:
+        return _drilling_axis_span(state, spec.plane_name) + depth_spec.extra_depth
+    if depth_spec.target_depth is None:
+        raise ValueError("La profundidad del taladro no pasante no puede quedar vacia.")
+    return depth_spec.target_depth
+
+
+def _drilling_bottom_condition_type(spec: _HydratedDrillingSpec) -> str:
+    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
+    if depth_spec.is_through:
+        return "a:ThroughHoleBottom"
+    if spec.drill_family == "Conical" and spec.tool_object_type == "System.Object":
+        return "a:ConicalHoleBottom"
+    return "a:FlatHoleBottom"
+
+
+def _uses_drilling_depth_expressions(spec: _HydratedDrillingSpec) -> bool:
+    return _normalize_milling_depth_spec(spec.depth_spec).is_through
 
 
 def _validate_drilling_center(state, spec: _HydratedDrillingSpec) -> None:
