@@ -59,14 +59,20 @@ __all__ = [
     "_build_parameterized_line_geometry_primitive",
     "_build_profile_geometry_spec",
     "_build_toolpath_description",
+    "_build_closed_polyline_geometry_profile",
+    "_build_line_description",
+    "_build_open_polyline_descriptions",
+    "_build_open_polyline_geometry_profile",
     "_circle_curve_spec",
     "_composite_curve_spec",
     "_curve_spec_from_profile_geometry",
     "_extract_geometry_profile",
     "_format_maestro_number",
     "_format_maestro_orientation_number",
+    "_is_closed_polyline_points",
     "_normalize_curve_serialization_text",
     "_normalize_geometry_winding",
+    "_normalize_polyline_points",
     "_parse_circle_geometry_profile",
     "_parse_geometry_primitive",
     "_parse_trimmed_curve_arc",
@@ -452,6 +458,23 @@ def _points_close_2d(
     return math.isclose(point_a[0], point_b[0], abs_tol=tolerance) and math.isclose(
         point_a[1], point_b[1], abs_tol=tolerance
     )
+
+
+def _normalize_polyline_points(points: Sequence[tuple[float, float]]) -> tuple[tuple[float, float], ...]:
+    normalized = tuple((float(point[0]), float(point[1])) for point in points)
+    if len(normalized) < 2:
+        raise ValueError("Una polilinea necesita al menos 2 puntos.")
+    for start_point, end_point in zip(normalized, normalized[1:]):
+        if math.isclose(start_point[0], end_point[0], abs_tol=1e-9) and math.isclose(
+            start_point[1], end_point[1], abs_tol=1e-9
+        ):
+            raise ValueError("La polilinea no puede contener segmentos de longitud cero.")
+    return normalized
+
+
+def _is_closed_polyline_points(points: Sequence[tuple[float, float]]) -> bool:
+    normalized_points = tuple((float(point[0]), float(point[1])) for point in points)
+    return len(normalized_points) >= 4 and _points_close_2d(normalized_points[0], normalized_points[-1])
 
 
 def _normalize_positive_angle(angle: float) -> float:
@@ -881,6 +904,54 @@ def _build_profile_geometry_spec(
         bounding_box=_profile_bounding_box(normalized_primitives),
         member_serializations=normalized_member_serializations
         or tuple(_primitive_to_serialization(primitive) for primitive in normalized_primitives),
+    )
+
+
+def _build_line_description(start_x: float, start_y: float, end_x: float, end_y: float) -> str:
+    return _build_maestro_line_serialization((start_x, start_y, 0.0), (end_x, end_y, 0.0))
+
+
+def _build_open_polyline_descriptions(points: Sequence[tuple[float, float]]) -> tuple[str, ...]:
+    normalized_points = _normalize_polyline_points(points)
+    return tuple(
+        _build_line_description(start_point[0], start_point[1], end_point[0], end_point[1])
+        for start_point, end_point in zip(normalized_points, normalized_points[1:])
+    )
+
+
+def _build_open_polyline_geometry_profile(
+    points: Sequence[tuple[float, float]],
+    *,
+    z_value: float = 0.0,
+) -> GeometryProfileSpec:
+    """Construye una polilinea abierta plana como `GeometryProfileSpec`."""
+
+    normalized_points = _normalize_polyline_points(points)
+    return build_composite_geometry_profile(
+        tuple(
+            _line_primitive_at_plane(start_point, end_point, z_value=z_value)
+            for start_point, end_point in zip(normalized_points, normalized_points[1:])
+        )
+    )
+
+
+def _build_closed_polyline_geometry_profile(
+    points: Sequence[tuple[float, float]],
+    *,
+    z_value: float = 0.0,
+) -> GeometryProfileSpec:
+    """Construye una polilinea cerrada plana como `GeometryProfileSpec`."""
+
+    normalized_points = tuple((float(point[0]), float(point[1])) for point in points)
+    if len(normalized_points) < 4:
+        raise ValueError("Un contorno cerrado necesita al menos 4 puntos incluyendo el cierre.")
+    if not _points_close_2d(normalized_points[0], normalized_points[-1]):
+        raise ValueError("La polilinea cerrada debe terminar en el mismo punto en el que empieza.")
+    return build_composite_geometry_profile(
+        tuple(
+            _line_primitive_at_plane(start_point, end_point, z_value=z_value)
+            for start_point, end_point in zip(normalized_points, normalized_points[1:])
+        )
     )
 
 

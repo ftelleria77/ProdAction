@@ -93,10 +93,16 @@ from .common.geometry import (
     _build_parameterized_line_geometry_primitive,
     _build_profile_geometry_spec,
     _build_toolpath_description,
+    _build_closed_polyline_geometry_profile,
+    _build_line_description,
+    _build_open_polyline_descriptions,
+    _build_open_polyline_geometry_profile,
     _circle_curve_spec,
     _composite_curve_spec,
     _curve_spec_from_profile_geometry,
     _extract_geometry_profile,
+    _is_closed_polyline_points,
+    _normalize_polyline_points,
     _build_compensated_profile_geometry,
     _line_primitive_at_plane,
     _line_primitive_3d,
@@ -246,9 +252,7 @@ from .milling.circle import (
 )
 from .milling.profile import (
     PolylineMillingSpec,
-    _is_closed_polyline_points,
     _normalize_polyline_milling_spec,
-    _normalize_polyline_points,
     _validate_polyline_postprocessable_by_maestro,
     build_polyline_milling_spec,
 )
@@ -1480,54 +1484,6 @@ def _operation_overcut_length(spec) -> float:
 
 def _uses_feature_depth_expressions(spec) -> bool:
     return _normalize_milling_depth_spec(spec.depth_spec).is_through
-
-
-def _build_line_description(start_x: float, start_y: float, end_x: float, end_y: float) -> str:
-    return _build_maestro_line_serialization((start_x, start_y, 0.0), (end_x, end_y, 0.0))
-
-
-def _build_open_polyline_descriptions(points: Sequence[tuple[float, float]]) -> tuple[str, ...]:
-    normalized_points = _normalize_polyline_points(points)
-    return tuple(
-        _build_line_description(start_point[0], start_point[1], end_point[0], end_point[1])
-        for start_point, end_point in zip(normalized_points, normalized_points[1:])
-    )
-
-
-def _build_open_polyline_geometry_profile(
-    points: Sequence[tuple[float, float]],
-    *,
-    z_value: float = 0.0,
-) -> GeometryProfileSpec:
-    """Construye una polilinea abierta plana como `GeometryProfileSpec`."""
-
-    normalized_points = _normalize_polyline_points(points)
-    return build_composite_geometry_profile(
-        tuple(
-            _line_primitive_at_plane(start_point, end_point, z_value=z_value)
-            for start_point, end_point in zip(normalized_points, normalized_points[1:])
-        )
-    )
-
-
-def _build_closed_polyline_geometry_profile(
-    points: Sequence[tuple[float, float]],
-    *,
-    z_value: float = 0.0,
-) -> GeometryProfileSpec:
-    """Construye una polilinea cerrada plana como `GeometryProfileSpec`."""
-
-    normalized_points = tuple((float(point[0]), float(point[1])) for point in points)
-    if len(normalized_points) < 4:
-        raise ValueError("Un contorno cerrado necesita al menos 4 puntos incluyendo el cierre.")
-    if not _points_close_2d(normalized_points[0], normalized_points[-1]):
-        raise ValueError("La polilinea cerrada debe terminar en el mismo punto en el que empieza.")
-    return build_composite_geometry_profile(
-        tuple(
-            _line_primitive_at_plane(start_point, end_point, z_value=z_value)
-            for start_point, end_point in zip(normalized_points, normalized_points[1:])
-        )
-    )
 
 
 def _build_squaring_outline_points(

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field, replace
 from typing import Optional, Sequence
 
+from ..common.geometry import (
+    _is_closed_polyline_points,
+    _normalize_polyline_points,
+)
 from ..common.depth import (
     MillingDepthSpec,
     _normalize_milling_depth_spec,
@@ -58,36 +61,6 @@ class PolylineMillingSpec:
     approach: ApproachSpec = field(default_factory=ApproachSpec)
     retract: RetractSpec = field(default_factory=RetractSpec)
     milling_strategy: Optional[MillingStrategySpec] = None
-
-
-def _points_close_2d(
-    first: tuple[float, float],
-    second: tuple[float, float],
-    *,
-    tolerance: float = 1e-6,
-) -> bool:
-    return math.isclose(first[0], second[0], abs_tol=tolerance) and math.isclose(
-        first[1],
-        second[1],
-        abs_tol=tolerance,
-    )
-
-
-def _normalize_polyline_points(points: Sequence[tuple[float, float]]) -> tuple[tuple[float, float], ...]:
-    normalized = tuple((float(point[0]), float(point[1])) for point in points)
-    if len(normalized) < 2:
-        raise ValueError("Una polilinea necesita al menos 2 puntos.")
-    for start_point, end_point in zip(normalized, normalized[1:]):
-        if math.isclose(start_point[0], end_point[0], abs_tol=1e-9) and math.isclose(
-            start_point[1], end_point[1], abs_tol=1e-9
-        ):
-            raise ValueError("La polilinea no puede contener segmentos de longitud cero.")
-    return normalized
-
-
-def _is_closed_polyline_points(points: Sequence[tuple[float, float]]) -> bool:
-    normalized_points = tuple((float(point[0]), float(point[1])) for point in points)
-    return len(normalized_points) >= 4 and _points_close_2d(normalized_points[0], normalized_points[-1])
 
 
 def _validate_polyline_postprocessable_by_maestro(spec: PolylineMillingSpec) -> None:

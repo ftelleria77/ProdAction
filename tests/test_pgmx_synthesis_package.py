@@ -105,6 +105,15 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._profile_at_z, common_geometry._profile_at_z)
         self.assertIs(core_sp._reverse_profile_geometry, common_geometry._reverse_profile_geometry)
         self.assertIs(core_sp._vertical_transition_primitive, common_geometry._vertical_transition_primitive)
+        self.assertIs(core_sp._normalize_polyline_points, common_geometry._normalize_polyline_points)
+        self.assertIs(core_sp._is_closed_polyline_points, common_geometry._is_closed_polyline_points)
+        self.assertIs(core_sp._build_line_description, common_geometry._build_line_description)
+        self.assertIs(core_sp._build_open_polyline_descriptions, common_geometry._build_open_polyline_descriptions)
+        self.assertIs(core_sp._build_open_polyline_geometry_profile, common_geometry._build_open_polyline_geometry_profile)
+        self.assertIs(
+            core_sp._build_closed_polyline_geometry_profile,
+            common_geometry._build_closed_polyline_geometry_profile,
+        )
         compensated_line = common_geometry.build_compensated_toolpath_profile(
             common_geometry.build_line_geometry_profile(0.0, 0.0, 100.0, 0.0),
             side_of_feature="derecha",
@@ -285,6 +294,8 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.PolylineMillingSpec, milling_profile.PolylineMillingSpec)
         self.assertIs(core_sp.build_polyline_milling_spec, milling_profile.build_polyline_milling_spec)
         self.assertIs(core_sp._normalize_polyline_milling_spec, milling_profile._normalize_polyline_milling_spec)
+        self.assertIs(milling_profile._normalize_polyline_points, common_geometry._normalize_polyline_points)
+        self.assertIs(milling_profile._is_closed_polyline_points, common_geometry._is_closed_polyline_points)
         polyline = milling_profile.build_polyline_milling_spec(
             ((0, 0), (100, 0), (100, 50), (0, 0)),
             side_of_feature="izquierda",
