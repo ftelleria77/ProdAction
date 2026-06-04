@@ -67,7 +67,6 @@ Hallazgos ya volcados en la sintesis:
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
 import json
 import math
@@ -94,6 +93,17 @@ from .common.piece import (
     _workpiece_depth_name,
     _workpiece_length_name,
     _workpiece_width_name,
+)
+from .common.tools import (
+    TOOL_CATALOG_PATH,
+    _is_vertical_x_saw,
+    _load_tool_catalog,
+    _normalize_tool_resolution,
+    _normalize_tool_usage_group,
+    _resolve_drilling_tool,
+    _tool_catalog_label,
+    _validate_tool_sinking_length_for_total_depth,
+    _validate_tool_type_for_drilling_spec,
 )
 from .common.xml import (
     ARRAYS_NS,
@@ -145,7 +155,6 @@ def _module_data_dir() -> Path:
 MODULE_DIR = _module_data_dir()
 DEFAULT_BASELINE_DIR = MODULE_DIR / "maestro_baselines"
 DEFAULT_BASELINE_XML_PATH = DEFAULT_BASELINE_DIR / "Pieza.xml"
-TOOL_CATALOG_PATH = MODULE_DIR / "tool_catalog.csv"
 SYNTHESIZER_VERSION = "1.6"
 
 __all__ = [
@@ -1622,25 +1631,6 @@ def _normalize_drill_family(value: Optional[str]) -> str:
     return mapping[raw]
 
 
-def _normalize_tool_resolution(value: Optional[str]) -> str:
-    raw = (value or "Auto").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
-    mapping = {
-        "auto": "Auto",
-        "automatic": "Auto",
-        "automatico": "Auto",
-        "none": "None",
-        "sin": "None",
-        "ninguna": "None",
-        "empty": "None",
-        "explicit": "Explicit",
-        "explicita": "Explicit",
-        "manual": "Explicit",
-    }
-    if raw not in mapping:
-        raise ValueError("ToolResolution invalido. Valores admitidos: Auto, None o Explicit.")
-    return mapping[raw]
-
-
 def _normalize_approach_type(value: Optional[str]) -> str:
     raw = (value or "Line").strip().lower()
     mapping = {
@@ -2568,67 +2558,6 @@ def _normalize_squaring_milling_spec(squaring_milling: SquaringMillingSpec) -> S
     )
 
 
-def _load_tool_catalog() -> dict[str, dict[str, str]]:
-    """Carga el catalogo plano de herramientas indexado por `tool_id`."""
-
-    if not TOOL_CATALOG_PATH.exists():
-        raise FileNotFoundError(
-            f"No existe el catalogo de herramientas '{TOOL_CATALOG_PATH}'."
-        )
-    with TOOL_CATALOG_PATH.open("r", encoding="utf-8-sig", newline="") as handle:
-        rows = tuple(csv.DictReader(handle))
-    return {
-        str((row.get("tool_id") or "").strip()): row
-        for row in rows
-        if (row.get("tool_id") or "").strip()
-    }
-
-
-_AUTO_VERTICAL_DRILL_TOOLS: dict[tuple[str, str], tuple[str, str]] = {
-    ("Flat", "8"): ("1888", "001"),
-    ("Flat", "15"): ("1889", "002"),
-    ("Flat", "20"): ("1890", "003"),
-    ("Flat", "35"): ("1891", "004"),
-    ("Flat", "5"): ("1892", "005"),
-    ("Flat", "4"): ("1893", "006"),
-    ("Conical", "5"): ("1894", "007"),
-}
-
-def _lookup_tool_catalog_entry(
-    tool_catalog: dict[str, dict[str, str]],
-    *,
-    tool_id: Optional[str] = None,
-    tool_name: Optional[str] = None,
-) -> dict[str, str]:
-    normalized_tool_id = (tool_id or "").strip()
-    normalized_tool_name = (tool_name or "").strip()
-    if normalized_tool_id == "0" and normalized_tool_name:
-        normalized_tool_id = ""
-
-    if normalized_tool_id:
-        row = tool_catalog.get(normalized_tool_id)
-        if row is None:
-            raise ValueError(
-                f"No existe la herramienta '{normalized_tool_id}' en '{TOOL_CATALOG_PATH.name}'."
-            )
-        if normalized_tool_name and (row.get("name") or "").strip() != normalized_tool_name:
-            raise ValueError(
-                "La herramienta explicita no coincide con el catalogo: "
-                f"id={normalized_tool_id} corresponde a '{(row.get('name') or '').strip()}'."
-            )
-        return row
-
-    if normalized_tool_name:
-        for row in tool_catalog.values():
-            if (row.get("name") or "").strip() == normalized_tool_name:
-                return row
-        raise ValueError(
-            f"No existe la herramienta '{normalized_tool_name}' en '{TOOL_CATALOG_PATH.name}'."
-        )
-
-    raise ValueError("La resolucion explicita de herramienta requiere tool_id, tool_name o ambos.")
-
-
 def _feature_depth_value(state: PgmxState, spec) -> float:
     # En Maestro, un pasante deja `Depth.StartDepth/EndDepth` igual al espesor
     # actual de la pieza y luego agrega expresiones parametricas hacia `DepthName`.
@@ -2654,14 +2583,6 @@ def _tool_total_milling_depth(state: PgmxState, spec) -> float:
     if depth_spec.target_depth is None:
         raise ValueError("La profundidad del fresado no pasante no puede quedar vacia.")
     return depth_spec.target_depth
-
-
-def _tool_catalog_label(spec) -> str:
-    return f"{spec.tool_name} ({spec.tool_id})"
-
-
-def _diameter_key(value: float) -> str:
-    return _compact_number(float(value))
 
 
 def _drilling_feature_depth_value(state: PgmxState, spec: _HydratedDrillingSpec) -> float:
@@ -2725,50 +2646,6 @@ def _default_drill_family(
     if depth_spec.is_through and plane_name == "Top" and math.isclose(float(diameter), 5.0, abs_tol=1e-9):
         return "Conical"
     return "Flat"
-
-
-def _resolve_drilling_tool(
-    drilling: DrillingSpec,
-    tool_catalog: dict[str, dict[str, str]],
-) -> tuple[str, str, str]:
-    if drilling.tool_resolution == "None":
-        return "0", "", "System.Object"
-
-    if drilling.tool_resolution == "Explicit":
-        row = _lookup_tool_catalog_entry(
-            tool_catalog,
-            tool_id=drilling.tool_id,
-            tool_name=drilling.tool_name,
-        )
-        return (
-            str((row.get("tool_id") or "").strip()),
-            str((row.get("name") or "").strip()),
-            "ScmGroup.XCam.ToolDataModel.Tool.CuttingTool",
-        )
-
-    if drilling.plane_name in {"Front", "Back", "Right", "Left"}:
-        # En los taladros laterales Maestro deja la operacion sin ToolKey hasta
-        # el postprocesado. Forzar 058/059/060/061 desde el PGMX puede asignar
-        # una broca incorrecta segun el sentido real de la cara.
-        return "0", "", "System.Object"
-
-    diameter_key = _diameter_key(drilling.diameter)
-    tool_key = _AUTO_VERTICAL_DRILL_TOOLS.get((drilling.drill_family, diameter_key))
-    if tool_key is None:
-        raise ValueError(
-            "No hay una herramienta vertical auto-resoluble para ese diametro/familia en el toolset relevado."
-        )
-
-    row = _lookup_tool_catalog_entry(
-        tool_catalog,
-        tool_id=tool_key[0],
-        tool_name=tool_key[1],
-    )
-    return (
-        str((row.get("tool_id") or "").strip()),
-        str((row.get("name") or "").strip()),
-        "ScmGroup.XCam.ToolDataModel.Tool.CuttingTool",
-    )
 
 
 def _normalize_drilling_spec(drilling: DrillingSpec) -> DrillingSpec:
@@ -2866,42 +2743,12 @@ def _validate_tool_sinking_length_for_spec(
     """Valida que la profundidad total no supere el `sinking_length` de la herramienta."""
 
     catalog_entry = tool_catalog.get(spec.tool_id)
-    if catalog_entry is None:
-        raise ValueError(
-            "No se pudo validar la seguridad de la herramienta "
-            f"{_tool_catalog_label(spec)} porque no existe en '{TOOL_CATALOG_PATH.name}'."
-        )
-
-    sinking_length_text = (catalog_entry.get("sinking_length") or "").strip()
-    sinking_length = float(sinking_length_text or "0")
-    if sinking_length <= 0.0:
-        raise ValueError(
-            "La herramienta "
-            f"{_tool_catalog_label(spec)} no tiene un `sinking_length` valido en '{TOOL_CATALOG_PATH.name}'."
-        )
-
-    total_depth = _tool_total_milling_depth(state, spec)
-    if total_depth > sinking_length + 1e-9:
-        raise ValueError(
-            "La profundidad total del fresado excede el `sinking_length` de la herramienta: "
-            f"{_tool_catalog_label(spec)} permite { _compact_number(sinking_length) } mm, "
-            f"pero la solicitud requiere { _compact_number(total_depth) } mm."
-        )
-
-
-def _normalize_tool_usage_group(tool_type: str) -> str:
-    normalized = (tool_type or "").strip().lower()
-    if normalized.startswith("broca"):
-        return "drilling"
-    if normalized.startswith("fresa") or normalized.startswith("freza"):
-        return "milling"
-    if normalized.startswith("sierra"):
-        return "saw"
-    return "other"
-
-
-def _is_vertical_x_saw(tool_type: str) -> bool:
-    return (tool_type or "").strip().lower() == "sierra vertical x"
+    _validate_tool_sinking_length_for_total_depth(
+        spec,
+        catalog_entry,
+        total_depth=_tool_total_milling_depth(state, spec),
+        operation_name="fresado",
+    )
 
 
 def _validate_vertical_x_saw_for_milling_spec(spec, tool_type: str) -> None:
@@ -2962,28 +2809,6 @@ def _validate_tool_type_for_milling_spec(spec, tool_catalog: dict[str, dict[str,
         )
 
 
-def _validate_tool_type_for_drilling_spec(
-    spec,
-    tool_catalog: dict[str, dict[str, str]],
-) -> None:
-    if spec.tool_object_type == "System.Object":
-        return
-
-    catalog_entry = tool_catalog.get(spec.tool_id)
-    if catalog_entry is None:
-        raise ValueError(
-            "No se pudo validar el tipo de la herramienta "
-            f"{_tool_catalog_label(spec)} porque no existe en '{TOOL_CATALOG_PATH.name}'."
-        )
-
-    tool_type = (catalog_entry.get("type") or "").strip()
-    if _normalize_tool_usage_group(tool_type) != "drilling":
-        raise ValueError(
-            "El taladrado requiere una herramienta de tipo Broca: "
-            f"{_tool_catalog_label(spec)} figura como '{tool_type or 'sin tipo'}'."
-        )
-
-
 def _validate_tool_sinking_length_for_drilling_spec(
     state: PgmxState,
     spec,
@@ -2993,27 +2818,12 @@ def _validate_tool_sinking_length_for_drilling_spec(
         return
 
     catalog_entry = tool_catalog.get(spec.tool_id)
-    if catalog_entry is None:
-        raise ValueError(
-            "No se pudo validar la seguridad de la herramienta "
-            f"{_tool_catalog_label(spec)} porque no existe en '{TOOL_CATALOG_PATH.name}'."
-        )
-
-    sinking_length_text = (catalog_entry.get("sinking_length") or "").strip()
-    sinking_length = float(sinking_length_text or "0")
-    if sinking_length <= 0.0:
-        raise ValueError(
-            "La herramienta "
-            f"{_tool_catalog_label(spec)} no tiene un `sinking_length` valido en '{TOOL_CATALOG_PATH.name}'."
-        )
-
-    total_depth = _drilling_total_depth(state, spec)
-    if total_depth > sinking_length + 1e-9:
-        raise ValueError(
-            "La profundidad total del taladro excede el `sinking_length` de la herramienta: "
-            f"{_tool_catalog_label(spec)} permite { _compact_number(sinking_length) } mm, "
-            f"pero la solicitud requiere { _compact_number(total_depth) } mm."
-        )
+    _validate_tool_sinking_length_for_total_depth(
+        spec,
+        catalog_entry,
+        total_depth=_drilling_total_depth(state, spec),
+        operation_name="taladro",
+    )
 
 
 def _validate_tool_sinking_lengths(

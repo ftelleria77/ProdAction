@@ -9,6 +9,7 @@ from pgmx.synthesis import drilling as synthesis_drilling
 from pgmx.synthesis import milling as synthesis_milling
 from pgmx.synthesis.common import depth as common_depth
 from pgmx.synthesis.common import piece as common_piece
+from pgmx.synthesis.common import tools as common_tools
 from pgmx.synthesis.common import xml as common_xml
 from tools import synthesize_pgmx as legacy_sp
 from tools import pgmx_synthesis as legacy_pgmx_synthesis
@@ -70,6 +71,13 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             common_piece._drilling_entry_point_and_direction(piece, drill),
             ((0.0, 260.0, 9.0), (1.0, 0.0, 0.0)),
         )
+        self.assertIs(core_sp.TOOL_CATALOG_PATH, common_tools.TOOL_CATALOG_PATH)
+        self.assertIs(core_sp._load_tool_catalog, common_tools._load_tool_catalog)
+        self.assertEqual(common_tools._normalize_tool_resolution("manual"), "Explicit")
+        self.assertEqual(common_tools._normalize_tool_usage_group("Broca D5"), "drilling")
+        self.assertEqual(common_tools._normalize_tool_usage_group("Fresa Helicoidal"), "milling")
+        self.assertTrue(common_tools._is_vertical_x_saw("Sierra Vertical X"))
+        self.assertIn("1900", common_tools._load_tool_catalog())
 
 
 if __name__ == "__main__":
