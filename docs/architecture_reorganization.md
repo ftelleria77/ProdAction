@@ -1,10 +1,12 @@
 # Reorganizacion De Arquitectura
 
-Estado: 2026-06-02
+Estado: 2026-06-03
 
-Este documento fija el rumbo de reorganizacion del repo. Los frentes ISO por
-estado y Vaciado quedan pausados como investigacion; la prioridad pasa a ordenar
-el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
+Este documento fija el rumbo de reorganizacion del repo. El frente ISO por
+estado queda pausado como investigacion; el frente historico de Vaciado se
+absorbe en `ClosedPocket`/pocket milling, con laboratorio futuro bajo
+`pgmx.machining_lab.pocket_milling`. La prioridad pasa a ordenar el codigo
+productivo y reducir acoplamiento sin romper los comandos actuales.
 
 ## Objetivos
 
@@ -87,19 +89,19 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 | `core/nesting_boards.py` | Normalizacion, resolucion y margen de tableros de corte | Preparacion de tableros separada del empacador |
 | `core/nesting_pieces.py` | Expansion de piezas, resolucion de dimensiones PGMX y reemplazo En-Juego para corte | Preparacion de piezas separada del empacador |
 | `core/nesting_pdf.py` | Renderer PDF imprimible de diagramas de corte | Salida visual de nesting separada del empacador |
-| `pgmx/` | Snapshot, adaptacion, sintesis, Vaciado y datos Maestro | Subsistema productivo PGMX fuera de `tools` |
+| `pgmx/` | Snapshot, adaptacion, sintesis, pocket milling y datos Maestro | Subsistema productivo PGMX fuera de `tools` |
 | `pgmx/synthesis/` | Implementacion interna del sintetizador PGMX | Paquete productivo para specs, serializacion y extensiones PGMX |
 | `pgmx/snapshot.py` | Snapshot PGMX publico | Herramienta publica estable |
 | `pgmx/adapters.py` | Adaptadores PGMX publicos | Herramienta publica estable |
 | `pgmx/processing.py` | Resolucion de programas PGMX, dibujos SVG, dimensiones y reparacion de slots | Servicios PGMX usados por UI, planillas y nesting |
-| `pgmx/vaciado/` | Contrato V2 de Vaciado | Handoff hacia `pgmx.synthesis.vaciado` |
-| `pgmx/vaciado_lab/` | Investigacion Vaciado y motor legado como oraculo | Laboratorio PGMX, no dependencia productiva directa |
+| `pgmx/vaciado/` | Contrato V2 historico de Vaciado | Debe integrarse en `pgmx.synthesis.milling.pocket` y desaparecer como paquete final |
+| `pgmx/vaciado_lab/` | Investigacion historica de Vaciado y motor legado como oraculo | Debe migrar a `pgmx.machining_lab.pocket_milling` y desaparecer como paquete final |
 | `pgmx/data/` | Baseline Maestro y catalogo de herramientas | Datos versionados del subsistema PGMX |
 | `tools/synthesize_pgmx.py` | CLI y API historica de sintesis PGMX | Fachada compatible hacia `pgmx.synthesis` |
 | `tools/pgmx_snapshot.py` | CLI y API historica de snapshot PGMX | Fachada compatible hacia `pgmx.snapshot` |
 | `tools/pgmx_adapters.py` | CLI y API historica de adaptadores PGMX | Fachada compatible hacia `pgmx.adapters` |
 | `tools/studies/` | Estudios reproducibles | Laboratorio versionado |
-| `tools/pgmx_vaciado*` | Imports/CLIs historicos de Vaciado | Fachadas compatibles hacia `pgmx.vaciado*` |
+| `tools/pgmx_vaciado*` | Imports/CLIs historicos de Vaciado | Fachadas temporales durante la migracion hacia pocket milling |
 | `iso_state_synthesis/` | Investigacion ISO por estado | Subsistema experimental pausado |
 | `cnc_traceability/` | Herramienta XP standalone | Subsistema separado |
 
@@ -158,10 +160,11 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
 7. Separar `tools/synthesize_pgmx.py` en un paquete interno manteniendo
    `tools.synthesize_pgmx` como fachada publica.
    Hecho: el subsistema PGMX productivo vive en `pgmx/`; `pgmx/synthesis/core.py`
-   contiene la implementacion heredada, `tools/synthesize_pgmx.py` quedo como
-   fachada de compatibilidad y `pgmx/synthesis/vaciado.py` fija la frontera
-   productiva para integrar `Vaciado` desde `pgmx.vaciado` sin depender del
-   motor legado `pgmx.vaciado_lab.trace_engine`.
+   contiene la implementacion heredada y `tools/synthesize_pgmx.py` quedo como
+   fachada de compatibilidad. Correccion arquitectonica posterior:
+   `Vaciado` debe integrarse en `pgmx.synthesis.milling.pocket`; no debe quedar
+   como `pgmx.synthesis.vaciado`, `pgmx.vaciado` ni `pgmx.vaciado_lab` en el
+   mapa final.
 8. Revisar `core/` por dominios: proyectos/piezas, planillas, corte/nesting,
    En-Juego y puntos de contacto con `pgmx/`.
    Avance: `core/pgmx_processing.py` quedo como fachada compatible y la
@@ -231,9 +234,9 @@ el codigo productivo y reducir acoplamiento sin romper los comandos actuales.
    Avance: catalogo inicial de herramientas publicas, fachadas compatibles y
    laboratorios documentado en `docs/laboratory_frontiers.md`. Las fachadas PGMX
    historicas quedan cubiertas por `tests/test_pgmx_public_facades.py`.
-   Avance: referencias documentales de Vaciado alineadas con la mudanza a
-   `pgmx/vaciado_lab/`; `tools.pgmx_vaciado*` queda registrado como fachada
-   compatible historica.
+   Avance: referencias documentales de Vaciado alineadas con la mudanza
+   objetivo a `pgmx.machining_lab.pocket_milling`; `tools.pgmx_vaciado*` queda
+   registrado como fachada compatible historica temporal.
    Avance: estudios ISO fechados catalogados en `tools/studies/iso/README.md`
    y enlazados desde los indices de documentacion.
    Avance: `tools.studies.cut_diagrams.ordering_lab` dejo de importar helpers
@@ -254,11 +257,11 @@ python -m compileall main.py app core pgmx tools iso_state_synthesis cnc_traceab
 python -c "import app.ui, core.parser, core.nesting, core.nesting_compat, core.nesting_model, core.nesting_strategy, core.nesting_geometry, core.nesting_free_rectangles, core.nesting_guillotine_sections, core.nesting_guillotine, core.nesting_brkga, core.nesting_dispatch, core.nesting_service, core.nesting_first_fit, core.nesting_boards, core.nesting_pieces, core.nesting_pdf, core.summary, core.production_sheet, core.production_sheet_data, core.production_sheet_images, core.production_sheet_pdf, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
 ```
 
-- Las suites de Vaciado estan pausadas por defecto. Para ejecutarlas cuando se
-  reactive ese frente:
+- Las suites de Vaciado ya no estan pausadas por variable de entorno. Corren por
+  defecto; los casos que necesitan el corpus externo `S:\Maestro\...` conservan
+  su propio `skipUnless` cuando ese corpus no esta disponible:
 
 ```powershell
-$env:PRODACTION_ENABLE_VACIADO_TESTS='1'
 python -m unittest tests.test_pgmx_vaciado_v2
 python -m unittest tests.test_pgmx_vaciado
 ```
@@ -269,7 +272,8 @@ python -m unittest tests.test_pgmx_vaciado
   `docs/laboratory_frontiers.md`; los scripts exploratorios nuevos deben vivir
   en `tools/studies/<tema>/` o en un paquete experimental explicitamente
   documentado.
-- Los frentes pausados (`iso_state_synthesis/` y `pgmx/vaciado_lab/`) no se
-  usan para dirigir la arquitectura productiva salvo que se reactive
-  explicitamente ese frente. `pgmx/vaciado/` puede integrarse al subsistema
-  PGMX solo a traves de `pgmx.synthesis.vaciado`.
+- Los frentes pausados o experimentales (`iso_state_synthesis/` y
+  `pgmx/vaciado_lab/`) no se usan para dirigir la arquitectura productiva salvo
+  reactivacion explicita de ese frente. `pgmx/vaciado/` debe integrarse al
+  subsistema PGMX solo a traves de `pgmx.synthesis.milling.pocket`, y luego
+  desaparecer como paquete separado.

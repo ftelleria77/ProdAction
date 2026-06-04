@@ -11,26 +11,33 @@ tener que leer todas las memorias historicas de una vez.
    - Mapa rapido de arquitectura, flujos y archivos importantes.
 3. `docs/synthesize_pgmx_help.md`
    - Fuente de verdad para la API publica de sintesis `.pgmx`.
-4. `docs/pgmx_snapshot_help.md` y `docs/pgmx_adapters_help.md`
+4. `docs/pgmx_synthesis_modularization_plan.md`
+   - Plan para modularizar el sintetizador por familias de mecanizado e
+     integrar Vaciado como `ClosedPocket`/pocket milling.
+5. `docs/pgmx_synthesis_modularization_temporary_memory.md`
+   - Memoria temporal para discutir el alcance modulo por modulo antes de
+     escribir codigo.
+6. `docs/pgmx_snapshot_help.md` y `docs/pgmx_adapters_help.md`
    - Lectura/adaptacion de `.pgmx` existentes hacia specs publicos.
-5. `pgmx/vaciado_lab/README.md`
-   - Laboratorio separado para estudiar el nuevo concepto `Vaciado` en `.pgmx`.
-6. `docs/cut_diagrams_temporary_memory.md`
+7. `pgmx/vaciado_lab/README.md`
+   - Laboratorio historico de `ClosedPocket`/Vaciado; debe migrar a
+     `pgmx/machining_lab/pocket_milling/`.
+8. `docs/cut_diagrams_temporary_memory.md`
    - Estado del motor de diagramas de corte y algoritmos de guillotina.
-7. `docs/laboratory_frontiers.md`
+9. `docs/laboratory_frontiers.md`
    - Fronteras entre herramientas publicas, fachadas compatibles y laboratorios.
-8. `cnc_traceability/README.md`
+10. `cnc_traceability/README.md`
    - Entrada del subsistema de trazabilidad CNC compatible con Windows XP.
-9. `iso_state_synthesis/README.md`
+11. `iso_state_synthesis/README.md`
    - Entrada del subsistema experimental por estado para futura traduccion
      `.pgmx -> .iso`.
-10. `docs/iso_cnc_contract.md`
+12. `docs/iso_cnc_contract.md`
    - Contrato CNC/ISO observado: configuracion Maestro, toolset, variables y
      huecos pendientes para un sintetizador ISO.
-11. `docs/iso_minimal_fixtures_plan.md`
+13. `docs/iso_minimal_fixtures_plan.md`
    - Plan de reanudacion para generar `.pgmx` minimos comparables en la compu
      de fabrica y postprocesarlos con Maestro.
-12. `docs/iso_synthesis_temporary_memory.md`
+14. `docs/iso_synthesis_temporary_memory.md`
    - Ingenieria inversa del flujo PGMX -> Maestro/postprocesador -> ISO.
 
 ## Mapa por tema
@@ -43,13 +50,13 @@ tener que leer todas las memorias historicas de una vez.
 | Escaneo de proyectos | `docs/repo_study_guide.md` | `core/parser.py` |
 | Planillas y PDF | `docs/repo_study_guide.md` | `core/summary.py`, `core/production_sheet.py`, `core/production_sheet_pdf.py` |
 | Dibujos de piezas | `docs/repo_study_guide.md` | `pgmx/processing.py`, `core/pgmx_processing.py` |
-| Sintesis PGMX | `docs/synthesize_pgmx_help.md` | `pgmx/synthesis/`, `tools/synthesize_pgmx.py` |
+| Sintesis PGMX | `docs/synthesize_pgmx_help.md`, `docs/pgmx_synthesis_modularization_plan.md`, `docs/pgmx_synthesis_modularization_temporary_memory.md` | `pgmx/synthesis/`, `tools/synthesize_pgmx.py` |
 | Snapshot/adaptacion PGMX | `docs/pgmx_snapshot_help.md`, `docs/pgmx_adapters_help.md` | `pgmx/snapshot.py`, `pgmx/adapters.py`, `tools/pgmx_snapshot.py`, `tools/pgmx_adapters.py` |
-| Vaciado PGMX | `pgmx/vaciado_lab/README.md`, `pgmx/vaciado_lab/memory/current-state.md`, `docs/laboratory_frontiers.md` | `pgmx/vaciado/`, `pgmx/vaciado_lab/`, `tools/pgmx_vaciado/` |
+| Pocket milling PGMX | `pgmx/vaciado_lab/README.md`, `pgmx/vaciado_lab/memory/current-state.md`, `docs/laboratory_frontiers.md` | `pgmx/synthesis/milling/pocket.py`, futuro `pgmx/machining_lab/pocket_milling/`, historicos `pgmx/vaciado*`, `tools/pgmx_vaciado*` |
 | Reparacion SlotSide | `docs/repo_study_guide.md`, `docs/pgmx_temporary_memory.md` | `core/pgmx_processing.py`, `app/ui.py` |
 | En-Juego | `docs/en_juego_synthesis_temporary_memory.md` | `core/en_juego_synthesis.py`, `core/en_juego_transform.py` |
 | Diagramas de corte | `docs/cut_diagrams_temporary_memory.md` | `core/nesting_service.py`, `core/nesting_compat.py` |
-| Laboratorios y fachadas | `docs/laboratory_frontiers.md` | `tools/`, `pgmx/vaciado_lab/`, `tools/studies/`, `iso_state_synthesis/` |
+| Laboratorios y fachadas | `docs/laboratory_frontiers.md`, `docs/pgmx_synthesis_modularization_plan.md` | `tools/`, futuro `pgmx/machining_lab/`, historico `pgmx/vaciado_lab/`, `tools/studies/`, `iso_state_synthesis/` |
 | Laboratorio de corte | `docs/cut_diagrams_temporary_memory.md`, `docs/laboratory_frontiers.md` | `tools/studies/cut_diagrams/ordering_lab.py` |
 | Trazabilidad CNC | `cnc_traceability/README.md`, `cnc_traceability/docs/contract.md`, `cnc_traceability/memory/current-state.md` | `cnc_traceability/viewer_xp.py` |
 | Generacion ISO experimental | `iso_state_synthesis/README.md`, `iso_state_synthesis/memory/current-state.md`, `docs/iso_cnc_contract.md` | `iso_state_synthesis/` |

@@ -2,14 +2,10 @@ from __future__ import annotations
 
 from dataclasses import replace
 import math
-import os
 import tempfile
 import unittest
 from unittest import mock
 from pathlib import Path
-
-RUN_VACIADO_TESTS = os.environ.get("PRODACTION_ENABLE_VACIADO_TESTS") == "1"
-VACIADO_TESTS_PAUSED_REASON = "Vaciado tests paused; set PRODACTION_ENABLE_VACIADO_TESTS=1 to run them."
 
 from pgmx import synthesis as sp
 from pgmx.adapters import adapt_pgmx_path
@@ -181,7 +177,6 @@ def _trajectory_primitive_counts(adaptation) -> tuple[tuple[int, int], ...]:
     return tuple(counts)
 
 
-@unittest.skipUnless(RUN_VACIADO_TESTS, VACIADO_TESTS_PAUSED_REASON)
 class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     def test_trace_engine_skeleton_preserves_contract_offsets_and_z_levels(self) -> None:
         strategy = sp.build_contour_parallel_milling_strategy_spec(
@@ -862,7 +857,6 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
                 self.assertTrue(plan.can_emit_trajectory)
 
 
-@unittest.skipUnless(RUN_VACIADO_TESTS, VACIADO_TESTS_PAUSED_REASON)
 class VaciadoIslandBaseLoopRuleTests(unittest.TestCase):
     def test_rounded_kernel_loop_rule_matches_observed_base_points(self) -> None:
         expected = (
@@ -892,7 +886,6 @@ class VaciadoIslandBaseLoopRuleTests(unittest.TestCase):
     _external_corpus_available(),
     f"Corpus externo de Vaciado no disponible en {EXTERNAL_ROOT}",
 )
-@unittest.skipUnless(RUN_VACIADO_TESTS, VACIADO_TESTS_PAUSED_REASON)
 class VaciadoPocketMillingCorpusTests(unittest.TestCase):
     def test_rectangular_vaciados_roundtrip_and_match_trace(self) -> None:
         with tempfile.TemporaryDirectory(prefix="vaciado_roundtrip_") as temp_dir:

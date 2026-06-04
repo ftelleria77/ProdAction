@@ -1,6 +1,13 @@
 # PGMX Vaciado
 
-Ultima actualizacion: 2026-05-16
+Ultima actualizacion: 2026-06-03
+
+Nota arquitectonica: `Vaciado` queda como nombre historico del corpus. El
+destino final del mecanizado es `pgmx.synthesis.milling.pocket`
+(`ClosedPocket`/pocket milling). El contrato experimental `pgmx.vaciado` y el
+laboratorio `pgmx.vaciado_lab` deben desaparecer como paquetes finales; la
+memoria y herramientas utiles deben migrar a
+`pgmx.machining_lab.pocket_milling`.
 
 ## Objetivo
 
@@ -40,8 +47,10 @@ decision se tomo.
 ## Separacion De Responsabilidades
 
 - Este laboratorio puede tener codigo incompleto o especulativo.
-- Vive bajo `pgmx/vaciado_lab/`; las rutas `tools.pgmx_vaciado.*` se mantienen
-  solo como fachadas historicas de comandos/imports.
+- Vive historicamente bajo `pgmx/vaciado_lab/`; el destino de migracion es
+  `pgmx/machining_lab/pocket_milling/`. Las rutas `tools.pgmx_vaciado.*` se
+  mantienen solo como fachadas historicas de comandos/imports durante la
+  transicion.
 - Una regla solo se migra a `pgmx.snapshot`, `pgmx.adapters`,
   `pgmx.synthesis`, `pgmx.processing` o `iso_state_synthesis/` cuando tenga
   evidencia suficiente.
@@ -1758,3 +1767,26 @@ Frontera que sigue abierta:
 - Caso base multi-isla de `Vaciado_031`.
 - `Vaciado_035` circular/non-polyline.
 - Comando productivo de regeneracion/validacion de lote.
+
+## Actualizacion 2026-06-02 - Reactivacion De Tests De Vaciado
+
+Se retiro la pausa global por variable de entorno
+`PRODACTION_ENABLE_VACIADO_TESTS` en las suites de Vaciado.
+
+Alcance:
+
+- `tests.test_pgmx_vaciado_v2` corre por defecto como smoke del contrato V2.
+- `tests.test_pgmx_vaciado` corre por defecto como smoke del laboratorio y del
+  motor de trazas.
+- Los casos dependientes del corpus externo conservan sus guardias locales
+  `_external_corpus_available()` para poder saltarse si la evidencia Maestro no
+  esta montada.
+- La reactivacion de tests no cambia el caracter experimental de
+  `pgmx.vaciado_lab`; el punto de integracion productivo objetivo es
+  `pgmx.synthesis.milling.pocket`, y el contrato/laboratorio historico debe
+  migrar hacia pocket milling.
+
+Validacion local:
+
+- `py -3 -m unittest tests.test_pgmx_vaciado_v2`: `8` tests, `OK`.
+- `py -3 -m unittest tests.test_pgmx_vaciado`: `57` tests, `OK`.

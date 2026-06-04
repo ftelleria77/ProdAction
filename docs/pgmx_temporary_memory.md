@@ -2847,3 +2847,36 @@ Plan pendiente a formular antes de reactivar `Vaciado`:
 Estado: pendiente. No ejecutar todavia como parte de la etapa 9; queda como
 precondicion arquitectonica para continuar el frente de sintesis generativa de
 `Vaciado`.
+
+## Ronda 36 - Plan De Laboratorio General Y Modularizacion Por Mecanizados
+
+Fecha: 2026-06-02
+
+Decision registrada:
+
+- El plan arquitectonico queda formulado en
+  `docs/pgmx_synthesis_modularization_plan.md`.
+- El laboratorio actual `pgmx/vaciado_lab/` debe convertirse por etapas en el
+  primer caso de un laboratorio general de mecanizados del sintetizador y luego
+  desaparecer como paquete historico.
+- El destino conceptual del laboratorio general es `pgmx/machining_lab/`, con
+  subcarpetas por familia (`pocket_milling`, `line_milling`, `slot_milling`,
+  `profile_milling`, `drilling`, etc.).
+- `pgmx/vaciado_lab/`, `pgmx/vaciado/` y `tools/pgmx_vaciado*` se mantienen
+  solo como rutas historicas de transicion mientras existan comandos, tests o
+  memorias que las referencien.
+- La produccion debe avanzar hacia modulos por familia bajo `pgmx.synthesis`,
+  sin depender directamente de laboratorios.
+
+Criterio de ejecucion:
+
+1. Primero inventariar `pgmx.synthesis.core` y la cobertura por familia.
+2. Despues crear el laboratorio general sin cambio funcional.
+3. Luego migrar el laboratorio de `Vaciado` al nuevo destino
+   `pgmx/machining_lab/pocket_milling/`.
+4. Recien despues separar helpers comunes y modulos productivos por familia.
+5. Finalmente eliminar la dependencia productiva directa hacia el laboratorio
+   historico de `Vaciado`, integrar `pgmx/vaciado/` en `milling.pocket` y
+   promover solo reglas cerradas.
+
+Estado: plan formulado; pendiente de ejecucion por etapas.

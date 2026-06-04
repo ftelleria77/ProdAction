@@ -7,6 +7,11 @@ Este laboratorio vive en `pgmx/vaciado_lab/`. No es codigo productivo: sirve
 para registrar memoria, generar evidencia, comparar contra Maestro y probar
 estrategias antes de volcar reglas cerradas en los modulos estables.
 
+Este paquete queda como laboratorio historico. El plan de migracion esta en
+`docs/pgmx_synthesis_modularization_plan.md`; el destino propuesto es
+`pgmx/machining_lab/pocket_milling/`. `pgmx.vaciado_lab` debe desaparecer
+cuando memoria, tests y comandos migren al laboratorio general.
+
 Las fachadas historicas bajo `tools.pgmx_vaciado` se mantienen para comandos e
 imports existentes, pero la implementacion del laboratorio esta en
 `pgmx.vaciado_lab`.
@@ -72,7 +77,8 @@ este laboratorio hacia los modulos correspondientes:
 
 - lectura: `pgmx.snapshot`;
 - adaptacion: `pgmx.adapters`;
-- sintesis PGMX: `pgmx.synthesis` y, para el contrato V2, `pgmx.synthesis.vaciado`;
+- sintesis PGMX: `pgmx.synthesis` y, para `ClosedPocket`/Vaciado,
+  `pgmx.synthesis.milling.pocket`;
 - dibujo/visualizacion: `pgmx.processing`;
 - ISO: `iso_state_synthesis/`.
 
