@@ -88,11 +88,15 @@ from .common.geometry import (
     GeometryPrimitiveSpec,
     GeometryProfileSpec,
     _CurveSpec,
+    _build_curve_holder,
     _build_maestro_arc_serialization,
     _build_maestro_line_serialization,
     _build_oriented_maestro_arc_serialization,
     _build_profile_geometry_spec,
+    _build_start_point,
+    _build_toolpath,
     _build_toolpath_description,
+    _build_vector_holder,
     _build_closed_polyline_geometry_profile,
     _build_line_description,
     _build_open_polyline_descriptions,
@@ -1238,43 +1242,6 @@ def _build_up_arc_exit_curve(
     )
 
 
-def _build_curve_holder(
-    local_name: str,
-    curve_spec: _CurveSpec,
-    generated_member_keys: Sequence[str] = (),
-) -> ET.Element:
-    curve = ET.Element(
-        _qname(BASE_MODEL_NS, local_name),
-        {f"{{{XSI_NS}}}type": f"c:{curve_spec.geometry_type}"},
-    )
-    _set_xmlns(curve, "c", GEOMETRY_NS)
-    _append_key(curve, "0", "System.Object")
-    _append_blank_name(curve)
-    _append_node(curve, GEOMETRY_NS, "IsAbsolute", "true")
-    _append_object_ref(curve, GEOMETRY_NS, "PlaneID", "0", "System.Object")
-    if curve_spec.geometry_type in {"GeomTrimmedCurve", "GeomCircle"}:
-        if curve_spec.serialization is None:
-            raise ValueError(f"La curva {curve_spec.geometry_type} requiere una serializacion raw.")
-        _append_node(curve, GEOMETRY_NS, "_serializationGeometryDescription", curve_spec.serialization)
-        return curve
-
-    if curve_spec.geometry_type != "GeomCompositeCurve":
-        raise ValueError(f"Tipo de curva no soportado: {curve_spec.geometry_type}")
-
-    member_keys = tuple(curve_spec.member_keys or generated_member_keys)
-    if not curve_spec.member_serializations:
-        raise ValueError("La curva GeomCompositeCurve requiere al menos un miembro serializado.")
-    if len(member_keys) != len(curve_spec.member_serializations):
-        raise ValueError("La curva GeomCompositeCurve requiere una clave por cada miembro serializado.")
-
-    keys_group = _append_node(curve, GEOMETRY_NS, "_serializingKeys")
-    members_group = _append_node(curve, GEOMETRY_NS, "_serializingMembers")
-    for key_id, member_serialization in zip(member_keys, curve_spec.member_serializations):
-        _append_node(keys_group, ARRAYS_NS, "unsignedInt", key_id)
-        _append_node(members_group, ARRAYS_NS, "string", member_serialization)
-    return curve
-
-
 def _geometry_object_type(geometry_type: str) -> str:
     mapping = {
         "GeomTrimmedCurve": "ScmGroup.XCam.MachiningDataModel.Geometry.GeomTrimmedCurve",
@@ -1340,32 +1307,6 @@ def _build_boundary_curve_holder(
         _append_node(keys_group, ARRAYS_NS, "unsignedInt", key_id)
         _append_node(members_group, ARRAYS_NS, "string", member_serialization)
     return boundary
-
-
-def _build_vector_holder(local_name: str, x_value: float, y_value: float, z_value: float) -> ET.Element:
-    vector = ET.Element(_qname(BASE_MODEL_NS, local_name))
-    _append_key(vector, "0", "System.Object")
-    _append_blank_name(vector)
-    _append_node(vector, GEOMETRY_NS, "IsAbsolute", "true")
-    _append_object_ref(vector, GEOMETRY_NS, "PlaneID", "0", "System.Object")
-    _append_node(vector, GEOMETRY_NS, "_x", _compact_number(x_value))
-    _append_node(vector, GEOMETRY_NS, "_y", _compact_number(y_value))
-    _append_node(vector, GEOMETRY_NS, "_z", _compact_number(z_value))
-    _append_node(vector, GEOMETRY_NS, "XRotation", attrib={f"{{{XSI_NS}}}nil": "true"})
-    _append_node(vector, GEOMETRY_NS, "ZRotation", attrib={f"{{{XSI_NS}}}nil": "true"})
-    return vector
-
-
-def _build_start_point(x_value: float, y_value: float, z_value: float) -> ET.Element:
-    start_point = ET.Element(_qname(PGMX_NS, "StartPoint"))
-    _append_key(start_point, "0", "System.Object")
-    _append_blank_name(start_point)
-    _append_node(start_point, GEOMETRY_NS, "IsAbsolute", "true")
-    _append_object_ref(start_point, GEOMETRY_NS, "PlaneID", "0", "System.Object")
-    _append_node(start_point, GEOMETRY_NS, "_x", _compact_number(x_value))
-    _append_node(start_point, GEOMETRY_NS, "_y", _compact_number(y_value))
-    _append_node(start_point, GEOMETRY_NS, "_z", _compact_number(z_value))
-    return start_point
 
 
 def _build_identity_profile_placement() -> ET.Element:
@@ -1740,26 +1681,6 @@ def _build_drilling_operation(
     )
     _set_xmlns(machining_strategy, "b", BASE_MODEL_NS)
     return operation
-
-
-def _build_toolpath(
-    toolpath_type: str,
-    curve_spec: _CurveSpec,
-    *,
-    generated_member_keys: Sequence[str] = (),
-) -> ET.Element:
-    toolpath = ET.Element(
-        _qname(BASE_MODEL_NS, "Toolpath"),
-        {f"{{{XSI_NS}}}type": "b:CutterLocationTrajectory"},
-    )
-    _set_xmlns(toolpath, "b", BASE_MODEL_NS)
-    _append_node(toolpath, BASE_MODEL_NS, "Attributes", "")
-    _append_node(toolpath, BASE_MODEL_NS, "Priority", "true")
-    _append_node(toolpath, BASE_MODEL_NS, "Type", toolpath_type)
-    _append_node(toolpath, BASE_MODEL_NS, "Direction", "true")
-    toolpath.append(_build_curve_holder("BasicCurve", curve_spec, generated_member_keys=generated_member_keys))
-    toolpath.append(_build_vector_holder("ToolAxis", 1.0, 0.0, 0.0))
-    return toolpath
 
 
 def _build_generated_approach_curve(
