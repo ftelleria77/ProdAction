@@ -18,6 +18,7 @@ from pgmx.synthesis.milling import circle as milling_circle
 from pgmx.synthesis.milling import line as milling_line
 from pgmx.synthesis.milling import profile as milling_profile
 from pgmx.synthesis.milling import slot as milling_slot
+from pgmx.synthesis.milling import squaring as milling_squaring
 from tools import synthesize_pgmx as legacy_sp
 from tools import pgmx_synthesis as legacy_pgmx_synthesis
 
@@ -202,6 +203,18 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIsInstance(circle.milling_strategy, common_strategy.HelicalMillingStrategySpec)
         with self.assertRaisesRegex(ValueError, "radio"):
             milling_circle.build_circle_milling_spec(center_x=0, center_y=0, radius=0)
+        self.assertIs(core_sp.SquaringMillingSpec, milling_squaring.SquaringMillingSpec)
+        self.assertIs(core_sp.build_squaring_milling_spec, milling_squaring.build_squaring_milling_spec)
+        self.assertIs(core_sp._normalize_squaring_milling_spec, milling_squaring._normalize_squaring_milling_spec)
+        squaring = milling_squaring.build_squaring_milling_spec(start_edge="borde-derecho", winding="horario")
+        self.assertIsInstance(squaring, milling_squaring.SquaringMillingSpec)
+        self.assertEqual(squaring.start_edge, "Right")
+        self.assertEqual(squaring.winding, "Clockwise")
+        self.assertEqual(squaring.side_of_feature, "Left")
+        self.assertEqual(squaring.tool_id, "1900")
+        self.assertTrue(squaring.depth_spec.is_through)
+        self.assertEqual(squaring.depth_spec.extra_depth, 1.0)
+        self.assertEqual(squaring.approach.approach_type, "Arc")
 
 
 if __name__ == "__main__":
