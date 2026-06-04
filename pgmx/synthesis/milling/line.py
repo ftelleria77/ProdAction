@@ -4,23 +4,30 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Optional
 
 from ..common.depth import (
     MillingDepthSpec,
+    _extract_depth_spec_from_template,
     _normalize_milling_depth_spec,
     build_milling_depth_spec,
 )
 from ..common.geometry import (
     GeometryProfileSpec,
+    _CurveSpec,
+    _curve_spec_from_toolpath_node,
     _parse_line_serialization,
     _profile_endpoint_points,
     build_compensated_toolpath_profile,
     build_line_geometry_profile,
 )
+from ..common.hydration import _load_pgmx_container
 from ..common.leads import (
     ApproachSpec,
     RetractSpec,
+    _extract_approach_spec_from_operation,
+    _extract_retract_spec_from_operation,
     _normalize_approach_spec,
     _normalize_retract_spec,
     build_approach_spec,
@@ -33,11 +40,14 @@ from ..common.strategy import (
     MillingStrategySpec,
     UnidirectionalMillingStrategySpec,
     _ensure_milling_strategy_allowed,
+    _extract_milling_strategy_spec_from_operation,
     _build_bidirectional_line_strategy_profile,
     _build_unidirectional_line_strategy_profile,
     _normalize_milling_strategy_spec,
     _strategy_comparison_key,
 )
+from ..common.piece import _workpiece_depth_name
+from ..common.xml import _raw_text, _text, _xsi_type
 from ._common import _normalize_side_of_feature
 
 __all__ = [
@@ -45,6 +55,7 @@ __all__ = [
     "build_line_milling_spec",
     "_build_line_toolpath_profile",
     "_can_hydrate_exact_serialization",
+    "_extract_line_milling_template",
     "_matches_line_geometry",
     "_normalize_line_milling_spec",
     "_offset_line_for_toolpath",
@@ -192,6 +203,74 @@ def _can_hydrate_exact_serialization(template: dict[str, object], spec: LineMill
         and spec.tool_id == source_tool_id
         and spec.tool_name == source_tool_name
     )
+
+
+def _extract_line_milling_template(source_pgmx_path: Path) -> dict[str, object]:
+    root, _, _ = _load_pgmx_container(source_pgmx_path)
+
+    geometry = next(
+        (
+            node
+            for node in root.findall("./{*}Geometries/{*}GeomGeometry")
+            if "GeomTrimmedCurve" in _xsi_type(node)
+        ),
+        None,
+    )
+    feature = next(
+        (
+            node
+            for node in root.findall("./{*}Features/{*}ManufacturingFeature")
+            if "GeneralProfileFeature" in _xsi_type(node)
+        ),
+        None,
+    )
+    operation = next(
+        (
+            node
+            for node in root.findall("./{*}Operations/{*}Operation")
+            if "BottomAndSideFinishMilling" in _xsi_type(node)
+        ),
+        None,
+    )
+    if geometry is None or feature is None or operation is None:
+        raise ValueError(f"El archivo '{source_pgmx_path}' no contiene una plantilla de fresado lineal compatible.")
+
+    geometry_id = int(_text(geometry, "./{*}Key/{*}ID", "0") or "0")
+    feature_id = _text(feature, "./{*}Key/{*}ID")
+    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
+    depth_variable_name = _workpiece_depth_name(workpiece)
+    toolpath_by_type = {
+        _text(toolpath, "./{*}Type"): _curve_spec_from_toolpath_node(toolpath)
+        for toolpath in operation.findall("./{*}ToolpathList/{*}Toolpath")
+    }
+    matching_expressions = [
+        node
+        for node in root.findall("./{*}Expressions/{*}Expression")
+        if _text(node, "./{*}ReferencedObject/{*}ID") == feature_id
+    ]
+    expression_ids = [int(_text(node, "./{*}Key/{*}ID", "0") or "0") for node in matching_expressions]
+    preferred_start = min([geometry_id] + expression_ids) if expression_ids else geometry_id
+
+    return {
+        "preferred_id_start": preferred_start,
+        "depth_spec": _extract_depth_spec_from_template(
+            feature,
+            operation,
+            matching_expressions,
+            depth_variable_name,
+        ),
+        "side_of_feature": _normalize_side_of_feature(_text(feature, "./{*}SideOfFeature", "Center")),
+        "tool_width": float(_text(feature, "./{*}SweptShape/{*}Width", "0") or "0"),
+        "tool_id": _text(operation, "./{*}ToolKey/{*}ID"),
+        "tool_name": _text(operation, "./{*}ToolKey/{*}Name"),
+        "milling_strategy": _extract_milling_strategy_spec_from_operation(operation),
+        "approach": _extract_approach_spec_from_operation(operation),
+        "retract": _extract_retract_spec_from_operation(operation),
+        "geometry_serialization": _raw_text(geometry, "./{*}_serializationGeometryDescription"),
+        "approach_curve": toolpath_by_type.get("Approach"),
+        "trajectory_curve": toolpath_by_type.get("TrajectoryPath"),
+        "lift_curve": toolpath_by_type.get("Lift"),
+    }
 
 
 def build_line_milling_spec(

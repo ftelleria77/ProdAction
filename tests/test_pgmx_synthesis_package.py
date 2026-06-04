@@ -338,6 +338,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._offset_line_for_toolpath, milling_line._offset_line_for_toolpath)
         self.assertIs(core_sp._matches_line_geometry, milling_line._matches_line_geometry)
         self.assertIs(core_sp._can_hydrate_exact_serialization, milling_line._can_hydrate_exact_serialization)
+        self.assertIs(core_sp._extract_line_milling_template, milling_line._extract_line_milling_template)
         line = milling_line.build_line_milling_spec(
             0,
             0,
