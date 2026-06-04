@@ -3,7 +3,11 @@ from __future__ import annotations
 import unittest
 
 from pgmx import synthesis as pgmx_synthesis
+from pgmx.synthesis import common as synthesis_common
 from pgmx.synthesis import core as core_sp
+from pgmx.synthesis import drilling as synthesis_drilling
+from pgmx.synthesis import milling as synthesis_milling
+from pgmx.synthesis.common import xml as common_xml
 from tools import synthesize_pgmx as legacy_sp
 from tools import pgmx_synthesis as legacy_pgmx_synthesis
 
@@ -38,6 +42,14 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertEqual(geometry.outer.bbox.height, 300.0)
         self.assertEqual(strategy.tool_width, 80.0)
         self.assertEqual(depth.target_depth, 10.0)
+
+    def test_modular_synthesis_packages_import_and_core_uses_common_xml(self) -> None:
+        self.assertIsNotNone(synthesis_common)
+        self.assertIsNotNone(synthesis_milling)
+        self.assertIsNotNone(synthesis_drilling)
+        self.assertEqual(common_xml.PGMX_NS, core_sp.PGMX_NS)
+        self.assertIs(core_sp._append_node, common_xml._append_node)
+        self.assertEqual(common_xml._compact_number(1.25), "1.25")
 
 
 if __name__ == "__main__":
