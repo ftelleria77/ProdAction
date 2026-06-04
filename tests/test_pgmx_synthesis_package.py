@@ -18,6 +18,7 @@ from pgmx.synthesis.common import tools as common_tools
 from pgmx.synthesis.common import xml as common_xml
 from pgmx.synthesis.drilling import pattern as drilling_pattern
 from pgmx.synthesis.drilling import single as drilling_single
+from pgmx.synthesis.milling import _common as milling_common
 from pgmx.synthesis.milling import circle as milling_circle
 from pgmx.synthesis.milling import line as milling_line
 from pgmx.synthesis.milling import pocket as milling_pocket
@@ -224,6 +225,8 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         strategy = common_strategy.build_bidirectional_milling_strategy_spec(axial_cutting_depth=2.5)
         self.assertTrue(strategy.allow_multiple_passes)
         self.assertEqual(strategy.axial_cutting_depth, 2.5)
+        self.assertIs(milling_common._normalize_geometry_winding, common_geometry._normalize_geometry_winding)
+        self.assertIs(milling_common._normalize_side_of_feature, common_geometry._normalize_side_of_feature)
         self.assertIs(core_sp._load_pgmx_container, common_hydration._load_pgmx_container)
         self.assertIs(core_sp.load_pgmx_template_document, common_hydration.load_pgmx_template_document)
         template = common_hydration.load_pgmx_template_document(core_sp.DEFAULT_BASELINE_XML_PATH)
