@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass, replace
 from typing import Optional, Sequence
+
+from .xml import _raw_text, _text, _xsi_type
 
 __all__ = [
     "GeometryPrimitiveSpec",
     "GeometryProfileSpec",
+    "_CurveSpec",
     "build_arc_geometry_primitive",
     "build_circle_geometry_profile",
     "build_composite_geometry_profile",
@@ -21,10 +25,18 @@ __all__ = [
     "_build_parameterized_line_geometry_primitive",
     "_build_profile_geometry_spec",
     "_build_toolpath_description",
+    "_circle_curve_spec",
+    "_composite_curve_spec",
+    "_curve_spec_from_profile_geometry",
+    "_extract_geometry_profile",
     "_format_maestro_number",
     "_format_maestro_orientation_number",
     "_normalize_curve_serialization_text",
     "_normalize_geometry_winding",
+    "_parse_circle_geometry_profile",
+    "_parse_geometry_primitive",
+    "_parse_trimmed_curve_arc",
+    "_parse_trimmed_curve_line",
     "_points_close_2d",
     "_points_close_3d",
     "_primitive_end_tangent_2d",
@@ -34,6 +46,7 @@ __all__ = [
     "_profile_bounding_box",
     "_profile_signed_area",
     "_sample_arc_point",
+    "_trimmed_curve_spec",
 ]
 
 
@@ -81,6 +94,16 @@ class GeometryProfileSpec:
     @property
     def primitive_count(self) -> int:
         return len(self.primitives)
+
+
+@dataclass(frozen=True)
+class _CurveSpec:
+    """Serializacion XML de una curva usada en geometria o toolpaths."""
+
+    geometry_type: str = "GeomTrimmedCurve"
+    serialization: Optional[str] = None
+    member_keys: tuple[str, ...] = ()
+    member_serializations: tuple[str, ...] = ()
 
 
 def _normalize_geometry_winding(value: Optional[str]) -> str:
@@ -825,3 +848,199 @@ def _build_profile_geometry_spec(
         member_serializations=normalized_member_serializations
         or tuple(_primitive_to_serialization(primitive) for primitive in normalized_primitives),
     )
+
+
+def _trimmed_curve_spec(serialization: str) -> _CurveSpec:
+    return _CurveSpec(
+        geometry_type="GeomTrimmedCurve",
+        serialization=_normalize_curve_serialization_text(serialization),
+    )
+
+
+def _circle_curve_spec(serialization: str) -> _CurveSpec:
+    return _CurveSpec(
+        geometry_type="GeomCircle",
+        serialization=_normalize_curve_serialization_text(serialization),
+    )
+
+
+def _composite_curve_spec(
+    member_serializations: Sequence[str],
+    member_keys: Sequence[str] = (),
+) -> _CurveSpec:
+    return _CurveSpec(
+        geometry_type="GeomCompositeCurve",
+        member_keys=tuple(member_keys),
+        member_serializations=tuple(_normalize_curve_serialization_text(serialization) for serialization in member_serializations),
+    )
+
+
+def _curve_spec_from_profile_geometry(profile: GeometryProfileSpec) -> _CurveSpec:
+    if profile.geometry_type == "GeomCartesianPoint":
+        raise ValueError("El perfil Point no puede convertirse en una curva/toolpath.")
+    if profile.geometry_type == "GeomTrimmedCurve":
+        if profile.serialization is None:
+            raise ValueError("El perfil lineal/arco necesita serialization para convertirse en curva.")
+        return _trimmed_curve_spec(profile.serialization)
+    if profile.geometry_type == "GeomCircle":
+        if profile.serialization is None:
+            raise ValueError("El perfil circular necesita serialization para convertirse en curva.")
+        return _circle_curve_spec(profile.serialization)
+    if profile.geometry_type == "GeomCompositeCurve":
+        return _composite_curve_spec(profile.member_serializations)
+    raise ValueError(f"Tipo de perfil geometrico no soportado: {profile.geometry_type}")
+
+
+def _parse_trimmed_curve_line(text: str) -> Optional[GeometryPrimitiveSpec]:
+    lines = [line.strip().split() for line in (text or "").splitlines() if line.strip()]
+    if len(lines) < 2:
+        return None
+    header = lines[0]
+    body = lines[1]
+    if len(header) < 3 or len(body) < 7 or header[0] != "8" or body[0] != "1":
+        return None
+    try:
+        parameter_start = float(header[1])
+        parameter_end = float(header[2])
+        origin_x = float(body[1])
+        origin_y = float(body[2])
+        origin_z = float(body[3])
+        direction_x = float(body[4])
+        direction_y = float(body[5])
+        direction_z = float(body[6])
+    except ValueError:
+        return None
+
+    # Maestro puede trimar la misma recta con parametros crecientes o decrecientes.
+    # Para leer horario/antihorario sin perder informacion hay que evaluar ambos
+    # puntos sobre la recta base, en vez de asumir `8 0 longitud`.
+    start_point = (
+        origin_x + (direction_x * parameter_start),
+        origin_y + (direction_y * parameter_start),
+        origin_z + (direction_z * parameter_start),
+    )
+    end_point = (
+        origin_x + (direction_x * parameter_end),
+        origin_y + (direction_y * parameter_end),
+        origin_z + (direction_z * parameter_end),
+    )
+    return GeometryPrimitiveSpec(
+        primitive_type="Line",
+        start_point=start_point,
+        end_point=end_point,
+        parameter_start=parameter_start,
+        parameter_end=parameter_end,
+    )
+
+
+def _parse_trimmed_curve_arc(text: str) -> Optional[GeometryPrimitiveSpec]:
+    lines = [line.strip().split() for line in (text or "").splitlines() if line.strip()]
+    if len(lines) < 2:
+        return None
+    header = lines[0]
+    body = lines[1]
+    if len(header) < 3 or len(body) < 14 or header[0] != "8" or body[0] != "2":
+        return None
+    try:
+        parameter_start = float(header[1])
+        parameter_end = float(header[2])
+        center_x = float(body[1])
+        center_y = float(body[2])
+        center_z = float(body[3])
+        normal_vector = (float(body[4]), float(body[5]), float(body[6]))
+        u_vector = (float(body[7]), float(body[8]), float(body[9]))
+        v_vector = (float(body[10]), float(body[11]), float(body[12]))
+        radius = float(body[13])
+    except ValueError:
+        return None
+    center_point = (center_x, center_y, center_z)
+    start_point = _sample_arc_point(center_point, u_vector, v_vector, radius, parameter_start)
+    end_point = _sample_arc_point(center_point, u_vector, v_vector, radius, parameter_end)
+    return GeometryPrimitiveSpec(
+        primitive_type="Arc",
+        start_point=start_point,
+        end_point=end_point,
+        parameter_start=parameter_start,
+        parameter_end=parameter_end,
+        center_point=center_point,
+        radius=radius,
+        normal_vector=normal_vector,
+        u_vector=u_vector,
+        v_vector=v_vector,
+    )
+
+
+def _parse_geometry_primitive(text: str) -> Optional[GeometryPrimitiveSpec]:
+    return _parse_trimmed_curve_line(text) or _parse_trimmed_curve_arc(text)
+
+
+def _parse_circle_geometry_profile(text: str) -> Optional[GeometryProfileSpec]:
+    parts = (text or "").strip().split()
+    if len(parts) < 14 or parts[0] != "2":
+        return None
+    try:
+        center_x = float(parts[1])
+        center_y = float(parts[2])
+        center_z = float(parts[3])
+        normal_z = float(parts[6])
+        radius = float(parts[13])
+    except ValueError:
+        return None
+    winding = "CounterClockwise" if normal_z >= 0.0 else "Clockwise"
+    return replace(
+        build_circle_geometry_profile(
+            center_x,
+            center_y,
+            radius,
+            z_value=center_z,
+            winding=winding,
+        ),
+        serialization=_normalize_curve_serialization_text(text),
+    )
+
+
+def _parse_cartesian_point_geometry_profile(node: ET.Element) -> Optional[GeometryProfileSpec]:
+    point_x_text = _text(node, "./{*}_x")
+    point_y_text = _text(node, "./{*}_y")
+    point_z_text = _text(node, "./{*}_z", "0")
+    if not point_x_text or not point_y_text:
+        return None
+    try:
+        point_x = float(point_x_text)
+        point_y = float(point_y_text)
+        point_z = float(point_z_text)
+    except ValueError:
+        return None
+    return build_point_geometry_profile(point_x, point_y, z_value=point_z)
+
+
+def _extract_geometry_profile(node: ET.Element) -> Optional[GeometryProfileSpec]:
+    geometry_type = _xsi_type(node)
+    if "GeomCartesianPoint" in geometry_type:
+        return _parse_cartesian_point_geometry_profile(node)
+    if "GeomCircle" in geometry_type:
+        return _parse_circle_geometry_profile(_raw_text(node, "./{*}_serializationGeometryDescription"))
+    if "GeomTrimmedCurve" in geometry_type:
+        serialization = _raw_text(node, "./{*}_serializationGeometryDescription")
+        primitive = _parse_geometry_primitive(serialization)
+        if primitive is None:
+            return None
+        return _build_profile_geometry_spec(
+            geometry_type="GeomTrimmedCurve",
+            primitives=(primitive,),
+            serialization=serialization,
+        )
+    if "GeomCompositeCurve" in geometry_type:
+        member_serializations = [member.text or "" for member in node.findall("./{*}_serializingMembers/{*}string")]
+        primitives = []
+        for member_serialization in member_serializations:
+            primitive = _parse_geometry_primitive(member_serialization)
+            if primitive is None:
+                return None
+            primitives.append(primitive)
+        return _build_profile_geometry_spec(
+            geometry_type="GeomCompositeCurve",
+            primitives=tuple(primitives),
+            member_serializations=member_serializations,
+        )
+    return None
