@@ -300,8 +300,10 @@ from .milling.profile import (
 from .milling.pocket import (
     PocketBossRouteSeedSpec,
     PocketMillingSpec,
+    _HydratedPocketMillingSpec,
     _can_hydrate_pocket_template_trace,
     _extract_pocket_milling_template,
+    _hydrate_pocket_milling_spec,
     _same_xy_contours,
     _same_xy_points,
     build_pocket_boss_route_seed_spec,
@@ -561,85 +563,6 @@ class _HydratedSquaringMillingSpec:
     @property
     def milling_strategy(self) -> Optional[MillingStrategySpec]:
         return self.spec.milling_strategy
-
-
-@dataclass(frozen=True)
-class _HydratedPocketMillingSpec:
-    """Datos internos de serializacion para un `PocketMillingSpec` rectangular."""
-
-    spec: PocketMillingSpec
-    preferred_id_start: Optional[int] = None
-    geometry_curve: Optional[_CurveSpec] = None
-    trajectory_curves: tuple[_CurveSpec, ...] = ()
-    trajectory_sequences: tuple[tuple[tuple[float, float, float], ...], ...] = ()
-
-    @property
-    def contour_points(self) -> tuple[tuple[float, float], ...]:
-        return self.spec.contour_points
-
-    @property
-    def feature_name(self) -> str:
-        return self.spec.feature_name
-
-    @property
-    def plane_name(self) -> str:
-        return self.spec.plane_name
-
-    @property
-    def tool_id(self) -> str:
-        return self.spec.tool_id
-
-    @property
-    def tool_name(self) -> str:
-        return self.spec.tool_name
-
-    @property
-    def tool_width(self) -> float:
-        return self.spec.tool_width
-
-    @property
-    def security_plane(self) -> float:
-        return self.spec.security_plane
-
-    @property
-    def depth_spec(self) -> MillingDepthSpec:
-        return self.spec.depth_spec
-
-    @property
-    def approach(self) -> ApproachSpec:
-        return self.spec.approach
-
-    @property
-    def retract(self) -> RetractSpec:
-        return self.spec.retract
-
-    @property
-    def milling_strategy(self) -> ContourParallelMillingStrategySpec:
-        return self.spec.milling_strategy
-
-    @property
-    def allowance_bottom(self) -> float:
-        return self.spec.allowance_bottom
-
-    @property
-    def allowance_side(self) -> float:
-        return self.spec.allowance_side
-
-    @property
-    def boss_contours(self) -> tuple[tuple[tuple[float, float], ...], ...]:
-        return self.spec.boss_contours
-
-    @property
-    def boss_route_seeds(self) -> tuple[PocketBossRouteSeedSpec, ...]:
-        return self.spec.boss_route_seeds
-
-    @property
-    def effective_contour_offset(self) -> float:
-        return self.spec.effective_contour_offset
-
-    @property
-    def radial_step(self) -> float:
-        return self.spec.radial_step
 
 
 @dataclass(frozen=True)
@@ -5022,34 +4945,6 @@ HydratedMachiningSpec = Union[
     _HydratedDrillingSpec,
     _HydratedDrillingPatternSpec,
 ]
-
-
-def _hydrate_pocket_milling_spec(
-    spec: PocketMillingSpec,
-    source_pgmx_path: Optional[Path],
-) -> _HydratedPocketMillingSpec:
-    if source_pgmx_path is None:
-        return _HydratedPocketMillingSpec(spec)
-    try:
-        template = _extract_pocket_milling_template(source_pgmx_path)
-    except ValueError:
-        return _HydratedPocketMillingSpec(spec)
-    can_hydrate_trace = _can_hydrate_pocket_template_trace(template, spec)
-    return _HydratedPocketMillingSpec(
-        spec,
-        preferred_id_start=int(template["preferred_id_start"]),
-        geometry_curve=template.get("geometry_curve") if isinstance(template.get("geometry_curve"), _CurveSpec) else None,
-        trajectory_curves=(
-            template.get("trajectory_curves")
-            if can_hydrate_trace and isinstance(template.get("trajectory_curves"), tuple)
-            else ()
-        ),
-        trajectory_sequences=(
-            template.get("trajectory_sequences")
-            if can_hydrate_trace and isinstance(template.get("trajectory_sequences"), tuple)
-            else ()
-        ),
-    )
 
 
 def _hydrate_machining_spec(

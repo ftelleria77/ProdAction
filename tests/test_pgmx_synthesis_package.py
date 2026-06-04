@@ -458,12 +458,14 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertEqual(squaring.approach.approach_type, "Arc")
         self.assertIs(core_sp.PocketMillingSpec, milling_pocket.PocketMillingSpec)
         self.assertIs(core_sp.PocketBossRouteSeedSpec, milling_pocket.PocketBossRouteSeedSpec)
+        self.assertIs(core_sp._HydratedPocketMillingSpec, milling_pocket._HydratedPocketMillingSpec)
         self.assertIs(core_sp.build_pocket_milling_spec, milling_pocket.build_pocket_milling_spec)
         self.assertIs(core_sp._extract_pocket_milling_template, milling_pocket._extract_pocket_milling_template)
         self.assertIs(
             core_sp._can_hydrate_pocket_template_trace,
             milling_pocket._can_hydrate_pocket_template_trace,
         )
+        self.assertIs(core_sp._hydrate_pocket_milling_spec, milling_pocket._hydrate_pocket_milling_spec)
         self.assertIs(
             core_sp.build_pocket_boss_route_seed_spec,
             milling_pocket.build_pocket_boss_route_seed_spec,
