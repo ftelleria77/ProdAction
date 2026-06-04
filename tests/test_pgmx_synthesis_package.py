@@ -187,6 +187,10 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._drilling_bottom_condition_type, drilling_single._drilling_bottom_condition_type)
         self.assertIs(core_sp._uses_drilling_depth_expressions, drilling_single._uses_drilling_depth_expressions)
         self.assertIs(core_sp._validate_drilling_center, drilling_single._validate_drilling_center)
+        self.assertIs(
+            core_sp._validate_tool_sinking_length_for_drilling_spec,
+            drilling_single._validate_tool_sinking_length_for_drilling_spec,
+        )
         top_drill = drilling_single.build_drilling_spec(center_x=40, center_y=60, diameter=5.0)
         self.assertIsInstance(top_drill, drilling_single.DrillingSpec)
         self.assertEqual(top_drill.drill_family, "Conical")

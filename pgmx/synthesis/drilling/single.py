@@ -13,7 +13,12 @@ from ..common.depth import (
     build_milling_depth_spec,
 )
 from ..common.piece import _drilling_axis_span, _normalize_plane_name, _plane_local_dimensions
-from ..common.tools import _load_tool_catalog, _normalize_tool_resolution, _resolve_drilling_tool
+from ..common.tools import (
+    _load_tool_catalog,
+    _normalize_tool_resolution,
+    _resolve_drilling_tool,
+    _validate_tool_sinking_length_for_total_depth,
+)
 from ..common.xml import _compact_number
 
 __all__ = [
@@ -29,6 +34,7 @@ __all__ = [
     "_normalize_drilling_spec",
     "_uses_drilling_depth_expressions",
     "_validate_drilling_center",
+    "_validate_tool_sinking_length_for_drilling_spec",
 ]
 
 
@@ -290,3 +296,20 @@ def _validate_drilling_center(state, spec: _HydratedDrillingSpec) -> None:
             f"El centro Y del taladro cae fuera del plano '{spec.plane_name}': "
             f"{_compact_number(spec.center_y)} no pertenece a [0, {_compact_number(max_y)}]."
         )
+
+
+def _validate_tool_sinking_length_for_drilling_spec(
+    state,
+    spec,
+    tool_catalog: dict[str, dict[str, str]],
+) -> None:
+    if spec.tool_object_type == "System.Object":
+        return
+
+    catalog_entry = tool_catalog.get(spec.tool_id)
+    _validate_tool_sinking_length_for_total_depth(
+        spec,
+        catalog_entry,
+        total_depth=_drilling_total_depth(state, spec),
+        operation_name="taladro",
+    )

@@ -271,6 +271,7 @@ from .drilling.single import (
     _normalize_drilling_spec,
     _uses_drilling_depth_expressions,
     _validate_drilling_center,
+    _validate_tool_sinking_length_for_drilling_spec,
     build_drilling_spec,
 )
 from .milling.line import (
@@ -835,23 +836,6 @@ def _validate_tool_type_for_milling_spec(spec, tool_catalog: dict[str, dict[str,
             "o bien una Sierra Vertical X en modo ranurado horizontal no pasante: "
             f"{_tool_catalog_label(spec)} figura como '{tool_type or 'sin tipo'}'."
         )
-
-
-def _validate_tool_sinking_length_for_drilling_spec(
-    state: PgmxState,
-    spec,
-    tool_catalog: dict[str, dict[str, str]],
-) -> None:
-    if spec.tool_object_type == "System.Object":
-        return
-
-    catalog_entry = tool_catalog.get(spec.tool_id)
-    _validate_tool_sinking_length_for_total_depth(
-        spec,
-        catalog_entry,
-        total_depth=_drilling_total_depth(state, spec),
-        operation_name="taladro",
-    )
 
 
 def _validate_tool_sinking_lengths(
