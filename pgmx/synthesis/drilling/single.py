@@ -12,8 +12,9 @@ from ..common.depth import (
     _normalize_milling_depth_spec,
     build_milling_depth_spec,
 )
-from ..common.piece import _normalize_plane_name
+from ..common.piece import _normalize_plane_name, _plane_local_dimensions
 from ..common.tools import _load_tool_catalog, _normalize_tool_resolution, _resolve_drilling_tool
+from ..common.xml import _compact_number
 
 __all__ = [
     "DrillingSpec",
@@ -23,6 +24,7 @@ __all__ = [
     "_hydrate_drilling_spec",
     "_normalize_drill_family",
     "_normalize_drilling_spec",
+    "_validate_drilling_center",
 ]
 
 
@@ -234,3 +236,17 @@ def _hydrate_drilling_spec(
         resolved_tool_name=resolved_tool_name,
         resolved_tool_object_type=resolved_tool_object_type,
     )
+
+
+def _validate_drilling_center(state, spec: _HydratedDrillingSpec) -> None:
+    max_x, max_y = _plane_local_dimensions(state, spec.plane_name)
+    if spec.center_x < -1e-9 or spec.center_x > max_x + 1e-9:
+        raise ValueError(
+            f"El centro X del taladro cae fuera del plano '{spec.plane_name}': "
+            f"{_compact_number(spec.center_x)} no pertenece a [0, {_compact_number(max_x)}]."
+        )
+    if spec.center_y < -1e-9 or spec.center_y > max_y + 1e-9:
+        raise ValueError(
+            f"El centro Y del taladro cae fuera del plano '{spec.plane_name}': "
+            f"{_compact_number(spec.center_y)} no pertenece a [0, {_compact_number(max_y)}]."
+        )

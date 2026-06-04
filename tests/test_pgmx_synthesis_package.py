@@ -181,6 +181,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.build_drilling_spec, drilling_single.build_drilling_spec)
         self.assertIs(core_sp._normalize_drilling_spec, drilling_single._normalize_drilling_spec)
         self.assertIs(core_sp._hydrate_drilling_spec, drilling_single._hydrate_drilling_spec)
+        self.assertIs(core_sp._validate_drilling_center, drilling_single._validate_drilling_center)
         top_drill = drilling_single.build_drilling_spec(center_x=40, center_y=60, diameter=5.0)
         self.assertIsInstance(top_drill, drilling_single.DrillingSpec)
         self.assertEqual(top_drill.drill_family, "Conical")
@@ -209,6 +210,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._HydratedDrillingPatternSpec, drilling_pattern._HydratedDrillingPatternSpec)
         self.assertIs(core_sp._hydrate_drilling_pattern_spec, drilling_pattern._hydrate_drilling_pattern_spec)
         self.assertIs(core_sp._normalize_drilling_pattern_spec, drilling_pattern._normalize_drilling_pattern_spec)
+        self.assertIs(core_sp._validate_drilling_pattern_center, drilling_pattern._validate_drilling_pattern_center)
         drill_pattern = drilling_pattern.build_drilling_pattern_spec(
             20,
             30,

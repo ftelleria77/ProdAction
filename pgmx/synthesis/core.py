@@ -257,6 +257,7 @@ from .drilling.pattern import (
     _HydratedDrillingPatternSpec,
     _hydrate_drilling_pattern_spec,
     _normalize_drilling_pattern_spec,
+    _validate_drilling_pattern_center,
     build_drilling_pattern_spec,
 )
 from .drilling.single import (
@@ -264,6 +265,7 @@ from .drilling.single import (
     _HydratedDrillingSpec,
     _hydrate_drilling_spec,
     _normalize_drilling_spec,
+    _validate_drilling_center,
     build_drilling_spec,
 )
 from .milling.line import (
@@ -790,20 +792,6 @@ def _drilling_bottom_condition_type(spec: _HydratedDrillingSpec) -> str:
 
 def _uses_drilling_depth_expressions(spec: _HydratedDrillingSpec) -> bool:
     return _normalize_milling_depth_spec(spec.depth_spec).is_through
-
-
-def _validate_drilling_center(state: PgmxState, spec: _HydratedDrillingSpec) -> None:
-    max_x, max_y = _plane_local_dimensions(state, spec.plane_name)
-    if spec.center_x < -1e-9 or spec.center_x > max_x + 1e-9:
-        raise ValueError(
-            f"El centro X del taladro cae fuera del plano '{spec.plane_name}': "
-            f"{_compact_number(spec.center_x)} no pertenece a [0, {_compact_number(max_x)}]."
-        )
-    if spec.center_y < -1e-9 or spec.center_y > max_y + 1e-9:
-        raise ValueError(
-            f"El centro Y del taladro cae fuera del plano '{spec.plane_name}': "
-            f"{_compact_number(spec.center_y)} no pertenece a [0, {_compact_number(max_y)}]."
-        )
 
 
 def _validate_tool_sinking_length_for_spec(
@@ -4254,24 +4242,6 @@ def _append_drilling(root: ET.Element, state: PgmxState, spec: _HydratedDrilling
                 depth_variable_name,
                 referenced_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
             )
-        )
-
-
-def _validate_drilling_pattern_center(state: PgmxState, spec: _HydratedDrillingPatternSpec) -> None:
-    max_x, max_y = _plane_local_dimensions(state, spec.plane_name)
-    last_x = spec.center_x + ((spec.columns - 1) * spec.spacing)
-    last_y = spec.center_y + ((spec.rows - 1) * spec.row_spacing)
-    if spec.center_x < -1e-9 or last_x > max_x + 1e-9:
-        raise ValueError(
-            "El patron de taladros cae fuera del eje X del plano "
-            f"'{spec.plane_name}': {_compact_number(spec.center_x)}..{_compact_number(last_x)} "
-            f"no pertenece a [0, {_compact_number(max_x)}]."
-        )
-    if spec.center_y < -1e-9 or last_y > max_y + 1e-9:
-        raise ValueError(
-            "El patron de taladros cae fuera del eje Y del plano "
-            f"'{spec.plane_name}': {_compact_number(spec.center_y)}..{_compact_number(last_y)} "
-            f"no pertenece a [0, {_compact_number(max_y)}]."
         )
 
 

@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import Optional
 
 from ..common.depth import MillingDepthSpec, build_milling_depth_spec
-from ..common.piece import _normalize_plane_name
+from ..common.piece import _normalize_plane_name, _plane_local_dimensions
 from ..common.tools import _normalize_tool_resolution
+from ..common.xml import _compact_number
 from .single import (
     DrillingSpec,
     _HydratedDrillingSpec,
@@ -23,6 +24,7 @@ __all__ = [
     "_HydratedDrillingPatternSpec",
     "_hydrate_drilling_pattern_spec",
     "_normalize_drilling_pattern_spec",
+    "_validate_drilling_pattern_center",
 ]
 
 
@@ -194,6 +196,24 @@ def _hydrate_drilling_pattern_spec(
         None,
     )
     return _HydratedDrillingPatternSpec(spec=normalized_pattern, base_drilling=base_drilling)
+
+
+def _validate_drilling_pattern_center(state, spec: _HydratedDrillingPatternSpec) -> None:
+    max_x, max_y = _plane_local_dimensions(state, spec.plane_name)
+    last_x = spec.center_x + ((spec.columns - 1) * spec.spacing)
+    last_y = spec.center_y + ((spec.rows - 1) * spec.row_spacing)
+    if spec.center_x < -1e-9 or last_x > max_x + 1e-9:
+        raise ValueError(
+            "El patron de taladros cae fuera del eje X del plano "
+            f"'{spec.plane_name}': {_compact_number(spec.center_x)}..{_compact_number(last_x)} "
+            f"no pertenece a [0, {_compact_number(max_x)}]."
+        )
+    if spec.center_y < -1e-9 or last_y > max_y + 1e-9:
+        raise ValueError(
+            "El patron de taladros cae fuera del eje Y del plano "
+            f"'{spec.plane_name}': {_compact_number(spec.center_y)}..{_compact_number(last_y)} "
+            f"no pertenece a [0, {_compact_number(max_y)}]."
+        )
 
 
 def build_drilling_pattern_spec(
