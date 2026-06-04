@@ -65,7 +65,10 @@ __all__ = [
     "_build_open_polyline_geometry_profile",
     "_circle_curve_spec",
     "_composite_curve_spec",
+    "_curve_spec_from_basic_curve_node",
+    "_curve_spec_from_composite_curve_node",
     "_curve_spec_from_profile_geometry",
+    "_curve_spec_from_toolpath_node",
     "_curve_spec_points",
     "_extract_geometry_profile",
     "_format_maestro_number",
@@ -1829,6 +1832,28 @@ def _curve_spec_from_profile_geometry(profile: GeometryProfileSpec) -> _CurveSpe
     if profile.geometry_type == "GeomCompositeCurve":
         return _composite_curve_spec(profile.member_serializations)
     raise ValueError(f"Tipo de perfil geometrico no soportado: {profile.geometry_type}")
+
+
+def _curve_spec_from_composite_curve_node(node: ET.Element) -> _CurveSpec:
+    return _composite_curve_spec(
+        [member.text or "" for member in node.findall("./{*}_serializingMembers/{*}string")],
+        [(key.text or "").strip() for key in node.findall("./{*}_serializingKeys/{*}unsignedInt")],
+    )
+
+
+def _curve_spec_from_basic_curve_node(node: Optional[ET.Element]) -> _CurveSpec:
+    if node is None:
+        raise ValueError("El nodo BasicCurve es obligatorio para extraer una curva Maestro.")
+    curve_type = _xsi_type(node)
+    if "GeomCompositeCurve" in curve_type:
+        return _curve_spec_from_composite_curve_node(node)
+    if "GeomCircle" in curve_type:
+        return _circle_curve_spec(_raw_text(node, "./{*}_serializationGeometryDescription"))
+    return _trimmed_curve_spec(_raw_text(node, "./{*}_serializationGeometryDescription"))
+
+
+def _curve_spec_from_toolpath_node(toolpath: ET.Element) -> _CurveSpec:
+    return _curve_spec_from_basic_curve_node(toolpath.find("./{*}BasicCurve"))
 
 
 def _parse_trimmed_curve_line(text: str) -> Optional[GeometryPrimitiveSpec]:

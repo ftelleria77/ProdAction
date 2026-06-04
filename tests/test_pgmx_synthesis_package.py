@@ -93,6 +93,8 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._circle_curve_spec, common_geometry._circle_curve_spec)
         self.assertIs(core_sp._composite_curve_spec, common_geometry._composite_curve_spec)
         self.assertIs(core_sp._curve_spec_from_profile_geometry, common_geometry._curve_spec_from_profile_geometry)
+        self.assertIs(core_sp._curve_spec_from_composite_curve_node, common_geometry._curve_spec_from_composite_curve_node)
+        self.assertIs(core_sp._curve_spec_from_toolpath_node, common_geometry._curve_spec_from_toolpath_node)
         self.assertIs(core_sp._parse_geometry_primitive, common_geometry._parse_geometry_primitive)
         self.assertIs(core_sp._parse_line_serialization, common_geometry._parse_line_serialization)
         self.assertIs(core_sp._curve_spec_points, common_geometry._curve_spec_points)

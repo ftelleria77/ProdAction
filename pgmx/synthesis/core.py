@@ -99,7 +99,9 @@ from .common.geometry import (
     _build_open_polyline_geometry_profile,
     _circle_curve_spec,
     _composite_curve_spec,
+    _curve_spec_from_composite_curve_node,
     _curve_spec_from_profile_geometry,
+    _curve_spec_from_toolpath_node,
     _curve_spec_points,
     _extract_geometry_profile,
     _is_closed_polyline_points,
@@ -2044,28 +2046,12 @@ def _extract_line_milling_template(source_pgmx_path: Path) -> dict[str, object]:
     if geometry is None or feature is None or operation is None:
         raise ValueError(f"El archivo '{source_pgmx_path}' no contiene una plantilla de fresado lineal compatible.")
 
-    def extract_toolpath_curve(toolpath: ET.Element) -> _CurveSpec:
-        basic_curve = toolpath.find("./{*}BasicCurve")
-        curve_type = _xsi_type(basic_curve)
-        if "GeomCompositeCurve" in curve_type:
-            return _composite_curve_spec(
-                [
-                    member.text or ""
-                    for member in basic_curve.findall("./{*}_serializingMembers/{*}string")
-                ],
-                [
-                    (key.text or "").strip()
-                    for key in basic_curve.findall("./{*}_serializingKeys/{*}unsignedInt")
-                ],
-            )
-        return _trimmed_curve_spec(_raw_text(basic_curve, "./{*}_serializationGeometryDescription"))
-
     geometry_id = int(_text(geometry, "./{*}Key/{*}ID", "0") or "0")
     feature_id = _text(feature, "./{*}Key/{*}ID")
     workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
     depth_variable_name = _workpiece_depth_name(workpiece)
     toolpath_by_type = {
-        _text(toolpath, "./{*}Type"): extract_toolpath_curve(toolpath)
+        _text(toolpath, "./{*}Type"): _curve_spec_from_toolpath_node(toolpath)
         for toolpath in operation.findall("./{*}ToolpathList/{*}Toolpath")
     }
     matching_expressions = [
@@ -2156,25 +2142,12 @@ def _extract_polyline_milling_template(source_pgmx_path: Path) -> dict[str, obje
     if geometry is None or feature is None or operation is None:
         raise ValueError(f"El archivo '{source_pgmx_path}' no contiene una plantilla de fresado por polilinea compatible.")
 
-    def extract_composite_curve(node: ET.Element) -> _CurveSpec:
-        return _composite_curve_spec(
-            [member.text or "" for member in node.findall("./{*}_serializingMembers/{*}string")],
-            [(key.text or "").strip() for key in node.findall("./{*}_serializingKeys/{*}unsignedInt")],
-        )
-
-    def extract_toolpath_curve(toolpath: ET.Element) -> _CurveSpec:
-        basic_curve = toolpath.find("./{*}BasicCurve")
-        curve_type = _xsi_type(basic_curve)
-        if "GeomCompositeCurve" in curve_type:
-            return extract_composite_curve(basic_curve)
-        return _trimmed_curve_spec(_raw_text(basic_curve, "./{*}_serializationGeometryDescription"))
-
     geometry_id = int(_text(geometry, "./{*}Key/{*}ID", "0") or "0")
     feature_id = _text(feature, "./{*}Key/{*}ID")
     workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
     depth_variable_name = _workpiece_depth_name(workpiece)
     toolpath_by_type = {
-        _text(toolpath, "./{*}Type"): extract_toolpath_curve(toolpath)
+        _text(toolpath, "./{*}Type"): _curve_spec_from_toolpath_node(toolpath)
         for toolpath in operation.findall("./{*}ToolpathList/{*}Toolpath")
     }
     matching_expressions = [
@@ -2200,7 +2173,7 @@ def _extract_polyline_milling_template(source_pgmx_path: Path) -> dict[str, obje
         "milling_strategy": _extract_milling_strategy_spec_from_operation(operation),
         "approach": _extract_approach_spec_from_operation(operation),
         "retract": _extract_retract_spec_from_operation(operation),
-        "geometry_curve": extract_composite_curve(geometry),
+        "geometry_curve": _curve_spec_from_composite_curve_node(geometry),
         "approach_curve": toolpath_by_type.get("Approach"),
         "trajectory_curve": toolpath_by_type.get("TrajectoryPath"),
         "lift_curve": toolpath_by_type.get("Lift"),
@@ -2261,24 +2234,12 @@ def _extract_circle_milling_template(source_pgmx_path: Path) -> dict[str, object
     if geometry is None or feature is None or operation is None:
         raise ValueError(f"El archivo '{source_pgmx_path}' no contiene una plantilla de fresado circular compatible.")
 
-    def extract_toolpath_curve(toolpath: ET.Element) -> _CurveSpec:
-        basic_curve = toolpath.find("./{*}BasicCurve")
-        curve_type = _xsi_type(basic_curve)
-        if "GeomCompositeCurve" in curve_type:
-            return _composite_curve_spec(
-                [member.text or "" for member in basic_curve.findall("./{*}_serializingMembers/{*}string")],
-                [(key.text or "").strip() for key in basic_curve.findall("./{*}_serializingKeys/{*}unsignedInt")],
-            )
-        if "GeomCircle" in curve_type:
-            return _circle_curve_spec(_raw_text(basic_curve, "./{*}_serializationGeometryDescription"))
-        return _trimmed_curve_spec(_raw_text(basic_curve, "./{*}_serializationGeometryDescription"))
-
     geometry_id = int(_text(geometry, "./{*}Key/{*}ID", "0") or "0")
     feature_id = _text(feature, "./{*}Key/{*}ID")
     workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
     depth_variable_name = _workpiece_depth_name(workpiece)
     toolpath_by_type = {
-        _text(toolpath, "./{*}Type"): extract_toolpath_curve(toolpath)
+        _text(toolpath, "./{*}Type"): _curve_spec_from_toolpath_node(toolpath)
         for toolpath in operation.findall("./{*}ToolpathList/{*}Toolpath")
     }
     matching_expressions = [
@@ -5525,22 +5486,9 @@ HydratedMachiningSpec = Union[
 def _extract_pocket_milling_template(source_pgmx_path: Path) -> dict[str, object]:
     root, _, _ = _load_pgmx_container(source_pgmx_path)
 
-    def extract_composite_curve(node: ET.Element) -> _CurveSpec:
-        return _composite_curve_spec(
-            [member.text or "" for member in node.findall("./{*}_serializingMembers/{*}string")],
-            [(key.text or "").strip() for key in node.findall("./{*}_serializingKeys/{*}unsignedInt")],
-        )
-
     def extract_curve_xy_points(node: ET.Element) -> tuple[tuple[float, float], ...]:
-        points = _curve_spec_points(extract_composite_curve(node)) or ()
+        points = _curve_spec_points(_curve_spec_from_composite_curve_node(node)) or ()
         return tuple((point[0], point[1]) for point in points)
-
-    def extract_toolpath_curve(toolpath: ET.Element) -> _CurveSpec:
-        basic_curve = toolpath.find("./{*}BasicCurve")
-        curve_type = _xsi_type(basic_curve)
-        if "GeomCompositeCurve" in curve_type:
-            return extract_composite_curve(basic_curve)
-        return _trimmed_curve_spec(_raw_text(basic_curve, "./{*}_serializationGeometryDescription"))
 
     geometry = next(
         (
@@ -5595,7 +5543,7 @@ def _extract_pocket_milling_template(source_pgmx_path: Path) -> dict[str, object
         if route_geometry is not None:
             boss_route_seed_contours.append(extract_curve_xy_points(route_geometry))
     trajectory_curves = tuple(
-        extract_toolpath_curve(toolpath)
+        _curve_spec_from_toolpath_node(toolpath)
         for toolpath in operation.findall("./{*}ToolpathList/{*}Toolpath")
         if _text(toolpath, "./{*}Type") == "TrajectoryPath"
     )
@@ -5612,7 +5560,7 @@ def _extract_pocket_milling_template(source_pgmx_path: Path) -> dict[str, object
             matching_expressions,
             depth_variable_name,
         ),
-        "geometry_curve": extract_composite_curve(geometry),
+        "geometry_curve": _curve_spec_from_composite_curve_node(geometry),
         "tool_width": float(_text(feature, "./{*}SweptShape/{*}Width", "0") or "0"),
         "tool_id": _text(operation, "./{*}ToolKey/{*}ID"),
         "tool_name": _text(operation, "./{*}ToolKey/{*}Name"),
