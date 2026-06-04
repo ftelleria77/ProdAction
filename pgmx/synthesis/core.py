@@ -99,6 +99,18 @@ from .common.geometry import (
     _extract_geometry_profile,
     _build_compensated_profile_geometry,
     _line_primitive_at_plane,
+    _line_primitive_3d,
+    _line_unit_direction,
+    _primitive_at_z,
+    _profile_at_z,
+    _profile_endpoint_directions,
+    _profile_endpoint_points,
+    _profile_endpoint_points_3d,
+    _profile_entry_exit_context,
+    _resolve_toolpath_direction,
+    _reverse_geometry_primitive,
+    _reverse_profile_geometry,
+    _vertical_transition_primitive,
     _normalize_side_of_feature,
     _primitive_winding,
     _normalize_curve_serialization_text,
@@ -1608,30 +1620,6 @@ def _build_squaring_geometry_profile(
     return build_composite_geometry_profile(tuple(primitives))
 
 
-def _line_unit_direction(start_x: float, start_y: float, end_x: float, end_y: float) -> tuple[float, float]:
-    delta_x = end_x - start_x
-    delta_y = end_y - start_y
-    length = math.hypot(delta_x, delta_y)
-    if length <= 1e-9:
-        raise ValueError("No se puede sintetizar un fresado lineal con longitud cero.")
-    return (delta_x / length, delta_y / length)
-
-
-def _resolve_toolpath_direction(
-    toolpath_start: tuple[float, float],
-    toolpath_end: tuple[float, float],
-    direction: Optional[tuple[float, float]] = None,
-) -> tuple[float, float]:
-    if direction is not None:
-        return direction
-    return _line_unit_direction(
-        toolpath_start[0],
-        toolpath_start[1],
-        toolpath_end[0],
-        toolpath_end[1],
-    )
-
-
 def _preferred_side_for_arc(side_of_feature: str, arc_side: str) -> str:
     normalized_side = _normalize_side_of_feature(side_of_feature)
     if normalized_side != "Center":
@@ -1977,73 +1965,6 @@ def _build_up_arc_exit_curve(
     )
 
 
-def _profile_endpoint_points(profile: GeometryProfileSpec) -> tuple[tuple[float, float], tuple[float, float]]:
-    """Devuelve inicio y fin XY del recorrido efectivo."""
-
-    if profile.geometry_type == "GeomCircle":
-        if profile.center_point is None or profile.radius is None:
-            raise ValueError("El perfil circular necesita centro y radio para exponer sus extremos.")
-        start_point = (profile.center_point[0] + profile.radius, profile.center_point[1])
-        return start_point, start_point
-
-    if not profile.primitives:
-        raise ValueError("El perfil compensado no contiene primitivas.")
-    first_primitive = profile.primitives[0]
-    last_primitive = profile.primitives[-1]
-    return (
-        (first_primitive.start_point[0], first_primitive.start_point[1]),
-        (last_primitive.end_point[0], last_primitive.end_point[1]),
-    )
-
-
-def _profile_endpoint_directions(
-    profile: GeometryProfileSpec,
-) -> tuple[Optional[tuple[float, float]], Optional[tuple[float, float]]]:
-    """Devuelve tangentes XY de entrada y salida del perfil compensado."""
-
-    if profile.geometry_type == "GeomCircle":
-        winding = _normalize_geometry_winding(profile.winding)
-        tangent = (0.0, 1.0 if winding == "CounterClockwise" else -1.0)
-        return tangent, tangent
-
-    if not profile.primitives:
-        return None, None
-    return _primitive_start_tangent_2d(profile.primitives[0]), _primitive_end_tangent_2d(profile.primitives[-1])
-
-
-def _profile_entry_exit_context(
-    profile: GeometryProfileSpec,
-) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float], tuple[float, float]]:
-    """Resuelve punto y tangente de entrada/salida para cualquier trayectoria compensada."""
-
-    start_point, end_point = _profile_endpoint_points(profile)
-    start_direction, end_direction = _profile_endpoint_directions(profile)
-
-    if start_direction is None:
-        start_direction = _resolve_toolpath_direction(start_point, end_point)
-    if end_direction is None:
-        end_direction = _resolve_toolpath_direction(start_point, end_point)
-
-    return start_point, end_point, start_direction, end_direction
-
-
-def _profile_endpoint_points_3d(
-    profile: GeometryProfileSpec,
-) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
-    if profile.geometry_type == "GeomCircle":
-        if profile.center_point is None or profile.radius is None:
-            raise ValueError("El perfil circular necesita centro y radio para exponer sus extremos 3D.")
-        start_point = (
-            profile.center_point[0] + profile.radius,
-            profile.center_point[1],
-            profile.center_point[2],
-        )
-        return start_point, start_point
-    if not profile.primitives:
-        raise ValueError("El perfil compensado no contiene primitivas.")
-    return profile.primitives[0].start_point, profile.primitives[-1].end_point
-
-
 def _strategy_is_multilevel(strategy: Optional[MillingStrategySpec]) -> bool:
     normalized_strategy = _normalize_milling_strategy_spec(strategy)
     if normalized_strategy is None:
@@ -2131,139 +2052,6 @@ def _helical_rough_end_levels(
     if not levels or not math.isclose(levels[-1], helical_end_level, abs_tol=1e-9):
         levels.append(helical_end_level)
     return tuple(levels)
-
-
-def _line_primitive_3d(
-    start_point: tuple[float, float, float],
-    end_point: tuple[float, float, float],
-) -> GeometryPrimitiveSpec:
-    return build_line_geometry_primitive(
-        start_point[0],
-        start_point[1],
-        end_point[0],
-        end_point[1],
-        start_z=start_point[2],
-        end_z=end_point[2],
-    )
-
-
-def _vertical_transition_primitive(
-    xy_point: tuple[float, float],
-    start_z: float,
-    end_z: float,
-) -> GeometryPrimitiveSpec:
-    return _line_primitive_3d(
-        (xy_point[0], xy_point[1], start_z),
-        (xy_point[0], xy_point[1], end_z),
-    )
-
-
-def _primitive_at_z(primitive: GeometryPrimitiveSpec, z_value: float) -> GeometryPrimitiveSpec:
-    if primitive.primitive_type == "Line":
-        return GeometryPrimitiveSpec(
-            primitive_type="Line",
-            start_point=(primitive.start_point[0], primitive.start_point[1], z_value),
-            end_point=(primitive.end_point[0], primitive.end_point[1], z_value),
-            parameter_start=primitive.parameter_start,
-            parameter_end=primitive.parameter_end,
-            direction_hint=primitive.direction_hint,
-        )
-    if primitive.primitive_type == "Arc":
-        if (
-            primitive.center_point is None
-            or primitive.radius is None
-            or primitive.normal_vector is None
-            or primitive.u_vector is None
-            or primitive.v_vector is None
-        ):
-            raise ValueError("La primitiva de arco necesita centro, radio y base orientada.")
-        return GeometryPrimitiveSpec(
-            primitive_type="Arc",
-            start_point=(primitive.start_point[0], primitive.start_point[1], z_value),
-            end_point=(primitive.end_point[0], primitive.end_point[1], z_value),
-            parameter_start=primitive.parameter_start,
-            parameter_end=primitive.parameter_end,
-            center_point=(primitive.center_point[0], primitive.center_point[1], z_value),
-            radius=primitive.radius,
-            normal_vector=primitive.normal_vector,
-            u_vector=primitive.u_vector,
-            v_vector=primitive.v_vector,
-        )
-    raise ValueError(f"Tipo de primitiva no soportado para reasignar z: {primitive.primitive_type}")
-
-
-def _profile_at_z(profile: GeometryProfileSpec, z_value: float) -> GeometryProfileSpec:
-    if profile.geometry_type == "GeomCircle":
-        if profile.center_point is None or profile.radius is None:
-            raise ValueError("El perfil circular necesita centro y radio para reasignar z.")
-        return build_circle_geometry_profile(
-            profile.center_point[0],
-            profile.center_point[1],
-            profile.radius,
-            z_value=z_value,
-            winding=profile.winding,
-        )
-    if not profile.primitives:
-        raise ValueError("El perfil necesita primitivas para reasignar z.")
-    return _build_profile_geometry_spec(
-        geometry_type=profile.geometry_type,
-        primitives=tuple(_primitive_at_z(primitive, z_value) for primitive in profile.primitives),
-    )
-
-
-def _reverse_geometry_primitive(primitive: GeometryPrimitiveSpec) -> GeometryPrimitiveSpec:
-    if primitive.primitive_type == "Line":
-        return GeometryPrimitiveSpec(
-            primitive_type="Line",
-            start_point=primitive.end_point,
-            end_point=primitive.start_point,
-            parameter_start=primitive.parameter_start,
-            parameter_end=primitive.parameter_end,
-            direction_hint=(
-                None
-                if primitive.direction_hint is None
-                else (
-                    -primitive.direction_hint[0],
-                    -primitive.direction_hint[1],
-                    -primitive.direction_hint[2],
-                )
-            ),
-        )
-    if primitive.primitive_type == "Arc":
-        if primitive.center_point is None:
-            raise ValueError("La primitiva de arco necesita centro para invertirse.")
-        return build_arc_geometry_primitive(
-            primitive.end_point[0],
-            primitive.end_point[1],
-            primitive.start_point[0],
-            primitive.start_point[1],
-            primitive.center_point[0],
-            primitive.center_point[1],
-            z_value=primitive.center_point[2],
-            winding="Clockwise" if _primitive_winding(primitive) == "CounterClockwise" else "CounterClockwise",
-        )
-    raise ValueError(f"Tipo de primitiva no soportado para invertir: {primitive.primitive_type}")
-
-
-def _reverse_profile_geometry(profile: GeometryProfileSpec) -> GeometryProfileSpec:
-    if profile.geometry_type == "GeomCircle":
-        if profile.center_point is None or profile.radius is None:
-            raise ValueError("El perfil circular necesita centro y radio para invertirse.")
-        reversed_winding = "Clockwise" if _normalize_geometry_winding(profile.winding) == "CounterClockwise" else "CounterClockwise"
-        return build_circle_geometry_profile(
-            profile.center_point[0],
-            profile.center_point[1],
-            profile.radius,
-            z_value=profile.center_point[2],
-            winding=reversed_winding,
-        )
-    return _build_profile_geometry_spec(
-        geometry_type=profile.geometry_type,
-        primitives=tuple(
-            _reverse_geometry_primitive(primitive)
-            for primitive in reversed(profile.primitives)
-        ),
-    )
 
 
 def _build_unidirectional_line_strategy_profile(
