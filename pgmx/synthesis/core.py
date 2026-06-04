@@ -284,6 +284,7 @@ from .milling.profile import (
     PolylineMillingSpec,
     _build_polyline_toolpath_profile,
     _can_hydrate_exact_polyline_serialization,
+    _extract_polyline_milling_template,
     _matches_polyline_geometry,
     _normalize_polyline_milling_spec,
     _validate_polyline_postprocessable_by_maestro,
@@ -2043,74 +2044,6 @@ def _hydrate_slot_milling_spec(
 ) -> _HydratedSlotMillingSpec:
     del source_pgmx_path
     return _HydratedSlotMillingSpec(spec=_normalize_slot_milling_spec(slot_milling))
-
-
-def _extract_polyline_milling_template(source_pgmx_path: Path) -> dict[str, object]:
-    root, _, _ = _load_pgmx_container(source_pgmx_path)
-
-    geometry = next(
-        (
-            node
-            for node in root.findall("./{*}Geometries/{*}GeomGeometry")
-            if "GeomCompositeCurve" in _xsi_type(node)
-        ),
-        None,
-    )
-    feature = next(
-        (
-            node
-            for node in root.findall("./{*}Features/{*}ManufacturingFeature")
-            if "GeneralProfileFeature" in _xsi_type(node)
-        ),
-        None,
-    )
-    operation = next(
-        (
-            node
-            for node in root.findall("./{*}Operations/{*}Operation")
-            if "BottomAndSideFinishMilling" in _xsi_type(node)
-        ),
-        None,
-    )
-    if geometry is None or feature is None or operation is None:
-        raise ValueError(f"El archivo '{source_pgmx_path}' no contiene una plantilla de fresado por polilinea compatible.")
-
-    geometry_id = int(_text(geometry, "./{*}Key/{*}ID", "0") or "0")
-    feature_id = _text(feature, "./{*}Key/{*}ID")
-    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
-    depth_variable_name = _workpiece_depth_name(workpiece)
-    toolpath_by_type = {
-        _text(toolpath, "./{*}Type"): _curve_spec_from_toolpath_node(toolpath)
-        for toolpath in operation.findall("./{*}ToolpathList/{*}Toolpath")
-    }
-    matching_expressions = [
-        node
-        for node in root.findall("./{*}Expressions/{*}Expression")
-        if _text(node, "./{*}ReferencedObject/{*}ID") == feature_id
-    ]
-    expression_ids = [int(_text(node, "./{*}Key/{*}ID", "0") or "0") for node in matching_expressions]
-    preferred_start = min([geometry_id] + expression_ids) if expression_ids else geometry_id
-
-    return {
-        "preferred_id_start": preferred_start,
-        "depth_spec": _extract_depth_spec_from_template(
-            feature,
-            operation,
-            matching_expressions,
-            depth_variable_name,
-        ),
-        "side_of_feature": _normalize_side_of_feature(_text(feature, "./{*}SideOfFeature", "Center")),
-        "tool_width": float(_text(feature, "./{*}SweptShape/{*}Width", "0") or "0"),
-        "tool_id": _text(operation, "./{*}ToolKey/{*}ID"),
-        "tool_name": _text(operation, "./{*}ToolKey/{*}Name"),
-        "milling_strategy": _extract_milling_strategy_spec_from_operation(operation),
-        "approach": _extract_approach_spec_from_operation(operation),
-        "retract": _extract_retract_spec_from_operation(operation),
-        "geometry_curve": _curve_spec_from_composite_curve_node(geometry),
-        "approach_curve": toolpath_by_type.get("Approach"),
-        "trajectory_curve": toolpath_by_type.get("TrajectoryPath"),
-        "lift_curve": toolpath_by_type.get("Lift"),
-    }
 
 
 def _hydrate_polyline_milling_spec(

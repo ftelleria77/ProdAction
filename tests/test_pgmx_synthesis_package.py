@@ -386,6 +386,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             core_sp._can_hydrate_exact_polyline_serialization,
             milling_profile._can_hydrate_exact_polyline_serialization,
         )
+        self.assertIs(core_sp._extract_polyline_milling_template, milling_profile._extract_polyline_milling_template)
         self.assertIs(milling_profile._normalize_polyline_points, common_geometry._normalize_polyline_points)
         self.assertIs(milling_profile._is_closed_polyline_points, common_geometry._is_closed_polyline_points)
         polyline = milling_profile.build_polyline_milling_spec(
