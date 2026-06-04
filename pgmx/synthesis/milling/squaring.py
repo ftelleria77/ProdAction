@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, replace
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
+from ..common.geometry import (
+    GeometryPrimitiveSpec,
+    GeometryProfileSpec,
+    _build_parameterized_line_geometry_primitive,
+    build_composite_geometry_profile,
+    build_line_geometry_primitive,
+)
 from ..common.depth import (
     MillingDepthSpec,
     _normalize_milling_depth_spec,
@@ -27,11 +35,19 @@ from ..common.strategy import (
 )
 from ._common import _normalize_geometry_winding
 
+if TYPE_CHECKING:
+    from ..common.program import PgmxState
+
 __all__ = [
     "SquaringMillingSpec",
     "build_squaring_milling_spec",
     "_normalize_squaring_milling_spec",
     "_normalize_squaring_start_edge",
+    "_with_line_direction_hint",
+    "_reparameterize_squaring_toolpath_profile",
+    "_reparameterize_line_primitive_from_end",
+    "_build_squaring_outline_points",
+    "_build_squaring_geometry_profile",
 ]
 
 
@@ -76,6 +92,185 @@ class SquaringMillingSpec:
     def side_of_feature(self) -> str:
         normalized_winding = _normalize_geometry_winding(self.winding)
         return "Right" if normalized_winding == "CounterClockwise" else "Left"
+
+
+def _build_squaring_outline_points(
+    length: float,
+    width: float,
+    *,
+    start_edge: str,
+    winding: str,
+) -> tuple[tuple[float, float], ...]:
+    length_value = float(length)
+    width_value = float(width)
+    if length_value <= 1e-9 or width_value <= 1e-9:
+        raise ValueError("El escuadrado necesita una pieza con largo y ancho mayores que cero.")
+
+    bottom_left = (0.0, 0.0)
+    bottom_right = (length_value, 0.0)
+    top_right = (length_value, width_value)
+    top_left = (0.0, width_value)
+    mid_bottom = (length_value / 2.0, 0.0)
+    mid_right = (length_value, width_value / 2.0)
+    mid_top = (length_value / 2.0, width_value)
+    mid_left = (0.0, width_value / 2.0)
+
+    normalized_start_edge = _normalize_squaring_start_edge(start_edge)
+    normalized_winding = _normalize_geometry_winding(winding)
+    if normalized_winding == "CounterClockwise":
+        mapping = {
+            "Bottom": (mid_bottom, bottom_right, top_right, top_left, bottom_left, mid_bottom),
+            "Right": (mid_right, top_right, top_left, bottom_left, bottom_right, mid_right),
+            "Top": (mid_top, top_left, bottom_left, bottom_right, top_right, mid_top),
+            "Left": (mid_left, bottom_left, bottom_right, top_right, top_left, mid_left),
+        }
+    else:
+        mapping = {
+            "Bottom": (mid_bottom, bottom_left, top_left, top_right, bottom_right, mid_bottom),
+            "Right": (mid_right, bottom_right, bottom_left, top_left, top_right, mid_right),
+            "Top": (mid_top, top_right, bottom_right, bottom_left, top_left, mid_top),
+            "Left": (mid_left, top_left, top_right, bottom_right, bottom_left, mid_left),
+        }
+    return mapping[normalized_start_edge]
+
+
+def _build_squaring_geometry_profile(
+    state: PgmxState,
+    spec: _HydratedSquaringMillingSpec,
+    *,
+    z_value: float = 0.0,
+) -> GeometryProfileSpec:
+    points = _build_squaring_outline_points(
+        state.length,
+        state.width,
+        start_edge=spec.start_edge,
+        winding=spec.winding,
+    )
+    length_value = float(state.length)
+    width_value = float(state.width)
+    target_z = float(z_value)
+    edge_length = length_value if spec.start_edge in {"Bottom", "Top"} else width_value
+
+    parameterized_edge_map: dict[tuple[str, str], tuple[tuple[float, float, float], tuple[float, float, float]]] = {
+        ("CounterClockwise", "Bottom"): ((0.0, 0.0, target_z), (1.0, 0.0, 0.0)),
+        ("CounterClockwise", "Right"): ((length_value, 0.0, target_z), (0.0, 1.0, 0.0)),
+        ("CounterClockwise", "Top"): ((length_value, width_value, target_z), (-1.0, 0.0, 0.0)),
+        ("CounterClockwise", "Left"): ((0.0, width_value, target_z), (0.0, -1.0, 0.0)),
+        ("Clockwise", "Bottom"): ((length_value, 0.0, target_z), (-1.0, 0.0, 0.0)),
+        ("Clockwise", "Right"): ((length_value, width_value, target_z), (0.0, -1.0, 0.0)),
+        ("Clockwise", "Top"): ((0.0, width_value, target_z), (1.0, 0.0, 0.0)),
+        ("Clockwise", "Left"): ((0.0, 0.0, target_z), (0.0, 1.0, 0.0)),
+    }
+    edge_origin, edge_direction = parameterized_edge_map[(spec.winding, spec.start_edge)]
+    midpoint_parameter = edge_length / 2.0
+
+    primitives = [
+        _build_parameterized_line_geometry_primitive(
+            edge_origin,
+            edge_direction,
+            midpoint_parameter,
+            edge_length,
+        ),
+        build_line_geometry_primitive(points[1][0], points[1][1], points[2][0], points[2][1], start_z=target_z, end_z=target_z),
+        build_line_geometry_primitive(points[2][0], points[2][1], points[3][0], points[3][1], start_z=target_z, end_z=target_z),
+        build_line_geometry_primitive(points[3][0], points[3][1], points[4][0], points[4][1], start_z=target_z, end_z=target_z),
+        _build_parameterized_line_geometry_primitive(
+            edge_origin,
+            edge_direction,
+            0.0,
+            midpoint_parameter,
+        ),
+    ]
+    return build_composite_geometry_profile(tuple(primitives))
+
+def _reparameterize_line_primitive_from_end(primitive: GeometryPrimitiveSpec) -> GeometryPrimitiveSpec:
+    """Reexpresa una linea con origen en su punto final y rango `[-length, 0]`.
+
+    Maestro tiende a reserializar asi los dos tramos partidos del borde inicial
+    en `TrajectoryPath` de escuadrados. La geometria efectiva no cambia; solo
+    cambia la parametrizacion textual de la recta.
+    """
+
+    if primitive.primitive_type != "Line":
+        return primitive
+    length = math.dist(primitive.start_point, primitive.end_point)
+    if length <= 1e-9:
+        return primitive
+    return GeometryPrimitiveSpec(
+        primitive_type="Line",
+        start_point=primitive.start_point,
+        end_point=primitive.end_point,
+        parameter_start=-length,
+        parameter_end=-0.0,
+        direction_hint=primitive.direction_hint,
+    )
+
+
+def _with_line_direction_hint(
+    primitive: GeometryPrimitiveSpec,
+    *,
+    z_negative_zero: bool = False,
+) -> GeometryPrimitiveSpec:
+    """Anota signos preferidos para componentes nulas de direccion en lineas."""
+
+    if primitive.primitive_type != "Line":
+        return primitive
+    dx = primitive.end_point[0] - primitive.start_point[0]
+    dy = primitive.end_point[1] - primitive.start_point[1]
+    dz = primitive.end_point[2] - primitive.start_point[2]
+    length = math.dist(primitive.start_point, primitive.end_point)
+    if length <= 1e-9:
+        return primitive
+    direction_z = -0.0 if z_negative_zero and math.isclose(dz, 0.0, abs_tol=1e-12) else (dz / length)
+    return GeometryPrimitiveSpec(
+        primitive_type="Line",
+        start_point=primitive.start_point,
+        end_point=primitive.end_point,
+        parameter_start=primitive.parameter_start,
+        parameter_end=primitive.parameter_end,
+        direction_hint=(dx / length, dy / length, direction_z),
+    )
+
+
+def _reparameterize_squaring_toolpath_profile(profile: GeometryProfileSpec) -> GeometryProfileSpec:
+    """Alinea parametrizacion y signos de direccion del escuadrado con Maestro."""
+
+    if profile.geometry_type != "GeomCompositeCurve" or len(profile.primitives) < 2:
+        return profile
+    primitives = list(profile.primitives)
+    bbox = profile.bounding_box
+    min_y = bbox[1] if bbox is not None else None
+    max_vertical_length = max(
+        (
+            math.dist(primitive.start_point, primitive.end_point)
+            for primitive in primitives
+            if primitive.primitive_type == "Line"
+            and math.isclose(primitive.start_point[0], primitive.end_point[0], abs_tol=1e-6)
+        ),
+        default=0.0,
+    )
+    if primitives[0].primitive_type == "Line":
+        primitives[0] = _reparameterize_line_primitive_from_end(primitives[0])
+        if min_y is not None and math.isclose(primitives[0].start_point[1], min_y, abs_tol=1e-6):
+            primitives[0] = _with_line_direction_hint(primitives[0], z_negative_zero=True)
+    if primitives[-1].primitive_type == "Line":
+        primitives[-1] = _reparameterize_line_primitive_from_end(primitives[-1])
+        if min_y is not None and math.isclose(primitives[-1].start_point[1], min_y, abs_tol=1e-6):
+            primitives[-1] = _with_line_direction_hint(primitives[-1], z_negative_zero=True)
+    if max_vertical_length > 0.0:
+        for index, primitive in enumerate(primitives):
+            if primitive.primitive_type != "Line":
+                continue
+            dx = primitive.end_point[0] - primitive.start_point[0]
+            dy = primitive.end_point[1] - primitive.start_point[1]
+            length = math.dist(primitive.start_point, primitive.end_point)
+            if (
+                math.isclose(dx, 0.0, abs_tol=1e-6)
+                and dy < 0.0
+                and math.isclose(length, max_vertical_length, abs_tol=1e-6)
+            ):
+                primitives[index] = _with_line_direction_hint(primitive, z_negative_zero=True)
+    return build_composite_geometry_profile(tuple(primitives))
 
 
 def _normalize_squaring_start_edge(value: Optional[str]) -> str:
