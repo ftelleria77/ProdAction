@@ -92,6 +92,30 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._parse_circle_geometry_profile, common_geometry._parse_circle_geometry_profile)
         self.assertIs(core_sp._extract_geometry_profile, common_geometry._extract_geometry_profile)
         self.assertIs(core_sp.read_pgmx_geometries, common_geometry.read_pgmx_geometries)
+        self.assertIs(core_sp.build_compensated_toolpath_profile, common_geometry.build_compensated_toolpath_profile)
+        self.assertIs(core_sp._build_compensated_profile_geometry, common_geometry._build_compensated_profile_geometry)
+        self.assertIs(core_sp._normalize_side_of_feature, common_geometry._normalize_side_of_feature)
+        self.assertIs(core_sp._line_primitive_at_plane, common_geometry._line_primitive_at_plane)
+        self.assertIs(core_sp._primitive_winding, common_geometry._primitive_winding)
+        compensated_line = common_geometry.build_compensated_toolpath_profile(
+            common_geometry.build_line_geometry_profile(0.0, 0.0, 100.0, 0.0),
+            side_of_feature="derecha",
+            tool_width=20.0,
+        )
+        self.assertEqual(compensated_line.primitives[0].start_point[:2], (0.0, -10.0))
+        self.assertEqual(compensated_line.primitives[0].end_point[:2], (100.0, -10.0))
+        compensated_corner = common_geometry.build_compensated_toolpath_profile(
+            common_geometry.build_composite_geometry_profile(
+                (
+                    common_geometry.build_line_geometry_primitive(0.0, 0.0, 100.0, 0.0),
+                    common_geometry.build_line_geometry_primitive(100.0, 0.0, 100.0, 100.0),
+                )
+            ),
+            side_of_feature="izquierda",
+            tool_width=20.0,
+        )
+        self.assertEqual(compensated_corner.primitives[0].end_point[:2], (90.0, 10.0))
+        self.assertEqual(compensated_corner.primitives[1].start_point[:2], (90.0, 10.0))
         primitive = common_geometry.GeometryPrimitiveSpec("Point", (1.0, 2.0, 0.0), (1.0, 2.0, 0.0))
         profile = common_geometry.GeometryProfileSpec("GeomCartesianPoint", "Point", primitives=(primitive,))
         self.assertEqual(profile.primitive_count, 1)
