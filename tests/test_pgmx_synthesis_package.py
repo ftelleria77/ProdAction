@@ -225,6 +225,28 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._strategy_pass_levels, common_strategy._strategy_pass_levels)
         self.assertIs(core_sp._helical_rough_end_levels, common_strategy._helical_rough_end_levels)
         self.assertIs(
+            core_sp._build_unidirectional_line_strategy_profile,
+            common_strategy._build_unidirectional_line_strategy_profile,
+        )
+        self.assertIs(
+            core_sp._build_bidirectional_line_strategy_profile,
+            common_strategy._build_bidirectional_line_strategy_profile,
+        )
+        self.assertIs(
+            core_sp._build_unidirectional_open_profile_strategy_toolpath,
+            common_strategy._build_unidirectional_open_profile_strategy_toolpath,
+        )
+        self.assertIs(
+            core_sp._build_bidirectional_open_profile_strategy_toolpath,
+            common_strategy._build_bidirectional_open_profile_strategy_toolpath,
+        )
+        self.assertIs(core_sp._build_closed_profile_strategy_toolpath, common_strategy._build_closed_profile_strategy_toolpath)
+        self.assertIs(core_sp._build_helical_arc_primitive, common_strategy._build_helical_arc_primitive)
+        self.assertIs(
+            core_sp._build_helical_circle_strategy_toolpath,
+            common_strategy._build_helical_circle_strategy_toolpath,
+        )
+        self.assertIs(
             core_sp._resolve_unidirectional_connection_mode,
             common_strategy._resolve_unidirectional_connection_mode,
         )

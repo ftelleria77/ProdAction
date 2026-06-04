@@ -184,6 +184,13 @@ from .common.strategy import (
     MillingStrategySpec,
     UnidirectionalMillingStrategySpec,
     _ensure_milling_strategy_allowed,
+    _build_bidirectional_line_strategy_profile,
+    _build_bidirectional_open_profile_strategy_toolpath,
+    _build_closed_profile_strategy_toolpath,
+    _build_helical_arc_primitive,
+    _build_helical_circle_strategy_toolpath,
+    _build_unidirectional_line_strategy_profile,
+    _build_unidirectional_open_profile_strategy_toolpath,
     _helical_rough_end_levels,
     _normalize_milling_strategy_spec,
     _normalize_strategy_connection_mode,
@@ -1841,315 +1848,6 @@ def _build_up_arc_exit_curve(
     )
 
 
-def _build_unidirectional_line_strategy_profile(
-    state: PgmxState,
-    spec,
-    base_profile: GeometryProfileSpec,
-    strategy: UnidirectionalMillingStrategySpec,
-) -> GeometryProfileSpec:
-    pass_levels = _strategy_pass_levels(float(state.depth), _toolpath_cut_z(state, spec), strategy)
-    if len(pass_levels) <= 1:
-        return _profile_at_z(base_profile, pass_levels[0])
-
-    start_xy, end_xy = _profile_endpoint_points(base_profile)
-    is_closed_profile = False
-    connection_mode = _resolve_unidirectional_connection_mode(strategy, is_closed_profile=is_closed_profile)
-    clearance_level = state.depth + spec.security_plane
-    in_piece_lift = spec.security_plane / 2.0
-    primitives: list[GeometryPrimitiveSpec] = []
-
-    for index, current_level in enumerate(pass_levels):
-        primitives.append(
-            _line_primitive_3d(
-                (start_xy[0], start_xy[1], current_level),
-                (end_xy[0], end_xy[1], current_level),
-            )
-        )
-        if index == len(pass_levels) - 1:
-            continue
-        reconnect_level = (
-            clearance_level
-            if connection_mode == "SafetyHeight"
-            else current_level + in_piece_lift
-        )
-        primitives.append(_vertical_transition_primitive(end_xy, current_level, reconnect_level))
-        primitives.append(
-            _line_primitive_3d(
-                (end_xy[0], end_xy[1], reconnect_level),
-                (start_xy[0], start_xy[1], reconnect_level),
-            )
-        )
-        primitives.append(_vertical_transition_primitive(start_xy, reconnect_level, pass_levels[index + 1]))
-
-    return build_composite_geometry_profile(tuple(primitives))
-
-
-def _build_bidirectional_line_strategy_profile(
-    state: PgmxState,
-    spec,
-    base_profile: GeometryProfileSpec,
-    strategy: BidirectionalMillingStrategySpec,
-) -> GeometryProfileSpec:
-    pass_levels = _strategy_pass_levels(float(state.depth), _toolpath_cut_z(state, spec), strategy)
-    if len(pass_levels) <= 1:
-        return _profile_at_z(base_profile, pass_levels[0])
-
-    start_xy, end_xy = _profile_endpoint_points(base_profile)
-    primitives: list[GeometryPrimitiveSpec] = []
-    current_forward = True
-
-    for index, current_level in enumerate(pass_levels):
-        current_start = start_xy if current_forward else end_xy
-        current_end = end_xy if current_forward else start_xy
-        primitives.append(
-            _line_primitive_3d(
-                (current_start[0], current_start[1], current_level),
-                (current_end[0], current_end[1], current_level),
-            )
-        )
-        if index == len(pass_levels) - 1:
-            continue
-        primitives.append(
-            _vertical_transition_primitive(
-                current_end,
-                current_level,
-                pass_levels[index + 1],
-            )
-        )
-        current_forward = not current_forward
-
-    return build_composite_geometry_profile(tuple(primitives))
-
-
-def _build_unidirectional_open_profile_strategy_toolpath(
-    state: PgmxState,
-    spec,
-    base_profile: GeometryProfileSpec,
-    strategy: UnidirectionalMillingStrategySpec,
-) -> GeometryProfileSpec:
-    pass_levels = _strategy_pass_levels(float(state.depth), _toolpath_cut_z(state, spec), strategy)
-    if len(pass_levels) <= 1:
-        return _profile_at_z(base_profile, pass_levels[0])
-
-    connection_mode = _resolve_unidirectional_connection_mode(strategy, is_closed_profile=False)
-    clearance_level = state.depth + spec.security_plane
-    in_piece_lift = spec.security_plane / 2.0
-    primitives: list[GeometryPrimitiveSpec] = []
-
-    for index, current_level in enumerate(pass_levels):
-        forward_profile = _profile_at_z(base_profile, current_level)
-        primitives.extend(forward_profile.primitives)
-        if index == len(pass_levels) - 1:
-            continue
-
-        forward_end = forward_profile.primitives[-1].end_point
-        reverse_reconnect_level = (
-            clearance_level
-            if connection_mode == "SafetyHeight"
-            else current_level + in_piece_lift
-        )
-        primitives.append(
-            _vertical_transition_primitive(
-                (forward_end[0], forward_end[1]),
-                current_level,
-                reverse_reconnect_level,
-            )
-        )
-
-        reverse_profile = _reverse_profile_geometry(_profile_at_z(base_profile, reverse_reconnect_level))
-        primitives.extend(reverse_profile.primitives)
-        reverse_end = reverse_profile.primitives[-1].end_point
-        primitives.append(
-            _vertical_transition_primitive(
-                (reverse_end[0], reverse_end[1]),
-                reverse_reconnect_level,
-                pass_levels[index + 1],
-            )
-        )
-
-    return build_composite_geometry_profile(tuple(primitives))
-
-
-def _build_bidirectional_open_profile_strategy_toolpath(
-    state: PgmxState,
-    spec,
-    base_profile: GeometryProfileSpec,
-    strategy: BidirectionalMillingStrategySpec,
-) -> GeometryProfileSpec:
-    pass_levels = _strategy_pass_levels(float(state.depth), _toolpath_cut_z(state, spec), strategy)
-    if len(pass_levels) <= 1:
-        return _profile_at_z(base_profile, pass_levels[0])
-
-    primitives: list[GeometryPrimitiveSpec] = []
-    current_forward = True
-
-    for index, current_level in enumerate(pass_levels):
-        current_profile = _profile_at_z(base_profile, current_level)
-        if not current_forward:
-            current_profile = _reverse_profile_geometry(current_profile)
-        primitives.extend(current_profile.primitives)
-        if index == len(pass_levels) - 1:
-            continue
-
-        current_end = current_profile.primitives[-1].end_point
-        primitives.append(
-            _vertical_transition_primitive(
-                (current_end[0], current_end[1]),
-                current_level,
-                pass_levels[index + 1],
-            )
-        )
-        current_forward = not current_forward
-
-    return build_composite_geometry_profile(tuple(primitives))
-
-
-def _build_closed_profile_strategy_toolpath(
-    state: PgmxState,
-    spec,
-    base_profile: GeometryProfileSpec,
-    strategy: MillingStrategySpec,
-) -> GeometryProfileSpec:
-    pass_levels = _strategy_pass_levels(float(state.depth), _toolpath_cut_z(state, spec), strategy)
-    if len(pass_levels) <= 1:
-        return _profile_at_z(base_profile, pass_levels[0])
-
-    primitives: list[GeometryPrimitiveSpec] = []
-    for index, current_level in enumerate(pass_levels):
-        loop_profile = _profile_at_z(base_profile, current_level)
-        if isinstance(strategy, BidirectionalMillingStrategySpec) and index % 2 == 1:
-            loop_profile = _reverse_profile_geometry(loop_profile)
-        primitives.extend(loop_profile.primitives)
-        if index == len(pass_levels) - 1:
-            continue
-        loop_end = loop_profile.primitives[-1].end_point
-        primitives.append(
-            _vertical_transition_primitive(
-                (loop_end[0], loop_end[1]),
-                current_level,
-                pass_levels[index + 1],
-            )
-        )
-    return build_composite_geometry_profile(tuple(primitives))
-
-
-def _build_helical_arc_primitive(
-    flat_arc: GeometryPrimitiveSpec,
-    *,
-    start_z: float,
-    end_z: float,
-) -> GeometryPrimitiveSpec:
-    if (
-        flat_arc.primitive_type != "Arc"
-        or flat_arc.center_point is None
-        or flat_arc.radius is None
-    ):
-        raise ValueError("La estrategia helicoidal sobre circulo requiere primitivas de arco planas.")
-
-    tangent_xy = _primitive_start_tangent_2d(flat_arc)
-    if tangent_xy is None:
-        raise ValueError("No se pudo resolver la tangente de arranque del arco helicoidal.")
-
-    center_x = flat_arc.center_point[0]
-    center_y = flat_arc.center_point[1]
-    center_z = (float(start_z) + float(end_z)) / 2.0
-    radius_3d = math.hypot(float(flat_arc.radius), (float(start_z) - float(end_z)) / 2.0)
-    if radius_3d <= 1e-9:
-        raise ValueError("El arco helicoidal requiere radio 3D positivo.")
-
-    start_angle = float(flat_arc.parameter_start)
-    start_point = (flat_arc.start_point[0], flat_arc.start_point[1], float(start_z))
-    end_point = (flat_arc.end_point[0], flat_arc.end_point[1], float(end_z))
-    radial_start = (
-        (start_point[0] - center_x) / radius_3d,
-        (start_point[1] - center_y) / radius_3d,
-        (start_point[2] - center_z) / radius_3d,
-    )
-    tangent_start = (tangent_xy[0], tangent_xy[1], 0.0)
-    cos_start = math.cos(start_angle)
-    sin_start = math.sin(start_angle)
-    u_vector = (
-        (radial_start[0] * cos_start) - (tangent_start[0] * sin_start),
-        (radial_start[1] * cos_start) - (tangent_start[1] * sin_start),
-        (radial_start[2] * cos_start) - (tangent_start[2] * sin_start),
-    )
-    v_vector = (
-        (radial_start[0] * sin_start) + (tangent_start[0] * cos_start),
-        (radial_start[1] * sin_start) + (tangent_start[1] * cos_start),
-        (radial_start[2] * sin_start) + (tangent_start[2] * cos_start),
-    )
-    normal_vector = (
-        (u_vector[1] * v_vector[2]) - (u_vector[2] * v_vector[1]),
-        (u_vector[2] * v_vector[0]) - (u_vector[0] * v_vector[2]),
-        (u_vector[0] * v_vector[1]) - (u_vector[1] * v_vector[0]),
-    )
-    return GeometryPrimitiveSpec(
-        primitive_type="Arc",
-        start_point=start_point,
-        end_point=end_point,
-        parameter_start=flat_arc.parameter_start,
-        parameter_end=flat_arc.parameter_end,
-        center_point=(center_x, center_y, center_z),
-        radius=radius_3d,
-        normal_vector=normal_vector,
-        u_vector=u_vector,
-        v_vector=v_vector,
-    )
-
-
-def _build_helical_circle_strategy_toolpath(
-    state: PgmxState,
-    spec,
-    base_profile: GeometryProfileSpec,
-    strategy: HelicalMillingStrategySpec,
-) -> GeometryProfileSpec:
-    if (
-        base_profile.geometry_type != "GeomCompositeCurve"
-        or len(base_profile.primitives) != 2
-        or any(primitive.primitive_type != "Arc" for primitive in base_profile.primitives)
-    ):
-        raise ValueError(
-            "La estrategia Helicoidal hoy espera un circulo compensado compuesto por dos semicircunferencias."
-        )
-
-    final_level = _toolpath_cut_z(state, spec)
-    rough_end_levels = _helical_rough_end_levels(float(state.depth), final_level, strategy)
-    current_level = float(state.depth)
-    primitives: list[GeometryPrimitiveSpec] = []
-
-    for rough_end_level in rough_end_levels:
-        midpoint_level = (current_level + rough_end_level) / 2.0
-        primitives.append(
-            _build_helical_arc_primitive(
-                base_profile.primitives[0],
-                start_z=current_level,
-                end_z=midpoint_level,
-            )
-        )
-        primitives.append(
-            _build_helical_arc_primitive(
-                base_profile.primitives[1],
-                start_z=midpoint_level,
-                end_z=rough_end_level,
-            )
-        )
-        current_level = rough_end_level
-
-    if strategy.allows_finish_cutting:
-        loop_end_point = primitives[-1].end_point
-        if not math.isclose(current_level, final_level, abs_tol=1e-9):
-            primitives.append(
-                _vertical_transition_primitive(
-                    (loop_end_point[0], loop_end_point[1]),
-                    current_level,
-                    final_level,
-                )
-            )
-        primitives.extend(_profile_at_z(base_profile, final_level).primitives)
-
-    return build_composite_geometry_profile(tuple(primitives))
-
-
 def _build_line_toolpath_profile(state: PgmxState, spec: _HydratedLineMillingSpec) -> GeometryProfileSpec:
     """Construye el perfil de trayectoria efectivo para un fresado lineal."""
 
@@ -2170,9 +1868,15 @@ def _build_line_toolpath_profile(state: PgmxState, spec: _HydratedLineMillingSpe
     )
     strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
     if isinstance(strategy, UnidirectionalMillingStrategySpec):
-        return _build_unidirectional_line_strategy_profile(state, spec, base_profile, strategy)
+        return _build_unidirectional_line_strategy_profile(
+            float(state.depth),
+            cut_z,
+            spec.security_plane,
+            base_profile,
+            strategy,
+        )
     if isinstance(strategy, BidirectionalMillingStrategySpec):
-        return _build_bidirectional_line_strategy_profile(state, spec, base_profile, strategy)
+        return _build_bidirectional_line_strategy_profile(float(state.depth), cut_z, base_profile, strategy)
     return base_profile
 
 
@@ -2207,10 +1911,16 @@ def _build_polyline_toolpath_profile(
     if strategy is None:
         return base_profile
     if nominal_profile.is_closed:
-        return _build_closed_profile_strategy_toolpath(state, spec, base_profile, strategy)
+        return _build_closed_profile_strategy_toolpath(float(state.depth), cut_z, base_profile, strategy)
     if isinstance(strategy, UnidirectionalMillingStrategySpec):
-        return _build_unidirectional_open_profile_strategy_toolpath(state, spec, base_profile, strategy)
-    return _build_bidirectional_open_profile_strategy_toolpath(state, spec, base_profile, strategy)
+        return _build_unidirectional_open_profile_strategy_toolpath(
+            float(state.depth),
+            cut_z,
+            spec.security_plane,
+            base_profile,
+            strategy,
+        )
+    return _build_bidirectional_open_profile_strategy_toolpath(float(state.depth), cut_z, base_profile, strategy)
 
 
 def _build_circle_toolpath_profile(
@@ -2237,8 +1947,8 @@ def _build_circle_toolpath_profile(
     if strategy is None:
         return base_profile
     if isinstance(strategy, HelicalMillingStrategySpec):
-        return _build_helical_circle_strategy_toolpath(state, spec, base_profile, strategy)
-    return _build_closed_profile_strategy_toolpath(state, spec, base_profile, strategy)
+        return _build_helical_circle_strategy_toolpath(float(state.depth), cut_z, base_profile, strategy)
+    return _build_closed_profile_strategy_toolpath(float(state.depth), cut_z, base_profile, strategy)
 
 
 def _build_squaring_toolpath_profile(
@@ -2259,7 +1969,7 @@ def _build_squaring_toolpath_profile(
     strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
     if strategy is None:
         return toolpath_profile
-    return _build_closed_profile_strategy_toolpath(state, spec, toolpath_profile, strategy)
+    return _build_closed_profile_strategy_toolpath(float(state.depth), cut_z, toolpath_profile, strategy)
 
 
 def _parse_line_serialization(text: str) -> Optional[tuple[tuple[float, float, float], tuple[float, float, float]]]:
