@@ -332,6 +332,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertEqual(retract.retract_type, "Arc")
         self.assertEqual(retract.overlap, 0.25)
         self.assertIs(core_sp.LineMillingSpec, milling_line.LineMillingSpec)
+        self.assertIs(core_sp._HydratedLineMillingSpec, milling_line._HydratedLineMillingSpec)
         self.assertIs(core_sp.build_line_milling_spec, milling_line.build_line_milling_spec)
         self.assertIs(core_sp._normalize_line_milling_spec, milling_line._normalize_line_milling_spec)
         self.assertIs(core_sp._build_line_toolpath_profile, milling_line._build_line_toolpath_profile)
@@ -339,6 +340,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._matches_line_geometry, milling_line._matches_line_geometry)
         self.assertIs(core_sp._can_hydrate_exact_serialization, milling_line._can_hydrate_exact_serialization)
         self.assertIs(core_sp._extract_line_milling_template, milling_line._extract_line_milling_template)
+        self.assertIs(core_sp._hydrate_line_milling_spec, milling_line._hydrate_line_milling_spec)
         line = milling_line.build_line_milling_spec(
             0,
             0,

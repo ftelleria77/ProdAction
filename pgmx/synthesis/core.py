@@ -264,9 +264,11 @@ from .drilling.single import (
 )
 from .milling.line import (
     LineMillingSpec,
+    _HydratedLineMillingSpec,
     _build_line_toolpath_profile,
     _can_hydrate_exact_serialization,
     _extract_line_milling_template,
+    _hydrate_line_milling_spec,
     _matches_line_geometry,
     _normalize_line_milling_spec,
     _offset_line_for_toolpath,
@@ -404,78 +406,6 @@ __all__ = [
 # ============================================================================
 # Public data model
 # ============================================================================
-
-@dataclass(frozen=True)
-class _HydratedLineMillingSpec:
-    """Datos internos de serializacion que complementan un `LineMillingSpec`."""
-
-    spec: LineMillingSpec
-    preferred_id_start: Optional[int] = None
-    geometry_serialization: Optional[str] = None
-    approach_curve: Optional[_CurveSpec] = None
-    trajectory_curve: Optional[_CurveSpec] = None
-    lift_curve: Optional[_CurveSpec] = None
-
-    @property
-    def start_x(self) -> float:
-        return self.spec.start_x
-
-    @property
-    def start_y(self) -> float:
-        return self.spec.start_y
-
-    @property
-    def end_x(self) -> float:
-        return self.spec.end_x
-
-    @property
-    def end_y(self) -> float:
-        return self.spec.end_y
-
-    @property
-    def feature_name(self) -> str:
-        return self.spec.feature_name
-
-    @property
-    def plane_name(self) -> str:
-        return self.spec.plane_name
-
-    @property
-    def side_of_feature(self) -> str:
-        return self.spec.side_of_feature
-
-    @property
-    def tool_id(self) -> str:
-        return self.spec.tool_id
-
-    @property
-    def tool_name(self) -> str:
-        return self.spec.tool_name
-
-    @property
-    def tool_width(self) -> float:
-        return self.spec.tool_width
-
-    @property
-    def security_plane(self) -> float:
-        return self.spec.security_plane
-
-    @property
-    def depth_spec(self) -> MillingDepthSpec:
-        return self.spec.depth_spec
-
-    @property
-    def approach(self) -> ApproachSpec:
-        return self.spec.approach
-
-    @property
-    def retract(self) -> RetractSpec:
-        return self.spec.retract
-
-    @property
-    def milling_strategy(self) -> Optional[MillingStrategySpec]:
-        return self.spec.milling_strategy
-
 
 @dataclass(frozen=True)
 class _HydratedSlotMillingSpec:
@@ -2021,26 +1951,6 @@ def _reserve_ids(root: ET.Element, count: int, preferred_start: Optional[int] = 
     first_default_id = int(next(_id_counter(root)))
     start_id = first_default_id if preferred_start is None else max(first_default_id, preferred_start)
     return [str(start_id + offset) for offset in range(count)]
-
-
-def _hydrate_line_milling_spec(
-    line_milling: LineMillingSpec,
-    source_pgmx_path: Optional[Path],
-) -> _HydratedLineMillingSpec:
-    normalized_line_milling = _normalize_line_milling_spec(line_milling)
-    if source_pgmx_path is None:
-        return _HydratedLineMillingSpec(spec=normalized_line_milling)
-    template = _extract_line_milling_template(source_pgmx_path)
-    if not _can_hydrate_exact_serialization(template, normalized_line_milling):
-        return _HydratedLineMillingSpec(spec=normalized_line_milling)
-    return _HydratedLineMillingSpec(
-        spec=normalized_line_milling,
-        preferred_id_start=int(template["preferred_id_start"]),
-        geometry_serialization=str(template["geometry_serialization"]),
-        approach_curve=template.get("approach_curve") if isinstance(template.get("approach_curve"), _CurveSpec) else None,
-        trajectory_curve=template.get("trajectory_curve") if isinstance(template.get("trajectory_curve"), _CurveSpec) else None,
-        lift_curve=template.get("lift_curve") if isinstance(template.get("lift_curve"), _CurveSpec) else None,
-    )
 
 
 def _hydrate_slot_milling_spec(
