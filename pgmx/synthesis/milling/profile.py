@@ -6,8 +6,12 @@ from dataclasses import dataclass, field, replace
 from typing import Optional, Sequence
 
 from ..common.geometry import (
+    GeometryProfileSpec,
+    _build_closed_polyline_geometry_profile,
+    _build_open_polyline_geometry_profile,
     _is_closed_polyline_points,
     _normalize_polyline_points,
+    build_compensated_toolpath_profile,
 )
 from ..common.depth import (
     MillingDepthSpec,
@@ -27,6 +31,9 @@ from ..common.strategy import (
     MillingStrategySpec,
     UnidirectionalMillingStrategySpec,
     _ensure_milling_strategy_allowed,
+    _build_bidirectional_open_profile_strategy_toolpath,
+    _build_closed_profile_strategy_toolpath,
+    _build_unidirectional_open_profile_strategy_toolpath,
     _normalize_milling_strategy_spec,
 )
 from ._common import _normalize_side_of_feature
@@ -34,6 +41,7 @@ from ._common import _normalize_side_of_feature
 __all__ = [
     "PolylineMillingSpec",
     "build_polyline_milling_spec",
+    "_build_polyline_toolpath_profile",
     "_is_closed_polyline_points",
     "_normalize_polyline_milling_spec",
     "_normalize_polyline_points",
@@ -101,6 +109,40 @@ def _normalize_polyline_milling_spec(polyline_milling: PolylineMillingSpec) -> P
     )
     _validate_polyline_postprocessable_by_maestro(normalized_spec)
     return normalized_spec
+
+
+def _build_polyline_toolpath_profile(
+    top_level: float,
+    final_level: float,
+    spec: PolylineMillingSpec,
+) -> GeometryProfileSpec:
+    """Construye la trayectoria compensada para una polilinea abierta o cerrada."""
+
+    cut_z = float(final_level)
+    if _is_closed_polyline_points(spec.points):
+        nominal_profile = _build_closed_polyline_geometry_profile(spec.points, z_value=cut_z)
+    else:
+        nominal_profile = _build_open_polyline_geometry_profile(spec.points, z_value=cut_z)
+    base_profile = build_compensated_toolpath_profile(
+        nominal_profile,
+        side_of_feature=spec.side_of_feature,
+        tool_width=spec.tool_width,
+        z_value=cut_z,
+    )
+    strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
+    if strategy is None:
+        return base_profile
+    if nominal_profile.is_closed:
+        return _build_closed_profile_strategy_toolpath(float(top_level), cut_z, base_profile, strategy)
+    if isinstance(strategy, UnidirectionalMillingStrategySpec):
+        return _build_unidirectional_open_profile_strategy_toolpath(
+            float(top_level),
+            cut_z,
+            spec.security_plane,
+            base_profile,
+            strategy,
+        )
+    return _build_bidirectional_open_profile_strategy_toolpath(float(top_level), cut_z, base_profile, strategy)
 
 
 def build_polyline_milling_spec(

@@ -362,6 +362,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.PolylineMillingSpec, milling_profile.PolylineMillingSpec)
         self.assertIs(core_sp.build_polyline_milling_spec, milling_profile.build_polyline_milling_spec)
         self.assertIs(core_sp._normalize_polyline_milling_spec, milling_profile._normalize_polyline_milling_spec)
+        self.assertIs(core_sp._build_polyline_toolpath_profile, milling_profile._build_polyline_toolpath_profile)
         self.assertIs(milling_profile._normalize_polyline_points, common_geometry._normalize_polyline_points)
         self.assertIs(milling_profile._is_closed_polyline_points, common_geometry._is_closed_polyline_points)
         polyline = milling_profile.build_polyline_milling_spec(
