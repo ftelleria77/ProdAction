@@ -416,6 +416,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             core_sp._can_hydrate_exact_circle_serialization,
             milling_circle._can_hydrate_exact_circle_serialization,
         )
+        self.assertIs(core_sp._extract_circle_milling_template, milling_circle._extract_circle_milling_template)
         circle = milling_circle.build_circle_milling_spec(
             center_x=50,
             center_y=60,
