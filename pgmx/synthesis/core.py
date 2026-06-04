@@ -311,6 +311,8 @@ from .milling.pocket import (
 )
 from .milling.slot import (
     SlotMillingSpec,
+    _HydratedSlotMillingSpec,
+    _hydrate_slot_milling_spec,
     _normalize_slot_milling_spec,
     build_slot_milling_spec,
 )
@@ -412,94 +414,6 @@ __all__ = [
 # ============================================================================
 # Public data model
 # ============================================================================
-
-@dataclass(frozen=True)
-class _HydratedSlotMillingSpec:
-    """Datos internos de serializacion que complementan un `SlotMillingSpec`."""
-
-    spec: SlotMillingSpec
-    preferred_id_start: Optional[int] = None
-    geometry_serialization: Optional[str] = None
-    approach_curve: Optional[_CurveSpec] = None
-    trajectory_curve: Optional[_CurveSpec] = None
-    lift_curve: Optional[_CurveSpec] = None
-
-    @property
-    def start_x(self) -> float:
-        return self.spec.start_x
-
-    @property
-    def start_y(self) -> float:
-        return self.spec.start_y
-
-    @property
-    def end_x(self) -> float:
-        return self.spec.end_x
-
-    @property
-    def end_y(self) -> float:
-        return self.spec.end_y
-
-    @property
-    def feature_name(self) -> str:
-        return self.spec.feature_name
-
-    @property
-    def plane_name(self) -> str:
-        return self.spec.plane_name
-
-    @property
-    def side_of_feature(self) -> str:
-        return self.spec.side_of_feature
-
-    @property
-    def tool_id(self) -> str:
-        return self.spec.tool_id
-
-    @property
-    def tool_name(self) -> str:
-        return self.spec.tool_name
-
-    @property
-    def tool_width(self) -> float:
-        return self.spec.tool_width
-
-    @property
-    def security_plane(self) -> float:
-        return self.spec.security_plane
-
-    @property
-    def depth_spec(self) -> MillingDepthSpec:
-        return self.spec.depth_spec
-
-    @property
-    def approach(self) -> ApproachSpec:
-        return self.spec.approach
-
-    @property
-    def retract(self) -> RetractSpec:
-        return self.spec.retract
-
-    @property
-    def milling_strategy(self) -> None:
-        return None
-
-    @property
-    def material_position(self) -> str:
-        return self.spec.material_position
-
-    @property
-    def side_offset(self) -> float:
-        return self.spec.side_offset
-
-    @property
-    def end_radius(self) -> float:
-        return self.spec.end_radius
-
-    @property
-    def slot_angle(self) -> float:
-        return self.spec.slot_angle
-
 
 @dataclass(frozen=True)
 class _HydratedSquaringMillingSpec:
@@ -1746,14 +1660,6 @@ def _reserve_ids(root: ET.Element, count: int, preferred_start: Optional[int] = 
     first_default_id = int(next(_id_counter(root)))
     start_id = first_default_id if preferred_start is None else max(first_default_id, preferred_start)
     return [str(start_id + offset) for offset in range(count)]
-
-
-def _hydrate_slot_milling_spec(
-    slot_milling: SlotMillingSpec,
-    source_pgmx_path: Optional[Path],
-) -> _HydratedSlotMillingSpec:
-    del source_pgmx_path
-    return _HydratedSlotMillingSpec(spec=_normalize_slot_milling_spec(slot_milling))
 
 
 def _hydrate_squaring_milling_spec(
