@@ -463,6 +463,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.PolylineMillingSpec, milling_profile.PolylineMillingSpec)
         self.assertIs(core_sp._HydratedPolylineMillingSpec, milling_profile._HydratedPolylineMillingSpec)
         self.assertIs(core_sp.build_polyline_milling_spec, milling_profile.build_polyline_milling_spec)
+        self.assertIs(core_sp._append_curve_profile_milling, milling_profile._append_curve_profile_milling)
         self.assertIs(core_sp._normalize_polyline_milling_spec, milling_profile._normalize_polyline_milling_spec)
         self.assertIs(core_sp._build_polyline_toolpath_profile, milling_profile._build_polyline_toolpath_profile)
         self.assertIs(core_sp._matches_polyline_geometry, milling_profile._matches_polyline_geometry)
