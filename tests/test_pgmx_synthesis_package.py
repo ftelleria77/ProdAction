@@ -8,6 +8,7 @@ from pgmx.synthesis import core as core_sp
 from pgmx.synthesis import drilling as synthesis_drilling
 from pgmx.synthesis import milling as synthesis_milling
 from pgmx.synthesis.common import depth as common_depth
+from pgmx.synthesis.common import piece as common_piece
 from pgmx.synthesis.common import xml as common_xml
 from tools import synthesize_pgmx as legacy_sp
 from tools import pgmx_synthesis as legacy_pgmx_synthesis
@@ -54,6 +55,21 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.MillingDepthSpec, common_depth.MillingDepthSpec)
         self.assertIs(common_depth.DepthSpec, common_depth.MillingDepthSpec)
         self.assertIs(core_sp.build_milling_depth_spec, common_depth.build_milling_depth_spec)
+        self.assertIs(core_sp._normalize_plane_name, common_piece._normalize_plane_name)
+        self.assertEqual(common_piece._normalize_plane_name("cara-derecha"), "Right")
+        piece = common_piece.PieceGeometry(length=500.0, width=300.0, depth=18.0)
+        drill = core_sp.build_drilling_spec(
+            center_x=40.0,
+            center_y=9.0,
+            diameter=5.0,
+            plane_name="Left",
+        )
+        self.assertEqual(common_piece._plane_local_dimensions(piece, "Left"), (300.0, 18.0))
+        self.assertEqual(common_piece._drilling_axis_span(piece, "Left"), 500.0)
+        self.assertEqual(
+            common_piece._drilling_entry_point_and_direction(piece, drill),
+            ((0.0, 260.0, 9.0), (1.0, 0.0, 0.0)),
+        )
 
 
 if __name__ == "__main__":
