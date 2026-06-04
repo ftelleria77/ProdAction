@@ -254,7 +254,9 @@ from .drilling.single import (
 )
 from .milling.line import (
     LineMillingSpec,
+    _build_line_toolpath_profile,
     _normalize_line_milling_spec,
+    _offset_line_for_toolpath,
     build_line_milling_spec,
 )
 from .milling.circle import (
@@ -1846,48 +1848,6 @@ def _build_up_arc_exit_curve(
             ),
         ]
     )
-
-
-def _build_line_toolpath_profile(state: PgmxState, spec: _HydratedLineMillingSpec) -> GeometryProfileSpec:
-    """Construye el perfil de trayectoria efectivo para un fresado lineal."""
-
-    cut_z = _toolpath_cut_z(state, spec)
-    nominal_profile = build_line_geometry_profile(
-        spec.start_x,
-        spec.start_y,
-        spec.end_x,
-        spec.end_y,
-        start_z=cut_z,
-        end_z=cut_z,
-    )
-    base_profile = build_compensated_toolpath_profile(
-        nominal_profile,
-        side_of_feature=spec.side_of_feature,
-        tool_width=spec.tool_width,
-        z_value=cut_z,
-    )
-    strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
-    if isinstance(strategy, UnidirectionalMillingStrategySpec):
-        return _build_unidirectional_line_strategy_profile(
-            float(state.depth),
-            cut_z,
-            spec.security_plane,
-            base_profile,
-            strategy,
-        )
-    if isinstance(strategy, BidirectionalMillingStrategySpec):
-        return _build_bidirectional_line_strategy_profile(float(state.depth), cut_z, base_profile, strategy)
-    return base_profile
-
-
-def _offset_line_for_toolpath(spec: _HydratedLineMillingSpec) -> tuple[tuple[float, float], tuple[float, float]]:
-    toolpath_profile = build_compensated_toolpath_profile(
-        build_line_geometry_profile(spec.start_x, spec.start_y, spec.end_x, spec.end_y),
-        side_of_feature=spec.side_of_feature,
-        tool_width=spec.tool_width,
-    )
-    return _profile_endpoint_points(toolpath_profile)
-
 
 
 def _build_polyline_toolpath_profile(
@@ -5130,7 +5090,7 @@ def _append_line_milling(root: ET.Element, state: PgmxState, spec: _HydratedLine
     geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
     start_expression_id = reserved_ids[4] if uses_depth_expressions else None
     end_expression_id = reserved_ids[5] if uses_depth_expressions else None
-    generated_toolpath_profile = _build_line_toolpath_profile(state, spec)
+    generated_toolpath_profile = _build_line_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
     toolpath_start, toolpath_end, _, _ = _profile_entry_exit_context(generated_toolpath_profile)
     approach_curve = spec.approach_curve
     if approach_curve is None:
@@ -5212,7 +5172,7 @@ def _append_slot_milling(root: ET.Element, state: PgmxState, spec: _HydratedSlot
     geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
     start_expression_id = reserved_ids[4] if uses_depth_expressions else None
     end_expression_id = reserved_ids[5] if uses_depth_expressions else None
-    generated_toolpath_profile = _build_line_toolpath_profile(state, spec)
+    generated_toolpath_profile = _build_line_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
     toolpath_start, toolpath_end, _, _ = _profile_entry_exit_context(generated_toolpath_profile)
     approach_curve = spec.approach_curve
     if approach_curve is None:

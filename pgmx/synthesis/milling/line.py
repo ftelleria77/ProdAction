@@ -10,6 +10,12 @@ from ..common.depth import (
     _normalize_milling_depth_spec,
     build_milling_depth_spec,
 )
+from ..common.geometry import (
+    GeometryProfileSpec,
+    _profile_endpoint_points,
+    build_compensated_toolpath_profile,
+    build_line_geometry_profile,
+)
 from ..common.leads import (
     ApproachSpec,
     RetractSpec,
@@ -23,6 +29,8 @@ from ..common.strategy import (
     MillingStrategySpec,
     UnidirectionalMillingStrategySpec,
     _ensure_milling_strategy_allowed,
+    _build_bidirectional_line_strategy_profile,
+    _build_unidirectional_line_strategy_profile,
     _normalize_milling_strategy_spec,
 )
 from ._common import _normalize_side_of_feature
@@ -30,7 +38,9 @@ from ._common import _normalize_side_of_feature
 __all__ = [
     "LineMillingSpec",
     "build_line_milling_spec",
+    "_build_line_toolpath_profile",
     "_normalize_line_milling_spec",
+    "_offset_line_for_toolpath",
 ]
 
 
@@ -69,6 +79,51 @@ def _normalize_line_milling_spec(line_milling: LineMillingSpec) -> LineMillingSp
         retract=_normalize_retract_spec(line_milling.retract),
         milling_strategy=normalized_strategy,
     )
+
+
+def _build_line_toolpath_profile(
+    top_level: float,
+    final_level: float,
+    spec: LineMillingSpec,
+) -> GeometryProfileSpec:
+    """Construye el perfil de trayectoria efectivo para un fresado lineal."""
+
+    cut_z = float(final_level)
+    nominal_profile = build_line_geometry_profile(
+        spec.start_x,
+        spec.start_y,
+        spec.end_x,
+        spec.end_y,
+        start_z=cut_z,
+        end_z=cut_z,
+    )
+    base_profile = build_compensated_toolpath_profile(
+        nominal_profile,
+        side_of_feature=spec.side_of_feature,
+        tool_width=spec.tool_width,
+        z_value=cut_z,
+    )
+    strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
+    if isinstance(strategy, UnidirectionalMillingStrategySpec):
+        return _build_unidirectional_line_strategy_profile(
+            float(top_level),
+            cut_z,
+            spec.security_plane,
+            base_profile,
+            strategy,
+        )
+    if isinstance(strategy, BidirectionalMillingStrategySpec):
+        return _build_bidirectional_line_strategy_profile(float(top_level), cut_z, base_profile, strategy)
+    return base_profile
+
+
+def _offset_line_for_toolpath(spec: LineMillingSpec) -> tuple[tuple[float, float], tuple[float, float]]:
+    toolpath_profile = build_compensated_toolpath_profile(
+        build_line_geometry_profile(spec.start_x, spec.start_y, spec.end_x, spec.end_y),
+        side_of_feature=spec.side_of_feature,
+        tool_width=spec.tool_width,
+    )
+    return _profile_endpoint_points(toolpath_profile)
 
 
 def build_line_milling_spec(
