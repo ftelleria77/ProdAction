@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Optional
 
@@ -18,8 +19,10 @@ __all__ = [
     "_ensure_milling_strategy_allowed",
     "_normalize_milling_strategy_spec",
     "_normalize_strategy_connection_mode",
+    "_helical_rough_end_levels",
     "_strategy_is_multilevel",
     "_strategy_comparison_key",
+    "_strategy_pass_levels",
     "_serialize_unidirectional_connection_mode",
     "_resolve_unidirectional_connection_mode",
 ]
@@ -390,6 +393,62 @@ def _strategy_comparison_key(
         normalized_strategy.axial_cutting_depth,
         normalized_strategy.axial_finish_cutting_depth,
     )
+
+
+def _strategy_pass_levels(
+    top_level: float,
+    final_level: float,
+    strategy: UnidirectionalMillingStrategySpec | BidirectionalMillingStrategySpec,
+) -> tuple[float, ...]:
+    if not strategy.allow_multiple_passes:
+        return (float(final_level),)
+
+    top_level_value = float(top_level)
+    final_level_value = float(final_level)
+    rough_step = float(strategy.axial_cutting_depth)
+    finish_step = float(strategy.axial_finish_cutting_depth)
+    finish_start = final_level_value + finish_step if finish_step > 0.0 else None
+    levels: list[float] = []
+
+    if rough_step > 0.0:
+        current_level = top_level_value - rough_step
+        rough_stop_level = finish_start if finish_start is not None else final_level_value
+        while current_level > rough_stop_level + 1e-9:
+            levels.append(current_level)
+            current_level -= rough_step
+
+    if finish_start is not None and finish_start > final_level_value + 1e-9:
+        if not levels or not math.isclose(levels[-1], finish_start, abs_tol=1e-9):
+            levels.append(finish_start)
+
+    if not levels or not math.isclose(levels[-1], final_level_value, abs_tol=1e-9):
+        levels.append(final_level_value)
+    return tuple(levels)
+
+
+def _helical_rough_end_levels(
+    top_level: float,
+    final_level: float,
+    strategy: HelicalMillingStrategySpec,
+) -> tuple[float, ...]:
+    top_level_value = float(top_level)
+    final_level_value = float(final_level)
+    rough_step = float(strategy.axial_cutting_depth)
+    finish_step = float(strategy.axial_finish_cutting_depth)
+    helical_end_level = final_level_value
+    if strategy.allows_finish_cutting and finish_step > 0.0:
+        helical_end_level = final_level_value + finish_step
+
+    levels: list[float] = []
+    if rough_step > 0.0:
+        current_level = top_level_value - rough_step
+        while current_level > helical_end_level + 1e-9:
+            levels.append(current_level)
+            current_level -= rough_step
+
+    if not levels or not math.isclose(levels[-1], helical_end_level, abs_tol=1e-9):
+        levels.append(helical_end_level)
+    return tuple(levels)
 
 
 def _normalize_milling_strategy_spec(

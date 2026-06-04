@@ -222,6 +222,8 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             common_strategy.build_contour_parallel_milling_strategy_spec,
         )
         self.assertIs(core_sp._strategy_is_multilevel, common_strategy._strategy_is_multilevel)
+        self.assertIs(core_sp._strategy_pass_levels, common_strategy._strategy_pass_levels)
+        self.assertIs(core_sp._helical_rough_end_levels, common_strategy._helical_rough_end_levels)
         self.assertIs(
             core_sp._resolve_unidirectional_connection_mode,
             common_strategy._resolve_unidirectional_connection_mode,
@@ -238,6 +240,28 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
                 is_closed_profile=True,
             ),
             "InPiece",
+        )
+        self.assertEqual(
+            common_strategy._strategy_pass_levels(
+                18.0,
+                0.0,
+                common_strategy.build_unidirectional_milling_strategy_spec(
+                    axial_cutting_depth=5.0,
+                    axial_finish_cutting_depth=2.0,
+                ),
+            ),
+            (13.0, 8.0, 3.0, 2.0, 0.0),
+        )
+        self.assertEqual(
+            common_strategy._helical_rough_end_levels(
+                18.0,
+                0.0,
+                common_strategy.build_helical_milling_strategy_spec(
+                    axial_cutting_depth=5.0,
+                    axial_finish_cutting_depth=2.0,
+                ),
+            ),
+            (13.0, 8.0, 3.0, 2.0),
         )
         strategy = common_strategy.build_bidirectional_milling_strategy_spec(axial_cutting_depth=2.5)
         self.assertTrue(strategy.allow_multiple_passes)
