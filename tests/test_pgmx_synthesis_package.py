@@ -412,6 +412,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
                 retract_mode="Up",
             )
         self.assertIs(core_sp.CircleMillingSpec, milling_circle.CircleMillingSpec)
+        self.assertIs(core_sp._HydratedCircleMillingSpec, milling_circle._HydratedCircleMillingSpec)
         self.assertIs(core_sp.build_circle_milling_spec, milling_circle.build_circle_milling_spec)
         self.assertIs(core_sp._normalize_circle_milling_spec, milling_circle._normalize_circle_milling_spec)
         self.assertIs(core_sp._build_circle_toolpath_profile, milling_circle._build_circle_toolpath_profile)
@@ -421,6 +422,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             milling_circle._can_hydrate_exact_circle_serialization,
         )
         self.assertIs(core_sp._extract_circle_milling_template, milling_circle._extract_circle_milling_template)
+        self.assertIs(core_sp._hydrate_circle_milling_spec, milling_circle._hydrate_circle_milling_spec)
         circle = milling_circle.build_circle_milling_spec(
             center_x=50,
             center_y=60,
