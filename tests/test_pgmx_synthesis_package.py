@@ -14,6 +14,7 @@ from pgmx.synthesis.common import piece as common_piece
 from pgmx.synthesis.common import strategy as common_strategy
 from pgmx.synthesis.common import tools as common_tools
 from pgmx.synthesis.common import xml as common_xml
+from pgmx.synthesis.milling import circle as milling_circle
 from pgmx.synthesis.milling import line as milling_line
 from pgmx.synthesis.milling import profile as milling_profile
 from pgmx.synthesis.milling import slot as milling_slot
@@ -184,6 +185,23 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
                 retract_type="Arc",
                 retract_mode="Up",
             )
+        self.assertIs(core_sp.CircleMillingSpec, milling_circle.CircleMillingSpec)
+        self.assertIs(core_sp.build_circle_milling_spec, milling_circle.build_circle_milling_spec)
+        self.assertIs(core_sp._normalize_circle_milling_spec, milling_circle._normalize_circle_milling_spec)
+        circle = milling_circle.build_circle_milling_spec(
+            center_x=50,
+            center_y=60,
+            radius=20,
+            winding="horario",
+            side_of_feature="derecha",
+            milling_strategy=common_strategy.build_helical_milling_strategy_spec(axial_cutting_depth=2.0),
+        )
+        self.assertIsInstance(circle, milling_circle.CircleMillingSpec)
+        self.assertEqual(circle.winding, "Clockwise")
+        self.assertEqual(circle.side_of_feature, "Right")
+        self.assertIsInstance(circle.milling_strategy, common_strategy.HelicalMillingStrategySpec)
+        with self.assertRaisesRegex(ValueError, "radio"):
+            milling_circle.build_circle_milling_spec(center_x=0, center_y=0, radius=0)
 
 
 if __name__ == "__main__":
