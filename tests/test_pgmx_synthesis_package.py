@@ -280,6 +280,9 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         )
         self.assertIs(core_sp._strategy_pass_levels, common_strategy._strategy_pass_levels)
         self.assertIs(core_sp._helical_rough_end_levels, common_strategy._helical_rough_end_levels)
+        self.assertIs(core_sp._build_milling_strategy_node, common_strategy._build_milling_strategy_node)
+        self.assertIs(core_sp._should_activate_cnc_correction, common_strategy._should_activate_cnc_correction)
+        self.assertIs(core_sp._spec_uses_closed_profile, common_strategy._spec_uses_closed_profile)
         self.assertIs(
             core_sp._build_unidirectional_line_strategy_profile,
             common_strategy._build_unidirectional_line_strategy_profile,
@@ -397,6 +400,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.build_line_milling_spec, milling_line.build_line_milling_spec)
         self.assertIs(core_sp._normalize_line_milling_spec, milling_line._normalize_line_milling_spec)
         self.assertIs(core_sp._build_line_geometry, milling_line._build_line_geometry)
+        self.assertIs(core_sp._build_line_operation, milling_line._build_line_operation)
         self.assertIs(core_sp._build_line_toolpath_profile, milling_line._build_line_toolpath_profile)
         self.assertIs(core_sp._offset_line_for_toolpath, milling_line._offset_line_for_toolpath)
         self.assertIs(core_sp._matches_line_geometry, milling_line._matches_line_geometry)

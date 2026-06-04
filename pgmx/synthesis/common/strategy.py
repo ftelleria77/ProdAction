@@ -10,6 +10,7 @@ from typing import Optional
 from .geometry import (
     GeometryPrimitiveSpec,
     GeometryProfileSpec,
+    _is_closed_polyline_points,
     _line_primitive_3d,
     _primitive_start_tangent_2d,
     _profile_at_z,
@@ -18,7 +19,19 @@ from .geometry import (
     _vertical_transition_primitive,
     build_composite_geometry_profile,
 )
-from .xml import XSI_NS, _safe_bool, _safe_float, _text, _xsi_type
+from .xml import (
+    PGMX_NS,
+    STRATEGY_NS,
+    XSI_NS,
+    _append_node,
+    _compact_number,
+    _qname,
+    _safe_bool,
+    _safe_float,
+    _set_xmlns,
+    _text,
+    _xsi_type,
+)
 
 __all__ = [
     "BidirectionalMillingStrategySpec",
@@ -32,6 +45,7 @@ __all__ = [
     "build_unidirectional_milling_strategy_spec",
     "_ensure_milling_strategy_allowed",
     "_extract_milling_strategy_spec_from_operation",
+    "_build_milling_strategy_node",
     "_build_bidirectional_line_strategy_profile",
     "_build_bidirectional_open_profile_strategy_toolpath",
     "_build_closed_profile_strategy_toolpath",
@@ -45,6 +59,8 @@ __all__ = [
     "_strategy_is_multilevel",
     "_strategy_comparison_key",
     "_strategy_pass_levels",
+    "_should_activate_cnc_correction",
+    "_spec_uses_closed_profile",
     "_serialize_unidirectional_connection_mode",
     "_resolve_unidirectional_connection_mode",
 ]
@@ -346,6 +362,24 @@ def _strategy_is_multilevel(strategy: Optional[MillingStrategySpec]) -> bool:
     )
 
 
+def _should_activate_cnc_correction(spec) -> bool:
+    return not _strategy_is_multilevel(spec.milling_strategy)
+
+
+def _spec_uses_closed_profile(spec) -> bool:
+    if type(spec).__name__ in {
+        "_HydratedCircleMillingSpec",
+        "CircleMillingSpec",
+        "_HydratedSquaringMillingSpec",
+        "SquaringMillingSpec",
+    }:
+        return True
+    points = getattr(spec, "points", None)
+    if points is None:
+        return False
+    return _is_closed_polyline_points(points)
+
+
 def _resolve_unidirectional_connection_mode(
     strategy: UnidirectionalMillingStrategySpec,
     *,
@@ -363,6 +397,68 @@ def _serialize_unidirectional_connection_mode(connection_mode: str) -> str:
         "SafetyHeight": "LiftShiftPlunge",
         "InPiece": "Straghtline",
     }[normalized_connection_mode]
+
+
+def _build_milling_strategy_node(spec) -> ET.Element:
+    strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
+    if strategy is None:
+        return ET.Element(_qname(PGMX_NS, "MachiningStrategy"), {f"{{{XSI_NS}}}nil": "true"})
+    if isinstance(strategy, ContourParallelMillingStrategySpec):
+        node = ET.Element(
+            _qname(PGMX_NS, "MachiningStrategy"),
+            {f"{{{XSI_NS}}}type": "b:ContourParallel"},
+        )
+        _set_xmlns(node, "b", STRATEGY_NS)
+        _append_node(node, PGMX_NS, "AllowMultiplePasses", "true" if strategy.allow_multiple_passes else "false")
+        _append_node(node, PGMX_NS, "Overlap", _compact_number(strategy.overlap))
+        _append_node(node, STRATEGY_NS, "AllowsBidirectional", "true" if strategy.allows_bidirectional else "false")
+        _append_node(node, STRATEGY_NS, "AllowsFinishCutting", "true" if strategy.allows_finish_cutting else "false")
+        _append_node(node, STRATEGY_NS, "AxialCuttingDepth", _compact_number(strategy.axial_cutting_depth))
+        _append_node(node, STRATEGY_NS, "AxialFinishCuttingDepth", _compact_number(strategy.axial_finish_cutting_depth))
+        _append_node(node, STRATEGY_NS, "Cutmode", strategy.cutmode)
+        _append_node(node, STRATEGY_NS, "InsideToOutSide", "true" if strategy.inside_to_outside else "false")
+        _append_node(node, STRATEGY_NS, "IsHelicStrategy", "true" if strategy.is_helic_strategy else "false")
+        _append_node(node, STRATEGY_NS, "IsInternal", "true" if strategy.is_internal else "false")
+        _append_node(node, STRATEGY_NS, "RadialCuttingDepth", _compact_number(strategy.radial_cutting_depth))
+        _append_node(node, STRATEGY_NS, "RadialFinishCuttingDepth", _compact_number(strategy.radial_finish_cutting_depth))
+        _append_node(node, STRATEGY_NS, "RotationDirection", strategy.rotation_direction)
+        _append_node(node, STRATEGY_NS, "StrokeConnectionStrategy", strategy.stroke_connection_strategy)
+        return node
+
+    if isinstance(strategy, UnidirectionalMillingStrategySpec):
+        strategy_type = "b:UnidirectionalMilling"
+        stroke_connection_strategy = _serialize_unidirectional_connection_mode(
+            _resolve_unidirectional_connection_mode(
+                strategy,
+                is_closed_profile=_spec_uses_closed_profile(spec),
+            )
+        )
+    elif isinstance(strategy, BidirectionalMillingStrategySpec):
+        strategy_type = "b:BidirectionalMilling"
+        stroke_connection_strategy = "Straghtline"
+    else:
+        strategy_type = "b:HelicMilling"
+        stroke_connection_strategy = "Straghtline"
+
+    node = ET.Element(
+        _qname(PGMX_NS, "MachiningStrategy"),
+        {f"{{{XSI_NS}}}type": strategy_type},
+    )
+    _set_xmlns(node, "b", STRATEGY_NS)
+    if isinstance(strategy, HelicalMillingStrategySpec):
+        _append_node(node, PGMX_NS, "AllowMultiplePasses", "false")
+    else:
+        _append_node(node, PGMX_NS, "AllowMultiplePasses", "true" if strategy.allow_multiple_passes else "false")
+    _append_node(node, PGMX_NS, "Overlap", "0")
+    if isinstance(strategy, HelicalMillingStrategySpec):
+        _append_node(node, STRATEGY_NS, "AllowsFinishCutting", "true" if strategy.allows_finish_cutting else "false")
+    _append_node(node, STRATEGY_NS, "AxialCuttingDepth", _compact_number(strategy.axial_cutting_depth))
+    _append_node(node, STRATEGY_NS, "AxialFinishCuttingDepth", _compact_number(strategy.axial_finish_cutting_depth))
+    _append_node(node, STRATEGY_NS, "Cutmode", "Climb")
+    _append_node(node, STRATEGY_NS, "RadialCuttingDepth", "0")
+    _append_node(node, STRATEGY_NS, "RadialFinishCuttingDepth", "0")
+    _append_node(node, STRATEGY_NS, "StrokeConnectionStrategy", stroke_connection_strategy)
+    return node
 
 
 def _strategy_comparison_key(

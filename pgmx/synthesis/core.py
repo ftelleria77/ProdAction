@@ -205,6 +205,7 @@ from .common.strategy import (
     _build_closed_profile_strategy_toolpath,
     _build_helical_arc_primitive,
     _build_helical_circle_strategy_toolpath,
+    _build_milling_strategy_node,
     _build_unidirectional_line_strategy_profile,
     _build_unidirectional_open_profile_strategy_toolpath,
     _helical_rough_end_levels,
@@ -212,6 +213,8 @@ from .common.strategy import (
     _normalize_strategy_connection_mode,
     _resolve_unidirectional_connection_mode,
     _serialize_unidirectional_connection_mode,
+    _should_activate_cnc_correction,
+    _spec_uses_closed_profile,
     _strategy_comparison_key,
     _strategy_is_multilevel,
     _strategy_pass_levels,
@@ -309,6 +312,7 @@ from .milling.line import (
     LineMillingSpec,
     _HydratedLineMillingSpec,
     _build_line_geometry,
+    _build_line_operation,
     _build_line_toolpath_profile,
     _can_hydrate_exact_serialization,
     _extract_line_milling_template,
@@ -1496,213 +1500,6 @@ def _build_generated_lift_curve_for_profile(
         toolpath_end,
         direction=end_direction,
     )
-
-
-def _should_activate_cnc_correction(spec) -> bool:
-    return not _strategy_is_multilevel(spec.milling_strategy)
-
-
-def _spec_uses_closed_profile(spec) -> bool:
-    if isinstance(spec, (_HydratedCircleMillingSpec, CircleMillingSpec, _HydratedSquaringMillingSpec, SquaringMillingSpec)):
-        return True
-    points = getattr(spec, "points", None)
-    if points is None:
-        return False
-    return _is_closed_polyline_points(points)
-
-
-def _build_milling_strategy_node(spec) -> ET.Element:
-    strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
-    if strategy is None:
-        return ET.Element(_qname(PGMX_NS, "MachiningStrategy"), {f"{{{XSI_NS}}}nil": "true"})
-    if isinstance(strategy, ContourParallelMillingStrategySpec):
-        node = ET.Element(
-            _qname(PGMX_NS, "MachiningStrategy"),
-            {f"{{{XSI_NS}}}type": "b:ContourParallel"},
-        )
-        _set_xmlns(node, "b", STRATEGY_NS)
-        _append_node(node, PGMX_NS, "AllowMultiplePasses", "true" if strategy.allow_multiple_passes else "false")
-        _append_node(node, PGMX_NS, "Overlap", _compact_number(strategy.overlap))
-        _append_node(node, STRATEGY_NS, "AllowsBidirectional", "true" if strategy.allows_bidirectional else "false")
-        _append_node(node, STRATEGY_NS, "AllowsFinishCutting", "true" if strategy.allows_finish_cutting else "false")
-        _append_node(node, STRATEGY_NS, "AxialCuttingDepth", _compact_number(strategy.axial_cutting_depth))
-        _append_node(node, STRATEGY_NS, "AxialFinishCuttingDepth", _compact_number(strategy.axial_finish_cutting_depth))
-        _append_node(node, STRATEGY_NS, "Cutmode", strategy.cutmode)
-        _append_node(node, STRATEGY_NS, "InsideToOutSide", "true" if strategy.inside_to_outside else "false")
-        _append_node(node, STRATEGY_NS, "IsHelicStrategy", "true" if strategy.is_helic_strategy else "false")
-        _append_node(node, STRATEGY_NS, "IsInternal", "true" if strategy.is_internal else "false")
-        _append_node(node, STRATEGY_NS, "RadialCuttingDepth", _compact_number(strategy.radial_cutting_depth))
-        _append_node(node, STRATEGY_NS, "RadialFinishCuttingDepth", _compact_number(strategy.radial_finish_cutting_depth))
-        _append_node(node, STRATEGY_NS, "RotationDirection", strategy.rotation_direction)
-        _append_node(node, STRATEGY_NS, "StrokeConnectionStrategy", strategy.stroke_connection_strategy)
-        return node
-
-    if isinstance(strategy, UnidirectionalMillingStrategySpec):
-        strategy_type = "b:UnidirectionalMilling"
-        stroke_connection_strategy = _serialize_unidirectional_connection_mode(
-            _resolve_unidirectional_connection_mode(
-                strategy,
-                is_closed_profile=_spec_uses_closed_profile(spec),
-            )
-        )
-    elif isinstance(strategy, BidirectionalMillingStrategySpec):
-        strategy_type = "b:BidirectionalMilling"
-        stroke_connection_strategy = "Straghtline"
-    else:
-        strategy_type = "b:HelicMilling"
-        stroke_connection_strategy = "Straghtline"
-
-    node = ET.Element(
-        _qname(PGMX_NS, "MachiningStrategy"),
-        {f"{{{XSI_NS}}}type": strategy_type},
-    )
-    _set_xmlns(node, "b", STRATEGY_NS)
-    if isinstance(strategy, HelicalMillingStrategySpec):
-        _append_node(node, PGMX_NS, "AllowMultiplePasses", "false")
-    else:
-        _append_node(node, PGMX_NS, "AllowMultiplePasses", "true" if strategy.allow_multiple_passes else "false")
-    _append_node(node, PGMX_NS, "Overlap", "0")
-    if isinstance(strategy, HelicalMillingStrategySpec):
-        _append_node(node, STRATEGY_NS, "AllowsFinishCutting", "true" if strategy.allows_finish_cutting else "false")
-    _append_node(node, STRATEGY_NS, "AxialCuttingDepth", _compact_number(strategy.axial_cutting_depth))
-    _append_node(node, STRATEGY_NS, "AxialFinishCuttingDepth", _compact_number(strategy.axial_finish_cutting_depth))
-    _append_node(node, STRATEGY_NS, "Cutmode", "Climb")
-    _append_node(node, STRATEGY_NS, "RadialCuttingDepth", "0")
-    _append_node(node, STRATEGY_NS, "RadialFinishCuttingDepth", "0")
-    _append_node(node, STRATEGY_NS, "StrokeConnectionStrategy", stroke_connection_strategy)
-    return node
-
-
-def _build_line_operation(
-    state: PgmxState,
-    spec,
-    operation_id: str,
-    approach_curve: _CurveSpec,
-    approach_curve_member_keys: Sequence[str] = (),
-    lift_curve: Optional[_CurveSpec] = None,
-    lift_curve_member_keys: Sequence[str] = (),
-    trajectory_curve: Optional[_CurveSpec] = None,
-    trajectory_curve_member_keys: Sequence[str] = (),
-    toolpath_start: Optional[tuple[float, float]] = None,
-    toolpath_end: Optional[tuple[float, float]] = None,
-) -> ET.Element:
-    operation = ET.Element(
-        _qname(PGMX_NS, "Operation"),
-        {f"{{{XSI_NS}}}type": "a:BottomAndSideFinishMilling"},
-    )
-    _set_xmlns(operation, "a", MILLING_NS)
-    _append_key(operation, operation_id, "ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideFinishMilling")
-    _append_blank_name(operation)
-    _append_node(
-        operation,
-        PGMX_NS,
-        "ActivateCNCCorrection",
-        "true" if _should_activate_cnc_correction(spec) else "false",
-    )
-    _append_node(operation, PGMX_NS, "Attributes", "")
-    _append_node(operation, PGMX_NS, "ToolDirection", attrib={f"{{{XSI_NS}}}nil": "true"})
-    toolpath_list = _append_node(operation, PGMX_NS, "ToolpathList")
-    _set_xmlns(toolpath_list, "b", BASE_MODEL_NS)
-    clearance_z = state.depth + spec.security_plane
-    cut_z = _toolpath_cut_z(state, spec)
-    if toolpath_start is None or toolpath_end is None:
-        (toolpath_start_x, toolpath_start_y), (toolpath_end_x, toolpath_end_y) = _offset_line_for_toolpath(spec)
-    else:
-        toolpath_start_x, toolpath_start_y = toolpath_start
-        toolpath_end_x, toolpath_end_y = toolpath_end
-    toolpath_list.append(
-        _build_toolpath(
-            "Approach",
-            approach_curve,
-            generated_member_keys=approach_curve_member_keys,
-        )
-    )
-    toolpath_list.append(
-        _build_toolpath(
-            "TrajectoryPath",
-            trajectory_curve
-            or spec.trajectory_curve
-            or _trimmed_curve_spec(
-                _build_toolpath_description(
-                    (toolpath_start_x, toolpath_start_y, cut_z),
-                    (toolpath_end_x, toolpath_end_y, cut_z),
-                )
-            ),
-            generated_member_keys=trajectory_curve_member_keys,
-        )
-    )
-    toolpath_list.append(
-        _build_toolpath(
-            "Lift",
-            lift_curve
-            or spec.lift_curve
-            or _trimmed_curve_spec(
-                _build_toolpath_description(
-                    (toolpath_end_x, toolpath_end_y, cut_z),
-                    (toolpath_end_x, toolpath_end_y, clearance_z),
-                )
-            ),
-            generated_member_keys=lift_curve_member_keys,
-        )
-    )
-    _append_node(operation, PGMX_NS, "ToolpathPriority", "true")
-    _append_node(operation, PGMX_NS, "AdditionalToolKeys", "")
-    _append_node(operation, PGMX_NS, "ApproachSecurityPlane", _compact_number(spec.security_plane))
-    _append_node(operation, PGMX_NS, "Head", attrib={f"{{{XSI_NS}}}nil": "true"})
-    _append_node(operation, PGMX_NS, "HeadRotation", "0")
-    _append_node(operation, PGMX_NS, "MachineFunctions", "")
-    _append_node(operation, PGMX_NS, "RetractSecurityPlane", _compact_number(spec.security_plane))
-    operation.append(_build_start_point(0.0, 0.0, 0.0))
-    technology = _append_node(
-        operation,
-        PGMX_NS,
-        "Technology",
-        attrib={f"{{{XSI_NS}}}type": "MillingTechnology"},
-    )
-    _append_node(technology, PGMX_NS, "Feedrate", "0")
-    _append_node(technology, PGMX_NS, "CutSpeed", "0")
-    _append_node(technology, PGMX_NS, "Spindle", "0")
-    _append_object_ref(
-        operation,
-        PGMX_NS,
-        "ToolKey",
-        spec.tool_id,
-        "ScmGroup.XCam.ToolDataModel.Tool.CuttingTool",
-        include_name=True,
-        name_text=spec.tool_name,
-    )
-    _append_node(operation, PGMX_NS, "OvercutLength", _compact_number(_operation_overcut_length(spec)))
-    approach = _append_node(
-        operation,
-        PGMX_NS,
-        "Approach",
-        attrib={f"{{{XSI_NS}}}type": "b:BaseApproachStrategy"},
-    )
-    _set_xmlns(approach, "b", STRATEGY_NS)
-    _append_node(approach, STRATEGY_NS, "ApproachArcSide", spec.approach.arc_side)
-    _append_node(approach, STRATEGY_NS, "ApproachMode", spec.approach.mode)
-    _append_node(approach, STRATEGY_NS, "ApproachType", spec.approach.approach_type)
-    _append_node(approach, STRATEGY_NS, "IsEnabled", "true" if spec.approach.is_enabled else "false")
-    _append_node(approach, STRATEGY_NS, "RadiusMultiplier", _compact_number(spec.approach.radius_multiplier))
-    _append_node(approach, STRATEGY_NS, "Speed", _compact_number(spec.approach.speed))
-    retract = _append_node(
-        operation,
-        PGMX_NS,
-        "Retract",
-        attrib={f"{{{XSI_NS}}}type": "b:BaseRetractStrategy"},
-    )
-    _set_xmlns(retract, "b", STRATEGY_NS)
-    _append_node(retract, STRATEGY_NS, "IsEnabled", "true" if spec.retract.is_enabled else "false")
-    _append_node(retract, STRATEGY_NS, "OverLap", _compact_number(spec.retract.overlap))
-    _append_node(retract, STRATEGY_NS, "RadiusMultiplier", _compact_number(spec.retract.radius_multiplier))
-    _append_node(retract, STRATEGY_NS, "RetractArcSide", spec.retract.arc_side)
-    _append_node(retract, STRATEGY_NS, "RetractMode", spec.retract.mode)
-    _append_node(retract, STRATEGY_NS, "RetractType", spec.retract.retract_type)
-    _append_node(retract, STRATEGY_NS, "Speed", _compact_number(spec.retract.speed))
-    operation.append(_build_milling_strategy_node(spec))
-    _append_node(operation, PGMX_NS, "AllowanceBottom", "0")
-    _append_node(operation, PGMX_NS, "AllowanceSide", "0")
-    return operation
 
 
 def _build_contour_parallel_xyz_path(
