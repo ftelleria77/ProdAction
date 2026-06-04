@@ -15,6 +15,7 @@ from pgmx.synthesis.common import strategy as common_strategy
 from pgmx.synthesis.common import tools as common_tools
 from pgmx.synthesis.common import xml as common_xml
 from pgmx.synthesis.milling import line as milling_line
+from pgmx.synthesis.milling import slot as milling_slot
 from tools import synthesize_pgmx as legacy_sp
 from tools import pgmx_synthesis as legacy_pgmx_synthesis
 
@@ -143,6 +144,24 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             milling_line.LineMillingSpec(0, 0, 100, 0, side_of_feature="izquierda")
         )
         self.assertEqual(normalized_line.side_of_feature, "Left")
+        self.assertIs(core_sp.SlotMillingSpec, milling_slot.SlotMillingSpec)
+        self.assertIs(core_sp.build_slot_milling_spec, milling_slot.build_slot_milling_spec)
+        self.assertIs(core_sp._normalize_slot_milling_spec, milling_slot._normalize_slot_milling_spec)
+        slot = milling_slot.build_slot_milling_spec(
+            start_x=0,
+            start_y=0,
+            end_x=120,
+            end_y=0,
+            side_of_feature="derecha",
+        )
+        self.assertIsInstance(slot, milling_slot.SlotMillingSpec)
+        self.assertEqual(slot.feature_name, "Canal")
+        self.assertEqual(slot.side_of_feature, "Right")
+        self.assertEqual(slot.tool_id, "1899")
+        self.assertEqual(slot.depth_spec.target_depth, 10.0)
+        self.assertIsNone(slot.milling_strategy)
+        with self.assertRaisesRegex(ValueError, "longitud cero"):
+            milling_slot.build_slot_milling_spec(start_x=0, start_y=0, end_x=0, end_y=0)
 
 
 if __name__ == "__main__":

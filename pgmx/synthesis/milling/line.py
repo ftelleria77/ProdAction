@@ -25,6 +25,7 @@ from ..common.strategy import (
     _ensure_milling_strategy_allowed,
     _normalize_milling_strategy_spec,
 )
+from ._common import _normalize_side_of_feature
 
 __all__ = [
     "LineMillingSpec",
@@ -52,22 +53,6 @@ class LineMillingSpec:
     approach: ApproachSpec = field(default_factory=ApproachSpec)
     retract: RetractSpec = field(default_factory=RetractSpec)
     milling_strategy: Optional[MillingStrategySpec] = None
-
-
-def _normalize_side_of_feature(value: Optional[str]) -> str:
-    raw = (value or "Center").strip().lower()
-    mapping = {
-        "center": "Center",
-        "centre": "Center",
-        "central": "Center",
-        "right": "Right",
-        "derecha": "Right",
-        "left": "Left",
-        "izquierda": "Left",
-    }
-    if raw not in mapping:
-        raise ValueError("SideOfFeature invalido. Valores admitidos: Center, Right, Left.")
-    return mapping[raw]
 
 
 def _normalize_line_milling_spec(line_milling: LineMillingSpec) -> LineMillingSpec:
