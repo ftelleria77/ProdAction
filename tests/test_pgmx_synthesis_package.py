@@ -8,6 +8,7 @@ from pgmx.synthesis import core as core_sp
 from pgmx.synthesis import drilling as synthesis_drilling
 from pgmx.synthesis import milling as synthesis_milling
 from pgmx.synthesis.common import depth as common_depth
+from pgmx.synthesis.common import hydration as common_hydration
 from pgmx.synthesis.common import piece as common_piece
 from pgmx.synthesis.common import strategy as common_strategy
 from pgmx.synthesis.common import tools as common_tools
@@ -91,6 +92,16 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         strategy = common_strategy.build_bidirectional_milling_strategy_spec(axial_cutting_depth=2.5)
         self.assertTrue(strategy.allow_multiple_passes)
         self.assertEqual(strategy.axial_cutting_depth, 2.5)
+        self.assertIs(core_sp._load_pgmx_container, common_hydration._load_pgmx_container)
+        self.assertIs(core_sp.load_pgmx_template_document, common_hydration.load_pgmx_template_document)
+        template = common_hydration.load_pgmx_template_document(core_sp.DEFAULT_BASELINE_XML_PATH)
+        self.assertIsInstance(template, common_hydration.PgmxTemplateDocument)
+        self.assertEqual(template.xml_entry_name, "Pieza.xml")
+        self.assertIn("Pieza.xml", template.archive_entries)
+        root, entries, xml_entry_name = core_sp._load_pgmx_container(core_sp.DEFAULT_BASELINE_XML_PATH)
+        self.assertEqual(root.tag, template.root.tag)
+        self.assertEqual(xml_entry_name, template.xml_entry_name)
+        self.assertEqual(entries.keys(), template.archive_entries.keys())
 
 
 if __name__ == "__main__":

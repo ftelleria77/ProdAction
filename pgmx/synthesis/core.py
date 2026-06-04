@@ -83,6 +83,13 @@ from .common.depth import (
     _normalize_milling_depth_spec,
     build_milling_depth_spec,
 )
+from .common.hydration import (
+    PgmxTemplateDocument,
+    _load_exploded_pgmx_container,
+    _load_pgmx_container,
+    _resolve_exploded_pgmx_xml_path,
+    load_pgmx_template_document,
+)
 from .common.piece import (
     PieceGeometry,
     _drilling_axis_span,
@@ -1204,66 +1211,6 @@ class PgmxSynthesisResult:
 # ============================================================================
 # Public spec builders
 # ============================================================================
-
-def _resolve_exploded_pgmx_xml_path(source_path: Path) -> Path:
-    """Resuelve el XML base cuando el baseline esta desempaquetado en disco."""
-
-    if source_path.is_file() and source_path.suffix.lower() == ".xml":
-        return source_path
-    if not source_path.is_dir():
-        raise ValueError(
-            "El baseline Maestro desempaquetado debe pasarse como carpeta o como archivo `.xml`."
-        )
-
-    xml_candidates = sorted(
-        (
-            child
-            for child in source_path.iterdir()
-            if child.is_file() and child.suffix.lower() == ".xml"
-        ),
-        key=lambda path: (path.name.lower() != "pieza.xml", path.name.lower()),
-    )
-    if not xml_candidates:
-        raise ValueError(f"La carpeta '{source_path}' no contiene ningun archivo `.xml`.")
-    return xml_candidates[0]
-
-
-def _load_exploded_pgmx_container(source_path: Path) -> tuple[ET.Element, dict[str, bytes], str]:
-    """Carga un baseline Maestro desempaquetado (`Pieza.xml` + extras asociados)."""
-
-    xml_path = _resolve_exploded_pgmx_xml_path(source_path)
-    container_dir = xml_path.parent
-    archive_entries: dict[str, bytes] = {xml_path.name: xml_path.read_bytes()}
-    for child in sorted(container_dir.iterdir(), key=lambda path: path.name.lower()):
-        if not child.is_file() or child == xml_path:
-            continue
-        if child.suffix.lower() not in {".epl", ".tlgx"}:
-            continue
-        archive_entries[child.name] = child.read_bytes()
-
-    xml_root = ET.fromstring(archive_entries[xml_path.name].decode("utf-8", errors="ignore"))
-    return xml_root, archive_entries, xml_path.name
-
-
-def _load_pgmx_container(source_path: Path) -> tuple[ET.Element, dict[str, bytes], str]:
-    """Carga un baseline Maestro desde `.pgmx`, `Pieza.xml` o carpeta contenedora."""
-
-    if not source_path.exists():
-        raise FileNotFoundError(f"No existe el baseline Maestro '{source_path}'.")
-    if source_path.is_file() and source_path.suffix.lower() == ".pgmx":
-        with zipfile.ZipFile(source_path) as zip_file:
-            archive_entries = {name: zip_file.read(name) for name in zip_file.namelist()}
-        xml_entry_name = next((name for name in archive_entries if name.lower().endswith(".xml")), "")
-        if not xml_entry_name:
-            raise ValueError(f"El archivo '{source_path}' no contiene una entrada XML.")
-        xml_root = ET.fromstring(archive_entries[xml_entry_name].decode("utf-8", errors="ignore"))
-        return xml_root, archive_entries, xml_entry_name
-    if source_path.is_dir() or (source_path.is_file() and source_path.suffix.lower() == ".xml"):
-        return _load_exploded_pgmx_container(source_path)
-    raise ValueError(
-        f"El baseline Maestro '{source_path}' debe ser un `.pgmx`, un `.xml` o una carpeta."
-    )
-
 
 def _id_counter(root: ET.Element):
     """Genera IDs nuevos por encima del mayor ID/unsignedInt ya presente en el XML."""
