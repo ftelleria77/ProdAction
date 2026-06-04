@@ -91,6 +91,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._parse_geometry_primitive, common_geometry._parse_geometry_primitive)
         self.assertIs(core_sp._parse_circle_geometry_profile, common_geometry._parse_circle_geometry_profile)
         self.assertIs(core_sp._extract_geometry_profile, common_geometry._extract_geometry_profile)
+        self.assertIs(core_sp.read_pgmx_geometries, common_geometry.read_pgmx_geometries)
         primitive = common_geometry.GeometryPrimitiveSpec("Point", (1.0, 2.0, 0.0), (1.0, 2.0, 0.0))
         profile = common_geometry.GeometryProfileSpec("GeomCartesianPoint", "Point", primitives=(primitive,))
         self.assertEqual(profile.primitive_count, 1)

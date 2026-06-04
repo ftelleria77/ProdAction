@@ -5,8 +5,10 @@ from __future__ import annotations
 import math
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Optional, Sequence
 
+from .hydration import _load_pgmx_container
 from .xml import _raw_text, _text, _xsi_type
 
 __all__ = [
@@ -19,6 +21,7 @@ __all__ = [
     "build_line_geometry_primitive",
     "build_line_geometry_profile",
     "build_point_geometry_profile",
+    "read_pgmx_geometries",
     "_build_maestro_arc_serialization",
     "_build_maestro_line_serialization",
     "_build_oriented_maestro_arc_serialization",
@@ -1044,3 +1047,19 @@ def _extract_geometry_profile(node: ET.Element) -> Optional[GeometryProfileSpec]
             member_serializations=member_serializations,
         )
     return None
+
+
+def read_pgmx_geometries(path: Path) -> tuple[GeometryProfileSpec, ...]:
+    """Lee y clasifica las geometrías presentes en la sección `Geometries`.
+
+    Esta API se usa para inventariar familias manuales de Maestro y para dejar
+    una base explicita de sintesis futura sin depender del nombre del archivo.
+    """
+
+    root, _, _ = _load_pgmx_container(path)
+    profiles: list[GeometryProfileSpec] = []
+    for geometry in root.findall("./{*}Geometries/{*}GeomGeometry"):
+        profile = _extract_geometry_profile(geometry)
+        if profile is not None:
+            profiles.append(profile)
+    return tuple(profiles)

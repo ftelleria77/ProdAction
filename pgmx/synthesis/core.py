@@ -113,6 +113,7 @@ from .common.geometry import (
     build_line_geometry_primitive,
     build_line_geometry_profile,
     build_point_geometry_profile,
+    read_pgmx_geometries,
 )
 from .common.hydration import (
     PgmxTemplateDocument,
@@ -7262,22 +7263,6 @@ def read_pgmx_state(path: Path) -> PgmxState:
         origin_z=origin_z,
         execution_fields=execution_fields,
     )
-
-
-def read_pgmx_geometries(path: Path) -> tuple[GeometryProfileSpec, ...]:
-    """Lee y clasifica las geometrías presentes en la sección `Geometries`.
-
-    Esta API se usa para inventariar familias manuales de Maestro y para dejar
-    una base explicita de sintesis futura sin depender del nombre del archivo.
-    """
-
-    root, _, _ = _load_pgmx_container(path)
-    profiles: list[GeometryProfileSpec] = []
-    for geometry in root.findall("./{*}Geometries/{*}GeomGeometry"):
-        profile = _extract_geometry_profile(geometry)
-        if profile is not None:
-            profiles.append(profile)
-    return tuple(profiles)
 
 
 def _merge_state(
