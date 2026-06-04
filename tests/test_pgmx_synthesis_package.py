@@ -67,6 +67,10 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertEqual(common_xml.PGMX_NS, core_sp.PGMX_NS)
         self.assertIs(core_sp._append_node, common_xml._append_node)
         self.assertEqual(common_xml._compact_number(1.25), "1.25")
+        self.assertIs(core_sp._safe_float, common_xml._safe_float)
+        self.assertIs(core_sp._safe_bool, common_xml._safe_bool)
+        self.assertEqual(common_xml._safe_float("1,25", 0.0), 1.25)
+        self.assertTrue(common_xml._safe_bool("si", False))
         self.assertIs(core_sp.PgmxState, common_program.PgmxState)
         self.assertIs(core_sp.MachiningSpec, common_program.MachiningSpec)
         self.assertIs(core_sp.XnSpec, common_program.XnSpec)
@@ -147,6 +151,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.MillingDepthSpec, common_depth.MillingDepthSpec)
         self.assertIs(common_depth.DepthSpec, common_depth.MillingDepthSpec)
         self.assertIs(core_sp.build_milling_depth_spec, common_depth.build_milling_depth_spec)
+        self.assertIs(core_sp._extract_depth_spec_from_template, common_depth._extract_depth_spec_from_template)
         self.assertIs(core_sp._normalize_plane_name, common_piece._normalize_plane_name)
         self.assertEqual(common_piece._normalize_plane_name("cara-derecha"), "Right")
         piece = common_piece.PieceGeometry(length=500.0, width=300.0, depth=18.0)
@@ -224,6 +229,10 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             common_strategy.build_contour_parallel_milling_strategy_spec,
         )
         self.assertIs(core_sp._strategy_is_multilevel, common_strategy._strategy_is_multilevel)
+        self.assertIs(
+            core_sp._extract_milling_strategy_spec_from_operation,
+            common_strategy._extract_milling_strategy_spec_from_operation,
+        )
         self.assertIs(core_sp._strategy_pass_levels, common_strategy._strategy_pass_levels)
         self.assertIs(core_sp._helical_rough_end_levels, common_strategy._helical_rough_end_levels)
         self.assertIs(

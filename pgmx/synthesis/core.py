@@ -80,6 +80,7 @@ from typing import Optional, Sequence, Union
 
 from .common.depth import (
     MillingDepthSpec,
+    _extract_depth_spec_from_template,
     _normalize_milling_depth_spec,
     build_milling_depth_spec,
 )
@@ -186,6 +187,7 @@ from .common.strategy import (
     MillingStrategySpec,
     UnidirectionalMillingStrategySpec,
     _ensure_milling_strategy_allowed,
+    _extract_milling_strategy_spec_from_operation,
     _build_bidirectional_line_strategy_profile,
     _build_bidirectional_open_profile_strategy_toolpath,
     _build_closed_profile_strategy_toolpath,
@@ -237,6 +239,8 @@ from .common.xml import (
     _compact_number,
     _qname,
     _raw_text,
+    _safe_bool,
+    _safe_float,
     _set_text,
     _set_xmlns,
     _strip_namespace,
@@ -1162,27 +1166,6 @@ def _finalize_pgmx_xml_bytes(xml_bytes: bytes) -> bytes:
     return xml_text.encode("utf-8")
 
 
-def _safe_float(value, default: float) -> float:
-    raw = "" if value is None else str(value).strip().replace(",", ".")
-    if not raw:
-        return default
-    try:
-        return float(raw)
-    except ValueError:
-        return default
-
-
-def _safe_bool(value, default: bool) -> bool:
-    raw = "" if value is None else str(value).strip().lower()
-    if not raw:
-        return default
-    if raw in {"true", "1", "yes", "si", "sí"}:
-        return True
-    if raw in {"false", "0", "no"}:
-        return False
-    return default
-
-
 def _finalize_synthesized_pgmx_xml_bytes(xml_bytes: bytes) -> bytes:
     finalized = _finalize_pgmx_xml_bytes(xml_bytes)
     xml_text = finalized.decode("utf-8")
@@ -1859,87 +1842,6 @@ def _build_up_arc_exit_curve(
             ),
         ]
     )
-
-
-def _extract_depth_spec_from_template(
-    feature: ET.Element,
-    operation: ET.Element,
-    matching_expressions: Sequence[ET.Element],
-    depth_variable_name: str,
-) -> MillingDepthSpec:
-    expression_values = {
-        _text(node, "./{*}Property/{*}InnerField/{*}Name"): _text(node, "./{*}Value")
-        for node in matching_expressions
-        if _text(node, "./{*}Property/{*}Name") == "Depth"
-    }
-    bottom_condition_type = _xsi_type(feature.find("./{*}BottomCondition"))
-    overcut_length = _safe_float(_text(operation, "./{*}OvercutLength"), 0.0)
-    if "ThroughMillingBottom" in bottom_condition_type or (
-        expression_values.get("StartDepth") == depth_variable_name
-        and expression_values.get("EndDepth") == depth_variable_name
-    ):
-        return build_milling_depth_spec(is_through=True, extra_depth=overcut_length)
-
-    start_depth = _safe_float(_text(feature, "./{*}Depth/{*}StartDepth"), 0.0)
-    end_depth = _safe_float(_text(feature, "./{*}Depth/{*}EndDepth"), 0.0)
-    if not math.isclose(start_depth, end_depth, abs_tol=1e-6):
-        raise ValueError("La plantilla usa profundidades distintas para StartDepth/EndDepth; caso no soportado aun.")
-    return build_milling_depth_spec(is_through=False, target_depth=start_depth)
-
-
-def _extract_milling_strategy_spec_from_operation(
-    operation: ET.Element,
-) -> Optional[MillingStrategySpec]:
-    strategy_node = operation.find("./{*}MachiningStrategy")
-    if strategy_node is None:
-        return None
-    if (strategy_node.get(f"{{{XSI_NS}}}nil") or "").strip().lower() == "true":
-        return None
-
-    strategy_type = _xsi_type(strategy_node)
-    allow_multiple_passes = _safe_bool(_text(strategy_node, "./{*}AllowMultiplePasses"), False)
-    allows_finish_cutting = _safe_bool(_text(strategy_node, "./{*}AllowsFinishCutting"), True)
-    axial_cutting_depth = _safe_float(_text(strategy_node, "./{*}AxialCuttingDepth"), 0.0)
-    axial_finish_cutting_depth = _safe_float(_text(strategy_node, "./{*}AxialFinishCuttingDepth"), 0.0)
-    stroke_connection_strategy = _text(strategy_node, "./{*}StrokeConnectionStrategy", "Automatic")
-
-    if "ContourParallel" in strategy_type:
-        return build_contour_parallel_milling_strategy_spec(
-            rotation_direction=_text(strategy_node, "./{*}RotationDirection", "CounterClockwise"),
-            stroke_connection_strategy=stroke_connection_strategy,
-            inside_to_outside=_safe_bool(_text(strategy_node, "./{*}InsideToOutSide"), True),
-            overlap=_safe_float(_text(strategy_node, "./{*}Overlap"), 0.5),
-            is_helic_strategy=_safe_bool(_text(strategy_node, "./{*}IsHelicStrategy"), False),
-            allow_multiple_passes=allow_multiple_passes,
-            axial_cutting_depth=axial_cutting_depth,
-            axial_finish_cutting_depth=axial_finish_cutting_depth,
-            cutmode=_text(strategy_node, "./{*}Cutmode", "Climb"),
-            is_internal=_safe_bool(_text(strategy_node, "./{*}IsInternal"), True),
-            radial_cutting_depth=_safe_float(_text(strategy_node, "./{*}RadialCuttingDepth"), 0.0),
-            radial_finish_cutting_depth=_safe_float(_text(strategy_node, "./{*}RadialFinishCuttingDepth"), 0.0),
-            allows_bidirectional=_safe_bool(_text(strategy_node, "./{*}AllowsBidirectional"), False),
-            allows_finish_cutting=_safe_bool(_text(strategy_node, "./{*}AllowsFinishCutting"), False),
-        )
-    if "UnidirectionalMilling" in strategy_type:
-        return build_unidirectional_milling_strategy_spec(
-            connection_mode=stroke_connection_strategy,
-            allow_multiple_passes=allow_multiple_passes,
-            axial_cutting_depth=axial_cutting_depth,
-            axial_finish_cutting_depth=axial_finish_cutting_depth,
-        )
-    if "BidirectionalMilling" in strategy_type:
-        return build_bidirectional_milling_strategy_spec(
-            allow_multiple_passes=allow_multiple_passes,
-            axial_cutting_depth=axial_cutting_depth,
-            axial_finish_cutting_depth=axial_finish_cutting_depth,
-        )
-    if "HelicMilling" in strategy_type:
-        return build_helical_milling_strategy_spec(
-            axial_cutting_depth=axial_cutting_depth,
-            allows_finish_cutting=allows_finish_cutting,
-            axial_finish_cutting_depth=axial_finish_cutting_depth,
-        )
-    return None
 
 
 def _build_curve_holder(

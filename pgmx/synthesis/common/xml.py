@@ -40,6 +40,8 @@ __all__ = [
     "_compact_number",
     "_qname",
     "_raw_text",
+    "_safe_bool",
+    "_safe_float",
     "_set_text",
     "_set_xmlns",
     "_strip_namespace",
@@ -160,3 +162,24 @@ def _raw_text(node: Optional[ET.Element], path: str, default: str = "") -> str:
     if found is None or found.text is None:
         return default
     return str(found.text)
+
+
+def _safe_float(value, default: float) -> float:
+    raw = "" if value is None else str(value).strip().replace(",", ".")
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _safe_bool(value, default: bool) -> bool:
+    raw = "" if value is None else str(value).strip().lower()
+    if not raw:
+        return default
+    if raw in {"true", "1", "yes", "si", "s\u00ed"}:
+        return True
+    if raw in {"false", "0", "no"}:
+        return False
+    return default

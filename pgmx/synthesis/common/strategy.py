@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Optional
 
@@ -17,6 +18,7 @@ from .geometry import (
     _vertical_transition_primitive,
     build_composite_geometry_profile,
 )
+from .xml import XSI_NS, _safe_bool, _safe_float, _text, _xsi_type
 
 __all__ = [
     "BidirectionalMillingStrategySpec",
@@ -29,6 +31,7 @@ __all__ = [
     "build_helical_milling_strategy_spec",
     "build_unidirectional_milling_strategy_spec",
     "_ensure_milling_strategy_allowed",
+    "_extract_milling_strategy_spec_from_operation",
     "_build_bidirectional_line_strategy_profile",
     "_build_bidirectional_open_profile_strategy_toolpath",
     "_build_closed_profile_strategy_toolpath",
@@ -412,6 +415,61 @@ def _strategy_comparison_key(
         normalized_strategy.axial_cutting_depth,
         normalized_strategy.axial_finish_cutting_depth,
     )
+
+
+def _extract_milling_strategy_spec_from_operation(
+    operation: ET.Element,
+) -> Optional[MillingStrategySpec]:
+    strategy_node = operation.find("./{*}MachiningStrategy")
+    if strategy_node is None:
+        return None
+    if (strategy_node.get(f"{{{XSI_NS}}}nil") or "").strip().lower() == "true":
+        return None
+
+    strategy_type = _xsi_type(strategy_node)
+    allow_multiple_passes = _safe_bool(_text(strategy_node, "./{*}AllowMultiplePasses"), False)
+    allows_finish_cutting = _safe_bool(_text(strategy_node, "./{*}AllowsFinishCutting"), True)
+    axial_cutting_depth = _safe_float(_text(strategy_node, "./{*}AxialCuttingDepth"), 0.0)
+    axial_finish_cutting_depth = _safe_float(_text(strategy_node, "./{*}AxialFinishCuttingDepth"), 0.0)
+    stroke_connection_strategy = _text(strategy_node, "./{*}StrokeConnectionStrategy", "Automatic")
+
+    if "ContourParallel" in strategy_type:
+        return build_contour_parallel_milling_strategy_spec(
+            rotation_direction=_text(strategy_node, "./{*}RotationDirection", "CounterClockwise"),
+            stroke_connection_strategy=stroke_connection_strategy,
+            inside_to_outside=_safe_bool(_text(strategy_node, "./{*}InsideToOutSide"), True),
+            overlap=_safe_float(_text(strategy_node, "./{*}Overlap"), 0.5),
+            is_helic_strategy=_safe_bool(_text(strategy_node, "./{*}IsHelicStrategy"), False),
+            allow_multiple_passes=allow_multiple_passes,
+            axial_cutting_depth=axial_cutting_depth,
+            axial_finish_cutting_depth=axial_finish_cutting_depth,
+            cutmode=_text(strategy_node, "./{*}Cutmode", "Climb"),
+            is_internal=_safe_bool(_text(strategy_node, "./{*}IsInternal"), True),
+            radial_cutting_depth=_safe_float(_text(strategy_node, "./{*}RadialCuttingDepth"), 0.0),
+            radial_finish_cutting_depth=_safe_float(_text(strategy_node, "./{*}RadialFinishCuttingDepth"), 0.0),
+            allows_bidirectional=_safe_bool(_text(strategy_node, "./{*}AllowsBidirectional"), False),
+            allows_finish_cutting=_safe_bool(_text(strategy_node, "./{*}AllowsFinishCutting"), False),
+        )
+    if "UnidirectionalMilling" in strategy_type:
+        return build_unidirectional_milling_strategy_spec(
+            connection_mode=stroke_connection_strategy,
+            allow_multiple_passes=allow_multiple_passes,
+            axial_cutting_depth=axial_cutting_depth,
+            axial_finish_cutting_depth=axial_finish_cutting_depth,
+        )
+    if "BidirectionalMilling" in strategy_type:
+        return build_bidirectional_milling_strategy_spec(
+            allow_multiple_passes=allow_multiple_passes,
+            axial_cutting_depth=axial_cutting_depth,
+            axial_finish_cutting_depth=axial_finish_cutting_depth,
+        )
+    if "HelicMilling" in strategy_type:
+        return build_helical_milling_strategy_spec(
+            axial_cutting_depth=axial_cutting_depth,
+            allows_finish_cutting=allows_finish_cutting,
+            axial_finish_cutting_depth=axial_finish_cutting_depth,
+        )
+    return None
 
 
 def _strategy_pass_levels(

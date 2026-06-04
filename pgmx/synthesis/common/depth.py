@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import math
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Sequence
+
+from .xml import _safe_float, _text, _xsi_type
 
 __all__ = [
     "DepthSpec",
     "MillingDepthSpec",
     "build_depth_spec",
     "build_milling_depth_spec",
+    "_extract_depth_spec_from_template",
     "_normalize_milling_depth_spec",
 ]
 
@@ -87,3 +91,29 @@ def _normalize_milling_depth_spec(depth_spec: Optional[MillingDepthSpec]) -> Mil
         target_depth=depth_spec.target_depth,
         extra_depth=depth_spec.extra_depth,
     )
+
+
+def _extract_depth_spec_from_template(
+    feature: ET.Element,
+    operation: ET.Element,
+    matching_expressions: Sequence[ET.Element],
+    depth_variable_name: str,
+) -> MillingDepthSpec:
+    expression_values = {
+        _text(node, "./{*}Property/{*}InnerField/{*}Name"): _text(node, "./{*}Value")
+        for node in matching_expressions
+        if _text(node, "./{*}Property/{*}Name") == "Depth"
+    }
+    bottom_condition_type = _xsi_type(feature.find("./{*}BottomCondition"))
+    overcut_length = _safe_float(_text(operation, "./{*}OvercutLength"), 0.0)
+    if "ThroughMillingBottom" in bottom_condition_type or (
+        expression_values.get("StartDepth") == depth_variable_name
+        and expression_values.get("EndDepth") == depth_variable_name
+    ):
+        return build_milling_depth_spec(is_through=True, extra_depth=overcut_length)
+
+    start_depth = _safe_float(_text(feature, "./{*}Depth/{*}StartDepth"), 0.0)
+    end_depth = _safe_float(_text(feature, "./{*}Depth/{*}EndDepth"), 0.0)
+    if not math.isclose(start_depth, end_depth, abs_tol=1e-6):
+        raise ValueError("La plantilla usa profundidades distintas para StartDepth/EndDepth; caso no soportado aun.")
+    return build_milling_depth_spec(is_through=False, target_depth=start_depth)
