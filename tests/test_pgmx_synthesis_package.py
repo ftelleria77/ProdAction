@@ -206,6 +206,8 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             )
         self.assertIs(core_sp.DrillingPatternSpec, drilling_pattern.DrillingPatternSpec)
         self.assertIs(core_sp.build_drilling_pattern_spec, drilling_pattern.build_drilling_pattern_spec)
+        self.assertIs(core_sp._HydratedDrillingPatternSpec, drilling_pattern._HydratedDrillingPatternSpec)
+        self.assertIs(core_sp._hydrate_drilling_pattern_spec, drilling_pattern._hydrate_drilling_pattern_spec)
         self.assertIs(core_sp._normalize_drilling_pattern_spec, drilling_pattern._normalize_drilling_pattern_spec)
         drill_pattern = drilling_pattern.build_drilling_pattern_spec(
             20,

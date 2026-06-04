@@ -254,6 +254,8 @@ from .common.xml import (
 )
 from .drilling.pattern import (
     DrillingPatternSpec,
+    _HydratedDrillingPatternSpec,
+    _hydrate_drilling_pattern_spec,
     _normalize_drilling_pattern_spec,
     build_drilling_pattern_spec,
 )
@@ -418,78 +420,6 @@ __all__ = [
 # ============================================================================
 # Public data model
 # ============================================================================
-
-@dataclass(frozen=True)
-class _HydratedDrillingPatternSpec:
-    """Datos internos para serializar un `ReplicateFeature` de taladros."""
-
-    spec: DrillingPatternSpec
-    base_drilling: _HydratedDrillingSpec
-
-    @property
-    def center_x(self) -> float:
-        return self.spec.center_x
-
-    @property
-    def center_y(self) -> float:
-        return self.spec.center_y
-
-    @property
-    def diameter(self) -> float:
-        return self.spec.diameter
-
-    @property
-    def columns(self) -> int:
-        return self.spec.columns
-
-    @property
-    def rows(self) -> int:
-        return self.spec.rows
-
-    @property
-    def spacing(self) -> float:
-        return self.spec.spacing
-
-    @property
-    def row_spacing(self) -> float:
-        return self.spec.row_spacing if self.spec.row_spacing is not None else self.spec.spacing
-
-    @property
-    def feature_name(self) -> str:
-        return self.spec.feature_name
-
-    @property
-    def plane_name(self) -> str:
-        return self.spec.plane_name
-
-    @property
-    def security_plane(self) -> float:
-        return self.spec.security_plane
-
-    @property
-    def depth_spec(self) -> MillingDepthSpec:
-        return self.spec.depth_spec
-
-    @property
-    def drill_family(self) -> str:
-        return self.spec.drill_family
-
-    @property
-    def tool_resolution(self) -> str:
-        return self.spec.tool_resolution
-
-    @property
-    def tool_id(self) -> str:
-        return self.base_drilling.tool_id
-
-    @property
-    def tool_name(self) -> str:
-        return self.base_drilling.tool_name
-
-    @property
-    def tool_object_type(self) -> str:
-        return self.base_drilling.tool_object_type
-
 
 # ============================================================================
 # Public spec builders
@@ -1541,31 +1471,6 @@ def _reserve_ids(root: ET.Element, count: int, preferred_start: Optional[int] = 
     first_default_id = int(next(_id_counter(root)))
     start_id = first_default_id if preferred_start is None else max(first_default_id, preferred_start)
     return [str(start_id + offset) for offset in range(count)]
-
-
-def _hydrate_drilling_pattern_spec(
-    pattern: DrillingPatternSpec,
-    source_pgmx_path: Optional[Path],
-) -> _HydratedDrillingPatternSpec:
-    del source_pgmx_path
-    normalized_pattern = _normalize_drilling_pattern_spec(pattern)
-    base_drilling = _hydrate_drilling_spec(
-        DrillingSpec(
-            center_x=normalized_pattern.center_x,
-            center_y=normalized_pattern.center_y,
-            diameter=normalized_pattern.diameter,
-            feature_name=normalized_pattern.feature_name,
-            plane_name=normalized_pattern.plane_name,
-            security_plane=normalized_pattern.security_plane,
-            depth_spec=normalized_pattern.depth_spec,
-            drill_family=normalized_pattern.drill_family,
-            tool_resolution=normalized_pattern.tool_resolution,
-            tool_id=normalized_pattern.tool_id,
-            tool_name=normalized_pattern.tool_name,
-        ),
-        None,
-    )
-    return _HydratedDrillingPatternSpec(spec=normalized_pattern, base_drilling=base_drilling)
 
 
 def _build_point_geometry(
