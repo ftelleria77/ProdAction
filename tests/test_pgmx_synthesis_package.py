@@ -16,6 +16,7 @@ from pgmx.synthesis.common import tools as common_tools
 from pgmx.synthesis.common import xml as common_xml
 from pgmx.synthesis.milling import circle as milling_circle
 from pgmx.synthesis.milling import line as milling_line
+from pgmx.synthesis.milling import pocket as milling_pocket
 from pgmx.synthesis.milling import profile as milling_profile
 from pgmx.synthesis.milling import slot as milling_slot
 from pgmx.synthesis.milling import squaring as milling_squaring
@@ -215,6 +216,31 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertTrue(squaring.depth_spec.is_through)
         self.assertEqual(squaring.depth_spec.extra_depth, 1.0)
         self.assertEqual(squaring.approach.approach_type, "Arc")
+        self.assertIs(core_sp.PocketMillingSpec, milling_pocket.PocketMillingSpec)
+        self.assertIs(core_sp.PocketBossRouteSeedSpec, milling_pocket.PocketBossRouteSeedSpec)
+        self.assertIs(core_sp.build_pocket_milling_spec, milling_pocket.build_pocket_milling_spec)
+        self.assertIs(
+            core_sp.build_pocket_boss_route_seed_spec,
+            milling_pocket.build_pocket_boss_route_seed_spec,
+        )
+        seed = milling_pocket.build_pocket_boss_route_seed_spec(
+            geometry_id="42",
+            contour_points=((20, 20), (40, 20), (40, 40), (20, 20)),
+        )
+        pocket = milling_pocket.build_pocket_milling_spec(
+            contour_points=((0, 0), (100, 0), (100, 80), (0, 0)),
+            tool_width=20.0,
+            allowance_side=2.0,
+            boss_route_seeds=(seed,),
+        )
+        self.assertIsInstance(pocket, milling_pocket.PocketMillingSpec)
+        self.assertEqual(pocket.feature_name, "Vaciado")
+        self.assertEqual(pocket.effective_contour_offset, 12.0)
+        self.assertEqual(pocket.radial_step, 10.0)
+        self.assertTrue(pocket.has_boss_route_seeds)
+        self.assertEqual(pocket.resolved_boss_route_seed_contours, (seed.contour_points,))
+        with self.assertRaisesRegex(ValueError, "primer y ultimo punto"):
+            milling_pocket.build_pocket_milling_spec(contour_points=((0, 0), (100, 0), (100, 80), (0, 80)))
 
 
 if __name__ == "__main__":
