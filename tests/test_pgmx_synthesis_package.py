@@ -9,6 +9,7 @@ from pgmx.synthesis import drilling as synthesis_drilling
 from pgmx.synthesis import milling as synthesis_milling
 from pgmx.synthesis.common import depth as common_depth
 from pgmx.synthesis.common import hydration as common_hydration
+from pgmx.synthesis.common import leads as common_leads
 from pgmx.synthesis.common import piece as common_piece
 from pgmx.synthesis.common import strategy as common_strategy
 from pgmx.synthesis.common import tools as common_tools
@@ -102,6 +103,22 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertEqual(root.tag, template.root.tag)
         self.assertEqual(xml_entry_name, template.xml_entry_name)
         self.assertEqual(entries.keys(), template.archive_entries.keys())
+        self.assertIs(core_sp.ApproachSpec, common_leads.ApproachSpec)
+        self.assertIs(core_sp.RetractSpec, common_leads.RetractSpec)
+        self.assertIs(core_sp.build_approach_spec, common_leads.build_approach_spec)
+        self.assertIs(core_sp.build_retract_spec, common_leads.build_retract_spec)
+        self.assertIs(core_sp._normalize_retract_mode, common_leads._normalize_retract_mode)
+        self.assertEqual(common_leads._normalize_approach_arc_side("izquierda"), "Left")
+        self.assertEqual(common_leads._normalize_retract_mode("en-cota"), "Quote")
+        self.assertFalse(common_leads.build_approach_spec().is_enabled)
+        approach = common_leads.build_approach_spec(approach_type="arc")
+        self.assertTrue(approach.is_enabled)
+        self.assertEqual(approach.approach_type, "Arc")
+        self.assertEqual(approach.mode, "Quote")
+        retract = common_leads.build_retract_spec(retract_type="arco", overlap=0.25)
+        self.assertTrue(retract.is_enabled)
+        self.assertEqual(retract.retract_type, "Arc")
+        self.assertEqual(retract.overlap, 0.25)
 
 
 if __name__ == "__main__":
