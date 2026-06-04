@@ -497,6 +497,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.CircleMillingSpec, milling_circle.CircleMillingSpec)
         self.assertIs(core_sp._HydratedCircleMillingSpec, milling_circle._HydratedCircleMillingSpec)
         self.assertIs(core_sp.build_circle_milling_spec, milling_circle.build_circle_milling_spec)
+        self.assertIs(core_sp._append_circle_milling, milling_circle._append_circle_milling)
         self.assertIs(core_sp._normalize_circle_milling_spec, milling_circle._normalize_circle_milling_spec)
         self.assertIs(core_sp._build_circle_toolpath_profile, milling_circle._build_circle_toolpath_profile)
         self.assertIs(core_sp._matches_circle_geometry, milling_circle._matches_circle_geometry)

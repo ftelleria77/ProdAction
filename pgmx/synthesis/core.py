@@ -343,6 +343,7 @@ from .milling.line import (
 from .milling.circle import (
     CircleMillingSpec,
     _HydratedCircleMillingSpec,
+    _append_circle_milling,
     _build_circle_toolpath_profile,
     _can_hydrate_exact_circle_serialization,
     _extract_circle_milling_template,
@@ -2072,26 +2073,6 @@ def _build_xn_step(
     else:
         _append_node(step, BASE_MODEL_NS, "Y", _compact_number(spec.y))
     return step
-
-
-def _append_circle_milling(root: ET.Element, state: PgmxState, spec: _HydratedCircleMillingSpec) -> None:
-    generated_geometry_curve = spec.geometry_curve or _curve_spec_from_profile_geometry(
-        build_circle_geometry_profile(
-            spec.center_x,
-            spec.center_y,
-            spec.radius,
-            z_value=0.0,
-            winding=spec.winding,
-        )
-    )
-    generated_toolpath_profile = _build_circle_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
-    _append_curve_profile_milling(
-        root,
-        state,
-        spec,
-        generated_geometry_curve,
-        generated_toolpath_profile,
-    )
 
 
 def _append_squaring_milling(root: ET.Element, state: PgmxState, spec: _HydratedSquaringMillingSpec) -> None:

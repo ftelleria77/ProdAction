@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Optional
@@ -17,6 +18,7 @@ from ..common.geometry import (
     _CurveSpec,
     GeometryProfileSpec,
     _circle_curve_spec,
+    _curve_spec_from_profile_geometry,
     _curve_spec_from_toolpath_node,
     _parse_circle_geometry_profile,
     build_circle_geometry_profile,
@@ -47,12 +49,14 @@ from ..common.strategy import (
 )
 from ..common.piece import _workpiece_depth_name
 from ..common.xml import _raw_text, _text, _xsi_type
-from ._common import _normalize_geometry_winding, _normalize_side_of_feature
+from ._common import _normalize_geometry_winding, _normalize_side_of_feature, _toolpath_cut_z
+from .profile import _append_curve_profile_milling
 
 __all__ = [
     "CircleMillingSpec",
     "build_circle_milling_spec",
     "_HydratedCircleMillingSpec",
+    "_append_circle_milling",
     "_build_circle_toolpath_profile",
     "_can_hydrate_exact_circle_serialization",
     "_extract_circle_milling_template",
@@ -209,6 +213,26 @@ def _build_circle_toolpath_profile(
     if isinstance(strategy, HelicalMillingStrategySpec):
         return _build_helical_circle_strategy_toolpath(float(top_level), cut_z, base_profile, strategy)
     return _build_closed_profile_strategy_toolpath(float(top_level), cut_z, base_profile, strategy)
+
+
+def _append_circle_milling(root: ET.Element, state, spec: _HydratedCircleMillingSpec) -> None:
+    generated_geometry_curve = spec.geometry_curve or _curve_spec_from_profile_geometry(
+        build_circle_geometry_profile(
+            spec.center_x,
+            spec.center_y,
+            spec.radius,
+            z_value=0.0,
+            winding=spec.winding,
+        )
+    )
+    generated_toolpath_profile = _build_circle_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
+    _append_curve_profile_milling(
+        root,
+        state,
+        spec,
+        generated_geometry_curve,
+        generated_toolpath_profile,
+    )
 
 
 def _matches_circle_geometry(template: dict[str, object], spec: CircleMillingSpec, tolerance: float = 1e-6) -> bool:
