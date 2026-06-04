@@ -524,6 +524,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.SquaringMillingSpec, milling_squaring.SquaringMillingSpec)
         self.assertIs(core_sp._HydratedSquaringMillingSpec, milling_squaring._HydratedSquaringMillingSpec)
         self.assertIs(core_sp.build_squaring_milling_spec, milling_squaring.build_squaring_milling_spec)
+        self.assertIs(core_sp._append_squaring_milling, milling_squaring._append_squaring_milling)
         self.assertIs(core_sp._normalize_squaring_milling_spec, milling_squaring._normalize_squaring_milling_spec)
         self.assertIs(core_sp._hydrate_squaring_milling_spec, milling_squaring._hydrate_squaring_milling_spec)
         self.assertIs(core_sp._build_squaring_outline_points, milling_squaring._build_squaring_outline_points)

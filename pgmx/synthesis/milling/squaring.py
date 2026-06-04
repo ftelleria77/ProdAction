@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
@@ -12,6 +13,7 @@ from ..common.geometry import (
     GeometryProfileSpec,
     _CurveSpec,
     _build_parameterized_line_geometry_primitive,
+    _curve_spec_from_profile_geometry,
     build_compensated_toolpath_profile,
     build_composite_geometry_profile,
     build_line_geometry_primitive,
@@ -37,7 +39,8 @@ from ..common.strategy import (
     _build_closed_profile_strategy_toolpath,
     _normalize_milling_strategy_spec,
 )
-from ._common import _normalize_geometry_winding
+from ._common import _normalize_geometry_winding, _toolpath_cut_z
+from .profile import _append_curve_profile_milling
 
 if TYPE_CHECKING:
     from ..common.program import PgmxState
@@ -46,6 +49,7 @@ __all__ = [
     "SquaringMillingSpec",
     "build_squaring_milling_spec",
     "_HydratedSquaringMillingSpec",
+    "_append_squaring_milling",
     "_hydrate_squaring_milling_spec",
     "_normalize_squaring_milling_spec",
     "_normalize_squaring_start_edge",
@@ -364,6 +368,18 @@ def _build_squaring_toolpath_profile(
     if strategy is None:
         return toolpath_profile
     return _build_closed_profile_strategy_toolpath(float(state.depth), cut_z, toolpath_profile, strategy)
+
+
+def _append_squaring_milling(root: ET.Element, state, spec: _HydratedSquaringMillingSpec) -> None:
+    generated_geometry_profile = _build_squaring_geometry_profile(state, spec, z_value=0.0)
+    generated_toolpath_profile = _build_squaring_toolpath_profile(state, _toolpath_cut_z(state, spec), spec)
+    _append_curve_profile_milling(
+        root,
+        state,
+        spec,
+        spec.geometry_curve or _curve_spec_from_profile_geometry(generated_geometry_profile),
+        generated_toolpath_profile,
+    )
 
 
 def _hydrate_squaring_milling_spec(

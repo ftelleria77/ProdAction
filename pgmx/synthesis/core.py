@@ -390,6 +390,7 @@ from .milling.slot import (
 from .milling.squaring import (
     SquaringMillingSpec,
     _HydratedSquaringMillingSpec,
+    _append_squaring_milling,
     _normalize_squaring_milling_spec,
     _normalize_squaring_start_edge,
     _build_squaring_geometry_profile,
@@ -2073,18 +2074,6 @@ def _build_xn_step(
     else:
         _append_node(step, BASE_MODEL_NS, "Y", _compact_number(spec.y))
     return step
-
-
-def _append_squaring_milling(root: ET.Element, state: PgmxState, spec: _HydratedSquaringMillingSpec) -> None:
-    generated_geometry_profile = _build_squaring_geometry_profile(state, spec, z_value=0.0)
-    generated_toolpath_profile = _build_squaring_toolpath_profile(state, _toolpath_cut_z(state, spec), spec)
-    _append_curve_profile_milling(
-        root,
-        state,
-        spec,
-        spec.geometry_curve or _curve_spec_from_profile_geometry(generated_geometry_profile),
-        generated_toolpath_profile,
-    )
 
 
 def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPocketMillingSpec) -> None:
