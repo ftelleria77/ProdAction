@@ -240,9 +240,15 @@ from .common.xml import (
     _append_node,
     _append_object_ref,
     _append_reference_key,
+    _build_depth_expression,
+    _build_point_geometry,
+    _build_working_step,
     _compact_number,
+    _find_plane_ref,
+    _id_counter,
     _qname,
     _raw_text,
+    _reserve_ids,
     _safe_bool,
     _safe_float,
     _set_text,
@@ -432,23 +438,6 @@ __all__ = [
 # ============================================================================
 # Public spec builders
 # ============================================================================
-
-def _id_counter(root: ET.Element):
-    """Genera IDs nuevos por encima del mayor ID/unsignedInt ya presente en el XML."""
-
-    max_value = 0
-    for element in root.iter():
-        tag = _strip_namespace(element.tag)
-        text = str(element.text or "").strip()
-        if tag not in {"ID", "unsignedInt"} or not text.isdigit():
-            continue
-        max_value = max(max_value, int(text))
-
-    current = max_value + 1
-    while True:
-        yield str(current)
-        current += 1
-
 
 def _toolpath_line_string(
     start_point: tuple[float, float, float],
@@ -1392,55 +1381,6 @@ def _build_identity_profile_placement() -> ET.Element:
     _append_node(placement, GEOMETRY_NS, "_zP", "0")
     _append_node(placement, GEOMETRY_NS, "_zVx", "-0")
     return placement
-
-
-def _find_plane_ref(root: ET.Element, plane_name: str) -> tuple[str, str]:
-    planes = root.find("./{*}Planes")
-    if planes is None:
-        raise ValueError("La plantilla no contiene Planes.")
-    for plane in list(planes):
-        plane_type = _text(plane, "./{*}Type") or _text(plane, "./{*}Name")
-        if plane_type == plane_name:
-            return (
-                _text(plane, "./{*}Key/{*}ID"),
-                _text(plane, "./{*}Key/{*}ObjectType"),
-            )
-    raise ValueError(f"La plantilla no contiene el plano '{plane_name}'.")
-
-
-def _reserve_ids(root: ET.Element, count: int, preferred_start: Optional[int] = None) -> list[str]:
-    first_default_id = int(next(_id_counter(root)))
-    start_id = first_default_id if preferred_start is None else max(first_default_id, preferred_start)
-    return [str(start_id + offset) for offset in range(count)]
-
-
-def _build_point_geometry(
-    geometry_id: str,
-    plane_id: str,
-    plane_object_type: str,
-    point_x: float,
-    point_y: float,
-    point_z: float = 0.0,
-) -> ET.Element:
-    geometry = ET.Element(
-        _qname(GEOMETRY_NS, "GeomGeometry"),
-        {f"{{{XSI_NS}}}type": "a:GeomCartesianPoint"},
-    )
-    _set_xmlns(geometry, "a", GEOMETRY_NS)
-    _append_key(geometry, geometry_id, "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCartesianPoint")
-    _append_blank_name(geometry)
-    _append_node(geometry, GEOMETRY_NS, "IsAbsolute", "false")
-    _append_object_ref(
-        geometry,
-        GEOMETRY_NS,
-        "PlaneID",
-        plane_id,
-        plane_object_type,
-    )
-    _append_node(geometry, GEOMETRY_NS, "_x", _compact_number(point_x))
-    _append_node(geometry, GEOMETRY_NS, "_y", _compact_number(point_y))
-    _append_node(geometry, GEOMETRY_NS, "_z", _compact_number(point_z))
-    return geometry
 
 
 def _build_line_geometry(
@@ -3479,43 +3419,6 @@ def _build_pocket_operation(
     return operation
 
 
-def _build_working_step(
-    feature_name: str,
-    step_id: str,
-    feature_id: str,
-    operation_id: str,
-    feature_object_type: str = "ScmGroup.XCam.MachiningDataModel.Milling.GeneralProfileFeature",
-    operation_object_type: str = "ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideFinishMilling",
-) -> ET.Element:
-    step = ET.Element(
-        _qname(BASE_MODEL_NS, "Executable"),
-        {f"{{{XSI_NS}}}type": "a:MachiningWorkingStep"},
-    )
-    _set_xmlns(step, "a", PGMX_NS)
-    _append_key(step, step_id, "ScmGroup.XCam.MachiningDataModel.ProjectModule.MachiningWorkingStep")
-    _append_blank_name(step).text = feature_name
-    _append_node(step, BASE_MODEL_NS, "Description", "")
-    _append_node(step, BASE_MODEL_NS, "IsEnabled", "true")
-    _append_node(step, BASE_MODEL_NS, "Priority", "0")
-    feature_ref = _append_object_ref(
-        step,
-        PGMX_NS,
-        "ManufacturingFeatureID",
-        feature_id,
-        feature_object_type,
-    )
-    operation_ref = _append_object_ref(
-        step,
-        PGMX_NS,
-        "OperationID",
-        operation_id,
-        operation_object_type,
-    )
-    _set_xmlns(feature_ref, "b", UTILITY_NS)
-    _set_xmlns(operation_ref, "b", UTILITY_NS)
-    return step
-
-
 def _build_xn_step(
     step_id: str,
     workpiece_id: str,
@@ -3570,41 +3473,6 @@ def _build_xn_step(
     else:
         _append_node(step, BASE_MODEL_NS, "Y", _compact_number(spec.y))
     return step
-
-
-def _build_depth_expression(
-    expression_id: str,
-    feature_id: str,
-    inner_field_name: str,
-    depth_variable_name: str,
-    referenced_object_type: str = "ScmGroup.XCam.MachiningDataModel.Milling.GeneralProfileFeature",
-) -> ET.Element:
-    expression = ET.Element(_qname(PARAMETRIC_NS, "Expression"))
-    _append_key(expression, expression_id, "ScmGroup.XCam.MachiningDataModel.Parametrics.Expression")
-    _append_blank_name(expression)
-    property_node = _append_node(
-        expression,
-        PARAMETRIC_NS,
-        "Property",
-        attrib={f"{{{XSI_NS}}}type": "a:CompositeField"},
-    )
-    _set_xmlns(property_node, "a", PARAMETRIC_NS)
-    _append_node(property_node, PARAMETRIC_NS, "Index", "-1")
-    _append_node(property_node, PARAMETRIC_NS, "Key", attrib={f"{{{XSI_NS}}}nil": "true"})
-    _append_node(property_node, PARAMETRIC_NS, "Name", "Depth")
-    inner_field = _append_node(property_node, PARAMETRIC_NS, "InnerField")
-    _append_node(inner_field, PARAMETRIC_NS, "Index", "-1")
-    _append_node(inner_field, PARAMETRIC_NS, "Key", attrib={f"{{{XSI_NS}}}nil": "true"})
-    _append_node(inner_field, PARAMETRIC_NS, "Name", inner_field_name)
-    _append_object_ref(
-        expression,
-        PARAMETRIC_NS,
-        "ReferencedObject",
-        feature_id,
-        referenced_object_type,
-    )
-    _append_node(expression, PARAMETRIC_NS, "Value", depth_variable_name)
-    return expression
 
 
 def _build_drilling_pattern_depth_expression(
