@@ -74,7 +74,7 @@ import re
 import sys
 import zipfile
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Optional, Sequence, Union
 
@@ -114,6 +114,14 @@ from .common.piece import (
     _workpiece_depth_name,
     _workpiece_length_name,
     _workpiece_width_name,
+)
+from .common.program import (
+    DEFAULT_MACHINING_ORDER,
+    MachiningSpec,
+    PgmxState,
+    PgmxSynthesisRequest,
+    PgmxSynthesisResult,
+    XnSpec,
 )
 from .common.strategy import (
     BidirectionalMillingStrategySpec,
@@ -300,20 +308,6 @@ __all__ = [
 # ============================================================================
 
 @dataclass(frozen=True)
-class PgmxState:
-    """Descripcion de la pieza final a sintetizar."""
-
-    piece_name: str
-    length: float
-    width: float
-    depth: float
-    origin_x: float
-    origin_y: float
-    origin_z: float
-    execution_fields: str = "HG"
-
-
-@dataclass(frozen=True)
 class GeometryPrimitiveSpec:
     """Primitiva geometrica 2D/3D reusable para perfiles Maestro."""
 
@@ -357,27 +351,6 @@ class GeometryProfileSpec:
     @property
     def primitive_count(self) -> int:
         return len(self.primitives)
-
-
-MachiningSpec = Union[
-    LineMillingSpec,
-    SlotMillingSpec,
-    PolylineMillingSpec,
-    CircleMillingSpec,
-    SquaringMillingSpec,
-    PocketMillingSpec,
-    DrillingSpec,
-    DrillingPatternSpec,
-]
-
-
-@dataclass(frozen=True)
-class XnSpec:
-    """Configuracion publica de `Xn`, la operacion nula final del workplan."""
-
-    reference: str = "Absolute"
-    x: float = -3700.0
-    y: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -954,47 +927,6 @@ class _HydratedDrillingPatternSpec:
     @property
     def tool_object_type(self) -> str:
         return self.base_drilling.tool_object_type
-
-
-@dataclass(frozen=True)
-class PgmxSynthesisRequest:
-    """Solicitud completa para sintetizar un `.pgmx` reutilizable desde la app."""
-
-    baseline_path: Path
-    output_path: Path
-    piece: PgmxState
-    source_pgmx_path: Optional[Path] = None
-    line_millings: tuple[LineMillingSpec, ...] = ()
-    slot_millings: tuple[SlotMillingSpec, ...] = ()
-    polyline_millings: tuple[PolylineMillingSpec, ...] = ()
-    circle_millings: tuple[CircleMillingSpec, ...] = ()
-    squaring_millings: tuple[SquaringMillingSpec, ...] = ()
-    pocket_millings: tuple[PocketMillingSpec, ...] = ()
-    drillings: tuple[DrillingSpec, ...] = ()
-    drilling_patterns: tuple[DrillingPatternSpec, ...] = ()
-    ordered_machinings: tuple[MachiningSpec, ...] = ()
-    machining_order: tuple[str, ...] = ("line", "slot", "polyline", "circle", "squaring", "pocket", "drilling", "drilling_pattern")
-    xn: XnSpec = field(default_factory=XnSpec)
-
-
-@dataclass(frozen=True)
-class PgmxSynthesisResult:
-    """Resultado de una sintesis ya escrita a disco."""
-
-    output_path: Path
-    piece: PgmxState
-    sha256: str
-    line_millings: tuple[LineMillingSpec, ...] = ()
-    slot_millings: tuple[SlotMillingSpec, ...] = ()
-    polyline_millings: tuple[PolylineMillingSpec, ...] = ()
-    circle_millings: tuple[CircleMillingSpec, ...] = ()
-    squaring_millings: tuple[SquaringMillingSpec, ...] = ()
-    pocket_millings: tuple[PocketMillingSpec, ...] = ()
-    drillings: tuple[DrillingSpec, ...] = ()
-    drilling_patterns: tuple[DrillingPatternSpec, ...] = ()
-    ordered_machinings: tuple[MachiningSpec, ...] = ()
-    machining_order: tuple[str, ...] = ("line", "slot", "polyline", "circle", "squaring", "pocket", "drilling", "drilling_pattern")
-    xn: XnSpec = field(default_factory=XnSpec)
 
 
 # ============================================================================
@@ -8850,7 +8782,7 @@ def _split_hydrated_machinings(
 
 
 def _normalize_machining_order(value: Optional[Sequence[str]]) -> tuple[str, ...]:
-    default_order = ("line", "slot", "polyline", "circle", "squaring", "pocket", "drilling", "drilling_pattern")
+    default_order = DEFAULT_MACHINING_ORDER
     aliases = {
         "lines": "line",
         "line_milling": "line",

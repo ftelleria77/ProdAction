@@ -11,6 +11,7 @@ from pgmx.synthesis.common import depth as common_depth
 from pgmx.synthesis.common import hydration as common_hydration
 from pgmx.synthesis.common import leads as common_leads
 from pgmx.synthesis.common import piece as common_piece
+from pgmx.synthesis.common import program as common_program
 from pgmx.synthesis.common import strategy as common_strategy
 from pgmx.synthesis.common import tools as common_tools
 from pgmx.synthesis.common import xml as common_xml
@@ -64,6 +65,15 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertEqual(common_xml.PGMX_NS, core_sp.PGMX_NS)
         self.assertIs(core_sp._append_node, common_xml._append_node)
         self.assertEqual(common_xml._compact_number(1.25), "1.25")
+        self.assertIs(core_sp.PgmxState, common_program.PgmxState)
+        self.assertIs(core_sp.MachiningSpec, common_program.MachiningSpec)
+        self.assertIs(core_sp.XnSpec, common_program.XnSpec)
+        self.assertIs(core_sp.PgmxSynthesisRequest, common_program.PgmxSynthesisRequest)
+        self.assertIs(core_sp.PgmxSynthesisResult, common_program.PgmxSynthesisResult)
+        self.assertEqual(
+            common_program.DEFAULT_MACHINING_ORDER,
+            ("line", "slot", "polyline", "circle", "squaring", "pocket", "drilling", "drilling_pattern"),
+        )
         self.assertIs(core_sp.MillingDepthSpec, common_depth.MillingDepthSpec)
         self.assertIs(common_depth.DepthSpec, common_depth.MillingDepthSpec)
         self.assertIs(core_sp.build_milling_depth_spec, common_depth.build_milling_depth_spec)
