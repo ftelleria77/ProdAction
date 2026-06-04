@@ -298,6 +298,9 @@ from .milling._common import (
     _tool_total_milling_depth,
     _toolpath_cut_z,
     _uses_feature_depth_expressions,
+    _validate_tool_sinking_length_for_spec,
+    _validate_tool_type_for_milling_spec,
+    _validate_vertical_x_saw_for_milling_spec,
 )
 from .milling.line import (
     LineMillingSpec,
@@ -743,80 +746,6 @@ def _normalize_xn_spec(xn: Optional[XnSpec]) -> XnSpec:
         x=xn.x,
         y=xn.y,
     )
-
-
-def _validate_tool_sinking_length_for_spec(
-    state: PgmxState,
-    spec,
-    tool_catalog: dict[str, dict[str, str]],
-) -> None:
-    """Valida que la profundidad total no supere el `sinking_length` de la herramienta."""
-
-    catalog_entry = tool_catalog.get(spec.tool_id)
-    _validate_tool_sinking_length_for_total_depth(
-        spec,
-        catalog_entry,
-        total_depth=_tool_total_milling_depth(state, spec),
-        operation_name="fresado",
-    )
-
-
-def _validate_vertical_x_saw_for_milling_spec(spec, tool_type: str) -> None:
-    if not isinstance(spec, (_HydratedLineMillingSpec, _HydratedSlotMillingSpec)):
-        raise ValueError(
-            "La herramienta "
-            f"{_tool_catalog_label(spec)} ({tool_type}) solo permite ranurados lineales rectos."
-        )
-
-    if _normalize_plane_name(spec.plane_name) != "Top":
-        raise ValueError(
-            "La herramienta "
-            f"{_tool_catalog_label(spec)} ({tool_type}) solo permite ranurados sobre el plano Top."
-        )
-
-    depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
-    if depth_spec.is_through:
-        raise ValueError(
-            "La herramienta "
-            f"{_tool_catalog_label(spec)} ({tool_type}) solo permite ranurados no pasantes."
-        )
-
-    if not math.isclose(float(spec.start_y), float(spec.end_y), abs_tol=1e-9):
-        raise ValueError(
-            "La herramienta "
-            f"{_tool_catalog_label(spec)} ({tool_type}) solo permite líneas horizontales."
-        )
-
-
-def _validate_tool_type_for_milling_spec(spec, tool_catalog: dict[str, dict[str, str]]) -> None:
-    catalog_entry = tool_catalog.get(spec.tool_id)
-    if catalog_entry is None:
-        raise ValueError(
-            "No se pudo validar el tipo de la herramienta "
-            f"{_tool_catalog_label(spec)} porque no existe en '{TOOL_CATALOG_PATH.name}'."
-        )
-
-    tool_type = (catalog_entry.get("type") or "").strip()
-    usage_group = _normalize_tool_usage_group(tool_type)
-    if isinstance(spec, _HydratedSlotMillingSpec):
-        if not _is_vertical_x_saw(tool_type):
-            raise ValueError(
-                "La ranura `SlotSide` requiere una Sierra Vertical X compatible: "
-                f"{_tool_catalog_label(spec)} figura como '{tool_type or 'sin tipo'}'."
-            )
-        _validate_vertical_x_saw_for_milling_spec(spec, tool_type)
-        return
-    if usage_group == "milling":
-        return
-    if _is_vertical_x_saw(tool_type):
-        _validate_vertical_x_saw_for_milling_spec(spec, tool_type)
-        return
-    if usage_group != "milling":
-        raise ValueError(
-            "El fresado requiere una herramienta de tipo Fresa/Freza, "
-            "o bien una Sierra Vertical X en modo ranurado horizontal no pasante: "
-            f"{_tool_catalog_label(spec)} figura como '{tool_type or 'sin tipo'}'."
-        )
 
 
 def _validate_tool_sinking_lengths(
