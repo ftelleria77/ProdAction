@@ -18,6 +18,10 @@ __all__ = [
     "_ensure_milling_strategy_allowed",
     "_normalize_milling_strategy_spec",
     "_normalize_strategy_connection_mode",
+    "_strategy_is_multilevel",
+    "_strategy_comparison_key",
+    "_serialize_unidirectional_connection_mode",
+    "_resolve_unidirectional_connection_mode",
 ]
 
 
@@ -300,6 +304,91 @@ def build_contour_parallel_milling_strategy_spec(
         ),
         allows_bidirectional=False if allows_bidirectional is None else bool(allows_bidirectional),
         allows_finish_cutting=False if allows_finish_cutting is None else bool(allows_finish_cutting),
+    )
+
+
+def _strategy_is_multilevel(strategy: Optional[MillingStrategySpec]) -> bool:
+    normalized_strategy = _normalize_milling_strategy_spec(strategy)
+    if normalized_strategy is None:
+        return False
+    if isinstance(normalized_strategy, HelicalMillingStrategySpec):
+        return True
+    if not normalized_strategy.allow_multiple_passes:
+        return False
+    return (
+        normalized_strategy.axial_cutting_depth > 0.0
+        or normalized_strategy.axial_finish_cutting_depth > 0.0
+    )
+
+
+def _resolve_unidirectional_connection_mode(
+    strategy: UnidirectionalMillingStrategySpec,
+    *,
+    is_closed_profile: bool,
+) -> str:
+    if strategy.connection_mode != "Automatic":
+        return strategy.connection_mode
+    return "InPiece" if is_closed_profile else "SafetyHeight"
+
+
+def _serialize_unidirectional_connection_mode(connection_mode: str) -> str:
+    normalized_connection_mode = _normalize_strategy_connection_mode(connection_mode)
+    return {
+        "Automatic": "LiftShiftPlunge",
+        "SafetyHeight": "LiftShiftPlunge",
+        "InPiece": "Straghtline",
+    }[normalized_connection_mode]
+
+
+def _strategy_comparison_key(
+    strategy: Optional[MillingStrategySpec],
+    *,
+    is_closed_profile: bool,
+) -> Optional[tuple[object, ...]]:
+    normalized_strategy = _normalize_milling_strategy_spec(strategy)
+    if normalized_strategy is None:
+        return None
+    if isinstance(normalized_strategy, UnidirectionalMillingStrategySpec):
+        return (
+            "Unidirectional",
+            _resolve_unidirectional_connection_mode(
+                normalized_strategy,
+                is_closed_profile=is_closed_profile,
+            ),
+            normalized_strategy.allow_multiple_passes,
+            normalized_strategy.axial_cutting_depth,
+            normalized_strategy.axial_finish_cutting_depth,
+        )
+    if isinstance(normalized_strategy, HelicalMillingStrategySpec):
+        return (
+            "Helical",
+            normalized_strategy.allows_finish_cutting,
+            normalized_strategy.axial_cutting_depth,
+            normalized_strategy.axial_finish_cutting_depth,
+        )
+    if isinstance(normalized_strategy, ContourParallelMillingStrategySpec):
+        return (
+            "ContourParallel",
+            normalized_strategy.rotation_direction,
+            normalized_strategy.stroke_connection_strategy,
+            normalized_strategy.inside_to_outside,
+            normalized_strategy.overlap,
+            normalized_strategy.is_helic_strategy,
+            normalized_strategy.allow_multiple_passes,
+            normalized_strategy.axial_cutting_depth,
+            normalized_strategy.axial_finish_cutting_depth,
+            normalized_strategy.cutmode,
+            normalized_strategy.is_internal,
+            normalized_strategy.radial_cutting_depth,
+            normalized_strategy.radial_finish_cutting_depth,
+            normalized_strategy.allows_bidirectional,
+            normalized_strategy.allows_finish_cutting,
+        )
+    return (
+        "Bidirectional",
+        normalized_strategy.allow_multiple_passes,
+        normalized_strategy.axial_cutting_depth,
+        normalized_strategy.axial_finish_cutting_depth,
     )
 
 

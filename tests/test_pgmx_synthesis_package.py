@@ -221,7 +221,24 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             core_sp.build_contour_parallel_milling_strategy_spec,
             common_strategy.build_contour_parallel_milling_strategy_spec,
         )
+        self.assertIs(core_sp._strategy_is_multilevel, common_strategy._strategy_is_multilevel)
+        self.assertIs(
+            core_sp._resolve_unidirectional_connection_mode,
+            common_strategy._resolve_unidirectional_connection_mode,
+        )
+        self.assertIs(
+            core_sp._serialize_unidirectional_connection_mode,
+            common_strategy._serialize_unidirectional_connection_mode,
+        )
+        self.assertIs(core_sp._strategy_comparison_key, common_strategy._strategy_comparison_key)
         self.assertEqual(common_strategy._normalize_strategy_connection_mode("en-la-pieza"), "InPiece")
+        self.assertEqual(
+            common_strategy._resolve_unidirectional_connection_mode(
+                common_strategy.build_unidirectional_milling_strategy_spec(),
+                is_closed_profile=True,
+            ),
+            "InPiece",
+        )
         strategy = common_strategy.build_bidirectional_milling_strategy_spec(axial_cutting_depth=2.5)
         self.assertTrue(strategy.allow_multiple_passes)
         self.assertEqual(strategy.axial_cutting_depth, 2.5)
