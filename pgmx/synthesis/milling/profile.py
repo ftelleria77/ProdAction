@@ -31,6 +31,8 @@ from ..common.leads import (
 )
 from ..common.strategy import (
     BidirectionalMillingStrategySpec,
+    ContourParallelMillingStrategySpec,
+    HelicalMillingStrategySpec,
     MillingStrategySpec,
     UnidirectionalMillingStrategySpec,
     _ensure_milling_strategy_allowed,
@@ -38,6 +40,7 @@ from ..common.strategy import (
     _build_closed_profile_strategy_toolpath,
     _build_unidirectional_open_profile_strategy_toolpath,
     _normalize_milling_strategy_spec,
+    _strategy_comparison_key,
 )
 from ._common import _normalize_side_of_feature
 
@@ -45,6 +48,7 @@ __all__ = [
     "PolylineMillingSpec",
     "build_polyline_milling_spec",
     "_build_polyline_toolpath_profile",
+    "_can_hydrate_exact_polyline_serialization",
     "_is_closed_polyline_points",
     "_matches_polyline_geometry",
     "_normalize_polyline_milling_spec",
@@ -164,6 +168,53 @@ def _matches_polyline_geometry(template: dict[str, object], spec: PolylineMillin
         and math.isclose(parsed_point[1], expected_point[1], abs_tol=tolerance)
         and math.isclose(parsed_point[2], expected_point[2], abs_tol=tolerance)
         for parsed_point, expected_point in zip(parsed_points, expected_points)
+    )
+
+
+def _can_hydrate_exact_polyline_serialization(template: dict[str, object], spec: PolylineMillingSpec) -> bool:
+    source_depth_spec = template.get("depth_spec") if isinstance(template.get("depth_spec"), MillingDepthSpec) else None
+    requested_depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
+    if source_depth_spec is None or _normalize_milling_depth_spec(source_depth_spec) != requested_depth_spec:
+        return False
+    source_strategy = template.get("milling_strategy") if isinstance(
+        template.get("milling_strategy"),
+        (
+            UnidirectionalMillingStrategySpec,
+            BidirectionalMillingStrategySpec,
+            HelicalMillingStrategySpec,
+            ContourParallelMillingStrategySpec,
+        ),
+    ) else None
+    is_closed_profile = _is_closed_polyline_points(spec.points)
+    if _strategy_comparison_key(source_strategy, is_closed_profile=is_closed_profile) != _strategy_comparison_key(
+        spec.milling_strategy,
+        is_closed_profile=is_closed_profile,
+    ):
+        return False
+    requested_side = _normalize_side_of_feature(spec.side_of_feature)
+    source_side = str(template["side_of_feature"])
+    if requested_side != source_side:
+        return False
+    source_approach = _normalize_approach_spec(template.get("approach") if isinstance(template.get("approach"), ApproachSpec) else None)
+    requested_approach = _normalize_approach_spec(spec.approach)
+    if source_approach != requested_approach:
+        return False
+    source_retract = _normalize_retract_spec(template.get("retract") if isinstance(template.get("retract"), RetractSpec) else None)
+    requested_retract = _normalize_retract_spec(spec.retract)
+    if source_retract != requested_retract:
+        return False
+    if not _matches_polyline_geometry(template, spec):
+        return False
+    if requested_side == "Center":
+        return True
+
+    source_tool_width = float(template["tool_width"])
+    source_tool_id = str(template["tool_id"])
+    source_tool_name = str(template["tool_name"])
+    return (
+        math.isclose(spec.tool_width, source_tool_width, abs_tol=1e-6)
+        and spec.tool_id == source_tool_id
+        and spec.tool_name == source_tool_name
     )
 
 

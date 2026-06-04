@@ -28,12 +28,15 @@ from ..common.leads import (
 )
 from ..common.strategy import (
     BidirectionalMillingStrategySpec,
+    ContourParallelMillingStrategySpec,
+    HelicalMillingStrategySpec,
     MillingStrategySpec,
     UnidirectionalMillingStrategySpec,
     _ensure_milling_strategy_allowed,
     _build_bidirectional_line_strategy_profile,
     _build_unidirectional_line_strategy_profile,
     _normalize_milling_strategy_spec,
+    _strategy_comparison_key,
 )
 from ._common import _normalize_side_of_feature
 
@@ -41,6 +44,7 @@ __all__ = [
     "LineMillingSpec",
     "build_line_milling_spec",
     "_build_line_toolpath_profile",
+    "_can_hydrate_exact_serialization",
     "_matches_line_geometry",
     "_normalize_line_milling_spec",
     "_offset_line_for_toolpath",
@@ -142,6 +146,52 @@ def _matches_line_geometry(template: dict[str, object], spec: LineMillingSpec, t
         return all(math.isclose(x, y, abs_tol=tolerance) for x, y in zip(a, b))
 
     return close(direct, expected) or close(reverse, expected)
+
+
+def _can_hydrate_exact_serialization(template: dict[str, object], spec: LineMillingSpec) -> bool:
+    source_depth_spec = template.get("depth_spec") if isinstance(template.get("depth_spec"), MillingDepthSpec) else None
+    requested_depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
+    if source_depth_spec is None or _normalize_milling_depth_spec(source_depth_spec) != requested_depth_spec:
+        return False
+    source_strategy = template.get("milling_strategy") if isinstance(
+        template.get("milling_strategy"),
+        (
+            UnidirectionalMillingStrategySpec,
+            BidirectionalMillingStrategySpec,
+            HelicalMillingStrategySpec,
+            ContourParallelMillingStrategySpec,
+        ),
+    ) else None
+    if _strategy_comparison_key(source_strategy, is_closed_profile=False) != _strategy_comparison_key(
+        spec.milling_strategy,
+        is_closed_profile=False,
+    ):
+        return False
+    requested_side = _normalize_side_of_feature(spec.side_of_feature)
+    source_side = str(template["side_of_feature"])
+    if requested_side != source_side:
+        return False
+    source_approach = _normalize_approach_spec(template.get("approach") if isinstance(template.get("approach"), ApproachSpec) else None)
+    requested_approach = _normalize_approach_spec(spec.approach)
+    if source_approach != requested_approach:
+        return False
+    source_retract = _normalize_retract_spec(template.get("retract") if isinstance(template.get("retract"), RetractSpec) else None)
+    requested_retract = _normalize_retract_spec(spec.retract)
+    if source_retract != requested_retract:
+        return False
+    if not _matches_line_geometry(template, spec):
+        return False
+    if requested_side == "Center":
+        return True
+
+    source_tool_width = float(template["tool_width"])
+    source_tool_id = str(template["tool_id"])
+    source_tool_name = str(template["tool_name"])
+    return (
+        math.isclose(spec.tool_width, source_tool_width, abs_tol=1e-6)
+        and spec.tool_id == source_tool_id
+        and spec.tool_name == source_tool_name
+    )
 
 
 def build_line_milling_spec(
