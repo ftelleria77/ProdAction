@@ -10,6 +10,11 @@ from ..common.depth import (
     _normalize_milling_depth_spec,
     build_milling_depth_spec,
 )
+from ..common.geometry import (
+    GeometryProfileSpec,
+    build_circle_geometry_profile,
+    build_compensated_toolpath_profile,
+)
 from ..common.leads import (
     ApproachSpec,
     RetractSpec,
@@ -24,6 +29,8 @@ from ..common.strategy import (
     MillingStrategySpec,
     UnidirectionalMillingStrategySpec,
     _ensure_milling_strategy_allowed,
+    _build_closed_profile_strategy_toolpath,
+    _build_helical_circle_strategy_toolpath,
     _normalize_milling_strategy_spec,
 )
 from ._common import _normalize_geometry_winding, _normalize_side_of_feature
@@ -31,6 +38,7 @@ from ._common import _normalize_geometry_winding, _normalize_side_of_feature
 __all__ = [
     "CircleMillingSpec",
     "build_circle_milling_spec",
+    "_build_circle_toolpath_profile",
     "_normalize_circle_milling_spec",
 ]
 
@@ -81,6 +89,35 @@ def _normalize_circle_milling_spec(circle_milling: CircleMillingSpec) -> CircleM
         retract=_normalize_retract_spec(circle_milling.retract),
         milling_strategy=normalized_strategy,
     )
+
+
+def _build_circle_toolpath_profile(
+    top_level: float,
+    final_level: float,
+    spec: CircleMillingSpec,
+) -> GeometryProfileSpec:
+    """Construye la trayectoria compensada para un fresado circular cerrado."""
+
+    cut_z = float(final_level)
+    nominal_profile = build_circle_geometry_profile(
+        spec.center_x,
+        spec.center_y,
+        spec.radius,
+        z_value=cut_z,
+        winding=spec.winding,
+    )
+    base_profile = build_compensated_toolpath_profile(
+        nominal_profile,
+        side_of_feature=spec.side_of_feature,
+        tool_width=spec.tool_width,
+        z_value=cut_z,
+    )
+    strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
+    if strategy is None:
+        return base_profile
+    if isinstance(strategy, HelicalMillingStrategySpec):
+        return _build_helical_circle_strategy_toolpath(float(top_level), cut_z, base_profile, strategy)
+    return _build_closed_profile_strategy_toolpath(float(top_level), cut_z, base_profile, strategy)
 
 
 def build_circle_milling_spec(

@@ -261,6 +261,7 @@ from .milling.line import (
 )
 from .milling.circle import (
     CircleMillingSpec,
+    _build_circle_toolpath_profile,
     _normalize_circle_milling_spec,
     build_circle_milling_spec,
 )
@@ -1849,34 +1850,6 @@ def _build_up_arc_exit_curve(
             ),
         ]
     )
-
-
-def _build_circle_toolpath_profile(
-    state: PgmxState,
-    spec: _HydratedCircleMillingSpec,
-) -> GeometryProfileSpec:
-    """Construye la trayectoria compensada para un fresado circular cerrado."""
-
-    cut_z = _toolpath_cut_z(state, spec)
-    nominal_profile = build_circle_geometry_profile(
-        spec.center_x,
-        spec.center_y,
-        spec.radius,
-        z_value=cut_z,
-        winding=spec.winding,
-    )
-    base_profile = build_compensated_toolpath_profile(
-        nominal_profile,
-        side_of_feature=spec.side_of_feature,
-        tool_width=spec.tool_width,
-        z_value=cut_z,
-    )
-    strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
-    if strategy is None:
-        return base_profile
-    if isinstance(strategy, HelicalMillingStrategySpec):
-        return _build_helical_circle_strategy_toolpath(float(state.depth), cut_z, base_profile, strategy)
-    return _build_closed_profile_strategy_toolpath(float(state.depth), cut_z, base_profile, strategy)
 
 
 def _build_squaring_toolpath_profile(
@@ -5333,7 +5306,7 @@ def _append_circle_milling(root: ET.Element, state: PgmxState, spec: _HydratedCi
             winding=spec.winding,
         )
     )
-    generated_toolpath_profile = _build_circle_toolpath_profile(state, spec)
+    generated_toolpath_profile = _build_circle_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
     _append_curve_profile_milling(
         root,
         state,
