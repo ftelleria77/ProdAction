@@ -88,6 +88,8 @@ from .common.geometry import (
     GeometryPrimitiveSpec,
     GeometryProfileSpec,
     _CurveSpec,
+    _build_boundary_curve_holder,
+    _build_geometry_from_curve_spec,
     _build_curve_holder,
     _build_identity_profile_placement,
     _build_maestro_arc_serialization,
@@ -109,6 +111,7 @@ from .common.geometry import (
     _curve_spec_from_toolpath_node,
     _curve_spec_points,
     _extract_geometry_profile,
+    _geometry_object_type,
     _is_closed_polyline_points,
     _normalize_polyline_points,
     _build_compensated_profile_geometry,
@@ -228,7 +231,6 @@ from .common.tools import (
     _validate_tool_type_for_drilling_spec,
 )
 from .common.xml import (
-    ARRAYS_NS,
     BASE_MODEL_NS,
     DRILLING_NS,
     GEOMETRY_NS,
@@ -306,6 +308,7 @@ from .milling._common import (
 from .milling.line import (
     LineMillingSpec,
     _HydratedLineMillingSpec,
+    _build_line_geometry,
     _build_line_toolpath_profile,
     _can_hydrate_exact_serialization,
     _extract_line_milling_template,
@@ -1131,89 +1134,6 @@ def _build_up_arc_exit_curve(
                 (lift_x, lift_y, clearance_z),
             ),
         ]
-    )
-
-
-def _geometry_object_type(geometry_type: str) -> str:
-    mapping = {
-        "GeomTrimmedCurve": "ScmGroup.XCam.MachiningDataModel.Geometry.GeomTrimmedCurve",
-        "GeomCompositeCurve": "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCompositeCurve",
-        "GeomCircle": "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCircle",
-    }
-    if geometry_type not in mapping:
-        raise ValueError(f"Tipo de geometria no soportado: {geometry_type}")
-    return mapping[geometry_type]
-
-
-def _build_geometry_from_curve_spec(
-    geometry_id: str,
-    plane_id: str,
-    plane_object_type: str,
-    curve_spec: _CurveSpec,
-    *,
-    generated_member_keys: Sequence[str] = (),
-) -> ET.Element:
-    geometry = ET.Element(
-        _qname(GEOMETRY_NS, "GeomGeometry"),
-        {f"{{{XSI_NS}}}type": f"a:{curve_spec.geometry_type}"},
-    )
-    _set_xmlns(geometry, "a", GEOMETRY_NS)
-    _append_key(geometry, geometry_id, _geometry_object_type(curve_spec.geometry_type))
-    _append_blank_name(geometry)
-    _append_node(geometry, GEOMETRY_NS, "IsAbsolute", "false")
-    _append_object_ref(geometry, GEOMETRY_NS, "PlaneID", plane_id, plane_object_type)
-    if curve_spec.geometry_type in {"GeomTrimmedCurve", "GeomCircle"}:
-        if curve_spec.serialization is None:
-            raise ValueError(f"La geometria {curve_spec.geometry_type} requiere una serializacion raw.")
-        _append_node(geometry, GEOMETRY_NS, "_serializationGeometryDescription", curve_spec.serialization)
-        return geometry
-
-    member_keys = tuple(curve_spec.member_keys or generated_member_keys)
-    if len(member_keys) != len(curve_spec.member_serializations):
-        raise ValueError("La geometria compuesta requiere una clave por cada miembro serializado.")
-    keys_group = _append_node(geometry, GEOMETRY_NS, "_serializingKeys")
-    members_group = _append_node(geometry, GEOMETRY_NS, "_serializingMembers")
-    for key_id, member_serialization in zip(member_keys, curve_spec.member_serializations):
-        _append_node(keys_group, ARRAYS_NS, "unsignedInt", key_id)
-        _append_node(members_group, ARRAYS_NS, "string", member_serialization)
-    return geometry
-
-
-def _build_boundary_curve_holder(
-    curve_spec: _CurveSpec,
-    generated_member_keys: Sequence[str],
-) -> ET.Element:
-    if curve_spec.geometry_type != "GeomCompositeCurve":
-        raise ValueError("BoundaryGeometryList de ClosedPocket requiere GeomCompositeCurve.")
-    boundary = ET.Element(_qname(GEOMETRY_NS, "GeomCompositeCurve"))
-    _append_key(boundary, "0", "System.Object")
-    _append_blank_name(boundary)
-    _append_node(boundary, GEOMETRY_NS, "IsAbsolute", "false")
-    _append_object_ref(boundary, GEOMETRY_NS, "PlaneID", "0", "System.Object")
-    member_keys = tuple(curve_spec.member_keys or generated_member_keys)
-    if len(member_keys) != len(curve_spec.member_serializations):
-        raise ValueError("La geometria de borde requiere una clave por cada miembro serializado.")
-    keys_group = _append_node(boundary, GEOMETRY_NS, "_serializingKeys")
-    members_group = _append_node(boundary, GEOMETRY_NS, "_serializingMembers")
-    for key_id, member_serialization in zip(member_keys, curve_spec.member_serializations):
-        _append_node(keys_group, ARRAYS_NS, "unsignedInt", key_id)
-        _append_node(members_group, ARRAYS_NS, "string", member_serialization)
-    return boundary
-
-
-def _build_line_geometry(
-    geometry_id: str,
-    plane_id: str,
-    plane_object_type: str,
-    spec: _HydratedLineMillingSpec,
-) -> ET.Element:
-    return _build_geometry_from_curve_spec(
-        geometry_id,
-        plane_id,
-        plane_object_type,
-        _trimmed_curve_spec(
-            spec.geometry_serialization or _build_line_description(spec.start_x, spec.start_y, spec.end_x, spec.end_y),
-        ),
     )
 
 

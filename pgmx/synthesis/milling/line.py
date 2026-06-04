@@ -16,9 +16,12 @@ from ..common.depth import (
 from ..common.geometry import (
     GeometryProfileSpec,
     _CurveSpec,
+    _build_geometry_from_curve_spec,
+    _build_line_description,
     _curve_spec_from_toolpath_node,
     _parse_line_serialization,
     _profile_endpoint_points,
+    _trimmed_curve_spec,
     build_compensated_toolpath_profile,
     build_line_geometry_profile,
 )
@@ -54,6 +57,7 @@ __all__ = [
     "LineMillingSpec",
     "build_line_milling_spec",
     "_HydratedLineMillingSpec",
+    "_build_line_geometry",
     "_build_line_toolpath_profile",
     "_can_hydrate_exact_serialization",
     "_extract_line_milling_template",
@@ -216,6 +220,22 @@ def _offset_line_for_toolpath(spec: LineMillingSpec) -> tuple[tuple[float, float
         tool_width=spec.tool_width,
     )
     return _profile_endpoint_points(toolpath_profile)
+
+
+def _build_line_geometry(
+    geometry_id: str,
+    plane_id: str,
+    plane_object_type: str,
+    spec: _HydratedLineMillingSpec,
+):
+    return _build_geometry_from_curve_spec(
+        geometry_id,
+        plane_id,
+        plane_object_type,
+        _trimmed_curve_spec(
+            spec.geometry_serialization or _build_line_description(spec.start_x, spec.start_y, spec.end_x, spec.end_y),
+        ),
+    )
 
 
 def _matches_line_geometry(template: dict[str, object], spec: LineMillingSpec, tolerance: float = 1e-6) -> bool:
