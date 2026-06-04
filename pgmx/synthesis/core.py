@@ -133,7 +133,6 @@ from .common.tools import (
     TOOL_CATALOG_PATH,
     _is_vertical_x_saw,
     _load_tool_catalog,
-    _normalize_tool_resolution,
     _normalize_tool_usage_group,
     _resolve_drilling_tool,
     _tool_catalog_label,
@@ -167,6 +166,16 @@ from .common.xml import (
     _text,
     _xsi_type,
     register_pgmx_namespaces,
+)
+from .drilling.pattern import (
+    DrillingPatternSpec,
+    _normalize_drilling_pattern_spec,
+    build_drilling_pattern_spec,
+)
+from .drilling.single import (
+    DrillingSpec,
+    _normalize_drilling_spec,
+    build_drilling_spec,
 )
 from .milling.line import (
     LineMillingSpec,
@@ -348,44 +357,6 @@ class GeometryProfileSpec:
     @property
     def primitive_count(self) -> int:
         return len(self.primitives)
-
-
-@dataclass(frozen=True)
-class DrillingSpec:
-    """Descripcion reutilizable de un taladro puntual sobre una cara de la pieza."""
-
-    center_x: float
-    center_y: float
-    diameter: float
-    feature_name: str = "Taladrado"
-    plane_name: str = "Top"
-    security_plane: float = 20.0
-    depth_spec: MillingDepthSpec = field(default_factory=MillingDepthSpec)
-    drill_family: str = "Flat"
-    tool_resolution: str = "Auto"
-    tool_id: str = "0"
-    tool_name: str = ""
-
-
-@dataclass(frozen=True)
-class DrillingPatternSpec:
-    """Repeticion rectangular de taladros iguales usando `ReplicateFeature`."""
-
-    center_x: float
-    center_y: float
-    diameter: float
-    columns: int
-    rows: int
-    spacing: float
-    row_spacing: Optional[float] = None
-    feature_name: str = "Taladrado"
-    plane_name: str = "Top"
-    security_plane: float = 20.0
-    depth_spec: MillingDepthSpec = field(default_factory=MillingDepthSpec)
-    drill_family: str = "Flat"
-    tool_resolution: str = "Auto"
-    tool_id: str = "0"
-    tool_name: str = ""
 
 
 MachiningSpec = Union[
@@ -1332,28 +1303,6 @@ def _normalize_side_of_feature(value: Optional[str]) -> str:
     return mapping[raw]
 
 
-def _normalize_drill_family(value: Optional[str]) -> str:
-    raw = (value or "Flat").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
-    mapping = {
-        "flat": "Flat",
-        "plana": "Flat",
-        "plano": "Flat",
-        "conical": "Conical",
-        "conica": "Conical",
-        "conico": "Conical",
-        "lanza": "Conical",
-        "puntadelanza": "Conical",
-        "countersunk": "Countersunk",
-        "abocinado": "Countersunk",
-        "abocinada": "Countersunk",
-    }
-    if raw not in mapping:
-        raise ValueError(
-            "DrillFamily invalido. Valores admitidos: Flat/Plana, Conical/Lanza o Countersunk/Abocinado."
-        )
-    return mapping[raw]
-
-
 def _normalize_geometry_winding(value: Optional[str]) -> str:
     raw = (value or "CounterClockwise").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
     mapping = {
@@ -1717,106 +1666,6 @@ def _validate_drilling_center(state: PgmxState, spec: _HydratedDrillingSpec) -> 
             f"El centro Y del taladro cae fuera del plano '{spec.plane_name}': "
             f"{_compact_number(spec.center_y)} no pertenece a [0, {_compact_number(max_y)}]."
         )
-
-
-def _default_drill_family(
-    plane_name: str,
-    diameter: float,
-    depth_spec: MillingDepthSpec,
-    requested_family: Optional[str],
-) -> str:
-    if requested_family is not None:
-        return _normalize_drill_family(requested_family)
-    if depth_spec.is_through and plane_name == "Top" and math.isclose(float(diameter), 5.0, abs_tol=1e-9):
-        return "Conical"
-    return "Flat"
-
-
-def _normalize_drilling_spec(drilling: DrillingSpec) -> DrillingSpec:
-    normalized_plane_name = _normalize_plane_name(drilling.plane_name)
-    normalized_depth_spec = _normalize_milling_depth_spec(drilling.depth_spec)
-    normalized_drill_family = _normalize_drill_family(drilling.drill_family)
-    if normalized_drill_family == "Countersunk":
-        raise ValueError(
-            "La familia `Countersunk/Abocinado` todavia no tiene un caso manual validado en Maestro."
-        )
-    if normalized_drill_family == "Conical":
-        if normalized_plane_name != "Top":
-            raise ValueError("La broca conica solo esta validada por ahora sobre la cara `Top`.")
-        if not math.isclose(float(drilling.diameter), 5.0, abs_tol=1e-9):
-            raise ValueError("La broca conica relevada hasta ahora solo existe en `D5`.")
-    diameter_value = float(drilling.diameter)
-    if diameter_value <= 0.0:
-        raise ValueError("El diametro del taladro debe ser mayor que cero.")
-    security_plane_value = float(drilling.security_plane)
-    if security_plane_value < 0.0:
-        raise ValueError("SecurityPlane no puede ser negativo.")
-    return replace(
-        drilling,
-        center_x=float(drilling.center_x),
-        center_y=float(drilling.center_y),
-        diameter=diameter_value,
-        feature_name=(drilling.feature_name or "Taladrado").strip() or "Taladrado",
-        plane_name=normalized_plane_name,
-        security_plane=security_plane_value,
-        depth_spec=normalized_depth_spec,
-        drill_family=normalized_drill_family,
-        tool_resolution=_normalize_tool_resolution(drilling.tool_resolution),
-        tool_id=(drilling.tool_id or "").strip() or "0",
-        tool_name=(drilling.tool_name or "").strip(),
-    )
-
-
-def _normalize_drilling_pattern_spec(pattern: DrillingPatternSpec) -> DrillingPatternSpec:
-    base_drilling = _normalize_drilling_spec(
-        DrillingSpec(
-            center_x=pattern.center_x,
-            center_y=pattern.center_y,
-            diameter=pattern.diameter,
-            feature_name=pattern.feature_name,
-            plane_name=pattern.plane_name,
-            security_plane=pattern.security_plane,
-            depth_spec=pattern.depth_spec,
-            drill_family=pattern.drill_family,
-            tool_resolution=pattern.tool_resolution,
-            tool_id=pattern.tool_id,
-            tool_name=pattern.tool_name,
-        )
-    )
-    columns = int(pattern.columns)
-    rows = int(pattern.rows)
-    if columns < 1 or rows < 1:
-        raise ValueError("`DrillingPatternSpec` requiere `columns` y `rows` mayores o iguales a 1.")
-    if columns * rows < 2:
-        raise ValueError("Para un unico taladro use `DrillingSpec`; el patron requiere al menos 2 huecos.")
-
-    spacing = float(pattern.spacing)
-    row_spacing = spacing if pattern.row_spacing is None else float(pattern.row_spacing)
-    if spacing < 0.0 or row_spacing < 0.0:
-        raise ValueError("Las separaciones de `DrillingPatternSpec` no pueden ser negativas.")
-    if columns > 1 and spacing <= 0.0:
-        raise ValueError("Un patron con mas de una columna requiere `spacing` mayor que cero.")
-    if rows > 1 and row_spacing <= 0.0:
-        raise ValueError("Un patron con mas de una fila requiere `row_spacing` mayor que cero.")
-
-    return replace(
-        pattern,
-        center_x=base_drilling.center_x,
-        center_y=base_drilling.center_y,
-        diameter=base_drilling.diameter,
-        columns=columns,
-        rows=rows,
-        spacing=spacing,
-        row_spacing=row_spacing,
-        feature_name=base_drilling.feature_name,
-        plane_name=base_drilling.plane_name,
-        security_plane=base_drilling.security_plane,
-        depth_spec=base_drilling.depth_spec,
-        drill_family=base_drilling.drill_family,
-        tool_resolution=base_drilling.tool_resolution,
-        tool_id=base_drilling.tool_id,
-        tool_name=base_drilling.tool_name,
-    )
 
 
 def _validate_tool_sinking_length_for_spec(
@@ -9068,110 +8917,6 @@ def _ensure_xn_step(root: ET.Element, xn: XnSpec) -> None:
     workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
     [step_id] = _reserve_ids(root, 1)
     elements.append(_build_xn_step(step_id, workpiece_id, workpiece_object_type, _normalize_xn_spec(xn)))
-
-
-# ============================================================================
-# Public machining builders
-# ============================================================================
-
-def build_drilling_spec(
-    *,
-    center_x: float,
-    center_y: float,
-    diameter: float,
-    feature_name: Optional[str] = None,
-    plane_name: Optional[str] = None,
-    security_plane: Optional[float] = None,
-    is_through: Optional[bool] = None,
-    target_depth: Optional[float] = None,
-    extra_depth: Optional[float] = None,
-    drill_family: Optional[str] = None,
-    tool_resolution: Optional[str] = None,
-    tool_id: Optional[str] = None,
-    tool_name: Optional[str] = None,
-) -> DrillingSpec:
-    """Construye un `DrillingSpec` reusable para taladros puntuales."""
-
-    normalized_plane_name = _normalize_plane_name(plane_name)
-    depth_spec = build_milling_depth_spec(
-        is_through=is_through,
-        target_depth=target_depth,
-        extra_depth=extra_depth,
-    )
-    effective_drill_family = _default_drill_family(
-        normalized_plane_name,
-        float(diameter),
-        depth_spec,
-        drill_family,
-    )
-    return DrillingSpec(
-        center_x=float(center_x),
-        center_y=float(center_y),
-        diameter=float(diameter),
-        feature_name=(feature_name or "Taladrado").strip() or "Taladrado",
-        plane_name=normalized_plane_name,
-        security_plane=20.0 if security_plane is None else float(security_plane),
-        depth_spec=depth_spec,
-        drill_family=effective_drill_family,
-        tool_resolution=_normalize_tool_resolution(tool_resolution or "Auto"),
-        tool_id=(tool_id or "0").strip() or "0",
-        tool_name=(tool_name or "").strip(),
-    )
-
-
-def build_drilling_pattern_spec(
-    center_x: float,
-    center_y: float,
-    diameter: float,
-    columns: int,
-    rows: int,
-    spacing: float,
-    feature_name: Optional[str] = None,
-    *,
-    row_spacing: Optional[float] = None,
-    plane_name: str = "Top",
-    security_plane: Optional[float] = None,
-    is_through: bool = True,
-    target_depth: Optional[float] = None,
-    extra_depth: float = 0.0,
-    drill_family: Optional[str] = None,
-    tool_resolution: str = "Auto",
-    tool_id: Optional[str] = None,
-    tool_name: Optional[str] = None,
-) -> DrillingPatternSpec:
-    """Construye una repeticion rectangular Maestro (`ReplicateFeature`)."""
-
-    normalized_plane_name = _normalize_plane_name(plane_name)
-    depth_spec = MillingDepthSpec(
-        is_through=is_through,
-        target_depth=target_depth,
-        extra_depth=extra_depth,
-    )
-    effective_drill_family = _default_drill_family(
-        normalized_plane_name,
-        float(diameter),
-        depth_spec,
-        drill_family,
-    )
-    return _normalize_drilling_pattern_spec(
-        DrillingPatternSpec(
-            center_x=float(center_x),
-            center_y=float(center_y),
-            diameter=float(diameter),
-            columns=int(columns),
-            rows=int(rows),
-            spacing=float(spacing),
-            row_spacing=row_spacing,
-            feature_name=(feature_name or "Taladrado").strip() or "Taladrado",
-            plane_name=normalized_plane_name,
-            security_plane=20.0 if security_plane is None else float(security_plane),
-            depth_spec=depth_spec,
-            drill_family=effective_drill_family,
-            tool_resolution=_normalize_tool_resolution(tool_resolution or "Auto"),
-            tool_id=(tool_id or "0").strip() or "0",
-            tool_name=(tool_name or "").strip(),
-        )
-    )
 
 
 # ============================================================================

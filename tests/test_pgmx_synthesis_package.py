@@ -14,6 +14,8 @@ from pgmx.synthesis.common import piece as common_piece
 from pgmx.synthesis.common import strategy as common_strategy
 from pgmx.synthesis.common import tools as common_tools
 from pgmx.synthesis.common import xml as common_xml
+from pgmx.synthesis.drilling import pattern as drilling_pattern
+from pgmx.synthesis.drilling import single as drilling_single
 from pgmx.synthesis.milling import circle as milling_circle
 from pgmx.synthesis.milling import line as milling_line
 from pgmx.synthesis.milling import pocket as milling_pocket
@@ -87,6 +89,52 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertEqual(common_tools._normalize_tool_usage_group("Fresa Helicoidal"), "milling")
         self.assertTrue(common_tools._is_vertical_x_saw("Sierra Vertical X"))
         self.assertIn("1900", common_tools._load_tool_catalog())
+        self.assertIs(core_sp.DrillingSpec, drilling_single.DrillingSpec)
+        self.assertIs(core_sp.build_drilling_spec, drilling_single.build_drilling_spec)
+        self.assertIs(core_sp._normalize_drilling_spec, drilling_single._normalize_drilling_spec)
+        top_drill = drilling_single.build_drilling_spec(center_x=40, center_y=60, diameter=5.0)
+        self.assertIsInstance(top_drill, drilling_single.DrillingSpec)
+        self.assertEqual(top_drill.drill_family, "Conical")
+        self.assertEqual(top_drill.tool_id, "0")
+        side_drill = drilling_single._normalize_drilling_spec(
+            drilling_single.DrillingSpec(
+                center_x=40,
+                center_y=9,
+                diameter=8,
+                plane_name="cara-derecha",
+                drill_family="plana",
+                tool_resolution="manual",
+                tool_id=" 123 ",
+            )
+        )
+        self.assertEqual(side_drill.plane_name, "Right")
+        self.assertEqual(side_drill.drill_family, "Flat")
+        self.assertEqual(side_drill.tool_resolution, "Explicit")
+        self.assertEqual(side_drill.tool_id, "123")
+        with self.assertRaisesRegex(ValueError, "D5"):
+            drilling_single._normalize_drilling_spec(
+                drilling_single.DrillingSpec(center_x=0, center_y=0, diameter=8, drill_family="lanza")
+            )
+        self.assertIs(core_sp.DrillingPatternSpec, drilling_pattern.DrillingPatternSpec)
+        self.assertIs(core_sp.build_drilling_pattern_spec, drilling_pattern.build_drilling_pattern_spec)
+        self.assertIs(core_sp._normalize_drilling_pattern_spec, drilling_pattern._normalize_drilling_pattern_spec)
+        drill_pattern = drilling_pattern.build_drilling_pattern_spec(
+            20,
+            30,
+            5.0,
+            2,
+            3,
+            32.0,
+            row_spacing=45.0,
+        )
+        self.assertIsInstance(drill_pattern, drilling_pattern.DrillingPatternSpec)
+        self.assertEqual(drill_pattern.drill_family, "Conical")
+        self.assertEqual(drill_pattern.columns, 2)
+        self.assertEqual(drill_pattern.rows, 3)
+        self.assertEqual(drill_pattern.row_spacing, 45.0)
+        self.assertEqual(drill_pattern.tool_id, "0")
+        with self.assertRaisesRegex(ValueError, "unico taladro"):
+            drilling_pattern.build_drilling_pattern_spec(0, 0, 5, 1, 1, 0)
         self.assertIs(core_sp.UnidirectionalMillingStrategySpec, common_strategy.UnidirectionalMillingStrategySpec)
         self.assertIs(core_sp.BidirectionalMillingStrategySpec, common_strategy.BidirectionalMillingStrategySpec)
         self.assertIs(core_sp.HelicalMillingStrategySpec, common_strategy.HelicalMillingStrategySpec)
