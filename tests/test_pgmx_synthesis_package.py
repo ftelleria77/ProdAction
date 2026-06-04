@@ -439,6 +439,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.SlotMillingSpec, milling_slot.SlotMillingSpec)
         self.assertIs(core_sp._HydratedSlotMillingSpec, milling_slot._HydratedSlotMillingSpec)
         self.assertIs(core_sp.build_slot_milling_spec, milling_slot.build_slot_milling_spec)
+        self.assertIs(core_sp._append_slot_milling, milling_slot._append_slot_milling)
         self.assertIs(core_sp._build_slot_side_feature, milling_slot._build_slot_side_feature)
         self.assertIs(core_sp._normalize_slot_milling_spec, milling_slot._normalize_slot_milling_spec)
         self.assertIs(core_sp._hydrate_slot_milling_spec, milling_slot._hydrate_slot_milling_spec)

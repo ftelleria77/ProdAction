@@ -376,6 +376,7 @@ from .milling.pocket import (
 from .milling.slot import (
     SlotMillingSpec,
     _HydratedSlotMillingSpec,
+    _append_slot_milling,
     _build_slot_side_feature,
     _hydrate_slot_milling_spec,
     _normalize_slot_milling_spec,
@@ -2226,74 +2227,6 @@ def _append_line_milling(root: ET.Element, state: PgmxState, spec: _HydratedLine
         )
     )
     elements.append(_build_working_step(spec.feature_name, step_id, feature_id, operation_id))
-    if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
-        expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
-        expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
-
-
-def _append_slot_milling(root: ET.Element, state: PgmxState, spec: _HydratedSlotMillingSpec) -> None:
-    geometries = root.find("./{*}Geometries")
-    features = root.find("./{*}Features")
-    operations = root.find("./{*}Operations")
-    expressions = root.find("./{*}Expressions")
-    elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
-    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
-    if any(node is None for node in (geometries, features, operations, expressions, elements, workpiece)):
-        raise ValueError("La plantilla no contiene todas las colecciones requeridas para sintetizar la ranura.")
-
-    workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
-    workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
-    depth_variable_name = _workpiece_depth_name(workpiece)
-    plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
-    uses_depth_expressions = _uses_feature_depth_expressions(spec)
-    reserved_ids = _reserve_ids(root, 6 if uses_depth_expressions else 4, spec.preferred_id_start)
-    geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
-    start_expression_id = reserved_ids[4] if uses_depth_expressions else None
-    end_expression_id = reserved_ids[5] if uses_depth_expressions else None
-    generated_toolpath_profile = _build_line_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
-    toolpath_start, toolpath_end, _, _ = _profile_entry_exit_context(generated_toolpath_profile)
-    approach_curve = spec.approach_curve
-    if approach_curve is None:
-        approach_curve = _build_generated_approach_curve_for_profile(state, spec, generated_toolpath_profile)
-    lift_curve = spec.lift_curve
-    if lift_curve is None:
-        lift_curve = _build_generated_lift_curve_for_profile(state, spec, generated_toolpath_profile)
-    trajectory_curve = spec.trajectory_curve or _curve_spec_from_profile_geometry(generated_toolpath_profile)
-
-    geometries.append(_build_line_geometry(geometry_id, plane_id, plane_object_type, spec))
-    features.append(
-        _build_slot_side_feature(
-            state,
-            spec,
-            feature_id,
-            geometry_id,
-            operation_id,
-            workpiece_id,
-            workpiece_object_type,
-        )
-    )
-    operations.append(
-        _build_line_operation(
-            state,
-            spec,
-            operation_id,
-            approach_curve,
-            lift_curve=lift_curve,
-            trajectory_curve=trajectory_curve,
-            trajectory_curve_member_keys=trajectory_curve.member_keys,
-            toolpath_start=toolpath_start,
-            toolpath_end=toolpath_end,
-        )
-    )
-    elements.append(
-        _build_working_step(
-            spec.feature_name,
-            step_id,
-            feature_id,
-            operation_id,
-            feature_object_type="ScmGroup.XCam.MachiningDataModel.Milling.SlotSide",
-        )
-    )
     if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
         expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
         expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
