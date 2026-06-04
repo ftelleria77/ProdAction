@@ -89,6 +89,7 @@ from .common.geometry import (
     GeometryProfileSpec,
     _CurveSpec,
     _build_curve_holder,
+    _build_identity_profile_placement,
     _build_maestro_arc_serialization,
     _build_maestro_line_serialization,
     _build_oriented_maestro_arc_serialization,
@@ -352,6 +353,7 @@ from .milling.pocket import (
 from .milling.slot import (
     SlotMillingSpec,
     _HydratedSlotMillingSpec,
+    _build_slot_side_feature,
     _hydrate_slot_milling_spec,
     _normalize_slot_milling_spec,
     build_slot_milling_spec,
@@ -1199,24 +1201,6 @@ def _build_boundary_curve_holder(
     return boundary
 
 
-def _build_identity_profile_placement() -> ET.Element:
-    placement = ET.Element(_qname(PGMX_NS, "Placement"))
-    _append_key(placement, "0", "System.Object")
-    _append_blank_name(placement)
-    _append_node(placement, GEOMETRY_NS, "IsAbsolute", "true")
-    _append_object_ref(placement, GEOMETRY_NS, "PlaneID", "0", "System.Object")
-    _append_node(placement, GEOMETRY_NS, "_xN", "0")
-    _append_node(placement, GEOMETRY_NS, "_xP", "0")
-    _append_node(placement, GEOMETRY_NS, "_xVx", "1")
-    _append_node(placement, GEOMETRY_NS, "_yN", "0")
-    _append_node(placement, GEOMETRY_NS, "_yP", "0")
-    _append_node(placement, GEOMETRY_NS, "_yVx", "0")
-    _append_node(placement, GEOMETRY_NS, "_zN", "1")
-    _append_node(placement, GEOMETRY_NS, "_zP", "0")
-    _append_node(placement, GEOMETRY_NS, "_zVx", "-0")
-    return placement
-
-
 def _build_line_geometry(
     geometry_id: str,
     plane_id: str,
@@ -1410,81 +1394,6 @@ def _build_closed_pocket_boss(
     _append_node(depth, PGMX_NS, "StartDepth", "0")
     _append_node(boss, BASE_MODEL_NS, "Slope", "0")
     return boss
-
-
-def _build_slot_side_feature(
-    state: PgmxState,
-    spec: _HydratedSlotMillingSpec,
-    feature_id: str,
-    geometry_id: str,
-    operation_id: str,
-    workpiece_id: str,
-    workpiece_object_type: str,
-) -> ET.Element:
-    feature = ET.Element(
-        _qname(PGMX_NS, "ManufacturingFeature"),
-        {f"{{{XSI_NS}}}type": "a:SlotSide"},
-    )
-    _set_xmlns(feature, "a", MILLING_NS)
-    _append_key(feature, feature_id, "ScmGroup.XCam.MachiningDataModel.Milling.SlotSide")
-    _append_blank_name(feature).text = spec.feature_name
-    _append_object_ref(
-        feature,
-        PGMX_NS,
-        "GeometryID",
-        geometry_id,
-        "ScmGroup.XCam.MachiningDataModel.Geometry.GeomTrimmedCurve",
-    )
-    operation_ids = _append_node(feature, PGMX_NS, "OperationIDs")
-    _append_reference_key(
-        operation_ids,
-        operation_id,
-        "ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideFinishMilling",
-    )
-    _append_object_ref(feature, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
-    bottom_condition = _append_node(
-        feature,
-        PGMX_NS,
-        "BottomCondition",
-        attrib={f"{{{XSI_NS}}}type": _feature_bottom_condition_type(spec)},
-    )
-    _set_xmlns(bottom_condition, "a", MILLING_NS)
-    depth = _append_node(feature, PGMX_NS, "Depth")
-    depth_value = _compact_number(_feature_depth_value(state, spec))
-    _append_node(depth, PGMX_NS, "EndDepth", depth_value)
-    _append_node(depth, PGMX_NS, "StartDepth", depth_value)
-    end_conditions = _append_node(feature, PGMX_NS, "EndConditions")
-    for _ in range(2):
-        slot_end = _append_node(
-            end_conditions,
-            MILLING_NS,
-            "SlotEndType",
-            attrib={f"{{{XSI_NS}}}type": "a:WoodruffSlotEndType"},
-        )
-        _set_xmlns(slot_end, "a", MILLING_NS)
-        _append_node(slot_end, MILLING_NS, "Radius", _compact_number(spec.end_radius))
-    _append_node(feature, PGMX_NS, "IsGeomSameDirection", "true")
-    _append_node(feature, PGMX_NS, "IsPrecise", "false")
-    _append_node(feature, PGMX_NS, "MaterialPosition", spec.material_position)
-    _append_node(feature, PGMX_NS, "OvercutLenghtInput", "0")
-    _append_node(feature, PGMX_NS, "OvercutLenghtOutput", "0")
-    _append_node(feature, PGMX_NS, "SideOfFeature", spec.side_of_feature)
-    _append_node(feature, PGMX_NS, "SideOffset", _compact_number(spec.side_offset))
-    swept_shape = _append_node(
-        feature,
-        PGMX_NS,
-        "SweptShape",
-        attrib={f"{{{XSI_NS}}}type": "a:SquareUProfile"},
-    )
-    _set_xmlns(swept_shape, "a", MILLING_NS)
-    swept_shape.append(_build_identity_profile_placement())
-    _append_node(swept_shape, MILLING_NS, "FirstAngle", "0")
-    _append_node(swept_shape, MILLING_NS, "FirstRadius", "0")
-    _append_node(swept_shape, MILLING_NS, "SecondAngle", "0")
-    _append_node(swept_shape, MILLING_NS, "SecondRadius", "0")
-    _append_node(swept_shape, MILLING_NS, "Width", _compact_number(spec.tool_width))
-    _append_node(feature, PGMX_NS, "Angle", str(float(spec.slot_angle)))
-    return feature
 
 
 def _build_generated_approach_curve(

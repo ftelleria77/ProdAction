@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Optional
@@ -12,7 +13,7 @@ from ..common.depth import (
     _normalize_milling_depth_spec,
     build_milling_depth_spec,
 )
-from ..common.geometry import _CurveSpec
+from ..common.geometry import _CurveSpec, _build_identity_profile_placement
 from ..common.leads import (
     ApproachSpec,
     RetractSpec,
@@ -22,12 +23,26 @@ from ..common.leads import (
     build_retract_spec,
 )
 from ..common.piece import _normalize_plane_name
-from ._common import _normalize_side_of_feature
+from ..common.xml import (
+    MILLING_NS,
+    PGMX_NS,
+    XSI_NS,
+    _append_blank_name,
+    _append_key,
+    _append_node,
+    _append_object_ref,
+    _append_reference_key,
+    _compact_number,
+    _qname,
+    _set_xmlns,
+)
+from ._common import _feature_bottom_condition_type, _feature_depth_value, _normalize_side_of_feature
 
 __all__ = [
     "SlotMillingSpec",
     "build_slot_milling_spec",
     "_HydratedSlotMillingSpec",
+    "_build_slot_side_feature",
     "_hydrate_slot_milling_spec",
     "_normalize_slot_milling_spec",
 ]
@@ -193,6 +208,81 @@ def _hydrate_slot_milling_spec(
 ) -> _HydratedSlotMillingSpec:
     del source_pgmx_path
     return _HydratedSlotMillingSpec(spec=_normalize_slot_milling_spec(slot_milling))
+
+
+def _build_slot_side_feature(
+    state,
+    spec: _HydratedSlotMillingSpec,
+    feature_id: str,
+    geometry_id: str,
+    operation_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+) -> ET.Element:
+    feature = ET.Element(
+        _qname(PGMX_NS, "ManufacturingFeature"),
+        {f"{{{XSI_NS}}}type": "a:SlotSide"},
+    )
+    _set_xmlns(feature, "a", MILLING_NS)
+    _append_key(feature, feature_id, "ScmGroup.XCam.MachiningDataModel.Milling.SlotSide")
+    _append_blank_name(feature).text = spec.feature_name
+    _append_object_ref(
+        feature,
+        PGMX_NS,
+        "GeometryID",
+        geometry_id,
+        "ScmGroup.XCam.MachiningDataModel.Geometry.GeomTrimmedCurve",
+    )
+    operation_ids = _append_node(feature, PGMX_NS, "OperationIDs")
+    _append_reference_key(
+        operation_ids,
+        operation_id,
+        "ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideFinishMilling",
+    )
+    _append_object_ref(feature, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
+    bottom_condition = _append_node(
+        feature,
+        PGMX_NS,
+        "BottomCondition",
+        attrib={f"{{{XSI_NS}}}type": _feature_bottom_condition_type(spec)},
+    )
+    _set_xmlns(bottom_condition, "a", MILLING_NS)
+    depth = _append_node(feature, PGMX_NS, "Depth")
+    depth_value = _compact_number(_feature_depth_value(state, spec))
+    _append_node(depth, PGMX_NS, "EndDepth", depth_value)
+    _append_node(depth, PGMX_NS, "StartDepth", depth_value)
+    end_conditions = _append_node(feature, PGMX_NS, "EndConditions")
+    for _ in range(2):
+        slot_end = _append_node(
+            end_conditions,
+            MILLING_NS,
+            "SlotEndType",
+            attrib={f"{{{XSI_NS}}}type": "a:WoodruffSlotEndType"},
+        )
+        _set_xmlns(slot_end, "a", MILLING_NS)
+        _append_node(slot_end, MILLING_NS, "Radius", _compact_number(spec.end_radius))
+    _append_node(feature, PGMX_NS, "IsGeomSameDirection", "true")
+    _append_node(feature, PGMX_NS, "IsPrecise", "false")
+    _append_node(feature, PGMX_NS, "MaterialPosition", spec.material_position)
+    _append_node(feature, PGMX_NS, "OvercutLenghtInput", "0")
+    _append_node(feature, PGMX_NS, "OvercutLenghtOutput", "0")
+    _append_node(feature, PGMX_NS, "SideOfFeature", spec.side_of_feature)
+    _append_node(feature, PGMX_NS, "SideOffset", _compact_number(spec.side_offset))
+    swept_shape = _append_node(
+        feature,
+        PGMX_NS,
+        "SweptShape",
+        attrib={f"{{{XSI_NS}}}type": "a:SquareUProfile"},
+    )
+    _set_xmlns(swept_shape, "a", MILLING_NS)
+    swept_shape.append(_build_identity_profile_placement())
+    _append_node(swept_shape, MILLING_NS, "FirstAngle", "0")
+    _append_node(swept_shape, MILLING_NS, "FirstRadius", "0")
+    _append_node(swept_shape, MILLING_NS, "SecondAngle", "0")
+    _append_node(swept_shape, MILLING_NS, "SecondRadius", "0")
+    _append_node(swept_shape, MILLING_NS, "Width", _compact_number(spec.tool_width))
+    _append_node(feature, PGMX_NS, "Angle", str(float(spec.slot_angle)))
+    return feature
 
 
 def build_slot_milling_spec(

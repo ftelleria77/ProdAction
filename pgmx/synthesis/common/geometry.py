@@ -45,6 +45,7 @@ __all__ = [
     "_build_compensated_tangent_composite_profile",
     "_build_curve_holder",
     "_build_corner_join_arc",
+    "_build_identity_profile_placement",
     "_build_start_point",
     "_build_toolpath",
     "_cross_2d",
@@ -232,6 +233,24 @@ def _build_start_point(x_value: float, y_value: float, z_value: float) -> ET.Ele
     _append_node(start_point, GEOMETRY_NS, "_y", _compact_number(y_value))
     _append_node(start_point, GEOMETRY_NS, "_z", _compact_number(z_value))
     return start_point
+
+
+def _build_identity_profile_placement() -> ET.Element:
+    placement = ET.Element(_qname(PGMX_NS, "Placement"))
+    _append_key(placement, "0", "System.Object")
+    _append_blank_name(placement)
+    _append_node(placement, GEOMETRY_NS, "IsAbsolute", "true")
+    _append_object_ref(placement, GEOMETRY_NS, "PlaneID", "0", "System.Object")
+    _append_node(placement, GEOMETRY_NS, "_xN", "0")
+    _append_node(placement, GEOMETRY_NS, "_xP", "0")
+    _append_node(placement, GEOMETRY_NS, "_xVx", "1")
+    _append_node(placement, GEOMETRY_NS, "_yN", "0")
+    _append_node(placement, GEOMETRY_NS, "_yP", "0")
+    _append_node(placement, GEOMETRY_NS, "_yVx", "0")
+    _append_node(placement, GEOMETRY_NS, "_zN", "1")
+    _append_node(placement, GEOMETRY_NS, "_zP", "0")
+    _append_node(placement, GEOMETRY_NS, "_zVx", "-0")
+    return placement
 
 
 def _build_toolpath(

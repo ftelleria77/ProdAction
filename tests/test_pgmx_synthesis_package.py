@@ -98,6 +98,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._build_curve_holder, common_geometry._build_curve_holder)
         self.assertIs(core_sp._build_vector_holder, common_geometry._build_vector_holder)
         self.assertIs(core_sp._build_start_point, common_geometry._build_start_point)
+        self.assertIs(core_sp._build_identity_profile_placement, common_geometry._build_identity_profile_placement)
         self.assertIs(core_sp._build_toolpath, common_geometry._build_toolpath)
         self.assertIs(core_sp._trimmed_curve_spec, common_geometry._trimmed_curve_spec)
         self.assertIs(core_sp._circle_curve_spec, common_geometry._circle_curve_spec)
@@ -421,6 +422,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.SlotMillingSpec, milling_slot.SlotMillingSpec)
         self.assertIs(core_sp._HydratedSlotMillingSpec, milling_slot._HydratedSlotMillingSpec)
         self.assertIs(core_sp.build_slot_milling_spec, milling_slot.build_slot_milling_spec)
+        self.assertIs(core_sp._build_slot_side_feature, milling_slot._build_slot_side_feature)
         self.assertIs(core_sp._normalize_slot_milling_spec, milling_slot._normalize_slot_milling_spec)
         self.assertIs(core_sp._hydrate_slot_milling_spec, milling_slot._hydrate_slot_milling_spec)
         slot = milling_slot.build_slot_milling_spec(
