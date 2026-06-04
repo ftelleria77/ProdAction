@@ -314,6 +314,7 @@ from .drilling.single import (
     build_drilling_spec,
 )
 from .milling._common import (
+    _build_profile_feature,
     _feature_bottom_condition_type,
     _feature_depth_value,
     _operation_overcut_length,
@@ -327,6 +328,7 @@ from .milling._common import (
 from .milling.line import (
     LineMillingSpec,
     _HydratedLineMillingSpec,
+    _append_line_milling,
     _build_line_geometry,
     _build_line_operation,
     _build_line_toolpath_profile,
@@ -827,86 +829,6 @@ def _build_polyline_geometry(
         curve_spec,
         generated_member_keys=generated_member_keys,
     )
-
-
-def _build_profile_feature(
-    state: PgmxState,
-    spec,
-    feature_id: str,
-    geometry_id: str,
-    operation_id: str,
-    workpiece_id: str,
-    workpiece_object_type: str,
-    geometry_object_type: str,
-) -> ET.Element:
-    feature = ET.Element(
-        _qname(PGMX_NS, "ManufacturingFeature"),
-        {f"{{{XSI_NS}}}type": "a:GeneralProfileFeature"},
-    )
-    _set_xmlns(feature, "a", MILLING_NS)
-    _append_key(feature, feature_id, "ScmGroup.XCam.MachiningDataModel.Milling.GeneralProfileFeature")
-    _append_blank_name(feature).text = spec.feature_name
-    _append_object_ref(
-        feature,
-        PGMX_NS,
-        "GeometryID",
-        geometry_id,
-        geometry_object_type,
-    )
-    operation_ids = _append_node(feature, PGMX_NS, "OperationIDs")
-    _append_reference_key(
-        operation_ids,
-        operation_id,
-        "ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideFinishMilling",
-    )
-    _append_object_ref(feature, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
-    bottom_condition = _append_node(
-        feature,
-        PGMX_NS,
-        "BottomCondition",
-        attrib={f"{{{XSI_NS}}}type": _feature_bottom_condition_type(spec)},
-    )
-    _set_xmlns(bottom_condition, "a", MILLING_NS)
-    depth = _append_node(feature, PGMX_NS, "Depth")
-    depth_value = _compact_number(_feature_depth_value(state, spec))
-    _append_node(depth, PGMX_NS, "EndDepth", depth_value)
-    _append_node(depth, PGMX_NS, "StartDepth", depth_value)
-    end_conditions = _append_node(feature, PGMX_NS, "EndConditions")
-    slot_end_a = _append_node(
-        end_conditions,
-        MILLING_NS,
-        "SlotEndType",
-        attrib={f"{{{XSI_NS}}}type": "a:RadiusedSlotEndType"},
-    )
-    slot_end_b = _append_node(
-        end_conditions,
-        MILLING_NS,
-        "SlotEndType",
-        attrib={f"{{{XSI_NS}}}type": "a:RadiusedSlotEndType"},
-    )
-    _set_xmlns(slot_end_a, "a", MILLING_NS)
-    _set_xmlns(slot_end_b, "a", MILLING_NS)
-    _append_node(feature, PGMX_NS, "IsGeomSameDirection", "true")
-    _append_node(feature, PGMX_NS, "IsPrecise", "false")
-    _append_node(feature, PGMX_NS, "MaterialPosition", "Left")
-    _append_node(feature, PGMX_NS, "OvercutLenghtInput", "0")
-    _append_node(feature, PGMX_NS, "OvercutLenghtOutput", "0")
-    _append_node(feature, PGMX_NS, "SideOfFeature", spec.side_of_feature)
-    _append_node(feature, PGMX_NS, "SideOffset", "0")
-    swept_shape = _append_node(
-        feature,
-        PGMX_NS,
-        "SweptShape",
-        attrib={f"{{{XSI_NS}}}type": "a:SquareUProfile"},
-    )
-    _set_xmlns(swept_shape, "a", MILLING_NS)
-    swept_shape.append(_build_identity_profile_placement())
-    _append_node(swept_shape, MILLING_NS, "FirstAngle", "0")
-    _append_node(swept_shape, MILLING_NS, "FirstRadius", "0")
-    _append_node(swept_shape, MILLING_NS, "SecondAngle", "0")
-    _append_node(swept_shape, MILLING_NS, "SecondRadius", "0")
-    _append_node(swept_shape, MILLING_NS, "Width", _compact_number(spec.tool_width))
-    return feature
 
 
 def _build_closed_pocket_feature(
@@ -2148,88 +2070,6 @@ def _build_xn_step(
     else:
         _append_node(step, BASE_MODEL_NS, "Y", _compact_number(spec.y))
     return step
-
-
-def _append_line_milling(root: ET.Element, state: PgmxState, spec: _HydratedLineMillingSpec) -> None:
-    geometries = root.find("./{*}Geometries")
-    features = root.find("./{*}Features")
-    operations = root.find("./{*}Operations")
-    expressions = root.find("./{*}Expressions")
-    elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
-    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
-    if any(node is None for node in (geometries, features, operations, expressions, elements, workpiece)):
-        raise ValueError("La plantilla no contiene todas las colecciones requeridas para sintetizar el fresado.")
-
-    workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
-    workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
-    depth_variable_name = _workpiece_depth_name(workpiece)
-    plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
-    uses_depth_expressions = _uses_feature_depth_expressions(spec)
-    reserved_ids = _reserve_ids(root, 6 if uses_depth_expressions else 4, spec.preferred_id_start)
-    geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
-    start_expression_id = reserved_ids[4] if uses_depth_expressions else None
-    end_expression_id = reserved_ids[5] if uses_depth_expressions else None
-    generated_toolpath_profile = _build_line_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
-    toolpath_start, toolpath_end, _, _ = _profile_entry_exit_context(generated_toolpath_profile)
-    approach_curve = spec.approach_curve
-    if approach_curve is None:
-        approach_curve = _build_generated_approach_curve_for_profile(state, spec, generated_toolpath_profile)
-    lift_curve = spec.lift_curve
-    if lift_curve is None:
-        lift_curve = _build_generated_lift_curve_for_profile(state, spec, generated_toolpath_profile)
-    trajectory_curve = spec.trajectory_curve or _curve_spec_from_profile_geometry(generated_toolpath_profile)
-
-    trajectory_curve_member_keys: tuple[str, ...] = ()
-    next_generated_aux_id = int(end_expression_id or step_id) + 1
-    if trajectory_curve.geometry_type == "GeomCompositeCurve" and not trajectory_curve.member_keys:
-        member_count = len(trajectory_curve.member_serializations)
-        trajectory_curve_member_keys = tuple(str(next_generated_aux_id + offset) for offset in range(member_count))
-        next_generated_aux_id += member_count
-
-    approach_curve_member_keys: tuple[str, ...] = ()
-    if approach_curve.geometry_type == "GeomCompositeCurve" and not approach_curve.member_keys:
-        member_count = len(approach_curve.member_serializations)
-        approach_curve_member_keys = tuple(str(next_generated_aux_id + offset) for offset in range(member_count))
-        next_generated_aux_id += member_count
-
-    lift_curve_member_keys: tuple[str, ...] = ()
-    if lift_curve.geometry_type == "GeomCompositeCurve" and not lift_curve.member_keys:
-        member_count = len(lift_curve.member_serializations)
-        lift_curve_member_keys = tuple(str(next_generated_aux_id + offset) for offset in range(member_count))
-        next_generated_aux_id += member_count
-
-    geometries.append(_build_line_geometry(geometry_id, plane_id, plane_object_type, spec))
-    features.append(
-        _build_profile_feature(
-            state,
-            spec,
-            feature_id,
-            geometry_id,
-            operation_id,
-            workpiece_id,
-            workpiece_object_type,
-            "ScmGroup.XCam.MachiningDataModel.Geometry.GeomTrimmedCurve",
-        )
-    )
-    operations.append(
-        _build_line_operation(
-            state,
-            spec,
-            operation_id,
-            approach_curve,
-            approach_curve_member_keys=approach_curve_member_keys,
-            lift_curve=lift_curve,
-            lift_curve_member_keys=lift_curve_member_keys,
-            trajectory_curve=trajectory_curve,
-            trajectory_curve_member_keys=trajectory_curve.member_keys or trajectory_curve_member_keys,
-            toolpath_start=toolpath_start,
-            toolpath_end=toolpath_end,
-        )
-    )
-    elements.append(_build_working_step(spec.feature_name, step_id, feature_id, operation_id))
-    if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
-        expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
-        expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
 
 
 def _append_curve_profile_milling(

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import math
+import xml.etree.ElementTree as ET
 
 from ..common.depth import _normalize_milling_depth_spec
 from ..common.geometry import (
+    _build_identity_profile_placement,
     _normalize_geometry_winding,
     _normalize_side_of_feature,
 )
@@ -17,10 +19,24 @@ from ..common.tools import (
     _tool_catalog_label,
     _validate_tool_sinking_length_for_total_depth,
 )
+from ..common.xml import (
+    MILLING_NS,
+    PGMX_NS,
+    XSI_NS,
+    _append_blank_name,
+    _append_key,
+    _append_node,
+    _append_object_ref,
+    _append_reference_key,
+    _compact_number,
+    _qname,
+    _set_xmlns,
+)
 
 __all__ = [
     "_normalize_geometry_winding",
     "_normalize_side_of_feature",
+    "_build_profile_feature",
     "_feature_bottom_condition_type",
     "_feature_depth_value",
     "_operation_overcut_length",
@@ -79,6 +95,86 @@ def _operation_overcut_length(spec) -> float:
 
 def _uses_feature_depth_expressions(spec) -> bool:
     return _normalize_milling_depth_spec(spec.depth_spec).is_through
+
+
+def _build_profile_feature(
+    state,
+    spec,
+    feature_id: str,
+    geometry_id: str,
+    operation_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+    geometry_object_type: str,
+) -> ET.Element:
+    feature = ET.Element(
+        _qname(PGMX_NS, "ManufacturingFeature"),
+        {f"{{{XSI_NS}}}type": "a:GeneralProfileFeature"},
+    )
+    _set_xmlns(feature, "a", MILLING_NS)
+    _append_key(feature, feature_id, "ScmGroup.XCam.MachiningDataModel.Milling.GeneralProfileFeature")
+    _append_blank_name(feature).text = spec.feature_name
+    _append_object_ref(
+        feature,
+        PGMX_NS,
+        "GeometryID",
+        geometry_id,
+        geometry_object_type,
+    )
+    operation_ids = _append_node(feature, PGMX_NS, "OperationIDs")
+    _append_reference_key(
+        operation_ids,
+        operation_id,
+        "ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideFinishMilling",
+    )
+    _append_object_ref(feature, PGMX_NS, "WorkpieceID", workpiece_id, workpiece_object_type)
+    bottom_condition = _append_node(
+        feature,
+        PGMX_NS,
+        "BottomCondition",
+        attrib={f"{{{XSI_NS}}}type": _feature_bottom_condition_type(spec)},
+    )
+    _set_xmlns(bottom_condition, "a", MILLING_NS)
+    depth = _append_node(feature, PGMX_NS, "Depth")
+    depth_value = _compact_number(_feature_depth_value(state, spec))
+    _append_node(depth, PGMX_NS, "EndDepth", depth_value)
+    _append_node(depth, PGMX_NS, "StartDepth", depth_value)
+    end_conditions = _append_node(feature, PGMX_NS, "EndConditions")
+    slot_end_a = _append_node(
+        end_conditions,
+        MILLING_NS,
+        "SlotEndType",
+        attrib={f"{{{XSI_NS}}}type": "a:RadiusedSlotEndType"},
+    )
+    slot_end_b = _append_node(
+        end_conditions,
+        MILLING_NS,
+        "SlotEndType",
+        attrib={f"{{{XSI_NS}}}type": "a:RadiusedSlotEndType"},
+    )
+    _set_xmlns(slot_end_a, "a", MILLING_NS)
+    _set_xmlns(slot_end_b, "a", MILLING_NS)
+    _append_node(feature, PGMX_NS, "IsGeomSameDirection", "true")
+    _append_node(feature, PGMX_NS, "IsPrecise", "false")
+    _append_node(feature, PGMX_NS, "MaterialPosition", "Left")
+    _append_node(feature, PGMX_NS, "OvercutLenghtInput", "0")
+    _append_node(feature, PGMX_NS, "OvercutLenghtOutput", "0")
+    _append_node(feature, PGMX_NS, "SideOfFeature", spec.side_of_feature)
+    _append_node(feature, PGMX_NS, "SideOffset", "0")
+    swept_shape = _append_node(
+        feature,
+        PGMX_NS,
+        "SweptShape",
+        attrib={f"{{{XSI_NS}}}type": "a:SquareUProfile"},
+    )
+    _set_xmlns(swept_shape, "a", MILLING_NS)
+    swept_shape.append(_build_identity_profile_placement())
+    _append_node(swept_shape, MILLING_NS, "FirstAngle", "0")
+    _append_node(swept_shape, MILLING_NS, "FirstRadius", "0")
+    _append_node(swept_shape, MILLING_NS, "SecondAngle", "0")
+    _append_node(swept_shape, MILLING_NS, "SecondRadius", "0")
+    _append_node(swept_shape, MILLING_NS, "Width", _compact_number(spec.tool_width))
+    return feature
 
 
 def _is_hydrated_line_or_slot_milling_spec(spec) -> bool:

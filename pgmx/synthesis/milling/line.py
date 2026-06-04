@@ -22,8 +22,10 @@ from ..common.geometry import (
     _build_start_point,
     _build_toolpath,
     _build_toolpath_description,
+    _curve_spec_from_profile_geometry,
     _curve_spec_from_toolpath_node,
     _parse_line_serialization,
+    _profile_entry_exit_context,
     _profile_endpoint_points,
     _trimmed_curve_spec,
     build_compensated_toolpath_profile,
@@ -33,6 +35,8 @@ from ..common.hydration import _load_pgmx_container
 from ..common.leads import (
     ApproachSpec,
     RetractSpec,
+    _build_generated_approach_curve_for_profile,
+    _build_generated_lift_curve_for_profile,
     _extract_approach_spec_from_operation,
     _extract_retract_spec_from_operation,
     _normalize_approach_spec,
@@ -66,19 +70,30 @@ from ..common.xml import (
     _append_key,
     _append_node,
     _append_object_ref,
+    _build_depth_expression,
+    _build_working_step,
     _compact_number,
+    _find_plane_ref,
     _qname,
     _raw_text,
+    _reserve_ids,
     _set_xmlns,
     _text,
     _xsi_type,
 )
-from ._common import _normalize_side_of_feature, _operation_overcut_length, _toolpath_cut_z
+from ._common import (
+    _build_profile_feature,
+    _normalize_side_of_feature,
+    _operation_overcut_length,
+    _toolpath_cut_z,
+    _uses_feature_depth_expressions,
+)
 
 __all__ = [
     "LineMillingSpec",
     "build_line_milling_spec",
     "_HydratedLineMillingSpec",
+    "_append_line_milling",
     "_build_line_geometry",
     "_build_line_operation",
     "_build_line_toolpath_profile",
@@ -391,6 +406,88 @@ def _build_line_operation(
     _append_node(operation, PGMX_NS, "AllowanceBottom", "0")
     _append_node(operation, PGMX_NS, "AllowanceSide", "0")
     return operation
+
+
+def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec) -> None:
+    geometries = root.find("./{*}Geometries")
+    features = root.find("./{*}Features")
+    operations = root.find("./{*}Operations")
+    expressions = root.find("./{*}Expressions")
+    elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
+    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
+    if any(node is None for node in (geometries, features, operations, expressions, elements, workpiece)):
+        raise ValueError("La plantilla no contiene todas las colecciones requeridas para sintetizar el fresado.")
+
+    workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
+    workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
+    depth_variable_name = _workpiece_depth_name(workpiece)
+    plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
+    uses_depth_expressions = _uses_feature_depth_expressions(spec)
+    reserved_ids = _reserve_ids(root, 6 if uses_depth_expressions else 4, spec.preferred_id_start)
+    geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
+    start_expression_id = reserved_ids[4] if uses_depth_expressions else None
+    end_expression_id = reserved_ids[5] if uses_depth_expressions else None
+    generated_toolpath_profile = _build_line_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
+    toolpath_start, toolpath_end, _, _ = _profile_entry_exit_context(generated_toolpath_profile)
+    approach_curve = spec.approach_curve
+    if approach_curve is None:
+        approach_curve = _build_generated_approach_curve_for_profile(state, spec, generated_toolpath_profile)
+    lift_curve = spec.lift_curve
+    if lift_curve is None:
+        lift_curve = _build_generated_lift_curve_for_profile(state, spec, generated_toolpath_profile)
+    trajectory_curve = spec.trajectory_curve or _curve_spec_from_profile_geometry(generated_toolpath_profile)
+
+    trajectory_curve_member_keys: tuple[str, ...] = ()
+    next_generated_aux_id = int(end_expression_id or step_id) + 1
+    if trajectory_curve.geometry_type == "GeomCompositeCurve" and not trajectory_curve.member_keys:
+        member_count = len(trajectory_curve.member_serializations)
+        trajectory_curve_member_keys = tuple(str(next_generated_aux_id + offset) for offset in range(member_count))
+        next_generated_aux_id += member_count
+
+    approach_curve_member_keys: tuple[str, ...] = ()
+    if approach_curve.geometry_type == "GeomCompositeCurve" and not approach_curve.member_keys:
+        member_count = len(approach_curve.member_serializations)
+        approach_curve_member_keys = tuple(str(next_generated_aux_id + offset) for offset in range(member_count))
+        next_generated_aux_id += member_count
+
+    lift_curve_member_keys: tuple[str, ...] = ()
+    if lift_curve.geometry_type == "GeomCompositeCurve" and not lift_curve.member_keys:
+        member_count = len(lift_curve.member_serializations)
+        lift_curve_member_keys = tuple(str(next_generated_aux_id + offset) for offset in range(member_count))
+        next_generated_aux_id += member_count
+
+    geometries.append(_build_line_geometry(geometry_id, plane_id, plane_object_type, spec))
+    features.append(
+        _build_profile_feature(
+            state,
+            spec,
+            feature_id,
+            geometry_id,
+            operation_id,
+            workpiece_id,
+            workpiece_object_type,
+            "ScmGroup.XCam.MachiningDataModel.Geometry.GeomTrimmedCurve",
+        )
+    )
+    operations.append(
+        _build_line_operation(
+            state,
+            spec,
+            operation_id,
+            approach_curve,
+            approach_curve_member_keys=approach_curve_member_keys,
+            lift_curve=lift_curve,
+            lift_curve_member_keys=lift_curve_member_keys,
+            trajectory_curve=trajectory_curve,
+            trajectory_curve_member_keys=trajectory_curve.member_keys or trajectory_curve_member_keys,
+            toolpath_start=toolpath_start,
+            toolpath_end=toolpath_end,
+        )
+    )
+    elements.append(_build_working_step(spec.feature_name, step_id, feature_id, operation_id))
+    if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
+        expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
+        expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
 
 
 def _matches_line_geometry(template: dict[str, object], spec: LineMillingSpec, tolerance: float = 1e-6) -> bool:
