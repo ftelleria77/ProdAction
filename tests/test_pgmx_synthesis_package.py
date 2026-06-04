@@ -315,6 +315,8 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.RetractSpec, common_leads.RetractSpec)
         self.assertIs(core_sp.build_approach_spec, common_leads.build_approach_spec)
         self.assertIs(core_sp.build_retract_spec, common_leads.build_retract_spec)
+        self.assertIs(core_sp._extract_approach_spec_from_operation, common_leads._extract_approach_spec_from_operation)
+        self.assertIs(core_sp._extract_retract_spec_from_operation, common_leads._extract_retract_spec_from_operation)
         self.assertIs(core_sp._normalize_retract_mode, common_leads._normalize_retract_mode)
         self.assertEqual(common_leads._normalize_approach_arc_side("izquierda"), "Left")
         self.assertEqual(common_leads._normalize_retract_mode("en-cota"), "Quote")

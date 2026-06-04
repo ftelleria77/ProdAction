@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Optional
+
+from .xml import _safe_bool, _safe_float, _text
 
 __all__ = [
     "ApproachSpec",
     "RetractSpec",
     "build_approach_spec",
     "build_retract_spec",
+    "_extract_approach_spec_from_operation",
+    "_extract_retract_spec_from_operation",
     "_normalize_approach_arc_side",
     "_normalize_approach_mode",
     "_normalize_approach_spec",
@@ -225,4 +230,27 @@ def _normalize_retract_spec(retract: Optional[RetractSpec]) -> RetractSpec:
         speed=retract.speed,
         arc_side=retract.arc_side,
         overlap=retract.overlap,
+    )
+
+
+def _extract_approach_spec_from_operation(operation: ET.Element) -> ApproachSpec:
+    return build_approach_spec(
+        enabled=_safe_bool(_text(operation, "./{*}Approach/{*}IsEnabled"), False),
+        approach_type=_text(operation, "./{*}Approach/{*}ApproachType", "Line"),
+        mode=_text(operation, "./{*}Approach/{*}ApproachMode", "Down"),
+        radius_multiplier=_safe_float(_text(operation, "./{*}Approach/{*}RadiusMultiplier"), 1.2),
+        speed=_safe_float(_text(operation, "./{*}Approach/{*}Speed"), 0.0),
+        arc_side=_text(operation, "./{*}Approach/{*}ApproachArcSide", "Automatic"),
+    )
+
+
+def _extract_retract_spec_from_operation(operation: ET.Element) -> RetractSpec:
+    return build_retract_spec(
+        enabled=_safe_bool(_text(operation, "./{*}Retract/{*}IsEnabled"), False),
+        retract_type=_text(operation, "./{*}Retract/{*}RetractType", "Line"),
+        mode=_text(operation, "./{*}Retract/{*}RetractMode", "Up"),
+        radius_multiplier=_safe_float(_text(operation, "./{*}Retract/{*}RadiusMultiplier"), 1.2),
+        speed=_safe_float(_text(operation, "./{*}Retract/{*}Speed"), 0.0),
+        arc_side=_text(operation, "./{*}Retract/{*}RetractArcSide", "Automatic"),
+        overlap=_safe_float(_text(operation, "./{*}Retract/{*}OverLap"), 0.0),
     )
