@@ -206,9 +206,14 @@ from .common.program import (
     PgmxSynthesisResult,
     XnSpec,
     _append_hydrated_machining,
+    _build_xn_step,
+    _ensure_xn_step,
     _hydrate_machining_spec,
     _normalize_machining_order,
+    _normalize_xn_reference,
+    _normalize_xn_spec,
     _split_hydrated_machinings,
+    build_xn_spec,
 )
 from .common.strategy import (
     BidirectionalMillingStrategySpec,
@@ -771,45 +776,6 @@ def _normalize_execution_fields(value: Optional[str]) -> str:
     return raw
 
 
-def _normalize_xn_reference(value: Optional[str]) -> str:
-    raw = (value or "Absolute").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
-    mapping = {
-        "absolute": "Absolute",
-        "absoluto": "Absolute",
-        "relative": "Relative",
-        "relativo": "Relative",
-    }
-    normalized = mapping.get(raw)
-    if normalized is None:
-        raise ValueError("Reference invalido para Xn. Valores admitidos: Absolute/Absoluto o Relative/Relativo.")
-    return normalized
-
-
-def build_xn_spec(
-    *,
-    reference: Optional[str] = None,
-    x: Optional[float] = None,
-    y: Optional[float] = None,
-) -> XnSpec:
-    """Construye la spec publica `Xn` con defaults observados en Maestro."""
-
-    return XnSpec(
-        reference=_normalize_xn_reference(reference),
-        x=-3700.0 if x is None else float(x),
-        y=None if y is None else float(y),
-    )
-
-
-def _normalize_xn_spec(xn: Optional[XnSpec]) -> XnSpec:
-    if xn is None:
-        return build_xn_spec()
-    return build_xn_spec(
-        reference=xn.reference,
-        x=xn.x,
-        y=xn.y,
-    )
-
-
 def _validate_tool_sinking_lengths(
     state: PgmxState,
     line_millings: Sequence[_HydratedLineMillingSpec],
@@ -847,62 +813,6 @@ def _validate_tool_sinking_lengths(
     for spec in drilling_patterns:
         _validate_tool_type_for_drilling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_drilling_spec(state, spec, tool_catalog)
-
-
-def _build_xn_step(
-    step_id: str,
-    workpiece_id: str,
-    workpiece_object_type: str,
-    spec: XnSpec,
-) -> ET.Element:
-    step = ET.Element(
-        _qname(BASE_MODEL_NS, "Executable"),
-        {f"{{{XSI_NS}}}type": "Xn"},
-    )
-    _append_key(step, step_id, "ScmGroup.XCam.MachiningDataModel.Xn")
-    _append_blank_name(step).text = "Xn"
-    _append_node(step, BASE_MODEL_NS, "Description", "")
-    _append_node(step, BASE_MODEL_NS, "IsEnabled", "true")
-    _append_node(step, BASE_MODEL_NS, "Priority", "0")
-
-    if spec.y is None:
-        geometry_ref = _append_node(step, BASE_MODEL_NS, "GeometryID")
-        _append_node(geometry_ref, UTILITY_NS, "ID", "0")
-        _append_node(geometry_ref, UTILITY_NS, "ObjectType", attrib={f"{{{XSI_NS}}}nil": "true"})
-        _set_xmlns(geometry_ref, "a", UTILITY_NS)
-    else:
-        _append_node(step, BASE_MODEL_NS, "GeometryID", attrib={f"{{{XSI_NS}}}nil": "true"})
-
-    workpiece_ref = _append_object_ref(
-        step,
-        BASE_MODEL_NS,
-        "WorkpieceID",
-        workpiece_id,
-        workpiece_object_type,
-    )
-    _set_xmlns(workpiece_ref, "a", UTILITY_NS)
-
-    _append_node(step, BASE_MODEL_NS, "Reference", spec.reference)
-    _append_node(step, BASE_MODEL_NS, "Speed", "0")
-    _append_node(step, BASE_MODEL_NS, "SpindleEnable", "Off")
-
-    tool_ref = _append_object_ref(
-        step,
-        BASE_MODEL_NS,
-        "Tool",
-        "0",
-        "System.Object",
-        include_name=True,
-        name_text="",
-    )
-    _set_xmlns(tool_ref, "a", UTILITY_NS)
-
-    _append_node(step, BASE_MODEL_NS, "X", _compact_number(spec.x))
-    if spec.y is None:
-        _append_node(step, BASE_MODEL_NS, "Y", attrib={f"{{{XSI_NS}}}nil": "true"})
-    else:
-        _append_node(step, BASE_MODEL_NS, "Y", _compact_number(spec.y))
-    return step
 
 
 # ============================================================================
@@ -1154,22 +1064,6 @@ def _apply_pocket_millings(
 ) -> None:
     for pocket_milling in pocket_millings:
         _append_pocket_milling(root, state, pocket_milling)
-
-
-def _ensure_xn_step(root: ET.Element, xn: XnSpec) -> None:
-    elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
-    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
-    if elements is None or workpiece is None:
-        raise ValueError("La plantilla no contiene MainWorkplan/Elements o WorkPiece para sintetizar Xn.")
-
-    for executable in list(elements):
-        if _xsi_type(executable) == "Xn":
-            elements.remove(executable)
-
-    workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
-    workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
-    [step_id] = _reserve_ids(root, 1)
-    elements.append(_build_xn_step(step_id, workpiece_id, workpiece_object_type, _normalize_xn_spec(xn)))
 
 
 # ============================================================================

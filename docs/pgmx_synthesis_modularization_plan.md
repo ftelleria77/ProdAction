@@ -203,6 +203,43 @@ traves de `milling.pocket`, sin contrato `pgmx.vaciado` ni laboratorio
   cuando la memoria, tests y comandos hayan migrado a pocket milling.
 - Actualizar `docs/synthesize_pgmx_help.md` con el nuevo mapa.
 
+## Plan De Cierre Operativo
+
+Estado fijado: 2026-06-05, despues de extraer familias productivas,
+dispatcher y CLI.
+
+Este es el orden operativo para terminar la modularizacion sin cambiar
+comportamiento publico:
+
+1. Completar `pgmx.synthesis.common.program`.
+   - Mover `Xn`, estado de pieza, request, ejecucion programatica,
+     validacion transversal y escritura final desde `core.py`.
+   - Mantener `core.py` como reexport/alias de compatibilidad mientras dure la
+     migracion.
+2. Separar serializacion y contenedor si `common.program` queda demasiado
+   cargado.
+   - `common.xml` debe contener normalizacion XML, namespaces y helpers de
+     nodos.
+   - `common.program` puede conservar la escritura final del `.pgmx` si sigue
+     siendo parte de la ejecucion del programa.
+3. Eliminar dependencias productivas hacia `pgmx.vaciado_lab`.
+   - `pgmx.synthesis.milling.pocket` no debe importar laboratorio como motor
+     productivo final.
+   - Solo se promueven al modulo productivo reglas cerradas y testeadas.
+4. Crear el laboratorio general.
+   - Mover `pgmx.vaciado_lab` hacia
+     `pgmx.machining_lab.pocket_milling`.
+   - Mantener fachadas historicas solo durante la transicion.
+5. Integrar o retirar el contrato separado `pgmx.vaciado`.
+   - `ClosedPocket`/pocket milling debe quedar como familia de
+     `pgmx.synthesis.milling.pocket`.
+6. Reducir `pgmx.synthesis.core` a fachada interna.
+   - No debe contener logica nueva.
+   - Debe sostener compatibilidad con `tools.synthesize_pgmx` y
+     `tools.pgmx_synthesis`.
+7. Actualizar documentacion publica y limpiar fachadas historicas cuando los
+   tests y comandos hayan migrado.
+
 ## Validacion Minima Por Etapa
 
 ```powershell
