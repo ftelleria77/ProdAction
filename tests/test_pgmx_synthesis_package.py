@@ -549,6 +549,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.build_pocket_milling_spec, milling_pocket.build_pocket_milling_spec)
         self.assertIs(core_sp._build_closed_pocket_feature, milling_pocket._build_closed_pocket_feature)
         self.assertIs(core_sp._build_closed_pocket_boss, milling_pocket._build_closed_pocket_boss)
+        self.assertIs(core_sp._build_pocket_operation, milling_pocket._build_pocket_operation)
         self.assertIs(core_sp._extract_pocket_milling_template, milling_pocket._extract_pocket_milling_template)
         self.assertIs(
             core_sp._can_hydrate_pocket_template_trace,

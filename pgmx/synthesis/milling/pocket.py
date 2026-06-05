@@ -17,9 +17,13 @@ from ..common.depth import (
 from ..common.geometry import (
     _CurveSpec,
     _build_boundary_curve_holder,
+    _build_start_point,
+    _build_toolpath,
+    _build_toolpath_description,
     _curve_spec_from_composite_curve_node,
     _curve_spec_from_toolpath_node,
     _curve_spec_points,
+    _trimmed_curve_spec,
 )
 from ..common.hydration import _load_pgmx_container
 from ..common.leads import (
@@ -32,12 +36,15 @@ from ..common.piece import _normalize_plane_name, _workpiece_depth_name
 from ..common.strategy import (
     ContourParallelMillingStrategySpec,
     _extract_milling_strategy_spec_from_operation,
+    _build_milling_strategy_node,
     _strategy_comparison_key,
     build_contour_parallel_milling_strategy_spec,
 )
 from ..common.xml import (
     BASE_MODEL_NS,
+    MILLING_NS,
     PGMX_NS,
+    STRATEGY_NS,
     XSI_NS,
     _append_blank_name,
     _append_key,
@@ -51,7 +58,7 @@ from ..common.xml import (
     _text,
     _xsi_type,
 )
-from ._common import _feature_depth_value
+from ._common import _feature_depth_value, _operation_overcut_length
 
 __all__ = [
     "PocketBossRouteSeedSpec",
@@ -61,6 +68,7 @@ __all__ = [
     "_HydratedPocketMillingSpec",
     "_build_closed_pocket_boss",
     "_build_closed_pocket_feature",
+    "_build_pocket_operation",
     "_can_hydrate_pocket_template_trace",
     "_extract_pocket_milling_template",
     "_hydrate_pocket_milling_spec",
@@ -294,6 +302,128 @@ def _build_closed_pocket_boss(
     _append_node(depth, PGMX_NS, "StartDepth", "0")
     _append_node(boss, BASE_MODEL_NS, "Slope", "0")
     return boss
+
+
+def _build_pocket_operation(
+    state,
+    spec: _HydratedPocketMillingSpec,
+    operation_id: str,
+    trajectory_curves: Sequence[_CurveSpec],
+    trajectory_curve_member_keys: Sequence[Sequence[str]],
+    trajectory_sequences: Sequence[Sequence[tuple[float, float, float]]],
+) -> ET.Element:
+    operation = ET.Element(
+        _qname(PGMX_NS, "Operation"),
+        {f"{{{XSI_NS}}}type": "a:BottomAndSideRoughMilling"},
+    )
+    _set_xmlns(operation, "a", MILLING_NS)
+    _append_key(operation, operation_id, "ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideRoughMilling")
+    _append_blank_name(operation)
+    _append_node(operation, PGMX_NS, "ActivateCNCCorrection", "false")
+    _append_node(operation, PGMX_NS, "Attributes", "")
+    _append_node(operation, PGMX_NS, "ToolDirection", attrib={f"{{{XSI_NS}}}nil": "true"})
+    toolpath_list = _append_node(operation, PGMX_NS, "ToolpathList")
+    _set_xmlns(toolpath_list, "b", BASE_MODEL_NS)
+
+    if not trajectory_sequences:
+        raise ValueError("La estrategia ContourParallel no genero trayectoria para el Vaciado.")
+    first_sequence = trajectory_sequences[0]
+    last_sequence = trajectory_sequences[-1]
+    if not first_sequence or not last_sequence:
+        raise ValueError("La estrategia ContourParallel genero una trayectoria vacia para el Vaciado.")
+    first_point = first_sequence[0]
+    last_point = last_sequence[-1]
+    clearance_z = state.depth + spec.security_plane
+    toolpath_list.append(
+        _build_toolpath(
+            "Approach",
+            _trimmed_curve_spec(
+                _build_toolpath_description(
+                    (first_point[0], first_point[1], clearance_z),
+                    first_point,
+                )
+            ),
+        )
+    )
+    if len(trajectory_curves) != len(trajectory_curve_member_keys):
+        raise ValueError("Cantidad inconsistente de curvas y claves de trayectoria para Vaciado.")
+    for trajectory_curve, member_keys in zip(trajectory_curves, trajectory_curve_member_keys):
+        toolpath_list.append(
+            _build_toolpath(
+                "TrajectoryPath",
+                trajectory_curve,
+                generated_member_keys=member_keys,
+            )
+        )
+    toolpath_list.append(
+        _build_toolpath(
+            "Lift",
+            _trimmed_curve_spec(
+                _build_toolpath_description(
+                    last_point,
+                    (last_point[0], last_point[1], clearance_z),
+                )
+            ),
+        )
+    )
+    _append_node(operation, PGMX_NS, "ToolpathPriority", "true")
+    _append_node(operation, PGMX_NS, "AdditionalToolKeys", "")
+    _append_node(operation, PGMX_NS, "ApproachSecurityPlane", _compact_number(spec.security_plane))
+    _append_node(operation, PGMX_NS, "Head", attrib={f"{{{XSI_NS}}}nil": "true"})
+    _append_node(operation, PGMX_NS, "HeadRotation", "0")
+    _append_node(operation, PGMX_NS, "MachineFunctions", "")
+    _append_node(operation, PGMX_NS, "RetractSecurityPlane", _compact_number(spec.security_plane))
+    operation.append(_build_start_point(0.0, 0.0, 0.0))
+    technology = _append_node(
+        operation,
+        PGMX_NS,
+        "Technology",
+        attrib={f"{{{XSI_NS}}}type": "MillingTechnology"},
+    )
+    _append_node(technology, PGMX_NS, "Feedrate", "0")
+    _append_node(technology, PGMX_NS, "CutSpeed", "0")
+    _append_node(technology, PGMX_NS, "Spindle", "0")
+    _append_object_ref(
+        operation,
+        PGMX_NS,
+        "ToolKey",
+        spec.tool_id,
+        "ScmGroup.XCam.ToolDataModel.Tool.CuttingTool",
+        include_name=True,
+        name_text=spec.tool_name,
+    )
+    _append_node(operation, PGMX_NS, "OvercutLength", _compact_number(_operation_overcut_length(spec)))
+    approach = _append_node(
+        operation,
+        PGMX_NS,
+        "Approach",
+        attrib={f"{{{XSI_NS}}}type": "b:BaseApproachStrategy"},
+    )
+    _set_xmlns(approach, "b", STRATEGY_NS)
+    _append_node(approach, STRATEGY_NS, "ApproachArcSide", spec.approach.arc_side)
+    _append_node(approach, STRATEGY_NS, "ApproachMode", spec.approach.mode)
+    _append_node(approach, STRATEGY_NS, "ApproachType", spec.approach.approach_type)
+    _append_node(approach, STRATEGY_NS, "IsEnabled", "true" if spec.approach.is_enabled else "false")
+    _append_node(approach, STRATEGY_NS, "RadiusMultiplier", _compact_number(spec.approach.radius_multiplier))
+    _append_node(approach, STRATEGY_NS, "Speed", _compact_number(spec.approach.speed))
+    retract = _append_node(
+        operation,
+        PGMX_NS,
+        "Retract",
+        attrib={f"{{{XSI_NS}}}type": "b:BaseRetractStrategy"},
+    )
+    _set_xmlns(retract, "b", STRATEGY_NS)
+    _append_node(retract, STRATEGY_NS, "IsEnabled", "true" if spec.retract.is_enabled else "false")
+    _append_node(retract, STRATEGY_NS, "OverLap", _compact_number(spec.retract.overlap))
+    _append_node(retract, STRATEGY_NS, "RadiusMultiplier", _compact_number(spec.retract.radius_multiplier))
+    _append_node(retract, STRATEGY_NS, "RetractArcSide", spec.retract.arc_side)
+    _append_node(retract, STRATEGY_NS, "RetractMode", spec.retract.mode)
+    _append_node(retract, STRATEGY_NS, "RetractType", spec.retract.retract_type)
+    _append_node(retract, STRATEGY_NS, "Speed", _compact_number(spec.retract.speed))
+    operation.append(_build_milling_strategy_node(spec))
+    _append_node(operation, PGMX_NS, "AllowanceBottom", _compact_number(spec.allowance_bottom))
+    _append_node(operation, PGMX_NS, "AllowanceSide", _compact_number(spec.allowance_side))
+    return operation
 
 
 def _normalize_closed_contour(
