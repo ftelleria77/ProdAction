@@ -38,8 +38,9 @@ Mapa vigente:
 | Ruta | Rol | Frontera |
 | --- | --- | --- |
 | `pgmx.synthesis.milling.pocket` | Produccion `ClosedPocket`/pocket milling | Punto estable para que la sintesis PGMX escriba vaciados como parte de la familia pocket/cajeado. |
+| `pgmx.synthesis.milling.pocket_contract` | Contrato promovido de pocket milling | Fuente real de las dataclasses y helpers antes separados como V2 de Vaciado. |
 | `pgmx.machining_lab.pocket_milling` | Laboratorio y oraculo | Puede usar trazas Maestro y memoria externa; no es dependencia productiva directa. |
-| `pgmx.vaciado` | Contrato V2 historico | Debe integrarse en `pgmx.synthesis.milling.pocket` y desaparecer como paquete final. |
+| `pgmx.vaciado` | Fachada historica del contrato V2 | Reexporta `pgmx.synthesis.milling.pocket_contract` y debe desaparecer como paquete final cuando migren los imports. |
 | `pgmx.vaciado_lab` | Fachada historica | Debe desaparecer como paquete final cuando termine la transicion. |
 | `tools.pgmx_vaciado*` | Fachadas historicas | Deben mantenerse solo durante la transicion de imports/CLIs hacia pocket milling. |
 
@@ -67,8 +68,8 @@ descriptivo. Si se estabiliza como API o flujo operativo, debe migrar a `pgmx/`,
 
 - Retirar la fachada `pgmx.vaciado_lab` cuando imports y comandos terminen de
   migrar al laboratorio general.
-- Integrar `pgmx.vaciado` en `pgmx.synthesis.milling.pocket` y retirar el
-  contrato V2 separado.
+- Retirar la fachada `pgmx.vaciado` cuando imports y comandos migren a
+  `pgmx.synthesis.milling.pocket_contract`.
 - Reducir referencias historicas `tools.pgmx_vaciado.*` cuando deje de ser
   necesario sostener comandos/imports previos.
 - Mantener `tools/synthesize_pgmx.py`, `tools/pgmx_snapshot.py` y

@@ -1,8 +1,4 @@
-"""Vaciado integration boundary for PGMX synthesis.
-
-The V2 model is still developed under `pgmx.vaciado`, but production
-PGMX synthesis should depend on this module as the stable handoff point.
-"""
+"""Historical Vaciado integration boundary for PGMX synthesis."""
 
 from __future__ import annotations
 
@@ -26,11 +22,11 @@ def vaciado_support_status() -> VaciadoSynthesisSupport:
 
     return VaciadoSynthesisSupport(
         enabled=True,
-        model_package="pgmx.vaciado",
+        model_package="pgmx.synthesis.milling.pocket",
         legacy_engine_allowed=False,
         notes=(
             "PocketMillingSpec remains the public PGMX spec for ClosedPocket Vaciado.",
-            "V2 owns geometry, strategy, depth and trace planning contracts.",
+            "The former V2 contract now lives in pgmx.synthesis.milling.pocket_contract.",
             "The pocket trace engine lives in pgmx.synthesis.milling.pocket_trace; pgmx.vaciado_lab reexports it for compatibility.",
         ),
     )
@@ -43,6 +39,6 @@ def adapt_pocket_milling_to_vaciado_contract(spec: PocketMillingSpec):
     package depend on laboratory modules at import time.
     """
 
-    from pgmx.vaciado.adapters import from_pocket_milling_spec
+    from pgmx.synthesis.milling.pocket_contract import from_pocket_milling_spec
 
     return from_pocket_milling_spec(spec)

@@ -1,5 +1,7 @@
-"""Compatibility facade for `pgmx.vaciado.geometry`."""
+"""Compatibility facade for `pgmx.synthesis.milling.pocket_contract` geometry names."""
 
 from __future__ import annotations
 
-from pgmx.vaciado.geometry import *  # noqa: F401,F403
+from pgmx.synthesis.milling.pocket_contract import BBox, Point2, PolylineContour, VaciadoGeometry
+
+__all__ = ["BBox", "Point2", "PolylineContour", "VaciadoGeometry"]

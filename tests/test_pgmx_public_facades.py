@@ -4,6 +4,7 @@ from pgmx import adapters, machining_lab, snapshot, synthesis, vaciado, vaciado_
 from pgmx.synthesis import cli as synthesis_cli
 from pgmx.synthesis import core as synthesis_core
 from pgmx.synthesis import vaciado as synthesis_vaciado
+from pgmx.synthesis.milling import pocket_contract as milling_pocket_contract
 from pgmx.synthesis.milling import pocket_trace as milling_pocket_trace
 from pgmx.machining_lab import pocket_milling as pocket_milling_lab
 from pgmx.machining_lab.pocket_milling import scan_samples as pocket_milling_scan_samples
@@ -66,9 +67,15 @@ class PgmxPublicFacadeTests(unittest.TestCase):
         )
 
         self.assertIs(pgmx_vaciado_v2.VaciadoGeometry, vaciado.VaciadoGeometry)
+        self.assertIs(vaciado.VaciadoGeometry, milling_pocket_contract.VaciadoGeometry)
+        self.assertIs(pgmx_vaciado_v2.VaciadoDepth, milling_pocket_contract.VaciadoDepth)
         self.assertIs(
             legacy_vaciado_v2_trace.plan_rectangular_no_islands,
             vaciado_trace.plan_rectangular_no_islands,
+        )
+        self.assertIs(
+            vaciado_trace.plan_rectangular_no_islands,
+            milling_pocket_contract.plan_rectangular_no_islands,
         )
 
 

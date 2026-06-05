@@ -49,7 +49,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
     def test_vaciado_boundary_adapts_public_pocket_spec_to_v2_contract(self) -> None:
         status = pgmx_synthesis.vaciado_support_status()
         self.assertTrue(status.enabled)
-        self.assertEqual(status.model_package, "pgmx.vaciado")
+        self.assertEqual(status.model_package, "pgmx.synthesis.milling.pocket")
         self.assertFalse(status.legacy_engine_allowed)
 
         pocket = pgmx_synthesis.build_pocket_milling_spec(

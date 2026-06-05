@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from pgmx.vaciado import (
+from pgmx.synthesis.milling.pocket_contract import (
     PolylineContour,
     VaciadoDepth,
     VaciadoGeometry,

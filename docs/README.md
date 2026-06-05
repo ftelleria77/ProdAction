@@ -52,7 +52,7 @@ tener que leer todas las memorias historicas de una vez.
 | Dibujos de piezas | `docs/repo_study_guide.md` | `pgmx/processing.py`, `core/pgmx_processing.py` |
 | Sintesis PGMX | `docs/synthesize_pgmx_help.md`, `docs/pgmx_synthesis_modularization_plan.md`, `docs/pgmx_synthesis_modularization_temporary_memory.md` | `pgmx/synthesis/`, `tools/synthesize_pgmx.py` |
 | Snapshot/adaptacion PGMX | `docs/pgmx_snapshot_help.md`, `docs/pgmx_adapters_help.md` | `pgmx/snapshot.py`, `pgmx/adapters.py`, `tools/pgmx_snapshot.py`, `tools/pgmx_adapters.py` |
-| Pocket milling PGMX | `pgmx/machining_lab/pocket_milling/README.md`, `pgmx/machining_lab/pocket_milling/memory/current-state.md`, `docs/laboratory_frontiers.md` | `pgmx/synthesis/milling/pocket.py`, `pgmx/machining_lab/pocket_milling/`, fachadas historicas `pgmx/vaciado_lab/`, `tools/pgmx_vaciado*` |
+| Pocket milling PGMX | `pgmx/machining_lab/pocket_milling/README.md`, `pgmx/machining_lab/pocket_milling/memory/current-state.md`, `docs/laboratory_frontiers.md` | `pgmx/synthesis/milling/pocket.py`, `pgmx/synthesis/milling/pocket_contract.py`, `pgmx/machining_lab/pocket_milling/`, fachadas historicas `pgmx/vaciado/`, `pgmx/vaciado_lab/`, `tools/pgmx_vaciado*` |
 | Reparacion SlotSide | `docs/repo_study_guide.md`, `docs/pgmx_temporary_memory.md` | `core/pgmx_processing.py`, `app/ui.py` |
 | En-Juego | `docs/en_juego_synthesis_temporary_memory.md` | `core/en_juego_synthesis.py`, `core/en_juego_transform.py` |
 | Diagramas de corte | `docs/cut_diagrams_temporary_memory.md` | `core/nesting_service.py`, `core/nesting_compat.py` |

@@ -55,6 +55,7 @@ pgmx/
       circle.py
       squaring.py
       pocket.py              # ClosedPocket / pocket milling productivo
+      pocket_contract.py     # contrato promovido desde el V2 historico de Vaciado
     drilling/
       single.py
       pattern.py
@@ -76,7 +77,8 @@ pgmx/
 laboratorio actual `pgmx/vaciado_lab/` y el contrato experimental
 `pgmx/vaciado/` son fuentes historicas de migracion: en el mapa objetivo ambos
 desaparecen como paquetes propios y su contenido util se integra en
-`pgmx.synthesis.milling.pocket` y `pgmx.machining_lab.pocket_milling`.
+`pgmx.synthesis.milling.pocket`, `pgmx.synthesis.milling.pocket_contract` y
+`pgmx.machining_lab.pocket_milling`.
 Las rutas historicas bajo `tools/` solo pueden quedar como fachadas temporales
 durante la transicion.
 
@@ -88,7 +90,7 @@ durante la transicion.
 | Ranura | `SlotMillingSpec` | `pgmx.synthesis.milling.slot` | `pgmx.machining_lab.slot_milling` |
 | Perfil | `PolylineMillingSpec`, `CircleMillingSpec` | `pgmx.synthesis.milling.profile`, `circle` | `pgmx.machining_lab.profile_milling` |
 | Escuadrado | `SquaringMillingSpec` | `pgmx.synthesis.milling.squaring` | `pgmx.machining_lab.squaring` |
-| Pocket / ClosedPocket | `PocketMillingSpec`, legado `pgmx.vaciado` | `pgmx.synthesis.milling.pocket` | `pgmx.machining_lab.pocket_milling` |
+| Pocket / ClosedPocket | `PocketMillingSpec`, contrato promovido `pgmx.synthesis.milling.pocket_contract` | `pgmx.synthesis.milling.pocket` | `pgmx.machining_lab.pocket_milling` |
 | Taladro | `DrillingSpec` | `pgmx.synthesis.drilling.single` | `pgmx.machining_lab.drilling` |
 | Patron de taladros | `DrillingPatternSpec` | `pgmx.synthesis.drilling.pattern` | `pgmx.machining_lab.drilling` |
 | Xn | `XnSpec` | `pgmx.synthesis.common.program` | sin laboratorio propio |
@@ -173,7 +175,8 @@ Cada migracion debe dejar:
 
 - Reubicar el motor experimental en `pgmx.machining_lab.pocket_milling`.
 - Integrar el contrato experimental `pgmx.vaciado` dentro de
-  `pgmx.synthesis.milling.pocket` y retirar el paquete separado.
+  `pgmx.synthesis.milling.pocket_contract`, dejando `pgmx.vaciado` como
+  fachada historica hasta que migren los imports.
 - Hacer que `pgmx.synthesis.milling.pocket` sea el unico punto productivo para
   `ClosedPocket`/pocket milling.
 - Eliminar la dependencia directa `pgmx.synthesis.core -> pgmx.vaciado_lab`.
@@ -181,8 +184,9 @@ Cada migracion debe dejar:
   `pgmx.synthesis.milling.pocket`.
 
 Salida esperada: la produccion conoce el mecanizado como `ClosedPocket` a
-traves de `milling.pocket`, sin contrato `pgmx.vaciado` ni laboratorio
-`pgmx.vaciado_lab` como paquetes finales.
+traves de `milling.pocket`, con el contrato en `milling.pocket_contract`, sin
+contrato `pgmx.vaciado` ni laboratorio `pgmx.vaciado_lab` como paquetes
+finales.
 
 ### Etapa 6 - Expansion Del Laboratorio
 
@@ -233,8 +237,10 @@ comportamiento publico:
    historica.
    - La implementacion real vive en `pgmx.machining_lab.pocket_milling`.
    - Mantener fachadas historicas solo durante la transicion.
-5. Integrar o retirar el contrato separado `pgmx.vaciado`.
-   - `ClosedPocket`/pocket milling debe quedar como familia de
+5. Integrar o retirar el contrato separado `pgmx.vaciado`. Hecho:
+   `pgmx.synthesis.milling.pocket_contract` contiene el contrato V2 promovido y
+   `pgmx.vaciado` queda como fachada historica.
+   - `ClosedPocket`/pocket milling queda como familia de
      `pgmx.synthesis.milling.pocket`.
 6. Reducir `pgmx.synthesis.core` a fachada interna. Hecho: `core.py` solo
    reexporta los modulos reales y mantiene el `__all__` publico historico.

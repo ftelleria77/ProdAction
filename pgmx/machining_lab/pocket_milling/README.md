@@ -79,9 +79,11 @@ este laboratorio hacia los modulos correspondientes:
 - adaptacion: `pgmx.adapters`;
 - sintesis PGMX: `pgmx.synthesis` y, para `ClosedPocket`/Vaciado,
   `pgmx.synthesis.milling.pocket`;
+- contrato promovido de pocket milling:
+  `pgmx.synthesis.milling.pocket_contract`;
 - dibujo/visualizacion: `pgmx.processing`;
 - ISO: `iso_state_synthesis/`.
 
 Las rutas `tools/pgmx_snapshot.py`, `tools/pgmx_adapters.py`,
-`tools/synthesize_pgmx.py` y `tools/pgmx_vaciado*` quedan como fachadas
-compatibles, no como lugar para logica nueva.
+`tools/synthesize_pgmx.py`, `pgmx.vaciado` y `tools/pgmx_vaciado*` quedan como
+fachadas compatibles, no como lugar para logica nueva.

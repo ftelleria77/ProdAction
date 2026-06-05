@@ -1,5 +1,7 @@
-"""Compatibility facade for `pgmx.vaciado.depth`."""
+"""Compatibility facade for `pgmx.synthesis.milling.pocket_contract` depth names."""
 
 from __future__ import annotations
 
-from pgmx.vaciado.depth import *  # noqa: F401,F403
+from pgmx.synthesis.milling.pocket_contract import VaciadoDepth
+
+__all__ = ["VaciadoDepth"]

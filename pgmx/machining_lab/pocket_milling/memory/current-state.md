@@ -1,6 +1,6 @@
 # PGMX Vaciado
 
-Ultima actualizacion: 2026-06-03
+Ultima actualizacion: 2026-06-05
 
 Nota arquitectonica: `Vaciado` queda como nombre historico del corpus. El
 destino final del mecanizado es `pgmx.synthesis.milling.pocket`
@@ -1788,3 +1788,67 @@ Validacion local:
 
 - `py -3 -m unittest tests.test_pgmx_vaciado_v2`: `8` tests, `OK`.
 - `py -3 -m unittest tests.test_pgmx_vaciado`: `57` tests, `OK`.
+
+## Actualizacion 2026-06-05 - Laboratorio Migrado A Pocket Milling
+
+Se completo el corte arquitectonico del laboratorio:
+
+- La implementacion real del laboratorio vive en
+  `pgmx.machining_lab.pocket_milling`.
+- `pgmx.vaciado_lab.*` queda como fachada historica hacia el laboratorio nuevo.
+- `tools.pgmx_vaciado.*` queda como fachada historica hacia
+  `pgmx.machining_lab.pocket_milling`.
+- El motor productivo de trazas ya no vive en el laboratorio: fue promovido a
+  `pgmx.synthesis.milling.pocket_trace`.
+- El generador rectangular productivo fue promovido a
+  `pgmx.synthesis.milling.pocket_rectangular`.
+- `pgmx.synthesis.milling.pocket` ya no importa `pgmx.vaciado_lab`.
+- `pgmx.synthesis.core` quedo reducido a fachada compacta de compatibilidad.
+
+Validacion local del corte:
+
+- `py -3 -m unittest tests.test_pgmx_synthesis_package tests.test_pgmx_public_facades tests.test_pgmx_vaciado_v2 tests.test_pgmx_vaciado`: `71` tests, `OK`.
+- `py -3 -m compileall -q pgmx tools tests`: `OK`.
+- `git diff --check`: `OK`.
+
+Frontera arquitectonica que sigue abierta:
+
+- Retirar la fachada historica `pgmx.vaciado` cuando imports y comandos migren
+  al contrato real `pgmx.synthesis.milling.pocket_contract`.
+- Retirar `pgmx.vaciado_lab`, `tools.pgmx_vaciado.*` y
+  `tools.pgmx_vaciado_v2.*` cuando imports y comandos terminen de migrar a
+  `pgmx.machining_lab.pocket_milling` y `pgmx.synthesis.milling`.
+
+Frontera tecnica de pocket milling que sigue abierta:
+
+- Caso base multi-isla de `Vaciado_031`.
+- `Vaciado_035` circular/non-polyline.
+- Comando productivo de regeneracion/validacion de lote.
+
+## Actualizacion 2026-06-05 - Contrato V2 Integrado En Pocket Contract
+
+El contrato V2 historico de Vaciado queda promovido dentro del subsistema
+productivo de pocket milling:
+
+- `pgmx.synthesis.milling.pocket_contract` es la fuente real de las dataclasses
+  y helpers del contrato.
+- `pgmx.vaciado.*` reexporta ese contrato como fachada historica.
+- `tools.pgmx_vaciado_v2.*` tambien reexporta
+  `pgmx.synthesis.milling.pocket_contract`.
+- `pgmx.synthesis.vaciado.vaciado_support_status()` informa como frontera
+  productiva `pgmx.synthesis.milling.pocket`.
+- Las pruebas de fachadas publicas verifican que `pgmx.vaciado` y
+  `tools.pgmx_vaciado_v2` apunten a `pocket_contract`.
+
+Validacion local del corte:
+
+- `py -3 -m unittest tests.test_pgmx_synthesis_package tests.test_pgmx_public_facades tests.test_pgmx_vaciado_v2 tests.test_pgmx_vaciado`: `71` tests, `OK`.
+- `py -3 -m compileall -q pgmx tools tests`: `OK`.
+- `git diff --check`: `OK`.
+- Smoke de identidad entre `pgmx.vaciado`, `tools.pgmx_vaciado_v2` y
+  `pgmx.synthesis.milling.pocket_contract`: `True True`.
+
+Frontera arquitectonica que sigue abierta:
+
+- Retirar las fachadas historicas cuando los imports externos y comandos
+  existentes puedan migrar sin romper compatibilidad.
