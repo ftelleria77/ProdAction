@@ -1,6 +1,7 @@
 import unittest
 
 from pgmx import adapters, snapshot, synthesis, vaciado, vaciado_lab
+from pgmx.synthesis import cli as synthesis_cli
 from pgmx.synthesis import core as synthesis_core
 from pgmx.synthesis import vaciado as synthesis_vaciado
 from tools import pgmx_adapters, pgmx_snapshot, pgmx_synthesis, synthesize_pgmx
@@ -19,6 +20,8 @@ class PgmxPublicFacadeTests(unittest.TestCase):
     def test_legacy_synthesis_facades_reexport_pgmx_synthesis(self) -> None:
         self.assertIs(synthesize_pgmx.PocketMillingSpec, synthesis_core.PocketMillingSpec)
         self.assertIs(synthesize_pgmx.main, synthesis.main)
+        self.assertIs(synthesis.main, synthesis_cli.main)
+        self.assertIs(synthesis_core.main, synthesis_cli.main)
         self.assertIn("main", synthesize_pgmx.__all__)
 
         self.assertIs(pgmx_synthesis.PocketMillingSpec, synthesis.PocketMillingSpec)

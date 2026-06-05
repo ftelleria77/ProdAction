@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from pgmx import synthesis as pgmx_synthesis
+from pgmx.synthesis import cli as synthesis_cli
 from pgmx.synthesis import common as synthesis_common
 from pgmx.synthesis import core as core_sp
 from pgmx.synthesis import drilling as synthesis_drilling
@@ -33,6 +34,8 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
     def test_public_facade_reexports_core_api_and_keeps_data_paths(self) -> None:
         self.assertIs(pgmx_synthesis.PocketMillingSpec, core_sp.PocketMillingSpec)
         self.assertIs(pgmx_synthesis.build_pocket_milling_spec, core_sp.build_pocket_milling_spec)
+        self.assertIs(pgmx_synthesis.main, synthesis_cli.main)
+        self.assertIs(core_sp.main, synthesis_cli.main)
         self.assertIs(legacy_sp.PocketMillingSpec, core_sp.PocketMillingSpec)
         self.assertIs(legacy_pgmx_synthesis.PocketMillingSpec, core_sp.PocketMillingSpec)
         self.assertTrue(pgmx_synthesis.DEFAULT_BASELINE_XML_PATH.name.endswith("Pieza.xml"))
