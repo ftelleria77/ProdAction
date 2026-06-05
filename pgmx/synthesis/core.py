@@ -371,6 +371,7 @@ from .milling.pocket import (
     PocketMillingSpec,
     _HydratedPocketMillingSpec,
     _SingleSeedMultiloopRoute,
+    _append_pocket_milling,
     _build_closed_pocket_boss,
     _build_closed_pocket_feature,
     _build_contour_parallel_xyz_path,
@@ -846,22 +847,6 @@ def _validate_tool_sinking_lengths(
         _validate_tool_sinking_length_for_drilling_spec(state, spec, tool_catalog)
 
 
-def _build_polyline_geometry(
-    geometry_id: str,
-    plane_id: str,
-    plane_object_type: str,
-    curve_spec: _CurveSpec,
-    generated_member_keys: Sequence[str] = (),
-) -> ET.Element:
-    return _build_geometry_from_curve_spec(
-        geometry_id,
-        plane_id,
-        plane_object_type,
-        curve_spec,
-        generated_member_keys=generated_member_keys,
-    )
-
-
 def _build_xn_step(
     step_id: str,
     workpiece_id: str,
@@ -916,154 +901,6 @@ def _build_xn_step(
     else:
         _append_node(step, BASE_MODEL_NS, "Y", _compact_number(spec.y))
     return step
-
-
-def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPocketMillingSpec) -> None:
-    geometries = root.find("./{*}Geometries")
-    features = root.find("./{*}Features")
-    operations = root.find("./{*}Operations")
-    expressions = root.find("./{*}Expressions")
-    elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
-    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
-    if any(node is None for node in (geometries, features, operations, expressions, elements, workpiece)):
-        raise ValueError("La plantilla no contiene todas las colecciones requeridas para sintetizar el Vaciado.")
-
-    if not _is_closed_polyline_points(spec.contour_points):
-        raise ValueError("PocketMillingSpec requiere un contorno cerrado.")
-
-    workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
-    workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
-    depth_variable_name = _workpiece_depth_name(workpiece)
-    plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
-    uses_depth_expressions = _uses_feature_depth_expressions(spec)
-
-    trajectory_sequences = _build_pocket_trajectory_xyz_sequences(state, spec)
-    boundary_curve = spec.geometry_curve or _curve_spec_from_profile_geometry(
-        _build_closed_polyline_geometry_profile(spec.contour_points, z_value=0.0)
-    )
-    boundary_member_count = len(boundary_curve.member_serializations)
-    boss_geometry_curves = tuple(
-        _curve_spec_from_profile_geometry(_build_closed_polyline_geometry_profile(boss_contour, z_value=0.0))
-        for boss_contour in spec.boss_contours
-    )
-    boss_geometry_member_count = sum(len(curve.member_serializations) for curve in boss_geometry_curves)
-    route_seed_curves = tuple(
-        _curve_spec_from_profile_geometry(_build_closed_polyline_geometry_profile(seed.contour_points, z_value=0.0))
-        for seed in spec.boss_route_seeds
-        if seed.is_resolved
-    )
-    route_seed_member_count = sum(1 + len(curve.member_serializations) for curve in route_seed_curves)
-    trajectory_curves = _build_pocket_trajectory_curve_specs(spec, trajectory_sequences)
-    trajectory_member_counts = tuple(len(curve.member_serializations) for curve in trajectory_curves)
-    trajectory_member_count = sum(trajectory_member_counts)
-    reserve_count = (
-        1
-        + boundary_member_count
-        + boss_geometry_member_count
-        + route_seed_member_count
-        + (6 if uses_depth_expressions else 4)
-        + trajectory_member_count
-    )
-    reserved_ids = _reserve_ids(root, reserve_count, spec.preferred_id_start)
-    geometry_id = reserved_ids[0]
-    boundary_member_keys = tuple(reserved_ids[1 : 1 + boundary_member_count])
-    cursor = 1 + boundary_member_count
-    boss_geometry_specs: list[tuple[_CurveSpec, tuple[str, ...]]] = []
-    for boss_curve in boss_geometry_curves:
-        boss_member_keys = tuple(reserved_ids[cursor : cursor + len(boss_curve.member_serializations)])
-        cursor += len(boss_curve.member_serializations)
-        boss_geometry_specs.append((boss_curve, boss_member_keys))
-    route_seed_geometry_specs: list[tuple[PocketBossRouteSeedSpec, str, _CurveSpec, tuple[str, ...]]] = []
-    for seed, curve in zip((seed for seed in spec.boss_route_seeds if seed.is_resolved), route_seed_curves):
-        seed_geometry_id = reserved_ids[cursor]
-        cursor += 1
-        seed_member_keys = tuple(reserved_ids[cursor : cursor + len(curve.member_serializations)])
-        cursor += len(curve.member_serializations)
-        route_seed_geometry_specs.append((seed, seed_geometry_id, curve, seed_member_keys))
-    operation_index = cursor
-    operation_id = reserved_ids[operation_index]
-    feature_id = reserved_ids[operation_index + 1]
-    step_id = reserved_ids[operation_index + 2]
-    start_expression_id = reserved_ids[operation_index + 3] if uses_depth_expressions else None
-    end_expression_id = reserved_ids[operation_index + 4] if uses_depth_expressions else None
-    trajectory_index = operation_index + (5 if uses_depth_expressions else 3)
-    trajectory_member_keys: list[tuple[str, ...]] = []
-    cursor = trajectory_index
-    for member_count in trajectory_member_counts:
-        trajectory_member_keys.append(tuple(reserved_ids[cursor : cursor + member_count]))
-        cursor += member_count
-
-    geometries.append(
-        _build_polyline_geometry(
-            geometry_id,
-            plane_id,
-            plane_object_type,
-            boundary_curve,
-            generated_member_keys=boundary_curve.member_keys or boundary_member_keys,
-        )
-    )
-    for _seed, seed_geometry_id, seed_curve, seed_member_keys in route_seed_geometry_specs:
-        geometries.append(
-            _build_polyline_geometry(
-                seed_geometry_id,
-                plane_id,
-                plane_object_type,
-                seed_curve,
-                generated_member_keys=seed_curve.member_keys or seed_member_keys,
-            )
-        )
-    features.append(
-        _build_closed_pocket_feature(
-            state,
-            spec,
-            feature_id,
-            geometry_id,
-            operation_id,
-            workpiece_id,
-            workpiece_object_type,
-            _geometry_object_type(boundary_curve.geometry_type),
-            boundary_curve,
-            boundary_curve.member_keys or boundary_member_keys,
-            boss_geometry_curves=tuple(
-                (boss_curve, boss_curve.member_keys or boss_member_keys)
-                for boss_curve, boss_member_keys in boss_geometry_specs
-            ),
-            boss_route_seed_refs=tuple(
-                (
-                    seed,
-                    seed_geometry_id,
-                    _geometry_object_type(seed_curve.geometry_type),
-                )
-                for seed, seed_geometry_id, seed_curve, _seed_member_keys in route_seed_geometry_specs
-            ),
-        )
-    )
-    operations.append(
-        _build_pocket_operation(
-            state,
-            spec,
-            operation_id,
-            trajectory_curves,
-            tuple(
-                trajectory_curve.member_keys or member_keys
-                for trajectory_curve, member_keys in zip(trajectory_curves, trajectory_member_keys)
-            ),
-            trajectory_sequences,
-        )
-    )
-    elements.append(
-        _build_working_step(
-            spec.feature_name,
-            step_id,
-            feature_id,
-            operation_id,
-            feature_object_type="ScmGroup.XCam.MachiningDataModel.ClosedPocket",
-            operation_object_type="ScmGroup.XCam.MachiningDataModel.Milling.BottomAndSideRoughMilling",
-        )
-    )
-    if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
-        expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
-        expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
 
 
 # ============================================================================
