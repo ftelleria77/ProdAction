@@ -372,6 +372,7 @@ from .milling.pocket import (
     _HydratedPocketMillingSpec,
     _build_closed_pocket_boss,
     _build_closed_pocket_feature,
+    _build_contour_parallel_xyz_path,
     _build_pocket_operation,
     _can_hydrate_pocket_template_trace,
     _extract_pocket_milling_template,
@@ -835,33 +836,6 @@ def _build_polyline_geometry(
         plane_object_type,
         curve_spec,
         generated_member_keys=generated_member_keys,
-    )
-
-
-def _build_contour_parallel_xyz_path(
-    state: PgmxState,
-    spec: _HydratedPocketMillingSpec,
-) -> tuple[tuple[float, float, float], ...]:
-    from pgmx.vaciado_lab.contour_parallel import generate_rectangular_contour_parallel_xyz_path
-
-    strategy = spec.milling_strategy
-    return generate_rectangular_contour_parallel_xyz_path(
-        length=state.length,
-        width=state.width,
-        depth=state.depth,
-        contour_points=spec.contour_points,
-        tool_width=spec.tool_width,
-        target_depth=float(_feature_depth_value(state, spec)),
-        security_plane=spec.security_plane,
-        allowance_side=spec.allowance_side,
-        overlap=strategy.overlap,
-        radial_cutting_depth=strategy.radial_cutting_depth,
-        rotation_direction=strategy.rotation_direction,
-        inside_to_outside=strategy.inside_to_outside,
-        stroke_connection_strategy=strategy.stroke_connection_strategy,
-        allow_multiple_passes=strategy.allow_multiple_passes,
-        axial_cutting_depth=strategy.axial_cutting_depth,
-        axial_finish_cutting_depth=strategy.axial_finish_cutting_depth,
     )
 
 
