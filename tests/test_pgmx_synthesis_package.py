@@ -90,10 +90,38 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.PgmxSynthesisRequest, common_program.PgmxSynthesisRequest)
         self.assertIs(core_sp.PgmxSynthesisResult, common_program.PgmxSynthesisResult)
         self.assertIs(core_sp.HydratedMachiningSpec, common_program.HydratedMachiningSpec)
+        self.assertIs(core_sp.MODULE_DIR, common_program.MODULE_DIR)
+        self.assertIs(core_sp.DEFAULT_BASELINE_DIR, common_program.DEFAULT_BASELINE_DIR)
+        self.assertIs(core_sp.DEFAULT_BASELINE_XML_PATH, common_program.DEFAULT_BASELINE_XML_PATH)
+        self.assertEqual(core_sp.SYNTHESIZER_VERSION, common_program.SYNTHESIZER_VERSION)
+        self.assertIs(core_sp._module_data_dir, common_program._module_data_dir)
         self.assertIs(core_sp._hydrate_machining_spec, common_program._hydrate_machining_spec)
         self.assertIs(core_sp._append_hydrated_machining, common_program._append_hydrated_machining)
         self.assertIs(core_sp._split_hydrated_machinings, common_program._split_hydrated_machinings)
         self.assertIs(core_sp._normalize_machining_order, common_program._normalize_machining_order)
+        self.assertIs(core_sp._normalize_execution_fields, common_program._normalize_execution_fields)
+        self.assertIs(core_sp._validate_tool_sinking_lengths, common_program._validate_tool_sinking_lengths)
+        self.assertIs(core_sp._write_pgmx_zip, common_program._write_pgmx_zip)
+        self.assertIs(core_sp._finalize_pgmx_xml_bytes, common_program._finalize_pgmx_xml_bytes)
+        self.assertIs(
+            core_sp._finalize_synthesized_pgmx_xml_bytes,
+            common_program._finalize_synthesized_pgmx_xml_bytes,
+        )
+        self.assertIs(core_sp.read_pgmx_state, common_program.read_pgmx_state)
+        self.assertIs(core_sp._merge_state, common_program._merge_state)
+        self.assertIs(core_sp._apply_piece_state, common_program._apply_piece_state)
+        self.assertIs(core_sp._apply_line_millings, common_program._apply_line_millings)
+        self.assertIs(core_sp._apply_slot_millings, common_program._apply_slot_millings)
+        self.assertIs(core_sp._apply_polyline_millings, common_program._apply_polyline_millings)
+        self.assertIs(core_sp._apply_circle_millings, common_program._apply_circle_millings)
+        self.assertIs(core_sp._apply_squaring_millings, common_program._apply_squaring_millings)
+        self.assertIs(core_sp._apply_pocket_millings, common_program._apply_pocket_millings)
+        self.assertIs(core_sp._apply_drillings, common_program._apply_drillings)
+        self.assertIs(core_sp._drilling_plane_priority, common_program._drilling_plane_priority)
+        self.assertIs(core_sp._apply_drilling_patterns, common_program._apply_drilling_patterns)
+        self.assertIs(core_sp.build_synthesis_request, common_program.build_synthesis_request)
+        self.assertIs(core_sp.synthesize_request, common_program.synthesize_request)
+        self.assertIs(core_sp.synthesize_pgmx, common_program.synthesize_pgmx)
         self.assertEqual(
             common_program.DEFAULT_MACHINING_ORDER,
             ("line", "slot", "polyline", "circle", "squaring", "pocket", "drilling", "drilling_pattern"),
