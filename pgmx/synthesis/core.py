@@ -375,6 +375,8 @@ from .milling.pocket import (
     _build_closed_pocket_feature,
     _build_contour_parallel_xyz_path,
     _build_pocket_operation,
+    _build_pocket_trajectory_curve_specs,
+    _build_pocket_trajectory_xyz_sequences,
     _build_single_seed_base_loop_xyz_sequences,
     _build_single_seed_bridge_only_curve_and_sequence,
     _build_single_seed_multiloop_curve_and_sequence,
@@ -383,6 +385,7 @@ from .milling.pocket import (
     _build_trace_engine_pocket_xyz_sequences,
     _can_hydrate_pocket_template_trace,
     _curve_spec_from_trace_resolved_sequence,
+    _curve_spec_from_xyz_path,
     _extract_pocket_milling_template,
     _hydrate_pocket_milling_spec,
     _points_are_close_3d,
@@ -857,86 +860,6 @@ def _build_polyline_geometry(
         curve_spec,
         generated_member_keys=generated_member_keys,
     )
-
-
-def _build_pocket_trajectory_xyz_sequences(
-    state: PgmxState,
-    spec: _HydratedPocketMillingSpec,
-) -> tuple[tuple[tuple[float, float, float], ...], ...]:
-    if spec.trajectory_sequences:
-        return spec.trajectory_sequences
-
-    if not spec.boss_contours and not spec.boss_route_seeds:
-        return (_build_contour_parallel_xyz_path(state, spec),)
-
-    trace_engine_sequences = _build_trace_engine_pocket_xyz_sequences(state, spec)
-    if trace_engine_sequences is not None:
-        return trace_engine_sequences
-
-    controlled_sequences = _build_single_seed_base_loop_xyz_sequences(state, spec)
-    if controlled_sequences is not None:
-        return controlled_sequences
-
-    cut_z = state.depth - float(_feature_depth_value(state, spec))
-    controlled_multiloop = _build_single_seed_multiloop_curve_and_sequence(spec, cut_z)
-    if controlled_multiloop is not None:
-        _curve_spec, sequence = controlled_multiloop
-        return (sequence,)
-
-    raise NotImplementedError(
-        "PocketMillingSpec con islas/BossGeometryList o semillas BossList.GeometryID "
-        "se adapta para lectura, pero la serializacion productiva de Vaciado con islas "
-        "todavia no esta implementada para esta configuracion."
-    )
-
-
-def _build_pocket_trajectory_curve_specs(
-    spec: _HydratedPocketMillingSpec,
-    trajectory_sequences: Sequence[Sequence[tuple[float, float, float]]],
-) -> tuple[_CurveSpec, ...]:
-    if spec.trajectory_curves and len(spec.trajectory_curves) == len(trajectory_sequences):
-        return spec.trajectory_curves
-
-    if not spec.boss_contours and not spec.boss_route_seeds:
-        return tuple(_curve_spec_from_xyz_path(sequence) for sequence in trajectory_sequences)
-
-    trace_engine_curves = _build_trace_engine_pocket_curve_specs(spec, trajectory_sequences)
-    if trace_engine_curves is not None:
-        return trace_engine_curves
-
-    seed = _supported_single_seed_base_loop_route_seed(spec)
-    if seed is not None and len(trajectory_sequences) == 2:
-        cut_z = trajectory_sequences[1][0][2]
-        seed_min_x, seed_max_x, seed_min_y, seed_max_y = _xy_bbox_minmax(seed.contour_points)
-        radii = _single_seed_base_loop_radii(spec, seed)
-        return (
-            _curve_spec_from_xyz_path(trajectory_sequences[0]),
-            _rounded_kernel_multi_loop_curve_spec(
-                (seed_min_x, seed_max_x, seed_min_y, seed_max_y),
-                radii,
-                cut_z,
-            ),
-        )
-
-    if len(trajectory_sequences) == 1 and trajectory_sequences[0]:
-        cut_z = trajectory_sequences[0][0][2]
-        controlled_multiloop = _build_single_seed_multiloop_curve_and_sequence(spec, cut_z)
-        if controlled_multiloop is not None:
-            curve_spec, _sequence = controlled_multiloop
-            return (curve_spec,)
-
-    return tuple(_curve_spec_from_xyz_path(sequence) for sequence in trajectory_sequences)
-
-
-def _curve_spec_from_xyz_path(points: Sequence[tuple[float, float, float]]) -> _CurveSpec:
-    descriptions: list[str] = []
-    for start_point, end_point in zip(points, points[1:]):
-        if _points_are_close_3d(start_point, end_point):
-            continue
-        descriptions.append(_build_toolpath_description(start_point, end_point))
-    if not descriptions:
-        raise ValueError("La trayectoria de Vaciado no contiene segmentos serializables.")
-    return _composite_curve_spec(descriptions)
 
 
 def _build_xn_step(

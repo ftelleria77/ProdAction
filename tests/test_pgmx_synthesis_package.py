@@ -553,6 +553,14 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._build_contour_parallel_xyz_path, milling_pocket._build_contour_parallel_xyz_path)
         self.assertIs(core_sp._build_pocket_operation, milling_pocket._build_pocket_operation)
         self.assertIs(
+            core_sp._build_pocket_trajectory_xyz_sequences,
+            milling_pocket._build_pocket_trajectory_xyz_sequences,
+        )
+        self.assertIs(
+            core_sp._build_pocket_trajectory_curve_specs,
+            milling_pocket._build_pocket_trajectory_curve_specs,
+        )
+        self.assertIs(
             core_sp._build_trace_engine_pocket_xyz_sequences,
             milling_pocket._build_trace_engine_pocket_xyz_sequences,
         )
@@ -565,6 +573,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             core_sp._curve_spec_from_trace_resolved_sequence,
             milling_pocket._curve_spec_from_trace_resolved_sequence,
         )
+        self.assertIs(core_sp._curve_spec_from_xyz_path, milling_pocket._curve_spec_from_xyz_path)
         self.assertIs(
             core_sp._build_single_seed_base_loop_xyz_sequences,
             milling_pocket._build_single_seed_base_loop_xyz_sequences,
