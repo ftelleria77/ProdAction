@@ -236,7 +236,8 @@ comportamiento publico:
 5. Integrar o retirar el contrato separado `pgmx.vaciado`.
    - `ClosedPocket`/pocket milling debe quedar como familia de
      `pgmx.synthesis.milling.pocket`.
-6. Reducir `pgmx.synthesis.core` a fachada interna.
+6. Reducir `pgmx.synthesis.core` a fachada interna. Hecho: `core.py` solo
+   reexporta los modulos reales y mantiene el `__all__` publico historico.
    - No debe contener logica nueva.
    - Debe sostener compatibilidad con `tools.synthesize_pgmx` y
      `tools.pgmx_synthesis`.
