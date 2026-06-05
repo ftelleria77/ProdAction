@@ -546,6 +546,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.PocketMillingSpec, milling_pocket.PocketMillingSpec)
         self.assertIs(core_sp.PocketBossRouteSeedSpec, milling_pocket.PocketBossRouteSeedSpec)
         self.assertIs(core_sp._HydratedPocketMillingSpec, milling_pocket._HydratedPocketMillingSpec)
+        self.assertIs(core_sp._SingleSeedMultiloopRoute, milling_pocket._SingleSeedMultiloopRoute)
         self.assertIs(core_sp.build_pocket_milling_spec, milling_pocket.build_pocket_milling_spec)
         self.assertIs(core_sp._build_closed_pocket_feature, milling_pocket._build_closed_pocket_feature)
         self.assertIs(core_sp._build_closed_pocket_boss, milling_pocket._build_closed_pocket_boss)
@@ -568,6 +569,15 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             core_sp._build_single_seed_base_loop_xyz_sequences,
             milling_pocket._build_single_seed_base_loop_xyz_sequences,
         )
+        self.assertIs(
+            core_sp._build_single_seed_multiloop_curve_and_sequence,
+            milling_pocket._build_single_seed_multiloop_curve_and_sequence,
+        )
+        self.assertIs(
+            core_sp._build_single_seed_bridge_only_curve_and_sequence,
+            milling_pocket._build_single_seed_bridge_only_curve_and_sequence,
+        )
+        self.assertIs(core_sp._points_are_close_3d, milling_pocket._points_are_close_3d)
         self.assertIs(core_sp._rounded_kernel_loop_curve_spec, milling_pocket._rounded_kernel_loop_curve_spec)
         self.assertIs(core_sp._rounded_kernel_loop_xy, milling_pocket._rounded_kernel_loop_xy)
         self.assertIs(
@@ -588,6 +598,11 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             core_sp._supported_single_seed_base_loop_seed,
             milling_pocket._supported_single_seed_base_loop_seed,
         )
+        self.assertIs(
+            core_sp._supported_single_seed_multiloop_route,
+            milling_pocket._supported_single_seed_multiloop_route,
+        )
+        self.assertIs(core_sp._supported_single_seed_route_seed, milling_pocket._supported_single_seed_route_seed)
         self.assertIs(core_sp._xy_bbox_minmax, milling_pocket._xy_bbox_minmax)
         self.assertIs(core_sp._extract_pocket_milling_template, milling_pocket._extract_pocket_milling_template)
         self.assertIs(

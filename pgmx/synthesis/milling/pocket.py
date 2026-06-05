@@ -68,6 +68,7 @@ __all__ = [
     "build_pocket_boss_route_seed_spec",
     "build_pocket_milling_spec",
     "_HydratedPocketMillingSpec",
+    "_SingleSeedMultiloopRoute",
     "_build_closed_pocket_boss",
     "_build_closed_pocket_feature",
     "_build_contour_parallel_xyz_path",
@@ -76,7 +77,10 @@ __all__ = [
     "_build_trace_engine_pocket_plan",
     "_build_trace_engine_pocket_xyz_sequences",
     "_build_single_seed_base_loop_xyz_sequences",
+    "_build_single_seed_bridge_only_curve_and_sequence",
+    "_build_single_seed_multiloop_curve_and_sequence",
     "_curve_spec_from_trace_resolved_sequence",
+    "_points_are_close_3d",
     "_rounded_kernel_loop_curve_spec",
     "_rounded_kernel_loop_xy",
     "_rounded_kernel_multi_loop_curve_spec",
@@ -85,6 +89,8 @@ __all__ = [
     "_single_seed_exterior_rectangle_loops_xyz",
     "_supported_single_seed_base_loop_route_seed",
     "_supported_single_seed_base_loop_seed",
+    "_supported_single_seed_multiloop_route",
+    "_supported_single_seed_route_seed",
     "_xy_bbox_minmax",
     "_can_hydrate_pocket_template_trace",
     "_extract_pocket_milling_template",
@@ -769,6 +775,578 @@ def _same_xy_bbox(
         for left, right in zip(_xy_bbox_minmax(first), _xy_bbox_minmax(second))
     )
 
+
+@dataclass(frozen=True)
+class _SingleSeedMultiloopRoute:
+    seed: PocketBossRouteSeedSpec
+    complete_radii: tuple[float, ...]
+    partial_radii: tuple[float, ...]
+    beta_angle: float
+    bridge_radius: Optional[float] = None
+    edge_boundary: bool = False
+
+
+def _build_single_seed_multiloop_curve_and_sequence(
+    spec: _HydratedPocketMillingSpec,
+    cut_z: float,
+) -> Optional[tuple[_CurveSpec, tuple[tuple[float, float, float], ...]]]:
+    route = _supported_single_seed_multiloop_route(spec)
+    if route is None:
+        return None
+
+    contour_min_x, contour_max_x, contour_min_y, contour_max_y = _xy_bbox_minmax(spec.contour_points)
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = _xy_bbox_minmax(route.seed.contour_points)
+    max_complete = route.complete_radii[-1]
+    min_partial = route.partial_radii[0] if route.partial_radii else None
+    max_partial = route.partial_radii[-1] if route.partial_radii else None
+    bridge_radius = route.bridge_radius
+    if bridge_radius is not None and not route.partial_radii and not route.edge_boundary:
+        return _build_single_seed_bridge_only_curve_and_sequence(route, cut_z, spec.contour_points)
+    anchor_radius = bridge_radius if bridge_radius is not None else (max_partial or max_complete)
+    anchor_x = contour_min_x + anchor_radius
+
+    descriptions: list[str] = []
+    points: list[tuple[float, float, float]] = [
+        (anchor_x, contour_min_y + anchor_radius, cut_z)
+    ]
+
+    def point(x_value: float, y_value: float) -> tuple[float, float, float]:
+        return (float(x_value), float(y_value), cut_z)
+
+    def add_line(end_point: tuple[float, float, float]) -> None:
+        start_point = points[-1]
+        if _points_are_close_3d(start_point, end_point):
+            return
+        descriptions.append(_build_toolpath_description(start_point, end_point))
+        points.append(end_point)
+
+    def add_arc(
+        end_point: tuple[float, float, float],
+        center_point: tuple[float, float],
+    ) -> None:
+        start_point = points[-1]
+        if _points_are_close_3d(start_point, end_point):
+            return
+        descriptions.append(_build_maestro_arc_serialization(start_point, end_point, center_point, -1.0, cut_z))
+        points.append(end_point)
+
+    def left_intersection_x(radius: float, center_y: float, y_value: float) -> float:
+        delta_y = center_y - y_value
+        return seed_min_x - math.sqrt(max(0.0, (radius * radius) - (delta_y * delta_y)))
+
+    def right_intersection_x(radius: float, center_y: float, y_value: float) -> float:
+        delta_y = center_y - y_value
+        return seed_max_x + math.sqrt(max(0.0, (radius * radius) - (delta_y * delta_y)))
+
+    def beta_point(radius: float) -> tuple[float, float, float]:
+        return point(
+            seed_min_x + (radius * math.cos(route.beta_angle)),
+            seed_min_y - (radius * math.sin(route.beta_angle)),
+        )
+
+    def add_complete_loop_from_right_bottom(radius: float) -> None:
+        diagonal = radius / math.sqrt(2.0)
+
+        add_line(point(seed_min_x, seed_min_y - radius))
+        add_arc(point(seed_min_x - radius, seed_min_y), (seed_min_x, seed_min_y))
+        add_line(point(seed_min_x - radius, seed_max_y))
+        add_arc(point(seed_min_x, seed_max_y + radius), (seed_min_x, seed_max_y))
+        add_line(point(seed_max_x, seed_max_y + radius))
+        add_arc(point(seed_max_x + diagonal, seed_max_y + diagonal), (seed_max_x, seed_max_y))
+        add_arc(point(seed_max_x + radius, seed_max_y), (seed_max_x, seed_max_y))
+        add_line(point(seed_max_x + radius, seed_min_y))
+        add_arc(point(seed_max_x, seed_min_y - radius), (seed_max_x, seed_min_y))
+
+    if bridge_radius is not None:
+        bridge_bottom_y = contour_min_y + bridge_radius
+        bridge_y_delta = math.sqrt(max(0.0, (bridge_radius * bridge_radius) - ((seed_min_x - anchor_x) ** 2)))
+        add_line(point(left_intersection_x(bridge_radius, seed_min_y, bridge_bottom_y), bridge_bottom_y))
+        add_arc(point(anchor_x, seed_min_y - bridge_y_delta), (seed_min_x, seed_min_y))
+        add_line(point(anchor_x, bridge_bottom_y))
+        add_line(point(anchor_x, contour_min_y + max_partial))
+
+    for index, radius in enumerate(reversed(route.partial_radii)):
+        bottom_y = contour_min_y + radius
+        top_y = contour_max_y - radius
+        left_boundary_x = contour_min_x + radius
+        next_radii = tuple(reversed(route.partial_radii))[index + 1 :]
+
+        add_line(point(left_intersection_x(radius, seed_min_y, bottom_y), bottom_y))
+        add_arc(point(seed_min_x - radius, seed_min_y), (seed_min_x, seed_min_y))
+        add_line(point(seed_min_x - radius, seed_max_y))
+        add_arc(point(left_intersection_x(radius, seed_max_y, top_y), top_y), (seed_min_x, seed_max_y))
+        add_line(point(left_boundary_x, top_y))
+        if bridge_radius is not None and math.isclose(radius, max_partial, abs_tol=1e-6):
+            add_line(point(left_boundary_x, contour_max_y - bridge_radius))
+        add_line(point(left_boundary_x, bottom_y))
+        add_line(point(anchor_x, bottom_y))
+        if next_radii:
+            add_line(point(anchor_x, contour_min_y + next_radii[0]))
+
+    add_line(point(anchor_x, contour_min_y + max_complete))
+    if route.edge_boundary:
+        add_line(point(seed_max_x, contour_min_y + max_complete))
+        add_complete_loop_from_right_bottom(max_complete)
+    for index, radius in enumerate(reversed(route.complete_radii)):
+        bottom_y = contour_min_y + radius
+        top_y = contour_max_y - radius
+        right_x = contour_max_x - radius
+        left_x = contour_min_x + radius
+        remaining = tuple(reversed(route.complete_radii))[index + 1 :]
+
+        add_line(point(right_x, bottom_y))
+        add_line(point(right_x, top_y))
+        if min_partial is not None and math.isclose(radius, max_complete, abs_tol=1e-6):
+            add_line(point(contour_max_x - min_partial, top_y))
+        add_line(point(left_x, top_y))
+        add_line(point(left_x, bottom_y))
+        add_line(point(anchor_x, bottom_y))
+        if remaining:
+            add_line(point(anchor_x, contour_min_y + remaining[0]))
+
+    for radius in route.complete_radii[1:]:
+        add_line(point(anchor_x, contour_min_y + radius))
+
+    if route.edge_boundary:
+        if min_partial is None or max_partial is None:
+            return (_composite_curve_spec(descriptions), tuple(points))
+
+        add_line(point(seed_max_x, contour_min_y + max_complete))
+        add_complete_loop_from_right_bottom(max_complete)
+        for radius in reversed(route.complete_radii[:-1]):
+            add_line(point(seed_max_x, seed_min_y - radius))
+            add_complete_loop_from_right_bottom(radius)
+        for radius in route.complete_radii[1:]:
+            add_line(point(seed_max_x, seed_min_y - radius))
+
+        add_line(point(contour_max_x - max_complete, contour_min_y + max_complete))
+        add_line(point(contour_max_x - max_complete, contour_max_y - max_complete))
+        add_line(point(contour_max_x - min_partial, contour_max_y - max_complete))
+        add_line(point(contour_max_x - min_partial, contour_max_y - min_partial))
+
+        for index, radius in enumerate(route.partial_radii):
+            top_y = contour_max_y - radius
+            bottom_y = contour_min_y + radius
+            right_boundary_x = contour_max_x - radius
+            next_radii = route.partial_radii[index + 1 :]
+
+            if next_radii:
+                add_line(point(contour_max_x - next_radii[0], top_y))
+            if bridge_radius is not None and math.isclose(radius, max_partial, abs_tol=1e-6):
+                add_line(point(contour_max_x - bridge_radius, top_y))
+            add_line(point(right_intersection_x(radius, seed_max_y, top_y), top_y))
+            diagonal = radius / math.sqrt(2.0)
+            diagonal_point = point(seed_max_x + diagonal, seed_max_y + diagonal)
+            if top_y >= seed_max_y + diagonal - 1e-6:
+                if math.hypot(diagonal_point[0] - points[-1][0], diagonal_point[1] - points[-1][1]) > 2.0:
+                    add_arc(diagonal_point, (seed_max_x, seed_max_y))
+                else:
+                    add_line(diagonal_point)
+            add_arc(point(seed_max_x + radius, seed_max_y), (seed_max_x, seed_max_y))
+            add_line(point(seed_max_x + radius, seed_min_y))
+            add_arc(point(right_intersection_x(radius, seed_min_y, bottom_y), bottom_y), (seed_max_x, seed_min_y))
+            add_line(point(right_boundary_x, bottom_y))
+            if bridge_radius is not None and math.isclose(radius, max_partial, abs_tol=1e-6):
+                bridge_anchor_x = contour_max_x - bridge_radius
+                bridge_top_y = contour_max_y - bridge_radius
+                bridge_bottom_y = contour_min_y + bridge_radius
+                bridge_y_delta = math.sqrt(max(0.0, (bridge_radius * bridge_radius) - ((bridge_anchor_x - seed_max_x) ** 2)))
+                add_line(point(right_boundary_x, bridge_bottom_y))
+                add_line(point(right_boundary_x, top_y))
+                add_line(point(bridge_anchor_x, top_y))
+                add_line(point(bridge_anchor_x, bridge_top_y))
+                add_line(point(right_intersection_x(bridge_radius, seed_max_y, bridge_top_y), bridge_top_y))
+                add_arc(point(bridge_anchor_x, seed_max_y + bridge_y_delta), (seed_max_x, seed_max_y))
+                add_line(point(bridge_anchor_x, bridge_top_y))
+                add_line(point(bridge_anchor_x, top_y))
+                add_line(point(right_intersection_x(radius, seed_max_y, top_y), top_y))
+                add_arc(point(seed_max_x + radius, seed_max_y), (seed_max_x, seed_max_y))
+                add_line(point(seed_max_x + radius, seed_min_y))
+                add_arc(point(right_intersection_x(radius, seed_min_y, bottom_y), bottom_y), (seed_max_x, seed_min_y))
+                add_line(point(right_boundary_x, bottom_y))
+                add_line(point(right_boundary_x, bridge_bottom_y))
+                add_line(point(bridge_anchor_x, bridge_bottom_y))
+                add_line(point(bridge_anchor_x, seed_min_y - bridge_y_delta))
+                add_arc(
+                    point(right_intersection_x(bridge_radius, seed_min_y, bridge_bottom_y), bridge_bottom_y),
+                    (seed_max_x, seed_min_y),
+                )
+                add_line(point(bridge_anchor_x, bridge_bottom_y))
+                add_line(point(right_boundary_x, bridge_bottom_y))
+            add_line(point(right_boundary_x, top_y))
+            if next_radii:
+                add_line(point(contour_max_x - next_radii[0], top_y))
+                add_line(point(contour_max_x - next_radii[0], contour_max_y - next_radii[0]))
+
+        for high_radius, low_radius in zip(reversed(route.partial_radii[1:]), reversed(route.partial_radii[:-1])):
+            add_line(point(contour_max_x - high_radius, contour_max_y - low_radius))
+            add_line(point(contour_max_x - low_radius, contour_max_y - low_radius))
+
+        add_line(point(contour_max_x - min_partial, contour_max_y - max_complete))
+        add_line(point(contour_min_x + max_complete, contour_max_y - max_complete))
+        add_line(point(contour_min_x + max_complete, contour_min_y + max_complete))
+        add_line(point(anchor_x, contour_min_y + max_complete))
+        add_line(point(anchor_x, contour_min_y + min_partial))
+        for radius in route.partial_radii[1:]:
+            add_line(point(anchor_x, contour_min_y + radius))
+
+        radius = max_partial
+        bottom_y = contour_min_y + radius
+        top_y = contour_max_y - radius
+        left_boundary_x = contour_min_x + radius
+        add_line(point(left_intersection_x(radius, seed_min_y, bottom_y), bottom_y))
+        add_arc(point(seed_min_x - radius, seed_min_y), (seed_min_x, seed_min_y))
+        add_line(point(seed_min_x - radius, seed_max_y))
+        add_arc(point(left_intersection_x(radius, seed_max_y, top_y), top_y), (seed_min_x, seed_max_y))
+        add_line(point(left_boundary_x, top_y))
+
+        if bridge_radius is not None:
+            bridge_top_y = contour_max_y - bridge_radius
+            bridge_y_delta = math.sqrt(max(0.0, (bridge_radius * bridge_radius) - ((seed_min_x - anchor_x) ** 2)))
+            add_line(point(left_boundary_x, bridge_top_y))
+            add_line(point(anchor_x, bridge_top_y))
+            add_line(point(anchor_x, seed_max_y + bridge_y_delta))
+            add_arc(
+                point(left_intersection_x(bridge_radius, seed_max_y, bridge_top_y), bridge_top_y),
+                (seed_min_x, seed_max_y),
+            )
+            add_line(point(anchor_x, bridge_top_y))
+
+        return (_composite_curve_spec(descriptions), tuple(points))
+
+    add_line(point(contour_max_x - max_complete, contour_min_y + max_complete))
+    add_line(point(contour_max_x - max_complete, contour_max_y - max_complete))
+    add_line(point(contour_max_x - min_partial, contour_max_y - max_complete))
+    add_line(point(contour_max_x - min_partial, contour_max_y - min_partial))
+
+    for index, radius in enumerate(route.partial_radii):
+        top_y = contour_max_y - radius
+        bottom_y = contour_min_y + radius
+        right_boundary_x = contour_max_x - radius
+        next_radii = route.partial_radii[index + 1 :]
+
+        if next_radii:
+            add_line(point(contour_max_x - next_radii[0], top_y))
+        if bridge_radius is not None and math.isclose(radius, max_partial, abs_tol=1e-6):
+            add_line(point(contour_max_x - bridge_radius, top_y))
+        add_line(point(right_intersection_x(radius, seed_max_y, top_y), top_y))
+        diagonal = radius / math.sqrt(2.0)
+        diagonal_point = point(seed_max_x + diagonal, seed_max_y + diagonal)
+        if top_y >= seed_max_y + diagonal - 1e-6:
+            if math.hypot(diagonal_point[0] - points[-1][0], diagonal_point[1] - points[-1][1]) > 2.0:
+                add_arc(diagonal_point, (seed_max_x, seed_max_y))
+            else:
+                add_line(diagonal_point)
+        add_arc(point(seed_max_x + radius, seed_max_y), (seed_max_x, seed_max_y))
+        add_line(point(seed_max_x + radius, seed_min_y))
+        add_arc(point(right_intersection_x(radius, seed_min_y, bottom_y), bottom_y), (seed_max_x, seed_min_y))
+        add_line(point(right_boundary_x, bottom_y))
+        if bridge_radius is not None and math.isclose(radius, max_partial, abs_tol=1e-6):
+            bridge_anchor_x = contour_max_x - bridge_radius
+            bridge_top_y = contour_max_y - bridge_radius
+            bridge_bottom_y = contour_min_y + bridge_radius
+            bridge_y_delta = math.sqrt(max(0.0, (bridge_radius * bridge_radius) - ((bridge_anchor_x - seed_max_x) ** 2)))
+            add_line(point(right_boundary_x, bridge_bottom_y))
+            add_line(point(right_boundary_x, top_y))
+            add_line(point(bridge_anchor_x, top_y))
+            add_line(point(bridge_anchor_x, bridge_top_y))
+            add_line(point(right_intersection_x(bridge_radius, seed_max_y, bridge_top_y), bridge_top_y))
+            add_arc(point(bridge_anchor_x, seed_max_y + bridge_y_delta), (seed_max_x, seed_max_y))
+            add_line(point(bridge_anchor_x, bridge_top_y))
+            add_line(point(bridge_anchor_x, top_y))
+            add_line(point(right_intersection_x(radius, seed_max_y, top_y), top_y))
+            add_arc(point(seed_max_x + radius, seed_max_y), (seed_max_x, seed_max_y))
+            add_line(point(seed_max_x + radius, seed_min_y))
+            add_arc(point(right_intersection_x(radius, seed_min_y, bottom_y), bottom_y), (seed_max_x, seed_min_y))
+            add_line(point(right_boundary_x, bottom_y))
+            add_line(point(right_boundary_x, bridge_bottom_y))
+            add_line(point(bridge_anchor_x, bridge_bottom_y))
+            add_line(point(bridge_anchor_x, seed_min_y - bridge_y_delta))
+            add_arc(point(right_intersection_x(bridge_radius, seed_min_y, bridge_bottom_y), bridge_bottom_y), (seed_max_x, seed_min_y))
+            add_line(point(bridge_anchor_x, bridge_bottom_y))
+            add_line(point(right_boundary_x, bridge_bottom_y))
+        add_line(point(right_boundary_x, top_y))
+        if next_radii:
+            add_line(point(contour_max_x - next_radii[0], top_y))
+            add_line(point(contour_max_x - next_radii[0], contour_max_y - next_radii[0]))
+
+    for high_radius, low_radius in zip(reversed(route.partial_radii[1:]), reversed(route.partial_radii[:-1])):
+        add_line(point(contour_max_x - high_radius, contour_max_y - low_radius))
+        add_line(point(contour_max_x - low_radius, contour_max_y - low_radius))
+
+    add_line(point(contour_max_x - min_partial, contour_max_y - max_complete))
+    add_line(point(contour_max_x - max_complete, contour_max_y - max_complete))
+    add_line(point(contour_max_x - max_complete, contour_min_y + max_complete))
+    add_line(point(anchor_x, contour_min_y + max_complete))
+    add_line(point(anchor_x, contour_min_y + min_partial))
+    add_line(point(left_intersection_x(min_partial, seed_min_y, contour_min_y + min_partial), contour_min_y + min_partial))
+    add_line(beta_point(max_complete))
+
+    for index, radius in enumerate(reversed(route.complete_radii)):
+        next_radii = tuple(reversed(route.complete_radii))[index + 1 :]
+        diagonal = radius / math.sqrt(2.0)
+
+        add_arc(point(seed_min_x - radius, seed_min_y), (seed_min_x, seed_min_y))
+        add_line(point(seed_min_x - radius, seed_max_y))
+        add_arc(point(seed_min_x, seed_max_y + radius), (seed_min_x, seed_max_y))
+        add_line(point(seed_max_x, seed_max_y + radius))
+        add_arc(point(seed_max_x + diagonal, seed_max_y + diagonal), (seed_max_x, seed_max_y))
+        add_arc(point(seed_max_x + radius, seed_max_y), (seed_max_x, seed_max_y))
+        add_line(point(seed_max_x + radius, seed_min_y))
+        add_arc(point(seed_max_x, seed_min_y - radius), (seed_max_x, seed_min_y))
+        add_line(point(seed_min_x, seed_min_y - radius))
+        add_arc(beta_point(radius), (seed_min_x, seed_min_y))
+        if next_radii:
+            add_line(beta_point(next_radii[0]))
+
+    if bridge_radius is not None:
+        for radius in route.complete_radii[1:]:
+            add_line(beta_point(radius))
+
+        add_line(point(left_intersection_x(min_partial, seed_min_y, contour_min_y + min_partial), contour_min_y + min_partial))
+        add_line(point(anchor_x, contour_min_y + min_partial))
+        for radius in route.partial_radii[1:]:
+            add_line(point(anchor_x, contour_min_y + radius))
+
+        radius = max_partial
+        bottom_y = contour_min_y + radius
+        top_y = contour_max_y - radius
+        left_boundary_x = contour_min_x + radius
+        add_line(point(left_intersection_x(radius, seed_min_y, bottom_y), bottom_y))
+        add_arc(point(seed_min_x - radius, seed_min_y), (seed_min_x, seed_min_y))
+        add_line(point(seed_min_x - radius, seed_max_y))
+        add_arc(point(left_intersection_x(radius, seed_max_y, top_y), top_y), (seed_min_x, seed_max_y))
+        add_line(point(left_boundary_x, top_y))
+
+        bridge_top_y = contour_max_y - bridge_radius
+        bridge_y_delta = math.sqrt(max(0.0, (bridge_radius * bridge_radius) - ((seed_min_x - anchor_x) ** 2)))
+        add_line(point(left_boundary_x, bridge_top_y))
+        add_line(point(anchor_x, bridge_top_y))
+        add_line(point(anchor_x, seed_max_y + bridge_y_delta))
+        add_arc(point(left_intersection_x(bridge_radius, seed_max_y, bridge_top_y), bridge_top_y), (seed_min_x, seed_max_y))
+        add_line(point(anchor_x, bridge_top_y))
+
+    return (_composite_curve_spec(descriptions), tuple(points))
+
+
+def _build_single_seed_bridge_only_curve_and_sequence(
+    route: _SingleSeedMultiloopRoute,
+    cut_z: float,
+    contour_points: Sequence[tuple[float, float]],
+) -> tuple[_CurveSpec, tuple[tuple[float, float, float], ...]]:
+    contour_min_x, contour_max_x, contour_min_y, contour_max_y = _xy_bbox_minmax(contour_points)
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = _xy_bbox_minmax(route.seed.contour_points)
+    radius = route.complete_radii[-1]
+    bridge_radius = route.bridge_radius
+    if bridge_radius is None:
+        raise ValueError("La ruta bridge-only requiere bridge_radius.")
+
+    left_anchor_x = contour_min_x + bridge_radius
+    right_anchor_x = contour_max_x - bridge_radius
+    left_boundary_x = contour_min_x + radius
+    right_boundary_x = contour_max_x - radius
+    bottom_y = contour_min_y + radius
+    top_y = contour_max_y - radius
+    bridge_bottom_y = contour_min_y + bridge_radius
+    bridge_top_y = contour_max_y - bridge_radius
+    bridge_y_delta = math.sqrt(max(0.0, (bridge_radius * bridge_radius) - ((seed_min_x - left_anchor_x) ** 2)))
+    diagonal = radius / math.sqrt(2.0)
+    radius_angle_x = seed_min_x + (radius * ((left_anchor_x - seed_min_x) / bridge_radius))
+    radius_angle_top_y = seed_max_y + (radius * (bridge_y_delta / bridge_radius))
+
+    descriptions: list[str] = []
+    points: list[tuple[float, float, float]] = [
+        (left_anchor_x, bridge_top_y, cut_z)
+    ]
+
+    def point(x_value: float, y_value: float) -> tuple[float, float, float]:
+        return (float(x_value), float(y_value), cut_z)
+
+    def add_line(end_point: tuple[float, float, float]) -> None:
+        start_point = points[-1]
+        if _points_are_close_3d(start_point, end_point):
+            return
+        descriptions.append(_build_toolpath_description(start_point, end_point))
+        points.append(end_point)
+
+    def add_arc(
+        end_point: tuple[float, float, float],
+        center_point: tuple[float, float],
+    ) -> None:
+        start_point = points[-1]
+        if _points_are_close_3d(start_point, end_point):
+            return
+        descriptions.append(_build_maestro_arc_serialization(start_point, end_point, center_point, -1.0, cut_z))
+        points.append(end_point)
+
+    def left_intersection_x(radius_value: float, center_y: float, y_value: float) -> float:
+        delta_y = center_y - y_value
+        return seed_min_x - math.sqrt(max(0.0, (radius_value * radius_value) - (delta_y * delta_y)))
+
+    def right_intersection_x(radius_value: float, center_y: float, y_value: float) -> float:
+        delta_y = center_y - y_value
+        return seed_max_x + math.sqrt(max(0.0, (radius_value * radius_value) - (delta_y * delta_y)))
+
+    add_line(point(left_anchor_x, seed_max_y + bridge_y_delta))
+    add_arc(
+        point(left_intersection_x(bridge_radius, seed_max_y, bridge_top_y), bridge_top_y),
+        (seed_min_x, seed_max_y),
+    )
+    add_line(point(left_anchor_x, bridge_top_y))
+    add_line(point(left_boundary_x, bridge_top_y))
+    add_line(point(left_boundary_x, bottom_y))
+    add_line(point(left_anchor_x, bottom_y))
+    add_line(point(right_boundary_x, bottom_y))
+    add_line(point(right_boundary_x, bridge_bottom_y))
+    add_line(point(right_boundary_x, top_y))
+    add_line(point(right_anchor_x, top_y))
+    add_line(point(left_boundary_x, top_y))
+    add_line(point(left_boundary_x, bridge_top_y))
+    add_line(point(left_boundary_x, bottom_y))
+    add_line(point(left_anchor_x, bottom_y))
+
+    add_line(point(left_anchor_x, bridge_bottom_y))
+    add_line(point(left_intersection_x(bridge_radius, seed_min_y, bridge_bottom_y), bridge_bottom_y))
+    add_arc(point(left_anchor_x, seed_min_y - bridge_y_delta), (seed_min_x, seed_min_y))
+    add_line(point(left_anchor_x, bridge_bottom_y))
+    add_line(point(left_anchor_x, bottom_y))
+
+    add_line(point(right_boundary_x, bottom_y))
+    add_line(point(right_boundary_x, bridge_bottom_y))
+    add_line(point(right_anchor_x, bridge_bottom_y))
+    add_line(point(right_anchor_x, seed_min_y - bridge_y_delta))
+    add_arc(
+        point(right_intersection_x(bridge_radius, seed_min_y, bridge_bottom_y), bridge_bottom_y),
+        (seed_max_x, seed_min_y),
+    )
+    add_line(point(right_anchor_x, bridge_bottom_y))
+    add_line(point(right_boundary_x, bridge_bottom_y))
+
+    add_line(point(right_boundary_x, top_y))
+    add_line(point(right_anchor_x, top_y))
+    add_line(point(right_anchor_x, bridge_top_y))
+    add_line(point(right_intersection_x(bridge_radius, seed_max_y, bridge_top_y), bridge_top_y))
+    add_arc(point(right_anchor_x, seed_max_y + bridge_y_delta), (seed_max_x, seed_max_y))
+    add_line(point(right_anchor_x, bridge_top_y))
+    add_line(point(right_anchor_x, top_y))
+
+    add_line(point(left_boundary_x, top_y))
+    add_line(point(left_boundary_x, bridge_top_y))
+    add_line(point(left_anchor_x, bridge_top_y))
+    add_line(point(left_anchor_x, seed_max_y + bridge_y_delta))
+    add_line(point(radius_angle_x, radius_angle_top_y))
+
+    add_arc(point(seed_min_x, seed_max_y + radius), (seed_min_x, seed_max_y))
+    add_line(point(seed_max_x, seed_max_y + radius))
+    add_arc(point(seed_max_x + diagonal, seed_max_y + diagonal), (seed_max_x, seed_max_y))
+    add_arc(point(seed_max_x + radius, seed_max_y), (seed_max_x, seed_max_y))
+    add_line(point(seed_max_x + radius, seed_min_y))
+    add_arc(point(seed_max_x, seed_min_y - radius), (seed_max_x, seed_min_y))
+    add_line(point(seed_min_x, seed_min_y - radius))
+    add_arc(point(seed_min_x - radius, seed_min_y), (seed_min_x, seed_min_y))
+    add_line(point(seed_min_x - radius, seed_max_y))
+    add_arc(point(radius_angle_x, radius_angle_top_y), (seed_min_x, seed_max_y))
+
+    return (_composite_curve_spec(descriptions), tuple(points))
+
+
+def _supported_single_seed_multiloop_route(
+    spec: _HydratedPocketMillingSpec,
+) -> Optional[_SingleSeedMultiloopRoute]:
+    seed = _supported_single_seed_route_seed(spec)
+    if seed is None:
+        return None
+
+    contour_min_x, contour_max_x, contour_min_y, contour_max_y = _xy_bbox_minmax(spec.contour_points)
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = _xy_bbox_minmax(seed.contour_points)
+    left_clearance = seed_min_x - contour_min_x
+    right_clearance = contour_max_x - seed_max_x
+    bottom_clearance = seed_min_y - contour_min_y
+    top_clearance = contour_max_y - seed_max_y
+    horizontal_half_clearance = min(left_clearance, right_clearance) / 2.0
+    vertical_half_clearance = min(bottom_clearance, top_clearance) / 2.0
+    radial_step = spec.radial_step
+    if radial_step <= 0.0:
+        return None
+
+    radius_count = int(math.floor((horizontal_half_clearance + 1e-6) / radial_step))
+    radii = tuple(radial_step * multiplier for multiplier in range(1, radius_count + 1))
+    complete_radii = tuple(radius for radius in radii if radius <= vertical_half_clearance + 1e-6)
+    partial_radii = tuple(radius for radius in radii if radius > vertical_half_clearance + 1e-6)
+    if not complete_radii:
+        return None
+    edge_boundary = math.isclose(complete_radii[-1], vertical_half_clearance, abs_tol=1e-6)
+
+    next_radius = radial_step * (radius_count + 1)
+    bridge_radius = None
+    if 0.0 < (next_radius - horizontal_half_clearance) <= 2.0:
+        bridge_radius = next_radius
+    if not partial_radii and not edge_boundary and bridge_radius is None:
+        return None
+
+    beta_angle = 0.0
+    if partial_radii:
+        min_partial = partial_radii[0]
+        partial_bottom_y = contour_min_y + min_partial
+        sin_beta = (seed_min_y - partial_bottom_y) / min_partial
+        if sin_beta <= -1.0 or sin_beta >= 1.0:
+            return None
+        beta_angle = math.pi - math.asin(sin_beta)
+    return _SingleSeedMultiloopRoute(
+        seed=seed,
+        complete_radii=complete_radii,
+        partial_radii=partial_radii,
+        beta_angle=beta_angle,
+        bridge_radius=bridge_radius,
+        edge_boundary=edge_boundary,
+    )
+
+
+def _supported_single_seed_route_seed(
+    spec: _HydratedPocketMillingSpec,
+) -> Optional[PocketBossRouteSeedSpec]:
+    if len(spec.boss_contours) != 1 or len(spec.boss_route_seeds) != 1:
+        return None
+    seed = spec.boss_route_seeds[0]
+    if not seed.is_resolved:
+        return None
+    if not _same_xy_bbox(spec.boss_contours[0], seed.contour_points):
+        return None
+    if spec.plane_name != "Top" or spec.milling_strategy.allow_multiple_passes:
+        return None
+    if not spec.milling_strategy.inside_to_outside:
+        return None
+    if spec.milling_strategy.stroke_connection_strategy != "LiftShiftPlunge":
+        return None
+
+    contour_min_x, contour_max_x, contour_min_y, contour_max_y = _xy_bbox_minmax(spec.contour_points)
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = _xy_bbox_minmax(seed.contour_points)
+    clearances = (
+        seed_min_x - contour_min_x,
+        contour_max_x - seed_max_x,
+        seed_min_y - contour_min_y,
+        contour_max_y - seed_max_y,
+    )
+    if min(clearances) <= 0.0:
+        return None
+    if not math.isclose(clearances[0], clearances[1], abs_tol=1e-6):
+        return None
+    if not math.isclose(clearances[2], clearances[3], abs_tol=1e-6):
+        return None
+    return seed
+
+
+def _points_are_close_3d(
+    first: tuple[float, float, float],
+    second: tuple[float, float, float],
+    *,
+    tolerance: float = 1e-9,
+) -> bool:
+    return (
+        math.isclose(first[0], second[0], abs_tol=tolerance)
+        and math.isclose(first[1], second[1], abs_tol=tolerance)
+        and math.isclose(first[2], second[2], abs_tol=tolerance)
+    )
 
 def _normalize_closed_contour(
     points: Sequence[tuple[float, float]],
