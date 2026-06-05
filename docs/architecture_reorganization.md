@@ -94,8 +94,10 @@ productivo y reducir acoplamiento sin romper los comandos actuales.
 | `pgmx/snapshot.py` | Snapshot PGMX publico | Herramienta publica estable |
 | `pgmx/adapters.py` | Adaptadores PGMX publicos | Herramienta publica estable |
 | `pgmx/processing.py` | Resolucion de programas PGMX, dibujos SVG, dimensiones y reparacion de slots | Servicios PGMX usados por UI, planillas y nesting |
+| `pgmx/machining_lab/` | Laboratorios de investigacion por mecanizado | Evidencia, memoria y analizadores; no debe ser dependencia productiva directa |
+| `pgmx/machining_lab/pocket_milling/` | Laboratorio de `ClosedPocket`/pocket milling | Destino vigente de la investigacion historica de Vaciado |
 | `pgmx/vaciado/` | Contrato V2 historico de Vaciado | Debe integrarse en `pgmx.synthesis.milling.pocket` y desaparecer como paquete final |
-| `pgmx/vaciado_lab/` | Investigacion historica de Vaciado y motor legado como oraculo | Debe migrar a `pgmx.machining_lab.pocket_milling` y desaparecer como paquete final |
+| `pgmx/vaciado_lab/` | Fachada historica del laboratorio de Vaciado | Debe desaparecer como paquete final cuando termine la transicion |
 | `pgmx/data/` | Baseline Maestro y catalogo de herramientas | Datos versionados del subsistema PGMX |
 | `tools/synthesize_pgmx.py` | CLI y API historica de sintesis PGMX | Fachada compatible hacia `pgmx.synthesis` |
 | `tools/pgmx_snapshot.py` | CLI y API historica de snapshot PGMX | Fachada compatible hacia `pgmx.snapshot` |

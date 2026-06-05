@@ -4,10 +4,9 @@ Ultima actualizacion: 2026-06-03
 
 Nota arquitectonica: `Vaciado` queda como nombre historico del corpus. El
 destino final del mecanizado es `pgmx.synthesis.milling.pocket`
-(`ClosedPocket`/pocket milling). El contrato experimental `pgmx.vaciado` y el
-laboratorio `pgmx.vaciado_lab` deben desaparecer como paquetes finales; la
-memoria y herramientas utiles deben migrar a
-`pgmx.machining_lab.pocket_milling`.
+(`ClosedPocket`/pocket milling). La memoria y las herramientas utiles viven
+ahora en `pgmx.machining_lab.pocket_milling`; `pgmx.vaciado_lab` queda como
+fachada historica durante la transicion.
 
 ## Objetivo
 
@@ -18,7 +17,7 @@ operativo de `Vaciado`.
 ## Memoria Temporal Activa
 
 - Reconstruccion V2 de `Vaciado`: leer
-  `pgmx/vaciado_lab/memory/vaciado-v2-rebuild.md` antes de avanzar con el
+  `pgmx/machining_lab/pocket_milling/memory/vaciado-v2-rebuild.md` antes de avanzar con el
   nuevo motor o con decisiones sobre la estrategia de sintesis.
 
 `Vaciado` nombra, por ahora, un mecanizado de remocion de material en un area
@@ -47,10 +46,9 @@ decision se tomo.
 ## Separacion De Responsabilidades
 
 - Este laboratorio puede tener codigo incompleto o especulativo.
-- Vive historicamente bajo `pgmx/vaciado_lab/`; el destino de migracion es
-  `pgmx/machining_lab/pocket_milling/`. Las rutas `tools.pgmx_vaciado.*` se
-  mantienen solo como fachadas historicas de comandos/imports durante la
-  transicion.
+- Vive bajo `pgmx/machining_lab/pocket_milling/`. Las rutas
+  `pgmx.vaciado_lab.*` y `tools.pgmx_vaciado.*` se mantienen solo como
+  fachadas historicas de comandos/imports durante la transicion.
 - Una regla solo se migra a `pgmx.snapshot`, `pgmx.adapters`,
   `pgmx.synthesis`, `pgmx.processing` o `iso_state_synthesis/` cuando tenga
   evidencia suficiente.

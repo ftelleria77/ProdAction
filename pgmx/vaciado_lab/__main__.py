@@ -1,6 +1,6 @@
-"""Run the default PGMX Vaciado sample scanner."""
+"""Compatibility entry point for `pgmx.machining_lab.pocket_milling`."""
 
-from .scan_samples import main
+from pgmx.machining_lab.pocket_milling.scan_samples import main
 
 
 if __name__ == "__main__":

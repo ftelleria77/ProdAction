@@ -1,10 +1,13 @@
 import unittest
 
-from pgmx import adapters, snapshot, synthesis, vaciado, vaciado_lab
+from pgmx import adapters, machining_lab, snapshot, synthesis, vaciado, vaciado_lab
 from pgmx.synthesis import cli as synthesis_cli
 from pgmx.synthesis import core as synthesis_core
 from pgmx.synthesis import vaciado as synthesis_vaciado
 from pgmx.synthesis.milling import pocket_trace as milling_pocket_trace
+from pgmx.machining_lab import pocket_milling as pocket_milling_lab
+from pgmx.machining_lab.pocket_milling import scan_samples as pocket_milling_scan_samples
+from pgmx.machining_lab.pocket_milling import trace_engine as pocket_milling_trace_engine
 from tools import pgmx_adapters, pgmx_snapshot, pgmx_synthesis, synthesize_pgmx
 from tools.pgmx_synthesis import core as legacy_synthesis_core
 from tools.pgmx_synthesis import vaciado as legacy_synthesis_vaciado
@@ -44,11 +47,18 @@ class PgmxPublicFacadeTests(unittest.TestCase):
         self.assertIn("main", pgmx_adapters.__all__)
 
     def test_legacy_vaciado_facades_reexport_current_boundaries(self) -> None:
-        self.assertIs(pgmx_vaciado.EXTERNAL_ROOT, vaciado_lab.EXTERNAL_ROOT)
-        self.assertIs(legacy_vaciado_scan_samples.main, vaciado_scan_samples.main)
+        self.assertIn("pocket_milling", machining_lab.__all__)
+        self.assertIs(pgmx_vaciado.EXTERNAL_ROOT, pocket_milling_lab.EXTERNAL_ROOT)
+        self.assertIs(vaciado_lab.EXTERNAL_ROOT, pocket_milling_lab.EXTERNAL_ROOT)
+        self.assertIs(legacy_vaciado_scan_samples.main, pocket_milling_scan_samples.main)
+        self.assertIs(vaciado_scan_samples.main, pocket_milling_scan_samples.main)
         self.assertIs(
             legacy_vaciado_trace_engine.generate_contour_parallel_pocket_trace,
+            pocket_milling_trace_engine.generate_contour_parallel_pocket_trace,
+        )
+        self.assertIs(
             vaciado_trace_engine.generate_contour_parallel_pocket_trace,
+            pocket_milling_trace_engine.generate_contour_parallel_pocket_trace,
         )
         self.assertIs(
             vaciado_trace_engine.generate_contour_parallel_pocket_trace,

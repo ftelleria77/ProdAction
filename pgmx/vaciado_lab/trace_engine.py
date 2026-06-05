@@ -1,4 +1,4 @@
-"""Compatibility facade for the production PGMX pocket trace engine."""
+"""Compatibility facade for `pgmx.machining_lab.pocket_milling.trace_engine`."""
 
-from pgmx.synthesis.milling.pocket_trace import *  # noqa: F401,F403
-from pgmx.synthesis.milling.pocket_trace import __all__
+from pgmx.machining_lab.pocket_milling.trace_engine import *  # noqa: F401,F403
+from pgmx.machining_lab.pocket_milling.trace_engine import __all__

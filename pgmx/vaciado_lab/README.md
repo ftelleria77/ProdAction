@@ -1,87 +1,12 @@
-# PGMX Vaciado
+# PGMX Vaciado Lab
 
-Espacio de investigacion para entender y validar mecanizados `.pgmx` que vamos
-a nombrar operativamente como `Vaciado`.
+Esta carpeta es una fachada historica.
 
-Este laboratorio vive en `pgmx/vaciado_lab/`. No es codigo productivo: sirve
-para registrar memoria, generar evidencia, comparar contra Maestro y probar
-estrategias antes de volcar reglas cerradas en los modulos estables.
-
-Este paquete queda como laboratorio historico. El plan de migracion esta en
-`docs/pgmx_synthesis_modularization_plan.md`; el destino propuesto es
-`pgmx/machining_lab/pocket_milling/`. `pgmx.vaciado_lab` debe desaparecer
-cuando memoria, tests y comandos migren al laboratorio general.
-
-Las fachadas historicas bajo `tools.pgmx_vaciado` se mantienen para comandos e
-imports existentes, pero la implementacion del laboratorio esta en
-`pgmx.vaciado_lab`.
-
-## Carpeta Externa
-
-Los ejemplos manuales y automaticos se trabajan fuera del repo en:
+La implementacion del laboratorio vive ahora en:
 
 ```text
-S:\Maestro\Projects\ProdAction\PGMX
+pgmx/machining_lab/pocket_milling/
 ```
 
-Estructura esperada:
-
-- `manual/`: ejemplos creados o ajustados manualmente en Maestro.
-- `generated/`: ejemplos generados por scripts tentativos.
-- `_analysis/`: reportes CSV/Markdown producidos por las herramientas de este
-  laboratorio.
-
-## Memoria
-
-Punto de entrada:
-
-- `memory/current-state.md`
-
-## Codigo De Laboratorio
-
-Primer inspector:
-
-```powershell
-py -3 -m pgmx.vaciado_lab.scan_samples
-```
-
-Con rutas explicitas:
-
-```powershell
-py -3 -m pgmx.vaciado_lab.scan_samples `
-  --root 'S:\Maestro\Projects\ProdAction\PGMX' `
-  --output-dir 'S:\Maestro\Projects\ProdAction\PGMX\_analysis'
-```
-
-El inspector cataloga features, operaciones, geometrias, toolpaths,
-profundidades y estrategias. No intenta resolver todavia como sintetizar ni
-postprocesar `Vaciado`.
-
-Analisis especifico de islas:
-
-```powershell
-py -3 -m pgmx.vaciado_lab.island_analysis `
-  --root 'S:\Maestro\Projects\ProdAction\PGMX' `
-  --output-dir 'S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_islands_analysis'
-```
-
-Este reporte separa `BossGeometryList`, `BossList`, toolpaths y trayectorias
-para `Vaciado_022` y `Vaciado_027..031`. Es descriptivo: la sintesis
-productiva con islas sigue bloqueada hasta derivar la regla de offsets y
-puentes internos.
-
-## Criterio De Integracion
-
-Cuando una regla sobreviva a ejemplos manuales y automaticos, se migra fuera de
-este laboratorio hacia los modulos correspondientes:
-
-- lectura: `pgmx.snapshot`;
-- adaptacion: `pgmx.adapters`;
-- sintesis PGMX: `pgmx.synthesis` y, para `ClosedPocket`/Vaciado,
-  `pgmx.synthesis.milling.pocket`;
-- dibujo/visualizacion: `pgmx.processing`;
-- ISO: `iso_state_synthesis/`.
-
-Las rutas `tools/pgmx_snapshot.py`, `tools/pgmx_adapters.py`,
-`tools/synthesize_pgmx.py` y `tools/pgmx_vaciado*` quedan como fachadas
-compatibles, no como lugar para logica nueva.
+Los imports `pgmx.vaciado_lab.*` se mantienen transitoriamente para tests,
+scripts y herramientas existentes.

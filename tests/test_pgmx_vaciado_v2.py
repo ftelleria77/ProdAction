@@ -11,7 +11,7 @@ from pgmx.vaciado import (
     plan_rectangular_no_islands,
 )
 from pgmx.adapters import adapt_pgmx_path
-from pgmx.vaciado_lab import EXTERNAL_ROOT
+from pgmx.machining_lab.pocket_milling import EXTERNAL_ROOT
 
 
 MANUAL_ROOT = EXTERNAL_ROOT / "manual"

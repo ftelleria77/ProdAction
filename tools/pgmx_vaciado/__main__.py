@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pgmx.vaciado_lab.scan_samples import main
+from pgmx.machining_lab.pocket_milling.scan_samples import main
 
 
 if __name__ == "__main__":

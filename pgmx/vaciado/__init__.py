@@ -1,9 +1,8 @@
 """Vaciado V2 experimental model.
 
-This package is intentionally independent from
-`pgmx.vaciado_lab.trace_engine`. The old engine remains an oracle during the
-rebuild, but V2 should model geometry, strategy, depth, and trace decisions as
-separate concerns.
+This package is intentionally independent from the pocket milling laboratory.
+The lab remains an oracle during the rebuild, but V2 should model geometry,
+strategy, depth, and trace decisions as separate concerns.
 """
 
 from .depth import VaciadoDepth

@@ -1,7 +1,4 @@
-"""Experimental PGMX Vaciado study helpers."""
+"""Compatibility facade for `pgmx.machining_lab.pocket_milling`."""
 
-from pathlib import Path
-
-EXTERNAL_ROOT = Path(r"S:\Maestro\Projects\ProdAction\PGMX")
-
-__all__ = ["EXTERNAL_ROOT"]
+from pgmx.machining_lab.pocket_milling import *  # noqa: F401,F403
+from pgmx.machining_lab.pocket_milling import __all__

@@ -222,13 +222,16 @@ comportamiento publico:
      nodos.
    - `common.program` puede conservar la escritura final del `.pgmx` si sigue
      siendo parte de la ejecucion del programa.
-3. Eliminar dependencias productivas hacia `pgmx.vaciado_lab`.
+3. Eliminar dependencias productivas hacia `pgmx.vaciado_lab`. Hecho:
+   `pgmx.synthesis.milling.pocket` usa `pocket_rectangular` y `pocket_trace`
+   dentro de `pgmx.synthesis.milling`.
    - `pgmx.synthesis.milling.pocket` no debe importar laboratorio como motor
      productivo final.
    - Solo se promueven al modulo productivo reglas cerradas y testeadas.
-4. Crear el laboratorio general.
-   - Mover `pgmx.vaciado_lab` hacia
-     `pgmx.machining_lab.pocket_milling`.
+4. Crear el laboratorio general. Hecho: el laboratorio vive en
+   `pgmx.machining_lab.pocket_milling` y `pgmx.vaciado_lab` queda como fachada
+   historica.
+   - La implementacion real vive en `pgmx.machining_lab.pocket_milling`.
    - Mantener fachadas historicas solo durante la transicion.
 5. Integrar o retirar el contrato separado `pgmx.vaciado`.
    - `ClosedPocket`/pocket milling debe quedar como familia de

@@ -1,9 +1,9 @@
-"""Compatibility facade for `pgmx.vaciado_lab.scan_samples`."""
+"""Compatibility facade for `pgmx.machining_lab.pocket_milling.scan_samples`."""
 
 from __future__ import annotations
 
-from pgmx.vaciado_lab.scan_samples import *  # noqa: F401,F403
-from pgmx.vaciado_lab.scan_samples import main
+from pgmx.machining_lab.pocket_milling.scan_samples import *  # noqa: F401,F403
+from pgmx.machining_lab.pocket_milling.scan_samples import main
 
 
 if __name__ == "__main__":

@@ -9,18 +9,18 @@ from pathlib import Path
 
 from pgmx import synthesis as sp
 from pgmx.adapters import adapt_pgmx_path
-from pgmx.vaciado_lab import EXTERNAL_ROOT
-from pgmx.vaciado_lab.contour_parallel import (
+from pgmx.machining_lab.pocket_milling import EXTERNAL_ROOT
+from pgmx.machining_lab.pocket_milling.contour_parallel import (
     _actual_trajectory_xyz,
     _actual_trajectory_xyz_sequences,
     generate_rectangular_contour_parallel_xyz_path,
 )
-from pgmx.vaciado_lab.island_analysis import (
+from pgmx.machining_lab.pocket_milling.island_analysis import (
     generate_rounded_kernel_loop_xy,
     infer_rounded_kernel_loop_xy,
     resolved_boss_ref_xy_contours,
 )
-from pgmx.vaciado_lab.trace_engine import generate_contour_parallel_pocket_trace
+from pgmx.machining_lab.pocket_milling.trace_engine import generate_contour_parallel_pocket_trace
 
 
 MANUAL_ROOT = EXTERNAL_ROOT / "manual"
