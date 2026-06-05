@@ -4,6 +4,7 @@ from pgmx import adapters, snapshot, synthesis, vaciado, vaciado_lab
 from pgmx.synthesis import cli as synthesis_cli
 from pgmx.synthesis import core as synthesis_core
 from pgmx.synthesis import vaciado as synthesis_vaciado
+from pgmx.synthesis.milling import pocket_trace as milling_pocket_trace
 from tools import pgmx_adapters, pgmx_snapshot, pgmx_synthesis, synthesize_pgmx
 from tools.pgmx_synthesis import core as legacy_synthesis_core
 from tools.pgmx_synthesis import vaciado as legacy_synthesis_vaciado
@@ -48,6 +49,10 @@ class PgmxPublicFacadeTests(unittest.TestCase):
         self.assertIs(
             legacy_vaciado_trace_engine.generate_contour_parallel_pocket_trace,
             vaciado_trace_engine.generate_contour_parallel_pocket_trace,
+        )
+        self.assertIs(
+            vaciado_trace_engine.generate_contour_parallel_pocket_trace,
+            milling_pocket_trace.generate_contour_parallel_pocket_trace,
         )
 
         self.assertIs(pgmx_vaciado_v2.VaciadoGeometry, vaciado.VaciadoGeometry)

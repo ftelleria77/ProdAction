@@ -23,6 +23,8 @@ from pgmx.synthesis.milling import _common as milling_common
 from pgmx.synthesis.milling import circle as milling_circle
 from pgmx.synthesis.milling import line as milling_line
 from pgmx.synthesis.milling import pocket as milling_pocket
+from pgmx.synthesis.milling import pocket_rectangular as milling_pocket_rectangular
+from pgmx.synthesis.milling import pocket_trace as milling_pocket_trace
 from pgmx.synthesis.milling import profile as milling_profile
 from pgmx.synthesis.milling import slot as milling_slot
 from pgmx.synthesis.milling import squaring as milling_squaring
@@ -592,6 +594,14 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._build_closed_pocket_boss, milling_pocket._build_closed_pocket_boss)
         self.assertIs(core_sp._append_pocket_milling, milling_pocket._append_pocket_milling)
         self.assertIs(core_sp._build_contour_parallel_xyz_path, milling_pocket._build_contour_parallel_xyz_path)
+        self.assertIs(
+            milling_pocket.generate_rectangular_contour_parallel_xyz_path,
+            milling_pocket_rectangular.generate_rectangular_contour_parallel_xyz_path,
+        )
+        self.assertIs(
+            milling_pocket.generate_contour_parallel_pocket_trace,
+            milling_pocket_trace.generate_contour_parallel_pocket_trace,
+        )
         self.assertIs(core_sp._build_pocket_operation, milling_pocket._build_pocket_operation)
         self.assertIs(
             core_sp._build_pocket_trajectory_xyz_sequences,

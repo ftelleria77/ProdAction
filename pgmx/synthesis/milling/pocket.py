@@ -70,6 +70,8 @@ from ..common.xml import (
     _xsi_type,
 )
 from ._common import _feature_depth_value, _operation_overcut_length, _uses_feature_depth_expressions
+from .pocket_rectangular import generate_rectangular_contour_parallel_xyz_path
+from .pocket_trace import generate_contour_parallel_pocket_trace
 
 if TYPE_CHECKING:
     from ..common.program import PgmxState
@@ -617,8 +619,6 @@ def _build_contour_parallel_xyz_path(
     state,
     spec: _HydratedPocketMillingSpec,
 ) -> tuple[tuple[float, float, float], ...]:
-    from pgmx.vaciado_lab.contour_parallel import generate_rectangular_contour_parallel_xyz_path
-
     strategy = spec.milling_strategy
     return generate_rectangular_contour_parallel_xyz_path(
         length=state.length,
@@ -676,8 +676,6 @@ def _build_trace_engine_pocket_plan(
     *,
     surface_z: float,
 ):
-    from pgmx.vaciado_lab.trace_engine import generate_contour_parallel_pocket_trace
-
     plan = generate_contour_parallel_pocket_trace(spec, surface_z=surface_z)
     if plan.pending_stages:
         return None

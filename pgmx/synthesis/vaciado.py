@@ -31,7 +31,7 @@ def vaciado_support_status() -> VaciadoSynthesisSupport:
         notes=(
             "PocketMillingSpec remains the public PGMX spec for ClosedPocket Vaciado.",
             "V2 owns geometry, strategy, depth and trace planning contracts.",
-            "The legacy pgmx.vaciado_lab.trace_engine stays outside the production boundary.",
+            "The pocket trace engine lives in pgmx.synthesis.milling.pocket_trace; pgmx.vaciado_lab reexports it for compatibility.",
         ),
     )
 
