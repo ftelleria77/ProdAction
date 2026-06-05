@@ -374,7 +374,11 @@ from .milling.pocket import (
     _build_closed_pocket_feature,
     _build_contour_parallel_xyz_path,
     _build_pocket_operation,
+    _build_trace_engine_pocket_curve_specs,
+    _build_trace_engine_pocket_plan,
+    _build_trace_engine_pocket_xyz_sequences,
     _can_hydrate_pocket_template_trace,
+    _curve_spec_from_trace_resolved_sequence,
     _extract_pocket_milling_template,
     _hydrate_pocket_milling_spec,
     _same_xy_contours,
@@ -935,81 +939,6 @@ def _build_pocket_trajectory_curve_specs(
             return (curve_spec,)
 
     return tuple(_curve_spec_from_xyz_path(sequence) for sequence in trajectory_sequences)
-
-
-def _build_trace_engine_pocket_xyz_sequences(
-    state: PgmxState,
-    spec: _HydratedPocketMillingSpec,
-) -> Optional[tuple[tuple[tuple[float, float, float], ...], ...]]:
-    plan = _build_trace_engine_pocket_plan(spec, surface_z=state.depth)
-    if plan is None or not plan.trajectory_sequences:
-        return None
-    return plan.trajectory_sequences
-
-
-def _build_trace_engine_pocket_curve_specs(
-    spec: _HydratedPocketMillingSpec,
-    trajectory_sequences: Sequence[Sequence[tuple[float, float, float]]],
-) -> Optional[tuple[_CurveSpec, ...]]:
-    if not trajectory_sequences:
-        return None
-    plan = _build_trace_engine_pocket_plan(spec, surface_z=0.0)
-    if plan is None:
-        return None
-    if len(plan.resolved_sequences) != len(trajectory_sequences):
-        return None
-
-    curve_specs: list[_CurveSpec] = []
-    for resolved_sequence, trajectory_sequence in zip(plan.resolved_sequences, trajectory_sequences):
-        if not trajectory_sequence:
-            return None
-        z_value = float(trajectory_sequence[0][2])
-        curve_specs.append(_curve_spec_from_trace_resolved_sequence(resolved_sequence, z_value))
-    return tuple(curve_specs)
-
-
-def _build_trace_engine_pocket_plan(
-    spec: _HydratedPocketMillingSpec,
-    *,
-    surface_z: float,
-):
-    from pgmx.vaciado_lab.trace_engine import generate_contour_parallel_pocket_trace
-
-    plan = generate_contour_parallel_pocket_trace(spec, surface_z=surface_z)
-    if plan.pending_stages:
-        return None
-    if not plan.resolved_sequences:
-        return None
-    return plan
-
-
-def _curve_spec_from_trace_resolved_sequence(resolved_sequence, z_value: float) -> _CurveSpec:
-    descriptions: list[str] = []
-    for primitive in resolved_sequence.primitives:
-        start = (primitive.start[0], primitive.start[1], z_value)
-        end = (primitive.end[0], primitive.end[1], z_value)
-        if primitive.primitive_type == "Line":
-            descriptions.append(_build_toolpath_description(start, end))
-            continue
-        if primitive.primitive_type == "Arc":
-            if primitive.center is None:
-                raise ValueError("La primitiva Arc de Vaciado requiere centro.")
-            normal_z = -1.0 if primitive.orientation == "Clockwise" else 1.0
-            descriptions.append(
-                _build_maestro_arc_serialization(
-                    start,
-                    end,
-                    primitive.center,
-                    normal_z,
-                    z_value,
-                    radius=primitive.radius,
-                )
-            )
-            continue
-        raise ValueError(f"Tipo de primitiva de Vaciado no soportado: {primitive.primitive_type}")
-    if not descriptions:
-        raise ValueError("La secuencia resuelta de Vaciado no contiene primitivas serializables.")
-    return _composite_curve_spec(descriptions)
 
 
 def _rounded_kernel_loop_curve_spec(
