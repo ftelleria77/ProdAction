@@ -82,6 +82,11 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.XnSpec, common_program.XnSpec)
         self.assertIs(core_sp.PgmxSynthesisRequest, common_program.PgmxSynthesisRequest)
         self.assertIs(core_sp.PgmxSynthesisResult, common_program.PgmxSynthesisResult)
+        self.assertIs(core_sp.HydratedMachiningSpec, common_program.HydratedMachiningSpec)
+        self.assertIs(core_sp._hydrate_machining_spec, common_program._hydrate_machining_spec)
+        self.assertIs(core_sp._append_hydrated_machining, common_program._append_hydrated_machining)
+        self.assertIs(core_sp._split_hydrated_machinings, common_program._split_hydrated_machinings)
+        self.assertIs(core_sp._normalize_machining_order, common_program._normalize_machining_order)
         self.assertEqual(
             common_program.DEFAULT_MACHINING_ORDER,
             ("line", "slot", "polyline", "circle", "squaring", "pocket", "drilling", "drilling_pattern"),
