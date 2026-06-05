@@ -12,6 +12,7 @@ from pgmx.synthesis.common import depth as common_depth
 from pgmx.synthesis.common import geometry as common_geometry
 from pgmx.synthesis.common import hydration as common_hydration
 from pgmx.synthesis.common import leads as common_leads
+from pgmx.synthesis.common import output as common_output
 from pgmx.synthesis.common import piece as common_piece
 from pgmx.synthesis.common import program as common_program
 from pgmx.synthesis.common import strategy as common_strategy
@@ -104,10 +105,19 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._normalize_execution_fields, common_program._normalize_execution_fields)
         self.assertIs(core_sp._validate_tool_sinking_lengths, common_program._validate_tool_sinking_lengths)
         self.assertIs(core_sp._write_pgmx_zip, common_program._write_pgmx_zip)
+        self.assertIs(common_program._write_pgmx_zip, common_output._write_pgmx_zip)
         self.assertIs(core_sp._finalize_pgmx_xml_bytes, common_program._finalize_pgmx_xml_bytes)
+        self.assertIs(
+            common_program._finalize_pgmx_xml_bytes,
+            common_output._finalize_pgmx_xml_bytes,
+        )
         self.assertIs(
             core_sp._finalize_synthesized_pgmx_xml_bytes,
             common_program._finalize_synthesized_pgmx_xml_bytes,
+        )
+        self.assertIs(
+            common_program._finalize_synthesized_pgmx_xml_bytes,
+            common_output._finalize_synthesized_pgmx_xml_bytes,
         )
         self.assertIs(core_sp.read_pgmx_state, common_program.read_pgmx_state)
         self.assertIs(core_sp._merge_state, common_program._merge_state)

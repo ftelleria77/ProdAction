@@ -39,7 +39,8 @@ pgmx/
     __init__.py              # API publica estable
     core.py                  # fachada interna temporal durante la migracion
     common/
-      program.py             # orquestacion de request, estado, worksteps y escritura final
+      program.py             # orquestacion de request, estado y worksteps
+      output.py              # finalizacion XML Maestro y escritura del contenedor PGMX
       xml.py                 # namespaces, nodos, IDs, serializacion comun
       geometry.py            # primitivas, perfiles y curvas reutilizables
       depth.py               # reglas de profundidad y cota de corte
@@ -221,11 +222,13 @@ comportamiento publico:
    - Mantener `core.py` como reexport/alias de compatibilidad mientras dure la
      migracion.
 2. Separar serializacion y contenedor si `common.program` queda demasiado
-   cargado.
+   cargado. Hecho: `pgmx.synthesis.common.output` contiene la finalizacion XML
+   Maestro y la escritura del contenedor `.pgmx`; `common.program` reexporta
+   esos nombres para compatibilidad.
    - `common.xml` debe contener normalizacion XML, namespaces y helpers de
      nodos.
-   - `common.program` puede conservar la escritura final del `.pgmx` si sigue
-     siendo parte de la ejecucion del programa.
+   - `common.program` conserva la ejecucion del programa y delega la salida
+     final en `common.output`.
 3. Eliminar dependencias productivas hacia `pgmx.vaciado_lab`. Hecho:
    `pgmx.synthesis.milling.pocket` usa `pocket_rectangular` y `pocket_trace`
    dentro de `pgmx.synthesis.milling`.

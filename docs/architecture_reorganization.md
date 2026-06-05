@@ -164,9 +164,10 @@ productivo y reducir acoplamiento sin romper los comandos actuales.
    Hecho: el subsistema PGMX productivo vive en `pgmx/`; `pgmx/synthesis/core.py`
    contiene la implementacion heredada y `tools/synthesize_pgmx.py` quedo como
    fachada de compatibilidad. Correccion arquitectonica posterior:
-   `Vaciado` debe integrarse en `pgmx.synthesis.milling.pocket`; no debe quedar
-   como `pgmx.synthesis.vaciado`, `pgmx.vaciado` ni `pgmx.vaciado_lab` en el
-   mapa final.
+   `Vaciado` quedo integrado en `pgmx.synthesis.milling.pocket` y su contrato
+   historico vive en `pgmx.synthesis.milling.pocket_contract`; `pgmx.vaciado`
+   y `pgmx.vaciado_lab` quedan solo como fachadas historicas durante la
+   transicion.
 8. Revisar `core/` por dominios: proyectos/piezas, planillas, corte/nesting,
    En-Juego y puntos de contacto con `pgmx/`.
    Avance: `core/pgmx_processing.py` quedo como fachada compatible y la
@@ -276,6 +277,7 @@ python -m unittest tests.test_pgmx_vaciado
   documentado.
 - Los frentes pausados o experimentales (`iso_state_synthesis/` y
   `pgmx/vaciado_lab/`) no se usan para dirigir la arquitectura productiva salvo
-  reactivacion explicita de ese frente. `pgmx/vaciado/` debe integrarse al
-  subsistema PGMX solo a traves de `pgmx.synthesis.milling.pocket`, y luego
-  desaparecer como paquete separado.
+  reactivacion explicita de ese frente. `pgmx/vaciado/` ya no es una frontera
+  productiva propia: reexporta el contrato de
+  `pgmx.synthesis.milling.pocket_contract` y debe desaparecer como paquete
+  separado cuando migren los imports externos.

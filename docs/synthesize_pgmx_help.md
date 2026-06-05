@@ -1,8 +1,9 @@
 # Ayuda `pgmx.synthesis`
 
-Esta guia deja por escrito como usar la API publica de `tools/synthesize_pgmx.py`,
-en que orden conviene llamarla y que reglas de trabajo seguimos para no perder el
-hilo de lo ya validado en Maestro.
+Esta guia deja por escrito como usar la API publica de `pgmx.synthesis`, en que
+orden conviene llamarla y que reglas de trabajo seguimos para no perder el hilo
+de lo ya validado en Maestro. `tools/synthesize_pgmx.py` queda como fachada
+historica de compatibilidad.
 
 Estado de hito actual:
 - sintetizador Maestro `v1.6`
@@ -28,6 +29,7 @@ Casos publicos soportados hoy:
 - fresado sobre polilinea lineal abierta o cerrada (`PolylineMillingSpec`)
 - fresado circular cerrado (`CircleMillingSpec`)
 - escuadrado exterior del contorno de pieza (`SquaringMillingSpec`)
+- pocket milling / `ClosedPocket` (`PocketMillingSpec`)
 - taladro puntual sobre punto (`DrillingSpec`)
 - repeticion rectangular de taladros (`DrillingPatternSpec`)
 - control de profundidad pasante/no pasante
@@ -46,21 +48,63 @@ Casos publicos soportados hoy:
 
 Casos que no deben asumirse como API publica estable si no estan documentados aqui:
 - familias de feature distintas de `GeneralProfileFeature`, `SlotSide`,
-  `RoundHole` y `ReplicateFeature`
+  `ClosedPocket`, `RoundHole` y `ReplicateFeature`
 - cualquier mecanizado que no este construido con
   `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
-  `CircleMillingSpec`, `SquaringMillingSpec`, `DrillingSpec` o
-  `DrillingPatternSpec`
+  `CircleMillingSpec`, `SquaringMillingSpec`, `PocketMillingSpec`,
+  `DrillingSpec` o `DrillingPatternSpec`
 
 Importante:
 - la sintesis completa de feature + operation sigue expuesta hoy por
   `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
-  `CircleMillingSpec`, `SquaringMillingSpec`, `DrillingSpec` y
-  `DrillingPatternSpec`
+  `CircleMillingSpec`, `SquaringMillingSpec`, `PocketMillingSpec`,
+  `DrillingSpec` y `DrillingPatternSpec`
 - la capa de compensacion sigue resolviendo lineas, arcos, circulos y curvas
   compuestas abiertas/cerradas como base de estas familias publicas
 
-## 2. Flujo recomendado
+## 2. Mapa modular actual
+
+La API publica se consume desde `pgmx.synthesis`. Las rutas
+`tools/synthesize_pgmx.py` y `tools/pgmx_synthesis` son fachadas historicas de
+compatibilidad y no deben recibir logica nueva.
+
+Mapa interno vigente:
+
+| Modulo | Rol |
+| --- | --- |
+| `pgmx.synthesis.__init__` | Superficie publica estable: specs, builders, lectura y ejecucion. |
+| `pgmx.synthesis.cli` / `__main__` | Entrada CLI y ejecucion `python -m pgmx.synthesis`. |
+| `pgmx.synthesis.core` | Fachada interna historica; reexporta los modulos reales. |
+| `pgmx.synthesis.common.program` | Orquestacion del programa: estado de pieza, request/result, orden de mecanizados, hidratacion, validacion transversal, worksteps y `Xn`. |
+| `pgmx.synthesis.common.output` | Finalizacion XML Maestro y escritura del contenedor `.pgmx`. |
+| `pgmx.synthesis.common.xml` | Namespaces, IDs, referencias y helpers XML de bajo nivel. |
+| `pgmx.synthesis.common.piece` | Geometria de pieza, caras/planos y transformaciones por cara. |
+| `pgmx.synthesis.common.depth` | Profundidad, pasante/no pasante y cotas de corte. |
+| `pgmx.synthesis.common.tools` | Catalogo, normalizacion y validaciones de herramienta. |
+| `pgmx.synthesis.common.strategy` | Estrategias Maestro comunes y contratos por familia. |
+| `pgmx.synthesis.common.hydration` | Lectura de templates y contenedores `.pgmx`/`Pieza.xml`. |
+| `pgmx.synthesis.common.leads` | Acercamientos y alejamientos Maestro. |
+| `pgmx.synthesis.milling.line` | Fresados lineales. |
+| `pgmx.synthesis.milling.slot` | Ranuras `SlotSide`. |
+| `pgmx.synthesis.milling.profile` | Fresados sobre perfiles/polilineas. |
+| `pgmx.synthesis.milling.circle` | Fresados circulares. |
+| `pgmx.synthesis.milling.squaring` | Escuadrado exterior. |
+| `pgmx.synthesis.milling.pocket` | Produccion `ClosedPocket` / pocket milling. |
+| `pgmx.synthesis.milling.pocket_contract` | Contrato promovido desde el V2 historico de Vaciado. |
+| `pgmx.synthesis.milling.pocket_trace` y `pocket_rectangular` | Reglas productivas cerradas de trazas/rectangulares para pocket milling. |
+| `pgmx.synthesis.drilling.single` | Taladros individuales. |
+| `pgmx.synthesis.drilling.pattern` | Patrones rectangulares de taladros. |
+
+Fronteras:
+
+- `pgmx.machining_lab.*` contiene laboratorios y evidencia; no es dependencia
+  productiva directa del sintetizador.
+- `pgmx.vaciado` reexporta `pgmx.synthesis.milling.pocket_contract` como
+  fachada historica.
+- `pgmx.vaciado_lab` y `tools.pgmx_vaciado*` son fachadas historicas del
+  laboratorio de pocket milling.
+
+## 3. Flujo recomendado
 
 Orden recomendado para usar el sintetizador:
 
@@ -70,8 +114,8 @@ Orden recomendado para usar el sintetizador:
 4. Construir la profundidad.
 5. Construir `Approach` y `Retract`.
 6. Construir uno o mas mecanizados (`LineMillingSpec`, `SlotMillingSpec`,
-   `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec` y/o
-   `DrillingSpec`/`DrillingPatternSpec`).
+   `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec`,
+   `PocketMillingSpec` y/o `DrillingSpec`/`DrillingPatternSpec`).
 7. Construir el `PgmxSynthesisRequest`.
 8. Ejecutar `synthesize_request(...)`.
 
@@ -85,7 +129,7 @@ Regla practica:
 - Los `.pgmx` manuales de ingeniería inversa viven en `archive/maestro_examples`.
 - la taxonomia de familias geometricas vive en `docs/pgmx_geometry_registry.md`
 
-## 3. API publica
+## 4. API publica
 
 ### `read_pgmx_state(path: Path) -> PgmxState`
 
@@ -721,6 +765,59 @@ Notas:
   relevados; la parametrizacion interna de algunas curvas puede no quedar
   serializada byte a byte igual si no se parte de una plantilla manual
 
+### `build_pocket_milling_spec(...) -> PocketMillingSpec`
+
+Construye un pocket milling superior observado en Maestro como `ClosedPocket`.
+Es la familia productiva donde quedo integrado el frente historico de
+`Vaciado`.
+
+Firma simplificada:
+
+```python
+build_pocket_milling_spec(
+    *,
+    contour_points,
+    feature_name=None,
+    plane_name=None,
+    tool_id=None,
+    tool_name=None,
+    tool_width=None,
+    security_plane=None,
+    is_through=None,
+    target_depth=None,
+    extra_depth=None,
+    approach_enabled=None,
+    approach_type=None,
+    approach_mode=None,
+    approach_radius_multiplier=None,
+    approach_speed=None,
+    approach_arc_side=None,
+    retract_enabled=None,
+    retract_type=None,
+    retract_mode=None,
+    retract_radius_multiplier=None,
+    retract_speed=None,
+    retract_arc_side=None,
+    retract_overlap=None,
+    milling_strategy=None,
+    allowance_bottom=None,
+    allowance_side=None,
+    boss_contours=None,
+    boss_route_seeds=None,
+)
+```
+
+Notas:
+- `contour_points` debe ser un contorno cerrado.
+- el subset productivo validado esta centrado en `Top`.
+- `milling_strategy` usa `ContourParallelMillingStrategySpec`.
+- `boss_contours` representa islas fisicas.
+- `boss_route_seeds` conserva referencias de semilla de ruta observadas en
+  Maestro.
+- el contrato V2 historico de Vaciado vive ahora en
+  `pgmx.synthesis.milling.pocket_contract`.
+- `pgmx.vaciado` se mantiene solo como fachada historica hacia ese contrato.
+
 ### `build_drilling_spec(...) -> DrillingSpec`
 
 Construye un taladro puntual asociado a un `GeomCartesianPoint`.
@@ -932,6 +1029,7 @@ build_synthesis_request(
     polyline_millings=None,
     circle_millings=None,
     squaring_millings=None,
+    pocket_millings=None,
     drillings=None,
     drilling_patterns=None,
     ordered_machinings=None,
@@ -945,15 +1043,15 @@ Reglas:
 - si no se indica `execution_fields`, usa `HG` por defecto
 - si no se pasa `piece`, toma el estado desde `source_pgmx_path` o desde el baseline
 - se pueden combinar mecanizados lineales, ranuras `SlotSide`, polilineas
-  abiertas, circulares, de escuadrado, de taladrado y de patrones de taladrado
-  en un mismo request
+  abiertas, circulares, de escuadrado, pocket milling, de taladrado y de
+  patrones de taladrado en un mismo request
 - `ordered_machinings` permite insertar una secuencia exacta de specs publicos
   (`LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
-  `CircleMillingSpec`, `SquaringMillingSpec`, `DrillingSpec`,
+  `CircleMillingSpec`, `SquaringMillingSpec`, `PocketMillingSpec`, `DrillingSpec`,
   `DrillingPatternSpec`) preservando ese orden de worksteps
 - `machining_order` permite definir el orden de aplicacion de familias de
   mecanizado; por defecto es `line`, `slot`, `polyline`, `circle`,
-  `squaring`, `drilling`, `drilling_pattern`
+  `squaring`, `pocket`, `drilling`, `drilling_pattern`
 - `xn` permite configurar el `Xn` final del workplan
 - si no se indica `xn`, la request usa `build_xn_spec()` por defecto
 - `baseline_path` y `source_pgmx_path` aceptan `.pgmx`, `Pieza.xml` o carpeta contenedora
@@ -988,7 +1086,7 @@ request = build_synthesis_request(...)
 result = synthesize_request(request)
 ```
 
-## 4. Reglas ya validadas en Maestro
+## 5. Reglas ya validadas en Maestro
 
 ### Generales
 
@@ -1179,7 +1277,7 @@ Limitacion Maestro observada:
 - para archivos que deban postprocesarse, usar `Retract Line + Up` o
   `Arc + Quote` en esa familia.
 
-## 5. Ejemplos de uso
+## 6. Ejemplos de uso
 
 ### Ejemplo minimo: leer una pieza
 
@@ -1599,12 +1697,13 @@ Lectura conceptual del ejemplo:
 - no se deben modelar estos casos como tres `DrillingSpec` individuales si el
   objetivo es que Maestro conserve la definicion de patron
 
-## 6. Reglas de trabajo para no perder el hilo
+## 7. Reglas de trabajo para no perder el hilo
 
 Estas reglas aplican cada vez que se trabaja con esta herramienta:
 
 - Antes de inferir una regla nueva, revisar esta guia y los README del repo.
-- Toda la generacion `.pgmx` del repo debe resolverse desde `tools/synthesize_pgmx.py`.
+- Toda la generacion `.pgmx` del repo debe resolverse desde `pgmx.synthesis`;
+  `tools/synthesize_pgmx.py` queda como fachada historica de compatibilidad.
 - El baseline principal versionado del repo es `pgmx/data/maestro_baselines/Pieza.xml`
   junto con `Pieza.epl` y `def.tlgx`.
 - Los estudios manuales y casos de comparación deben guardarse en `archive/maestro_examples`.
@@ -1618,9 +1717,11 @@ Estas reglas aplican cada vez que se trabaja con esta herramienta:
   - serializacion XML final
   - `xsi:type` y namespaces
   - referencias internas
-  - si el caso se esta construyendo con la familia correcta (`LineMillingSpec`, `SlotMillingSpec` o `PolylineMillingSpec`)
+  - si el caso se esta construyendo con la familia correcta
+    (`LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
+    `PocketMillingSpec`, etc.)
 
-## 7. Fuente de verdad
+## 8. Fuente de verdad
 
 La fuente principal para el uso del sintetizador pasa a ser este archivo:
 
