@@ -1,6 +1,6 @@
 # Plan De Modularizacion Del Sintetizador PGMX
 
-Estado: plan arquitectonico inicial, 2026-06-02.
+Estado: cierre arquitectonico formal, 2026-06-05.
 
 Este plan convierte el frente abierto de `ClosedPocket`/pocket milling en un
 patron general para desarrollar mecanizados del sintetizador PGMX. La meta es
@@ -14,8 +14,10 @@ mecanizado tenga el mismo recorrido:
 5. pruebas de compatibilidad y regresion;
 6. fachadas historicas sin logica nueva.
 
-No se mueve codigo como parte de este documento. El primer objetivo es fijar el
-mapa de destino para poder migrar sin cambiar comportamiento.
+Este documento nacio como mapa de destino. Al cierre formal del 2026-06-05,
+el mapa ya quedo ejecutado como reorganizacion arquitectonica del sintetizador;
+los pendientes listados al final son decisiones de producto/compatibilidad o
+frentes tecnicos, no bloqueos de modularizacion.
 
 ## Principios
 
@@ -253,6 +255,52 @@ comportamiento publico:
 7. Actualizar documentacion publica y limpiar fachadas historicas cuando los
    tests y comandos hayan migrado.
 
+## Cierre Formal De Etapa Arquitectonica
+
+Fecha de cierre: 2026-06-05.
+
+La etapa arquitectonica de modularizacion del sintetizador PGMX queda cerrada
+con estos criterios:
+
+- La API publica vigente es `pgmx.synthesis`.
+- `tools.synthesize_pgmx` y `tools.pgmx_synthesis` quedan como fachadas
+  historicas de compatibilidad, sin logica nueva.
+- `pgmx.synthesis.core` queda reducido a fachada interna historica; no dirige
+  arquitectura ni debe recibir logica nueva.
+- Las responsabilidades comunes quedaron separadas en `pgmx.synthesis.common`:
+  programa, XML, salida, pieza, profundidad, herramientas, estrategia,
+  hidratacion y acercamientos/alejamientos.
+- Las familias productivas quedaron separadas en `pgmx.synthesis.milling` y
+  `pgmx.synthesis.drilling`.
+- `ClosedPocket`/pocket milling quedo integrado en
+  `pgmx.synthesis.milling.pocket`.
+- El contrato V2 historico de Vaciado quedo promovido a
+  `pgmx.synthesis.milling.pocket_contract`.
+- `pgmx.vaciado`, `pgmx.vaciado_lab` y `tools.pgmx_vaciado*` quedan como
+  fachadas legacy temporales mientras se sostenga compatibilidad externa.
+- `pgmx.machining_lab.pocket_milling` queda como laboratorio/evidencia, no como
+  dependencia productiva directa.
+- La ayuda publica del sintetizador quedo alineada en
+  `docs/synthesize_pgmx_help.md`.
+
+Validacion de cierre publicada:
+
+```powershell
+py -3 -m unittest tests.test_pgmx_synthesis_package tests.test_pgmx_public_facades tests.test_pgmx_vaciado_v2 tests.test_pgmx_vaciado
+py -3 -m compileall -q pgmx tools tests
+git diff --check
+```
+
+Resultado registrado: `71` tests `OK`, `compileall` `OK`, `git diff --check`
+`OK`.
+
+Queda fuera de este cierre:
+
+- desarrollar nuevos casos de pocket milling/vaciado;
+- implementar el sintetizador ISO;
+- retirar fachadas legacy antes de decidir compatibilidad externa;
+- convertir decisiones abiertas de producto en codigo sin acuerdo previo.
+
 ## Validacion Minima Por Etapa
 
 ```powershell
@@ -266,7 +314,7 @@ py -3 -m compileall -q pgmx tools tests
 Si se toca una familia concreta, correr tambien sus tests especificos y un
 smoke import de las fachadas historicas.
 
-## Pendientes Explicitos
+## Decisiones Abiertas Posteriores Al Cierre
 
 - Definir si `profile.py` absorbe circulos o si `circle.py` queda como familia
   propia permanente.

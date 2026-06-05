@@ -168,6 +168,10 @@ productivo y reducir acoplamiento sin romper los comandos actuales.
    historico vive en `pgmx.synthesis.milling.pocket_contract`; `pgmx.vaciado`
    y `pgmx.vaciado_lab` quedan solo como fachadas historicas durante la
    transicion.
+   Cierre arquitectonico posterior: la modularizacion del sintetizador PGMX
+   queda cerrada como arquitectura el 2026-06-05. Los pendientes posteriores
+   son decisiones de compatibilidad/producto o frentes tecnicos de pocket
+   milling, no bloqueos del mapa modular.
 8. Revisar `core/` por dominios: proyectos/piezas, planillas, corte/nesting,
    En-Juego y puntos de contacto con `pgmx/`.
    Avance: `core/pgmx_processing.py` quedo como fachada compatible y la
