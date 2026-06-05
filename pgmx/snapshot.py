@@ -42,6 +42,7 @@ __all__ = [
     "PgmxEmbeddedToolSnapshot",
     "PgmxEmbeddedSpindleSnapshot",
     "PgmxSnapshot",
+    "main",
     "read_pgmx_snapshot",
     "snapshot_to_dict",
     "write_pgmx_snapshot_json",

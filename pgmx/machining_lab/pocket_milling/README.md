@@ -8,12 +8,9 @@ productivo: sirve
 para registrar memoria, generar evidencia, comparar contra Maestro y probar
 estrategias antes de volcar reglas cerradas en los modulos estables.
 
-Este paquete es el laboratorio general de `ClosedPocket`/pocket milling. La
-ruta historica `pgmx.vaciado_lab` queda como fachada transitoria durante la
-migracion de imports y comandos existentes.
-
-Las fachadas historicas bajo `tools.pgmx_vaciado` se mantienen para comandos e
-imports existentes, pero la implementacion del laboratorio esta en
+Este paquete es el laboratorio general de `ClosedPocket`/pocket milling. Las
+rutas historicas `pgmx.vaciado_lab` y `tools.pgmx_vaciado*` fueron retiradas;
+los comandos e imports del laboratorio deben usar
 `pgmx.machining_lab.pocket_milling`.
 
 ## Carpeta Externa
@@ -84,6 +81,5 @@ este laboratorio hacia los modulos correspondientes:
 - dibujo/visualizacion: `pgmx.processing`;
 - ISO: `iso_state_synthesis/`.
 
-Las rutas `tools/pgmx_snapshot.py`, `tools/pgmx_adapters.py`,
-`tools/synthesize_pgmx.py`, `pgmx.vaciado` y `tools/pgmx_vaciado*` quedan como
-fachadas compatibles, no como lugar para logica nueva.
+Las fachadas PGMX bajo `tools/` fueron retiradas. Usar `pgmx.snapshot`,
+`pgmx.adapters`, `pgmx.synthesis` y sus entradas `python -m pgmx.*`.

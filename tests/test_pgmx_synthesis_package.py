@@ -29,8 +29,6 @@ from pgmx.synthesis.milling import pocket_trace as milling_pocket_trace
 from pgmx.synthesis.milling import profile as milling_profile
 from pgmx.synthesis.milling import slot as milling_slot
 from pgmx.synthesis.milling import squaring as milling_squaring
-from tools import synthesize_pgmx as legacy_sp
-from tools import pgmx_synthesis as legacy_pgmx_synthesis
 
 
 class PgmxSynthesisPackageTests(unittest.TestCase):
@@ -39,8 +37,6 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(pgmx_synthesis.build_pocket_milling_spec, core_sp.build_pocket_milling_spec)
         self.assertIs(pgmx_synthesis.main, synthesis_cli.main)
         self.assertIs(core_sp.main, synthesis_cli.main)
-        self.assertIs(legacy_sp.PocketMillingSpec, core_sp.PocketMillingSpec)
-        self.assertIs(legacy_pgmx_synthesis.PocketMillingSpec, core_sp.PocketMillingSpec)
         self.assertTrue(pgmx_synthesis.DEFAULT_BASELINE_XML_PATH.name.endswith("Pieza.xml"))
         self.assertEqual(pgmx_synthesis.DEFAULT_BASELINE_DIR.name, "maestro_baselines")
         self.assertEqual(pgmx_synthesis.DEFAULT_BASELINE_DIR.parent.name, "data")

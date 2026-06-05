@@ -57,6 +57,7 @@ __all__ = [
     "adapt_pgmx_snapshot",
     "adapt_pgmx_path",
     "adaptation_to_dict",
+    "main",
     "write_pgmx_adaptation_json",
 ]
 

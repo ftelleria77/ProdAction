@@ -9,14 +9,14 @@ historicas, fachadas de compatibilidad o laboratorios reproducibles.
 
 ## Herramientas Publicas PGMX
 
-| Ruta principal | Fachada historica | Estado |
+| Ruta principal | CLI publica | Estado |
 | --- | --- | --- |
-| `pgmx.synthesis` | `tools.synthesize_pgmx`, `tools.pgmx_synthesis` | API/CLI publica vigente; las fachadas deben seguir importando y ejecutando `main()`. |
-| `pgmx.snapshot` | `tools.pgmx_snapshot` | API/CLI publica vigente para inspeccion normalizada de `.pgmx`. |
-| `pgmx.adapters` | `tools.pgmx_adapters` | API/CLI publica vigente para adaptar snapshots hacia specs de sintesis. |
+| `pgmx.synthesis` | `python -m pgmx.synthesis` | API/CLI publica vigente. |
+| `pgmx.snapshot` | `python -m pgmx.snapshot` | API/CLI publica vigente para inspeccion normalizada de `.pgmx`. |
+| `pgmx.adapters` | `python -m pgmx.adapters` | API/CLI publica vigente para adaptar snapshots hacia specs de sintesis. |
 
-Las fachadas anteriores se conservan por compatibilidad, pero no deben crecer
-con logica nueva. La implementacion productiva vive en `pgmx/`.
+La implementacion productiva vive en `pgmx/`. Las fachadas PGMX bajo `tools/`
+fueron retiradas.
 
 ## Laboratorio De Mecanizados PGMX
 
@@ -31,7 +31,6 @@ Mapa vigente:
 | --- | --- | --- |
 | `pgmx.machining_lab` | Laboratorio general de mecanizados | Paquete vigente para evidencia, memoria y analizadores por familia. No debe ser dependencia productiva directa. |
 | `pgmx.machining_lab.pocket_milling` | Laboratorio de `ClosedPocket` dentro del laboratorio general | Destino vigente del laboratorio historico de Vaciado. |
-| `pgmx.vaciado_lab` | Fachada historica durante la transicion | Debe desaparecer cuando imports y comandos migren a `pocket_milling`. |
 
 ## Pocket Milling PGMX
 
@@ -40,9 +39,6 @@ Mapa vigente:
 | `pgmx.synthesis.milling.pocket` | Produccion `ClosedPocket`/pocket milling | Punto estable para que la sintesis PGMX escriba vaciados como parte de la familia pocket/cajeado. |
 | `pgmx.synthesis.milling.pocket_contract` | Contrato promovido de pocket milling | Fuente real de las dataclasses y helpers antes separados como V2 de Vaciado. |
 | `pgmx.machining_lab.pocket_milling` | Laboratorio y oraculo | Puede usar trazas Maestro y memoria externa; no es dependencia productiva directa. |
-| `pgmx.vaciado` | Fachada historica del contrato V2 | Reexporta `pgmx.synthesis.milling.pocket_contract` y debe desaparecer como paquete final cuando migren los imports. |
-| `pgmx.vaciado_lab` | Fachada historica | Debe desaparecer como paquete final cuando termine la transicion. |
-| `tools.pgmx_vaciado*` | Fachadas historicas | Deben mantenerse solo durante la transicion de imports/CLIs hacia pocket milling. |
 
 El tracker vivo del laboratorio es
 `pgmx/machining_lab/pocket_milling/memory/current-state.md`. Antes de responder
@@ -64,16 +60,18 @@ Todo estudio nuevo debe entrar bajo `tools/studies/<tema>/` con nombre fechado o
 descriptivo. Si se estabiliza como API o flujo operativo, debe migrar a `pgmx/`,
 `core/` o una CLI publica documentada.
 
+## Fachadas Retiradas
+
+- `pgmx.vaciado`.
+- `pgmx.vaciado_lab`.
+- `tools.pgmx_synthesis`.
+- `tools.pgmx_vaciado`.
+- `tools.pgmx_vaciado_v2`.
+- `tools.synthesize_pgmx`.
+- `tools.pgmx_snapshot`.
+- `tools.pgmx_adapters`.
+
 ## Candidatos De Limpieza Futura
 
-- Retirar la fachada `pgmx.vaciado_lab` cuando imports y comandos terminen de
-  migrar al laboratorio general.
-- Retirar la fachada `pgmx.vaciado` cuando imports y comandos migren a
-  `pgmx.synthesis.milling.pocket_contract`.
-- Reducir referencias historicas `tools.pgmx_vaciado.*` cuando deje de ser
-  necesario sostener comandos/imports previos.
-- Mantener `tools/synthesize_pgmx.py`, `tools/pgmx_snapshot.py` y
-  `tools/pgmx_adapters.py` como fachadas minimas; cualquier funcion nueva debe
-  nacer en `pgmx/`.
 - Revisar periodicamente que `tools/studies/` no acumule scripts sin README,
   fecha, tema o criterio de promocion a API.

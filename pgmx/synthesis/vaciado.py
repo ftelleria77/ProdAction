@@ -1,4 +1,4 @@
-"""Historical Vaciado integration boundary for PGMX synthesis."""
+"""Pocket milling integration status for PGMX synthesis."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def vaciado_support_status() -> VaciadoSynthesisSupport:
         notes=(
             "PocketMillingSpec remains the public PGMX spec for ClosedPocket Vaciado.",
             "The former V2 contract now lives in pgmx.synthesis.milling.pocket_contract.",
-            "The pocket trace engine lives in pgmx.synthesis.milling.pocket_trace; pgmx.vaciado_lab reexports it for compatibility.",
+            "The pocket trace engine lives in pgmx.synthesis.milling.pocket_trace.",
         ),
     )
 

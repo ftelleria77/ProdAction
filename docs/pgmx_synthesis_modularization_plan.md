@@ -1,6 +1,7 @@
 # Plan De Modularizacion Del Sintetizador PGMX
 
-Estado: cierre arquitectonico formal, 2026-06-05.
+Estado: cierre arquitectonico formal y limpieza de fachadas historicas,
+2026-06-05.
 
 Este plan convierte el frente abierto de `ClosedPocket`/pocket milling en un
 patron general para desarrollar mecanizados del sintetizador PGMX. La meta es
@@ -12,7 +13,7 @@ mecanizado tenga el mismo recorrido:
 3. adaptacion desde snapshots Maestro;
 4. sintesis productiva `.pgmx`;
 5. pruebas de compatibilidad y regresion;
-6. fachadas historicas sin logica nueva.
+6. retiro de fachadas historicas cuando los imports ya migraron.
 
 Este documento nacio como mapa de destino. Al cierre formal del 2026-06-05,
 el mapa ya quedo ejecutado como reorganizacion arquitectonica del sintetizador;
@@ -22,8 +23,6 @@ frentes tecnicos, no bloqueos de modularizacion.
 ## Principios
 
 - `pgmx.synthesis` sigue siendo la API publica del sintetizador.
-- `tools.synthesize_pgmx` y `tools.pgmx_synthesis` siguen siendo fachadas de
-  compatibilidad.
 - Los laboratorios no son dependencia productiva directa.
 - Las reglas pasan a produccion solo cuando tienen evidencia Maestro, tests y
   un contrato de dominio claro.
@@ -77,13 +76,13 @@ pgmx/
 ```
 
 `pgmx/machining_lab/` es el destino conceptual del laboratorio general. El
-laboratorio actual `pgmx/vaciado_lab/` y el contrato experimental
-`pgmx/vaciado/` son fuentes historicas de migracion: en el mapa objetivo ambos
-desaparecen como paquetes propios y su contenido util se integra en
+laboratorio historico `pgmx/vaciado_lab/` y el contrato experimental
+`pgmx/vaciado/` ya fueron retirados como paquetes propios; su contenido util se
+integro en
 `pgmx.synthesis.milling.pocket`, `pgmx.synthesis.milling.pocket_contract` y
 `pgmx.machining_lab.pocket_milling`.
-Las rutas historicas bajo `tools/` solo pueden quedar como fachadas temporales
-durante la transicion.
+Las fachadas historicas `tools.pgmx_synthesis` y `tools.pgmx_vaciado*` tambien
+fueron retiradas.
 
 ## Familias
 
@@ -127,7 +126,7 @@ Cada familia debe avanzar con el mismo protocolo:
 
 - Listar funciones y dataclasses exportadas por `pgmx.synthesis.core`.
 - Marcar cuales son comunes y cuales pertenecen a una familia.
-- Registrar dependencias actuales desde `pgmx.synthesis.core` hacia
+- Registrar dependencias heredadas desde `pgmx.synthesis.core` hacia
   `pgmx.vaciado_lab`.
 - Crear una matriz de tests que cubra cada familia antes de mover codigo.
 
@@ -141,9 +140,10 @@ Salida esperada: inventario documentado y tests verdes sin cambios funcionales.
 - Mover primero documentacion y memoria de `Vaciado` hacia el laboratorio
   `pocket_milling`, dejando referencias compatibles solo mientras dure la
   transicion.
-- Despues mover modulos de analisis y trace engine, manteniendo
-  `pgmx.vaciado_lab.*` como fachada temporal.
-- Actualizar `tools.pgmx_vaciado.*` para que apunte al nuevo destino indirecto.
+- Despues mover modulos de analisis y trace engine, usando
+  `pgmx.vaciado_lab.*` como fachada temporal durante la transicion.
+- Actualizar `tools.pgmx_vaciado.*` para que apunte al nuevo destino indirecto
+  durante la transicion.
 
 Salida esperada: `Vaciado` funciona igual, pero deja de ser un laboratorio con
 nombre propio; queda absorbido por el laboratorio general de pocket milling.
@@ -178,8 +178,8 @@ Cada migracion debe dejar:
 
 - Reubicar el motor experimental en `pgmx.machining_lab.pocket_milling`.
 - Integrar el contrato experimental `pgmx.vaciado` dentro de
-  `pgmx.synthesis.milling.pocket_contract`, dejando `pgmx.vaciado` como
-  fachada historica hasta que migren los imports.
+  `pgmx.synthesis.milling.pocket_contract`, antes de retirar la fachada cuando
+  migren los imports.
 - Hacer que `pgmx.synthesis.milling.pocket` sea el unico punto productivo para
   `ClosedPocket`/pocket milling.
 - Eliminar la dependencia directa `pgmx.synthesis.core -> pgmx.vaciado_lab`.
@@ -205,9 +205,10 @@ finales.
 
 - Reducir `pgmx.synthesis.core` a fachada interna o eliminarlo si ya no cumple
   rol real.
-- Mantener `tools.synthesize_pgmx` y `tools.pgmx_synthesis` como compatibilidad.
-- Retirar `pgmx.vaciado_lab`, `pgmx.vaciado` y fachadas `tools.pgmx_vaciado*`
-  cuando la memoria, tests y comandos hayan migrado a pocket milling.
+- Retirar `tools.synthesize_pgmx`, `tools.pgmx_snapshot`,
+  `tools.pgmx_adapters`, `tools.pgmx_synthesis`, `pgmx.vaciado_lab`,
+  `pgmx.vaciado` y fachadas `tools.pgmx_vaciado*` cuando memoria, tests y
+  comandos hayan migrado al mapa final.
 - Actualizar `docs/synthesize_pgmx_help.md` con el nuevo mapa.
 
 ## Plan De Cierre Operativo
@@ -238,20 +239,17 @@ comportamiento publico:
      productivo final.
    - Solo se promueven al modulo productivo reglas cerradas y testeadas.
 4. Crear el laboratorio general. Hecho: el laboratorio vive en
-   `pgmx.machining_lab.pocket_milling` y `pgmx.vaciado_lab` queda como fachada
-   historica.
+   `pgmx.machining_lab.pocket_milling`.
    - La implementacion real vive en `pgmx.machining_lab.pocket_milling`.
-   - Mantener fachadas historicas solo durante la transicion.
+   - Las fachadas historicas de Vaciado fueron retiradas al cerrar la limpieza.
 5. Integrar o retirar el contrato separado `pgmx.vaciado`. Hecho:
-   `pgmx.synthesis.milling.pocket_contract` contiene el contrato V2 promovido y
-   `pgmx.vaciado` queda como fachada historica.
+   `pgmx.synthesis.milling.pocket_contract` contiene el contrato V2 promovido.
    - `ClosedPocket`/pocket milling queda como familia de
      `pgmx.synthesis.milling.pocket`.
 6. Reducir `pgmx.synthesis.core` a fachada interna. Hecho: `core.py` solo
    reexporta los modulos reales y mantiene el `__all__` publico historico.
    - No debe contener logica nueva.
-   - Debe sostener compatibilidad con `tools.synthesize_pgmx` y
-     `tools.pgmx_synthesis`.
+   - Ya no sostiene fachadas publicas bajo `tools/`.
 7. Actualizar documentacion publica y limpiar fachadas historicas cuando los
    tests y comandos hayan migrado.
 
@@ -263,8 +261,6 @@ La etapa arquitectonica de modularizacion del sintetizador PGMX queda cerrada
 con estos criterios:
 
 - La API publica vigente es `pgmx.synthesis`.
-- `tools.synthesize_pgmx` y `tools.pgmx_synthesis` quedan como fachadas
-  historicas de compatibilidad, sin logica nueva.
 - `pgmx.synthesis.core` queda reducido a fachada interna historica; no dirige
   arquitectura ni debe recibir logica nueva.
 - Las responsabilidades comunes quedaron separadas en `pgmx.synthesis.common`:
@@ -276,8 +272,10 @@ con estos criterios:
   `pgmx.synthesis.milling.pocket`.
 - El contrato V2 historico de Vaciado quedo promovido a
   `pgmx.synthesis.milling.pocket_contract`.
-- `pgmx.vaciado`, `pgmx.vaciado_lab` y `tools.pgmx_vaciado*` quedan como
-  fachadas legacy temporales mientras se sostenga compatibilidad externa.
+- `pgmx.vaciado`, `pgmx.vaciado_lab`, `tools.synthesize_pgmx`,
+  `tools.pgmx_snapshot`, `tools.pgmx_adapters`, `tools.pgmx_synthesis`,
+  `tools.pgmx_vaciado` y `tools.pgmx_vaciado_v2` fueron retirados despues de
+  migrar imports, tests y comandos al mapa final.
 - `pgmx.machining_lab.pocket_milling` queda como laboratorio/evidencia, no como
   dependencia productiva directa.
 - La ayuda publica del sintetizador quedo alineada en
@@ -314,12 +312,23 @@ py -3 -m compileall -q pgmx tools tests
 Si se toca una familia concreta, correr tambien sus tests especificos y un
 smoke import de las fachadas historicas.
 
-## Decisiones Abiertas Posteriores Al Cierre
+## Decisiones Cerradas Posteriores Al Cierre
 
-- Definir si `profile.py` absorbe circulos o si `circle.py` queda como familia
-  propia permanente.
-- Decidir si `PocketMillingSpec` sigue siendo el contrato publico final de
-  `ClosedPocket`/pocket milling o si se crea una spec nueva dentro de
-  `milling.pocket`.
-- Separar reglas genericas de toolpath de reglas particulares de Maestro.
-- Definir un comando de regeneracion/validacion de corpus para cada laboratorio.
+- `profile.py` y `circle.py` se mantienen como modulos productivos separados.
+  Motivo: los circulos comparten algunas bases con perfiles, pero tienen reglas
+  propias de familia, estrategia helicoidal y serializacion circular especifica.
+- `PocketMillingSpec` se mantiene como contrato publico final de
+  `ClosedPocket`/pocket milling. Motivo: ya esta expuesto por `pgmx.synthesis`,
+  validado por tests, documentado en la ayuda publica y alineado con el
+  contrato promovido `pgmx.synthesis.milling.pocket_contract`.
+
+## Decisiones Trasladadas Al Laboratorio
+
+Estas decisiones ya no bloquean el cierre arquitectonico del sintetizador.
+Quedan trasladadas al laboratorio de mecanizados y deberan retomarse cuando se
+reactive la investigacion del sintetizado de vaciados/pocket milling.
+
+- Separar reglas genericas de toolpath de reglas particulares de Maestro, a
+  partir de evidencia nueva del laboratorio.
+- Definir un comando de regeneracion/validacion de corpus para el laboratorio,
+  empezando por `pgmx.machining_lab.pocket_milling`.

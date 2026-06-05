@@ -20,8 +20,7 @@ tener que leer todas las memorias historicas de una vez.
 6. `docs/pgmx_snapshot_help.md` y `docs/pgmx_adapters_help.md`
    - Lectura/adaptacion de `.pgmx` existentes hacia specs publicos.
 7. `pgmx/machining_lab/pocket_milling/README.md`
-   - Laboratorio de `ClosedPocket`/pocket milling; `pgmx/vaciado_lab/` queda
-     como fachada historica.
+   - Laboratorio de `ClosedPocket`/pocket milling.
 8. `docs/cut_diagrams_temporary_memory.md`
    - Estado del motor de diagramas de corte y algoritmos de guillotina.
 9. `docs/laboratory_frontiers.md`
@@ -50,13 +49,13 @@ tener que leer todas las memorias historicas de una vez.
 | Escaneo de proyectos | `docs/repo_study_guide.md` | `core/parser.py` |
 | Planillas y PDF | `docs/repo_study_guide.md` | `core/summary.py`, `core/production_sheet.py`, `core/production_sheet_pdf.py` |
 | Dibujos de piezas | `docs/repo_study_guide.md` | `pgmx/processing.py`, `core/pgmx_processing.py` |
-| Sintesis PGMX | `docs/synthesize_pgmx_help.md`, `docs/pgmx_synthesis_modularization_plan.md`, `docs/pgmx_synthesis_modularization_temporary_memory.md` | `pgmx/synthesis/`, `tools/synthesize_pgmx.py` |
-| Snapshot/adaptacion PGMX | `docs/pgmx_snapshot_help.md`, `docs/pgmx_adapters_help.md` | `pgmx/snapshot.py`, `pgmx/adapters.py`, `tools/pgmx_snapshot.py`, `tools/pgmx_adapters.py` |
-| Pocket milling PGMX | `pgmx/machining_lab/pocket_milling/README.md`, `pgmx/machining_lab/pocket_milling/memory/current-state.md`, `docs/laboratory_frontiers.md` | `pgmx/synthesis/milling/pocket.py`, `pgmx/synthesis/milling/pocket_contract.py`, `pgmx/machining_lab/pocket_milling/`, fachadas historicas `pgmx/vaciado/`, `pgmx/vaciado_lab/`, `tools/pgmx_vaciado*` |
+| Sintesis PGMX | `docs/synthesize_pgmx_help.md`, `docs/pgmx_synthesis_modularization_plan.md`, `docs/pgmx_synthesis_modularization_temporary_memory.md` | `pgmx/synthesis/` |
+| Snapshot/adaptacion PGMX | `docs/pgmx_snapshot_help.md`, `docs/pgmx_adapters_help.md` | `pgmx/snapshot.py`, `pgmx/adapters.py` |
+| Pocket milling PGMX | `pgmx/machining_lab/pocket_milling/README.md`, `pgmx/machining_lab/pocket_milling/memory/current-state.md`, `docs/laboratory_frontiers.md` | `pgmx/synthesis/milling/pocket.py`, `pgmx/synthesis/milling/pocket_contract.py`, `pgmx/machining_lab/pocket_milling/` |
 | Reparacion SlotSide | `docs/repo_study_guide.md`, `docs/pgmx_temporary_memory.md` | `core/pgmx_processing.py`, `app/ui.py` |
 | En-Juego | `docs/en_juego_synthesis_temporary_memory.md` | `core/en_juego_synthesis.py`, `core/en_juego_transform.py` |
 | Diagramas de corte | `docs/cut_diagrams_temporary_memory.md` | `core/nesting_service.py`, `core/nesting_compat.py` |
-| Laboratorios y fachadas | `docs/laboratory_frontiers.md`, `docs/pgmx_synthesis_modularization_plan.md` | `tools/`, `pgmx/machining_lab/`, historico `pgmx/vaciado_lab/`, `tools/studies/`, `iso_state_synthesis/` |
+| Laboratorios y fachadas | `docs/laboratory_frontiers.md`, `docs/pgmx_synthesis_modularization_plan.md` | `tools/`, `pgmx/machining_lab/`, `tools/studies/`, `iso_state_synthesis/` |
 | Laboratorio de corte | `docs/cut_diagrams_temporary_memory.md`, `docs/laboratory_frontiers.md` | `tools/studies/cut_diagrams/ordering_lab.py` |
 | Trazabilidad CNC | `cnc_traceability/README.md`, `cnc_traceability/docs/contract.md`, `cnc_traceability/memory/current-state.md` | `cnc_traceability/viewer_xp.py` |
 | Generacion ISO experimental | `iso_state_synthesis/README.md`, `iso_state_synthesis/memory/current-state.md`, `docs/iso_cnc_contract.md` | `iso_state_synthesis/` |

@@ -5,8 +5,14 @@ Ultima actualizacion: 2026-06-05
 Nota arquitectonica: `Vaciado` queda como nombre historico del corpus. El
 destino final del mecanizado es `pgmx.synthesis.milling.pocket`
 (`ClosedPocket`/pocket milling). La memoria y las herramientas utiles viven
-ahora en `pgmx.machining_lab.pocket_milling`; `pgmx.vaciado_lab` queda como
-fachada historica durante la transicion.
+ahora en `pgmx.machining_lab.pocket_milling`.
+
+Limpieza 2026-06-05: las fachadas `pgmx.vaciado`, `pgmx.vaciado_lab`,
+`tools.synthesize_pgmx`, `tools.pgmx_snapshot`, `tools.pgmx_adapters`,
+`tools.pgmx_synthesis`, `tools.pgmx_vaciado` y `tools.pgmx_vaciado_v2` fueron
+retiradas. Las menciones anteriores dentro de esta memoria son historicas; usar
+`pgmx.synthesis`, `pgmx.snapshot`, `pgmx.adapters` y
+`pgmx.machining_lab.pocket_milling`.
 
 ## Objetivo
 

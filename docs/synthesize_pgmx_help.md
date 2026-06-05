@@ -2,8 +2,7 @@
 
 Esta guia deja por escrito como usar la API publica de `pgmx.synthesis`, en que
 orden conviene llamarla y que reglas de trabajo seguimos para no perder el hilo
-de lo ya validado en Maestro. `tools/synthesize_pgmx.py` queda como fachada
-historica de compatibilidad.
+de lo ya validado en Maestro.
 
 Estado de hito actual:
 - sintetizador Maestro `v1.6`
@@ -64,9 +63,8 @@ Importante:
 
 ## 2. Mapa modular actual
 
-La API publica se consume desde `pgmx.synthesis`. Las rutas
-`tools/synthesize_pgmx.py` y `tools/pgmx_synthesis` son fachadas historicas de
-compatibilidad y no deben recibir logica nueva.
+La API publica se consume desde `pgmx.synthesis`. La CLI vigente es
+`python -m pgmx.synthesis`.
 
 Mapa interno vigente:
 
@@ -99,10 +97,8 @@ Fronteras:
 
 - `pgmx.machining_lab.*` contiene laboratorios y evidencia; no es dependencia
   productiva directa del sintetizador.
-- `pgmx.vaciado` reexporta `pgmx.synthesis.milling.pocket_contract` como
-  fachada historica.
-- `pgmx.vaciado_lab` y `tools.pgmx_vaciado*` son fachadas historicas del
-  laboratorio de pocket milling.
+- Las fachadas historicas `pgmx.vaciado`, `pgmx.vaciado_lab`,
+  `tools.pgmx_synthesis` y `tools.pgmx_vaciado*` fueron retiradas.
 
 ## 3. Flujo recomendado
 
@@ -816,7 +812,6 @@ Notas:
   Maestro.
 - el contrato V2 historico de Vaciado vive ahora en
   `pgmx.synthesis.milling.pocket_contract`.
-- `pgmx.vaciado` se mantiene solo como fachada historica hacia ese contrato.
 
 ### `build_drilling_spec(...) -> DrillingSpec`
 
@@ -1702,8 +1697,7 @@ Lectura conceptual del ejemplo:
 Estas reglas aplican cada vez que se trabaja con esta herramienta:
 
 - Antes de inferir una regla nueva, revisar esta guia y los README del repo.
-- Toda la generacion `.pgmx` del repo debe resolverse desde `pgmx.synthesis`;
-  `tools/synthesize_pgmx.py` queda como fachada historica de compatibilidad.
+- Toda la generacion `.pgmx` del repo debe resolverse desde `pgmx.synthesis`.
 - El baseline principal versionado del repo es `pgmx/data/maestro_baselines/Pieza.xml`
   junto con `Pieza.epl` y `def.tlgx`.
 - Los estudios manuales y casos de comparación deben guardarse en `archive/maestro_examples`.

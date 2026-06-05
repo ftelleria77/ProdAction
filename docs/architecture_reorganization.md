@@ -96,14 +96,15 @@ productivo y reducir acoplamiento sin romper los comandos actuales.
 | `pgmx/processing.py` | Resolucion de programas PGMX, dibujos SVG, dimensiones y reparacion de slots | Servicios PGMX usados por UI, planillas y nesting |
 | `pgmx/machining_lab/` | Laboratorios de investigacion por mecanizado | Evidencia, memoria y analizadores; no debe ser dependencia productiva directa |
 | `pgmx/machining_lab/pocket_milling/` | Laboratorio de `ClosedPocket`/pocket milling | Destino vigente de la investigacion historica de Vaciado |
-| `pgmx/vaciado/` | Fachada historica del contrato V2 de Vaciado | Reexporta `pgmx.synthesis.milling.pocket_contract` y debe desaparecer como paquete final |
-| `pgmx/vaciado_lab/` | Fachada historica del laboratorio de Vaciado | Debe desaparecer como paquete final cuando termine la transicion |
+| `pgmx/vaciado/` | Retirado | El contrato promovido vive en `pgmx.synthesis.milling.pocket_contract` |
+| `pgmx/vaciado_lab/` | Retirado | El laboratorio vigente vive en `pgmx.machining_lab.pocket_milling` |
 | `pgmx/data/` | Baseline Maestro y catalogo de herramientas | Datos versionados del subsistema PGMX |
-| `tools/synthesize_pgmx.py` | CLI y API historica de sintesis PGMX | Fachada compatible hacia `pgmx.synthesis` |
-| `tools/pgmx_snapshot.py` | CLI y API historica de snapshot PGMX | Fachada compatible hacia `pgmx.snapshot` |
-| `tools/pgmx_adapters.py` | CLI y API historica de adaptadores PGMX | Fachada compatible hacia `pgmx.adapters` |
+| `tools/synthesize_pgmx.py` | Retirado | Usar `python -m pgmx.synthesis` |
+| `tools/pgmx_snapshot.py` | Retirado | Usar `python -m pgmx.snapshot` |
+| `tools/pgmx_adapters.py` | Retirado | Usar `python -m pgmx.adapters` |
 | `tools/studies/` | Estudios reproducibles | Laboratorio versionado |
-| `tools/pgmx_vaciado*` | Imports/CLIs historicos de Vaciado | Fachadas temporales durante la migracion hacia pocket milling |
+| `tools/pgmx_synthesis/` | Retirado | La API publica es `pgmx.synthesis` |
+| `tools/pgmx_vaciado*` | Retirado | Imports y comandos migrados a `pgmx.machining_lab.pocket_milling` y `pgmx.synthesis.milling.pocket_contract` |
 | `iso_state_synthesis/` | Investigacion ISO por estado | Subsistema experimental pausado |
 | `cnc_traceability/` | Herramienta XP standalone | Subsistema separado |
 
@@ -159,15 +160,16 @@ productivo y reducir acoplamiento sin romper los comandos actuales.
    extraidos a
    `app/project_detail_en_juego_dialogs.py`; creacion `.pgmx` En-Juego extraida a
    `app/project_detail_en_juego_output.py`.
-7. Separar `tools/synthesize_pgmx.py` en un paquete interno manteniendo
-   `tools.synthesize_pgmx` como fachada publica.
+7. Separar el sintetizador PGMX en un paquete interno.
    Hecho: el subsistema PGMX productivo vive en `pgmx/`; `pgmx/synthesis/core.py`
-   contiene la implementacion heredada y `tools/synthesize_pgmx.py` quedo como
-   fachada de compatibilidad. Correccion arquitectonica posterior:
+   contiene la implementacion heredada. Correccion arquitectonica posterior:
    `Vaciado` quedo integrado en `pgmx.synthesis.milling.pocket` y su contrato
-   historico vive en `pgmx.synthesis.milling.pocket_contract`; `pgmx.vaciado`
-   y `pgmx.vaciado_lab` quedan solo como fachadas historicas durante la
-   transicion.
+   historico vive en `pgmx.synthesis.milling.pocket_contract`; las fachadas
+   `pgmx.vaciado` y `pgmx.vaciado_lab` fueron retiradas despues de migrar los
+   imports. Las fachadas planas `tools.synthesize_pgmx`, `tools.pgmx_snapshot`
+   y `tools.pgmx_adapters` tambien fueron retiradas; usar las entradas
+   `python -m pgmx.synthesis`, `python -m pgmx.snapshot` y
+   `python -m pgmx.adapters`.
    Cierre arquitectonico posterior: la modularizacion del sintetizador PGMX
    queda cerrada como arquitectura el 2026-06-05. Los pendientes posteriores
    son decisiones de compatibilidad/producto o frentes tecnicos de pocket
@@ -242,8 +244,8 @@ productivo y reducir acoplamiento sin romper los comandos actuales.
    laboratorios documentado en `docs/laboratory_frontiers.md`. Las fachadas PGMX
    historicas quedan cubiertas por `tests/test_pgmx_public_facades.py`.
    Avance: referencias documentales de Vaciado alineadas con la mudanza
-   objetivo a `pgmx.machining_lab.pocket_milling`; `tools.pgmx_vaciado*` queda
-   registrado como fachada compatible historica temporal.
+   objetivo a `pgmx.machining_lab.pocket_milling`; `tools.pgmx_vaciado*` fue
+   retirado al cerrar la limpieza de fachadas historicas.
    Avance: estudios ISO fechados catalogados en `tools/studies/iso/README.md`
    y enlazados desde los indices de documentacion.
    Avance: `tools.studies.cut_diagrams.ordering_lab` dejo de importar helpers
@@ -279,9 +281,8 @@ python -m unittest tests.test_pgmx_vaciado
   `docs/laboratory_frontiers.md`; los scripts exploratorios nuevos deben vivir
   en `tools/studies/<tema>/` o en un paquete experimental explicitamente
   documentado.
-- Los frentes pausados o experimentales (`iso_state_synthesis/` y
-  `pgmx/vaciado_lab/`) no se usan para dirigir la arquitectura productiva salvo
-  reactivacion explicita de ese frente. `pgmx/vaciado/` ya no es una frontera
-  productiva propia: reexporta el contrato de
-  `pgmx.synthesis.milling.pocket_contract` y debe desaparecer como paquete
-  separado cuando migren los imports externos.
+- Los frentes pausados o experimentales (`iso_state_synthesis/`) no se usan para
+  dirigir la arquitectura productiva salvo reactivacion explicita de ese frente.
+  `pgmx/vaciado/` y `pgmx/vaciado_lab/` fueron retirados; el contrato vive en
+  `pgmx.synthesis.milling.pocket_contract` y el laboratorio en
+  `pgmx.machining_lab.pocket_milling`.

@@ -247,7 +247,7 @@ Avance registrado el 2026-05-06:
   `38 + 77 = Z115` y `8 + 77 = Z85`.
 - La fuente principal de datos de herramienta debe ser el `def.tlgx` embebido
   dentro del propio `.pgmx`; ahi esta la longitud `77` de la herramienta `005`.
-- `tools.pgmx_snapshot` ahora lee automaticamente ese `def.tlgx` embebido y lo
+- `pgmx.snapshot` ahora lee automaticamente ese `def.tlgx` embebido y lo
   expone como `tooling_entry_name`, `embedded_tools` y `embedded_spindles`.
 - Las copias `maestro/Tlgx/def.tlgx` y `xilog_plus/Job/def.tlg` del snapshot
   confirman el mismo dato, pero quedan como respaldo/contraste de maquina.

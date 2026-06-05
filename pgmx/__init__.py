@@ -8,5 +8,4 @@ __all__ = [
     "processing",
     "snapshot",
     "synthesis",
-    "vaciado",
 ]

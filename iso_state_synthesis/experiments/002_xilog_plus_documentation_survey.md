@@ -145,5 +145,5 @@ separar:
 
 Completado el 2026-05-06:
 
-- `tools.pgmx_snapshot` lee `def.tlgx` directamente desde el `.pgmx` y expone
+- `pgmx.snapshot` lee `def.tlgx` directamente desde el `.pgmx` y expone
   herramientas/spindles embebidos en el JSON del snapshot.

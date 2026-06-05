@@ -13,7 +13,7 @@ cuatro frentes grandes:
 - planillas de produccion y diagramas de corte;
 - herramienta separada para piso/CNC basada en archivos `.iso`.
 
-El sintetizador PGMX real vive en `tools/synthesize_pgmx.py` y expone
+El sintetizador PGMX real vive en `pgmx.synthesis` y expone
 `SYNTHESIZER_VERSION = "1.6"`.
 
 ## Estructura principal
@@ -34,9 +34,9 @@ El sintetizador PGMX real vive en `tools/synthesize_pgmx.py` y expone
 | `pgmx/processing.py` | Lectura PGMX para dibujos/dimensiones y reparacion de ranuras invalidas. |
 | `core/en_juego_synthesis.py` | Sintesis PGMX compuesta para En-Juego. |
 | `core/en_juego_transform.py` | Transformaciones geometricas En-Juego sin IO PGMX. |
-| `tools/synthesize_pgmx.py` | API publica para escribir `.pgmx` desde baseline Maestro. |
-| `tools/pgmx_snapshot.py` | Snapshot normalizado de `.pgmx` existentes. |
-| `tools/pgmx_adapters.py` | Adaptacion de snapshots hacia specs publicos. |
+| `pgmx/synthesis/` | API publica para escribir `.pgmx` desde baseline Maestro. |
+| `pgmx/snapshot.py` | Snapshot normalizado de `.pgmx` existentes. |
+| `pgmx/adapters.py` | Adaptacion de snapshots hacia specs publicos. |
 | `tools/studies/cut_diagrams/ordering_lab.py` | Laboratorio de algoritmos de guillotina. |
 | `tools/studies/iso/minimal_fixtures_2026_05_03.py` | Generador archivado de fixtures minimos ISO. |
 | `cnc_traceability/` | Subsistema de trazabilidad CNC compatible con Windows XP 32 bits. |
@@ -206,7 +206,7 @@ Prueba de humo PGMX recomendada:
 
 ## Riesgos actuales
 
-- `app/ui.py` y `tools/synthesize_pgmx.py` concentran muchas responsabilidades.
+- `app/ui.py` concentra muchas responsabilidades.
 - No hay suite formal de tests automatizados.
 - `requirements.txt` no fija versiones.
 - La investigacion ISO es extensa, pero aun no es API productiva.

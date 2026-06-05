@@ -24,7 +24,7 @@ ISO:
 
 Lectura PGMX usada:
 
-- `python -m tools.pgmx_snapshot <archivo.pgmx>`
+- `python -m pgmx.snapshot <archivo.pgmx>`
 - Desde 2026-05-06, esa lectura tambien expone el `def.tlgx` embebido como
   `tooling_entry_name`, `embedded_tools` y `embedded_spindles`.
 

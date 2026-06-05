@@ -1,8 +1,4 @@
-"""Internal package for PGMX synthesis.
-
-`tools.synthesize_pgmx` remains the public compatibility facade. New production
-PGMX synthesis modules should live here instead of growing that facade.
-"""
+"""Public package for PGMX synthesis."""
 
 from __future__ import annotations
 

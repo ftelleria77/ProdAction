@@ -40,7 +40,6 @@ python main.py
 ## Sintesis PGMX
 - Estado actual del sintetizador Maestro: `v1.6`
 - Flujo unico de generacion `.pgmx`: `python -m pgmx.synthesis`
-- CLI historica compatible: `python -m tools.synthesize_pgmx`
 - Guia completa del sintetizador: `docs/synthesize_pgmx_help.md`
 - Guia del snapshot integral de `.pgmx`: `docs/pgmx_snapshot_help.md`
 - Guia de adaptacion de `.pgmx` existentes hacia specs publicos: `docs/pgmx_adapters_help.md`

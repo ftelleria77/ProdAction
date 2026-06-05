@@ -5,7 +5,7 @@ El flujo anterior basado en `tools/export_pgmx.py` fue retirado del repo.
 Desde ahora, toda la generación de archivos `.pgmx` debe resolverse únicamente
 desde:
 
-- `tools/synthesize_pgmx.py`
+- `pgmx.synthesis`
 
 La referencia operativa vigente es:
 
@@ -21,6 +21,6 @@ Se unificó la generación en un único módulo para evitar:
 ## Regla actual
 
 Si hace falta agregar o corregir una familia de mecanizado:
-- se implementa en `tools/synthesize_pgmx.py`
+- se implementa en `pgmx.synthesis`
 - se documenta en `docs/synthesize_pgmx_help.md`
 - se refleja en los README que apuntan a esa guía
