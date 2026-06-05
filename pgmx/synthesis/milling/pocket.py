@@ -75,7 +75,17 @@ __all__ = [
     "_build_trace_engine_pocket_curve_specs",
     "_build_trace_engine_pocket_plan",
     "_build_trace_engine_pocket_xyz_sequences",
+    "_build_single_seed_base_loop_xyz_sequences",
     "_curve_spec_from_trace_resolved_sequence",
+    "_rounded_kernel_loop_curve_spec",
+    "_rounded_kernel_loop_xy",
+    "_rounded_kernel_multi_loop_curve_spec",
+    "_same_xy_bbox",
+    "_single_seed_base_loop_radii",
+    "_single_seed_exterior_rectangle_loops_xyz",
+    "_supported_single_seed_base_loop_route_seed",
+    "_supported_single_seed_base_loop_seed",
+    "_xy_bbox_minmax",
     "_can_hydrate_pocket_template_trace",
     "_extract_pocket_milling_template",
     "_hydrate_pocket_milling_spec",
@@ -533,6 +543,231 @@ def _curve_spec_from_trace_resolved_sequence(resolved_sequence, z_value: float) 
     if not descriptions:
         raise ValueError("La secuencia resuelta de Vaciado no contiene primitivas serializables.")
     return _composite_curve_spec(descriptions)
+
+
+def _build_single_seed_base_loop_xyz_sequences(
+    state,
+    spec: _HydratedPocketMillingSpec,
+) -> Optional[tuple[tuple[tuple[float, float, float], ...], ...]]:
+    seed = _supported_single_seed_base_loop_route_seed(spec)
+    if seed is None:
+        return None
+
+    contour_min_x, contour_max_x, contour_min_y, contour_max_y = _xy_bbox_minmax(spec.contour_points)
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = _xy_bbox_minmax(seed.contour_points)
+    radii = _single_seed_base_loop_radii(spec, seed)
+    cut_z = state.depth - float(_feature_depth_value(state, spec))
+
+    exterior = _single_seed_exterior_rectangle_loops_xyz(
+        (contour_min_x, contour_max_x, contour_min_y, contour_max_y),
+        radii,
+        cut_z,
+    )
+    island = tuple(
+        (x, y, cut_z)
+        for radius in radii
+        for x, y in _rounded_kernel_loop_xy(
+            (seed_min_x, seed_max_x, seed_min_y, seed_max_y),
+            radius,
+        )
+    )
+    return (exterior, island)
+
+
+def _rounded_kernel_loop_curve_spec(
+    kernel_bbox: tuple[float, float, float, float],
+    radius: float,
+    z_value: float,
+) -> _CurveSpec:
+    min_x, max_x, min_y, max_y = kernel_bbox
+    diagonal = radius / math.sqrt(2.0)
+    p0 = (min_x - radius, min_y, z_value)
+    p1 = (min_x - radius, max_y, z_value)
+    p2 = (min_x, max_y + radius, z_value)
+    p3 = (max_x, max_y + radius, z_value)
+    p4 = (max_x + diagonal, max_y + diagonal, z_value)
+    p5 = (max_x + radius, max_y, z_value)
+    p6 = (max_x + radius, min_y, z_value)
+    p7 = (max_x, min_y - radius, z_value)
+    p8 = (min_x, min_y - radius, z_value)
+
+    return _composite_curve_spec(
+        [
+            _build_toolpath_description(p0, p1),
+            _build_maestro_arc_serialization(p1, p2, (min_x, max_y), -1.0, z_value),
+            _build_toolpath_description(p2, p3),
+            _build_maestro_arc_serialization(p3, p4, (max_x, max_y), -1.0, z_value),
+            _build_maestro_arc_serialization(p4, p5, (max_x, max_y), -1.0, z_value),
+            _build_toolpath_description(p5, p6),
+            _build_maestro_arc_serialization(p6, p7, (max_x, min_y), -1.0, z_value),
+            _build_toolpath_description(p7, p8),
+            _build_maestro_arc_serialization(p8, p0, (min_x, min_y), -1.0, z_value),
+        ]
+    )
+
+
+def _rounded_kernel_multi_loop_curve_spec(
+    kernel_bbox: tuple[float, float, float, float],
+    radii: Sequence[float],
+    z_value: float,
+) -> _CurveSpec:
+    descriptions: list[str] = []
+    previous_start: Optional[tuple[float, float, float]] = None
+    min_x, _max_x, min_y, _max_y = kernel_bbox
+    for radius in radii:
+        loop_start = (min_x - radius, min_y, z_value)
+        if previous_start is not None:
+            descriptions.append(_build_toolpath_description(previous_start, loop_start))
+        loop_curve = _rounded_kernel_loop_curve_spec(kernel_bbox, radius, z_value)
+        descriptions.extend(loop_curve.member_serializations)
+        previous_start = loop_start
+    return _composite_curve_spec(descriptions)
+
+
+def _single_seed_exterior_rectangle_loops_xyz(
+    contour_bbox: tuple[float, float, float, float],
+    radii: Sequence[float],
+    cut_z: float,
+) -> tuple[tuple[float, float, float], ...]:
+    contour_min_x, contour_max_x, contour_min_y, contour_max_y = contour_bbox
+    points: list[tuple[float, float, float]] = []
+    for index, radius in enumerate(radii):
+        left = contour_min_x + radius
+        right = contour_max_x - radius
+        bottom = contour_min_y + radius
+        top = contour_max_y - radius
+        next_radius = radii[index + 1] if index + 1 < len(radii) else None
+
+        if not points:
+            points.append((left, top, cut_z))
+        if next_radius is not None:
+            points.append((left, contour_max_y - next_radius, cut_z))
+        points.extend(
+            (
+                (left, bottom, cut_z),
+                (right, bottom, cut_z),
+                (right, top, cut_z),
+                (left, top, cut_z),
+            )
+        )
+        if next_radius is not None:
+            next_left = contour_min_x + next_radius
+            next_top = contour_max_y - next_radius
+            points.extend(
+                (
+                    (left, next_top, cut_z),
+                    (next_left, next_top, cut_z),
+                )
+            )
+    return tuple(points)
+
+
+def _supported_single_seed_base_loop_route_seed(
+    spec: _HydratedPocketMillingSpec,
+) -> Optional[PocketBossRouteSeedSpec]:
+    seed = _supported_single_seed_base_loop_seed(spec)
+    if seed is None:
+        return None
+    if not _single_seed_base_loop_radii(spec, seed):
+        return None
+    return seed
+
+
+def _supported_single_seed_base_loop_seed(
+    spec: _HydratedPocketMillingSpec,
+) -> Optional[PocketBossRouteSeedSpec]:
+    if len(spec.boss_contours) != 1 or len(spec.boss_route_seeds) != 1:
+        return None
+    seed = spec.boss_route_seeds[0]
+    if not seed.is_resolved:
+        return None
+    if not _same_xy_bbox(spec.boss_contours[0], seed.contour_points):
+        return None
+    if spec.plane_name != "Top" or spec.milling_strategy.allow_multiple_passes:
+        return None
+    if spec.milling_strategy.inside_to_outside:
+        if spec.milling_strategy.stroke_connection_strategy != "LiftShiftPlunge":
+            return None
+    elif spec.milling_strategy.stroke_connection_strategy != "Straghtline":
+        return None
+    return seed
+
+
+def _single_seed_base_loop_radii(
+    spec: _HydratedPocketMillingSpec,
+    seed: PocketBossRouteSeedSpec,
+) -> tuple[float, ...]:
+    contour_min_x, contour_max_x, contour_min_y, contour_max_y = _xy_bbox_minmax(spec.contour_points)
+    seed_min_x, seed_max_x, seed_min_y, seed_max_y = _xy_bbox_minmax(seed.contour_points)
+    if not math.isclose(seed_max_x - seed_min_x, 50.0, abs_tol=1e-6):
+        return ()
+    if not math.isclose(seed_max_y - seed_min_y, 50.0, abs_tol=1e-6):
+        return ()
+    clearances = (
+        seed_min_x - contour_min_x,
+        contour_max_x - seed_max_x,
+        seed_min_y - contour_min_y,
+        contour_max_y - seed_max_y,
+    )
+    if min(clearances) <= 0.0:
+        return ()
+    if not math.isclose(clearances[0], clearances[1], abs_tol=1e-6):
+        return ()
+    if not math.isclose(clearances[2], clearances[3], abs_tol=1e-6):
+        return ()
+
+    half_min_clearance = min(clearances) / 2.0
+    radial_step = spec.radial_step
+    if radial_step <= 0.0:
+        return ()
+    if not math.isclose(radial_step, 40.0, abs_tol=1e-6):
+        return ()
+    if radial_step > half_min_clearance + 1e-6:
+        return ()
+    count = int(math.floor((half_min_clearance + 1e-6) / radial_step))
+    if count < 1:
+        return ()
+    return tuple(radial_step * multiplier for multiplier in range(1, count + 1))
+
+
+def _rounded_kernel_loop_xy(
+    kernel_bbox: tuple[float, float, float, float],
+    radius: float,
+) -> tuple[tuple[float, float], ...]:
+    min_x, max_x, min_y, max_y = kernel_bbox
+    diagonal = radius / math.sqrt(2.0)
+    return (
+        (min_x - radius, min_y),
+        (min_x - radius, max_y),
+        (min_x, max_y + radius),
+        (max_x, max_y + radius),
+        (max_x + diagonal, max_y + diagonal),
+        (max_x + radius, max_y),
+        (max_x + radius, min_y),
+        (max_x, min_y - radius),
+        (min_x, min_y - radius),
+        (min_x - radius, min_y),
+    )
+
+
+def _xy_bbox_minmax(points: Sequence[tuple[float, float]]) -> tuple[float, float, float, float]:
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    if not xs or not ys:
+        raise ValueError("No se puede calcular bbox de una geometria vacia.")
+    return (min(xs), max(xs), min(ys), max(ys))
+
+
+def _same_xy_bbox(
+    first: Sequence[tuple[float, float]],
+    second: Sequence[tuple[float, float]],
+    *,
+    tolerance: float = 1e-6,
+) -> bool:
+    return all(
+        math.isclose(left, right, abs_tol=tolerance)
+        for left, right in zip(_xy_bbox_minmax(first), _xy_bbox_minmax(second))
+    )
 
 
 def _normalize_closed_contour(

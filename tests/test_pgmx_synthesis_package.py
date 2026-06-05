@@ -564,6 +564,31 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             core_sp._curve_spec_from_trace_resolved_sequence,
             milling_pocket._curve_spec_from_trace_resolved_sequence,
         )
+        self.assertIs(
+            core_sp._build_single_seed_base_loop_xyz_sequences,
+            milling_pocket._build_single_seed_base_loop_xyz_sequences,
+        )
+        self.assertIs(core_sp._rounded_kernel_loop_curve_spec, milling_pocket._rounded_kernel_loop_curve_spec)
+        self.assertIs(core_sp._rounded_kernel_loop_xy, milling_pocket._rounded_kernel_loop_xy)
+        self.assertIs(
+            core_sp._rounded_kernel_multi_loop_curve_spec,
+            milling_pocket._rounded_kernel_multi_loop_curve_spec,
+        )
+        self.assertIs(core_sp._same_xy_bbox, milling_pocket._same_xy_bbox)
+        self.assertIs(core_sp._single_seed_base_loop_radii, milling_pocket._single_seed_base_loop_radii)
+        self.assertIs(
+            core_sp._single_seed_exterior_rectangle_loops_xyz,
+            milling_pocket._single_seed_exterior_rectangle_loops_xyz,
+        )
+        self.assertIs(
+            core_sp._supported_single_seed_base_loop_route_seed,
+            milling_pocket._supported_single_seed_base_loop_route_seed,
+        )
+        self.assertIs(
+            core_sp._supported_single_seed_base_loop_seed,
+            milling_pocket._supported_single_seed_base_loop_seed,
+        )
+        self.assertIs(core_sp._xy_bbox_minmax, milling_pocket._xy_bbox_minmax)
         self.assertIs(core_sp._extract_pocket_milling_template, milling_pocket._extract_pocket_milling_template)
         self.assertIs(
             core_sp._can_hydrate_pocket_template_trace,
