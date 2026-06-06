@@ -162,6 +162,19 @@ Hallazgos aplicados:
 - La funcion principal conserva las ramas de emision actuales; el cambio solo
   separa la fase de lectura para preparar builders de `motion_lines`.
 
+## Subcorte Fresado Router Builder No-Lead
+
+Hallazgos aplicados:
+
+- Se extrajo `_line_milling_no_lead_side_compensation_motion_lines` como primer
+  builder de `motion_lines` desde `_emit_line_milling_trace`.
+- El builder cubre la rama `uses_no_lead_side_compensation`: lineas/perfiles
+  sin leads reales con compensacion lateral y circulos sin lead con arcos.
+- Se agregaron tests puros para fijar el ISO emitido por una linea compensada
+  derecha y por un circulo compensado izquierdo.
+- `_emit_line_milling_trace` queda un paso mas cerca de separar seleccion de
+  rama, lectura de estado y generacion de movimiento.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome

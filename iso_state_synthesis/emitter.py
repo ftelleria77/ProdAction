@@ -152,6 +152,7 @@ class _LineMillingTraceContext:
     contour_points: object
     nominal_points: tuple[tuple[float, float], ...]
     open_polyline_outside_piece: bool
+    piece_depth: float
     trajectory_primitives: tuple[object, ...]
     approach_type: str
     approach_mode: str
@@ -3448,63 +3449,7 @@ def _emit_line_milling_trace(
             current_z = float(point.iso_z)
         motion_lines = tuple(generated)
     elif uses_no_lead_side_compensation:
-        compensation_code = "G42" if side_of_feature == "Right" else "G41"
-        rapid_point, leadout_point = _no_lead_compensation_points(
-            nominal_points,
-            float(tool_radius),
-            profile_family,
-            profile_winding,
-        )
-        current_x = nominal_points[0][0]
-        current_y = nominal_points[0][1]
-        current_z = float(cut_z)
-        include_cut_z = (
-            profile_family.startswith("Line")
-            or open_polyline_outside_piece
-            or float(cut_z) > -float(evaluation.initial_state.get("pieza", "depth"))
-        )
-        generated = [
-            "?%ETK[7]=4",
-            compensation_code,
-            f"G1 X{_fmt(nominal_points[0][0])} Y{_fmt(nominal_points[0][1])} Z{_fmt(security_z)} F{_fmt(plunge_feed)}",
-            f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}",
-        ]
-        if profile_family == "Circle" and circle_center_x is not None and circle_center_y is not None:
-            for point in nominal_points[2::2] or nominal_points[1:]:
-                generated.append(
-                    _profile_milling_arc_line(
-                        "G3" if profile_winding == "CounterClockwise" else "G2",
-                        point[0],
-                        point[1],
-                        circle_center_x,
-                        circle_center_y,
-                        milling_feed,
-                    )
-                )
-                current_x, current_y = point
-        else:
-            for point in nominal_points[1:]:
-                generated.append(
-                    _line_milling_motion_line(
-                        point[0],
-                        point[1],
-                        float(cut_z),
-                        current_x,
-                        current_y,
-                        current_z,
-                        float(milling_feed),
-                        always_include_z=include_cut_z,
-                    )
-                )
-                current_x, current_y = point
-        generated.extend(
-            (
-                f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}",
-                "G40",
-                f"G1 X{_fmt(leadout_point[0])} Y{_fmt(leadout_point[1])} Z{_fmt(security_z)} F{_fmt(milling_feed)}",
-            )
-        )
-        motion_lines = tuple(generated)
+        motion_lines = _line_milling_no_lead_side_compensation_motion_lines(context)
     elif strategy_name:
         current_x = float(start_x)
         current_y = float(start_y)
@@ -3644,6 +3589,7 @@ def _line_milling_trace_context(
         evaluation,
         nominal_points,
     )
+    piece_depth = float(evaluation.initial_state.get("pieza", "depth"))
     trajectory_primitives = tuple(_optional_change_after(differential, "movimiento", "trajectory_primitives", ()))
     approach_type = str(
         _optional_change_after(
@@ -3728,6 +3674,7 @@ def _line_milling_trace_context(
         contour_points=contour_points,
         nominal_points=nominal_points,
         open_polyline_outside_piece=open_polyline_outside_piece,
+        piece_depth=piece_depth,
         trajectory_primitives=trajectory_primitives,
         approach_type=approach_type,
         approach_mode=approach_mode,
@@ -3737,6 +3684,79 @@ def _line_milling_trace_context(
         retract_radius_multiplier=retract_radius_multiplier,
         modes=modes,
     )
+
+
+def _line_milling_no_lead_side_compensation_motion_lines(
+    context: _LineMillingTraceContext,
+) -> tuple[str, ...]:
+    compensation_code = "G42" if context.side_of_feature == "Right" else "G41"
+    _, leadout_point = _no_lead_compensation_points(
+        context.nominal_points,
+        float(context.tool_radius),
+        context.profile_family,
+        context.profile_winding,
+    )
+    current_x = context.nominal_points[0][0]
+    current_y = context.nominal_points[0][1]
+    current_z = float(context.cut_z)
+    include_cut_z = (
+        context.profile_family.startswith("Line")
+        or context.open_polyline_outside_piece
+        or float(context.cut_z) > -context.piece_depth
+    )
+    generated = [
+        "?%ETK[7]=4",
+        compensation_code,
+        (
+            f"G1 X{_fmt(context.nominal_points[0][0])} "
+            f"Y{_fmt(context.nominal_points[0][1])} "
+            f"Z{_fmt(context.security_z)} F{_fmt(context.plunge_feed)}"
+        ),
+        f"G1 Z{_fmt(context.cut_z)} F{_fmt(context.plunge_feed)}",
+    ]
+    if (
+        context.profile_family == "Circle"
+        and context.circle_center_x is not None
+        and context.circle_center_y is not None
+    ):
+        for point in context.nominal_points[2::2] or context.nominal_points[1:]:
+            generated.append(
+                _profile_milling_arc_line(
+                    "G3" if context.profile_winding == "CounterClockwise" else "G2",
+                    point[0],
+                    point[1],
+                    context.circle_center_x,
+                    context.circle_center_y,
+                    context.milling_feed,
+                )
+            )
+            current_x, current_y = point
+    else:
+        for point in context.nominal_points[1:]:
+            generated.append(
+                _line_milling_motion_line(
+                    point[0],
+                    point[1],
+                    float(context.cut_z),
+                    current_x,
+                    current_y,
+                    current_z,
+                    float(context.milling_feed),
+                    always_include_z=include_cut_z,
+                )
+            )
+            current_x, current_y = point
+    generated.extend(
+        (
+            f"G1 Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}",
+            "G40",
+            (
+                f"G1 X{_fmt(leadout_point[0])} Y{_fmt(leadout_point[1])} "
+                f"Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}"
+            ),
+        )
+    )
+    return tuple(generated)
 
 
 def _line_milling_trace_modes(

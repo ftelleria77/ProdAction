@@ -13,6 +13,7 @@ from iso_state_synthesis.emitter import (
     ExplainedIsoProgram,
     _closed_polyline_center_lead_geometry,
     _line_milling_motion_line,
+    _line_milling_no_lead_side_compensation_motion_lines,
     _line_milling_trace_context,
     _line_milling_trace_modes,
     _linear_profile_program_point,
@@ -104,6 +105,69 @@ def _trace_move(name: str, *points: tuple[float, float, float]) -> TraceMove:
 
 def _change(layer: str, key: str, after: object) -> StateChange:
     return StateChange(layer, key, None, after, "set", _TEST_SOURCE)
+
+
+def _line_milling_test_context(
+    *,
+    profile_family: str,
+    side_of_feature: str,
+    contour_points: tuple[tuple[float, float], ...],
+    profile_winding: str = "",
+    circle_center_x: float | None = None,
+    circle_center_y: float | None = None,
+    cut_z: float = -8.0,
+) -> object:
+    optional_circle_changes: tuple[StateChange, ...] = ()
+    if circle_center_x is not None and circle_center_y is not None:
+        optional_circle_changes = (
+            _change("movimiento", "circle_center_x", circle_center_x),
+            _change("movimiento", "circle_center_y", circle_center_y),
+        )
+    differential = StageDifferential(
+        stage_key="line_milling_trace",
+        family="line_milling",
+        order_index=1,
+        target_changes=(
+            _change("movimiento", "start_x", contour_points[0][0]),
+            _change("movimiento", "start_y", contour_points[0][1]),
+            _change("movimiento", "end_x", contour_points[-1][0]),
+            _change("movimiento", "end_y", contour_points[-1][1]),
+            _change("movimiento", "rapid_z", 30.0),
+            _change("movimiento", "cut_z", cut_z),
+            _change("movimiento", "security_z", 5.0),
+            _change("movimiento", "plunge_feed", 120.0),
+            _change("movimiento", "milling_feed", 600.0),
+            _change("movimiento", "profile_family", profile_family),
+            _change("movimiento", "profile_winding", profile_winding),
+            _change("movimiento", "contour_points", contour_points),
+            *optional_circle_changes,
+            _change("herramienta", "tool_radius", 2.0),
+            _change("herramienta", "tool_offset_length", 107.2),
+            _change("trabajo", "side_of_feature", side_of_feature),
+        ),
+        trace=(
+            _trace_move("Approach", (contour_points[0][0], contour_points[0][1], 5.0)),
+            _trace_move(
+                "TrajectoryPath",
+                *((point[0], point[1], cut_z) for point in contour_points),
+            ),
+            _trace_move("Lift", (contour_points[-1][0], contour_points[-1][1], 5.0)),
+        ),
+    )
+    evaluation = IsoStateEvaluation(
+        source_path=Path("fixture.pgmx"),
+        project_name="Fixture",
+        initial_state=StateVector(
+            (
+                StateValue("pieza", "depth", 18.0, _TEST_SOURCE),
+                StateValue("pieza", "length", 200.0, _TEST_SOURCE),
+                StateValue("pieza", "width", 100.0, _TEST_SOURCE),
+            )
+        ),
+        differentials=(differential,),
+        final_state=StateVector(),
+    )
+    return _line_milling_trace_context(evaluation, differential)
 
 
 class IsoStateSynthesisModelTests(unittest.TestCase):
@@ -493,6 +557,53 @@ class IsoStateSynthesisLineMillingGeometryTests(unittest.TestCase):
                 "CounterClockwise",
             ),
             ((10.0, 9.0), (20.0, 11.0)),
+        )
+
+    def test_no_lead_side_compensation_builder_emits_linear_profile(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="Line",
+            side_of_feature="Right",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+        )
+
+        self.assertTrue(context.modes.uses_no_lead_side_compensation)
+        self.assertEqual(
+            _line_milling_no_lead_side_compensation_motion_lines(context),
+            (
+                "?%ETK[7]=4",
+                "G42",
+                "G1 X10.000 Y20.000 Z5.000 F120.000",
+                "G1 Z-8.000 F120.000",
+                "G1 X110.000 Z-8.000 F600.000",
+                "G1 Z5.000 F600.000",
+                "G40",
+                "G1 X111.000 Y20.000 Z5.000 F600.000",
+            ),
+        )
+
+    def test_no_lead_side_compensation_builder_emits_circle_arcs(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="Circle",
+            side_of_feature="Left",
+            contour_points=((10.0, 10.0), (20.0, 10.0), (20.0, 20.0), (10.0, 20.0)),
+            profile_winding="CounterClockwise",
+            circle_center_x=15.0,
+            circle_center_y=15.0,
+        )
+
+        self.assertTrue(context.modes.uses_no_lead_side_compensation)
+        self.assertEqual(
+            _line_milling_no_lead_side_compensation_motion_lines(context),
+            (
+                "?%ETK[7]=4",
+                "G41",
+                "G1 X10.000 Y10.000 Z5.000 F120.000",
+                "G1 Z-8.000 F120.000",
+                "G3 X20.000 Y20.000 I15.000 J15.000 F600.000",
+                "G1 Z5.000 F600.000",
+                "G40",
+                "G1 X10.000 Y21.000 Z5.000 F600.000",
+            ),
         )
 
     def test_polyline_side_compensation_leads_support_line_and_arc(self) -> None:
