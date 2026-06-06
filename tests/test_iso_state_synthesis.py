@@ -12,11 +12,19 @@ from iso_state_synthesis.emitter import (
     ExplainedIsoLine,
     ExplainedIsoProgram,
     _closed_polyline_center_lead_geometry,
+    _line_milling_center_circle_leads_motion_lines,
+    _line_milling_circle_strategy_motion_lines,
+    _line_milling_closed_center_leads_motion_lines,
+    _line_milling_fallback_motion_lines,
     _line_milling_lead_path_motion_lines,
     _line_milling_motion_line,
+    _line_milling_no_lead_motion_lines,
     _line_milling_no_lead_side_compensation_motion_lines,
+    _line_milling_open_center_leads_motion_lines,
     _line_milling_open_polyline_side_compensation_motion_lines,
     _line_milling_side_compensation_fallback_motion_lines,
+    _line_milling_strategy_lead_path_motion_lines,
+    _line_milling_strategy_motion_lines,
     _line_milling_trace_context,
     _line_milling_trace_modes,
     _linear_profile_program_point,
@@ -119,10 +127,16 @@ def _line_milling_test_context(
     circle_center_x: float | None = None,
     circle_center_y: float | None = None,
     cut_z: float = -8.0,
+    strategy_name: str = "",
     approach_type: str = "Line",
+    approach_mode: str = "Down",
     approach_radius_multiplier: float = 2.0,
+    retract_type: str = "Line",
+    retract_mode: str = "Up",
+    retract_radius_multiplier: float | None = None,
     lead_paths: bool = False,
     overcut_length: float | None = None,
+    trajectory_primitives: tuple[object, ...] = (),
 ) -> object:
     optional_circle_changes: tuple[StateChange, ...] = ()
     if circle_center_x is not None and circle_center_y is not None:
@@ -133,6 +147,19 @@ def _line_milling_test_context(
     optional_work_changes: tuple[StateChange, ...] = ()
     if overcut_length is not None:
         optional_work_changes = (_change("trabajo", "overcut_length", overcut_length),)
+    optional_strategy_changes: tuple[StateChange, ...] = ()
+    if strategy_name:
+        optional_strategy_changes = (_change("trabajo", "strategy", strategy_name),)
+    optional_primitive_changes: tuple[StateChange, ...] = ()
+    if trajectory_primitives:
+        optional_primitive_changes = (
+            _change("movimiento", "trajectory_primitives", trajectory_primitives),
+        )
+    optional_retract_radius_changes: tuple[StateChange, ...] = ()
+    if retract_radius_multiplier is not None:
+        optional_retract_radius_changes = (
+            _change("trabajo", "retract_radius_multiplier", retract_radius_multiplier),
+        )
     first_x, first_y = contour_points[0]
     last_x, last_y = contour_points[-1]
     approach_move = (
@@ -163,11 +190,17 @@ def _line_milling_test_context(
             _change("movimiento", "profile_winding", profile_winding),
             _change("movimiento", "contour_points", contour_points),
             *optional_circle_changes,
+            *optional_primitive_changes,
             _change("herramienta", "tool_radius", 2.0),
             _change("herramienta", "tool_offset_length", 107.2),
             _change("trabajo", "side_of_feature", side_of_feature),
+            *optional_strategy_changes,
             _change("trabajo", "approach_type", approach_type),
+            _change("trabajo", "approach_mode", approach_mode),
             _change("trabajo", "approach_radius_multiplier", approach_radius_multiplier),
+            _change("trabajo", "retract_type", retract_type),
+            _change("trabajo", "retract_mode", retract_mode),
+            *optional_retract_radius_changes,
             *optional_work_changes,
         ),
         trace=(
@@ -724,6 +757,185 @@ class IsoStateSynthesisLineMillingGeometryTests(unittest.TestCase):
                 "G1 X10.000 Z-8.000 F120.000",
                 "G1 X110.000 Z-8.000 F600.000",
                 "G1 X112.000 Z5.000 F600.000",
+            ),
+        )
+
+    def test_open_center_leads_builder_emits_linear_entry_and_exit(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="OpenPolyline",
+            side_of_feature="Center",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+            lead_paths=True,
+        )
+
+        self.assertTrue(context.modes.uses_open_center_leads)
+        self.assertEqual(
+            _line_milling_open_center_leads_motion_lines(context, 6.0, 20.0),
+            (
+                "?%ETK[7]=4",
+                "G1 X10.000 Z-8.000 F120.000",
+                "G1 X110.000 F600.000",
+                "G1 X114.000 Z5.000 F600.000",
+                "G0 Z5.000",
+            ),
+        )
+
+    def test_closed_center_leads_builder_emits_arc_entry_and_linear_exit(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="ClosedPolylineMidEdgeStart",
+            side_of_feature="Center",
+            contour_points=(
+                (10.0, 10.0),
+                (20.0, 10.0),
+                (20.0, 20.0),
+                (10.0, 20.0),
+                (10.0, 10.0),
+            ),
+            profile_winding="CounterClockwise",
+            approach_type="Arc",
+            lead_paths=True,
+        )
+
+        self.assertTrue(context.modes.uses_closed_center_leads)
+        self.assertEqual(
+            _line_milling_closed_center_leads_motion_lines(context, 6.0, 14.0),
+            (
+                "?%ETK[7]=4",
+                "G3 X10.000 Y10.000 Z-8.000 I10.000 J14.000 F120.000",
+                "G1 X20.000 Z-8.000 F600.000",
+                "G1 Y20.000 Z-8.000 F600.000",
+                "G1 X10.000 Z-8.000 F600.000",
+                "G1 Y10.000 Z-8.000 F600.000",
+                "G1 X14.000 Z5.000 F600.000",
+                "G0 Z5.000",
+            ),
+        )
+
+    def test_center_circle_leads_builder_emits_circle_arcs(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="Circle",
+            side_of_feature="Center",
+            contour_points=((10.0, 10.0), (20.0, 10.0), (20.0, 20.0), (10.0, 20.0)),
+            profile_winding="CounterClockwise",
+            circle_center_x=15.0,
+            circle_center_y=15.0,
+            approach_type="Arc",
+            lead_paths=True,
+        )
+
+        self.assertTrue(context.modes.uses_center_circle_leads)
+        self.assertEqual(
+            _line_milling_center_circle_leads_motion_lines(context, 6.0, 6.0),
+            (
+                "?%ETK[7]=4",
+                "G3 X10.000 Y10.000 Z-8.000 I6.000 J10.000 F120.000",
+                "G3 X20.000 Y10.000 I15.000 J15.000 F600.000",
+                "G3 X20.000 Y20.000 I15.000 J15.000 F600.000",
+                "G3 X10.000 Y20.000 I15.000 J15.000 F600.000",
+                "G1 Y14.000 Z5.000 F600.000",
+                "G0 Z5.000",
+            ),
+        )
+
+    def test_circle_strategy_builder_walks_strategy_toolpath(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="Circle",
+            side_of_feature="Center",
+            contour_points=((10.0, 10.0), (20.0, 10.0)),
+            profile_winding="CounterClockwise",
+            circle_center_x=15.0,
+            circle_center_y=15.0,
+            strategy_name="Unidirectional",
+        )
+
+        self.assertEqual(
+            _line_milling_circle_strategy_motion_lines(context, 10.0, 10.0),
+            (
+                "G1 Z5.000 F120.000",
+                "?%ETK[7]=4",
+                "G1 Z-8.000 F600.000",
+                "G1 X20.000 Z-8.000 F600.000",
+                "G1 Z5.000 F600.000",
+                "G0 Z5.000",
+            ),
+        )
+
+    def test_strategy_lead_path_builder_uses_milling_feed_for_strategy_entry(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="OpenPolyline",
+            side_of_feature="Center",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+            strategy_name="Unidirectional",
+            lead_paths=True,
+        )
+
+        self.assertTrue(context.modes.has_lead_paths)
+        self.assertEqual(
+            _line_milling_strategy_lead_path_motion_lines(context),
+            (
+                "G1 Z5.000 F120.000",
+                "?%ETK[7]=4",
+                "G1 X10.000 Z-8.000 F600.000",
+                "G1 X110.000 Z-8.000 F600.000",
+                "G1 X112.000 Z5.000 F600.000",
+                "G0 Z5.000",
+            ),
+        )
+
+    def test_strategy_builder_without_leads_keeps_open_polyline_z_modal(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="OpenPolyline",
+            side_of_feature="Center",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+            strategy_name="Unidirectional",
+        )
+
+        self.assertEqual(
+            _line_milling_strategy_motion_lines(context),
+            (
+                "G1 Z5.000 F120.000",
+                "?%ETK[7]=4",
+                "G1 Z-8.000 F600.000",
+                "G1 X110.000 F600.000",
+                "G1 Z5.000 F600.000",
+                "G0 Z5.000",
+            ),
+        )
+
+    def test_no_lead_builder_emits_center_line_without_compensation(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="Line",
+            side_of_feature="Center",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+        )
+
+        self.assertFalse(context.modes.has_lead_paths)
+        self.assertEqual(
+            _line_milling_no_lead_motion_lines(context),
+            (
+                "G1 Z-8.000 F120.000",
+                "?%ETK[7]=4",
+                "G1 X110.000 Z-8.000 F600.000",
+                "G0 Z5.000",
+            ),
+        )
+
+    def test_fallback_builder_keeps_legacy_plain_toolpath_shape(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="Line",
+            side_of_feature="Center",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+        )
+
+        self.assertEqual(
+            _line_milling_fallback_motion_lines(context),
+            (
+                "G1 Z5.000 F120.000",
+                "?%ETK[7]=4",
+                "G1 Z-8.000 F600.000",
+                "G1 X110.000 Z-8.000 F600.000",
+                "G1 Z5.000 F600.000",
+                "G0 Z5.000",
             ),
         )
 

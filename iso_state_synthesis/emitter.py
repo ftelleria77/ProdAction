@@ -2675,594 +2675,15 @@ def _emit_line_milling_trace(
         )
 
     if uses_open_center_leads:
-        lead_geometry = _open_polyline_center_lead_geometry(
-            nominal_points,
-            float(tool_radius) * approach_radius_multiplier,
-            approach_type,
-        )
-        retract_geometry = _open_polyline_center_lead_geometry(
-            nominal_points,
-            float(tool_radius) * retract_radius_multiplier,
-            retract_type,
-        )
-        arc_code = "G3" if profile_winding != "Clockwise" else "G2"
-        generated = ["?%ETK[7]=4"]
-        current_x = float(rapid_x)
-        current_y = float(rapid_y)
-        current_z = float(security_z)
-        if approach_type == "Arc":
-            if approach_mode == "Down":
-                generated.append(
-                    _profile_milling_arc_line(
-                        arc_code,
-                        start_x,
-                        start_y,
-                        lead_geometry["approach_center"][0],
-                        lead_geometry["approach_center"][1],
-                        plunge_feed,
-                        z=cut_z,
-                    )
-                )
-            else:
-                generated.append(f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}")
-                generated.append(
-                    _profile_milling_arc_line(
-                        arc_code,
-                        start_x,
-                        start_y,
-                        lead_geometry["approach_center"][0],
-                        lead_geometry["approach_center"][1],
-                        plunge_feed,
-                    )
-                )
-        elif approach_mode == "Down":
-            generated.append(
-                _line_milling_motion_line(
-                    float(start_x),
-                    float(start_y),
-                    float(cut_z),
-                    current_x,
-                    current_y,
-                    current_z,
-                    float(plunge_feed),
-                )
-            )
-        else:
-            generated.append(f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}")
-            generated.append(
-                _line_milling_motion_line(
-                    float(start_x),
-                    float(start_y),
-                    float(cut_z),
-                    current_x,
-                    current_y,
-                    float(cut_z),
-                    float(plunge_feed),
-                    always_include_z=False,
-                )
-            )
-        current_x = float(start_x)
-        current_y = float(start_y)
-        current_z = float(cut_z)
-        for point in trajectory.points[1:]:
-            generated.append(
-                _line_milling_motion_line(
-                    float(point.x),
-                    float(point.y),
-                    float(point.iso_z),
-                    current_x,
-                    current_y,
-                    current_z,
-                    float(milling_feed),
-                    always_include_z=open_polyline_outside_piece,
-                )
-            )
-            current_x = float(point.x)
-            current_y = float(point.y)
-            current_z = float(point.iso_z)
-        if retract_type == "Arc":
-            exit_x, exit_y = retract_geometry["exit"]
-            if retract_mode == "Up":
-                generated.append(
-                    _profile_milling_arc_line(
-                        arc_code,
-                        exit_x,
-                        exit_y,
-                        retract_geometry["retract_center"][0],
-                        retract_geometry["retract_center"][1],
-                        milling_feed,
-                        z=security_z,
-                    )
-                )
-                generated.append(f"G0 Z{_fmt(security_z)}")
-            else:
-                generated.append(
-                    _profile_milling_arc_line(
-                        arc_code,
-                        exit_x,
-                        exit_y,
-                        retract_geometry["retract_center"][0],
-                        retract_geometry["retract_center"][1],
-                        milling_feed,
-                    )
-                )
-                generated.append(f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}")
-        else:
-            exit_x, exit_y = retract_geometry["exit"]
-            if retract_mode == "Up":
-                generated.append(
-                    _line_milling_motion_line(
-                        exit_x,
-                        exit_y,
-                        float(security_z),
-                        current_x,
-                        current_y,
-                        current_z,
-                        float(milling_feed),
-                    )
-                )
-                generated.append(f"G0 Z{_fmt(security_z)}")
-            else:
-                generated.append(
-                    _line_milling_motion_line(
-                        exit_x,
-                        exit_y,
-                        float(cut_z),
-                        current_x,
-                        current_y,
-                        current_z,
-                        float(milling_feed),
-                        always_include_z=False,
-                    )
-                )
-                generated.append(f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}")
-        motion_lines = tuple(generated)
+        motion_lines = _line_milling_open_center_leads_motion_lines(context, rapid_x, rapid_y)
     elif uses_closed_center_leads:
-        lead_geometry = _closed_polyline_center_lead_geometry(
-            nominal_points,
-            float(tool_radius) * approach_radius_multiplier,
-            approach_type,
-            profile_winding,
-        )
-        retract_geometry = _closed_polyline_center_lead_geometry(
-            nominal_points,
-            float(tool_radius) * retract_radius_multiplier,
-            retract_type,
-            profile_winding,
-        )
-        arc_code = "G3" if profile_winding == "CounterClockwise" else "G2"
-        generated = ["?%ETK[7]=4"]
-        current_x = float(rapid_x)
-        current_y = float(rapid_y)
-        current_z = float(security_z)
-        if approach_type == "Arc":
-            if approach_mode == "Down":
-                generated.append(
-                    _profile_milling_arc_line(
-                        arc_code,
-                        start_x,
-                        start_y,
-                        lead_geometry["approach_center"][0],
-                        lead_geometry["approach_center"][1],
-                        plunge_feed,
-                        z=cut_z,
-                    )
-                )
-            else:
-                generated.append(f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}")
-                generated.append(
-                    _profile_milling_arc_line(
-                        arc_code,
-                        start_x,
-                        start_y,
-                        lead_geometry["approach_center"][0],
-                        lead_geometry["approach_center"][1],
-                        plunge_feed,
-                    )
-                )
-        elif approach_mode == "Down":
-            generated.append(
-                _line_milling_motion_line(
-                    float(start_x),
-                    float(start_y),
-                    float(cut_z),
-                    current_x,
-                    current_y,
-                    current_z,
-                    float(plunge_feed),
-                )
-            )
-        else:
-            generated.append(f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}")
-            generated.append(
-                _line_milling_motion_line(
-                    float(start_x),
-                    float(start_y),
-                    float(cut_z),
-                    current_x,
-                    current_y,
-                    float(cut_z),
-                    float(plunge_feed),
-                )
-            )
-        current_x = float(start_x)
-        current_y = float(start_y)
-        current_z = float(cut_z)
-        primitive_index = 0
-        for point in trajectory.points[1:]:
-            matched_index, primitive = _matching_primitive_record(
-                trajectory_primitives,
-                primitive_index,
-                point,
-                current_x,
-                current_y,
-            )
-            if primitive is not None and str(primitive[0]) == "Arc":
-                generated.append(
-                    _arc_record_motion_line(
-                        primitive,
-                        point,
-                        current_z,
-                        float(milling_feed),
-                        fallback_center=(0.0, 0.0),
-                        fallback_winding=profile_winding,
-                    )
-                )
-                primitive_index = matched_index + 1
-            else:
-                generated.append(
-                    _line_milling_motion_line(
-                        float(point.x),
-                        float(point.y),
-                        float(point.iso_z),
-                        current_x,
-                        current_y,
-                        current_z,
-                        float(milling_feed),
-                    )
-                )
-                if matched_index >= 0:
-                    primitive_index = matched_index + 1
-            current_x = float(point.x)
-            current_y = float(point.y)
-            current_z = float(point.iso_z)
-        if retract_type == "Arc":
-            exit_x, exit_y = retract_geometry["exit"]
-            if retract_mode == "Up":
-                generated.append(
-                    _profile_milling_arc_line(
-                        arc_code,
-                        exit_x,
-                        exit_y,
-                        retract_geometry["retract_center"][0],
-                        retract_geometry["retract_center"][1],
-                        milling_feed,
-                        z=security_z,
-                    )
-                )
-                generated.append(f"G0 Z{_fmt(security_z)}")
-            else:
-                generated.append(
-                    _profile_milling_arc_line(
-                        arc_code,
-                        exit_x,
-                        exit_y,
-                        retract_geometry["retract_center"][0],
-                        retract_geometry["retract_center"][1],
-                        milling_feed,
-                    )
-                )
-                generated.append(f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}")
-        else:
-            exit_x, exit_y = retract_geometry["exit"]
-            if retract_mode == "Up":
-                generated.append(
-                    _line_milling_motion_line(
-                        exit_x,
-                        exit_y,
-                        float(security_z),
-                        current_x,
-                        current_y,
-                        current_z,
-                        float(milling_feed),
-                    )
-                )
-                generated.append(f"G0 Z{_fmt(security_z)}")
-            else:
-                generated.append(
-                    _line_milling_motion_line(
-                        exit_x,
-                        exit_y,
-                        float(cut_z),
-                        current_x,
-                        current_y,
-                        current_z,
-                        float(milling_feed),
-                    )
-                )
-                generated.append(f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}")
-        motion_lines = tuple(generated)
+        motion_lines = _line_milling_closed_center_leads_motion_lines(context, rapid_x, rapid_y)
     elif uses_center_circle_leads:
-        if circle_center_x is None or circle_center_y is None:
-            raise IsoCandidateEmissionError("El fresado circular con entrada no contiene centro.")
-        lead_distance = float(tool_radius) * approach_radius_multiplier
-        retract_lead_distance = float(tool_radius) * retract_radius_multiplier
-        arc_code = "G3" if profile_winding == "CounterClockwise" else "G2"
-        approach_center = (float(start_x) - lead_distance, float(start_y))
-        retract_center = (float(start_x) - retract_lead_distance, float(start_y))
-        generated = ["?%ETK[7]=4"]
-        current_x = float(rapid_x)
-        current_y = float(rapid_y)
-        current_z = float(security_z)
-        if approach_type == "Arc":
-            if approach_mode == "Down":
-                generated.append(
-                    _profile_milling_arc_line(
-                        arc_code,
-                        start_x,
-                        start_y,
-                        approach_center[0],
-                        approach_center[1],
-                        plunge_feed,
-                        z=cut_z,
-                    )
-                )
-            else:
-                generated.append(f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}")
-                generated.append(
-                    _profile_milling_arc_line(
-                        arc_code,
-                        start_x,
-                        start_y,
-                        approach_center[0],
-                        approach_center[1],
-                        plunge_feed,
-                    )
-                )
-        elif approach_mode == "Down":
-            generated.append(
-                _line_milling_motion_line(
-                    float(start_x),
-                    float(start_y),
-                    float(cut_z),
-                    current_x,
-                    current_y,
-                    current_z,
-                    float(plunge_feed),
-                )
-            )
-        else:
-            generated.append(f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}")
-            generated.append(
-                _line_milling_motion_line(
-                    float(start_x),
-                    float(start_y),
-                    float(cut_z),
-                    current_x,
-                    current_y,
-                    float(cut_z),
-                    float(plunge_feed),
-                )
-            )
-        current_x = float(start_x)
-        current_y = float(start_y)
-        current_z = float(cut_z)
-        primitive_index = 0
-        for point in trajectory.points[1:]:
-            matched_index, primitive = _matching_primitive_record(
-                trajectory_primitives,
-                primitive_index,
-                point,
-                current_x,
-                current_y,
-            )
-            if primitive is not None and str(primitive[0]) == "Arc":
-                generated.append(
-                    _arc_record_motion_line(
-                        primitive,
-                        point,
-                        current_z,
-                        float(milling_feed),
-                        fallback_center=(float(circle_center_x), float(circle_center_y)),
-                        fallback_winding=profile_winding,
-                    )
-                )
-                primitive_index = matched_index + 1
-            else:
-                generated.append(
-                    _profile_toolpath_motion_line(
-                        point,
-                        current_x,
-                        current_y,
-                        current_z,
-                        float(milling_feed),
-                        center=(float(circle_center_x), float(circle_center_y)),
-                        winding=profile_winding,
-                    )
-                )
-                if matched_index >= 0:
-                    primitive_index = matched_index + 1
-            current_x = float(point.x)
-            current_y = float(point.y)
-            current_z = float(point.iso_z)
-        if retract_type == "Arc":
-            exit_x = float(start_x) - retract_lead_distance
-            exit_y = float(start_y) + retract_lead_distance
-            if retract_mode == "Up":
-                generated.append(
-                    _profile_milling_arc_line(
-                        arc_code,
-                        exit_x,
-                        exit_y,
-                        retract_center[0],
-                        retract_center[1],
-                        milling_feed,
-                        z=security_z,
-                    )
-                )
-                generated.append(f"G0 Z{_fmt(security_z)}")
-            else:
-                generated.append(
-                    _profile_milling_arc_line(
-                        arc_code,
-                        exit_x,
-                        exit_y,
-                        retract_center[0],
-                        retract_center[1],
-                        milling_feed,
-                    )
-                )
-                generated.append(f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}")
-        else:
-            exit_x = float(start_x)
-            exit_y = float(start_y) + retract_lead_distance
-            if retract_mode == "Up":
-                generated.append(
-                    _line_milling_motion_line(
-                        exit_x,
-                        exit_y,
-                        float(security_z),
-                        current_x,
-                        current_y,
-                        current_z,
-                        float(milling_feed),
-                    )
-                )
-                generated.append(f"G0 Z{_fmt(security_z)}")
-            else:
-                generated.append(
-                    _line_milling_motion_line(
-                        exit_x,
-                        exit_y,
-                        float(cut_z),
-                        current_x,
-                        current_y,
-                        current_z,
-                        float(milling_feed),
-                    )
-                )
-                generated.append(f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}")
-        motion_lines = tuple(generated)
+        motion_lines = _line_milling_center_circle_leads_motion_lines(context, rapid_x, rapid_y)
     elif strategy_name and profile_family == "Circle":
-        if circle_center_x is None or circle_center_y is None:
-            raise IsoCandidateEmissionError("El fresado circular con estrategia no contiene centro.")
-        current_x = float(rapid_x)
-        current_y = float(rapid_y)
-        current_z = float(security_z)
-        primitive_index = 0
-        generated = [f"G1 Z{_fmt(security_z)} F{_fmt(plunge_feed)}", "?%ETK[7]=4"]
-        for point in trajectory.points:
-            matched_index, primitive = _matching_primitive_record(
-                trajectory_primitives,
-                primitive_index,
-                point,
-                current_x,
-                current_y,
-            )
-            if primitive is not None and str(primitive[0]) == "Arc":
-                line = _arc_record_motion_line(
-                    primitive,
-                    point,
-                    current_z,
-                    float(milling_feed),
-                    fallback_center=(float(circle_center_x), float(circle_center_y)),
-                    fallback_winding=profile_winding,
-                )
-                primitive_index = matched_index + 1
-            else:
-                line = _line_milling_motion_line(
-                    float(point.x),
-                    float(point.y),
-                    float(point.iso_z),
-                    current_x,
-                    current_y,
-                    current_z,
-                    float(milling_feed),
-                )
-                if matched_index >= 0:
-                    primitive_index = matched_index + 1
-            generated.append(line)
-            current_x = float(point.x)
-            current_y = float(point.y)
-            current_z = float(point.iso_z)
-        generated.append(f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}")
-        generated.append(f"G0 Z{_fmt(security_z)}")
-        motion_lines = tuple(generated)
+        motion_lines = _line_milling_circle_strategy_motion_lines(context, rapid_x, rapid_y)
     elif strategy_name and has_lead_paths:
-        generated = [f"G1 Z{_fmt(security_z)} F{_fmt(plunge_feed)}", "?%ETK[7]=4"]
-        current_x = float(approach.points[0].x)
-        current_y = float(approach.points[0].y)
-        current_z = float(security_z)
-        for point in approach.points[1:]:
-            generated.append(
-                _line_milling_motion_line(
-                    float(point.x),
-                    float(point.y),
-                    float(point.iso_z),
-                    current_x,
-                    current_y,
-                    current_z,
-                    float(milling_feed),
-                )
-            )
-            current_x = float(point.x)
-            current_y = float(point.y)
-            current_z = float(point.iso_z)
-        primitive_index = 0
-        for point in trajectory.points[1:]:
-            matched_index, primitive = _matching_primitive_record(
-                trajectory_primitives,
-                primitive_index,
-                point,
-                current_x,
-                current_y,
-            )
-            if primitive is not None and str(primitive[0]) == "Arc":
-                generated.append(
-                    _arc_record_motion_line(
-                        primitive,
-                        point,
-                        current_z,
-                        float(milling_feed),
-                        fallback_center=(0.0, 0.0),
-                        fallback_winding=profile_winding,
-                    )
-                )
-                primitive_index = matched_index + 1
-            else:
-                generated.append(
-                    _line_milling_motion_line(
-                        float(point.x),
-                        float(point.y),
-                        float(point.iso_z),
-                        current_x,
-                        current_y,
-                        current_z,
-                        float(milling_feed),
-                    )
-                )
-                if matched_index >= 0:
-                    primitive_index = matched_index + 1
-            current_x = float(point.x)
-            current_y = float(point.y)
-            current_z = float(point.iso_z)
-        for point in lift.points[1:]:
-            generated.append(
-                _line_milling_motion_line(
-                    float(point.x),
-                    float(point.y),
-                    float(point.iso_z),
-                    current_x,
-                    current_y,
-                    current_z,
-                    float(milling_feed),
-                )
-            )
-            current_x = float(point.x)
-            current_y = float(point.y)
-            current_z = float(point.iso_z)
-        generated.append(f"G0 Z{_fmt(security_z)}")
-        motion_lines = tuple(generated)
+        motion_lines = _line_milling_strategy_lead_path_motion_lines(context)
     elif (
         uses_side_compensation
         and profile_family.startswith("Line")
@@ -3296,77 +2717,11 @@ def _emit_line_milling_trace(
     elif uses_no_lead_side_compensation:
         motion_lines = _line_milling_no_lead_side_compensation_motion_lines(context)
     elif strategy_name:
-        current_x = float(start_x)
-        current_y = float(start_y)
-        current_z = float(security_z)
-        generated = [f"G1 Z{_fmt(security_z)} F{_fmt(plunge_feed)}", "?%ETK[7]=4"]
-        for point in trajectory.points:
-            line = _line_milling_motion_line(
-                float(point.x),
-                float(point.y),
-                float(point.iso_z),
-                current_x,
-                current_y,
-                current_z,
-                float(milling_feed),
-                always_include_z=profile_family != "OpenPolyline",
-            )
-            generated.append(line)
-            current_x = float(point.x)
-            current_y = float(point.y)
-            current_z = float(point.iso_z)
-        generated.append(f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}")
-        generated.append(f"G0 Z{_fmt(security_z)}")
-        motion_lines = tuple(generated)
+        motion_lines = _line_milling_strategy_motion_lines(context)
     elif not has_lead_paths:
-        current_x = float(trajectory.points[0].x if trajectory.points else start_x)
-        current_y = float(trajectory.points[0].y if trajectory.points else start_y)
-        current_z = float(cut_z)
-        generated = [f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}", "?%ETK[7]=4"]
-        for point in trajectory.points[1:]:
-            center = None
-            if profile_family == "Circle" and circle_center_x is not None and circle_center_y is not None:
-                center = (float(circle_center_x), float(circle_center_y))
-            always_include_z = profile_family.startswith("Line") or open_polyline_outside_piece
-            generated.append(
-                _profile_toolpath_motion_line(
-                    point,
-                    current_x,
-                    current_y,
-                    current_z,
-                    float(milling_feed),
-                    center=center,
-                    winding=profile_winding,
-                    always_include_z=always_include_z,
-                )
-            )
-            current_x = float(point.x)
-            current_y = float(point.y)
-            current_z = float(point.iso_z)
-        generated.append(f"G0 Z{_fmt(security_z)}")
-        motion_lines = tuple(generated)
+        motion_lines = _line_milling_no_lead_motion_lines(context)
     else:
-        current_x = float(start_x)
-        current_y = float(start_y)
-        current_z = float(security_z)
-        generated: list[str] = [f"G1 Z{_fmt(security_z)} F{_fmt(plunge_feed)}", "?%ETK[7]=4"]
-        for point in trajectory.points:
-            line = _line_milling_motion_line(
-                float(point.x),
-                float(point.y),
-                float(point.iso_z),
-                current_x,
-                current_y,
-                current_z,
-                float(milling_feed),
-            )
-            generated.append(line)
-            current_x = float(point.x)
-            current_y = float(point.y)
-            current_z = float(point.iso_z)
-        generated.append(f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}")
-        generated.append(f"G0 Z{_fmt(security_z)}")
-        motion_lines = tuple(generated)
+        motion_lines = _line_milling_fallback_motion_lines(context)
 
     for line in motion_lines:
         _append(
@@ -3529,6 +2884,711 @@ def _line_milling_trace_context(
         retract_radius_multiplier=retract_radius_multiplier,
         modes=modes,
     )
+
+
+def _line_milling_open_center_leads_motion_lines(
+    context: _LineMillingTraceContext,
+    rapid_x: object,
+    rapid_y: object,
+) -> tuple[str, ...]:
+    lead_geometry = _open_polyline_center_lead_geometry(
+        context.nominal_points,
+        float(context.tool_radius) * context.approach_radius_multiplier,
+        context.approach_type,
+    )
+    retract_geometry = _open_polyline_center_lead_geometry(
+        context.nominal_points,
+        float(context.tool_radius) * context.retract_radius_multiplier,
+        context.retract_type,
+    )
+    arc_code = "G3" if context.profile_winding != "Clockwise" else "G2"
+    generated = ["?%ETK[7]=4"]
+    current_x = float(rapid_x)
+    current_y = float(rapid_y)
+    current_z = float(context.security_z)
+    if context.approach_type == "Arc":
+        if context.approach_mode == "Down":
+            generated.append(
+                _profile_milling_arc_line(
+                    arc_code,
+                    context.start_x,
+                    context.start_y,
+                    lead_geometry["approach_center"][0],
+                    lead_geometry["approach_center"][1],
+                    context.plunge_feed,
+                    z=context.cut_z,
+                )
+            )
+        else:
+            generated.append(f"G1 Z{_fmt(context.cut_z)} F{_fmt(context.plunge_feed)}")
+            generated.append(
+                _profile_milling_arc_line(
+                    arc_code,
+                    context.start_x,
+                    context.start_y,
+                    lead_geometry["approach_center"][0],
+                    lead_geometry["approach_center"][1],
+                    context.plunge_feed,
+                )
+            )
+    elif context.approach_mode == "Down":
+        generated.append(
+            _line_milling_motion_line(
+                float(context.start_x),
+                float(context.start_y),
+                float(context.cut_z),
+                current_x,
+                current_y,
+                current_z,
+                float(context.plunge_feed),
+            )
+        )
+    else:
+        generated.append(f"G1 Z{_fmt(context.cut_z)} F{_fmt(context.plunge_feed)}")
+        generated.append(
+            _line_milling_motion_line(
+                float(context.start_x),
+                float(context.start_y),
+                float(context.cut_z),
+                current_x,
+                current_y,
+                float(context.cut_z),
+                float(context.plunge_feed),
+                always_include_z=False,
+            )
+        )
+    current_x = float(context.start_x)
+    current_y = float(context.start_y)
+    current_z = float(context.cut_z)
+    for point in context.trajectory.points[1:]:
+        generated.append(
+            _line_milling_motion_line(
+                float(point.x),
+                float(point.y),
+                float(point.iso_z),
+                current_x,
+                current_y,
+                current_z,
+                float(context.milling_feed),
+                always_include_z=context.open_polyline_outside_piece,
+            )
+        )
+        current_x = float(point.x)
+        current_y = float(point.y)
+        current_z = float(point.iso_z)
+    if context.retract_type == "Arc":
+        exit_x, exit_y = retract_geometry["exit"]
+        if context.retract_mode == "Up":
+            generated.append(
+                _profile_milling_arc_line(
+                    arc_code,
+                    exit_x,
+                    exit_y,
+                    retract_geometry["retract_center"][0],
+                    retract_geometry["retract_center"][1],
+                    context.milling_feed,
+                    z=context.security_z,
+                )
+            )
+            generated.append(f"G0 Z{_fmt(context.security_z)}")
+        else:
+            generated.append(
+                _profile_milling_arc_line(
+                    arc_code,
+                    exit_x,
+                    exit_y,
+                    retract_geometry["retract_center"][0],
+                    retract_geometry["retract_center"][1],
+                    context.milling_feed,
+                )
+            )
+            generated.append(f"G1 Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}")
+    else:
+        exit_x, exit_y = retract_geometry["exit"]
+        if context.retract_mode == "Up":
+            generated.append(
+                _line_milling_motion_line(
+                    exit_x,
+                    exit_y,
+                    float(context.security_z),
+                    current_x,
+                    current_y,
+                    current_z,
+                    float(context.milling_feed),
+                )
+            )
+            generated.append(f"G0 Z{_fmt(context.security_z)}")
+        else:
+            generated.append(
+                _line_milling_motion_line(
+                    exit_x,
+                    exit_y,
+                    float(context.cut_z),
+                    current_x,
+                    current_y,
+                    current_z,
+                    float(context.milling_feed),
+                    always_include_z=False,
+                )
+            )
+            generated.append(f"G1 Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}")
+    return tuple(generated)
+
+
+def _line_milling_closed_center_leads_motion_lines(
+    context: _LineMillingTraceContext,
+    rapid_x: object,
+    rapid_y: object,
+) -> tuple[str, ...]:
+    lead_geometry = _closed_polyline_center_lead_geometry(
+        context.nominal_points,
+        float(context.tool_radius) * context.approach_radius_multiplier,
+        context.approach_type,
+        context.profile_winding,
+    )
+    retract_geometry = _closed_polyline_center_lead_geometry(
+        context.nominal_points,
+        float(context.tool_radius) * context.retract_radius_multiplier,
+        context.retract_type,
+        context.profile_winding,
+    )
+    arc_code = "G3" if context.profile_winding == "CounterClockwise" else "G2"
+    generated = ["?%ETK[7]=4"]
+    current_x = float(rapid_x)
+    current_y = float(rapid_y)
+    current_z = float(context.security_z)
+    if context.approach_type == "Arc":
+        if context.approach_mode == "Down":
+            generated.append(
+                _profile_milling_arc_line(
+                    arc_code,
+                    context.start_x,
+                    context.start_y,
+                    lead_geometry["approach_center"][0],
+                    lead_geometry["approach_center"][1],
+                    context.plunge_feed,
+                    z=context.cut_z,
+                )
+            )
+        else:
+            generated.append(f"G1 Z{_fmt(context.cut_z)} F{_fmt(context.plunge_feed)}")
+            generated.append(
+                _profile_milling_arc_line(
+                    arc_code,
+                    context.start_x,
+                    context.start_y,
+                    lead_geometry["approach_center"][0],
+                    lead_geometry["approach_center"][1],
+                    context.plunge_feed,
+                )
+            )
+    elif context.approach_mode == "Down":
+        generated.append(
+            _line_milling_motion_line(
+                float(context.start_x),
+                float(context.start_y),
+                float(context.cut_z),
+                current_x,
+                current_y,
+                current_z,
+                float(context.plunge_feed),
+            )
+        )
+    else:
+        generated.append(f"G1 Z{_fmt(context.cut_z)} F{_fmt(context.plunge_feed)}")
+        generated.append(
+            _line_milling_motion_line(
+                float(context.start_x),
+                float(context.start_y),
+                float(context.cut_z),
+                current_x,
+                current_y,
+                float(context.cut_z),
+                float(context.plunge_feed),
+            )
+        )
+    current_x = float(context.start_x)
+    current_y = float(context.start_y)
+    current_z = float(context.cut_z)
+    primitive_index = 0
+    for point in context.trajectory.points[1:]:
+        matched_index, primitive = _matching_primitive_record(
+            context.trajectory_primitives,
+            primitive_index,
+            point,
+            current_x,
+            current_y,
+        )
+        if primitive is not None and str(primitive[0]) == "Arc":
+            generated.append(
+                _arc_record_motion_line(
+                    primitive,
+                    point,
+                    current_z,
+                    float(context.milling_feed),
+                    fallback_center=(0.0, 0.0),
+                    fallback_winding=context.profile_winding,
+                )
+            )
+            primitive_index = matched_index + 1
+        else:
+            generated.append(
+                _line_milling_motion_line(
+                    float(point.x),
+                    float(point.y),
+                    float(point.iso_z),
+                    current_x,
+                    current_y,
+                    current_z,
+                    float(context.milling_feed),
+                )
+            )
+            if matched_index >= 0:
+                primitive_index = matched_index + 1
+        current_x = float(point.x)
+        current_y = float(point.y)
+        current_z = float(point.iso_z)
+    if context.retract_type == "Arc":
+        exit_x, exit_y = retract_geometry["exit"]
+        if context.retract_mode == "Up":
+            generated.append(
+                _profile_milling_arc_line(
+                    arc_code,
+                    exit_x,
+                    exit_y,
+                    retract_geometry["retract_center"][0],
+                    retract_geometry["retract_center"][1],
+                    context.milling_feed,
+                    z=context.security_z,
+                )
+            )
+            generated.append(f"G0 Z{_fmt(context.security_z)}")
+        else:
+            generated.append(
+                _profile_milling_arc_line(
+                    arc_code,
+                    exit_x,
+                    exit_y,
+                    retract_geometry["retract_center"][0],
+                    retract_geometry["retract_center"][1],
+                    context.milling_feed,
+                )
+            )
+            generated.append(f"G1 Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}")
+    else:
+        exit_x, exit_y = retract_geometry["exit"]
+        if context.retract_mode == "Up":
+            generated.append(
+                _line_milling_motion_line(
+                    exit_x,
+                    exit_y,
+                    float(context.security_z),
+                    current_x,
+                    current_y,
+                    current_z,
+                    float(context.milling_feed),
+                )
+            )
+            generated.append(f"G0 Z{_fmt(context.security_z)}")
+        else:
+            generated.append(
+                _line_milling_motion_line(
+                    exit_x,
+                    exit_y,
+                    float(context.cut_z),
+                    current_x,
+                    current_y,
+                    current_z,
+                    float(context.milling_feed),
+                )
+            )
+            generated.append(f"G1 Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}")
+    return tuple(generated)
+
+
+def _line_milling_center_circle_leads_motion_lines(
+    context: _LineMillingTraceContext,
+    rapid_x: object,
+    rapid_y: object,
+) -> tuple[str, ...]:
+    if context.circle_center_x is None or context.circle_center_y is None:
+        raise IsoCandidateEmissionError("El fresado circular con entrada no contiene centro.")
+    lead_distance = float(context.tool_radius) * context.approach_radius_multiplier
+    retract_lead_distance = float(context.tool_radius) * context.retract_radius_multiplier
+    arc_code = "G3" if context.profile_winding == "CounterClockwise" else "G2"
+    approach_center = (float(context.start_x) - lead_distance, float(context.start_y))
+    retract_center = (float(context.start_x) - retract_lead_distance, float(context.start_y))
+    generated = ["?%ETK[7]=4"]
+    current_x = float(rapid_x)
+    current_y = float(rapid_y)
+    current_z = float(context.security_z)
+    if context.approach_type == "Arc":
+        if context.approach_mode == "Down":
+            generated.append(
+                _profile_milling_arc_line(
+                    arc_code,
+                    context.start_x,
+                    context.start_y,
+                    approach_center[0],
+                    approach_center[1],
+                    context.plunge_feed,
+                    z=context.cut_z,
+                )
+            )
+        else:
+            generated.append(f"G1 Z{_fmt(context.cut_z)} F{_fmt(context.plunge_feed)}")
+            generated.append(
+                _profile_milling_arc_line(
+                    arc_code,
+                    context.start_x,
+                    context.start_y,
+                    approach_center[0],
+                    approach_center[1],
+                    context.plunge_feed,
+                )
+            )
+    elif context.approach_mode == "Down":
+        generated.append(
+            _line_milling_motion_line(
+                float(context.start_x),
+                float(context.start_y),
+                float(context.cut_z),
+                current_x,
+                current_y,
+                current_z,
+                float(context.plunge_feed),
+            )
+        )
+    else:
+        generated.append(f"G1 Z{_fmt(context.cut_z)} F{_fmt(context.plunge_feed)}")
+        generated.append(
+            _line_milling_motion_line(
+                float(context.start_x),
+                float(context.start_y),
+                float(context.cut_z),
+                current_x,
+                current_y,
+                float(context.cut_z),
+                float(context.plunge_feed),
+            )
+        )
+    current_x = float(context.start_x)
+    current_y = float(context.start_y)
+    current_z = float(context.cut_z)
+    primitive_index = 0
+    for point in context.trajectory.points[1:]:
+        matched_index, primitive = _matching_primitive_record(
+            context.trajectory_primitives,
+            primitive_index,
+            point,
+            current_x,
+            current_y,
+        )
+        if primitive is not None and str(primitive[0]) == "Arc":
+            generated.append(
+                _arc_record_motion_line(
+                    primitive,
+                    point,
+                    current_z,
+                    float(context.milling_feed),
+                    fallback_center=(float(context.circle_center_x), float(context.circle_center_y)),
+                    fallback_winding=context.profile_winding,
+                )
+            )
+            primitive_index = matched_index + 1
+        else:
+            generated.append(
+                _profile_toolpath_motion_line(
+                    point,
+                    current_x,
+                    current_y,
+                    current_z,
+                    float(context.milling_feed),
+                    center=(float(context.circle_center_x), float(context.circle_center_y)),
+                    winding=context.profile_winding,
+                )
+            )
+            if matched_index >= 0:
+                primitive_index = matched_index + 1
+        current_x = float(point.x)
+        current_y = float(point.y)
+        current_z = float(point.iso_z)
+    if context.retract_type == "Arc":
+        exit_x = float(context.start_x) - retract_lead_distance
+        exit_y = float(context.start_y) + retract_lead_distance
+        if context.retract_mode == "Up":
+            generated.append(
+                _profile_milling_arc_line(
+                    arc_code,
+                    exit_x,
+                    exit_y,
+                    retract_center[0],
+                    retract_center[1],
+                    context.milling_feed,
+                    z=context.security_z,
+                )
+            )
+            generated.append(f"G0 Z{_fmt(context.security_z)}")
+        else:
+            generated.append(
+                _profile_milling_arc_line(
+                    arc_code,
+                    exit_x,
+                    exit_y,
+                    retract_center[0],
+                    retract_center[1],
+                    context.milling_feed,
+                )
+            )
+            generated.append(f"G1 Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}")
+    else:
+        exit_x = float(context.start_x)
+        exit_y = float(context.start_y) + retract_lead_distance
+        if context.retract_mode == "Up":
+            generated.append(
+                _line_milling_motion_line(
+                    exit_x,
+                    exit_y,
+                    float(context.security_z),
+                    current_x,
+                    current_y,
+                    current_z,
+                    float(context.milling_feed),
+                )
+            )
+            generated.append(f"G0 Z{_fmt(context.security_z)}")
+        else:
+            generated.append(
+                _line_milling_motion_line(
+                    exit_x,
+                    exit_y,
+                    float(context.cut_z),
+                    current_x,
+                    current_y,
+                    current_z,
+                    float(context.milling_feed),
+                )
+            )
+            generated.append(f"G1 Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}")
+    return tuple(generated)
+
+
+def _line_milling_circle_strategy_motion_lines(
+    context: _LineMillingTraceContext,
+    rapid_x: object,
+    rapid_y: object,
+) -> tuple[str, ...]:
+    if context.circle_center_x is None or context.circle_center_y is None:
+        raise IsoCandidateEmissionError("El fresado circular con estrategia no contiene centro.")
+    current_x = float(rapid_x)
+    current_y = float(rapid_y)
+    current_z = float(context.security_z)
+    primitive_index = 0
+    generated = [f"G1 Z{_fmt(context.security_z)} F{_fmt(context.plunge_feed)}", "?%ETK[7]=4"]
+    for point in context.trajectory.points:
+        matched_index, primitive = _matching_primitive_record(
+            context.trajectory_primitives,
+            primitive_index,
+            point,
+            current_x,
+            current_y,
+        )
+        if primitive is not None and str(primitive[0]) == "Arc":
+            line = _arc_record_motion_line(
+                primitive,
+                point,
+                current_z,
+                float(context.milling_feed),
+                fallback_center=(float(context.circle_center_x), float(context.circle_center_y)),
+                fallback_winding=context.profile_winding,
+            )
+            primitive_index = matched_index + 1
+        else:
+            line = _line_milling_motion_line(
+                float(point.x),
+                float(point.y),
+                float(point.iso_z),
+                current_x,
+                current_y,
+                current_z,
+                float(context.milling_feed),
+            )
+            if matched_index >= 0:
+                primitive_index = matched_index + 1
+        generated.append(line)
+        current_x = float(point.x)
+        current_y = float(point.y)
+        current_z = float(point.iso_z)
+    generated.append(f"G1 Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}")
+    generated.append(f"G0 Z{_fmt(context.security_z)}")
+    return tuple(generated)
+
+
+def _line_milling_strategy_lead_path_motion_lines(
+    context: _LineMillingTraceContext,
+) -> tuple[str, ...]:
+    generated = [f"G1 Z{_fmt(context.security_z)} F{_fmt(context.plunge_feed)}", "?%ETK[7]=4"]
+    current_x = float(context.approach.points[0].x)
+    current_y = float(context.approach.points[0].y)
+    current_z = float(context.security_z)
+    for point in context.approach.points[1:]:
+        generated.append(
+            _line_milling_motion_line(
+                float(point.x),
+                float(point.y),
+                float(point.iso_z),
+                current_x,
+                current_y,
+                current_z,
+                float(context.milling_feed),
+            )
+        )
+        current_x = float(point.x)
+        current_y = float(point.y)
+        current_z = float(point.iso_z)
+    primitive_index = 0
+    for point in context.trajectory.points[1:]:
+        matched_index, primitive = _matching_primitive_record(
+            context.trajectory_primitives,
+            primitive_index,
+            point,
+            current_x,
+            current_y,
+        )
+        if primitive is not None and str(primitive[0]) == "Arc":
+            generated.append(
+                _arc_record_motion_line(
+                    primitive,
+                    point,
+                    current_z,
+                    float(context.milling_feed),
+                    fallback_center=(0.0, 0.0),
+                    fallback_winding=context.profile_winding,
+                )
+            )
+            primitive_index = matched_index + 1
+        else:
+            generated.append(
+                _line_milling_motion_line(
+                    float(point.x),
+                    float(point.y),
+                    float(point.iso_z),
+                    current_x,
+                    current_y,
+                    current_z,
+                    float(context.milling_feed),
+                )
+            )
+            if matched_index >= 0:
+                primitive_index = matched_index + 1
+        current_x = float(point.x)
+        current_y = float(point.y)
+        current_z = float(point.iso_z)
+    for point in context.lift.points[1:]:
+        generated.append(
+            _line_milling_motion_line(
+                float(point.x),
+                float(point.y),
+                float(point.iso_z),
+                current_x,
+                current_y,
+                current_z,
+                float(context.milling_feed),
+            )
+        )
+        current_x = float(point.x)
+        current_y = float(point.y)
+        current_z = float(point.iso_z)
+    generated.append(f"G0 Z{_fmt(context.security_z)}")
+    return tuple(generated)
+
+
+def _line_milling_strategy_motion_lines(
+    context: _LineMillingTraceContext,
+) -> tuple[str, ...]:
+    current_x = float(context.start_x)
+    current_y = float(context.start_y)
+    current_z = float(context.security_z)
+    generated = [f"G1 Z{_fmt(context.security_z)} F{_fmt(context.plunge_feed)}", "?%ETK[7]=4"]
+    for point in context.trajectory.points:
+        line = _line_milling_motion_line(
+            float(point.x),
+            float(point.y),
+            float(point.iso_z),
+            current_x,
+            current_y,
+            current_z,
+            float(context.milling_feed),
+            always_include_z=context.profile_family != "OpenPolyline",
+        )
+        generated.append(line)
+        current_x = float(point.x)
+        current_y = float(point.y)
+        current_z = float(point.iso_z)
+    generated.append(f"G1 Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}")
+    generated.append(f"G0 Z{_fmt(context.security_z)}")
+    return tuple(generated)
+
+
+def _line_milling_no_lead_motion_lines(
+    context: _LineMillingTraceContext,
+) -> tuple[str, ...]:
+    current_x = float(context.trajectory.points[0].x if context.trajectory.points else context.start_x)
+    current_y = float(context.trajectory.points[0].y if context.trajectory.points else context.start_y)
+    current_z = float(context.cut_z)
+    generated = [f"G1 Z{_fmt(context.cut_z)} F{_fmt(context.plunge_feed)}", "?%ETK[7]=4"]
+    for point in context.trajectory.points[1:]:
+        center = None
+        if (
+            context.profile_family == "Circle"
+            and context.circle_center_x is not None
+            and context.circle_center_y is not None
+        ):
+            center = (float(context.circle_center_x), float(context.circle_center_y))
+        always_include_z = context.profile_family.startswith("Line") or context.open_polyline_outside_piece
+        generated.append(
+            _profile_toolpath_motion_line(
+                point,
+                current_x,
+                current_y,
+                current_z,
+                float(context.milling_feed),
+                center=center,
+                winding=context.profile_winding,
+                always_include_z=always_include_z,
+            )
+        )
+        current_x = float(point.x)
+        current_y = float(point.y)
+        current_z = float(point.iso_z)
+    generated.append(f"G0 Z{_fmt(context.security_z)}")
+    return tuple(generated)
+
+
+def _line_milling_fallback_motion_lines(
+    context: _LineMillingTraceContext,
+) -> tuple[str, ...]:
+    current_x = float(context.start_x)
+    current_y = float(context.start_y)
+    current_z = float(context.security_z)
+    generated: list[str] = [f"G1 Z{_fmt(context.security_z)} F{_fmt(context.plunge_feed)}", "?%ETK[7]=4"]
+    for point in context.trajectory.points:
+        line = _line_milling_motion_line(
+            float(point.x),
+            float(point.y),
+            float(point.iso_z),
+            current_x,
+            current_y,
+            current_z,
+            float(context.milling_feed),
+        )
+        generated.append(line)
+        current_x = float(point.x)
+        current_y = float(point.y)
+        current_z = float(point.iso_z)
+    generated.append(f"G1 Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}")
+    generated.append(f"G0 Z{_fmt(context.security_z)}")
+    return tuple(generated)
 
 
 def _line_milling_no_lead_side_compensation_motion_lines(

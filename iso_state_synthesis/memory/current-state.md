@@ -3,7 +3,21 @@
 Nueva memoria de trabajo para redisenar la generacion ISO desde cero sin
 arrastrar la arquitectura por patrones de `iso_generation/`.
 
-Ultima actualizacion: 2026-05-15
+Ultima actualizacion: 2026-06-06
+
+## Checkpoint 2026-06-06 - Modularizacion Interna Del Emisor Router
+
+- `_emit_line_milling_trace` queda reducido a lectura de contexto, calculo de
+  entrada comun, seleccion de builder de `motion_lines` y apendice explicado de
+  lineas ISO.
+- Los builders internos de traza router cubren center con leads
+  (`OpenPolyline`, `ClosedPolyline*`, `Circle`), estrategias, compensacion
+  lateral, sin-leads generico y fallback final.
+- La separacion a modulos fuera de `emitter.py` queda como decision futura del
+  laboratorio ISO; este checkpoint solo cierra la delegacion interna del bloque
+  de fresado router sin ampliar reglas ISO.
+- Cobertura local del checkpoint: `tests.test_iso_state_synthesis` fija los
+  builders de movimiento con tests puros.
 
 ## Retiro De `iso_generation/`
 

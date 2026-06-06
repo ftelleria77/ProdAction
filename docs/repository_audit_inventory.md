@@ -262,5 +262,8 @@ py -3 -m unittest discover -s tests -p "test*.py"
 - El subcorte inicial de `iso_state_synthesis/` agrega
   `docs/iso_state_synthesis_subsystem_audit.md` y cobertura pura para modelo,
   diferenciales, catalogo y comparacion de candidatos.
+- El subcorte de `iso_state_synthesis.emitter` extrae los builders internos de
+  `line_milling_trace`: center con leads, estrategias, compensacion lateral,
+  sin-leads generico y fallback final quedan cubiertos en tests puros.
 - `cnc_traceability/` tiene documentacion propia, pero poca o ninguna cobertura
   automatizada dedicada.

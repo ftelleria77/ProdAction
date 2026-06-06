@@ -119,19 +119,20 @@ Lectura estructural del bloque principal de fresado router:
 | Lectura de estado | Extrae coordenadas, feeds, herramienta, estrategia, familia de perfil, leads y primitivas desde `StageDifferential` y `evaluation.final_state`. | Conviene promover a un contexto/dataclass interno antes de extraer familias. |
 | Predicados de modo | Calcula `has_lead_paths`, `uses_side_compensation`, `uses_no_lead_side_compensation`, `uses_center_circle_leads`, `uses_closed_center_leads`, `uses_open_center_leads`. | Primer candidato a extraccion segura porque no emite lineas. |
 | Entrada comun | Calcula `rapid_x/rapid_y`, arma `entry_lines` y maneja continuidad con `previous_router_trace`. | Mezcla seleccion geometrica con estado modal anterior. Debe quedar cerca del dispatcher hasta tener tests de secuencia. |
-| Ramas center con leads | `OpenPolyline`, `ClosedPolyline*` y `Circle` con `side_of_feature=Center` y leads reales. | Comparten estructura approach/trajectory/retract. Se puede extraer despues de fijar predicados. |
-| Ramas con estrategia | Circulos con estrategia, estrategias con lead paths y estrategia sin leads. | Dependen de toolpaths Maestro y primitivas; requieren fixtures o tests de motion-line builders antes de extraer. |
-| Ramas con compensacion lateral | Lineal compensado, `OpenPolyline` compensado, fallback vertical y no-lead side compensation. | Ya tienen helpers geometricos cubiertos; falta cubrir la emision de motion lines por rama. |
-| Fallbacks | Lead paths simples, sin leads y fallback final. | Deben quedar como ultimo corte porque son los caminos de compatibilidad. |
+| Ramas center con leads | `OpenPolyline`, `ClosedPolyline*` y `Circle` con `side_of_feature=Center` y leads reales. | Extraidas como builders de `motion_lines`; siguen dentro de `emitter.py` hasta estabilizar el corte modular. |
+| Ramas con estrategia | Circulos con estrategia, estrategias con lead paths y estrategia sin leads. | Extraidas como builders internos y cubiertas con tests puros de forma. |
+| Ramas con compensacion lateral | Lineal compensado, `OpenPolyline` compensado, fallback vertical y no-lead side compensation. | La emision lateral ya delega en builders especificos o en el helper lineal previo. |
+| Fallbacks | Lead paths simples, sin leads y fallback final. | Extraidos como builders de compatibilidad para conservar la forma heredada. |
 
 Orden recomendado de extraccion futura:
 
 1. Hecho: extraer predicados de modo y cubrirlos con tests puros.
-2. Extraer un contexto interno de fresado router sin cambiar comportamiento.
-3. Extraer builders de `motion_lines` por familia/rama, empezando por las ramas
-   de geometria ya cubierta.
-4. Recién despues mover esos builders a modulos separados si el corte queda
-   estable.
+2. Hecho: extraer un contexto interno de fresado router sin cambiar
+   comportamiento.
+3. Hecho: extraer builders de `motion_lines` por familia/rama, empezando por
+   las ramas de geometria ya cubierta.
+4. Pendiente futuro: mover esos builders a modulos separados si el corte queda
+   estable y si el laboratorio ISO retoma una separacion por familias.
 
 ## Subcorte Fresado Router Predicados
 
@@ -209,11 +210,32 @@ Hallazgos aplicados:
   trayectoria/alejamiento.
 - Se agrego un test puro que fija el ISO emitido por esa secuencia.
 
+## Subcorte Fresado Router Builders Restantes
+
+Hallazgos aplicados:
+
+- Se extrajeron los builders internos para las ramas center con leads:
+  `_line_milling_open_center_leads_motion_lines`,
+  `_line_milling_closed_center_leads_motion_lines` y
+  `_line_milling_center_circle_leads_motion_lines`.
+- Se extrajeron los builders de estrategia:
+  `_line_milling_circle_strategy_motion_lines`,
+  `_line_milling_strategy_lead_path_motion_lines` y
+  `_line_milling_strategy_motion_lines`.
+- Se extrajeron los caminos de compatibilidad
+  `_line_milling_no_lead_motion_lines` y
+  `_line_milling_fallback_motion_lines`.
+- `_emit_line_milling_trace` queda reducido a lectura de contexto, calculo de
+  entrada comun, seleccion de builder y apendice explicado de lineas ISO.
+- La cobertura pura del subsistema fija los nuevos builders con casos center,
+  estrategia, sin leads y fallback final.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome
-  la generacion ISO, porque concentra preparacion, trazas, transiciones,
-  resets, formato y comparacion.
+  la generacion ISO, porque todavia concentra preparacion, transiciones,
+  resets, formato y comparacion. La traza router ya tiene builders internos de
+  `motion_lines`, pero aun no se movio a modulos separados.
 - Agregar fixtures PGMX/ISO chicos dentro de `tests/fixtures` o `tmp` controlado
   para cubrir `pgmx_source.py` y una emision real sin depender de rutas `S:` o
   `P:`.
