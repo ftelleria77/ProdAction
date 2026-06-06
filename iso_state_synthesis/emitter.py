@@ -857,6 +857,20 @@ def _emit_router_inter_work_reset(
     transition_id: Optional[str] = None,
 ) -> None:
     source = _observed_rule_source("router_inter_work_reset")
+    for line in _router_inter_work_reset_lines(next_prepare):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Bloque observado entre dos trabajos router con cambio de herramienta.",
+            confidence="observed",
+            rule_status="router_inter_work_observed",
+            transition_id=transition_id,
+        )
+
+
+def _router_inter_work_reset_lines(next_prepare: StageDifferential) -> tuple[str, ...]:
     strategy_change = _find_change(next_prepare.target_changes, "trabajo", "strategy")
     next_strategy = "" if strategy_change is None else str(strategy_change.after or "")
     approach_change = _find_change(next_prepare.target_changes, "trabajo", "approach_enabled")
@@ -877,17 +891,7 @@ def _emit_router_inter_work_reset(
     ]
     if next_strategy or (not next_approach_enabled and next_side not in {"Left", "Right"}):
         reset_lines = reset_lines[1:]
-    for line in reset_lines:
-        _append(
-            lines,
-            line,
-            differential,
-            source,
-            "Bloque observado entre dos trabajos router con cambio de herramienta.",
-            confidence="observed",
-            rule_status="router_inter_work_observed",
-            transition_id=transition_id,
-        )
+    return tuple(reset_lines)
 
 
 def compare_candidate_to_iso(

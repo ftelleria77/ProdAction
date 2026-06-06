@@ -37,6 +37,7 @@ from iso_state_synthesis.emitter import (
     _open_polyline_center_lead_geometry,
     _plan_work_groups,
     _polyline_side_compensation_leads,
+    _router_inter_work_reset_lines,
     _side_normal,
     _trace_move_tangent_unit,
     _trace_point_tangent,
@@ -430,6 +431,46 @@ class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
         self.assertEqual(
             [group.outgoing_transition_id for group in groups],
             ["T-RH-002", "T-XH-001", "T-XH-002", None],
+        )
+
+    def test_router_inter_work_reset_lines_emit_full_router_reset_by_default(self) -> None:
+        next_prepare = _stage_differential("profile_milling_prepare", "profile_milling", 0)
+
+        self.assertEqual(
+            _router_inter_work_reset_lines(next_prepare),
+            (
+                "?%ETK[7]=0",
+                "MLV=0",
+                "G0 G53 Z201.000",
+                "MLV=2",
+                "?%ETK[13]=0",
+                "?%ETK[18]=0",
+                "M5",
+                "MLV=0",
+                "G0 G53 Z201.000",
+            ),
+        )
+
+    def test_router_inter_work_reset_lines_trim_etk7_when_next_router_has_strategy(self) -> None:
+        next_prepare = StageDifferential(
+            stage_key="line_milling_prepare",
+            family="line_milling",
+            order_index=0,
+            target_changes=(_change("trabajo", "strategy", "Unidirectional"),),
+        )
+
+        self.assertEqual(
+            _router_inter_work_reset_lines(next_prepare),
+            (
+                "MLV=0",
+                "G0 G53 Z201.000",
+                "MLV=2",
+                "?%ETK[13]=0",
+                "?%ETK[18]=0",
+                "M5",
+                "MLV=0",
+                "G0 G53 Z201.000",
+            ),
         )
 
 

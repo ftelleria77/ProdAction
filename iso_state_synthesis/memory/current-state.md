@@ -15,6 +15,8 @@ Ultima actualizacion: 2026-06-06
 - La seleccion de lineas de movimiento queda separada en
   `_line_milling_trace_motion_lines`; la rama lineal compensada lee desde
   `_line_milling_linear_side_compensation_motion_lines`.
+- El primer subcorte de transiciones separa `_router_inter_work_reset_lines`
+  desde `_emit_router_inter_work_reset`.
 - Los builders internos de traza router cubren center con leads
   (`OpenPolyline`, `ClosedPolyline*`, `Circle`), estrategias, compensacion
   lateral, sin-leads generico y fallback final.

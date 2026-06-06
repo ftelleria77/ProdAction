@@ -259,6 +259,19 @@ Hallazgos aplicados:
 - Se agregaron tests puros para el builder lineal contextual y para el
   despacho del selector hacia center leads y compensacion lineal.
 
+## Subcorte Transicion Router Entre Trabajos
+
+Hallazgos aplicados:
+
+- Se extrajo `_router_inter_work_reset_lines` desde
+  `_emit_router_inter_work_reset` para separar la decision de lineas del
+  apendice explicado.
+- El helper conserva la regla observada: reset completo por defecto y reset
+  sin `?%ETK[7]=0` cuando el siguiente router trae estrategia o entra sin
+  acercamiento lateral/central.
+- Se agregaron tests puros para el reset completo y para el caso con estrategia
+  en el siguiente router.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome
