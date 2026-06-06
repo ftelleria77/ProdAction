@@ -6,8 +6,11 @@ from core.nesting_model import CutBoard
 
 
 def _safe_float(value):
+    raw_value = str(value).strip().replace(",", ".")
+    if not raw_value:
+        return None
     try:
-        return float(value)
+        return float(raw_value)
     except (TypeError, ValueError):
         return None
 
@@ -44,8 +47,10 @@ def normalize_board_definition(board_definition: dict) -> dict | None:
 
 
 def apply_board_margin(boards: list[CutBoard], board_width: float, board_height: float, board_margin: float) -> list[CutBoard]:
-    normalized_margin = max(0.0, float(board_margin))
-    board_area = float(board_width * board_height)
+    resolved_board_width = _safe_float(board_width) or 0.0
+    resolved_board_height = _safe_float(board_height) or 0.0
+    normalized_margin = max(0.0, _safe_float(board_margin) or 0.0)
+    board_area = float(resolved_board_width * resolved_board_height)
 
     for board in boards:
         if normalized_margin > 0:
@@ -54,8 +59,8 @@ def apply_board_margin(boards: list[CutBoard], board_width: float, board_height:
                 placement.y += normalized_margin
             board.main_cut_positions = [position + normalized_margin for position in board.main_cut_positions]
 
-        board.board_width = float(board_width)
-        board.board_height = float(board_height)
+        board.board_width = float(resolved_board_width)
+        board.board_height = float(resolved_board_height)
         board.board_margin = normalized_margin
 
         used_area = sum(placement.width * placement.height for placement in board.placements)

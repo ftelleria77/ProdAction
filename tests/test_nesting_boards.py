@@ -15,9 +15,9 @@ class NestingBoardsTests(unittest.TestCase):
         result = nesting_boards.normalize_board_definition(
             {
                 "color": " Blanco ",
-                "length": "2750",
-                "width": "1830",
-                "thickness": "18",
+                "length": "2750,5",
+                "width": "1830,25",
+                "thickness": "18,5",
                 "veta": "longitudinal",
             }
         )
@@ -26,9 +26,9 @@ class NestingBoardsTests(unittest.TestCase):
             result,
             {
                 "color": "Blanco",
-                "length": 2750.0,
-                "width": 1830.0,
-                "thickness": 18.0,
+                "length": 2750.5,
+                "width": 1830.25,
+                "thickness": 18.5,
                 "grain": "longitudinal",
                 "margin": 0.0,
             },

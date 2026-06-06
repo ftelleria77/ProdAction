@@ -191,6 +191,20 @@ memorias historicas como contexto, no como API.
    milling, no bloqueos del mapa modular.
 8. Revisar `core/` por dominios: proyectos/piezas, planillas, corte/nesting,
    En-Juego y puntos de contacto con `pgmx/`.
+   Reauditoria 2026-06-06: se abre `docs/core_subsystem_audit.md` como
+   documento dedicado. Primer subcorte: `core.model`/`core.parser`, con
+   cobertura focal en `tests/test_core_model.py` y `tests/test_core_parser.py`.
+   Segundo subcorte: planillas/PDF, con normalizacion numerica en
+   `core.production_sheet_data` y cobertura en
+   `tests/test_production_sheet_data.py`.
+   Tercer subcorte: diagramas de corte/nesting, con `core.nesting` conservado
+   como fachada compatible declarada y normalizacion numerica en helpers de
+   `core.nesting_boards`/`core.nesting_pieces`.
+   Cuarto subcorte: En-Juego productivo, con cobertura focal en
+   `tests/test_en_juego_transform.py` y `tests/test_en_juego_synthesis.py`.
+   Quinto subcorte: fachadas compatibles `core.summary`,
+   `core.pgmx_processing` y `core.nesting`, con cobertura en
+   `tests/test_core_facades.py`.
    Avance: `core/pgmx_processing.py` quedo como fachada compatible y la
    implementacion se movio a `pgmx/processing.py`; los imports productivos de
    UI, planillas y nesting apuntan ahora a `pgmx.processing`.
@@ -251,7 +265,7 @@ memorias historicas como contexto, no como API.
    `core.nesting_compat`; la fachada `core.nesting` reexporta solo ese contrato
    declarado. `LAB_COMPATIBILITY_NAMES` documenta los nombres que mantiene vivo
    `tools.studies.cut_diagrams.ordering_lab`.
-   Cierre: etapa 8 auditada contra los archivos actuales de `core/`; quedan
+   Cierre arquitectonico previo: etapa 8 auditada contra los archivos actuales de `core/`; quedan
    documentados modelo/parser, planillas, PGMX processing, En-Juego y
    corte/nesting. Las fachadas historicas vigentes son `core.summary`,
    `core.pgmx_processing` y `core.nesting`.

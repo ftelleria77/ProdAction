@@ -24,7 +24,7 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | Subsistema | Rol | Procesos Donde Interviene | Tests Principales | Docs Relacionados |
 | --- | --- | --- | --- | --- |
 | `app/` | Aplicacion desktop PySide6 y flujos de UI. | Seleccion de proyectos, edicion de proyectos, inspeccion de modulos, acciones PGMX, En-Juego, exportaciones. | `tests/test_project_*`, `tests/test_production_*`. | `README.md`, `docs/repo_study_guide.md`, `docs/app_subsystem_audit.md`. |
-| `core/` | Dominio compartido, parser, planillas, PDF, nesting y En-Juego. | Escaneo de proyectos, modelo de datos, resumen CSV, planillas Excel/PDF, diagramas de corte, composicion En-Juego. | `tests/test_nesting_*`, `tests/test_summary_exports.py`, `tests/test_production_*`. | `docs/repo_study_guide.md`, `docs/cut_diagrams_temporary_memory.md`, `docs/en_juego_synthesis_temporary_memory.md`. |
+| `core/` | Dominio compartido, parser, planillas, PDF, nesting y En-Juego. | Escaneo de proyectos, modelo de datos, resumen CSV, planillas Excel/PDF, diagramas de corte, composicion En-Juego. | `tests/test_core_*.py`, `tests/test_nesting_*`, `tests/test_summary_exports.py`, `tests/test_production_*`. | `docs/repo_study_guide.md`, `docs/core_subsystem_audit.md`, `docs/cut_diagrams_temporary_memory.md`, `docs/en_juego_synthesis_temporary_memory.md`. |
 | `pgmx/` | Subsistema PGMX productivo. | Lectura de programas, dibujos de piezas, snapshot, adaptacion, sintesis PGMX, laboratorio pocket milling. | `tests/test_pgmx_*`, `tests/test_project_detail_pgmx.py`. | `docs/synthesize_pgmx_help.md`, `docs/pgmx_snapshot_help.md`, `docs/pgmx_adapters_help.md`, `docs/pgmx_synthesis_modularization_plan.md`, `pgmx/machining_lab/README.md`. |
 | `iso_state_synthesis/` | Sintesis ISO experimental basada en estados. | Lectura de snapshot PGMX, plan de estados, diferencial, emision candidata ISO, comparacion. | Sin suite dedicada actual; se valida indirectamente desde UI/imports y estudios. | `iso_state_synthesis/README.md`, `iso_state_synthesis/memory/current-state.md`, `docs/iso_cnc_contract.md`. |
 | `cnc_traceability/` | Visor CNC standalone compatible con Windows XP. | Lectura de indice, seguimiento de mecanizado, preparacion USBMIX, previews de piezas. | Sin suite automatizada actual. | `cnc_traceability/README.md`, `cnc_traceability/docs/contract.md`. |
@@ -188,8 +188,11 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | Area | Suites |
 | --- | --- |
 | App/options/project detail | `tests/test_options_helpers.py`, `tests/test_project_detail_*.py`, `tests/test_project_store.py`. |
+| Core/model/parser | `tests/test_core_model.py`, `tests/test_core_parser.py`. |
+| Core/fachadas | `tests/test_core_facades.py`, `tests/test_nesting_compat.py`, `tests/test_summary_exports.py`. |
+| Core En-Juego | `tests/test_en_juego_transform.py`, `tests/test_en_juego_synthesis.py`, `tests/test_project_detail_en_juego_*.py`. |
 | En-Juego UI/layout/output | `tests/test_project_detail_en_juego_*.py`. |
-| Planillas/PDF | `tests/test_summary_exports.py`, `tests/test_production_pdf.py`, `tests/test_production_sheet_images.py`. |
+| Planillas/PDF | `tests/test_summary_exports.py`, `tests/test_production_sheet_data.py`, `tests/test_production_pdf.py`, `tests/test_production_sheet_images.py`. |
 | Nesting | `tests/test_nesting_*.py`. |
 | PGMX | `tests/test_pgmx_synthesis_package.py`, `tests/test_pgmx_public_facades.py`, `tests/test_pgmx_vaciado_v2.py`, `tests/test_pgmx_vaciado.py`, `tests/test_project_detail_pgmx.py`. |
 | Gaps conocidos | `iso_state_synthesis/`, `cnc_traceability/` y `tools/studies/` no tienen suite dedicada completa. |
@@ -235,5 +238,20 @@ py -3 -m unittest discover -s tests -p "test*.py"
 - `docs/app_subsystem_audit.md` queda agregado como corte de auditoria profunda
   del subsistema desktop; el bloque `app/` queda cerrado para esta etapa con
   deuda residual documentada.
+- `docs/core_subsystem_audit.md` queda agregado como corte de auditoria del
+  subsistema `core/`; el primer subcorte estabiliza modelo/parser y el contrato
+  de CSV con encabezados en `core.parser.load_module_summary`.
+- El subcorte planillas/PDF de `core/` estabiliza normalizacion numerica con
+  coma decimal en `core.production_sheet_data` y agrega cobertura focal.
+- El subcorte diagramas de corte de `core/` mantiene `core.nesting` como
+  fachada compatible declarada y estabiliza coma decimal en helpers numericos de
+  `core.nesting_boards` y `core.nesting_pieces`.
+- El subcorte En-Juego productivo de `core/` agrega cobertura para
+  transformaciones, validadores puros y contrato de resultado; la generacion
+  integral sigue dependiendo de fixtures PGMX reales.
+- El subcorte fachadas compatibles de `core/` agrega cobertura explicita para
+  `core.pgmx_processing`, `core.summary` y `core.nesting`.
+- El bloque `core/` queda cerrado para esta etapa; el siguiente bloque
+  recomendado es `pgmx/`.
 - `iso_state_synthesis/` y `cnc_traceability/` tienen documentacion propia, pero
   poca o ninguna cobertura automatizada dedicada.

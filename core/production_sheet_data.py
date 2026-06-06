@@ -16,17 +16,16 @@ from core.model import (
 
 
 def is_valid_thickness(value) -> bool:
-    if value is None:
-        return False
-    try:
-        return float(value) > 0
-    except (TypeError, ValueError):
-        return False
+    parsed = safe_float(value)
+    return parsed is not None and parsed > 0
 
 
 def safe_int(value, default=1) -> int:
+    raw_value = str(value).strip().replace(",", ".")
+    if not raw_value:
+        return default
     try:
-        parsed = int(float(value))
+        parsed = int(float(raw_value))
         return parsed if parsed > 0 else default
     except (TypeError, ValueError):
         return default
@@ -39,8 +38,11 @@ def effective_piece_quantity(piece_quantity, module_quantity) -> int:
 def safe_float(value):
     if value is None:
         return None
+    raw_value = str(value).strip().replace(",", ".")
+    if not raw_value:
+        return None
     try:
-        return float(value)
+        return float(raw_value)
     except (TypeError, ValueError):
         return None
 

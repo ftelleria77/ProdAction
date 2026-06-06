@@ -18,6 +18,11 @@ class NestingPiecesTests(unittest.TestCase):
         self.assertEqual(nesting_pieces.normalize_piece_grain_mode("longitudinal"), PIECE_GRAIN_HEIGHT_AXIS)
         self.assertEqual(nesting_pieces.normalize_piece_grain_mode("veta especial"), PIECE_GRAIN_LOCKED)
 
+    def test_numeric_helpers_accept_decimal_comma(self) -> None:
+        self.assertEqual(nesting_pieces.safe_float("18,5"), 18.5)
+        self.assertEqual(nesting_pieces.safe_quantity("2,9"), 2)
+        self.assertTrue(nesting_pieces.has_valid_cut_dimensions("100,5", "50", "18"))
+
     def test_expand_project_pieces_groups_valid_piece_copies(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir_name:
             module_path = Path(temp_dir_name)
@@ -32,7 +37,7 @@ class NestingPiecesTests(unittest.TestCase):
                         pieces=[
                             Piece(
                                 id="P1",
-                                width=100,
+                                width="100,5",
                                 height=50,
                                 thickness=18,
                                 quantity=2,
@@ -66,8 +71,8 @@ class NestingPiecesTests(unittest.TestCase):
             "Lateral #3 (A)",
             "Lateral #4 (A)",
         ])
-        self.assertTrue(all(piece.width == 100 and piece.height == 50 for piece in cut_pieces))
-        self.assertTrue(all(piece.final_width == 100 and piece.final_height == 50 for piece in cut_pieces))
+        self.assertTrue(all(piece.width == 100.5 and piece.height == 50 for piece in cut_pieces))
+        self.assertTrue(all(piece.final_width == 100.5 and piece.final_height == 50 for piece in cut_pieces))
 
 
 if __name__ == "__main__":

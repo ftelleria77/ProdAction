@@ -122,9 +122,9 @@ def _nonnegative_setting(value, default: float = 0.0) -> float:
 
 
 def _parse_quantity(piece_row: dict) -> int:
-    raw = "" if piece_row.get("quantity") is None else str(piece_row.get("quantity")).strip()
+    raw = "" if piece_row.get("quantity") is None else str(piece_row.get("quantity")).strip().replace(",", ".")
     try:
-        quantity = int(raw)
+        quantity = int(float(raw))
     except (TypeError, ValueError):
         return 1
     return quantity if quantity > 0 else 1

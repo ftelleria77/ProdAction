@@ -171,12 +171,29 @@ def load_module_summary(module_dir: Path) -> Dict[str, dict]:
         except ValueError:
             return 1
 
-    possible_ids = {normalize(x) for x in ["id", "pieza_id", "piece_id", "nombre", "pieza", "codigo"]}
-    possible_widths = {normalize(x) for x in ["width", "ancho", "ancho_mm", "largo", "ancho_cm", "width_mm"]}
-    possible_heights = {normalize(x) for x in ["height", "alto", "alto_mm", "alto_cm", "height_mm", "largo"]}
-    possible_color = {normalize(x) for x in ["color", "colores", "tono", "color_id"]}
-    possible_grain = {normalize(x) for x in ["grain_direction", "sentido_veta", "veta", "veta_sentido", "sentido"]}
-    possible_quantity = {normalize(x) for x in ["quantity", "cantidad", "qty", "cant"]}
+    possible_ids = tuple(normalize(x) for x in ["id", "pieza_id", "piece_id", "pieza", "codigo"])
+    possible_names = tuple(normalize(x) for x in ["name", "piece_name", "nombre", "descripcion"])
+    possible_widths = tuple(normalize(x) for x in ["width", "ancho", "ancho_mm", "ancho_cm", "width_mm"])
+    possible_heights = tuple(normalize(x) for x in ["height", "alto", "alto_mm", "alto_cm", "height_mm", "largo", "largo_mm"])
+    possible_thickness = tuple(normalize(x) for x in ["thickness", "espesor", "espesor_mm", "thickness_mm"])
+    possible_color = tuple(normalize(x) for x in ["color", "colores", "tono", "color_id"])
+    possible_grain = tuple(normalize(x) for x in ["grain_direction", "sentido_veta", "veta", "veta_sentido", "sentido"])
+    possible_quantity = tuple(normalize(x) for x in ["quantity", "cantidad", "qty", "cant"])
+    possible_sources = tuple(normalize(x) for x in ["source", "cnc_source", "pgmx", "programa", "archivo"])
+    possible_piece_types = tuple(normalize(x) for x in ["piece_type", "tipo", "tipo_pieza"])
+    known_header_names = set(
+        possible_ids
+        + possible_names
+        + possible_widths
+        + possible_heights
+        + possible_thickness
+        + possible_color
+        + possible_grain
+        + possible_quantity
+        + possible_sources
+        + possible_piece_types
+        + (normalize("module"),)
+    )
 
     summary_files = [
         summary_file
@@ -201,73 +218,70 @@ def load_module_summary(module_dir: Path) -> Dict[str, dict]:
             delimiter = ","
         logger.debug("Delimitador detectado en línea 1: %r", delimiter)
 
-        # Heurística: si primer valor parece ID de pieza (contiene letras y números), probablemente no hay encabezados
         first_row_values = lines[0].split(delimiter)
-        has_headers = False
-        
-        if len(first_row_values) > 0:
-            first_val = first_row_values[0].strip()
-            # Si empieza con número+letra (tipo "1FSX", "2FDX") es probablemente una pieza, no encabezado
-            if re.match(r"^[0-9]+[A-Za-z]", first_val):
-                has_headers = False
-                logger.debug("CSV detectado SIN encabezados (formato posicional, primer valor: %s)", first_val)
-            else:
-                has_headers = True
-                logger.debug("CSV detectado CON encabezados (primer valor: %s)", first_val)
+        first_row_headers = {normalize(value) for value in first_row_values}
+        has_headers = bool(first_row_headers & known_header_names)
+        if has_headers:
+            logger.debug("CSV detectado CON encabezados: %s", first_row_values[:10])
+        else:
+            logger.debug("CSV detectado SIN encabezados (formato posicional)")
 
-        # Intentar procesar como CSV sin encabezados primero (formato posicional).
+        # El formato posicional historico usa:
+        # 0=id, 1=tipo, 2=nombre, 3=cantidad, 5=largo, 6=ancho, 7=espesor,
+        # 8=color, 9=veta, 10=source.
         rows_count = 0
         no_header_lookup = {}
-        for line in lines:
-            if not line.strip():
-                continue
-            cols = line.split(delimiter)
-            rows_count += 1
+        if not has_headers:
+            for line in lines:
+                if not line.strip():
+                    continue
+                cols = line.split(delimiter)
+                rows_count += 1
 
-            if len(cols) < 10:
-                logger.debug("Fila %d: columnas insuficientes (%d < 10), saltando", rows_count, len(cols))
-                continue
+                if len(cols) < 10:
+                    logger.debug("Fila %d: columnas insuficientes (%d < 10), saltando", rows_count, len(cols))
+                    continue
 
-            piece_id = cols[0].strip()
-            if not piece_id:
-                logger.debug("Fila %d: ID vacío, saltando", rows_count)
-                continue
+                piece_id = cols[0].strip()
+                if not piece_id:
+                    logger.debug("Fila %d: ID vacio, saltando", rows_count)
+                    continue
 
-            piece_type = cols[1].strip() if len(cols) > 1 else None
-            quantity_str = cols[3].strip() if len(cols) > 3 else "1"
-            largo = parse_dimension(cols[5].strip()) if len(cols) > 5 else None
-            ancho = parse_dimension(cols[6].strip()) if len(cols) > 6 else None
-            espesor = parse_dimension(cols[7].strip()) if len(cols) > 7 else None
-            color = cols[8].strip() if len(cols) > 8 else None
-            veta_str = cols[9].strip() if len(cols) > 9 else "0"
-            grain_direction = normalize_piece_grain_direction(veta_str)
-            piece_name = cols[2].strip() if len(cols) > 2 else piece_id
-            source_file = cols[10].strip() if len(cols) > 10 else None
+                piece_type = cols[1].strip() if len(cols) > 1 else None
+                quantity_str = cols[3].strip() if len(cols) > 3 else "1"
+                largo = parse_dimension(cols[5].strip()) if len(cols) > 5 else None
+                ancho = parse_dimension(cols[6].strip()) if len(cols) > 6 else None
+                espesor = parse_dimension(cols[7].strip()) if len(cols) > 7 else None
+                color = cols[8].strip() if len(cols) > 8 else None
+                veta_str = cols[9].strip() if len(cols) > 9 else "0"
+                grain_direction = normalize_piece_grain_direction(veta_str)
+                piece_name = cols[2].strip() if len(cols) > 2 else piece_id
+                source_file = cols[10].strip() if len(cols) > 10 else None
 
-            if not largo and not ancho:
-                logger.debug("Fila %d: no dimension valida, saltando", rows_count)
-                continue
+                if not largo and not ancho:
+                    logger.debug("Fila %d: no dimension valida, saltando", rows_count)
+                    continue
 
-            qty_num = parse_quantity(quantity_str)
-            if piece_id in no_header_lookup:
-                prev_qty = parse_quantity(no_header_lookup[piece_id].get("quantity"))
-                no_header_lookup[piece_id]["quantity"] = str(prev_qty + qty_num)
-                if not no_header_lookup[piece_id].get("source") and source_file:
-                    no_header_lookup[piece_id]["source"] = source_file
-                continue
+                qty_num = parse_quantity(quantity_str)
+                if piece_id in no_header_lookup:
+                    prev_qty = parse_quantity(no_header_lookup[piece_id].get("quantity"))
+                    no_header_lookup[piece_id]["quantity"] = str(prev_qty + qty_num)
+                    if not no_header_lookup[piece_id].get("source") and source_file:
+                        no_header_lookup[piece_id]["source"] = source_file
+                    continue
 
-            no_header_lookup[piece_id] = {
-                "width": str(ancho) if ancho else None,
-                "height": str(largo) if largo else None,
-                "thickness": str(espesor) if espesor else None,
-                "color": color if color else None,
-                "grain_direction": grain_direction,
-                "quantity": str(qty_num),
-                "name": piece_name,
-                "source": source_file,
-                "piece_type": piece_type or None,
-            }
-            logger.debug("Fila %d: parseada sin encabezados %s", rows_count, piece_id)
+                no_header_lookup[piece_id] = {
+                    "width": str(ancho) if ancho is not None else None,
+                    "height": str(largo) if largo is not None else None,
+                    "thickness": str(espesor) if espesor is not None else None,
+                    "color": color if color else None,
+                    "grain_direction": grain_direction,
+                    "quantity": str(qty_num),
+                    "name": piece_name,
+                    "source": source_file,
+                    "piece_type": piece_type or None,
+                }
+                logger.debug("Fila %d: parseada sin encabezados %s", rows_count, piece_id)
 
         if no_header_lookup:
             lookup = no_header_lookup
@@ -309,26 +323,34 @@ def load_module_summary(module_dir: Path) -> Dict[str, dict]:
                                 return row_norm[candidate]
                         return None
 
-                    width = find_value(possible_widths)
-                    height = find_value(possible_heights)
+                    width = parse_dimension(find_value(possible_widths))
+                    height = parse_dimension(find_value(possible_heights))
+                    thickness = parse_dimension(find_value(possible_thickness))
                     color = find_value(possible_color)
                     grain_direction = normalize_piece_grain_direction(find_value(possible_grain))
                     quantity = find_value(possible_quantity) or "1"
+                    source = find_value(possible_sources)
+                    piece_type = find_value(possible_piece_types)
+                    piece_name = find_value(possible_names) or piece_id
 
                     qty_num = parse_quantity(quantity)
                     if piece_id in lookup:
                         prev_qty = parse_quantity(lookup[piece_id].get("quantity"))
                         lookup[piece_id]["quantity"] = str(prev_qty + qty_num)
+                        if not lookup[piece_id].get("source") and source:
+                            lookup[piece_id]["source"] = source
                         continue
 
                     lookup[piece_id] = {
-                        "width": width,
-                        "height": height,
+                        "width": str(width) if width is not None else None,
+                        "height": str(height) if height is not None else None,
+                        "thickness": str(thickness) if thickness is not None else None,
                         "color": color,
                         "grain_direction": grain_direction,
                         "quantity": str(qty_num),
-                        "source": row_norm.get("source") if "source" in row_norm else None,
-                        "name": row_norm.get("name") if "name" in row_norm else piece_id,
+                        "source": source,
+                        "name": piece_name,
+                        "piece_type": piece_type,
                     }
                     logger.debug("Fila %d: pieza '%s' (w=%s, h=%s, qty=%s)", rows_count, piece_id, width, height, quantity)
 

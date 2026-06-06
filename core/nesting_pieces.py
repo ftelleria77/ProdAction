@@ -24,25 +24,38 @@ from core.nesting_model import (
 
 
 def _safe_quantity(value) -> int:
+    raw_value = str(value).strip().replace(",", ".")
+    if not raw_value:
+        return 1
     try:
-        parsed = int(float(value))
+        parsed = int(float(raw_value))
     except (TypeError, ValueError):
         return 1
     return parsed if parsed > 0 else 1
 
 
 def _safe_float(value):
+    raw_value = str(value).strip().replace(",", ".")
+    if not raw_value:
+        return None
     try:
-        return float(value)
+        return float(raw_value)
     except (TypeError, ValueError):
         return None
 
 
 def _has_valid_cut_dimensions(width: float, height: float, thickness: float) -> bool:
-    try:
-        return float(width) > 0 and float(height) > 0 and float(thickness or 0) > 0
-    except (TypeError, ValueError):
-        return False
+    resolved_width = _safe_float(width)
+    resolved_height = _safe_float(height)
+    resolved_thickness = _safe_float(thickness)
+    return (
+        resolved_width is not None
+        and resolved_width > 0
+        and resolved_height is not None
+        and resolved_height > 0
+        and resolved_thickness is not None
+        and resolved_thickness > 0
+    )
 
 
 def _normalize_piece_grain_mode(value) -> str:
