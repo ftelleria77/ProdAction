@@ -2527,141 +2527,15 @@ def _emit_line_milling_trace(
     previous_router_trace: Optional[StageDifferential] = None,
 ) -> None:
     context = _line_milling_trace_context(evaluation, differential)
-    start_x = context.start_x
-    start_y = context.start_y
-    end_x = context.end_x
-    end_y = context.end_y
-    rapid_z = context.rapid_z
-    cut_z = context.cut_z
-    security_z = context.security_z
-    tool_radius = context.tool_radius
-    plunge_feed = context.plunge_feed
-    milling_feed = context.milling_feed
-    tool_offset = context.tool_offset
-    approach = context.approach
-    trajectory = context.trajectory
-    lift = context.lift
     source = context.source
-    side_of_feature = context.side_of_feature
-    overcut_length = context.overcut_length
-    strategy_name = context.strategy_name
-    profile_family = context.profile_family
-    profile_winding = context.profile_winding
-    circle_center_x = context.circle_center_x
-    circle_center_y = context.circle_center_y
-    nominal_points = context.nominal_points
-    open_polyline_outside_piece = context.open_polyline_outside_piece
-    trajectory_primitives = context.trajectory_primitives
-    approach_type = context.approach_type
-    approach_mode = context.approach_mode
-    approach_radius_multiplier = context.approach_radius_multiplier
-    retract_type = context.retract_type
-    retract_mode = context.retract_mode
-    retract_radius_multiplier = context.retract_radius_multiplier
-    modes = context.modes
-    has_lead_paths = modes.has_lead_paths
-    uses_side_compensation = modes.uses_side_compensation
-    uses_no_lead_side_compensation = modes.uses_no_lead_side_compensation
-    uses_center_circle_leads = modes.uses_center_circle_leads
-    uses_closed_center_leads = modes.uses_closed_center_leads
-    uses_open_center_leads = modes.uses_open_center_leads
-    if uses_open_center_leads:
-        lead_geometry = _open_polyline_center_lead_geometry(
-            nominal_points,
-            float(tool_radius) * approach_radius_multiplier,
-            approach_type,
-        )
-        rapid_x, rapid_y = lead_geometry["rapid"]
-    elif uses_closed_center_leads:
-        lead_geometry = _closed_polyline_center_lead_geometry(
-            nominal_points,
-            float(tool_radius) * approach_radius_multiplier,
-            approach_type,
-            profile_winding,
-        )
-        rapid_x, rapid_y = lead_geometry["rapid"]
-    elif uses_center_circle_leads:
-        lead_distance = float(tool_radius) * approach_radius_multiplier
-        if approach_type == "Arc":
-            rapid_x = float(start_x) - lead_distance
-            rapid_y = float(start_y) - lead_distance
-        else:
-            rapid_x = float(start_x)
-            rapid_y = float(start_y) - lead_distance
-    elif strategy_name and not has_lead_paths and approach.points:
-        rapid_x = float(approach.points[0].x)
-        rapid_y = float(approach.points[0].y)
-    elif uses_no_lead_side_compensation:
-        rapid_point, _ = _no_lead_compensation_points(
-            nominal_points,
-            float(tool_radius),
-            profile_family,
-            profile_winding,
-        )
-        rapid_x, rapid_y = rapid_point
-    elif (
-        uses_side_compensation
-        and profile_family.startswith("Line")
-        and approach_type == "Line"
-        and approach_mode == "Down"
-        and retract_type == "Line"
-        and retract_mode == "Up"
-    ):
-        rapid_x, rapid_y = _linear_side_compensation_rapid_point(
-            nominal_points,
-            approach,
-        )
-    elif uses_side_compensation and profile_family == "OpenPolyline":
-        polyline_lead = _polyline_side_compensation_leads(
-            nominal_points,
-            float(tool_radius),
-            side_of_feature,
-            approach_type,
-            approach_radius_multiplier,
-        )
-        rapid_x, rapid_y = polyline_lead["entry_rapid"]
-    elif uses_side_compensation:
-        rapid_x = start_x
-        rapid_y = float(approach.points[0].y) - (2.0 * overcut_length)
-    else:
-        rapid_x = approach.points[0].x if has_lead_paths else start_x
-        rapid_y = approach.points[0].y if has_lead_paths else start_y
-
-    entry_lines: tuple[str, ...]
-    if previous_router_trace is not None:
-        last_xy = _last_emitted_xy(lines)
-        previous_x = last_xy[0] if last_xy is not None else None
-        previous_y = last_xy[1] if last_xy is not None else None
-        if previous_x is None or previous_y is None:
-            previous_x = _optional_change_after(previous_router_trace, "movimiento", "leadout_x", None)
-            previous_y = _optional_change_after(previous_router_trace, "movimiento", "leadout_y", None)
-        if previous_x is None or previous_y is None:
-            previous_lift = _trace_move(previous_router_trace, "Lift")
-            previous_x = previous_lift.points[-1].x
-            previous_y = previous_lift.points[-1].y
-        entry_prefix = ["?%ETK[7]=0", "G17"]
-        if previous_router_trace.family != "line_milling":
-            entry_prefix.append("MLV=2")
-        entry_lines = tuple(entry_prefix) + (
-            f"G0 X{_fmt(previous_x)} Y{_fmt(previous_y)} Z{_fmt(rapid_z)}",
-            f"G0 X{_fmt(rapid_x)} Y{_fmt(rapid_y)} Z{_fmt(rapid_z)}",
-            f"G0 X{_fmt(rapid_x)} Y{_fmt(rapid_y)} Z{_fmt(rapid_z)}",
-            "D1",
-            f"SVL {_fmt(tool_offset)}",
-            f"VL6={_fmt(tool_offset)}",
-            f"SVR {_fmt(tool_radius)}",
-            f"VL7={_fmt(tool_radius)}",
-        )
-    else:
-        entry_lines = (
-            f"G0 X{_fmt(rapid_x)} Y{_fmt(rapid_y)}",
-            f"G0 Z{_fmt(rapid_z)}",
-            "D1",
-            f"SVL {_fmt(tool_offset)}",
-            f"VL6={_fmt(tool_offset)}",
-            f"SVR {_fmt(tool_radius)}",
-            f"VL7={_fmt(tool_radius)}",
-        )
+    rapid_x, rapid_y = _line_milling_rapid_point(context)
+    entry_lines = _line_milling_entry_lines(
+        lines,
+        context,
+        rapid_x,
+        rapid_y,
+        previous_router_trace=previous_router_trace,
+    )
 
     for line in entry_lines:
         _append(
@@ -2674,56 +2548,7 @@ def _emit_line_milling_trace(
             rule_status="generalized_line_milling_020_023",
         )
 
-    if uses_open_center_leads:
-        motion_lines = _line_milling_open_center_leads_motion_lines(context, rapid_x, rapid_y)
-    elif uses_closed_center_leads:
-        motion_lines = _line_milling_closed_center_leads_motion_lines(context, rapid_x, rapid_y)
-    elif uses_center_circle_leads:
-        motion_lines = _line_milling_center_circle_leads_motion_lines(context, rapid_x, rapid_y)
-    elif strategy_name and profile_family == "Circle":
-        motion_lines = _line_milling_circle_strategy_motion_lines(context, rapid_x, rapid_y)
-    elif strategy_name and has_lead_paths:
-        motion_lines = _line_milling_strategy_lead_path_motion_lines(context)
-    elif (
-        uses_side_compensation
-        and profile_family.startswith("Line")
-        and approach_type == "Line"
-        and approach_mode == "Down"
-        and retract_type == "Line"
-        and retract_mode == "Up"
-    ):
-        compensation_code = "G42" if side_of_feature == "Right" else "G41"
-        include_cut_z = (
-            open_polyline_outside_piece
-            or float(cut_z) > -float(evaluation.initial_state.get("pieza", "depth"))
-        )
-        motion_lines = _linear_side_compensation_motion_lines(
-            nominal_points,
-            approach,
-            lift,
-            compensation_code,
-            float(security_z),
-            float(cut_z),
-            float(plunge_feed),
-            float(milling_feed),
-            include_cut_z=include_cut_z,
-        )
-    elif uses_side_compensation and profile_family == "OpenPolyline":
-        motion_lines = _line_milling_open_polyline_side_compensation_motion_lines(context)
-    elif uses_side_compensation:
-        motion_lines = _line_milling_side_compensation_fallback_motion_lines(context)
-    elif has_lead_paths:
-        motion_lines = _line_milling_lead_path_motion_lines(context)
-    elif uses_no_lead_side_compensation:
-        motion_lines = _line_milling_no_lead_side_compensation_motion_lines(context)
-    elif strategy_name:
-        motion_lines = _line_milling_strategy_motion_lines(context)
-    elif not has_lead_paths:
-        motion_lines = _line_milling_no_lead_motion_lines(context)
-    else:
-        motion_lines = _line_milling_fallback_motion_lines(context)
-
-    for line in motion_lines:
+    for line in _line_milling_trace_motion_lines(context, rapid_x, rapid_y):
         _append(
             lines,
             line,
@@ -2883,6 +2708,177 @@ def _line_milling_trace_context(
         retract_mode=retract_mode,
         retract_radius_multiplier=retract_radius_multiplier,
         modes=modes,
+    )
+
+
+def _line_milling_rapid_point(context: _LineMillingTraceContext) -> tuple[object, object]:
+    modes = context.modes
+    if modes.uses_open_center_leads:
+        lead_geometry = _open_polyline_center_lead_geometry(
+            context.nominal_points,
+            float(context.tool_radius) * context.approach_radius_multiplier,
+            context.approach_type,
+        )
+        return lead_geometry["rapid"]
+    if modes.uses_closed_center_leads:
+        lead_geometry = _closed_polyline_center_lead_geometry(
+            context.nominal_points,
+            float(context.tool_radius) * context.approach_radius_multiplier,
+            context.approach_type,
+            context.profile_winding,
+        )
+        return lead_geometry["rapid"]
+    if modes.uses_center_circle_leads:
+        lead_distance = float(context.tool_radius) * context.approach_radius_multiplier
+        if context.approach_type == "Arc":
+            return (
+                float(context.start_x) - lead_distance,
+                float(context.start_y) - lead_distance,
+            )
+        return (float(context.start_x), float(context.start_y) - lead_distance)
+    if context.strategy_name and not modes.has_lead_paths and context.approach.points:
+        return (float(context.approach.points[0].x), float(context.approach.points[0].y))
+    if modes.uses_no_lead_side_compensation:
+        rapid_point, _ = _no_lead_compensation_points(
+            context.nominal_points,
+            float(context.tool_radius),
+            context.profile_family,
+            context.profile_winding,
+        )
+        return rapid_point
+    if (
+        modes.uses_side_compensation
+        and context.profile_family.startswith("Line")
+        and context.approach_type == "Line"
+        and context.approach_mode == "Down"
+        and context.retract_type == "Line"
+        and context.retract_mode == "Up"
+    ):
+        return _linear_side_compensation_rapid_point(
+            context.nominal_points,
+            context.approach,
+        )
+    if modes.uses_side_compensation and context.profile_family == "OpenPolyline":
+        polyline_lead = _polyline_side_compensation_leads(
+            context.nominal_points,
+            float(context.tool_radius),
+            context.side_of_feature,
+            context.approach_type,
+            context.approach_radius_multiplier,
+        )
+        return polyline_lead["entry_rapid"]
+    if modes.uses_side_compensation:
+        return (
+            context.start_x,
+            float(context.approach.points[0].y) - (2.0 * context.overcut_length),
+        )
+    return (
+        context.approach.points[0].x if modes.has_lead_paths else context.start_x,
+        context.approach.points[0].y if modes.has_lead_paths else context.start_y,
+    )
+
+
+def _line_milling_entry_lines(
+    emitted_lines: list[ExplainedIsoLine],
+    context: _LineMillingTraceContext,
+    rapid_x: object,
+    rapid_y: object,
+    *,
+    previous_router_trace: Optional[StageDifferential] = None,
+) -> tuple[str, ...]:
+    if previous_router_trace is not None:
+        last_xy = _last_emitted_xy(emitted_lines)
+        previous_x = last_xy[0] if last_xy is not None else None
+        previous_y = last_xy[1] if last_xy is not None else None
+        if previous_x is None or previous_y is None:
+            previous_x = _optional_change_after(previous_router_trace, "movimiento", "leadout_x", None)
+            previous_y = _optional_change_after(previous_router_trace, "movimiento", "leadout_y", None)
+        if previous_x is None or previous_y is None:
+            previous_lift = _trace_move(previous_router_trace, "Lift")
+            previous_x = previous_lift.points[-1].x
+            previous_y = previous_lift.points[-1].y
+        entry_prefix = ["?%ETK[7]=0", "G17"]
+        if previous_router_trace.family != "line_milling":
+            entry_prefix.append("MLV=2")
+        return tuple(entry_prefix) + (
+            f"G0 X{_fmt(previous_x)} Y{_fmt(previous_y)} Z{_fmt(context.rapid_z)}",
+            f"G0 X{_fmt(rapid_x)} Y{_fmt(rapid_y)} Z{_fmt(context.rapid_z)}",
+            f"G0 X{_fmt(rapid_x)} Y{_fmt(rapid_y)} Z{_fmt(context.rapid_z)}",
+            "D1",
+            f"SVL {_fmt(context.tool_offset)}",
+            f"VL6={_fmt(context.tool_offset)}",
+            f"SVR {_fmt(context.tool_radius)}",
+            f"VL7={_fmt(context.tool_radius)}",
+        )
+    return (
+        f"G0 X{_fmt(rapid_x)} Y{_fmt(rapid_y)}",
+        f"G0 Z{_fmt(context.rapid_z)}",
+        "D1",
+        f"SVL {_fmt(context.tool_offset)}",
+        f"VL6={_fmt(context.tool_offset)}",
+        f"SVR {_fmt(context.tool_radius)}",
+        f"VL7={_fmt(context.tool_radius)}",
+    )
+
+
+def _line_milling_trace_motion_lines(
+    context: _LineMillingTraceContext,
+    rapid_x: object,
+    rapid_y: object,
+) -> tuple[str, ...]:
+    modes = context.modes
+    if modes.uses_open_center_leads:
+        return _line_milling_open_center_leads_motion_lines(context, rapid_x, rapid_y)
+    if modes.uses_closed_center_leads:
+        return _line_milling_closed_center_leads_motion_lines(context, rapid_x, rapid_y)
+    if modes.uses_center_circle_leads:
+        return _line_milling_center_circle_leads_motion_lines(context, rapid_x, rapid_y)
+    if context.strategy_name and context.profile_family == "Circle":
+        return _line_milling_circle_strategy_motion_lines(context, rapid_x, rapid_y)
+    if context.strategy_name and modes.has_lead_paths:
+        return _line_milling_strategy_lead_path_motion_lines(context)
+    if (
+        modes.uses_side_compensation
+        and context.profile_family.startswith("Line")
+        and context.approach_type == "Line"
+        and context.approach_mode == "Down"
+        and context.retract_type == "Line"
+        and context.retract_mode == "Up"
+    ):
+        return _line_milling_linear_side_compensation_motion_lines(context)
+    if modes.uses_side_compensation and context.profile_family == "OpenPolyline":
+        return _line_milling_open_polyline_side_compensation_motion_lines(context)
+    if modes.uses_side_compensation:
+        return _line_milling_side_compensation_fallback_motion_lines(context)
+    if modes.has_lead_paths:
+        return _line_milling_lead_path_motion_lines(context)
+    if modes.uses_no_lead_side_compensation:
+        return _line_milling_no_lead_side_compensation_motion_lines(context)
+    if context.strategy_name:
+        return _line_milling_strategy_motion_lines(context)
+    if not modes.has_lead_paths:
+        return _line_milling_no_lead_motion_lines(context)
+    return _line_milling_fallback_motion_lines(context)
+
+
+def _line_milling_linear_side_compensation_motion_lines(
+    context: _LineMillingTraceContext,
+) -> tuple[str, ...]:
+    compensation_code = "G42" if context.side_of_feature == "Right" else "G41"
+    include_cut_z = (
+        context.open_polyline_outside_piece
+        or float(context.cut_z) > -context.piece_depth
+    )
+    return _linear_side_compensation_motion_lines(
+        context.nominal_points,
+        context.approach,
+        context.lift,
+        compensation_code,
+        float(context.security_z),
+        float(context.cut_z),
+        float(context.plunge_feed),
+        float(context.milling_feed),
+        include_cut_z=include_cut_z,
     )
 
 

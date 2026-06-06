@@ -15,17 +15,21 @@ from iso_state_synthesis.emitter import (
     _line_milling_center_circle_leads_motion_lines,
     _line_milling_circle_strategy_motion_lines,
     _line_milling_closed_center_leads_motion_lines,
+    _line_milling_entry_lines,
     _line_milling_fallback_motion_lines,
     _line_milling_lead_path_motion_lines,
+    _line_milling_linear_side_compensation_motion_lines,
     _line_milling_motion_line,
     _line_milling_no_lead_motion_lines,
     _line_milling_no_lead_side_compensation_motion_lines,
     _line_milling_open_center_leads_motion_lines,
     _line_milling_open_polyline_side_compensation_motion_lines,
+    _line_milling_rapid_point,
     _line_milling_side_compensation_fallback_motion_lines,
     _line_milling_strategy_lead_path_motion_lines,
     _line_milling_strategy_motion_lines,
     _line_milling_trace_context,
+    _line_milling_trace_motion_lines,
     _line_milling_trace_modes,
     _linear_profile_program_point,
     _linear_profile_tangent_axis,
@@ -502,6 +506,86 @@ class IsoStateSynthesisLineMillingGeometryTests(unittest.TestCase):
         self.assertTrue(context.modes.uses_side_compensation)
         self.assertFalse(context.modes.uses_open_center_leads)
 
+    def test_line_milling_rapid_point_uses_center_lead_geometry(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="OpenPolyline",
+            side_of_feature="Center",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+            approach_type="Arc",
+            lead_paths=True,
+        )
+
+        self.assertTrue(context.modes.uses_open_center_leads)
+        self.assertEqual(_line_milling_rapid_point(context), (6.0, 24.0))
+
+    def test_line_milling_rapid_point_uses_no_lead_compensation_entry(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="Line",
+            side_of_feature="Right",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+        )
+
+        self.assertTrue(context.modes.uses_no_lead_side_compensation)
+        self.assertEqual(_line_milling_rapid_point(context), (9.0, 20.0))
+
+    def test_line_milling_entry_lines_without_previous_router(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="Line",
+            side_of_feature="Center",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+        )
+
+        self.assertEqual(
+            _line_milling_entry_lines([], context, 10.0, 20.0),
+            (
+                "G0 X10.000 Y20.000",
+                "G0 Z30.000",
+                "D1",
+                "SVL 107.200",
+                "VL6=107.200",
+                "SVR 2.000",
+                "VL7=2.000",
+            ),
+        )
+
+    def test_line_milling_entry_lines_continue_from_previous_router_xy(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="Line",
+            side_of_feature="Center",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+        )
+        previous_trace = _stage_differential("profile_milling_trace", "profile_milling", 0)
+        emitted_lines = [
+            ExplainedIsoLine(
+                "G1 X1.000 Y2.000 Z5.000",
+                "profile_milling_trace",
+                _TEST_SOURCE,
+            )
+        ]
+
+        self.assertEqual(
+            _line_milling_entry_lines(
+                emitted_lines,
+                context,
+                10.0,
+                20.0,
+                previous_router_trace=previous_trace,
+            ),
+            (
+                "?%ETK[7]=0",
+                "G17",
+                "MLV=2",
+                "G0 X1.000 Y2.000 Z30.000",
+                "G0 X10.000 Y20.000 Z30.000",
+                "G0 X10.000 Y20.000 Z30.000",
+                "D1",
+                "SVL 107.200",
+                "VL6=107.200",
+                "SVR 2.000",
+                "VL7=2.000",
+            ),
+        )
+
     def test_line_milling_trace_modes_detects_center_lead_families(self) -> None:
         approach = _trace_points((0.0, 0.0), (2.0, 0.0))
         lift = _trace_points((10.0, 0.0), (12.0, 0.0))
@@ -740,6 +824,29 @@ class IsoStateSynthesisLineMillingGeometryTests(unittest.TestCase):
             ),
         )
 
+    def test_linear_side_compensation_builder_reads_context(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="Line",
+            side_of_feature="Right",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+            lead_paths=True,
+        )
+
+        self.assertTrue(context.modes.uses_side_compensation)
+        self.assertEqual(
+            _line_milling_linear_side_compensation_motion_lines(context),
+            (
+                "?%ETK[7]=4",
+                "G42",
+                "G1 X8.000 Y20.000 Z5.000 F120.000",
+                "G1 X10.000 Z-8.000 F120.000",
+                "G1 X110.000 Z-8.000 F600.000",
+                "G1 X112.000 Z5.000 F600.000",
+                "G40",
+                "G1 X113.000 Y20.000 Z5.000 F600.000",
+            ),
+        )
+
     def test_lead_path_builder_walks_approach_trajectory_and_lift(self) -> None:
         context = _line_milling_test_context(
             profile_family="Line",
@@ -858,6 +965,34 @@ class IsoStateSynthesisLineMillingGeometryTests(unittest.TestCase):
                 "G1 Z5.000 F600.000",
                 "G0 Z5.000",
             ),
+        )
+
+    def test_trace_motion_lines_dispatches_to_center_lead_builder(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="OpenPolyline",
+            side_of_feature="Center",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+            lead_paths=True,
+        )
+        rapid_x, rapid_y = _line_milling_rapid_point(context)
+
+        self.assertEqual(
+            _line_milling_trace_motion_lines(context, rapid_x, rapid_y),
+            _line_milling_open_center_leads_motion_lines(context, rapid_x, rapid_y),
+        )
+
+    def test_trace_motion_lines_dispatches_to_linear_side_compensation_builder(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="Line",
+            side_of_feature="Right",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+            lead_paths=True,
+        )
+        rapid_x, rapid_y = _line_milling_rapid_point(context)
+
+        self.assertEqual(
+            _line_milling_trace_motion_lines(context, rapid_x, rapid_y),
+            _line_milling_linear_side_compensation_motion_lines(context),
         )
 
     def test_strategy_lead_path_builder_uses_milling_feed_for_strategy_entry(self) -> None:

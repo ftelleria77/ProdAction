@@ -78,7 +78,7 @@ Concentracion actual detectada en `emitter.py`:
 
 | Zona | Funcion dominante | Observacion |
 | --- | --- | --- |
-| Fresado router | `_emit_line_milling_trace` | Mezcla fresado lineal, contornos abiertos/cerrados, circulos, leads, estrategias y lifts. Es el primer candidato para una extraccion futura por familia de mecanizado. |
+| Fresado router | `_emit_line_milling_trace` | Conserva la orquestacion de entrada, seleccion de rama y apendice explicado; las ramas de `motion_lines` ya delegan en builders internos. |
 | Dispatcher de trabajos | `_emit_planned_work_group` | Centraliza decisiones entre familias y transiciones. Conviene mantenerlo como orquestador, pero extraer reglas de transicion cuando se estabilicen. |
 | Preparaciones por cabezal | `_emit_top_drill_prepare*`, `_emit_side_drill_prepare*` | Tienen variantes segun familia previa. Son candidatos a modulos de transicion o preparacion por cabezal. |
 | Helpers geometricos | `_line_milling_motion_line`, `_unit_vector`, `_side_normal`, `_xy_changed` | Quedaron cubiertos como helpers puros antes de cualquier extraccion estructural. |
@@ -118,7 +118,7 @@ Lectura estructural del bloque principal de fresado router:
 | --- | --- | --- |
 | Lectura de estado | Extrae coordenadas, feeds, herramienta, estrategia, familia de perfil, leads y primitivas desde `StageDifferential` y `evaluation.final_state`. | Conviene promover a un contexto/dataclass interno antes de extraer familias. |
 | Predicados de modo | Calcula `has_lead_paths`, `uses_side_compensation`, `uses_no_lead_side_compensation`, `uses_center_circle_leads`, `uses_closed_center_leads`, `uses_open_center_leads`. | Primer candidato a extraccion segura porque no emite lineas. |
-| Entrada comun | Calcula `rapid_x/rapid_y`, arma `entry_lines` y maneja continuidad con `previous_router_trace`. | Mezcla seleccion geometrica con estado modal anterior. Debe quedar cerca del dispatcher hasta tener tests de secuencia. |
+| Entrada comun | Calcula `rapid_x/rapid_y`, arma `entry_lines` y maneja continuidad con `previous_router_trace`. | Extraida en `_line_milling_rapid_point` y `_line_milling_entry_lines`; la continuidad sigue cerca del emisor porque depende de lineas ya emitidas. |
 | Ramas center con leads | `OpenPolyline`, `ClosedPolyline*` y `Circle` con `side_of_feature=Center` y leads reales. | Extraidas como builders de `motion_lines`; siguen dentro de `emitter.py` hasta estabilizar el corte modular. |
 | Ramas con estrategia | Circulos con estrategia, estrategias con lead paths y estrategia sin leads. | Extraidas como builders internos y cubiertas con tests puros de forma. |
 | Ramas con compensacion lateral | Lineal compensado, `OpenPolyline` compensado, fallback vertical y no-lead side compensation. | La emision lateral ya delega en builders especificos o en el helper lineal previo. |
@@ -229,6 +229,35 @@ Hallazgos aplicados:
   entrada comun, seleccion de builder y apendice explicado de lineas ISO.
 - La cobertura pura del subsistema fija los nuevos builders con casos center,
   estrategia, sin leads y fallback final.
+
+## Subcorte Fresado Router Entrada Comun
+
+Hallazgos aplicados:
+
+- Se extrajo `_line_milling_rapid_point` para concentrar la seleccion del punto
+  rapido de entrada segun center leads, compensacion lateral, estrategia,
+  no-lead y fallback.
+- Se extrajo `_line_milling_entry_lines` para construir la entrada E004 comun,
+  incluyendo continuidad desde un router previo mediante la ultima XY emitida,
+  `leadout_x/y` o `Lift`.
+- `_emit_line_milling_trace` conserva la orquestacion: contexto, entrada,
+  seleccion del builder de `motion_lines` y apendice explicado.
+- Se agregaron tests puros para rapid point y entry lines con y sin router
+  previo.
+
+## Subcorte Fresado Router Selector De Movimiento
+
+Hallazgos aplicados:
+
+- Se extrajo `_line_milling_trace_motion_lines` para concentrar la seleccion
+  del builder de movimiento segun modo, estrategia, compensacion lateral,
+  leads y fallbacks.
+- Se extrajo `_line_milling_linear_side_compensation_motion_lines` para que la
+  rama lineal compensada tambien lea desde `_LineMillingTraceContext`.
+- `_emit_line_milling_trace` ya no contiene ramas de geometria de traza: arma
+  contexto, entrada y apende la salida del selector de movimiento.
+- Se agregaron tests puros para el builder lineal contextual y para el
+  despacho del selector hacia center leads y compensacion lineal.
 
 ## Deuda Residual
 

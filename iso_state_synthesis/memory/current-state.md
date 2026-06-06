@@ -10,6 +10,11 @@ Ultima actualizacion: 2026-06-06
 - `_emit_line_milling_trace` queda reducido a lectura de contexto, calculo de
   entrada comun, seleccion de builder de `motion_lines` y apendice explicado de
   lineas ISO.
+- La entrada comun de la traza router tambien queda separada en
+  `_line_milling_rapid_point` y `_line_milling_entry_lines`.
+- La seleccion de lineas de movimiento queda separada en
+  `_line_milling_trace_motion_lines`; la rama lineal compensada lee desde
+  `_line_milling_linear_side_compensation_motion_lines`.
 - Los builders internos de traza router cubren center con leads
   (`OpenPolyline`, `ClosedPolyline*`, `Circle`), estrategias, compensacion
   lateral, sin-leads generico y fallback final.
