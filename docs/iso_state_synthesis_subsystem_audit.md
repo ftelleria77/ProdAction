@@ -83,6 +83,33 @@ Concentracion actual detectada en `emitter.py`:
 | Preparaciones por cabezal | `_emit_top_drill_prepare*`, `_emit_side_drill_prepare*` | Tienen variantes segun familia previa. Son candidatos a modulos de transicion o preparacion por cabezal. |
 | Helpers geometricos | `_line_milling_motion_line`, `_unit_vector`, `_side_normal`, `_xy_changed` | Quedaron cubiertos como helpers puros antes de cualquier extraccion estructural. |
 
+## Subcorte Emisor Dispatcher
+
+Hallazgos aplicados:
+
+- Se agrego cobertura pura para `_work_stage_groups` y `_plan_work_groups`.
+- El dispatcher queda documentado como dos pasos: reconocer triples completos
+  `prepare/trace/reset` ignorando etapas comunes, y luego enriquecer cada grupo
+  con `incoming_transition_id` y `outgoing_transition_id`.
+- Los tests fijan que el emisor rechaza secuencias incompletas o desordenadas
+  antes de intentar emitir ISO.
+- Los tests cubren transiciones internas de router (`T-RH-*`), cambios de
+  cabezal router/boring (`T-XH-*`) y transiciones de boring head con ranuras
+  (`T-BH-005`, `T-BH-007`, `T-BH-008`).
+
+## Subcorte Fresado Router Geometria
+
+Hallazgos aplicados:
+
+- Se agrego cobertura pura para helpers geometricos usados por
+  `_emit_line_milling_trace`.
+- Los tests cubren seleccion de eje dominante, tangente de toolpath, direccion
+  de leads lineales compensados y extensiones sin lead.
+- Los tests fijan geometria de entrada/salida para polilineas abiertas y
+  cerradas, tanto con lead lineal como con lead en arco.
+- Este corte prepara una eventual extraccion de geometria de fresado router sin
+  modificar todavia la emision ISO candidata.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome

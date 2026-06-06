@@ -11,9 +11,19 @@ from iso_state_synthesis.differential import evaluate_state_plan
 from iso_state_synthesis.emitter import (
     ExplainedIsoLine,
     ExplainedIsoProgram,
+    _closed_polyline_center_lead_geometry,
     _line_milling_motion_line,
+    _linear_profile_program_point,
+    _linear_profile_tangent_axis,
+    _no_lead_compensation_points,
+    _open_polyline_center_lead_geometry,
+    _plan_work_groups,
+    _polyline_side_compensation_leads,
     _side_normal,
+    _trace_move_tangent_unit,
+    _trace_point_tangent,
     _unit_vector,
+    _work_stage_groups,
     _xy_changed,
     compare_candidate_to_iso,
 )
@@ -27,6 +37,49 @@ from iso_state_synthesis.model import (
     StateVector,
     to_jsonable,
 )
+
+
+_TEST_SOURCE = EvidenceSource("test", "tests/test_iso_state_synthesis.py", "dispatcher")
+
+
+def _stage_differential(
+    stage_key: str,
+    family: str,
+    order_index: int,
+    *,
+    tool_number: int | None = None,
+) -> StageDifferential:
+    target_changes: tuple[StateChange, ...] = ()
+    if tool_number is not None:
+        target_changes = (
+            StateChange(
+                "herramienta",
+                "tool_number",
+                None,
+                tool_number,
+                "set",
+                _TEST_SOURCE,
+            ),
+        )
+    return StageDifferential(
+        stage_key=stage_key,
+        family=family,
+        order_index=order_index,
+        target_changes=target_changes,
+    )
+
+
+def _work_triple(
+    family: str,
+    start_order: int,
+    *,
+    tool_number: int | None = None,
+) -> tuple[StageDifferential, StageDifferential, StageDifferential]:
+    return (
+        _stage_differential(f"{family}_prepare", family, start_order, tool_number=tool_number),
+        _stage_differential(f"{family}_trace", family, start_order + 1),
+        _stage_differential(f"{family}_reset", family, start_order + 2),
+    )
 
 
 class IsoStateSynthesisModelTests(unittest.TestCase):
@@ -132,6 +185,226 @@ class IsoStateSynthesisCatalogTests(unittest.TestCase):
         self.assertEqual(
             select_transition_id("line_milling", prepare(4), "top_drill", prepare(4)),
             "T-XH-001",
+        )
+
+
+class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
+    def test_work_stage_groups_ignores_common_stages_and_links_router_to_boring_head(self) -> None:
+        line = _work_triple("line_milling", 2, tool_number=4)
+        profile = _work_triple("profile_milling", 5, tool_number=4)
+        top_drill = _work_triple("top_drill", 8)
+        ordered_differentials = [
+            _stage_differential("program_header", "program", 0),
+            _stage_differential("machine_preamble", "program", 1),
+            *line,
+            *profile,
+            *top_drill,
+            _stage_differential("program_close", "program", 11),
+        ]
+
+        groups = _work_stage_groups(ordered_differentials)
+
+        self.assertEqual(
+            [group.family for group in groups],
+            ["line_milling", "profile_milling", "top_drill"],
+        )
+        self.assertIsNone(groups[0].incoming_transition_id)
+        self.assertEqual(groups[0].outgoing_transition_id, "T-RH-001")
+        self.assertEqual(groups[1].incoming_transition_id, "T-RH-001")
+        self.assertEqual(groups[1].outgoing_transition_id, "T-XH-001")
+        self.assertEqual(groups[2].incoming_transition_id, "T-XH-001")
+        self.assertIsNone(groups[2].outgoing_transition_id)
+        self.assertIs(groups[0].prepare, line[0])
+        self.assertIs(groups[1].trace, profile[1])
+        self.assertIs(groups[2].reset, top_drill[2])
+
+    def test_work_stage_groups_rejects_incomplete_or_misordered_groups(self) -> None:
+        line = _work_triple("line_milling", 0, tool_number=4)
+
+        self.assertEqual(_work_stage_groups([line[0], line[1]]), ())
+        self.assertEqual(_work_stage_groups([line[0], line[2], line[1]]), ())
+        self.assertEqual(
+            _work_stage_groups(
+                [
+                    _stage_differential("top_drill_prepare", "top_drill", 0),
+                    _stage_differential("slot_milling_trace", "slot_milling", 1),
+                    _stage_differential("top_drill_reset", "top_drill", 2),
+                ]
+            ),
+            (),
+        )
+
+    def test_plan_work_groups_selects_boring_head_slot_transitions(self) -> None:
+        top = _work_triple("top_drill", 0)
+        slot = _work_triple("slot_milling", 3)
+        side = _work_triple("side_drill", 6)
+        second_slot = _work_triple("slot_milling", 9)
+
+        groups = _plan_work_groups(
+            (
+                ("top_drill", *top),
+                ("slot_milling", *slot),
+                ("side_drill", *side),
+                ("slot_milling", *second_slot),
+            )
+        )
+
+        self.assertEqual(
+            [group.incoming_transition_id for group in groups],
+            [None, "T-BH-005", "T-BH-008", "T-BH-007"],
+        )
+        self.assertEqual(
+            [group.outgoing_transition_id for group in groups],
+            ["T-BH-005", "T-BH-008", "T-BH-007", None],
+        )
+
+    def test_plan_work_groups_selects_router_tool_change_and_head_switches(self) -> None:
+        line = _work_triple("line_milling", 0, tool_number=4)
+        profile = _work_triple("profile_milling", 3, tool_number=1)
+        side = _work_triple("side_drill", 6)
+        second_line = _work_triple("line_milling", 9, tool_number=1)
+
+        groups = _plan_work_groups(
+            (
+                ("line_milling", *line),
+                ("profile_milling", *profile),
+                ("side_drill", *side),
+                ("line_milling", *second_line),
+            )
+        )
+
+        self.assertEqual(
+            [group.incoming_transition_id for group in groups],
+            [None, "T-RH-002", "T-XH-001", "T-XH-002"],
+        )
+        self.assertEqual(
+            [group.outgoing_transition_id for group in groups],
+            ["T-RH-002", "T-XH-001", "T-XH-002", None],
+        )
+
+
+class IsoStateSynthesisLineMillingGeometryTests(unittest.TestCase):
+    def test_linear_profile_axis_and_tangent_helpers(self) -> None:
+        self.assertEqual(_linear_profile_tangent_axis(((0.0, 0.0), (10.0, 2.0))), "X")
+        self.assertEqual(_linear_profile_tangent_axis(((0.0, 0.0), (2.0, 10.0))), "Y")
+        self.assertEqual(
+            _linear_profile_program_point(((5.0, 7.0), (15.0, 7.0)), 9.0, "X"),
+            (9.0, 7.0),
+        )
+        self.assertEqual(
+            _linear_profile_program_point(((5.0, 7.0), (5.0, 17.0)), 9.0, "Y"),
+            (5.0, 9.0),
+        )
+        self.assertEqual(_trace_point_tangent(SimpleNamespace(x=3.0), "X"), 3.0)
+        with self.assertRaisesRegex(Exception, "no contiene eje X"):
+            _trace_point_tangent(SimpleNamespace(y=3.0), "X")
+        with self.assertRaisesRegex(Exception, "puntos suficientes"):
+            _linear_profile_tangent_axis(((0.0, 0.0),))
+
+    def test_trace_move_tangent_unit_detects_direction(self) -> None:
+        forward = SimpleNamespace(points=(SimpleNamespace(x=0.0), SimpleNamespace(x=5.0)))
+        backward = SimpleNamespace(points=(SimpleNamespace(x=5.0), SimpleNamespace(x=0.0)))
+        flat = SimpleNamespace(points=(SimpleNamespace(x=5.0), SimpleNamespace(x=5.0)))
+
+        self.assertEqual(_trace_move_tangent_unit(forward, "X"), 1.0)
+        self.assertEqual(_trace_move_tangent_unit(backward, "X"), -1.0)
+        with self.assertRaisesRegex(Exception, "no desplaza"):
+            _trace_move_tangent_unit(flat, "X")
+
+    def test_no_lead_compensation_points_adds_short_entry_and_exit_extensions(self) -> None:
+        self.assertEqual(
+            _no_lead_compensation_points(
+                ((10.0, 10.0), (20.0, 10.0)),
+                2.0,
+                "OpenPolyline",
+                "",
+            ),
+            ((9.0, 10.0), (21.0, 10.0)),
+        )
+        self.assertEqual(
+            _no_lead_compensation_points(
+                ((10.0, 10.0), (20.0, 10.0)),
+                2.0,
+                "Circle",
+                "CounterClockwise",
+            ),
+            ((10.0, 9.0), (20.0, 11.0)),
+        )
+
+    def test_polyline_side_compensation_leads_support_line_and_arc(self) -> None:
+        self.assertEqual(
+            _polyline_side_compensation_leads(
+                ((10.0, 10.0), (20.0, 10.0)),
+                tool_radius=2.0,
+                side_of_feature="Left",
+                approach_type="Arc",
+                radius_multiplier=2.0,
+            ),
+            {
+                "entry_rapid": (6.0, 15.0),
+                "entry": (6.0, 14.0),
+                "entry_center": (10.0, 14.0),
+                "exit": (24.0, 14.0),
+                "exit_center": (20.0, 14.0),
+                "exit_rapid": (24.0, 15.0),
+            },
+        )
+        self.assertEqual(
+            _polyline_side_compensation_leads(
+                ((10.0, 10.0), (20.0, 10.0)),
+                tool_radius=2.0,
+                side_of_feature="Left",
+                approach_type="Line",
+                radius_multiplier=2.0,
+            ),
+            {
+                "entry_rapid": (5.0, 10.0),
+                "entry": (6.0, 10.0),
+                "exit": (24.0, 10.0),
+                "exit_rapid": (25.0, 10.0),
+            },
+        )
+
+    def test_center_lead_geometry_for_open_and_closed_polylines(self) -> None:
+        self.assertEqual(
+            _closed_polyline_center_lead_geometry(
+                ((10.0, 10.0), (20.0, 10.0), (20.0, 20.0), (10.0, 20.0)),
+                lead_distance=2.0,
+                lead_type="Arc",
+                winding="CounterClockwise",
+            ),
+            {
+                "rapid": (8.0, 12.0),
+                "exit": (12.0, 12.0),
+                "approach_center": (10.0, 12.0),
+                "retract_center": (10.0, 12.0),
+            },
+        )
+        self.assertEqual(
+            _open_polyline_center_lead_geometry(
+                ((10.0, 10.0), (20.0, 10.0)),
+                lead_distance=2.0,
+                lead_type="Arc",
+            ),
+            {
+                "rapid": (8.0, 12.0),
+                "exit": (22.0, 12.0),
+                "approach_center": (10.0, 12.0),
+                "retract_center": (20.0, 12.0),
+            },
+        )
+        self.assertEqual(
+            _open_polyline_center_lead_geometry(
+                ((10.0, 10.0), (20.0, 10.0)),
+                lead_distance=2.0,
+                lead_type="Line",
+            ),
+            {
+                "rapid": (8.0, 10.0),
+                "exit": (22.0, 10.0),
+                "approach_center": (10.0, 10.0),
+                "retract_center": (20.0, 10.0),
+            },
         )
 
 
