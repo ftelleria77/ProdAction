@@ -123,6 +123,45 @@ class _LineMillingTraceModes:
     uses_open_center_leads: bool
 
 
+@dataclass(frozen=True)
+class _LineMillingTraceContext:
+    """State read by the router milling trace emitter before generating ISO."""
+
+    start_x: object
+    start_y: object
+    end_x: object
+    end_y: object
+    rapid_z: object
+    cut_z: object
+    security_z: object
+    tool_radius: object
+    plunge_feed: object
+    milling_feed: object
+    tool_offset: object
+    approach: object
+    trajectory: object
+    lift: object
+    source: EvidenceSource
+    side_of_feature: str
+    overcut_length: float
+    strategy_name: str
+    profile_family: str
+    profile_winding: str
+    circle_center_x: Optional[object]
+    circle_center_y: Optional[object]
+    contour_points: object
+    nominal_points: tuple[tuple[float, float], ...]
+    open_polyline_outside_piece: bool
+    trajectory_primitives: tuple[object, ...]
+    approach_type: str
+    approach_mode: str
+    approach_radius_multiplier: float
+    retract_type: str
+    retract_mode: str
+    retract_radius_multiplier: float
+    modes: _LineMillingTraceModes
+
+
 def emit_candidate_for_pgmx(
     pgmx_path: Path,
     *,
@@ -2486,114 +2525,39 @@ def _emit_line_milling_trace(
     *,
     previous_router_trace: Optional[StageDifferential] = None,
 ) -> None:
-    start_x = _change_after(differential, "movimiento", "start_x")
-    start_y = _change_after(differential, "movimiento", "start_y")
-    end_x = _change_after(differential, "movimiento", "end_x")
-    end_y = _change_after(differential, "movimiento", "end_y")
-    rapid_z = _change_after(differential, "movimiento", "rapid_z")
-    cut_z = _change_after(differential, "movimiento", "cut_z")
-    security_z = _change_after(differential, "movimiento", "security_z")
-    tool_radius = _change_after(differential, "herramienta", "tool_radius")
-    plunge_feed = _change_after(differential, "movimiento", "plunge_feed")
-    milling_feed = _change_after(differential, "movimiento", "milling_feed")
-    tool_offset = _change_after(differential, "herramienta", "tool_offset_length")
-    approach = _trace_move(differential, "Approach")
-    trajectory = _trace_move(differential, "TrajectoryPath")
-    lift = _trace_move(differential, "Lift")
-    source = _change_source(differential, "movimiento", "cut_z")
-    side_of_feature = str(
-        _optional_change_after(
-            differential,
-            "trabajo",
-            "side_of_feature",
-            evaluation.final_state.get("trabajo", "side_of_feature", "Center"),
-        )
-    )
-    overcut_length = float(
-        _optional_change_after(
-            differential,
-            "trabajo",
-            "overcut_length",
-            evaluation.final_state.get("trabajo", "overcut_length", 0.0),
-        )
-        or 0.0
-    )
-    strategy_name = str(
-        _optional_change_after(
-            differential,
-            "trabajo",
-            "strategy",
-            evaluation.final_state.get("trabajo", "strategy", ""),
-        )
-    )
-    profile_family = str(_optional_change_after(differential, "movimiento", "profile_family", "Line"))
-    profile_winding = str(_optional_change_after(differential, "movimiento", "profile_winding", ""))
-    circle_center_x = _optional_change_after(differential, "movimiento", "circle_center_x", None)
-    circle_center_y = _optional_change_after(differential, "movimiento", "circle_center_y", None)
-    contour_points = _change_after(differential, "movimiento", "contour_points")
-    nominal_points = tuple((float(point[0]), float(point[1])) for point in contour_points)
-    open_polyline_outside_piece = profile_family == "OpenPolyline" and _polyline_leaves_workpiece(
-        evaluation,
-        nominal_points,
-    )
-    trajectory_primitives = tuple(_optional_change_after(differential, "movimiento", "trajectory_primitives", ()))
-    approach_type = str(
-        _optional_change_after(
-            differential,
-            "trabajo",
-            "approach_type",
-            evaluation.final_state.get("trabajo", "approach_type", "Line"),
-        )
-    )
-    approach_mode = str(
-        _optional_change_after(
-            differential,
-            "trabajo",
-            "approach_mode",
-            evaluation.final_state.get("trabajo", "approach_mode", "Down"),
-        )
-    )
-    approach_radius_multiplier = float(
-        _optional_change_after(
-            differential,
-            "trabajo",
-            "approach_radius_multiplier",
-            evaluation.final_state.get("trabajo", "approach_radius_multiplier", 2.0),
-        )
-        or 2.0
-    )
-    retract_type = str(
-        _optional_change_after(
-            differential,
-            "trabajo",
-            "retract_type",
-            evaluation.final_state.get("trabajo", "retract_type", "Line"),
-        )
-    )
-    retract_mode = str(
-        _optional_change_after(
-            differential,
-            "trabajo",
-            "retract_mode",
-            evaluation.final_state.get("trabajo", "retract_mode", "Up"),
-        )
-    )
-    retract_radius_multiplier = float(
-        _optional_change_after(
-            differential,
-            "trabajo",
-            "retract_radius_multiplier",
-            evaluation.final_state.get("trabajo", "retract_radius_multiplier", approach_radius_multiplier),
-        )
-        or approach_radius_multiplier
-    )
-    modes = _line_milling_trace_modes(
-        approach=approach,
-        lift=lift,
-        strategy_name=strategy_name,
-        side_of_feature=side_of_feature,
-        profile_family=profile_family,
-    )
+    context = _line_milling_trace_context(evaluation, differential)
+    start_x = context.start_x
+    start_y = context.start_y
+    end_x = context.end_x
+    end_y = context.end_y
+    rapid_z = context.rapid_z
+    cut_z = context.cut_z
+    security_z = context.security_z
+    tool_radius = context.tool_radius
+    plunge_feed = context.plunge_feed
+    milling_feed = context.milling_feed
+    tool_offset = context.tool_offset
+    approach = context.approach
+    trajectory = context.trajectory
+    lift = context.lift
+    source = context.source
+    side_of_feature = context.side_of_feature
+    overcut_length = context.overcut_length
+    strategy_name = context.strategy_name
+    profile_family = context.profile_family
+    profile_winding = context.profile_winding
+    circle_center_x = context.circle_center_x
+    circle_center_y = context.circle_center_y
+    nominal_points = context.nominal_points
+    open_polyline_outside_piece = context.open_polyline_outside_piece
+    trajectory_primitives = context.trajectory_primitives
+    approach_type = context.approach_type
+    approach_mode = context.approach_mode
+    approach_radius_multiplier = context.approach_radius_multiplier
+    retract_type = context.retract_type
+    retract_mode = context.retract_mode
+    retract_radius_multiplier = context.retract_radius_multiplier
+    modes = context.modes
     has_lead_paths = modes.has_lead_paths
     uses_side_compensation = modes.uses_side_compensation
     uses_no_lead_side_compensation = modes.uses_no_lead_side_compensation
@@ -3624,6 +3588,155 @@ def _emit_line_milling_trace(
             confidence="confirmed",
             rule_status="generalized_line_milling_020_023",
         )
+
+
+def _line_milling_trace_context(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> _LineMillingTraceContext:
+    start_x = _change_after(differential, "movimiento", "start_x")
+    start_y = _change_after(differential, "movimiento", "start_y")
+    end_x = _change_after(differential, "movimiento", "end_x")
+    end_y = _change_after(differential, "movimiento", "end_y")
+    rapid_z = _change_after(differential, "movimiento", "rapid_z")
+    cut_z = _change_after(differential, "movimiento", "cut_z")
+    security_z = _change_after(differential, "movimiento", "security_z")
+    tool_radius = _change_after(differential, "herramienta", "tool_radius")
+    plunge_feed = _change_after(differential, "movimiento", "plunge_feed")
+    milling_feed = _change_after(differential, "movimiento", "milling_feed")
+    tool_offset = _change_after(differential, "herramienta", "tool_offset_length")
+    approach = _trace_move(differential, "Approach")
+    trajectory = _trace_move(differential, "TrajectoryPath")
+    lift = _trace_move(differential, "Lift")
+    source = _change_source(differential, "movimiento", "cut_z")
+    side_of_feature = str(
+        _optional_change_after(
+            differential,
+            "trabajo",
+            "side_of_feature",
+            evaluation.final_state.get("trabajo", "side_of_feature", "Center"),
+        )
+    )
+    overcut_length = float(
+        _optional_change_after(
+            differential,
+            "trabajo",
+            "overcut_length",
+            evaluation.final_state.get("trabajo", "overcut_length", 0.0),
+        )
+        or 0.0
+    )
+    strategy_name = str(
+        _optional_change_after(
+            differential,
+            "trabajo",
+            "strategy",
+            evaluation.final_state.get("trabajo", "strategy", ""),
+        )
+    )
+    profile_family = str(_optional_change_after(differential, "movimiento", "profile_family", "Line"))
+    profile_winding = str(_optional_change_after(differential, "movimiento", "profile_winding", ""))
+    circle_center_x = _optional_change_after(differential, "movimiento", "circle_center_x", None)
+    circle_center_y = _optional_change_after(differential, "movimiento", "circle_center_y", None)
+    contour_points = _change_after(differential, "movimiento", "contour_points")
+    nominal_points = tuple((float(point[0]), float(point[1])) for point in contour_points)
+    open_polyline_outside_piece = profile_family == "OpenPolyline" and _polyline_leaves_workpiece(
+        evaluation,
+        nominal_points,
+    )
+    trajectory_primitives = tuple(_optional_change_after(differential, "movimiento", "trajectory_primitives", ()))
+    approach_type = str(
+        _optional_change_after(
+            differential,
+            "trabajo",
+            "approach_type",
+            evaluation.final_state.get("trabajo", "approach_type", "Line"),
+        )
+    )
+    approach_mode = str(
+        _optional_change_after(
+            differential,
+            "trabajo",
+            "approach_mode",
+            evaluation.final_state.get("trabajo", "approach_mode", "Down"),
+        )
+    )
+    approach_radius_multiplier = float(
+        _optional_change_after(
+            differential,
+            "trabajo",
+            "approach_radius_multiplier",
+            evaluation.final_state.get("trabajo", "approach_radius_multiplier", 2.0),
+        )
+        or 2.0
+    )
+    retract_type = str(
+        _optional_change_after(
+            differential,
+            "trabajo",
+            "retract_type",
+            evaluation.final_state.get("trabajo", "retract_type", "Line"),
+        )
+    )
+    retract_mode = str(
+        _optional_change_after(
+            differential,
+            "trabajo",
+            "retract_mode",
+            evaluation.final_state.get("trabajo", "retract_mode", "Up"),
+        )
+    )
+    retract_radius_multiplier = float(
+        _optional_change_after(
+            differential,
+            "trabajo",
+            "retract_radius_multiplier",
+            evaluation.final_state.get("trabajo", "retract_radius_multiplier", approach_radius_multiplier),
+        )
+        or approach_radius_multiplier
+    )
+    modes = _line_milling_trace_modes(
+        approach=approach,
+        lift=lift,
+        strategy_name=strategy_name,
+        side_of_feature=side_of_feature,
+        profile_family=profile_family,
+    )
+    return _LineMillingTraceContext(
+        start_x=start_x,
+        start_y=start_y,
+        end_x=end_x,
+        end_y=end_y,
+        rapid_z=rapid_z,
+        cut_z=cut_z,
+        security_z=security_z,
+        tool_radius=tool_radius,
+        plunge_feed=plunge_feed,
+        milling_feed=milling_feed,
+        tool_offset=tool_offset,
+        approach=approach,
+        trajectory=trajectory,
+        lift=lift,
+        source=source,
+        side_of_feature=side_of_feature,
+        overcut_length=overcut_length,
+        strategy_name=strategy_name,
+        profile_family=profile_family,
+        profile_winding=profile_winding,
+        circle_center_x=circle_center_x,
+        circle_center_y=circle_center_y,
+        contour_points=contour_points,
+        nominal_points=nominal_points,
+        open_polyline_outside_piece=open_polyline_outside_piece,
+        trajectory_primitives=trajectory_primitives,
+        approach_type=approach_type,
+        approach_mode=approach_mode,
+        approach_radius_multiplier=approach_radius_multiplier,
+        retract_type=retract_type,
+        retract_mode=retract_mode,
+        retract_radius_multiplier=retract_radius_multiplier,
+        modes=modes,
+    )
 
 
 def _line_milling_trace_modes(

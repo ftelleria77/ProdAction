@@ -147,6 +147,21 @@ Hallazgos aplicados:
 - La emision ISO candidata no cambia: el bloque principal sigue consumiendo las
   mismas banderas, ahora derivadas desde el helper.
 
+## Subcorte Fresado Router Contexto
+
+Hallazgos aplicados:
+
+- Se agrego `_LineMillingTraceContext` como contrato interno para separar la
+  lectura de estado de la emision de ISO en `_emit_line_milling_trace`.
+- Se extrajo `_line_milling_trace_context`, que reune coordenadas, alturas,
+  feeds, herramienta, toolpaths, geometria nominal, primitivas, estrategia,
+  acercamiento/alejamiento y predicados de modo.
+- Se agrego un test puro que construye un `StageDifferential` minimo y confirma
+  que el contexto lee valores directos, defaults desde `final_state`, geometria
+  nominal y modos de compensacion.
+- La funcion principal conserva las ramas de emision actuales; el cambio solo
+  separa la fase de lectura para preparar builders de `motion_lines`.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome

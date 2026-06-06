@@ -13,6 +13,7 @@ from iso_state_synthesis.emitter import (
     ExplainedIsoProgram,
     _closed_polyline_center_lead_geometry,
     _line_milling_motion_line,
+    _line_milling_trace_context,
     _line_milling_trace_modes,
     _linear_profile_program_point,
     _linear_profile_tangent_axis,
@@ -30,12 +31,15 @@ from iso_state_synthesis.emitter import (
 )
 from iso_state_synthesis.model import (
     EvidenceSource,
+    IsoStateEvaluation,
     IsoStatePlan,
     StageDifferential,
     StateChange,
     StateStage,
     StateValue,
     StateVector,
+    TraceMove,
+    TracePoint,
     to_jsonable,
 )
 
@@ -85,6 +89,21 @@ def _work_triple(
 
 def _trace_points(*points: tuple[float, float]) -> SimpleNamespace:
     return SimpleNamespace(points=tuple(SimpleNamespace(x=x, y=y) for x, y in points))
+
+
+def _trace_move(name: str, *points: tuple[float, float, float]) -> TraceMove:
+    return TraceMove(
+        name=name,
+        points=tuple(
+            TracePoint(x=x, y=y, local_z=z, iso_z=z, source=_TEST_SOURCE)
+            for x, y, z in points
+        ),
+        source=_TEST_SOURCE,
+    )
+
+
+def _change(layer: str, key: str, after: object) -> StateChange:
+    return StateChange(layer, key, None, after, "set", _TEST_SOURCE)
 
 
 class IsoStateSynthesisModelTests(unittest.TestCase):
@@ -289,6 +308,78 @@ class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
 
 
 class IsoStateSynthesisLineMillingGeometryTests(unittest.TestCase):
+    def test_line_milling_trace_context_reads_state_and_modes(self) -> None:
+        differential = StageDifferential(
+            stage_key="line_milling_trace",
+            family="line_milling",
+            order_index=1,
+            target_changes=(
+                _change("movimiento", "start_x", 10.0),
+                _change("movimiento", "start_y", 20.0),
+                _change("movimiento", "end_x", 110.0),
+                _change("movimiento", "end_y", 20.0),
+                _change("movimiento", "rapid_z", 30.0),
+                _change("movimiento", "cut_z", -8.0),
+                _change("movimiento", "security_z", 5.0),
+                _change("movimiento", "plunge_feed", 120.0),
+                _change("movimiento", "milling_feed", 600.0),
+                _change("movimiento", "profile_family", "OpenPolyline"),
+                _change("movimiento", "profile_winding", "CounterClockwise"),
+                _change("movimiento", "contour_points", ((10.0, 20.0), (110.0, 20.0))),
+                _change("herramienta", "tool_radius", 2.0),
+                _change("herramienta", "tool_offset_length", 107.2),
+                _change("trabajo", "side_of_feature", "Left"),
+                _change("trabajo", "approach_type", "Arc"),
+                _change("trabajo", "approach_radius_multiplier", 3.0),
+                _change("trabajo", "retract_radius_multiplier", 4.0),
+            ),
+            trace=(
+                _trace_move("Approach", (4.0, 26.0, 5.0), (10.0, 20.0, -8.0)),
+                _trace_move("TrajectoryPath", (10.0, 20.0, -8.0), (110.0, 20.0, -8.0)),
+                _trace_move("Lift", (110.0, 20.0, -8.0), (116.0, 26.0, 5.0)),
+            ),
+        )
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector(
+                (
+                    StateValue("pieza", "depth", 18.0, _TEST_SOURCE),
+                    StateValue("pieza", "length", 200.0, _TEST_SOURCE),
+                    StateValue("pieza", "width", 100.0, _TEST_SOURCE),
+                )
+            ),
+            differentials=(differential,),
+            final_state=StateVector(
+                (
+                    StateValue("trabajo", "strategy", "", _TEST_SOURCE),
+                    StateValue("trabajo", "approach_mode", "Down", _TEST_SOURCE),
+                    StateValue("trabajo", "retract_type", "Line", _TEST_SOURCE),
+                    StateValue("trabajo", "retract_mode", "Up", _TEST_SOURCE),
+                )
+            ),
+        )
+
+        context = _line_milling_trace_context(evaluation, differential)
+
+        self.assertEqual(context.start_x, 10.0)
+        self.assertEqual(context.end_x, 110.0)
+        self.assertEqual(context.tool_radius, 2.0)
+        self.assertEqual(context.tool_offset, 107.2)
+        self.assertEqual(context.side_of_feature, "Left")
+        self.assertEqual(context.approach_type, "Arc")
+        self.assertEqual(context.approach_mode, "Down")
+        self.assertEqual(context.retract_type, "Line")
+        self.assertEqual(context.retract_mode, "Up")
+        self.assertEqual(context.approach_radius_multiplier, 3.0)
+        self.assertEqual(context.retract_radius_multiplier, 4.0)
+        self.assertEqual(context.nominal_points, ((10.0, 20.0), (110.0, 20.0)))
+        self.assertFalse(context.open_polyline_outside_piece)
+        self.assertIs(context.approach, differential.trace[0])
+        self.assertTrue(context.modes.has_lead_paths)
+        self.assertTrue(context.modes.uses_side_compensation)
+        self.assertFalse(context.modes.uses_open_center_leads)
+
     def test_line_milling_trace_modes_detects_center_lead_families(self) -> None:
         approach = _trace_points((0.0, 0.0), (2.0, 0.0))
         lift = _trace_points((10.0, 0.0), (12.0, 0.0))
