@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from pgmx import synthesis as pgmx_synthesis
 from pgmx.synthesis import cli as synthesis_cli
@@ -32,6 +35,43 @@ from pgmx.synthesis.milling import squaring as milling_squaring
 
 
 class PgmxSynthesisPackageTests(unittest.TestCase):
+    def test_frozen_data_dir_ignores_legacy_tools_fallback(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            executable_path = Path(tmpdir) / "ProdAction.exe"
+            legacy_tools = Path(tmpdir) / "tools"
+            legacy_tools.mkdir()
+
+            with patch.object(common_program.sys, "frozen", True, create=True), patch.object(
+                common_program.sys,
+                "executable",
+                str(executable_path),
+            ):
+                self.assertEqual(common_program._module_data_dir(), common_program.MODULE_DIR)
+
+            with patch.object(common_tools.sys, "frozen", True, create=True), patch.object(
+                common_tools.sys,
+                "executable",
+                str(executable_path),
+            ):
+                self.assertEqual(common_tools._module_data_dir(), common_tools.TOOL_CATALOG_PATH.parent)
+
+            bundled_data = Path(tmpdir) / "_internal" / "pgmx" / "data"
+            bundled_data.mkdir(parents=True)
+
+            with patch.object(common_program.sys, "frozen", True, create=True), patch.object(
+                common_program.sys,
+                "executable",
+                str(executable_path),
+            ):
+                self.assertEqual(common_program._module_data_dir(), bundled_data)
+
+            with patch.object(common_tools.sys, "frozen", True, create=True), patch.object(
+                common_tools.sys,
+                "executable",
+                str(executable_path),
+            ):
+                self.assertEqual(common_tools._module_data_dir(), bundled_data)
+
     def test_public_facade_reexports_core_api_and_keeps_data_paths(self) -> None:
         self.assertIs(pgmx_synthesis.PocketMillingSpec, core_sp.PocketMillingSpec)
         self.assertIs(pgmx_synthesis.build_pocket_milling_spec, core_sp.build_pocket_milling_spec)

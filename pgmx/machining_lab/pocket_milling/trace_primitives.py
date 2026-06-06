@@ -1,4 +1,4 @@
-"""Analyze Maestro Vaciado trajectory primitives.
+"""Analyze Maestro pocket milling trajectory primitives.
 
 This is a lab-only evidence tool. It does not synthesize PGMX files; it
 decomposes Maestro `TrajectoryPath` curves into lines/arcs and relates them to
@@ -626,7 +626,7 @@ def _summarized_counter_text(counter_text: str, *, max_items: int = 12) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Analyze Maestro Vaciado trajectory primitives.")
+    parser = argparse.ArgumentParser(description="Analyze Maestro pocket milling trajectory primitives.")
     parser.add_argument("--root", type=Path, default=EXTERNAL_ROOT)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--base-only", action="store_true", help="Skip E00x tool-variant files.")

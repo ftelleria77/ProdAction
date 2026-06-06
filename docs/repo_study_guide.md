@@ -26,6 +26,7 @@ El sintetizador PGMX real vive en `pgmx.synthesis` y expone
 | `docs/repository_audit_inventory.md` | Inventario de auditoria por subsistema, modulo, proceso, tests y docs. |
 | `docs/app_subsystem_audit.md` | Corte dedicado del subsistema `app/`, con flujos, correcciones y deuda residual aceptada. |
 | `docs/core_subsystem_audit.md` | Corte dedicado del subsistema `core/`, iniciado por modelo/parser. |
+| `docs/pgmx_subsystem_audit.md` | Corte dedicado del subsistema `pgmx/`, con fachadas, procesos y deuda residual. |
 | `app/ui.py` | Compone `ProjectDetailWindow` a partir de mixins. La logica de detalle vive en `app/project_detail_*.py`. |
 | `app/main_window.py` | Ventana inicial de seleccion de proyectos. |
 | `app/project_detail_*.py` | Flujos de detalle: procesamiento, inspeccion, salida, piezas, PGMX, colores y En-Juego. |
@@ -222,8 +223,9 @@ Prueba de humo PGMX recomendada:
 
 - El frente `app/project_detail_*` sigue siendo amplio y conviene auditarlo por
   flujo, no por archivo aislado.
-- `pgmx.processing` e `iso_state_synthesis.emitter` son modulos grandes con
-  varias responsabilidades internas.
+- `pgmx.processing` ya tiene auditoria inicial y cobertura focal de SVG, pero
+  sigue siendo un modulo grande con varias responsabilidades internas.
+- `iso_state_synthesis.emitter` sigue siendo grande y experimental.
 - La suite automatizada cubre app/core/PGMX/nesting/planillas, pero
   `iso_state_synthesis/`, `cnc_traceability/` y `tools/studies/` aun tienen
   cobertura dedicada limitada.

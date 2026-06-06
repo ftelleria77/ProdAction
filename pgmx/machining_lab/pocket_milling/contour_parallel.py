@@ -1,4 +1,4 @@
-"""Contour-parallel path experiments for rectangular Vaciado pockets."""
+"""Contour-parallel path experiments for rectangular pocket milling samples."""
 
 from __future__ import annotations
 
@@ -154,7 +154,7 @@ def generate_rectangular_contour_parallel_xyz_path(
     axial_cutting_depth: float = 0.0,
     axial_finish_cutting_depth: float = 0.0,
 ) -> tuple[tuple[float, float, float], ...]:
-    """Generate Maestro-like XYZ points for a rectangular Vaciado trajectory."""
+    """Generate Maestro-like XYZ points for a rectangular pocket milling trajectory."""
 
     xy_path = generate_rectangular_contour_parallel_path(
         length=length,
@@ -321,7 +321,7 @@ def _cut_depth_levels(
 ) -> tuple[float, ...]:
     target = float(target_depth)
     if target <= 0.0:
-        raise ValueError("target_depth must be positive for Vaciado.")
+        raise ValueError("target_depth must be positive for pocket milling.")
     step = float(axial_cutting_depth)
     finish = float(axial_finish_cutting_depth)
     if not allow_multiple_passes or step <= 0.0 or target <= max(finish, step):
@@ -647,7 +647,7 @@ def _build_summary(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Compare experimental rectangular ContourParallel generation against manual Vaciado samples."
+        description="Compare experimental rectangular ContourParallel generation against manual pocket milling samples."
     )
     parser.add_argument("--root", type=Path, default=EXTERNAL_ROOT)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)

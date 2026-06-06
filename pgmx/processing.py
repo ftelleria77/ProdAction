@@ -2304,7 +2304,7 @@ def build_piece_svg(piece: Piece, drawing: PieceDrawingData, output_path: Path):
         diameter = op.diameter if op.diameter and op.diameter > 0 else 5.0
         proj_len_mm = op.depth if op.depth and op.depth > 0 else max(8.0, diameter * 2.2)
         projected_x = float(op.projected_x) if op.projected_x is not None else float(op.x)
-        projected_y = float(op.projected_y) if op.projected_y is not None else float(op.x)
+        projected_y = float(op.projected_y) if op.projected_y is not None else float(op.y)
 
         if face == "left":
             y_mm = clamp(projected_y, 0.0, top_h)

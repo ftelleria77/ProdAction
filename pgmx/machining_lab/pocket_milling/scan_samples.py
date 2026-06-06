@@ -1,7 +1,8 @@
-"""Catalog PGMX samples for the Vaciado investigation.
+"""Catalog PGMX samples for the pocket milling investigation.
 
 The scanner is intentionally descriptive.  It does not classify a final
-``Vaciado`` model; it records the XML-level evidence needed to decide one.
+production model; it keeps the historical ``Vaciado_*`` corpus as XML-level
+evidence for pocket milling rules.
 """
 
 from __future__ import annotations
@@ -377,7 +378,7 @@ def _counter_lines(counter: Counter[str]) -> list[str]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Catalog PGMX samples for the Vaciado investigation.")
+    parser = argparse.ArgumentParser(description="Catalog PGMX samples for the pocket milling lab.")
     parser.add_argument("--root", type=Path, default=EXTERNAL_ROOT, help="Root folder with manual/generated PGMX samples.")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR, help="Folder for CSV and Markdown reports.")
     return parser

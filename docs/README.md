@@ -17,36 +17,39 @@ tener que leer todas las memorias historicas de una vez.
 5. `docs/core_subsystem_audit.md`
    - Auditoria del subsistema `core/`: dominio, parser, servicios productivos,
      fachadas compatibles y deuda residual.
-6. `docs/synthesize_pgmx_help.md`
+6. `docs/pgmx_subsystem_audit.md`
+   - Auditoria del subsistema `pgmx/`: fachadas publicas, lectura/dibujo,
+     snapshot, adaptacion, sintesis y laboratorio.
+7. `docs/synthesize_pgmx_help.md`
    - Fuente de verdad para la API publica de sintesis `.pgmx`.
-7. `docs/pgmx_synthesis_modularization_plan.md`
+8. `docs/pgmx_synthesis_modularization_plan.md`
    - Plan para modularizar el sintetizador por familias de mecanizado e
      integrar Vaciado como `ClosedPocket`/pocket milling.
-8. `docs/pgmx_synthesis_modularization_temporary_memory.md`
+9. `docs/pgmx_synthesis_modularization_temporary_memory.md`
    - Memoria temporal para discutir el alcance modulo por modulo antes de
      escribir codigo.
-9. `docs/pgmx_snapshot_help.md` y `docs/pgmx_adapters_help.md`
+10. `docs/pgmx_snapshot_help.md` y `docs/pgmx_adapters_help.md`
    - Lectura/adaptacion de `.pgmx` existentes hacia specs publicos.
-10. `pgmx/machining_lab/README.md` y
+11. `pgmx/machining_lab/README.md` y
    `pgmx/machining_lab/pocket_milling/README.md`
    - Laboratorio general de mecanizados PGMX y laboratorio de
      `ClosedPocket`/pocket milling.
-11. `docs/cut_diagrams_temporary_memory.md`
+12. `docs/cut_diagrams_temporary_memory.md`
    - Estado del motor de diagramas de corte y algoritmos de guillotina.
-12. `docs/laboratory_frontiers.md`
+13. `docs/laboratory_frontiers.md`
    - Fronteras entre herramientas publicas, fachadas compatibles y laboratorios.
-13. `cnc_traceability/README.md`
+14. `cnc_traceability/README.md`
    - Entrada del subsistema de trazabilidad CNC compatible con Windows XP.
-14. `iso_state_synthesis/README.md`
+15. `iso_state_synthesis/README.md`
    - Entrada del subsistema experimental por estado para futura traduccion
      `.pgmx -> .iso`.
-15. `docs/iso_cnc_contract.md`
+16. `docs/iso_cnc_contract.md`
    - Contrato CNC/ISO observado: configuracion Maestro, toolset, variables y
      huecos pendientes para un sintetizador ISO.
-16. `docs/iso_minimal_fixtures_plan.md`
+17. `docs/iso_minimal_fixtures_plan.md`
    - Plan de reanudacion para generar `.pgmx` minimos comparables en la compu
      de fabrica y postprocesarlos con Maestro.
-17. `docs/iso_synthesis_temporary_memory.md`
+18. `docs/iso_synthesis_temporary_memory.md`
    - Ingenieria inversa del flujo PGMX -> Maestro/postprocesador -> ISO.
 
 ## Mapa por tema
@@ -59,9 +62,9 @@ tener que leer todas las memorias historicas de una vez.
 | Modelo de datos | `docs/repo_study_guide.md`, `docs/core_subsystem_audit.md` | `core/model.py` |
 | Escaneo de proyectos | `docs/repo_study_guide.md`, `docs/core_subsystem_audit.md` | `core/parser.py` |
 | Planillas y PDF | `docs/repo_study_guide.md`, `docs/core_subsystem_audit.md` | `core/summary.py`, `core/production_sheet.py`, `core/production_sheet_data.py`, `core/production_sheet_images.py`, `core/production_sheet_pdf.py`, `core/production_pdf.py` |
-| Dibujos de piezas | `docs/repo_study_guide.md` | `pgmx/processing.py`, `core/pgmx_processing.py` |
-| Sintesis PGMX | `docs/synthesize_pgmx_help.md`, `docs/pgmx_synthesis_modularization_plan.md`, `docs/pgmx_synthesis_modularization_temporary_memory.md` | `pgmx/synthesis/` |
-| Snapshot/adaptacion PGMX | `docs/pgmx_snapshot_help.md`, `docs/pgmx_adapters_help.md` | `pgmx/snapshot.py`, `pgmx/adapters.py` |
+| Dibujos de piezas | `docs/repo_study_guide.md`, `docs/pgmx_subsystem_audit.md` | `pgmx/processing.py`, `core/pgmx_processing.py` |
+| Sintesis PGMX | `docs/pgmx_subsystem_audit.md`, `docs/synthesize_pgmx_help.md`, `docs/pgmx_synthesis_modularization_plan.md`, `docs/pgmx_synthesis_modularization_temporary_memory.md` | `pgmx/synthesis/` |
+| Snapshot/adaptacion PGMX | `docs/pgmx_subsystem_audit.md`, `docs/pgmx_snapshot_help.md`, `docs/pgmx_adapters_help.md` | `pgmx/snapshot.py`, `pgmx/adapters.py` |
 | Pocket milling PGMX | `pgmx/machining_lab/pocket_milling/README.md`, `pgmx/machining_lab/pocket_milling/memory/current-state.md`, `docs/laboratory_frontiers.md` | `pgmx/synthesis/milling/pocket.py`, `pgmx/synthesis/milling/pocket_contract.py`, `pgmx/machining_lab/pocket_milling/` |
 | Reparacion SlotSide | `docs/repo_study_guide.md`, `docs/pgmx_temporary_memory.md` | `pgmx/processing.py`, `core/pgmx_processing.py`, `app/project_detail_pgmx.py`, `app/project_detail_programs.py`, `app/project_detail_selected_piece_actions.py` |
 | En-Juego | `docs/en_juego_synthesis_temporary_memory.md`, `docs/core_subsystem_audit.md` | `core/en_juego_synthesis.py`, `core/en_juego_transform.py` |

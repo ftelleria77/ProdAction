@@ -1,17 +1,17 @@
-# PGMX Vaciado
+# PGMX Pocket Milling Lab
 
-Espacio de investigacion para entender y validar mecanizados `.pgmx` que vamos
-a nombrar operativamente como `Vaciado`.
+Espacio de investigacion para entender y validar mecanizados `.pgmx` de la
+familia `ClosedPocket`/pocket milling.
 
 Este laboratorio vive en `pgmx/machining_lab/pocket_milling/`. No es codigo
 productivo: sirve
 para registrar memoria, generar evidencia, comparar contra Maestro y probar
 estrategias antes de volcar reglas cerradas en los modulos estables.
 
-Este paquete es el laboratorio general de `ClosedPocket`/pocket milling. Las
-rutas historicas `pgmx.vaciado_lab` y `tools.pgmx_vaciado*` fueron retiradas;
-los comandos e imports del laboratorio deben usar
-`pgmx.machining_lab.pocket_milling`.
+Este paquete reemplaza al laboratorio historico de Vaciado y funciona como
+laboratorio general de pocket milling. Las rutas historicas `pgmx.vaciado_lab`
+y `tools.pgmx_vaciado*` fueron retiradas; los comandos e imports del
+laboratorio deben usar `pgmx.machining_lab.pocket_milling`.
 
 ## Carpeta Externa
 
@@ -52,7 +52,7 @@ py -3 -m pgmx.machining_lab.pocket_milling.scan_samples `
 
 El inspector cataloga features, operaciones, geometrias, toolpaths,
 profundidades y estrategias. No intenta resolver todavia como sintetizar ni
-postprocesar `Vaciado`.
+postprocesar pocket milling arbitrario.
 
 Analisis especifico de islas:
 

@@ -1,7 +1,8 @@
-"""Analyze Vaciado samples with BossGeometryList islands.
+"""Analyze pocket milling samples with BossGeometryList islands.
 
-This is an evidence tool for the Vaciado laboratory. It records how Maestro
-materializes islands before any productive serialization rule is enabled.
+This is an evidence tool for the pocket milling laboratory. It keeps the
+historical Vaciado corpus names while recording how Maestro materializes islands
+before any productive serialization rule is enabled.
 """
 
 from __future__ import annotations
@@ -670,13 +671,13 @@ def _parse_cases(value: str) -> tuple[int, ...]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Analyze Vaciado samples with islands.")
+    parser = argparse.ArgumentParser(description="Analyze pocket milling samples with islands.")
     parser.add_argument("--root", type=Path, default=EXTERNAL_ROOT)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument(
         "--cases",
         default=",".join(str(case) for case in DEFAULT_CASES),
-        help="Comma-separated Vaciado indexes to inspect.",
+        help="Comma-separated historical Vaciado indexes to inspect.",
     )
     return parser
 

@@ -46,8 +46,6 @@ def _module_data_dir() -> Path:
         for bundled_data_dir in (
             executable_dir / "pgmx" / "data",
             executable_dir / "_internal" / "pgmx" / "data",
-            executable_dir / "tools",
-            executable_dir / "_internal" / "tools",
         ):
             if bundled_data_dir.exists():
                 return bundled_data_dir
