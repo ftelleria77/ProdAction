@@ -2,68 +2,31 @@
 
 from __future__ import annotations
 
-import datetime
-import json
-import os
 import shutil
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QFileDialog,
-    QDialog,
-    QHBoxLayout,
-    QHeaderView,
+    QApplication,
     QInputDialog,
-    QLabel,
-    QListWidget,
-    QListWidgetItem,
     QMessageBox,
-    QPushButton,
     QProgressDialog,
-    QTableWidget,
-    QTableWidgetItem,
-    QVBoxLayout,
 )
 
-from app.project_dialogs import EditProjectWindow
 from app.project_store import (
-    _coerce_optional_piece_float_fields,
-    _coerce_piece_quantity_field,
     _normalize_project_locales,
-    _project_data_path,
     _save_project,
     _total_module_quantity,
 )
-from app.qt_helpers import _exec_centered
-from app.settings import (
-    _compact_number,
-    _default_en_juego_settings,
-    _normalize_cut_optimization_option,
-    _normalize_default_paths,
-    _normalize_en_juego_settings,
-    _parse_piece_quantity_value,
-    _read_app_settings,
-)
-from app.ui_constants import MAIN_ACTION_BUTTON_HEIGHT, MAIN_ACTION_BUTTON_WIDTH
 from core.model import (
     LocaleData,
     ModuleData,
-    Piece,
     Project,
-    normalize_piece_grain_direction,
-    normalize_piece_observations,
 )
-from core.nesting import generate_cut_diagrams
 from core.parser import inspect_project_layout, scan_project, scan_project_structure
-from pgmx.processing import (
-    generate_project_piece_drawings,
-    resolve_piece_program_path,
-)
-from core.production_sheet import export_production_sheet, export_production_sheet_pdf
 from core.summary import export_summary
-from iso_state_synthesis.emitter import emit_candidate_for_pgmx
+from pgmx.processing import generate_project_piece_drawings
+
 
 class ProjectDetailProcessingMixin:
     def _prompt_new_locale_name(self, root_path: Path, title: str, prompt: str) -> str | None:
@@ -158,8 +121,6 @@ class ProjectDetailProcessingMixin:
             shutil.move(str(module_dir), str(locale_dir / module_dir.name))
 
     def _ensure_project_structure_ready(self, root_path: Path) -> bool:
-        from core.parser import inspect_project_layout
-
         layout = inspect_project_layout(root_path)
         if not layout.loose_module_dirs:
             return True
@@ -193,10 +154,6 @@ class ProjectDetailProcessingMixin:
 
     def process_project(self):
         """Procesar el proyecto: escanear subcarpetas y extraer piezas de archivos PGMX."""
-        from pathlib import Path
-        from core.parser import inspect_project_layout, scan_project, scan_project_structure
-        from pgmx.processing import generate_project_piece_drawings
-
         progress_dialog: QProgressDialog | None = None
         progress_step = 0
         total_steps = 8
@@ -375,7 +332,6 @@ class ProjectDetailProcessingMixin:
             self._write_locale_config_files(processed_locales)
             _save_project(self.project)
 
-            from core.summary import export_summary
             summary_csv_path = root_path / "resumen_piezas.csv"
             update_progress("Exportando resumen de piezas.")
             export_summary(self.project, summary_csv_path)

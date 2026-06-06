@@ -119,6 +119,29 @@ def set_widgets_enabled(widgets: Iterable[Any], enabled: bool) -> None:
         widget.setEnabled(bool(enabled))
 
 
+def apply_en_juego_cut_mode_controls(
+    controls_panel: EnJuegoControlsPanel,
+    create_en_juego_btn,
+    *,
+    is_nesting_mode: bool,
+    spacing_mm: float,
+) -> None:
+    set_widgets_enabled(
+        (
+            controls_panel.origin_group,
+            controls_panel.operation_order_group,
+            controls_panel.configure_division_btn,
+            controls_panel.configure_squaring_btn,
+            create_en_juego_btn,
+        ),
+        is_nesting_mode,
+    )
+    controls_panel.spacing_hint_label.setText(
+        "Separación mínima actual: "
+        f"{_compact_number(spacing_mm)} mm"
+    )
+
+
 def build_en_juego_controls_panel(
     *,
     en_juego_settings: dict,

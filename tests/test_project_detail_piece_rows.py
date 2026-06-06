@@ -12,6 +12,7 @@ from app.project_detail_piece_rows import (
     infer_companion_f6_source,
     normalize_piece_row_flags,
     normalize_source_path,
+    orphan_program_preview_text,
     parse_module_setting_dimension,
     parse_optional_piece_float,
     parse_positive_optional_piece_float,
@@ -94,6 +95,20 @@ class ProjectDetailPieceRowsTests(unittest.TestCase):
         piece_id = unique_orphan_piece_id(Path("Pieza nueva.pgmx"), [{"id": "Pieza_nueva"}])
 
         self.assertEqual(piece_id, "Pieza_nueva_2")
+
+    def test_orphan_program_preview_text_uses_relative_names_and_limit(self) -> None:
+        module_path = Path("Modulo")
+        preview = orphan_program_preview_text(
+            [
+                module_path / "A.pgmx",
+                module_path / "Nested" / "B.pgmx",
+                module_path / "C.pgmx",
+            ],
+            module_path,
+            limit=2,
+        )
+
+        self.assertEqual(preview, "- A.pgmx\n- Nested/B.pgmx\n- ... y 1 mas")
 
     def test_serialize_piece_rows_for_config_removes_legacy_fields(self) -> None:
         rows = serialize_piece_rows_for_config(

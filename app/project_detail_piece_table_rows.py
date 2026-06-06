@@ -61,6 +61,65 @@ def filtered_piece_table_rows(
     ]
 
 
+def visible_piece_all_index(
+    current_row: int,
+    visible_row_indexes: Sequence[int],
+    *,
+    all_rows_count: int | None = None,
+) -> int | None:
+    if current_row < 0 or current_row >= len(visible_row_indexes):
+        return None
+    all_idx = visible_row_indexes[current_row]
+    if all_rows_count is not None and not 0 <= all_idx < all_rows_count:
+        return None
+    return all_idx
+
+
+def visible_piece_row_for_all_index(all_idx: int, visible_row_indexes: Sequence[int]) -> int | None:
+    try:
+        return list(visible_row_indexes).index(all_idx)
+    except ValueError:
+        return None
+
+
+def visible_piece_row_for_id(
+    piece_id: str,
+    piece_rows: Sequence[dict],
+    visible_row_indexes: Sequence[int],
+) -> int | None:
+    normalized_id = str(piece_id or "").strip()
+    if not normalized_id:
+        return None
+
+    for row_idx, all_idx in enumerate(visible_row_indexes):
+        if all_idx < 0 or all_idx >= len(piece_rows):
+            continue
+        if str(piece_rows[all_idx].get("id") or "").strip() == normalized_id:
+            return row_idx
+    return None
+
+
+def bounded_table_row(row_idx: int | None, row_count: int) -> int | None:
+    if row_idx is None or row_count <= 0:
+        return None
+    return max(0, min(row_idx, row_count - 1))
+
+
+def can_move_visible_piece(
+    current_row: int,
+    row_count: int,
+    visible_row_indexes: Sequence[int],
+    delta: int,
+) -> bool:
+    target_row = current_row + delta
+    return (
+        0 <= current_row < row_count
+        and 0 <= target_row < row_count
+        and current_row < len(visible_row_indexes)
+        and target_row < len(visible_row_indexes)
+    )
+
+
 def piece_table_program_display(
     source_value,
     pgmx_status: str,

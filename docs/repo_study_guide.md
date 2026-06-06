@@ -1,6 +1,6 @@
 # Guia Rapida De Estudio Del Repo
 
-Esta guia resume como esta organizado ProdAction al 2026-06-05. Sirve para
+Esta guia resume como esta organizado ProdAction al 2026-06-06. Sirve para
 entrar rapido al repo antes de tocar codigo.
 
 ## Estado actual
@@ -24,6 +24,7 @@ El sintetizador PGMX real vive en `pgmx.synthesis` y expone
 | --- | --- |
 | `main.py` | Entrada de la app PySide6. |
 | `docs/repository_audit_inventory.md` | Inventario de auditoria por subsistema, modulo, proceso, tests y docs. |
+| `docs/app_subsystem_audit.md` | Corte dedicado del subsistema `app/`, con flujos, correcciones y deuda residual aceptada. |
 | `app/ui.py` | Compone `ProjectDetailWindow` a partir de mixins. La logica de detalle vive en `app/project_detail_*.py`. |
 | `app/main_window.py` | Ventana inicial de seleccion de proyectos. |
 | `app/project_detail_*.py` | Flujos de detalle: procesamiento, inspeccion, salida, piezas, PGMX, colores y En-Juego. |

@@ -1,6 +1,6 @@
 # Reorganizacion De Arquitectura
 
-Estado: 2026-06-05
+Estado: 2026-06-06
 
 Este documento fija el rumbo de reorganizacion del repo. El frente ISO por
 estado queda pausado como investigacion; el frente historico de Vaciado quedo
@@ -61,7 +61,9 @@ memorias historicas como contexto, no como API.
 | `app/project_detail_output.py` | Diagramas, planillas y salida CNC/ISO | Flujos de produccion/exportacion |
 | `app/ui_constants.py` | Constantes compartidas de UI | Valores comunes para pantallas y dialogos |
 | `app/options_dialogs.py` | Dialogos de opciones generales | Configuracion de tableros, herramientas, cortes, piezas y rutas |
+| `app/options_helpers.py` | Helpers puros de dialogos de opciones | Reglas testeables de validacion de medidas |
 | `app/qt_helpers.py` | Helpers genericos de ventanas/dialogos Qt | Utilidades compartidas de presentacion |
+| `app/project_detail_dialog_lifecycle.py` | Confirmacion de guardado/cierre en dialogos del detalle | Ciclo de vida testeable de dialogos Qt |
 | `app/runtime.py` | Rutas runtime de la app | Fuente unica para rutas internas |
 | `app/project_registry.py` | Registro de proyectos | Persistencia simple del registro |
 | `app/project_store.py` | Carga/guardado de proyectos y configs locales | Servicio de persistencia de proyectos |
@@ -163,7 +165,16 @@ memorias historicas como contexto, no como API.
    subdialogos de divisiones/escuadrado, panel de controles y botonera En-Juego
    extraidos a
    `app/project_detail_en_juego_dialogs.py`; creacion `.pgmx` En-Juego extraida a
-   `app/project_detail_en_juego_output.py`.
+   `app/project_detail_en_juego_output.py`; ciclo de vida de dialogos extraido a
+   `app/project_detail_dialog_lifecycle.py`; helpers puros de opciones extraidos
+   a `app/options_helpers.py`.
+   Cierre 2026-06-06: `docs/app_subsystem_audit.md` fija la frontera real del
+   subsistema `app/`; se corrigieron imports faltantes de `QApplication` en
+   procesamiento/salida, `_show_centered` en el detalle core, `QInputDialog` y
+   `normalize_piece_grain_direction` en opciones; el flujo de cortes llama a
+   `core.nesting_service.generate_cut_diagrams`. La deuda residual queda
+   documentada como modulos amplios ya cubiertos por tests focales, no como
+   bloqueo de esta etapa.
 7. Separar el sintetizador PGMX en un paquete interno.
    Hecho: el subsistema PGMX productivo vive en `pgmx/`; `pgmx/synthesis/core.py`
    contiene la implementacion heredada. Correccion arquitectonica posterior:

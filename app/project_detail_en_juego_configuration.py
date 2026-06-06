@@ -14,13 +14,13 @@ from PySide6.QtWidgets import (
 
 from app.project_detail_en_juego_dimensions import EnJuegoDimensionAnnotator
 from app.project_detail_en_juego_dialogs import (
+    apply_en_juego_cut_mode_controls,
     build_en_juego_controls_panel,
     build_en_juego_view_toolbar,
     open_en_juego_division_settings_dialog,
     open_en_juego_squaring_settings_dialog,
 )
 from app.project_detail_en_juego_layout import (
-    collect_en_juego_composition_data,
     collect_en_juego_instances,
     collect_en_juego_layout_data,
     enforce_scene_piece_spacing,
@@ -36,7 +36,16 @@ from app.project_detail_en_juego_preview import (
     build_piece_scene_item,
     load_piece_drawing_data,
 )
-from app.project_detail_en_juego_settings import normalize_en_juego_dialog_settings
+from app.project_detail_en_juego_settings import (
+    en_juego_effective_piece_spacing_mm,
+    normalize_en_juego_dialog_settings,
+)
+from app.project_detail_en_juego_state import (
+    configurable_en_juego_rows,
+    en_juego_material_thickness_mm,
+    normalized_en_juego_layout,
+    store_en_juego_composition_layout,
+)
 from app.project_detail_en_juego_view import (
     EnJuegoGraphicsView,
     fit_scene_items_in_view,
@@ -47,13 +56,10 @@ from app.project_detail_en_juego_view import (
 )
 from app.qt_helpers import _apply_responsive_window_size, _exec_centered
 from app.settings import (
-    _coerce_setting_number,
     _compact_number,
     _load_en_juego_cutting_tools,
-    _normalize_en_juego_cut_mode,
     _normalize_en_juego_settings,
     _read_app_settings,
-    _resolve_en_juego_nesting_spacing_mm,
 )
 
 
@@ -71,11 +77,7 @@ def open_en_juego_configuration_dialog(
     sync_en_juego_observations,
     refresh_pieces_table,
 ) -> None:
-    en_juego_rows = [
-        row
-        for row in all_rows
-        if bool(row.get("en_juego", False)) and is_valid_thickness_value(row.get("thickness"))
-    ]
+    en_juego_rows = configurable_en_juego_rows(all_rows, is_valid_thickness_value)
     if not en_juego_rows:
         QMessageBox.warning(
             parent_dialog,
@@ -89,17 +91,9 @@ def open_en_juego_configuration_dialog(
     snap_distance_mm = 18.0
     en_juego_settings = dict(_normalize_en_juego_settings(config_data.get("en_juego_settings")))
     available_cutting_tools = _load_en_juego_cutting_tools()
-    en_juego_material_thickness_mm = max(
-        (
-            _coerce_setting_number(row.get("thickness"), 0.0, minimum=0.0)
-            for row in en_juego_rows
-        ),
-        default=0.0,
-    )
+    material_thickness_mm = en_juego_material_thickness_mm(en_juego_rows)
 
-    saved_layout = config_data.get("en_juego_layout", {})
-    if not isinstance(saved_layout, dict):
-        saved_layout = {}
+    saved_layout = normalized_en_juego_layout(config_data)
     auto_spacing_adjustment_state = {"active": False}
 
     config_dialog = QDialog(parent_dialog)
@@ -127,11 +121,8 @@ def open_en_juego_configuration_dialog(
         config_scale=config_scale,
     )
     pieces_list = controls_panel.pieces_list
-    origin_group = controls_panel.origin_group
-    operation_order_group = controls_panel.operation_order_group
     manual_cut_radio = controls_panel.manual_cut_radio
     nesting_cut_radio = controls_panel.nesting_cut_radio
-    spacing_hint_label = controls_panel.spacing_hint_label
     configure_division_btn = controls_panel.configure_division_btn
     configure_squaring_btn = controls_panel.configure_squaring_btn
     origin_x_field = controls_panel.origin_x_field
@@ -141,25 +132,11 @@ def open_en_juego_configuration_dialog(
     content_layout.addWidget(controls_panel.widget, 0, Qt.AlignTop)
 
     def effective_piece_spacing_mm() -> float:
-        cut_mode = "nesting" if nesting_cut_radio.isChecked() else "manual"
-        if cut_mode == "manual":
-            return max(
-                0.0,
-                _coerce_setting_number(
-                    app_cut_settings.get("cut_squaring_allowance"),
-                    10.0,
-                    minimum=0.0,
-                )
-                + _coerce_setting_number(
-                    app_cut_settings.get("cut_saw_kerf"),
-                    4.0,
-                    minimum=0.0,
-                ),
-            )
-
-        return _resolve_en_juego_nesting_spacing_mm(
-            en_juego_settings,
-            material_thickness_mm=en_juego_material_thickness_mm,
+        return en_juego_effective_piece_spacing_mm(
+            cut_mode="nesting" if nesting_cut_radio.isChecked() else "manual",
+            app_cut_settings=app_cut_settings,
+            en_juego_settings=en_juego_settings,
+            material_thickness_mm=material_thickness_mm,
         )
 
     preview_gap_mm = effective_piece_spacing_mm()
@@ -365,7 +342,7 @@ def open_en_juego_configuration_dialog(
             en_juego_settings=en_juego_settings,
             available_cutting_tools=available_cutting_tools,
             compact_scale=config_scale,
-            material_thickness_mm=en_juego_material_thickness_mm,
+            material_thickness_mm=material_thickness_mm,
             origin_x_field=origin_x_field,
             origin_y_field=origin_y_field,
             origin_z_field=origin_z_field,
@@ -393,9 +370,7 @@ def open_en_juego_configuration_dialog(
         )
 
     def save_en_juego_composition_layout():
-        layout_data = collect_layout_data()
-        config_data["en_juego_layout"] = layout_data
-        config_data["en_juego_composition"] = collect_en_juego_composition_data(layout_data)
+        store_en_juego_composition_layout(config_data, collect_layout_data())
 
     def save_en_juego_layout():
         sync_en_juego_settings_from_controls()
@@ -436,14 +411,11 @@ def open_en_juego_configuration_dialog(
     def refresh_cut_mode_controls(*, enforce_spacing: bool = False):
         sync_en_juego_settings_from_controls()
         is_nesting_mode = en_juego_settings.get("cut_mode") == "nesting"
-        origin_group.setEnabled(is_nesting_mode)
-        operation_order_group.setEnabled(is_nesting_mode)
-        configure_division_btn.setEnabled(is_nesting_mode)
-        configure_squaring_btn.setEnabled(is_nesting_mode)
-        create_en_juego_btn.setEnabled(is_nesting_mode)
-        spacing_hint_label.setText(
-            "Separación mínima actual: "
-            f"{_compact_number(effective_piece_spacing_mm())} mm"
+        apply_en_juego_cut_mode_controls(
+            controls_panel,
+            create_en_juego_btn,
+            is_nesting_mode=is_nesting_mode,
+            spacing_mm=effective_piece_spacing_mm(),
         )
         if enforce_spacing:
             enforce_minimum_piece_spacing()

@@ -55,7 +55,6 @@ from core.model import (
     normalize_piece_grain_direction,
     normalize_piece_observations,
 )
-from core.nesting import generate_cut_diagrams
 from core.parser import inspect_project_layout, scan_project, scan_project_structure
 from pgmx.processing import (
     generate_project_piece_drawings,

@@ -2,67 +2,30 @@
 
 from __future__ import annotations
 
-import datetime
-import json
-import os
-import shutil
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
-    QDialog,
-    QHBoxLayout,
-    QHeaderView,
-    QInputDialog,
-    QLabel,
-    QListWidget,
-    QListWidgetItem,
     QMessageBox,
-    QPushButton,
     QProgressDialog,
-    QTableWidget,
-    QTableWidgetItem,
-    QVBoxLayout,
 )
 
-from app.project_dialogs import EditProjectWindow
-from app.project_store import (
-    _coerce_optional_piece_float_fields,
-    _coerce_piece_quantity_field,
-    _normalize_project_locales,
-    _project_data_path,
-    _save_project,
-    _total_module_quantity,
-)
 from app.qt_helpers import _exec_centered
 from app.settings import (
     _compact_number,
-    _default_en_juego_settings,
     _normalize_cut_optimization_option,
     _normalize_default_paths,
-    _normalize_en_juego_settings,
-    _parse_piece_quantity_value,
     _read_app_settings,
 )
-from app.ui_constants import MAIN_ACTION_BUTTON_HEIGHT, MAIN_ACTION_BUTTON_WIDTH
-from core.model import (
-    LocaleData,
-    ModuleData,
-    Piece,
-    Project,
-    normalize_piece_grain_direction,
-    normalize_piece_observations,
-)
-from core.nesting import generate_cut_diagrams
-from core.parser import inspect_project_layout, scan_project, scan_project_structure
+from core.model import LocaleData, ModuleData, Piece, Project
+from core.nesting_service import generate_cut_diagrams
 from pgmx.processing import (
     generate_project_piece_drawings,
     resolve_piece_program_path,
 )
 from core.production_sheet import export_production_sheet, export_production_sheet_pdf
-from core.summary import export_summary
 from iso_state_synthesis.emitter import emit_candidate_for_pgmx
 
 class ProjectDetailOutputMixin:
@@ -86,8 +49,6 @@ class ProjectDetailOutputMixin:
         pdf_output_path = Path(self.project.root_directory) / "diagramas_corte_a4.pdf"
 
         try:
-            from core.nesting import generate_cut_diagrams
-
             result = generate_cut_diagrams(
                 selected_project,
                 pdf_output_path,
@@ -237,9 +198,6 @@ class ProjectDetailOutputMixin:
         return module_output_dir / f"{candidate_stem}.iso"
 
     def _export_project_iso_files(self, selected_project: Project, output_root: Path) -> dict:
-        from pgmx.processing import resolve_piece_program_path
-        from iso_state_synthesis.emitter import emit_candidate_for_pgmx
-
         generated_paths: list[Path] = []
         skipped_missing: list[dict] = []
         skipped_failed: list[dict] = []
@@ -364,9 +322,6 @@ class ProjectDetailOutputMixin:
         while True:
             progress_dialog = None
             try:
-                from pgmx.processing import generate_project_piece_drawings
-                from core.production_sheet import export_production_sheet, export_production_sheet_pdf
-
                 locale_work_items = []
                 for locale in selected_project.locales:
                     locale_project = self._project_for_single_locale(selected_project, locale)

@@ -4,6 +4,7 @@ from app.project_detail_en_juego_settings import (
     apply_en_juego_division_dialog_settings,
     apply_en_juego_squaring_dialog_settings,
     division_tool_hint_text,
+    en_juego_effective_piece_spacing_mm,
     en_juego_depth_role_text,
     normalize_en_juego_dialog_settings,
     squaring_tool_hint_text,
@@ -11,6 +12,45 @@ from app.project_detail_en_juego_settings import (
 
 
 class EnJuegoSettingsTests(unittest.TestCase):
+    def test_effective_piece_spacing_uses_manual_cut_settings(self):
+        spacing = en_juego_effective_piece_spacing_mm(
+            cut_mode="manual",
+            app_cut_settings={
+                "cut_squaring_allowance": "12.5",
+                "cut_saw_kerf": "3.5",
+            },
+            en_juego_settings={"cutting_tool_diameter": 8},
+            material_thickness_mm=18.0,
+        )
+
+        self.assertEqual(spacing, 16.0)
+
+    def test_effective_piece_spacing_uses_nesting_tool_spacing(self):
+        spacing = en_juego_effective_piece_spacing_mm(
+            cut_mode="nesting",
+            app_cut_settings={
+                "cut_squaring_allowance": "12.5",
+                "cut_saw_kerf": "3.5",
+            },
+            en_juego_settings={"cutting_tool_diameter": 8},
+            material_thickness_mm=18.0,
+        )
+
+        self.assertEqual(spacing, 8.0)
+
+    def test_effective_piece_spacing_falls_back_for_invalid_manual_values(self):
+        spacing = en_juego_effective_piece_spacing_mm(
+            cut_mode="manual",
+            app_cut_settings={
+                "cut_squaring_allowance": "bad",
+                "cut_saw_kerf": "-2",
+            },
+            en_juego_settings={},
+            material_thickness_mm=18.0,
+        )
+
+        self.assertEqual(spacing, 14.0)
+
     def test_depth_role_text_and_tool_hints(self):
         self.assertEqual(
             en_juego_depth_role_text(True, operation_label="división"),

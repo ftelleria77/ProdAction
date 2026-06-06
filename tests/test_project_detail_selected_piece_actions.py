@@ -5,8 +5,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from PySide6.QtWidgets import QMessageBox
+
 from app.project_detail_selected_piece_actions import (
     SelectedPieceActionContext,
+    edit_selected_piece,
+    remove_selected_piece,
     select_source_for_selected_piece,
     view_drawing_for_selected_piece,
 )
@@ -78,6 +82,47 @@ class SelectedPieceActionsTests(unittest.TestCase):
 
         open_drawing.assert_called_once_with(None, drawing_path, "Pieza Uno")
 
+    def test_edit_selected_piece_opens_editor_for_selected_row(self) -> None:
+        table = FakePiecesTable(current_row=1, row_count=2)
+        rows = [{"id": "P1"}, {"id": "P2"}]
+        editor_calls = []
+        context = self._context(module_path=Path("."), rows=rows, table=table)
+
+        edit_selected_piece(context, lambda row, **kwargs: editor_calls.append((row, kwargs)))
+
+        self.assertEqual(editor_calls, [(rows[1], {"row_index": 1})])
+
+    def test_remove_selected_piece_removes_row_persists_refreshes_and_restores_selection(self) -> None:
+        table = FakePiecesTable(current_row=0, row_count=2)
+        rows = [{"id": "P1", "name": "Pieza Uno"}, {"id": "P2"}]
+        calls = []
+        context = self._context(
+            module_path=Path("."),
+            rows=rows,
+            table=table,
+            persist=lambda: calls.append("persist"),
+            refresh=lambda: calls.append("refresh"),
+            remove=lambda row, **_: calls.append(("remove", row["id"])),
+            select=lambda piece_id, **kwargs: calls.append(("select", piece_id, kwargs)),
+        )
+
+        with mock.patch(
+            "app.project_detail_selected_piece_actions.QMessageBox.question",
+            return_value=QMessageBox.Yes,
+        ):
+            remove_selected_piece(context)
+
+        self.assertEqual(rows, [{"id": "P2"}])
+        self.assertEqual(
+            calls,
+            [
+                ("remove", "P1"),
+                "persist",
+                "refresh",
+                ("select", "", {"fallback_row": 0}),
+            ],
+        )
+
     def _context(
         self,
         *,
@@ -87,6 +132,8 @@ class SelectedPieceActionsTests(unittest.TestCase):
         persist=lambda: None,
         refresh=lambda: None,
         ensure=lambda row, **_: None,
+        remove=lambda row, **_: None,
+        select=lambda piece_id, **kwargs: None,
     ) -> SelectedPieceActionContext:
         return SelectedPieceActionContext(
             parent=None,
@@ -100,6 +147,8 @@ class SelectedPieceActionsTests(unittest.TestCase):
             build_piece_from_row=lambda row: row,
             ensure_piece_drawing=ensure,
             refresh_piece_drawing_file=lambda row, **_: None,
+            remove_piece_drawing_file=remove,
+            select_visible_piece_by_id=select,
             get_invalid_slot_issues_for_row=lambda row: (),
             clear_invalid_slot_cache=lambda *args, **kwargs: None,
             refresh_repair_pgmx_button_state=lambda: None,

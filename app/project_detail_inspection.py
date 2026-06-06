@@ -35,11 +35,16 @@ from app.project_detail_piece_table import (
     create_piece_table,
 )
 from app.project_detail_piece_table_rows import (
+    bounded_table_row,
+    can_move_visible_piece,
     clear_piece_table_widgets,
     filtered_piece_table_rows,
     piece_table_observations_text,
     render_piece_table_rows,
     set_piece_table_observations_item,
+    visible_piece_all_index,
+    visible_piece_row_for_all_index,
+    visible_piece_row_for_id,
 )
 from app.project_detail_pgmx import (
     clear_invalid_slot_cache_entries,
@@ -48,6 +53,8 @@ from app.project_detail_pgmx import (
 )
 from app.project_detail_selected_piece_actions import (
     SelectedPieceActionContext,
+    edit_selected_piece as edit_selected_piece_action,
+    remove_selected_piece as remove_selected_piece_action,
     repair_selected_invalid_pgmx as repair_selected_invalid_pgmx_action,
     select_source_for_selected_piece as select_source_for_selected_piece_action,
     view_drawing_for_selected_piece as view_drawing_for_selected_piece_action,
@@ -67,6 +74,11 @@ from app.project_detail_colors import (
     module_locale_key,
     open_color_change_dialog,
 )
+from app.project_detail_dialog_lifecycle import (
+    close_dialog_if_confirmed,
+    confirm_save_before_close,
+    install_reject_confirmation,
+)
 from app.project_detail_piece_rows import (
     build_orphan_program_row,
     build_piece_from_row as build_piece_from_row_data,
@@ -74,6 +86,7 @@ from app.project_detail_piece_rows import (
     infer_companion_f6_source as infer_companion_f6_source_for_module,
     normalize_piece_row_flags,
     normalize_source_path as normalize_module_source_path,
+    orphan_program_preview_text,
 )
 from app.qt_helpers import (
     _apply_responsive_window_size,
@@ -89,6 +102,8 @@ from core.model import (
     ModuleData,
     set_piece_en_juego_observation,
 )
+from pgmx.processing import get_pgmx_program_dimension_notes
+
 
 class ProjectDetailInspectionMixin:
     def inspect_module(self, parent_dialog, on_module_updated=None):
@@ -180,21 +195,13 @@ class ProjectDetailInspectionMixin:
             if not orphan_files:
                 return False
 
-            relative_names = [
-                str(program_path.relative_to(module_path)).replace("\\", "/")
-                for program_path in orphan_files
-            ]
-            preview_names = "\n".join(f"- {name}" for name in relative_names[:12])
-            if len(relative_names) > 12:
-                preview_names += f"\n- ... y {len(relative_names) - 12} mas"
-
             answer = QMessageBox.question(
                 inspect_dialog,
                 "Programas no asociados",
                 (
                     "Se encontraron programas PGMX en la carpeta del modulo "
                     "que no estan asociados a ninguna pieza.\n\n"
-                    f"{preview_names}\n\n"
+                    f"{orphan_program_preview_text(orphan_files, module_path)}\n\n"
                     "Desea agregarlos a la lista de piezas?"
                 ),
                 QMessageBox.Yes | QMessageBox.No,
@@ -259,9 +266,7 @@ class ProjectDetailInspectionMixin:
                 if warning_title:
                     QMessageBox.warning(inspect_dialog, warning_title, "Seleccione una pieza de la lista.")
                 return None
-            if current_row >= len(visible_row_indexes):
-                return None
-            return visible_row_indexes[current_row]
+            return visible_piece_all_index(current_row, visible_row_indexes)
 
         def select_piece_table_row(row_idx: int, *, focus_selected_row: bool = False) -> None:
             if row_idx < 0 or row_idx >= pieces_table.rowCount():
@@ -276,21 +281,21 @@ class ProjectDetailInspectionMixin:
                 pieces_table.setFocus(Qt.OtherFocusReason)
 
         def select_visible_piece_by_all_index(all_idx: int, *, focus_selected_row: bool = False) -> bool:
-            if all_idx not in visible_row_indexes:
+            visible_row = visible_piece_row_for_all_index(all_idx, visible_row_indexes)
+            if visible_row is None:
                 return False
-            select_piece_table_row(visible_row_indexes.index(all_idx), focus_selected_row=focus_selected_row)
+            select_piece_table_row(visible_row, focus_selected_row=focus_selected_row)
             return True
 
         def select_visible_piece_by_id(piece_id: str, fallback_row: int | None = None):
-            normalized_id = str(piece_id or "").strip()
-            if normalized_id:
-                for row_idx, all_idx in enumerate(visible_row_indexes):
-                    if str(all_rows[all_idx].get("id") or "").strip() == normalized_id:
-                        select_piece_table_row(row_idx)
-                        return
+            visible_row = visible_piece_row_for_id(piece_id, all_rows, visible_row_indexes)
+            if visible_row is not None:
+                select_piece_table_row(visible_row)
+                return
 
-            if fallback_row is not None and pieces_table.rowCount() > 0:
-                select_piece_table_row(max(0, min(fallback_row, pieces_table.rowCount() - 1)))
+            fallback_visible_row = bounded_table_row(fallback_row, pieces_table.rowCount())
+            if fallback_visible_row is not None:
+                select_piece_table_row(fallback_visible_row)
 
         def infer_companion_f6_source(source_value: str):
             return infer_companion_f6_source_for_module(source_value, module_path)
@@ -324,13 +329,11 @@ class ProjectDetailInspectionMixin:
             )
 
         def can_move_selected_piece(delta: int) -> bool:
-            current_row = pieces_table.currentRow()
-            target_row = current_row + delta
-            return (
-                0 <= current_row < pieces_table.rowCount()
-                and 0 <= target_row < pieces_table.rowCount()
-                and current_row < len(visible_row_indexes)
-                and target_row < len(visible_row_indexes)
+            return can_move_visible_piece(
+                pieces_table.currentRow(),
+                pieces_table.rowCount(),
+                visible_row_indexes,
+                delta,
             )
 
         def refresh_piece_order_button_state():
@@ -427,8 +430,6 @@ class ProjectDetailInspectionMixin:
             if row_idx < 0 or row_idx >= pieces_table.rowCount():
                 return
 
-            from pgmx.processing import get_pgmx_program_dimension_notes
-
             piece_row = all_rows[all_idx]
             notes = get_pgmx_program_dimension_notes(
                 self.project,
@@ -453,8 +454,6 @@ class ProjectDetailInspectionMixin:
 
         def refresh_pieces_table():
             nonlocal refreshing_pieces_table
-            from pgmx.processing import get_pgmx_program_dimension_notes
-
             clear_piece_table_widgets(pieces_table)
 
             sync_piece_program_dimensions_from_rows(
@@ -553,11 +552,9 @@ class ProjectDetailInspectionMixin:
             target_row = current_row + delta
             if not can_move_selected_piece(delta):
                 return
-            current_all_idx = visible_row_indexes[current_row]
-            target_all_idx = visible_row_indexes[target_row]
-            if current_all_idx < 0 or target_all_idx < 0:
-                return
-            if current_all_idx >= len(all_rows) or target_all_idx >= len(all_rows):
+            current_all_idx = visible_piece_all_index(current_row, visible_row_indexes, all_rows_count=len(all_rows))
+            target_all_idx = visible_piece_all_index(target_row, visible_row_indexes, all_rows_count=len(all_rows))
+            if current_all_idx is None or target_all_idx is None:
                 return
 
             all_rows[current_all_idx], all_rows[target_all_idx] = all_rows[target_all_idx], all_rows[current_all_idx]
@@ -615,6 +612,8 @@ class ProjectDetailInspectionMixin:
                 build_piece_from_row=build_piece_from_row,
                 ensure_piece_drawing=ensure_piece_drawing,
                 refresh_piece_drawing_file=refresh_piece_drawing_file,
+                remove_piece_drawing_file=remove_piece_drawing_file,
+                select_visible_piece_by_id=select_visible_piece_by_id,
                 get_invalid_slot_issues_for_row=get_invalid_slot_issues_for_row,
                 clear_invalid_slot_cache=clear_invalid_slot_cache,
                 refresh_repair_pgmx_button_state=refresh_repair_pgmx_button_state,
@@ -658,10 +657,7 @@ class ProjectDetailInspectionMixin:
             open_piece_editor()
 
         def edit_selected_piece():
-            all_idx = selected_piece_all_index("Editar pieza")
-            if all_idx is None:
-                return
-            open_piece_editor(all_rows[all_idx], row_index=all_idx)
+            edit_selected_piece_action(selected_piece_action_context(), open_piece_editor)
 
         def edit_piece_from_table_double_click(row: int, _column: int):
             if row < 0 or row >= pieces_table.rowCount():
@@ -670,28 +666,7 @@ class ProjectDetailInspectionMixin:
             edit_selected_piece()
 
         def remove_selected_piece():
-            current_row = pieces_table.currentRow()
-            all_idx = selected_piece_all_index("Eliminar pieza")
-            if all_idx is None:
-                return
-
-            piece_row = all_rows[all_idx]
-            piece_display_name = str(piece_row.get("name") or piece_row.get("id") or "pieza").strip()
-            answer = QMessageBox.question(
-                inspect_dialog,
-                "Eliminar pieza",
-                f'¿Desea eliminar la pieza "{piece_display_name}"?',
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-            if answer != QMessageBox.Yes:
-                return
-
-            all_rows.pop(all_idx)
-            remove_piece_drawing_file(piece_row)
-            persist_module_config()
-            refresh_pieces_table()
-            select_visible_piece_by_id("", fallback_row=current_row)
+            remove_selected_piece_action(selected_piece_action_context())
 
         def _configured_board_colors(piece_thickness: float | None = None) -> list[str]:
             return configured_board_colors(_read_app_settings(), piece_thickness=piece_thickness)
@@ -821,36 +796,14 @@ class ProjectDetailInspectionMixin:
             if show_feedback:
                 QMessageBox.information(inspect_dialog, "Configuración", "Configuración del módulo guardada.")
 
-        def ask_save_before_close() -> bool:
-            if not has_unsaved_changes:
-                return True
-
-            answer = QMessageBox.question(
+        def can_close_inspection_dialog() -> bool:
+            return confirm_save_before_close(
                 inspect_dialog,
-                "Cambios sin guardar",
-                "Hay cambios sin guardar en la configuración del módulo. ¿Desea guardarlos antes de cerrar?",
-                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
-                QMessageBox.Yes,
+                lambda: has_unsaved_changes,
+                save_module_settings,
             )
 
-            if answer == QMessageBox.Yes:
-                save_module_settings(show_feedback=False)
-                return True
-            if answer == QMessageBox.No:
-                return True
-            return False
-
-        def request_close_dialog():
-            if ask_save_before_close():
-                inspect_dialog.accept()
-
-        original_reject = inspect_dialog.reject
-
-        def reject_with_confirmation():
-            if ask_save_before_close():
-                original_reject()
-
-        inspect_dialog.reject = reject_with_confirmation
+        install_reject_confirmation(inspect_dialog, can_close_inspection_dialog)
 
         actions_column.addStretch(1)
 
@@ -860,7 +813,7 @@ class ProjectDetailInspectionMixin:
         save_btn.clicked.connect(save_module_settings)
         close_btn = QPushButton("Cerrar")
         close_btn.setFixedSize(MAIN_ACTION_BUTTON_WIDTH, MAIN_ACTION_BUTTON_HEIGHT)
-        close_btn.clicked.connect(request_close_dialog)
+        close_btn.clicked.connect(lambda: close_dialog_if_confirmed(inspect_dialog, can_close_inspection_dialog))
 
         actions_column.addWidget(save_btn)
         actions_column.addWidget(close_btn)

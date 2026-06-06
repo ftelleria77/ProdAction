@@ -215,6 +215,25 @@ def find_orphan_pgmx_files(module_path: Path, piece_rows: Iterable[dict]) -> lis
     return orphans
 
 
+def orphan_program_relative_names(program_paths: Iterable[Path], module_path: Path) -> list[str]:
+    relative_names: list[str] = []
+    for program_path in program_paths:
+        try:
+            relative_path = program_path.relative_to(module_path)
+        except ValueError:
+            relative_path = Path(program_path.name)
+        relative_names.append(str(relative_path).replace("\\", "/"))
+    return relative_names
+
+
+def orphan_program_preview_text(program_paths: Iterable[Path], module_path: Path, *, limit: int = 12) -> str:
+    relative_names = orphan_program_relative_names(program_paths, module_path)
+    preview_names = "\n".join(f"- {name}" for name in relative_names[:limit])
+    if len(relative_names) > limit:
+        preview_names += f"\n- ... y {len(relative_names) - limit} mas"
+    return preview_names
+
+
 def unique_orphan_piece_id(program_path: Path, piece_rows: Iterable[dict]) -> str:
     existing_ids = {str(row.get("id") or "").strip().lower() for row in piece_rows}
     base_id = "".join(

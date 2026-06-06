@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QInputDialog,
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
@@ -22,6 +23,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.options_helpers import parse_non_negative_measure
+from app.project_detail_colors import configured_board_colors, preferred_color_index
+from app.project_detail_piece_rows import parse_optional_piece_float
 from app.qt_helpers import (
     _apply_responsive_window_size,
     _exec_centered,
@@ -48,6 +52,7 @@ from app.settings import (
     _write_app_settings,
 )
 from app.ui_constants import MAIN_ACTION_BUTTON_HEIGHT, MAIN_ACTION_BUTTON_WIDTH
+from core.model import normalize_piece_grain_direction
 
 class BoardEditDialog(QDialog):
     def __init__(self, board: dict | None = None, parent=None):
@@ -411,22 +416,21 @@ class CutsDialog(QDialog):
         squaring_raw = self.cut_squaring_field.text().strip() or "10"
         saw_kerf_raw = self.cut_saw_kerf_field.text().strip() or "4"
 
-        def parse_non_negative_measure(raw_value: str, field_name: str) -> float | None:
-            try:
-                value = float(raw_value.replace(",", "."))
-            except ValueError:
+        def read_non_negative_measure(raw_value: str, field_name: str) -> float | None:
+            parsed = parse_non_negative_measure(raw_value)
+            if parsed.error == "invalid":
                 QMessageBox.warning(self, "Cortes", f"{field_name} debe ser un número.")
                 return None
-            if value < 0:
+            if parsed.error == "negative":
                 QMessageBox.warning(self, "Cortes", f"{field_name} debe ser mayor o igual a cero.")
                 return None
-            return value
+            return parsed.value
 
-        squaring_allowance = parse_non_negative_measure(squaring_raw, "El adicional para escuadrado")
+        squaring_allowance = read_non_negative_measure(squaring_raw, "El adicional para escuadrado")
         if squaring_allowance is None:
             return
 
-        saw_kerf = parse_non_negative_measure(saw_kerf_raw, "El espesor de sierra")
+        saw_kerf = read_non_negative_measure(saw_kerf_raw, "El espesor de sierra")
         if saw_kerf is None:
             return
 
@@ -533,39 +537,12 @@ class PieceTemplateEditDialog(QDialog):
             column_widget.setLayout(column_layout)
             return column_widget
 
-        def available_board_colors(piece_thickness: float | None = None) -> list[str]:
-            colors: list[str] = []
-            seen: set[str] = set()
-            for board in _read_app_settings().get("available_boards", []):
-                color = str(board.get("color") or "").strip()
-                if not color:
-                    continue
-                if piece_thickness is not None:
-                    try:
-                        board_thickness = float(board.get("thickness"))
-                    except (TypeError, ValueError):
-                        continue
-                    if abs(board_thickness - piece_thickness) > 0.001:
-                        continue
-                color_key = color.lower()
-                if color_key in seen:
-                    continue
-                seen.add(color_key)
-                colors.append(color)
-            return colors
-
-        def parse_optional_piece_float(raw_value: str):
-            raw_text = (raw_value or "").strip().replace(",", ".")
-            if not raw_text:
-                return None
-            try:
-                return float(raw_text)
-            except ValueError:
-                return None
-
         def select_color_from_boards():
             piece_thickness = parse_optional_piece_float(self.thickness_field.text())
-            available_colors = available_board_colors(piece_thickness=piece_thickness)
+            available_colors = configured_board_colors(
+                _read_app_settings(),
+                piece_thickness=piece_thickness,
+            )
             if not available_colors:
                 thickness_label = (
                     f" para espesor {int(piece_thickness) if float(piece_thickness).is_integer() else piece_thickness} mm"
@@ -580,12 +557,7 @@ class PieceTemplateEditDialog(QDialog):
                 return
 
             current_color = self.color_field.text().strip()
-            selected_index = 0
-            if current_color:
-                for color_index, color_value in enumerate(available_colors):
-                    if color_value.strip().lower() == current_color.lower():
-                        selected_index = color_index
-                        break
+            selected_index = preferred_color_index(available_colors, current_color)
 
             selected_color, ok = QInputDialog.getItem(
                 self,

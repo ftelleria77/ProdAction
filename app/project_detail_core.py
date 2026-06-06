@@ -36,7 +36,7 @@ from app.project_store import (
     _save_project,
     _total_module_quantity,
 )
-from app.qt_helpers import _exec_centered
+from app.qt_helpers import _exec_centered, _show_centered
 from app.settings import (
     _compact_number,
     _default_en_juego_settings,
@@ -55,7 +55,6 @@ from core.model import (
     normalize_piece_grain_direction,
     normalize_piece_observations,
 )
-from core.nesting import generate_cut_diagrams
 from core.parser import inspect_project_layout, scan_project, scan_project_structure
 from pgmx.processing import (
     generate_project_piece_drawings,

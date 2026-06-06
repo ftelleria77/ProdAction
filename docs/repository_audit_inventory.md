@@ -1,6 +1,6 @@
 # Inventario De Auditoria Del Repositorio
 
-Estado: inventario operativo actualizado, 2026-06-05.
+Estado: inventario operativo actualizado, 2026-06-06.
 
 Este documento es la base de trabajo para auditar ProdAction modulo por modulo y
 actualizar la documentacion vigente. No reemplaza las guias publicas; sirve para
@@ -23,7 +23,7 @@ mantener una matriz de control mientras se revisan los subsistemas.
 
 | Subsistema | Rol | Procesos Donde Interviene | Tests Principales | Docs Relacionados |
 | --- | --- | --- | --- | --- |
-| `app/` | Aplicacion desktop PySide6 y flujos de UI. | Seleccion de proyectos, edicion de proyectos, inspeccion de modulos, acciones PGMX, En-Juego, exportaciones. | `tests/test_project_*`, `tests/test_production_*`. | `README.md`, `docs/repo_study_guide.md`. |
+| `app/` | Aplicacion desktop PySide6 y flujos de UI. | Seleccion de proyectos, edicion de proyectos, inspeccion de modulos, acciones PGMX, En-Juego, exportaciones. | `tests/test_project_*`, `tests/test_production_*`. | `README.md`, `docs/repo_study_guide.md`, `docs/app_subsystem_audit.md`. |
 | `core/` | Dominio compartido, parser, planillas, PDF, nesting y En-Juego. | Escaneo de proyectos, modelo de datos, resumen CSV, planillas Excel/PDF, diagramas de corte, composicion En-Juego. | `tests/test_nesting_*`, `tests/test_summary_exports.py`, `tests/test_production_*`. | `docs/repo_study_guide.md`, `docs/cut_diagrams_temporary_memory.md`, `docs/en_juego_synthesis_temporary_memory.md`. |
 | `pgmx/` | Subsistema PGMX productivo. | Lectura de programas, dibujos de piezas, snapshot, adaptacion, sintesis PGMX, laboratorio pocket milling. | `tests/test_pgmx_*`, `tests/test_project_detail_pgmx.py`. | `docs/synthesize_pgmx_help.md`, `docs/pgmx_snapshot_help.md`, `docs/pgmx_adapters_help.md`, `docs/pgmx_synthesis_modularization_plan.md`, `pgmx/machining_lab/README.md`. |
 | `iso_state_synthesis/` | Sintesis ISO experimental basada en estados. | Lectura de snapshot PGMX, plan de estados, diferencial, emision candidata ISO, comparacion. | Sin suite dedicada actual; se valida indirectamente desde UI/imports y estudios. | `iso_state_synthesis/README.md`, `iso_state_synthesis/memory/current-state.md`, `docs/iso_cnc_contract.md`. |
@@ -58,7 +58,9 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | `app.settings` | Configuracion global, herramientas, cortes y En-Juego. | `read_app_settings`, `normalize_cut_optimization_option`. |
 | `app.runtime` | Rutas runtime de la app. | Constantes y helper interno de base dir. |
 | `app.qt_helpers` | Helpers de ventanas/dialogos Qt. | Helpers internos compartidos. |
+| `app.project_detail_dialog_lifecycle` | Confirmacion de guardado/cierre en dialogos del detalle. | `confirm_save_before_close`, `close_dialog_if_confirmed`, `install_reject_confirmation`. |
 | `app.options_dialogs` | Dialogos de opciones generales. | `OptionsDialog`, `BoardsDialog`, `ToolsDialog`, `CutsDialog`, `PathsDialog`. |
+| `app.options_helpers` | Helpers puros de dialogos de opciones. | `parse_non_negative_measure`. |
 | `app.project_detail_core` | Estado y persistencia del detalle de proyecto. | `ProjectDetailCoreMixin`. |
 | `app.project_detail_processing` | Procesamiento de proyectos/locales/modulos. | `ProjectDetailProcessingMixin`. |
 | `app.project_detail_modules` | Listado y edicion tabular de modulos. | `ProjectDetailModulesMixin`. |
@@ -70,7 +72,7 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | `app.project_detail_piece_editor` | Valores y rows del editor de pieza. | `PieceEditorValues`, `build_piece_editor_row`. |
 | `app.project_detail_piece_editor_dialog` | Dialogo Qt de alta/edicion de piezas. | `open_piece_editor_dialog`, `PieceEditorDialogContext`. |
 | `app.project_detail_piece_actions` | Botonera lateral de acciones de pieza. | `ProjectDetailPieceActions`, `build_project_detail_piece_actions`. |
-| `app.project_detail_selected_piece_actions` | Acciones sobre pieza seleccionada. | `select_source_for_selected_piece`, `repair_selected_invalid_pgmx`, `view_drawing_for_selected_piece`. |
+| `app.project_detail_selected_piece_actions` | Acciones sobre pieza seleccionada. | `select_source_for_selected_piece`, `edit_selected_piece`, `remove_selected_piece`, `repair_selected_invalid_pgmx`, `view_drawing_for_selected_piece`. |
 | `app.project_detail_programs` | Seleccion/asignacion/apertura de programas PGMX. | `select_pgmx_program_file`, `assign_program_source_to_row`, `open_piece_program_in_default_app`. |
 | `app.project_detail_pgmx` | Cache y mensajes de issues PGMX. | `invalid_slot_cache_key`, `get_cached_invalid_slot_issues`, `invalid_slot_message`. |
 | `app.project_detail_drawings` | Creacion, borrado y apertura de dibujos SVG. | `ensure_piece_drawing_file`, `refresh_piece_drawing_file`, `open_piece_drawing_dialog`. |
@@ -79,8 +81,8 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | `app.project_detail_selectors` | Dialogos de seleccion editable. | `EditableSelectionConfig`, `open_editable_selection_dialog`. |
 | `app.project_detail_module_persistence` | Persistencia de configuracion de modulo inspeccionado. | `build_module_settings_payload`, `persist_inspected_module_config`. |
 | `app.project_detail_module_settings_panel` | Panel de configuracion del modulo. | `ProjectDetailModuleSettingsPanel`, `build_project_detail_module_settings_panel`. |
-| `app.project_detail_en_juego_state` | Estado persistido de En-Juego. | `has_configurable_en_juego_pieces`, `sync_en_juego_observations`, `clear_persistent_en_juego_info`. |
-| `app.project_detail_en_juego_settings` | Normalizacion de settings/dialogos En-Juego. | `normalize_en_juego_dialog_settings`, `apply_en_juego_*_dialog_settings`. |
+| `app.project_detail_en_juego_state` | Estado persistido de En-Juego. | `configurable_en_juego_rows`, `en_juego_material_thickness_mm`, `store_en_juego_composition_layout`, `sync_en_juego_observations`. |
+| `app.project_detail_en_juego_settings` | Normalizacion de settings/dialogos En-Juego. | `normalize_en_juego_dialog_settings`, `en_juego_effective_piece_spacing_mm`, `apply_en_juego_*_dialog_settings`. |
 | `app.project_detail_en_juego_layout` | Layout puro de piezas En-Juego. | `collect_en_juego_instances`, `enforce_scene_piece_spacing`, `collect_en_juego_layout_data`. |
 | `app.project_detail_en_juego_view` | Items/viewport Qt de composicion En-Juego. | `EnJuegoGraphicsView`, `EnJuegoPieceItem`, `rotate_en_juego_scene_item`. |
 | `app.project_detail_en_juego_preview` | Render de preview en escena En-Juego. | `load_piece_drawing_data`, `build_piece_scene_item`. |
@@ -185,7 +187,7 @@ mantener una matriz de control mientras se revisan los subsistemas.
 
 | Area | Suites |
 | --- | --- |
-| App/project detail | `tests/test_project_detail_*.py`, `tests/test_project_store.py`. |
+| App/options/project detail | `tests/test_options_helpers.py`, `tests/test_project_detail_*.py`, `tests/test_project_store.py`. |
 | En-Juego UI/layout/output | `tests/test_project_detail_en_juego_*.py`. |
 | Planillas/PDF | `tests/test_summary_exports.py`, `tests/test_production_pdf.py`, `tests/test_production_sheet_images.py`. |
 | Nesting | `tests/test_nesting_*.py`. |
@@ -209,7 +211,9 @@ py -3 -m unittest discover -s tests -p "test*.py"
 4. Hecho: revisar `docs/repo_study_guide.md` contra el mapa real de `app/` y `core/`.
 5. Hecho: revisar `docs/synthesize_pgmx_help.md`, `docs/pgmx_snapshot_help.md` y
    `docs/pgmx_adapters_help.md` contra las CLIs finales `py -3 -m pgmx.*`.
-6. Vigente: evitar editar memorias historicas salvo para agregar nota de estado actual en
+6. Hecho: abrir auditoria dedicada de `app/` en
+   `docs/app_subsystem_audit.md`.
+7. Vigente: evitar editar memorias historicas salvo para agregar nota de estado actual en
    trackers vivos.
 
 ## Hallazgos Y Acciones Aplicadas
@@ -228,5 +232,8 @@ py -3 -m unittest discover -s tests -p "test*.py"
 - `pgmx/machining_lab/README.md` queda agregado como frontera general; el punto
   de entrada especifico de pocket milling sigue siendo
   `pgmx/machining_lab/pocket_milling/README.md`.
+- `docs/app_subsystem_audit.md` queda agregado como corte de auditoria profunda
+  del subsistema desktop; el bloque `app/` queda cerrado para esta etapa con
+  deuda residual documentada.
 - `iso_state_synthesis/` y `cnc_traceability/` tienen documentacion propia, pero
   poca o ninguna cobertura automatizada dedicada.

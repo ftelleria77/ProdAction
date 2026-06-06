@@ -25,6 +25,8 @@ class SelectedPieceActionContext:
     build_piece_from_row: Callable[[MutableMapping[str, object]], object]
     ensure_piece_drawing: Callable[..., Path | None]
     refresh_piece_drawing_file: Callable[..., Path | None]
+    remove_piece_drawing_file: Callable[..., None]
+    select_visible_piece_by_id: Callable[..., None]
     get_invalid_slot_issues_for_row: Callable[[dict], Sequence[object]]
     clear_invalid_slot_cache: Callable[..., None]
     refresh_repair_pgmx_button_state: Callable[[], None]
@@ -66,6 +68,40 @@ def select_source_for_selected_piece(context: SelectedPieceActionContext) -> Non
 
     piece_display_name = str(piece_row.get("name") or piece_row.get("id") or "pieza").strip()
     open_piece_drawing_dialog(context.parent, drawing_path, piece_display_name)
+
+
+def edit_selected_piece(context: SelectedPieceActionContext, open_piece_editor: Callable[..., object]) -> None:
+    selected = _selected_visible_indexes(context, "Editar pieza")
+    if selected is None:
+        return
+    _, all_idx = selected
+    open_piece_editor(context.all_rows[all_idx], row_index=all_idx)
+
+
+def remove_selected_piece(context: SelectedPieceActionContext) -> None:
+    current_row = context.pieces_table.currentRow()
+    selected = _selected_visible_indexes(context, "Eliminar pieza")
+    if selected is None:
+        return
+    _, all_idx = selected
+
+    piece_row = context.all_rows[all_idx]
+    piece_display_name = str(piece_row.get("name") or piece_row.get("id") or "pieza").strip()
+    answer = QMessageBox.question(
+        context.parent,
+        "Eliminar pieza",
+        f'¿Desea eliminar la pieza "{piece_display_name}"?',
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.No,
+    )
+    if answer != QMessageBox.Yes:
+        return
+
+    context.all_rows.pop(all_idx)
+    context.remove_piece_drawing_file(piece_row)
+    context.persist_module_config()
+    context.refresh_pieces_table()
+    context.select_visible_piece_by_id("", fallback_row=current_row)
 
 
 def repair_selected_invalid_pgmx(context: SelectedPieceActionContext) -> None:

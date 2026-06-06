@@ -196,6 +196,34 @@ def en_juego_depth_role_text(is_through: bool, *, operation_label: str) -> str:
     return "Profundidad extra" if is_through else f"Profundidad de {operation_label}"
 
 
+def en_juego_effective_piece_spacing_mm(
+    *,
+    cut_mode: str,
+    app_cut_settings: dict,
+    en_juego_settings: dict,
+    material_thickness_mm: float,
+) -> float:
+    if str(cut_mode or "").strip().lower() != "nesting":
+        return max(
+            0.0,
+            _coerce_setting_number(
+                app_cut_settings.get("cut_squaring_allowance"),
+                10.0,
+                minimum=0.0,
+            )
+            + _coerce_setting_number(
+                app_cut_settings.get("cut_saw_kerf"),
+                4.0,
+                minimum=0.0,
+            ),
+        )
+
+    return _resolve_en_juego_nesting_spacing_mm(
+        en_juego_settings,
+        material_thickness_mm=material_thickness_mm,
+    )
+
+
 def division_tool_hint_text(
     current_tool: dict,
     current_settings: dict,
