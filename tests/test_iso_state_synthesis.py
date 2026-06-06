@@ -14,6 +14,7 @@ from iso_state_synthesis.emitter import (
     _closed_polyline_center_lead_geometry,
     _line_milling_motion_line,
     _line_milling_no_lead_side_compensation_motion_lines,
+    _line_milling_open_polyline_side_compensation_motion_lines,
     _line_milling_trace_context,
     _line_milling_trace_modes,
     _linear_profile_program_point,
@@ -116,6 +117,9 @@ def _line_milling_test_context(
     circle_center_x: float | None = None,
     circle_center_y: float | None = None,
     cut_z: float = -8.0,
+    approach_type: str = "Line",
+    approach_radius_multiplier: float = 2.0,
+    lead_paths: bool = False,
 ) -> object:
     optional_circle_changes: tuple[StateChange, ...] = ()
     if circle_center_x is not None and circle_center_y is not None:
@@ -123,6 +127,18 @@ def _line_milling_test_context(
             _change("movimiento", "circle_center_x", circle_center_x),
             _change("movimiento", "circle_center_y", circle_center_y),
         )
+    first_x, first_y = contour_points[0]
+    last_x, last_y = contour_points[-1]
+    approach_move = (
+        _trace_move("Approach", (first_x - 2.0, first_y, 5.0), (first_x, first_y, cut_z))
+        if lead_paths
+        else _trace_move("Approach", (first_x, first_y, 5.0))
+    )
+    lift_move = (
+        _trace_move("Lift", (last_x, last_y, cut_z), (last_x + 2.0, last_y, 5.0))
+        if lead_paths
+        else _trace_move("Lift", (last_x, last_y, 5.0))
+    )
     differential = StageDifferential(
         stage_key="line_milling_trace",
         family="line_milling",
@@ -144,14 +160,16 @@ def _line_milling_test_context(
             _change("herramienta", "tool_radius", 2.0),
             _change("herramienta", "tool_offset_length", 107.2),
             _change("trabajo", "side_of_feature", side_of_feature),
+            _change("trabajo", "approach_type", approach_type),
+            _change("trabajo", "approach_radius_multiplier", approach_radius_multiplier),
         ),
         trace=(
-            _trace_move("Approach", (contour_points[0][0], contour_points[0][1], 5.0)),
+            approach_move,
             _trace_move(
                 "TrajectoryPath",
                 *((point[0], point[1], cut_z) for point in contour_points),
             ),
-            _trace_move("Lift", (contour_points[-1][0], contour_points[-1][1], 5.0)),
+            lift_move,
         ),
     )
     evaluation = IsoStateEvaluation(
@@ -603,6 +621,56 @@ class IsoStateSynthesisLineMillingGeometryTests(unittest.TestCase):
                 "G1 Z5.000 F600.000",
                 "G40",
                 "G1 X10.000 Y21.000 Z5.000 F600.000",
+            ),
+        )
+
+    def test_open_polyline_side_compensation_builder_emits_line_leads(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="OpenPolyline",
+            side_of_feature="Right",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+            approach_type="Line",
+            approach_radius_multiplier=2.0,
+            lead_paths=True,
+        )
+
+        self.assertTrue(context.modes.uses_side_compensation)
+        self.assertEqual(
+            _line_milling_open_polyline_side_compensation_motion_lines(context),
+            (
+                "?%ETK[7]=4",
+                "G42",
+                "G1 X6.000 Y20.000 Z5.000 F120.000",
+                "G1 X10.000 Z-8.000 F120.000",
+                "G1 X110.000 Z-8.000 F600.000",
+                "G1 X114.000 Z5.000 F600.000",
+                "G40",
+                "G1 X115.000 Y20.000 Z5.000 F600.000",
+            ),
+        )
+
+    def test_open_polyline_side_compensation_builder_emits_arc_leads(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="OpenPolyline",
+            side_of_feature="Left",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+            approach_type="Arc",
+            approach_radius_multiplier=2.0,
+            lead_paths=True,
+        )
+
+        self.assertTrue(context.modes.uses_side_compensation)
+        self.assertEqual(
+            _line_milling_open_polyline_side_compensation_motion_lines(context),
+            (
+                "?%ETK[7]=4",
+                "G41",
+                "G1 X6.000 Y24.000 Z5.000 F120.000",
+                "G3 X10.000 Y20.000 Z-8.000 I10.000 J24.000 F120.000",
+                "G1 X110.000 Z-8.000 F600.000",
+                "G3 X114.000 Y24.000 Z5.000 I110.000 J24.000 F600.000",
+                "G40",
+                "G1 X114.000 Y25.000 Z5.000 F600.000",
             ),
         )
 

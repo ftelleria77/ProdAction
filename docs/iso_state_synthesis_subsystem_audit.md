@@ -175,6 +175,19 @@ Hallazgos aplicados:
 - `_emit_line_milling_trace` queda un paso mas cerca de separar seleccion de
   rama, lectura de estado y generacion de movimiento.
 
+## Subcorte Fresado Router Builder OpenPolyline Compensado
+
+Hallazgos aplicados:
+
+- Se extrajo `_line_milling_open_polyline_side_compensation_motion_lines` para
+  la rama `uses_side_compensation and profile_family == "OpenPolyline"`.
+- El builder cubre polilineas abiertas con compensacion lateral y leads reales,
+  tanto lineales como en arco.
+- Se agregaron tests puros para fijar el ISO emitido por leads `Line` y `Arc`,
+  incluyendo la regla de conservar `Z` cuando la profundidad no es pasante.
+- El bloque principal conserva la seleccion de rama y delega otra familia de
+  `motion_lines` en un builder aislado.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome

@@ -3288,100 +3288,7 @@ def _emit_line_milling_trace(
             include_cut_z=include_cut_z,
         )
     elif uses_side_compensation and profile_family == "OpenPolyline":
-        compensation_code = "G42" if side_of_feature == "Right" else "G41"
-        polyline_lead = _polyline_side_compensation_leads(
-            nominal_points,
-            float(tool_radius),
-            side_of_feature,
-            approach_type,
-            approach_radius_multiplier,
-        )
-        entry_point = polyline_lead["entry"]
-        exit_point = polyline_lead["exit"]
-        exit_rapid = polyline_lead["exit_rapid"]
-        arc_code = "G3" if side_of_feature == "Left" else "G2"
-        generated = [
-            "?%ETK[7]=4",
-            compensation_code,
-            f"G1 X{_fmt(entry_point[0])} Y{_fmt(entry_point[1])} Z{_fmt(security_z)} F{_fmt(plunge_feed)}",
-        ]
-        if approach_type == "Arc":
-            entry_center = polyline_lead["entry_center"]
-            generated.append(
-                _profile_milling_arc_line(
-                    arc_code,
-                    nominal_points[0][0],
-                    nominal_points[0][1],
-                    entry_center[0],
-                    entry_center[1],
-                    plunge_feed,
-                    z=cut_z,
-                )
-            )
-        else:
-            generated.append(
-                _line_milling_motion_line(
-                    nominal_points[0][0],
-                    nominal_points[0][1],
-                    float(cut_z),
-                    entry_point[0],
-                    entry_point[1],
-                    float(security_z),
-                    float(plunge_feed),
-                )
-            )
-        current_x, current_y = nominal_points[0]
-        current_z = float(cut_z)
-        include_cut_z = (
-            open_polyline_outside_piece
-            or float(cut_z) > -float(evaluation.initial_state.get("pieza", "depth"))
-        )
-        for point in nominal_points[1:]:
-            generated.append(
-                _line_milling_motion_line(
-                    point[0],
-                    point[1],
-                    float(cut_z),
-                    current_x,
-                    current_y,
-                    current_z,
-                    float(milling_feed),
-                    always_include_z=include_cut_z,
-                )
-            )
-            current_x, current_y = point
-        if approach_type == "Arc":
-            exit_center = polyline_lead["exit_center"]
-            generated.append(
-                _profile_milling_arc_line(
-                    arc_code,
-                    exit_point[0],
-                    exit_point[1],
-                    exit_center[0],
-                    exit_center[1],
-                    milling_feed,
-                    z=security_z,
-                )
-            )
-        else:
-            generated.append(
-                _line_milling_motion_line(
-                    exit_point[0],
-                    exit_point[1],
-                    float(security_z),
-                    current_x,
-                    current_y,
-                    current_z,
-                    float(milling_feed),
-                )
-            )
-        generated.extend(
-            (
-                "G40",
-                f"G1 X{_fmt(exit_rapid[0])} Y{_fmt(exit_rapid[1])} Z{_fmt(security_z)} F{_fmt(milling_feed)}",
-            )
-        )
-        motion_lines = tuple(generated)
+        motion_lines = _line_milling_open_polyline_side_compensation_motion_lines(context)
     elif uses_side_compensation:
         compensation_code = "G42" if side_of_feature == "Right" else "G41"
         lift_y = float(lift.points[-2].y)
@@ -3752,6 +3659,111 @@ def _line_milling_no_lead_side_compensation_motion_lines(
             "G40",
             (
                 f"G1 X{_fmt(leadout_point[0])} Y{_fmt(leadout_point[1])} "
+                f"Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}"
+            ),
+        )
+    )
+    return tuple(generated)
+
+
+def _line_milling_open_polyline_side_compensation_motion_lines(
+    context: _LineMillingTraceContext,
+) -> tuple[str, ...]:
+    compensation_code = "G42" if context.side_of_feature == "Right" else "G41"
+    polyline_lead = _polyline_side_compensation_leads(
+        context.nominal_points,
+        float(context.tool_radius),
+        context.side_of_feature,
+        context.approach_type,
+        context.approach_radius_multiplier,
+    )
+    entry_point = polyline_lead["entry"]
+    exit_point = polyline_lead["exit"]
+    exit_rapid = polyline_lead["exit_rapid"]
+    arc_code = "G3" if context.side_of_feature == "Left" else "G2"
+    generated = [
+        "?%ETK[7]=4",
+        compensation_code,
+        (
+            f"G1 X{_fmt(entry_point[0])} Y{_fmt(entry_point[1])} "
+            f"Z{_fmt(context.security_z)} F{_fmt(context.plunge_feed)}"
+        ),
+    ]
+    if context.approach_type == "Arc":
+        entry_center = polyline_lead["entry_center"]
+        generated.append(
+            _profile_milling_arc_line(
+                arc_code,
+                context.nominal_points[0][0],
+                context.nominal_points[0][1],
+                entry_center[0],
+                entry_center[1],
+                context.plunge_feed,
+                z=context.cut_z,
+            )
+        )
+    else:
+        generated.append(
+            _line_milling_motion_line(
+                context.nominal_points[0][0],
+                context.nominal_points[0][1],
+                float(context.cut_z),
+                entry_point[0],
+                entry_point[1],
+                float(context.security_z),
+                float(context.plunge_feed),
+            )
+        )
+    current_x, current_y = context.nominal_points[0]
+    current_z = float(context.cut_z)
+    include_cut_z = (
+        context.open_polyline_outside_piece
+        or float(context.cut_z) > -context.piece_depth
+    )
+    for point in context.nominal_points[1:]:
+        generated.append(
+            _line_milling_motion_line(
+                point[0],
+                point[1],
+                float(context.cut_z),
+                current_x,
+                current_y,
+                current_z,
+                float(context.milling_feed),
+                always_include_z=include_cut_z,
+            )
+        )
+        current_x, current_y = point
+    if context.approach_type == "Arc":
+        exit_center = polyline_lead["exit_center"]
+        generated.append(
+            _profile_milling_arc_line(
+                arc_code,
+                exit_point[0],
+                exit_point[1],
+                exit_center[0],
+                exit_center[1],
+                context.milling_feed,
+                z=context.security_z,
+            )
+        )
+    else:
+        generated.append(
+            _line_milling_motion_line(
+                exit_point[0],
+                exit_point[1],
+                float(context.security_z),
+                current_x,
+                current_y,
+                current_z,
+                float(context.milling_feed),
+            )
+        )
+    generated.extend(
+        (
+            "G40",
+            (
+                f"G1 X{_fmt(exit_rapid[0])} Y{_fmt(exit_rapid[1])} "
                 f"Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}"
             ),
         )
