@@ -13,6 +13,7 @@ from iso_state_synthesis.emitter import (
     ExplainedIsoProgram,
     _closed_polyline_center_lead_geometry,
     _line_milling_motion_line,
+    _line_milling_trace_modes,
     _linear_profile_program_point,
     _linear_profile_tangent_axis,
     _no_lead_compensation_points,
@@ -80,6 +81,10 @@ def _work_triple(
         _stage_differential(f"{family}_trace", family, start_order + 1),
         _stage_differential(f"{family}_reset", family, start_order + 2),
     )
+
+
+def _trace_points(*points: tuple[float, float]) -> SimpleNamespace:
+    return SimpleNamespace(points=tuple(SimpleNamespace(x=x, y=y) for x, y in points))
 
 
 class IsoStateSynthesisModelTests(unittest.TestCase):
@@ -284,6 +289,74 @@ class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
 
 
 class IsoStateSynthesisLineMillingGeometryTests(unittest.TestCase):
+    def test_line_milling_trace_modes_detects_center_lead_families(self) -> None:
+        approach = _trace_points((0.0, 0.0), (2.0, 0.0))
+        lift = _trace_points((10.0, 0.0), (12.0, 0.0))
+
+        open_modes = _line_milling_trace_modes(
+            approach=approach,
+            lift=lift,
+            strategy_name="",
+            side_of_feature="Center",
+            profile_family="OpenPolyline",
+        )
+        circle_modes = _line_milling_trace_modes(
+            approach=approach,
+            lift=lift,
+            strategy_name="",
+            side_of_feature="Center",
+            profile_family="Circle",
+        )
+        closed_modes = _line_milling_trace_modes(
+            approach=approach,
+            lift=lift,
+            strategy_name="",
+            side_of_feature="Center",
+            profile_family="ClosedPolylineMidEdgeStart",
+        )
+
+        self.assertTrue(open_modes.has_lead_paths)
+        self.assertTrue(open_modes.uses_open_center_leads)
+        self.assertFalse(open_modes.uses_center_circle_leads)
+        self.assertTrue(circle_modes.uses_center_circle_leads)
+        self.assertTrue(closed_modes.uses_closed_center_leads)
+
+    def test_line_milling_trace_modes_detects_side_compensation_paths(self) -> None:
+        lead_modes = _line_milling_trace_modes(
+            approach=_trace_points((0.0, 0.0), (2.0, 0.0)),
+            lift=_trace_points((10.0, 0.0), (12.0, 0.0)),
+            strategy_name="",
+            side_of_feature="Left",
+            profile_family="OpenPolyline",
+        )
+        no_lead_modes = _line_milling_trace_modes(
+            approach=_trace_points((0.0, 0.0), (0.0, 0.0)),
+            lift=_trace_points((10.0, 0.0), (10.0, 0.0)),
+            strategy_name="",
+            side_of_feature="Right",
+            profile_family="Line",
+        )
+
+        self.assertTrue(lead_modes.uses_side_compensation)
+        self.assertFalse(lead_modes.uses_no_lead_side_compensation)
+        self.assertFalse(no_lead_modes.has_lead_paths)
+        self.assertFalse(no_lead_modes.uses_side_compensation)
+        self.assertTrue(no_lead_modes.uses_no_lead_side_compensation)
+
+    def test_line_milling_trace_modes_suppresses_compensation_when_strategy_is_active(self) -> None:
+        modes = _line_milling_trace_modes(
+            approach=_trace_points((0.0, 0.0), (2.0, 0.0)),
+            lift=_trace_points((10.0, 0.0), (12.0, 0.0)),
+            strategy_name="Unidirectional",
+            side_of_feature="Left",
+            profile_family="OpenPolyline",
+        )
+
+        self.assertTrue(modes.has_lead_paths)
+        self.assertFalse(modes.uses_side_compensation)
+        self.assertFalse(modes.uses_no_lead_side_compensation)
+        self.assertFalse(modes.uses_open_center_leads)
+
     def test_linear_profile_axis_and_tangent_helpers(self) -> None:
         self.assertEqual(_linear_profile_tangent_axis(((0.0, 0.0), (10.0, 2.0))), "X")
         self.assertEqual(_linear_profile_tangent_axis(((0.0, 0.0), (2.0, 10.0))), "Y")

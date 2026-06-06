@@ -111,6 +111,18 @@ class _WorkGroup:
     outgoing_transition_id: Optional[str] = None
 
 
+@dataclass(frozen=True)
+class _LineMillingTraceModes:
+    """Branch predicates for router milling trace emission."""
+
+    has_lead_paths: bool
+    uses_side_compensation: bool
+    uses_no_lead_side_compensation: bool
+    uses_center_circle_leads: bool
+    uses_closed_center_leads: bool
+    uses_open_center_leads: bool
+
+
 def emit_candidate_for_pgmx(
     pgmx_path: Path,
     *,
@@ -2575,43 +2587,19 @@ def _emit_line_milling_trace(
         )
         or approach_radius_multiplier
     )
-    has_lead_paths = (
-        len(approach.points) >= 2
-        and len(lift.points) >= 2
-        and (
-            abs(float(approach.points[0].x) - float(approach.points[-1].x)) >= 0.0005
-            or abs(float(approach.points[0].y) - float(approach.points[-1].y)) >= 0.0005
-        )
+    modes = _line_milling_trace_modes(
+        approach=approach,
+        lift=lift,
+        strategy_name=strategy_name,
+        side_of_feature=side_of_feature,
+        profile_family=profile_family,
     )
-    uses_side_compensation = (
-        has_lead_paths
-        and not strategy_name
-        and side_of_feature in {"Right", "Left"}
-    )
-    uses_no_lead_side_compensation = (
-        not has_lead_paths
-        and not strategy_name
-        and side_of_feature in {"Right", "Left"}
-        and (profile_family in {"OpenPolyline", "Circle"} or profile_family.startswith("Line"))
-    )
-    uses_center_circle_leads = (
-        has_lead_paths
-        and not strategy_name
-        and profile_family == "Circle"
-        and side_of_feature == "Center"
-    )
-    uses_closed_center_leads = (
-        has_lead_paths
-        and not strategy_name
-        and profile_family.startswith("ClosedPolyline")
-        and side_of_feature == "Center"
-    )
-    uses_open_center_leads = (
-        has_lead_paths
-        and not strategy_name
-        and profile_family == "OpenPolyline"
-        and side_of_feature == "Center"
-    )
+    has_lead_paths = modes.has_lead_paths
+    uses_side_compensation = modes.uses_side_compensation
+    uses_no_lead_side_compensation = modes.uses_no_lead_side_compensation
+    uses_center_circle_leads = modes.uses_center_circle_leads
+    uses_closed_center_leads = modes.uses_closed_center_leads
+    uses_open_center_leads = modes.uses_open_center_leads
     if uses_open_center_leads:
         lead_geometry = _open_polyline_center_lead_geometry(
             nominal_points,
@@ -3636,6 +3624,61 @@ def _emit_line_milling_trace(
             confidence="confirmed",
             rule_status="generalized_line_milling_020_023",
         )
+
+
+def _line_milling_trace_modes(
+    *,
+    approach: object,
+    lift: object,
+    strategy_name: str,
+    side_of_feature: str,
+    profile_family: str,
+) -> _LineMillingTraceModes:
+    has_lead_paths = (
+        len(approach.points) >= 2
+        and len(lift.points) >= 2
+        and (
+            abs(float(approach.points[0].x) - float(approach.points[-1].x)) >= 0.0005
+            or abs(float(approach.points[0].y) - float(approach.points[-1].y)) >= 0.0005
+        )
+    )
+    uses_side_compensation = (
+        has_lead_paths
+        and not strategy_name
+        and side_of_feature in {"Right", "Left"}
+    )
+    uses_no_lead_side_compensation = (
+        not has_lead_paths
+        and not strategy_name
+        and side_of_feature in {"Right", "Left"}
+        and (profile_family in {"OpenPolyline", "Circle"} or profile_family.startswith("Line"))
+    )
+    uses_center_circle_leads = (
+        has_lead_paths
+        and not strategy_name
+        and profile_family == "Circle"
+        and side_of_feature == "Center"
+    )
+    uses_closed_center_leads = (
+        has_lead_paths
+        and not strategy_name
+        and profile_family.startswith("ClosedPolyline")
+        and side_of_feature == "Center"
+    )
+    uses_open_center_leads = (
+        has_lead_paths
+        and not strategy_name
+        and profile_family == "OpenPolyline"
+        and side_of_feature == "Center"
+    )
+    return _LineMillingTraceModes(
+        has_lead_paths=has_lead_paths,
+        uses_side_compensation=uses_side_compensation,
+        uses_no_lead_side_compensation=uses_no_lead_side_compensation,
+        uses_center_circle_leads=uses_center_circle_leads,
+        uses_closed_center_leads=uses_closed_center_leads,
+        uses_open_center_leads=uses_open_center_leads,
+    )
 
 
 def _emit_line_milling_reset(

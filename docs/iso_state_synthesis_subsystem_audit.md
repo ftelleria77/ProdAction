@@ -110,6 +110,43 @@ Hallazgos aplicados:
 - Este corte prepara una eventual extraccion de geometria de fresado router sin
   modificar todavia la emision ISO candidata.
 
+## Mapa Interno `_emit_line_milling_trace`
+
+Lectura estructural del bloque principal de fresado router:
+
+| Zona | Responsabilidad actual | Observacion |
+| --- | --- | --- |
+| Lectura de estado | Extrae coordenadas, feeds, herramienta, estrategia, familia de perfil, leads y primitivas desde `StageDifferential` y `evaluation.final_state`. | Conviene promover a un contexto/dataclass interno antes de extraer familias. |
+| Predicados de modo | Calcula `has_lead_paths`, `uses_side_compensation`, `uses_no_lead_side_compensation`, `uses_center_circle_leads`, `uses_closed_center_leads`, `uses_open_center_leads`. | Primer candidato a extraccion segura porque no emite lineas. |
+| Entrada comun | Calcula `rapid_x/rapid_y`, arma `entry_lines` y maneja continuidad con `previous_router_trace`. | Mezcla seleccion geometrica con estado modal anterior. Debe quedar cerca del dispatcher hasta tener tests de secuencia. |
+| Ramas center con leads | `OpenPolyline`, `ClosedPolyline*` y `Circle` con `side_of_feature=Center` y leads reales. | Comparten estructura approach/trajectory/retract. Se puede extraer despues de fijar predicados. |
+| Ramas con estrategia | Circulos con estrategia, estrategias con lead paths y estrategia sin leads. | Dependen de toolpaths Maestro y primitivas; requieren fixtures o tests de motion-line builders antes de extraer. |
+| Ramas con compensacion lateral | Lineal compensado, `OpenPolyline` compensado, fallback vertical y no-lead side compensation. | Ya tienen helpers geometricos cubiertos; falta cubrir la emision de motion lines por rama. |
+| Fallbacks | Lead paths simples, sin leads y fallback final. | Deben quedar como ultimo corte porque son los caminos de compatibilidad. |
+
+Orden recomendado de extraccion futura:
+
+1. Hecho: extraer predicados de modo y cubrirlos con tests puros.
+2. Extraer un contexto interno de fresado router sin cambiar comportamiento.
+3. Extraer builders de `motion_lines` por familia/rama, empezando por las ramas
+   de geometria ya cubierta.
+4. Recién despues mover esos builders a modulos separados si el corte queda
+   estable.
+
+## Subcorte Fresado Router Predicados
+
+Hallazgos aplicados:
+
+- Se agrego `_LineMillingTraceModes` como contrato interno para nombrar las
+  ramas de `_emit_line_milling_trace`.
+- Se extrajo `_line_milling_trace_modes`, que calcula si la traza usa leads
+  reales, compensacion lateral, compensacion lateral sin lead, circulos center,
+  polilineas cerradas center o polilineas abiertas center.
+- Se agregaron tests puros para fijar esos predicados con casos center,
+  lateral, sin lead y estrategia activa.
+- La emision ISO candidata no cambia: el bloque principal sigue consumiendo las
+  mismas banderas, ahora derivadas desde el helper.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome
