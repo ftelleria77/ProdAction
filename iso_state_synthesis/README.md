@@ -58,9 +58,9 @@ py -3 -m iso_state_synthesis emit-candidate <archivo.pgmx> --output tmp\candidat
 
 La salida JSON de `emit-candidate --json` conserva, para cada linea, la fuente,
 la confianza y `rule_status`. Ese campo separa reglas ya generalizadas en el
-fixture Top Drill `001` a `006` de constantes de maquina/campo e hipotesis
-pendientes. La tanda validada actual cubre `Top Drill`, `Side Drill`,
-`Line E004` y un perfil `E001` acotado.
+corpus ISO de constantes de maquina/campo e hipotesis pendientes. La tanda
+validada actual cubre perforaciones, ranuras, fresados router lineales/perfiles
+y transiciones controladas listadas abajo.
 
 Compararlo contra Maestro:
 

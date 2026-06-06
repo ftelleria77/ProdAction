@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 import iso_state_synthesis as iso
 from iso_state_synthesis.catalog import select_transition_id
@@ -10,6 +11,10 @@ from iso_state_synthesis.differential import evaluate_state_plan
 from iso_state_synthesis.emitter import (
     ExplainedIsoLine,
     ExplainedIsoProgram,
+    _line_milling_motion_line,
+    _side_normal,
+    _unit_vector,
+    _xy_changed,
     compare_candidate_to_iso,
 )
 from iso_state_synthesis.model import (
@@ -156,6 +161,47 @@ class IsoStateSynthesisEmitterTests(unittest.TestCase):
         self.assertEqual(result.difference_count, 0)
         self.assertEqual(result.expected_line_count, 2)
         self.assertEqual(result.actual_line_count, 2)
+
+    def test_xy_changed_detects_single_axis_motion(self) -> None:
+        self.assertFalse(_xy_changed(0.0, 0.0, SimpleNamespace(x=0.0001, y=0.0001)))
+        self.assertTrue(_xy_changed(0.0, 0.0, SimpleNamespace(x=1.0, y=0.0)))
+        self.assertTrue(_xy_changed(0.0, 0.0, SimpleNamespace(x=0.0, y=1.0)))
+        self.assertTrue(_xy_changed(0.0, 0.0, SimpleNamespace(x=1.0, y=1.0)))
+
+    def test_line_milling_motion_line_emits_only_changed_axes(self) -> None:
+        self.assertEqual(
+            _line_milling_motion_line(
+                10.0,
+                5.0,
+                -3.0,
+                10.0,
+                0.0,
+                -3.0,
+                200.0,
+                always_include_z=False,
+            ),
+            "G1 Y5.000 F200.000",
+        )
+        self.assertEqual(
+            _line_milling_motion_line(
+                10.0,
+                5.0,
+                -4.0,
+                10.0,
+                5.0,
+                -3.0,
+                200.0,
+                always_include_z=False,
+            ),
+            "G1 Z-4.000 F200.000",
+        )
+
+    def test_vector_helpers_define_profile_side_geometry(self) -> None:
+        self.assertEqual(_unit_vector((0.0, 0.0), (3.0, 4.0)), (0.6, 0.8))
+        self.assertEqual(_side_normal(0.6, 0.8, "Left"), (-0.8, 0.6))
+        self.assertEqual(_side_normal(0.6, 0.8, "Right"), (0.8, -0.6))
+        with self.assertRaisesRegex(Exception, "longitud cero"):
+            _unit_vector((1.0, 1.0), (1.0, 1.0))
 
 
 if __name__ == "__main__":

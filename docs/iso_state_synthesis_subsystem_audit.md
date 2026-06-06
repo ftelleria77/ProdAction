@@ -61,6 +61,28 @@ Validaciones del corte:
 - `py -3 -m compileall -q iso_state_synthesis`
 - `py -3 -m unittest tests.test_iso_state_synthesis`
 
+## Subcorte Emisor Helpers
+
+Hallazgos aplicados:
+
+- Se corrigio `_xy_changed` para detectar movimientos donde cambia solo un eje
+  XY. La condicion anterior exigia cambio simultaneo de X e Y, lo que podia
+  degradar trazas de perfil alineadas a un eje durante la emision candidata.
+- Se agrego cobertura pura para helpers compartidos de `emitter.py`: deteccion
+  XY, emision compacta de movimientos lineales y geometria lateral de perfiles.
+- Se alinearon el docstring de `emit_candidate_from_evaluation`, su mensaje de
+  error para grupos incompletos y el README del paquete con el alcance real del
+  emisor observado.
+
+Concentracion actual detectada en `emitter.py`:
+
+| Zona | Funcion dominante | Observacion |
+| --- | --- | --- |
+| Fresado router | `_emit_line_milling_trace` | Mezcla fresado lineal, contornos abiertos/cerrados, circulos, leads, estrategias y lifts. Es el primer candidato para una extraccion futura por familia de mecanizado. |
+| Dispatcher de trabajos | `_emit_planned_work_group` | Centraliza decisiones entre familias y transiciones. Conviene mantenerlo como orquestador, pero extraer reglas de transicion cuando se estabilicen. |
+| Preparaciones por cabezal | `_emit_top_drill_prepare*`, `_emit_side_drill_prepare*` | Tienen variantes segun familia previa. Son candidatos a modulos de transicion o preparacion por cabezal. |
+| Helpers geometricos | `_line_milling_motion_line`, `_unit_vector`, `_side_normal`, `_xy_changed` | Quedaron cubiertos como helpers puros antes de cualquier extraccion estructural. |
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome

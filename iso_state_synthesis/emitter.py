@@ -131,9 +131,9 @@ def emit_candidate_from_evaluation(
 ) -> ExplainedIsoProgram:
     """Emit candidate ISO from a state evaluation.
 
-    This first emitter is intentionally narrow: it supports the minimal Top
-    Drill, Side Drill and E004 line-milling fixtures used by the state
-    synthesis study.
+    This emitter is intentionally narrow: it supports complete observed work
+    groups for drilling, slot milling and router milling, plus the transitions
+    promoted by the state-synthesis study.
     """
 
     resolved_program_name = program_name or evaluation.source_path.stem.lower()
@@ -186,8 +186,9 @@ def emit_candidate_from_evaluation(
     work_groups = _work_stage_groups(ordered_differentials)
     if len(work_differentials) != len(work_groups) * 3:
         raise IsoCandidateEmissionError(
-            "El emisor candidato inicial solo soporta secuencias completas "
-            "Top Drill, Side Drill, Line Milling y Profile Milling E001."
+            "El emisor candidato actual solo soporta secuencias completas "
+            "prepare/trace/reset para top_drill, side_drill, slot_milling, "
+            "line_milling y profile_milling."
         )
 
     if all(group.family == "top_drill" for group in work_groups):
@@ -5935,7 +5936,7 @@ def _iso_arc_center_from_record(
 def _xy_changed(previous_x: float, previous_y: float, point) -> bool:
     return (
         abs(float(point.x) - previous_x) >= 0.0005
-        and abs(float(point.y) - previous_y) >= 0.0005
+        or abs(float(point.y) - previous_y) >= 0.0005
     )
 
 
