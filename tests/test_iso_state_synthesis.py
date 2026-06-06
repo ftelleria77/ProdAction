@@ -15,6 +15,7 @@ from iso_state_synthesis.emitter import (
     _line_milling_motion_line,
     _line_milling_no_lead_side_compensation_motion_lines,
     _line_milling_open_polyline_side_compensation_motion_lines,
+    _line_milling_side_compensation_fallback_motion_lines,
     _line_milling_trace_context,
     _line_milling_trace_modes,
     _linear_profile_program_point,
@@ -120,6 +121,7 @@ def _line_milling_test_context(
     approach_type: str = "Line",
     approach_radius_multiplier: float = 2.0,
     lead_paths: bool = False,
+    overcut_length: float | None = None,
 ) -> object:
     optional_circle_changes: tuple[StateChange, ...] = ()
     if circle_center_x is not None and circle_center_y is not None:
@@ -127,6 +129,9 @@ def _line_milling_test_context(
             _change("movimiento", "circle_center_x", circle_center_x),
             _change("movimiento", "circle_center_y", circle_center_y),
         )
+    optional_work_changes: tuple[StateChange, ...] = ()
+    if overcut_length is not None:
+        optional_work_changes = (_change("trabajo", "overcut_length", overcut_length),)
     first_x, first_y = contour_points[0]
     last_x, last_y = contour_points[-1]
     approach_move = (
@@ -162,6 +167,7 @@ def _line_milling_test_context(
             _change("trabajo", "side_of_feature", side_of_feature),
             _change("trabajo", "approach_type", approach_type),
             _change("trabajo", "approach_radius_multiplier", approach_radius_multiplier),
+            *optional_work_changes,
         ),
         trace=(
             approach_move,
@@ -671,6 +677,32 @@ class IsoStateSynthesisLineMillingGeometryTests(unittest.TestCase):
                 "G3 X114.000 Y24.000 Z5.000 I110.000 J24.000 F600.000",
                 "G40",
                 "G1 X114.000 Y25.000 Z5.000 F600.000",
+            ),
+        )
+
+    def test_side_compensation_fallback_builder_uses_lift_y_and_overcut(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="VerticalFallback",
+            side_of_feature="Left",
+            contour_points=((10.0, 20.0), (10.0, 110.0)),
+            lead_paths=True,
+            overcut_length=3.0,
+        )
+
+        self.assertTrue(context.modes.uses_side_compensation)
+        self.assertEqual(
+            _line_milling_side_compensation_fallback_motion_lines(context),
+            (
+                "?%ETK[7]=4",
+                "G41",
+                "G1 X10.000 Y20.000 Z5.000 F120.000",
+                "G1 Z-8.000 F120.000",
+                "G1 Y20.000 Z-8.000 F120.000",
+                "G1 Y110.000 Z-8.000 F600.000",
+                "G1 Y110.000 Z-8.000 F600.000",
+                "G1 Z5.000 F600.000",
+                "G40",
+                "G1 X10.000 Y116.000 Z5.000 F600.000",
             ),
         )
 

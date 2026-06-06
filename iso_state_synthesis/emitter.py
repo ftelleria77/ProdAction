@@ -3290,20 +3290,7 @@ def _emit_line_milling_trace(
     elif uses_side_compensation and profile_family == "OpenPolyline":
         motion_lines = _line_milling_open_polyline_side_compensation_motion_lines(context)
     elif uses_side_compensation:
-        compensation_code = "G42" if side_of_feature == "Right" else "G41"
-        lift_y = float(lift.points[-2].y)
-        motion_lines = (
-            "?%ETK[7]=4",
-            compensation_code,
-            f"G1 X{_fmt(start_x)} Y{_fmt(approach.points[0].y)} Z{_fmt(security_z)} F{_fmt(plunge_feed)}",
-            f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}",
-            f"G1 Y{_fmt(start_y)} Z{_fmt(cut_z)} F{_fmt(plunge_feed)}",
-            f"G1 Y{_fmt(end_y)} Z{_fmt(cut_z)} F{_fmt(milling_feed)}",
-            f"G1 Y{_fmt(lift_y)} Z{_fmt(cut_z)} F{_fmt(milling_feed)}",
-            f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}",
-            "G40",
-            f"G1 X{_fmt(start_x)} Y{_fmt(lift_y + (2.0 * overcut_length))} Z{_fmt(security_z)} F{_fmt(milling_feed)}",
-        )
+        motion_lines = _line_milling_side_compensation_fallback_motion_lines(context)
     elif has_lead_paths:
         generated = ["?%ETK[7]=4"]
         current_x = float(approach.points[0].x)
@@ -3769,6 +3756,32 @@ def _line_milling_open_polyline_side_compensation_motion_lines(
         )
     )
     return tuple(generated)
+
+
+def _line_milling_side_compensation_fallback_motion_lines(
+    context: _LineMillingTraceContext,
+) -> tuple[str, ...]:
+    compensation_code = "G42" if context.side_of_feature == "Right" else "G41"
+    lift_y = float(context.lift.points[-2].y)
+    return (
+        "?%ETK[7]=4",
+        compensation_code,
+        (
+            f"G1 X{_fmt(context.start_x)} Y{_fmt(context.approach.points[0].y)} "
+            f"Z{_fmt(context.security_z)} F{_fmt(context.plunge_feed)}"
+        ),
+        f"G1 Z{_fmt(context.cut_z)} F{_fmt(context.plunge_feed)}",
+        f"G1 Y{_fmt(context.start_y)} Z{_fmt(context.cut_z)} F{_fmt(context.plunge_feed)}",
+        f"G1 Y{_fmt(context.end_y)} Z{_fmt(context.cut_z)} F{_fmt(context.milling_feed)}",
+        f"G1 Y{_fmt(lift_y)} Z{_fmt(context.cut_z)} F{_fmt(context.milling_feed)}",
+        f"G1 Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}",
+        "G40",
+        (
+            f"G1 X{_fmt(context.start_x)} "
+            f"Y{_fmt(lift_y + (2.0 * context.overcut_length))} "
+            f"Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}"
+        ),
+    )
 
 
 def _line_milling_trace_modes(

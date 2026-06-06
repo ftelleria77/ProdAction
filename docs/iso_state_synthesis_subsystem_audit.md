@@ -188,6 +188,16 @@ Hallazgos aplicados:
 - El bloque principal conserva la seleccion de rama y delega otra familia de
   `motion_lines` en un builder aislado.
 
+## Subcorte Fresado Router Builder Fallback Lateral
+
+Hallazgos aplicados:
+
+- Se extrajo `_line_milling_side_compensation_fallback_motion_lines` para el
+  fallback generico de `uses_side_compensation`.
+- El builder conserva la regla previa de usar `lift.points[-2].y` y
+  `overcut_length` para calcular el alejamiento final.
+- Se agrego un test puro que fija el ISO emitido por esa rama lateral.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome
