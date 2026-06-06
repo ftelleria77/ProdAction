@@ -3292,56 +3292,7 @@ def _emit_line_milling_trace(
     elif uses_side_compensation:
         motion_lines = _line_milling_side_compensation_fallback_motion_lines(context)
     elif has_lead_paths:
-        generated = ["?%ETK[7]=4"]
-        current_x = float(approach.points[0].x)
-        current_y = float(approach.points[0].y)
-        current_z = float(security_z)
-        for point in approach.points[1:]:
-            generated.append(
-                _line_milling_motion_line(
-                    float(point.x),
-                    float(point.y),
-                    float(point.iso_z),
-                    current_x,
-                    current_y,
-                    current_z,
-                    float(plunge_feed),
-                )
-            )
-            current_x = float(point.x)
-            current_y = float(point.y)
-            current_z = float(point.iso_z)
-        for point in trajectory.points[1:]:
-            generated.append(
-                _line_milling_motion_line(
-                    float(point.x),
-                    float(point.y),
-                    float(point.iso_z),
-                    current_x,
-                    current_y,
-                    current_z,
-                    float(milling_feed),
-                )
-            )
-            current_x = float(point.x)
-            current_y = float(point.y)
-            current_z = float(point.iso_z)
-        for point in lift.points[1:]:
-            generated.append(
-                _line_milling_motion_line(
-                    float(point.x),
-                    float(point.y),
-                    float(point.iso_z),
-                    current_x,
-                    current_y,
-                    current_z,
-                    float(milling_feed),
-                )
-            )
-            current_x = float(point.x)
-            current_y = float(point.y)
-            current_z = float(point.iso_z)
-        motion_lines = tuple(generated)
+        motion_lines = _line_milling_lead_path_motion_lines(context)
     elif uses_no_lead_side_compensation:
         motion_lines = _line_milling_no_lead_side_compensation_motion_lines(context)
     elif strategy_name:
@@ -3782,6 +3733,61 @@ def _line_milling_side_compensation_fallback_motion_lines(
             f"Z{_fmt(context.security_z)} F{_fmt(context.milling_feed)}"
         ),
     )
+
+
+def _line_milling_lead_path_motion_lines(
+    context: _LineMillingTraceContext,
+) -> tuple[str, ...]:
+    generated = ["?%ETK[7]=4"]
+    current_x = float(context.approach.points[0].x)
+    current_y = float(context.approach.points[0].y)
+    current_z = float(context.security_z)
+    for point in context.approach.points[1:]:
+        generated.append(
+            _line_milling_motion_line(
+                float(point.x),
+                float(point.y),
+                float(point.iso_z),
+                current_x,
+                current_y,
+                current_z,
+                float(context.plunge_feed),
+            )
+        )
+        current_x = float(point.x)
+        current_y = float(point.y)
+        current_z = float(point.iso_z)
+    for point in context.trajectory.points[1:]:
+        generated.append(
+            _line_milling_motion_line(
+                float(point.x),
+                float(point.y),
+                float(point.iso_z),
+                current_x,
+                current_y,
+                current_z,
+                float(context.milling_feed),
+            )
+        )
+        current_x = float(point.x)
+        current_y = float(point.y)
+        current_z = float(point.iso_z)
+    for point in context.lift.points[1:]:
+        generated.append(
+            _line_milling_motion_line(
+                float(point.x),
+                float(point.y),
+                float(point.iso_z),
+                current_x,
+                current_y,
+                current_z,
+                float(context.milling_feed),
+            )
+        )
+        current_x = float(point.x)
+        current_y = float(point.y)
+        current_z = float(point.iso_z)
+    return tuple(generated)
 
 
 def _line_milling_trace_modes(

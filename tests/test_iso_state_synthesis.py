@@ -12,6 +12,7 @@ from iso_state_synthesis.emitter import (
     ExplainedIsoLine,
     ExplainedIsoProgram,
     _closed_polyline_center_lead_geometry,
+    _line_milling_lead_path_motion_lines,
     _line_milling_motion_line,
     _line_milling_no_lead_side_compensation_motion_lines,
     _line_milling_open_polyline_side_compensation_motion_lines,
@@ -703,6 +704,26 @@ class IsoStateSynthesisLineMillingGeometryTests(unittest.TestCase):
                 "G1 Z5.000 F600.000",
                 "G40",
                 "G1 X10.000 Y116.000 Z5.000 F600.000",
+            ),
+        )
+
+    def test_lead_path_builder_walks_approach_trajectory_and_lift(self) -> None:
+        context = _line_milling_test_context(
+            profile_family="Line",
+            side_of_feature="Center",
+            contour_points=((10.0, 20.0), (110.0, 20.0)),
+            lead_paths=True,
+        )
+
+        self.assertTrue(context.modes.has_lead_paths)
+        self.assertFalse(context.modes.uses_side_compensation)
+        self.assertEqual(
+            _line_milling_lead_path_motion_lines(context),
+            (
+                "?%ETK[7]=4",
+                "G1 X10.000 Z-8.000 F120.000",
+                "G1 X110.000 Z-8.000 F600.000",
+                "G1 X112.000 Z5.000 F600.000",
             ),
         )
 

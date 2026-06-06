@@ -198,6 +198,17 @@ Hallazgos aplicados:
   `overcut_length` para calcular el alejamiento final.
 - Se agrego un test puro que fija el ISO emitido por esa rama lateral.
 
+## Subcorte Fresado Router Builder Lead Paths
+
+Hallazgos aplicados:
+
+- Se extrajo `_line_milling_lead_path_motion_lines` para la rama simple
+  `has_lead_paths`, sin compensacion lateral ni estrategia.
+- El builder conserva el recorrido `Approach` -> `TrajectoryPath` -> `Lift` y
+  la regla de feeds: `plunge_feed` en acercamiento y `milling_feed` en
+  trayectoria/alejamiento.
+- Se agrego un test puro que fija el ISO emitido por esa secuencia.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome
