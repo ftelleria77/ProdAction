@@ -1,21 +1,25 @@
 # Reorganizacion De Arquitectura
 
-Estado: 2026-06-03
+Estado: 2026-06-05
 
 Este documento fija el rumbo de reorganizacion del repo. El frente ISO por
-estado queda pausado como investigacion; el frente historico de Vaciado se
-absorbe en `ClosedPocket`/pocket milling, con laboratorio futuro bajo
-`pgmx.machining_lab.pocket_milling`. La prioridad pasa a ordenar el codigo
-productivo y reducir acoplamiento sin romper los comandos actuales.
+estado queda pausado como investigacion; el frente historico de Vaciado quedo
+absorbido en `ClosedPocket`/pocket milling, con laboratorio bajo
+`pgmx.machining_lab.pocket_milling`. La prioridad es mantener el codigo
+productivo importando rutas reales, documentar fronteras vivas y preservar las
+memorias historicas como contexto, no como API.
 
 ## Objetivos
 
 - Separar presentacion, persistencia, dominio, herramientas publicas y
   laboratorios.
-- Mantener funcionando `python main.py` y las CLIs existentes durante toda la
-  migracion.
+- Mantener funcionando `py -3 main.py` y las CLIs publicas vigentes
+  (`py -3 -m pgmx.synthesis`, `py -3 -m pgmx.snapshot`,
+  `py -3 -m pgmx.adapters`, `py -3 -m iso_state_synthesis`).
 - Evitar movimientos masivos sin una verificacion inmediata.
-- Conservar wrappers de compatibilidad cuando una API publica cambie de modulo.
+- Conservar wrappers de compatibilidad solo cuando esten documentados como
+  frontera vigente; retirar fachadas historicas cuando los imports hayan
+  migrado.
 - Documentar cada frontera nueva en el mismo cambio que la introduce.
 
 ## Mapa Actual
@@ -90,7 +94,7 @@ productivo y reducir acoplamiento sin romper los comandos actuales.
 | `core/nesting_pieces.py` | Expansion de piezas, resolucion de dimensiones PGMX y reemplazo En-Juego para corte | Preparacion de piezas separada del empacador |
 | `core/nesting_pdf.py` | Renderer PDF imprimible de diagramas de corte | Salida visual de nesting separada del empacador |
 | `pgmx/` | Snapshot, adaptacion, sintesis, pocket milling y datos Maestro | Subsistema productivo PGMX fuera de `tools` |
-| `pgmx/synthesis/` | Implementacion interna del sintetizador PGMX | Paquete productivo para specs, serializacion y extensiones PGMX |
+| `pgmx/synthesis/` | API publica e implementacion del sintetizador PGMX | Paquete productivo para specs, serializacion y extensiones PGMX |
 | `pgmx/snapshot.py` | Snapshot PGMX publico | Herramienta publica estable |
 | `pgmx/adapters.py` | Adaptadores PGMX publicos | Herramienta publica estable |
 | `pgmx/processing.py` | Resolucion de programas PGMX, dibujos SVG, dimensiones y reparacion de slots | Servicios PGMX usados por UI, planillas y nesting |
@@ -99,9 +103,9 @@ productivo y reducir acoplamiento sin romper los comandos actuales.
 | `pgmx/vaciado/` | Retirado | El contrato promovido vive en `pgmx.synthesis.milling.pocket_contract` |
 | `pgmx/vaciado_lab/` | Retirado | El laboratorio vigente vive en `pgmx.machining_lab.pocket_milling` |
 | `pgmx/data/` | Baseline Maestro y catalogo de herramientas | Datos versionados del subsistema PGMX |
-| `tools/synthesize_pgmx.py` | Retirado | Usar `python -m pgmx.synthesis` |
-| `tools/pgmx_snapshot.py` | Retirado | Usar `python -m pgmx.snapshot` |
-| `tools/pgmx_adapters.py` | Retirado | Usar `python -m pgmx.adapters` |
+| `tools/synthesize_pgmx.py` | Retirado | Usar `py -3 -m pgmx.synthesis` |
+| `tools/pgmx_snapshot.py` | Retirado | Usar `py -3 -m pgmx.snapshot` |
+| `tools/pgmx_adapters.py` | Retirado | Usar `py -3 -m pgmx.adapters` |
 | `tools/studies/` | Estudios reproducibles | Laboratorio versionado |
 | `tools/pgmx_synthesis/` | Retirado | La API publica es `pgmx.synthesis` |
 | `tools/pgmx_vaciado*` | Retirado | Imports y comandos migrados a `pgmx.machining_lab.pocket_milling` y `pgmx.synthesis.milling.pocket_contract` |
@@ -168,8 +172,8 @@ productivo y reducir acoplamiento sin romper los comandos actuales.
    `pgmx.vaciado` y `pgmx.vaciado_lab` fueron retiradas despues de migrar los
    imports. Las fachadas planas `tools.synthesize_pgmx`, `tools.pgmx_snapshot`
    y `tools.pgmx_adapters` tambien fueron retiradas; usar las entradas
-   `python -m pgmx.synthesis`, `python -m pgmx.snapshot` y
-   `python -m pgmx.adapters`.
+   `py -3 -m pgmx.synthesis`, `py -3 -m pgmx.snapshot` y
+   `py -3 -m pgmx.adapters`.
    Cierre arquitectonico posterior: la modularizacion del sintetizador PGMX
    queda cerrada como arquitectura el 2026-06-05. Los pendientes posteriores
    son decisiones de compatibilidad/producto o frentes tecnicos de pocket
@@ -196,8 +200,9 @@ productivo y reducir acoplamiento sin romper los comandos actuales.
    `core.nesting_model`; `core.nesting` reexporta los nombres historicos para
    mantener compatibilidad con UI y laboratorios.
    Avance: renderer PDF imprimible de diagramas de corte movido a
-   `core.nesting_pdf`; `core.nesting.generate_cut_diagrams` conserva la API
-   publica y delega solo la salida visual.
+   `core.nesting_pdf`; `core.nesting_service.generate_cut_diagrams` queda como
+   API productiva y `core.nesting.generate_cut_diagrams` conserva alias
+   compatible.
    Avance: normalizacion, resolucion por material/espesor y aplicacion de
    margen de tableros movidas a `core.nesting_boards`; `core.nesting` conserva
    las fachadas historicas usadas por laboratorios.
@@ -242,7 +247,8 @@ productivo y reducir acoplamiento sin romper los comandos actuales.
 9. Reubicar o etiquetar laboratorios sin mezclarlos con flujos productivos.
    Avance: catalogo inicial de herramientas publicas, fachadas compatibles y
    laboratorios documentado en `docs/laboratory_frontiers.md`. Las fachadas PGMX
-   historicas quedan cubiertas por `tests/test_pgmx_public_facades.py`.
+   historicas fueron retiradas; `tests/test_pgmx_public_facades.py` valida ahora
+   las fronteras publicas finales.
    Avance: referencias documentales de Vaciado alineadas con la mudanza
    objetivo a `pgmx.machining_lab.pocket_milling`; `tools.pgmx_vaciado*` fue
    retirado al cerrar la limpieza de fachadas historicas.
@@ -262,8 +268,8 @@ productivo y reducir acoplamiento sin romper los comandos actuales.
 - Despues de cada etapa correr:
 
 ```powershell
-python -m compileall main.py app core pgmx tools iso_state_synthesis cnc_traceability
-python -c "import app.ui, core.parser, core.nesting, core.nesting_compat, core.nesting_model, core.nesting_strategy, core.nesting_geometry, core.nesting_free_rectangles, core.nesting_guillotine_sections, core.nesting_guillotine, core.nesting_brkga, core.nesting_dispatch, core.nesting_service, core.nesting_first_fit, core.nesting_boards, core.nesting_pieces, core.nesting_pdf, core.summary, core.production_sheet, core.production_sheet_data, core.production_sheet_images, core.production_sheet_pdf, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
+py -3 -m compileall -q main.py app core pgmx iso_state_synthesis cnc_traceability tools tests
+py -3 -m unittest discover -s tests -p "test*.py"
 ```
 
 - Las suites de Vaciado ya no estan pausadas por variable de entorno. Corren por
@@ -271,12 +277,12 @@ python -c "import app.ui, core.parser, core.nesting, core.nesting_compat, core.n
   su propio `skipUnless` cuando ese corpus no esta disponible:
 
 ```powershell
-python -m unittest tests.test_pgmx_vaciado_v2
-python -m unittest tests.test_pgmx_vaciado
+py -3 -m unittest tests.test_pgmx_vaciado_v2
+py -3 -m unittest tests.test_pgmx_vaciado
 ```
 
-- Si una CLI publica se divide internamente, el comando viejo debe seguir
-  funcionando.
+- Si una CLI publica se divide internamente, documentar la entrada vigente y
+  decidir explicitamente si queda compatibilidad.
 - Las fronteras de laboratorios y fachadas se documentan en
   `docs/laboratory_frontiers.md`; los scripts exploratorios nuevos deben vivir
   en `tools/studies/<tema>/` o en un paquete experimental explicitamente

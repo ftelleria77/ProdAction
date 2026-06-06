@@ -100,19 +100,19 @@ El JSON generado por `snapshot_to_dict(...)` y `write_pgmx_snapshot_json(...)` i
 Volcar un snapshot a stdout:
 
 ```powershell
-python -m pgmx.snapshot archive\maestro_examples\Tapa.pgmx
+py -3 -m pgmx.snapshot archive\maestro_examples\Tapa.pgmx
 ```
 
 Guardar el snapshot en JSON:
 
 ```powershell
-python -m pgmx.snapshot archive\maestro_examples\Tapa.pgmx --output tmp\tapa_snapshot.json
+py -3 -m pgmx.snapshot archive\maestro_examples\Tapa.pgmx --output tmp\tapa_snapshot.json
 ```
 
 Incluir tambien el XML crudo:
 
 ```powershell
-python -m pgmx.snapshot archive\maestro_examples\Tapa.pgmx --include-xml-text
+py -3 -m pgmx.snapshot archive\maestro_examples\Tapa.pgmx --include-xml-text
 ```
 
 ## Nota de alcance

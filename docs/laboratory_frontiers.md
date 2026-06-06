@@ -4,25 +4,33 @@ Estado: 2026-06-05
 
 Este documento separa herramientas publicas, fachadas compatibles y frentes de
 investigacion. La regla operativa es que el codigo productivo importe `pgmx/`,
-`core/` o `app/`; las rutas bajo `tools/` solo deben ser CLIs publicas
-historicas, fachadas de compatibilidad o laboratorios reproducibles.
+`core/` o `app/`; las rutas bajo `tools/` quedan para estudios reproducibles,
+no para APIs productivas.
 
 ## Herramientas Publicas PGMX
 
 | Ruta principal | CLI publica | Estado |
 | --- | --- | --- |
-| `pgmx.synthesis` | `python -m pgmx.synthesis` | API/CLI publica vigente. |
-| `pgmx.snapshot` | `python -m pgmx.snapshot` | API/CLI publica vigente para inspeccion normalizada de `.pgmx`. |
-| `pgmx.adapters` | `python -m pgmx.adapters` | API/CLI publica vigente para adaptar snapshots hacia specs de sintesis. |
+| `pgmx.synthesis` | `py -3 -m pgmx.synthesis` | API/CLI publica vigente. |
+| `pgmx.snapshot` | `py -3 -m pgmx.snapshot` | API/CLI publica vigente para inspeccion normalizada de `.pgmx`. |
+| `pgmx.adapters` | `py -3 -m pgmx.adapters` | API/CLI publica vigente para adaptar snapshots hacia specs de sintesis. |
 
 La implementacion productiva vive en `pgmx/`. Las fachadas PGMX bajo `tools/`
 fueron retiradas.
 
+## Fachadas Compatibles Vigentes
+
+| Ruta | Destino | Criterio |
+| --- | --- | --- |
+| `core.nesting` | `core.nesting_compat` | Conserva aliases historicos de diagramas de corte para UI, tests y laboratorios. |
+| `core.pgmx_processing` | `pgmx.processing` | Conserva imports historicos mientras la app y docs terminan de migrar. |
+| `core.summary` | `core.summary` + reexports de planillas | Mantiene el CSV como API propia y compatibilidad para exportadores historicos. |
+
 ## Laboratorio De Mecanizados PGMX
 
-El laboratorio actual de `Vaciado` pasa a ser el piloto para un laboratorio
-general de mecanizados del sintetizador, pero el nombre final de la familia es
-`pocket_milling` / `ClosedPocket`. El plan de migracion esta en
+El laboratorio historico de `Vaciado` quedo integrado como piloto del
+laboratorio general de mecanizados del sintetizador. El nombre final de la
+familia es `pocket_milling` / `ClosedPocket`. El plan de migracion esta en
 `docs/pgmx_synthesis_modularization_plan.md`.
 
 Mapa vigente:

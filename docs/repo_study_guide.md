@@ -1,17 +1,19 @@
 # Guia Rapida De Estudio Del Repo
 
-Esta guia resume como esta organizado ProdAction al 2026-05-02. Sirve para
+Esta guia resume como esta organizado ProdAction al 2026-06-05. Sirve para
 entrar rapido al repo antes de tocar codigo.
 
 ## Estado actual
 
 ProdAction es una aplicacion desktop de produccion para muebles/CNC. Hoy tiene
-cuatro frentes grandes:
+estos frentes grandes:
 
 - gestion de proyectos, locales, modulos y piezas;
 - lectura, adaptacion, reparacion y sintesis de `.pgmx` Maestro;
 - planillas de produccion y diagramas de corte;
-- herramienta separada para piso/CNC basada en archivos `.iso`.
+- sintesis ISO experimental a partir de estados PGMX;
+- herramienta separada para piso/CNC basada en archivos `.iso`;
+- estudios reproducibles archivados bajo `tools/studies/`.
 
 El sintetizador PGMX real vive en `pgmx.synthesis` y expone
 `SYNTHESIZER_VERSION = "1.6"`.
@@ -21,7 +23,10 @@ El sintetizador PGMX real vive en `pgmx.synthesis` y expone
 | Ruta | Rol |
 | --- | --- |
 | `main.py` | Entrada de la app PySide6. |
-| `app/ui.py` | UI principal y coordinacion de flujos. Archivo grande; leer por secciones/metodos. |
+| `docs/repository_audit_inventory.md` | Inventario de auditoria por subsistema, modulo, proceso, tests y docs. |
+| `app/ui.py` | Compone `ProjectDetailWindow` a partir de mixins. La logica de detalle vive en `app/project_detail_*.py`. |
+| `app/main_window.py` | Ventana inicial de seleccion de proyectos. |
+| `app/project_detail_*.py` | Flujos de detalle: procesamiento, inspeccion, salida, piezas, PGMX, colores y En-Juego. |
 | `core/model.py` | Dataclasses: `Project`, `LocaleData`, `ModuleData`, `Piece`. |
 | `core/parser.py` | Escaneo de carpetas, CSV y modulos. |
 | `core/summary.py` | Resumen CSV y fachada historica de planillas. |
@@ -37,6 +42,7 @@ El sintetizador PGMX real vive en `pgmx.synthesis` y expone
 | `pgmx/synthesis/` | API publica para escribir `.pgmx` desde baseline Maestro. |
 | `pgmx/snapshot.py` | Snapshot normalizado de `.pgmx` existentes. |
 | `pgmx/adapters.py` | Adaptacion de snapshots hacia specs publicos. |
+| `pgmx/machining_lab/pocket_milling/` | Laboratorio de evidencia para `ClosedPocket`/pocket milling. |
 | `tools/studies/cut_diagrams/ordering_lab.py` | Laboratorio de algoritmos de guillotina. |
 | `tools/studies/iso/minimal_fixtures_2026_05_03.py` | Generador archivado de fixtures minimos ISO. |
 | `cnc_traceability/` | Subsistema de trazabilidad CNC compatible con Windows XP 32 bits. |
@@ -46,7 +52,8 @@ El sintetizador PGMX real vive en `pgmx.synthesis` y expone
 
 ### Procesar proyecto
 
-Entrada desde `ProjectDetailWindow.process_project()` en `app/ui.py`.
+Entrada desde `ProjectDetailWindow.process_project()` en
+`app/project_detail_processing.py`.
 
 Flujo:
 
@@ -59,7 +66,8 @@ Flujo:
 
 ### Inspeccionar modulo
 
-Entrada desde `ProjectDetailWindow.inspect_module()` en `app/ui.py`.
+Entrada desde `ProjectDetailWindow.inspect_module()` en
+`app/project_detail_inspection.py`.
 
 Responsabilidades relevantes:
 
@@ -71,7 +79,8 @@ Responsabilidades relevantes:
 
 ### Generar planillas
 
-Entrada desde `ProjectDetailWindow.generate_sheets()`.
+Entrada desde `ProjectDetailWindow.generate_sheets()` en
+`app/project_detail_output.py`.
 
 Genera:
 
@@ -81,11 +90,12 @@ Genera:
 
 ### Diagramas de corte
 
-Entrada desde `ProjectDetailWindow.show_cuts()`.
+Entrada desde `ProjectDetailWindow.show_cuts()` en
+`app/project_detail_output.py`.
 
 Motor:
 
-- `core.nesting.generate_cut_diagrams(...)`;
+- `core.nesting_service.generate_cut_diagrams(...)`;
 - agrupa piezas por material/color y espesor;
 - usa medidas reales del programa PGMX cuando existen;
 - respeta En-Juego como pieza compuesta;
@@ -109,6 +119,7 @@ Specs publicos soportados por `pgmx.synthesis`:
 - `PolylineMillingSpec`;
 - `CircleMillingSpec`;
 - `SquaringMillingSpec`;
+- `PocketMillingSpec`;
 - `DrillingSpec`;
 - `DrillingPatternSpec`;
 - `XnSpec`.
@@ -120,7 +131,9 @@ Reglas importantes:
 - `build_synthesis_request(...)` usa ese baseline por default;
 - `ordered_machinings` preserva orden exacto de worksteps;
 - `machining_order` ordena familias cuando se pasan listas separadas;
-- `ToolKey` resuelto activa validaciones contra `pgmx/data/tool_catalog.csv`.
+- cuando una herramienta queda resuelta, se valida contra
+  `pgmx/data/tool_catalog.csv`; cuando Maestro debe resolverla despues,
+  `ToolKey` puede quedar vacio por contrato.
 
 ### Reparacion de ranuras invalidas
 
@@ -186,15 +199,14 @@ Estado actual documentado:
 ## Comandos utiles de verificacion
 
 ```powershell
-python -m compileall main.py app core pgmx tools
-python -c "import app.ui, core.parser, core.nesting, core.nesting_compat, core.summary, pgmx.processing, core.en_juego_synthesis; print('core imports ok')"
-python -c "from pgmx import synthesis as sp; print(sp.SYNTHESIZER_VERSION)"
-python -m tools.studies.iso.minimal_fixtures_2026_05_03 --output-dir tmp/iso_minimal_fixtures
-python -m iso_state_synthesis --help
-python -m pgmx.synthesis --help
-python -m pgmx.snapshot --help
-python -m pgmx.adapters --help
-python -m tools.studies.cut_diagrams.ordering_lab --help
+py -3 -m compileall -q main.py app core pgmx iso_state_synthesis cnc_traceability tools tests
+py -3 -m unittest discover -s tests -p "test*.py"
+py -3 -m iso_state_synthesis --help
+py -3 -m pgmx.synthesis --help
+py -3 -m pgmx.snapshot --help
+py -3 -m pgmx.adapters --help
+py -3 -m tools.studies.iso.minimal_fixtures_2026_05_03 --output-dir tmp/iso_minimal_fixtures
+py -3 -m tools.studies.cut_diagrams.ordering_lab --help
 ```
 
 Prueba de humo PGMX recomendada:
@@ -206,8 +218,13 @@ Prueba de humo PGMX recomendada:
 
 ## Riesgos actuales
 
-- `app/ui.py` concentra muchas responsabilidades.
-- No hay suite formal de tests automatizados.
+- El frente `app/project_detail_*` sigue siendo amplio y conviene auditarlo por
+  flujo, no por archivo aislado.
+- `pgmx.processing` e `iso_state_synthesis.emitter` son modulos grandes con
+  varias responsabilidades internas.
+- La suite automatizada cubre app/core/PGMX/nesting/planillas, pero
+  `iso_state_synthesis/`, `cnc_traceability/` y `tools/studies/` aun tienen
+  cobertura dedicada limitada.
 - `requirements.txt` no fija versiones.
 - La investigacion ISO es extensa, pero aun no es API productiva.
 - Las memorias historicas son utiles, pero conviene promover decisiones

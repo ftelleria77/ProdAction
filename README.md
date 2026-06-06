@@ -13,8 +13,8 @@ Aplicación Python para:
 ## Instalación
 
 ```powershell
-cd C:\Users\fermi\Proyectos\my-python-api
-python -m venv venv
+cd C:\Dev\Repositorios\ProdAction
+py -3 -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 ```
@@ -22,11 +22,12 @@ pip install -r requirements.txt
 ## Ejecución
 
 ```powershell
-python main.py
+py -3 main.py
 ```
 
 ## Orientacion rapida del repo
 - Indice ordenado de documentacion: `docs/README.md`
+- Inventario de auditoria por subsistema: `docs/repository_audit_inventory.md`
 - Rumbo de reorganizacion de arquitectura: `docs/architecture_reorganization.md`
 - Guia rapida para estudiar el repo: `docs/repo_study_guide.md`
 - Para PGMX, usar como fuente de verdad operativa `docs/synthesize_pgmx_help.md`, `docs/pgmx_snapshot_help.md` y `docs/pgmx_adapters_help.md`
@@ -35,11 +36,11 @@ python main.py
 1. Crear nuevo proyecto (nombre + carpeta raíz)
 2. Escoger carpeta raíz para módulos
 3. Exportar resumen CSV con `core.summary.export_summary`
-4. Generar diagramas de corte con `core.nesting.generate_cut_diagrams`
+4. Generar diagramas de corte con `core.nesting_service.generate_cut_diagrams`
 
 ## Sintesis PGMX
 - Estado actual del sintetizador Maestro: `v1.6`
-- Flujo unico de generacion `.pgmx`: `python -m pgmx.synthesis`
+- Flujo unico de generacion `.pgmx`: `py -3 -m pgmx.synthesis`
 - Guia completa del sintetizador: `docs/synthesize_pgmx_help.md`
 - Guia del snapshot integral de `.pgmx`: `docs/pgmx_snapshot_help.md`
 - Guia de adaptacion de `.pgmx` existentes hacia specs publicos: `docs/pgmx_adapters_help.md`
@@ -48,7 +49,7 @@ python main.py
 - Baseline principal versionado: `pgmx/data/maestro_baselines/Pieza.xml` junto con `Pieza.epl` y `def.tlgx`
 - `build_synthesis_request(...)` y la CLI usan `pgmx/data/maestro_baselines` como baseline por defecto si no se indica otro
 - Ejemplos y estudios manuales para ingeniería inversa: `archive/maestro_examples/`
-- API programática para sintesis: `build_approach_spec(...)`, `build_retract_spec(...)`, `build_milling_depth_spec(...)`, `build_unidirectional_milling_strategy_spec(...)`, `build_bidirectional_milling_strategy_spec(...)`, `build_xn_spec(...)`, `build_line_milling_spec(...)`, `build_slot_milling_spec(...)`, `build_polyline_milling_spec(...)`, `build_circle_milling_spec(...)`, `build_squaring_milling_spec(...)`, `build_drilling_spec(...)`, `build_drilling_pattern_spec(...)`, `build_synthesis_request(...)` y `synthesize_request(...)` en `pgmx.synthesis`
+- API programática para sintesis: `build_approach_spec(...)`, `build_retract_spec(...)`, `build_milling_depth_spec(...)`, `build_unidirectional_milling_strategy_spec(...)`, `build_bidirectional_milling_strategy_spec(...)`, `build_xn_spec(...)`, `build_line_milling_spec(...)`, `build_slot_milling_spec(...)`, `build_polyline_milling_spec(...)`, `build_circle_milling_spec(...)`, `build_squaring_milling_spec(...)`, `build_pocket_milling_spec(...)`, `build_drilling_spec(...)`, `build_drilling_pattern_spec(...)`, `build_synthesis_request(...)` y `synthesize_request(...)` en `pgmx.synthesis`
 - API programatica para inspeccion/construccion geometrica: `read_pgmx_geometries(...)`, `build_point_geometry_profile(...)`, `build_line_geometry_profile(...)`, `build_circle_geometry_profile(...)`, `build_composite_geometry_profile(...)` y `build_compensated_toolpath_profile(...)`
 - API programatica para snapshot integral de un `.pgmx`: `read_pgmx_snapshot(...)`, `snapshot_to_dict(...)` y `write_pgmx_snapshot_json(...)` en `pgmx.snapshot`
 - API programatica para adaptar `.pgmx` existentes al subset publico del sintetizador: `adapt_pgmx_snapshot(...)`, `adapt_pgmx_path(...)`, `adaptation_to_dict(...)` y `write_pgmx_adaptation_json(...)` en `pgmx.adapters`
@@ -65,11 +66,12 @@ Estado validado hasta ahora en `pgmx.synthesis`:
 - ranuras lineales `SlotSide` horizontales con `Sierra Vertical X`
 - fresados circulares cerrados via `CircleMillingSpec`
 - escuadrado exterior del contorno de pieza via `SquaringMillingSpec`
+- pocket milling / `ClosedPocket` via `PocketMillingSpec`
 - taladros puntuales sobre `Top`, `Front`, `Back`, `Right` y `Left` via `DrillingSpec`
 - patrones rectangulares de taladros via `DrillingPatternSpec`
 - lectura y clasificacion de geometria base: puntos, lineas, circulos y curvas compuestas abiertas/cerradas
 - compensacion geometrica reusable para lineas, arcos, circulos y curvas compuestas abiertas/cerradas
-- la sintesis publica completa de mecanizado sigue expuesta hoy via `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec`, `DrillingSpec` y `DrillingPatternSpec`
+- la sintesis publica completa de mecanizado sigue expuesta hoy via `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec`, `PocketMillingSpec`, `DrillingSpec` y `DrillingPatternSpec`
 - `SideOfFeature` `Center|Right|Left`
 - fresados pasantes y no pasantes, con `Extra`/`OvercutLength`
 - taladros pasantes y no pasantes, con `Extra` aplicado sobre `TrajectoryPath`
@@ -86,7 +88,7 @@ Estado validado hasta ahora en `pgmx.synthesis`:
 - caso manual validado: escuadrado exterior con `E001`, pasante + `Extra=1`, `Approach Arc + Quote x2` y `Retract Arc + Quote x2`; hoy ya queda expuesto por `SquaringMillingSpec`, con 4 orientaciones validas de `MidEdgeStart`, ambas combinaciones exteriores `CounterClockwise + Right` / `Clockwise + Left`, y `origin_x/y/z` limitado a `WorkpieceSetup/Placement`
 
 Flujo recomendado de alto nivel:
-- describir cada mecanizado con specs (`LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec`, `DrillingSpec`, `DrillingPatternSpec`)
+- describir cada mecanizado con specs (`LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec`, `PocketMillingSpec`, `DrillingSpec`, `DrillingPatternSpec`)
 - armar el request con `build_synthesis_request(...)`
 - ejecutar `synthesize_request(...)`
 - para una guia paso a paso con ejemplos completos, ver `docs/synthesize_pgmx_help.md`

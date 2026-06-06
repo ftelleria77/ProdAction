@@ -63,15 +63,15 @@ Importante:
 
 ## 2. Mapa modular actual
 
-La API publica se consume desde `pgmx.synthesis`. La CLI vigente es
-`python -m pgmx.synthesis`.
+La API publica se consume desde `pgmx.synthesis`. La CLI vigente en este repo
+es `py -3 -m pgmx.synthesis`.
 
 Mapa interno vigente:
 
 | Modulo | Rol |
 | --- | --- |
 | `pgmx.synthesis.__init__` | Superficie publica estable: specs, builders, lectura y ejecucion. |
-| `pgmx.synthesis.cli` / `__main__` | Entrada CLI y ejecucion `python -m pgmx.synthesis`. |
+| `pgmx.synthesis.cli` / `__main__` | Entrada CLI y ejecucion `py -3 -m pgmx.synthesis`. |
 | `pgmx.synthesis.core` | Fachada interna historica; reexporta los modulos reales. |
 | `pgmx.synthesis.common.program` | Orquestacion del programa: estado de pieza, request/result, orden de mecanizados, hidratacion, validacion transversal, worksteps y `Xn`. |
 | `pgmx.synthesis.common.output` | Finalizacion XML Maestro y escritura del contenedor `.pgmx`. |

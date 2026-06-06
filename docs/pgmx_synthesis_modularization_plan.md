@@ -38,7 +38,7 @@ frentes tecnicos, no bloqueos de modularizacion.
 pgmx/
   synthesis/
     __init__.py              # API publica estable
-    core.py                  # fachada interna temporal durante la migracion
+    core.py                  # fachada interna historica; reexporta modulos reales
     common/
       program.py             # orquestacion de request, estado y worksteps
       output.py              # finalizacion XML Maestro y escritura del contenedor PGMX
@@ -65,6 +65,7 @@ pgmx/
     README.md
     pocket_milling/
       ...
+    # futuros laboratorios por familia, solo ante preguntas abiertas reales:
     line_milling/
       ...
     slot_milling/
@@ -122,7 +123,14 @@ Cada familia debe avanzar con el mismo protocolo:
 
 ## Etapas
 
+Las etapas siguientes quedan como historial de ejecucion del cierre
+arquitectonico. Las tareas activas ya no son migrar fachadas historicas, sino
+mantener la frontera limpia y abrir laboratorios nuevos solo cuando exista una
+pregunta tecnica concreta.
+
 ### Etapa 1 - Inventario Y Frontera
+
+Estado: completada.
 
 - Listar funciones y dataclasses exportadas por `pgmx.synthesis.core`.
 - Marcar cuales son comunes y cuales pertenecen a una familia.
@@ -134,21 +142,21 @@ Salida esperada: inventario documentado y tests verdes sin cambios funcionales.
 
 ### Etapa 2 - Laboratorio General
 
+Estado: completada para el laboratorio piloto de pocket milling.
+
 - Crear `pgmx/machining_lab/README.md`.
 - Crear `pgmx/machining_lab/pocket_milling/` como destino del laboratorio
-  actual.
-- Mover primero documentacion y memoria de `Vaciado` hacia el laboratorio
-  `pocket_milling`, dejando referencias compatibles solo mientras dure la
-  transicion.
-- Despues mover modulos de analisis y trace engine, usando
-  `pgmx.vaciado_lab.*` como fachada temporal durante la transicion.
-- Actualizar `tools.pgmx_vaciado.*` para que apunte al nuevo destino indirecto
-  durante la transicion.
+  historico de Vaciado.
+- Mover documentacion, memoria, analizadores y trace engine utiles hacia
+  `pocket_milling`.
+- Retirar las fachadas temporales despues de migrar imports, tests y comandos.
 
 Salida esperada: `Vaciado` funciona igual, pero deja de ser un laboratorio con
 nombre propio; queda absorbido por el laboratorio general de pocket milling.
 
 ### Etapa 3 - Base Comun Del Sintetizador
+
+Estado: completada.
 
 - Extraer helpers comunes desde `pgmx.synthesis.core` hacia
   `pgmx.synthesis.common`.
@@ -158,6 +166,8 @@ nombre propio; queda absorbido por el laboratorio general de pocket milling.
 Salida esperada: menos acoplamiento interno, API publica identica.
 
 ### Etapa 4 - Modulos Productivos Por Familia
+
+Estado: completada para las familias publicas actuales.
 
 Migrar una familia por vez:
 
@@ -176,6 +186,8 @@ Cada migracion debe dejar:
 
 ### Etapa 5 - Integracion De Pocket Milling Sin Motor Legado
 
+Estado: completada.
+
 - Reubicar el motor experimental en `pgmx.machining_lab.pocket_milling`.
 - Integrar el contrato experimental `pgmx.vaciado` dentro de
   `pgmx.synthesis.milling.pocket_contract`, antes de retirar la fachada cuando
@@ -193,6 +205,8 @@ finales.
 
 ### Etapa 6 - Expansion Del Laboratorio
 
+Estado: protocolo vigente, no tarea abierta obligatoria.
+
 - Agregar laboratorios por familia cuando haya una pregunta abierta real.
 - Usar la misma estructura del laboratorio piloto de pocket milling:
   - `memory/current-state.md`;
@@ -203,13 +217,13 @@ finales.
 
 ### Etapa 7 - Limpieza Final
 
-- Reducir `pgmx.synthesis.core` a fachada interna o eliminarlo si ya no cumple
-  rol real.
-- Retirar `tools.synthesize_pgmx`, `tools.pgmx_snapshot`,
-  `tools.pgmx_adapters`, `tools.pgmx_synthesis`, `pgmx.vaciado_lab`,
-  `pgmx.vaciado` y fachadas `tools.pgmx_vaciado*` cuando memoria, tests y
-  comandos hayan migrado al mapa final.
-- Actualizar `docs/synthesize_pgmx_help.md` con el nuevo mapa.
+Estado: completada.
+
+- `pgmx.synthesis.core` quedo reducido a fachada interna historica.
+- `tools.synthesize_pgmx`, `tools.pgmx_snapshot`, `tools.pgmx_adapters`,
+  `tools.pgmx_synthesis`, `pgmx.vaciado_lab`, `pgmx.vaciado` y fachadas
+  `tools.pgmx_vaciado*` fueron retiradas.
+- `docs/synthesize_pgmx_help.md` documenta el mapa publico vigente.
 
 ## Plan De Cierre Operativo
 
@@ -250,8 +264,9 @@ comportamiento publico:
    reexporta los modulos reales y mantiene el `__all__` publico historico.
    - No debe contener logica nueva.
    - Ya no sostiene fachadas publicas bajo `tools/`.
-7. Actualizar documentacion publica y limpiar fachadas historicas cuando los
-   tests y comandos hayan migrado.
+7. Actualizar documentacion publica y limpiar fachadas historicas. Hecho: la
+   ayuda publica usa `pgmx.synthesis`, `pgmx.snapshot` y `pgmx.adapters`; el
+   inventario general vive en `docs/repository_audit_inventory.md`.
 
 ## Cierre Formal De Etapa Arquitectonica
 
@@ -296,7 +311,8 @@ Queda fuera de este cierre:
 
 - desarrollar nuevos casos de pocket milling/vaciado;
 - implementar el sintetizador ISO;
-- retirar fachadas legacy antes de decidir compatibilidad externa;
+- definir compatibilidad externa futura si aparece un consumidor fuera del
+  repositorio;
 - convertir decisiones abiertas de producto en codigo sin acuerdo previo.
 
 ## Validacion Minima Por Etapa
@@ -306,11 +322,11 @@ py -3 -m unittest tests.test_pgmx_synthesis_package
 py -3 -m unittest tests.test_pgmx_public_facades
 py -3 -m unittest tests.test_pgmx_vaciado_v2
 py -3 -m unittest tests.test_pgmx_vaciado
-py -3 -m compileall -q pgmx tools tests
+py -3 -m compileall -q main.py app core pgmx iso_state_synthesis cnc_traceability tools tests
 ```
 
 Si se toca una familia concreta, correr tambien sus tests especificos y un
-smoke import de las fachadas historicas.
+smoke import de la API publica vigente.
 
 ## Decisiones Cerradas Posteriores Al Cierre
 

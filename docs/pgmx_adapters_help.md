@@ -152,13 +152,13 @@ intercalada de familias distintas.
 Imprimir la adaptacion en stdout:
 
 ```powershell
-python -m pgmx.adapters archive\maestro_examples\Tapa.pgmx
+py -3 -m pgmx.adapters archive\maestro_examples\Tapa.pgmx
 ```
 
 Guardar la adaptacion como JSON:
 
 ```powershell
-python -m pgmx.adapters archive\maestro_examples\Tapa.pgmx --output tmp\tapa_adaptation.json
+py -3 -m pgmx.adapters archive\maestro_examples\Tapa.pgmx --output tmp\tapa_adaptation.json
 ```
 
 ## Flujo recomendado
