@@ -27,6 +27,7 @@ El sintetizador PGMX real vive en `pgmx.synthesis` y expone
 | `docs/app_subsystem_audit.md` | Corte dedicado del subsistema `app/`, con flujos, correcciones y deuda residual aceptada. |
 | `docs/core_subsystem_audit.md` | Corte dedicado del subsistema `core/`, iniciado por modelo/parser. |
 | `docs/pgmx_subsystem_audit.md` | Corte dedicado del subsistema `pgmx/`, con fachadas, procesos y deuda residual. |
+| `docs/iso_state_synthesis_subsystem_audit.md` | Corte dedicado del subsistema ISO por estado, con contratos, CLI y deuda residual. |
 | `app/ui.py` | Compone `ProjectDetailWindow` a partir de mixins. La logica de detalle vive en `app/project_detail_*.py`. |
 | `app/main_window.py` | Ventana inicial de seleccion de proyectos. |
 | `app/project_detail_*.py` | Flujos de detalle: procesamiento, inspeccion, salida, piezas, PGMX, colores y En-Juego. |
@@ -184,6 +185,7 @@ No hay generador ISO nativo productivo. El estado actual es investigacion,
 documentacion del postprocesado Maestro/CNC y el subsistema experimental por
 estado `iso_state_synthesis/`.
 
+Auditoria del bloque: `docs/iso_state_synthesis_subsystem_audit.md`.
 Fuente historica: `docs/iso_synthesis_temporary_memory.md`.
 Contrato CNC/ISO observado: `docs/iso_cnc_contract.md`.
 Plan de fixtures minimos: `docs/iso_minimal_fixtures_plan.md`.
@@ -225,10 +227,11 @@ Prueba de humo PGMX recomendada:
   flujo, no por archivo aislado.
 - `pgmx.processing` ya tiene auditoria inicial y cobertura focal de SVG, pero
   sigue siendo un modulo grande con varias responsabilidades internas.
-- `iso_state_synthesis.emitter` sigue siendo grande y experimental.
-- La suite automatizada cubre app/core/PGMX/nesting/planillas, pero
-  `iso_state_synthesis/`, `cnc_traceability/` y `tools/studies/` aun tienen
-  cobertura dedicada limitada.
+- `iso_state_synthesis.emitter` ya tiene auditoria inicial y cobertura de
+  contratos puros, pero sigue siendo grande y experimental.
+- La suite automatizada cubre app/core/PGMX/nesting/planillas e ISO inicial,
+  pero `cnc_traceability/` y `tools/studies/` aun tienen cobertura dedicada
+  limitada.
 - `requirements.txt` no fija versiones.
 - La investigacion ISO es extensa, pero aun no es API productiva.
 - Las memorias historicas son utiles, pero conviene promover decisiones

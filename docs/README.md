@@ -40,16 +40,19 @@ tener que leer todas las memorias historicas de una vez.
    - Fronteras entre herramientas publicas, fachadas compatibles y laboratorios.
 14. `cnc_traceability/README.md`
    - Entrada del subsistema de trazabilidad CNC compatible con Windows XP.
-15. `iso_state_synthesis/README.md`
+15. `docs/iso_state_synthesis_subsystem_audit.md`
+   - Auditoria del subsistema experimental ISO por estado: contratos, CLI,
+     emisor candidato y deuda residual.
+16. `iso_state_synthesis/README.md`
    - Entrada del subsistema experimental por estado para futura traduccion
      `.pgmx -> .iso`.
-16. `docs/iso_cnc_contract.md`
+17. `docs/iso_cnc_contract.md`
    - Contrato CNC/ISO observado: configuracion Maestro, toolset, variables y
      huecos pendientes para un sintetizador ISO.
-17. `docs/iso_minimal_fixtures_plan.md`
+18. `docs/iso_minimal_fixtures_plan.md`
    - Plan de reanudacion para generar `.pgmx` minimos comparables en la compu
      de fabrica y postprocesarlos con Maestro.
-18. `docs/iso_synthesis_temporary_memory.md`
+19. `docs/iso_synthesis_temporary_memory.md`
    - Ingenieria inversa del flujo PGMX -> Maestro/postprocesador -> ISO.
 
 ## Mapa por tema
@@ -72,7 +75,7 @@ tener que leer todas las memorias historicas de una vez.
 | Laboratorios y fachadas | `docs/laboratory_frontiers.md`, `docs/pgmx_synthesis_modularization_plan.md` | `tools/`, `pgmx/machining_lab/`, `tools/studies/`, `iso_state_synthesis/` |
 | Laboratorio de corte | `docs/cut_diagrams_temporary_memory.md`, `docs/laboratory_frontiers.md` | `tools/studies/cut_diagrams/ordering_lab.py` |
 | Trazabilidad CNC | `cnc_traceability/README.md`, `cnc_traceability/docs/contract.md`, `cnc_traceability/memory/current-state.md` | `cnc_traceability/viewer_xp.py` |
-| Generacion ISO experimental | `iso_state_synthesis/README.md`, `iso_state_synthesis/memory/current-state.md`, `docs/iso_cnc_contract.md` | `iso_state_synthesis/` |
+| Generacion ISO experimental | `docs/iso_state_synthesis_subsystem_audit.md`, `iso_state_synthesis/README.md`, `iso_state_synthesis/memory/current-state.md`, `docs/iso_cnc_contract.md` | `iso_state_synthesis/` |
 | Contrato CNC/ISO | `docs/iso_cnc_contract.md`, `docs/iso_minimal_fixtures_plan.md`, `docs/iso_synthesis_temporary_memory.md` | `tools/studies/iso/README.md`, `tools/studies/iso/` |
 
 ## Reglas de mantenimiento
