@@ -40,7 +40,7 @@ Ultima actualizacion: 2026-06-07
   y capa de explicacion para el cabezal de perforacion/ranurado.
 - El subcorte de modulo Router Milling Lines mueve el contexto de traza, los
   predicados de modo, la entrada comun, los builders de movimiento, el reset
-  router y la preparacion incremental despues de boring head a
+  router, la preparacion router inicial y la preparacion incremental despues de boring head a
   `iso_state_synthesis.router_milling_lines`.
 - El subcorte de modulo Transition Lines mueve builders puros de transicion a
   `iso_state_synthesis.transition_lines`: reset router-router, router hacia
@@ -65,6 +65,9 @@ Ultima actualizacion: 2026-06-07
 - Los builders de traza router cubren center con leads (`OpenPolyline`,
   `ClosedPolyline*`, `Circle`), estrategias, compensacion lateral, sin-leads
   generico y fallback final desde el nuevo modulo.
+- `_line_milling_prepare_lines` fija la preparacion router completa y la
+  variante incremental entre routers; `_emit_line_milling_prepare` queda como
+  wrapper explicativo.
 - `IsoCandidateEmissionError` vive en `iso_state_synthesis.errors` para que el
   CLI, `emitter.py` y los builders compartan el mismo contrato sin ciclos.
 - La separacion modular de builders queda cerrada sin ampliar reglas ISO:
@@ -74,8 +77,8 @@ Ultima actualizacion: 2026-06-07
   scripts vivos que comparan corpus contra el sintetizador actual ya importan
   `comparison.py` y `work_groups.py` en lugar de depender de `emitter.py`.
 - Cobertura local del checkpoint: `tests.test_iso_state_synthesis` fija los
-  builders de movimiento router, boring head, programa, trazas boring y perfil
-  con tests puros.
+  builders de preparacion/movimiento router, boring head, programa, trazas
+  boring y perfil con tests puros.
 
 ## Retiro De `iso_generation/`
 

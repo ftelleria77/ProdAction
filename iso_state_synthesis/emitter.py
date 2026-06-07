@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import struct
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -71,6 +70,7 @@ from .profile_milling_lines import _profile_milling_trace_lines
 from .router_milling_lines import (
     _line_milling_entry_lines,
     _line_milling_prepare_after_boring_lines,
+    _line_milling_prepare_lines,
     _line_milling_rapid_point,
     _line_milling_reset_lines,
     _line_milling_trace_context,
@@ -1645,61 +1645,12 @@ def _emit_line_milling_prepare(
     *,
     incremental_router: bool = False,
 ) -> None:
-    length = evaluation.initial_state.get("pieza", "length")
-    width = evaluation.initial_state.get("pieza", "width")
-    origin_x = evaluation.initial_state.get("pieza", "origin_x")
-    origin_y = evaluation.initial_state.get("pieza", "origin_y")
-    header_dz = evaluation.final_state.get("pieza", "header_dz")
-    tool_number = _change_after(differential, "herramienta", "tool_number")
-    spindle = _change_after(differential, "herramienta", "spindle")
-    etk9 = _change_after(differential, "salida", "etk_9")
-    etk18 = _change_after(differential, "salida", "etk_18")
-    spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
-    shf_x = _change_after(differential, "herramienta", "shf_x")
-    shf_y = _change_after(differential, "herramienta", "shf_y")
-    shf_z = _change_after(differential, "herramienta", "shf_z")
     source = _change_source(differential, "herramienta", "tool_offset_length")
-    prep_origin_x = length + (2 * origin_x)
-    if incremental_router:
-        prepare_lines = (
-            "MLV=0",
-            f"T{int(tool_number)}",
-            "SYN",
-            "M06",
-            f"?%ETK[9]={int(etk9)}",
-            f"?%ETK[18]={int(etk18)}",
-            f"S{int(spindle_speed)}M3",
-            "G17",
-            "MLV=2",
-            "?%ETK[13]=1",
-        )
-    else:
-        prepare_lines = (
-        "MLV=0",
-        f"T{int(tool_number)}",
-        "SYN",
-        "M06",
-        f"?%ETK[6]={int(spindle)}",
-        f"?%ETK[9]={int(etk9)}",
-        f"?%ETK[18]={int(etk18)}",
-        f"S{int(spindle_speed)}M3",
-        "G17",
-        "MLV=2",
-        f"%Or[0].ofX={_fmt_scaled(-prep_origin_x)}",
-        "%Or[0].ofY=-1515599.976",
-        f"%Or[0].ofZ={_fmt_scaled(header_dz)}",
-        "MLV=1",
-        f"SHF[X]={_fmt(-(length + origin_x))}",
-        f"SHF[Y]={_fmt(_base_shf_y(origin_y))}",
-        f"SHF[Z]={_fmt(header_dz)}",
-        "MLV=2",
-        "?%ETK[13]=1",
-        "MLV=2",
-        f"SHF[X]={_fmt(shf_x)}",
-        f"SHF[Y]={_fmt(shf_y)}",
-        f"SHF[Z]={_fmt(shf_z)}",
-        )
-    for line in prepare_lines:
+    for line in _line_milling_prepare_lines(
+        evaluation,
+        differential,
+        incremental_router=incremental_router,
+    ):
         _append(
             lines,
             line,
@@ -3078,22 +3029,3 @@ def _fmt(value: object) -> str:
     if abs(number) < 0.0005:
         number = 0.0
     return f"{number:.3f}"
-
-
-def _last_emitted_xy(lines: list[ExplainedIsoLine]) -> Optional[tuple[float, float]]:
-    for emitted in reversed(lines):
-        x_value: Optional[float] = None
-        y_value: Optional[float] = None
-        for word in emitted.line.split():
-            if word.startswith("X"):
-                x_value = float(word[1:])
-            elif word.startswith("Y"):
-                y_value = float(word[1:])
-        if x_value is not None and y_value is not None:
-            return x_value, y_value
-    return None
-
-
-def _fmt_scaled(value: object) -> str:
-    number = struct.unpack("f", struct.pack("f", float(value)))[0]
-    return f"{number * 1000.0:.3f}"

@@ -63,6 +63,7 @@ from iso_state_synthesis.router_milling_lines import (
     _line_milling_open_center_leads_motion_lines,
     _line_milling_open_polyline_side_compensation_motion_lines,
     _line_milling_prepare_after_boring_lines,
+    _line_milling_prepare_lines,
     _line_milling_rapid_point,
     _line_milling_reset_lines,
     _line_milling_side_compensation_fallback_motion_lines,
@@ -946,6 +947,80 @@ class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
                 "SHF[X]=-12.000",
                 "SHF[Y]=-2.000",
                 "SHF[Z]=-90.000",
+            ),
+        )
+
+    def test_line_milling_prepare_lines_cover_full_and_incremental_router_prepare(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector(
+                (
+                    StateValue("pieza", "length", 400.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_x", 5.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_y", 7.0, _TEST_SOURCE),
+                )
+            ),
+            differentials=(),
+            final_state=StateVector((StateValue("pieza", "header_dz", 43.0, _TEST_SOURCE),)),
+        )
+        differential = StageDifferential(
+            stage_key="line_milling_prepare",
+            family="line_milling",
+            order_index=1,
+            target_changes=(
+                _change("herramienta", "tool_number", 4),
+                _change("herramienta", "spindle", 4),
+                _change("herramienta", "spindle_speed_standard", 18000),
+                _change("herramienta", "shf_x", -12.0),
+                _change("herramienta", "shf_y", -2.0),
+                _change("herramienta", "shf_z", -90.0),
+                _change("salida", "etk_9", 4),
+                _change("salida", "etk_18", 1),
+            ),
+        )
+
+        self.assertEqual(
+            _line_milling_prepare_lines(evaluation, differential),
+            (
+                "MLV=0",
+                "T4",
+                "SYN",
+                "M06",
+                "?%ETK[6]=4",
+                "?%ETK[9]=4",
+                "?%ETK[18]=1",
+                "S18000M3",
+                "G17",
+                "MLV=2",
+                "%Or[0].ofX=-410000.000",
+                "%Or[0].ofY=-1515599.976",
+                "%Or[0].ofZ=43000.000",
+                "MLV=1",
+                "SHF[X]=-405.000",
+                "SHF[Y]=-1508.600",
+                "SHF[Z]=43.000",
+                "MLV=2",
+                "?%ETK[13]=1",
+                "MLV=2",
+                "SHF[X]=-12.000",
+                "SHF[Y]=-2.000",
+                "SHF[Z]=-90.000",
+            ),
+        )
+        self.assertEqual(
+            _line_milling_prepare_lines(evaluation, differential, incremental_router=True),
+            (
+                "MLV=0",
+                "T4",
+                "SYN",
+                "M06",
+                "?%ETK[9]=4",
+                "?%ETK[18]=1",
+                "S18000M3",
+                "G17",
+                "MLV=2",
+                "?%ETK[13]=1",
             ),
         )
 

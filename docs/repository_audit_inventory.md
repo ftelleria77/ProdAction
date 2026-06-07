@@ -170,7 +170,7 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | `iso_state_synthesis.program_lines` | Builders puros de lineas ISO para cabecera, preambulo, marcos y cierres de programa. | Helpers internos `_program_*`, `_piece_frame_*`, `_common_program_close_*`. |
 | `iso_state_synthesis.boring_head_lines` | Builders puros de lineas ISO para preparaciones y resets del cabezal de perforacion/ranurado. | Helpers internos `_top_drill_*`, `_side_drill_*`, `_slot_milling_*`. |
 | `iso_state_synthesis.boring_trace_lines` | Builders puros de trazas ISO para Top Drill y Side Drill. | Helpers internos `_top_drill_trace_lines`, `_side_drill_trace_lines`. |
-| `iso_state_synthesis.router_milling_lines` | Builders puros de lineas ISO para fresados router lineales. | Helpers internos `_line_milling_*`, geometria de leads y compensacion. |
+| `iso_state_synthesis.router_milling_lines` | Builders puros de preparacion, traza y reset ISO para fresados router lineales. | Helpers internos `_line_milling_*`, geometria de leads y compensacion. |
 | `iso_state_synthesis.profile_milling_lines` | Builders puros de trazas ISO para fresado de perfil E001 y estrategia PH5. | Helper interno `_profile_milling_trace_lines`. |
 | `iso_state_synthesis.slot_milling_lines` | Builders puros de traza ISO para SlotSide. | Helper interno `_slot_milling_trace_lines`. |
 | `iso_state_synthesis.transition_lines` | Builders puros de lineas ISO para transiciones entre familias. | Helpers internos `_router_*`, `_boring_to_router_*`, `_top_to_slot_*`, `_side_to_slot_*`, `_slot_to_slot_*`. |

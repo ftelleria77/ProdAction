@@ -379,8 +379,9 @@ Hallazgos aplicados:
   builders puros para fresados router lineales. La traza de perfil quedo
   separada luego en `profile_milling_lines.py`.
 - Se movieron al nuevo modulo el contexto de traza, los predicados de modo, la
-  entrada comun, los builders de `motion_lines`, el reset router y la
-  preparacion incremental despues de boring head.
+  entrada comun, los builders de `motion_lines`, el reset router, la
+  preparacion router inicial y la preparacion incremental despues de boring
+  head.
 - `emitter.py` conserva la orquestacion y el apendice explicado: lee el modulo
   de router, decide la etapa y adjunta fuente, confianza, `block_id`,
   `transition_id` y nota por linea.
@@ -390,6 +391,8 @@ Hallazgos aplicados:
 - Los tests de helpers router ahora importan desde
   `iso_state_synthesis.router_milling_lines`, de modo que la cobertura fija el
   nuevo limite modular.
+- La cobertura tambien fija `_line_milling_prepare_lines` para la preparacion
+  router completa y la variante incremental entre routers.
 
 ## Subcorte Modulo Transition Lines
 
