@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 import zipfile
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
@@ -16,6 +17,17 @@ PROGRAMACIONES_SETTINGSX_PATH = "iso_state_synthesis/machine_config/snapshot/mae
 
 class BoringHeadLineError(RuntimeError):
     """Raised when boring-head line builders cannot read required state."""
+
+
+@dataclass(frozen=True)
+class _SidePlaneSelectionLines:
+    """Side face selection lines split by explanatory emission group."""
+
+    frame: tuple[str, ...]
+    selection: tuple[str, ...]
+
+    def all_lines(self) -> tuple[str, ...]:
+        return self.frame + self.selection
 
 
 def _top_drill_prepare_after_router_base_lines(
@@ -367,6 +379,42 @@ def _side_drill_prepare_between_base_lines(
         f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
         "MLV=2",
         "G17",
+    )
+
+
+def _side_plane_selection_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+    plane: str,
+    *,
+    include_right_frame: bool = True,
+    previous_plane: Optional[str] = None,
+) -> _SidePlaneSelectionLines:
+    frame_plane: Optional[str] = None
+    if plane in {"Left", "Back"}:
+        frame_plane = plane
+    elif plane == "Right" and include_right_frame and (
+        previous_plane is None or previous_plane in {"Back", "Left"}
+    ):
+        frame_plane = "Right"
+    elif plane == "Front" and previous_plane in {"Back", "Left"}:
+        frame_plane = "Right"
+
+    frame_lines: tuple[str, ...] = ()
+    if frame_plane is not None:
+        side_x, side_y = _side_plane_frame_shift(evaluation, frame_plane)
+        header_dz = evaluation.final_state.get("pieza", "header_dz")
+        frame_lines = (
+            "MLV=1",
+            f"SHF[X]={_fmt(side_x)}",
+            f"SHF[Y]={_fmt(side_y)}",
+            f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
+        )
+
+    side_etk8 = _change_after(differential, "trabajo", "side_etk8")
+    return _SidePlaneSelectionLines(
+        frame=frame_lines,
+        selection=(f"?%ETK[8]={int(side_etk8)}", "G40"),
     )
 
 

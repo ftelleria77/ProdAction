@@ -14,6 +14,7 @@ from iso_state_synthesis.boring_head_lines import (
     _side_drill_reset_lines,
     _side_drill_same_spindle_reposition_lines,
     _side_drill_spindle_change_lines,
+    _side_plane_selection_lines,
     _slot_milling_prepare_after_top_lines,
     _slot_milling_prepare_lines,
     _slot_milling_reset_lines,
@@ -1710,6 +1711,115 @@ class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
                 "?%ETK[17]=257",
                 "S6000M3",
                 "?%ETK[0]=5",
+            ),
+        )
+
+    def test_side_plane_selection_lines_cover_lateral_faces_and_optional_frames(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector(
+                (
+                    StateValue("pieza", "length", 400.0, _TEST_SOURCE),
+                    StateValue("pieza", "width", 350.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_x", 5.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_y", 7.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_z", 25.0, _TEST_SOURCE),
+                )
+            ),
+            differentials=(),
+            final_state=StateVector((StateValue("pieza", "header_dz", 43.0, _TEST_SOURCE),)),
+        )
+
+        left = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=1,
+            target_changes=(
+                _change("trabajo", "side_etk8", 3),
+            ),
+        )
+        back = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=1,
+            target_changes=(
+                _change("trabajo", "side_etk8", 4),
+            ),
+        )
+        right = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=1,
+            target_changes=(
+                _change("trabajo", "side_etk8", 2),
+            ),
+        )
+        front = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=1,
+            target_changes=(
+                _change("trabajo", "side_etk8", 5),
+            ),
+        )
+
+        self.assertEqual(
+            _side_plane_selection_lines(evaluation, left, "Left").all_lines(),
+            (
+                "MLV=1",
+                "SHF[X]=-405.000",
+                "SHF[Y]=-1158.600",
+                "SHF[Z]=43.000+%ETK[114]/1000",
+                "?%ETK[8]=3",
+                "G40",
+            ),
+        )
+        self.assertEqual(
+            _side_plane_selection_lines(evaluation, back, "Back").all_lines(),
+            (
+                "MLV=1",
+                "SHF[X]=-5.000",
+                "SHF[Y]=-1508.600",
+                "SHF[Z]=43.000+%ETK[114]/1000",
+                "?%ETK[8]=4",
+                "G40",
+            ),
+        )
+        self.assertEqual(
+            _side_plane_selection_lines(evaluation, right, "Right").all_lines(),
+            (
+                "MLV=1",
+                "SHF[X]=-405.000",
+                "SHF[Y]=-1508.600",
+                "SHF[Z]=43.000+%ETK[114]/1000",
+                "?%ETK[8]=2",
+                "G40",
+            ),
+        )
+        self.assertEqual(
+            _side_plane_selection_lines(
+                evaluation,
+                right,
+                "Right",
+                include_right_frame=False,
+            ).all_lines(),
+            ("?%ETK[8]=2", "G40"),
+        )
+        self.assertEqual(
+            _side_plane_selection_lines(
+                evaluation,
+                front,
+                "Front",
+                previous_plane="Left",
+            ).all_lines(),
+            (
+                "MLV=1",
+                "SHF[X]=-405.000",
+                "SHF[Y]=-1508.600",
+                "SHF[Z]=43.000+%ETK[114]/1000",
+                "?%ETK[8]=5",
+                "G40",
             ),
         )
 

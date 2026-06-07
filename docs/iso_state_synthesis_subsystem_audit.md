@@ -365,11 +365,15 @@ Hallazgos aplicados:
 - Se movieron al nuevo modulo las secuencias de lineas de Top Drill, Side Drill
   y SlotSide, junto con utilidades compartidas de shift, velocidad, mascara y
   `G53 Z` lateral.
+- Se agrego `_side_plane_selection_lines` para aislar la seleccion de cara
+  lateral y la recomposicion opcional de marco `Left/Right/Front/Back`.
 - `emitter.py` conserva la orquestacion y el apendice explicado: decide que
   etapa emitir y adjunta fuente, confianza, `block_id`, `transition_id` y nota
   por linea.
 - Los tests de helpers ahora importan desde `iso_state_synthesis.boring_head_lines`,
   de modo que la cobertura fija el nuevo limite modular.
+- La cobertura lateral fija los casos con marco obligatorio, marco derecho
+  opcional y seleccion `ETK[8]/G40` por cara.
 
 ## Subcorte Modulo Router Milling Lines
 

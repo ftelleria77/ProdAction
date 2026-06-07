@@ -17,6 +17,7 @@ from .boring_head_lines import (
     _side_drill_reset_lines,
     _side_drill_same_spindle_reposition_lines,
     _side_drill_spindle_change_lines,
+    _side_plane_selection_lines,
     _slot_milling_prepare_after_top_lines,
     _slot_milling_prepare_lines,
     _slot_milling_reset_lines,
@@ -987,36 +988,25 @@ def _emit_side_plane_selection(
     transition_id: Optional[str] = None,
 ) -> None:
     source = _observed_rule_source("side_drill_plane_selection")
-    frame_plane: Optional[str] = None
-    if plane in {"Left", "Back"}:
-        frame_plane = plane
-    elif plane == "Right" and include_right_frame and (
-        previous_plane is None or previous_plane in {"Back", "Left"}
-    ):
-        frame_plane = "Right"
-    elif plane == "Front" and previous_plane in {"Back", "Left"}:
-        frame_plane = "Right"
-    if frame_plane is not None:
-        side_x, side_y = _side_plane_frame_shift(evaluation, frame_plane)
-        header_dz = evaluation.final_state.get("pieza", "header_dz")
-        for line in (
-            "MLV=1",
-            f"SHF[X]={_fmt(side_x)}",
-            f"SHF[Y]={_fmt(side_y)}",
-            f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
-        ):
-            _append(
-                lines,
-                line,
-                differential,
-                source,
-                "Cambio de marco lateral antes de seleccionar nueva cara.",
-                confidence="confirmed",
-                rule_status="generalized_side_drill_sequence",
-                transition_id=transition_id,
-            )
-    side_etk8 = _change_after(differential, "trabajo", "side_etk8")
-    for line in (f"?%ETK[8]={int(side_etk8)}", "G40"):
+    selection_lines = _side_plane_selection_lines(
+        evaluation,
+        differential,
+        plane,
+        include_right_frame=include_right_frame,
+        previous_plane=previous_plane,
+    )
+    for line in selection_lines.frame:
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Cambio de marco lateral antes de seleccionar nueva cara.",
+            confidence="confirmed",
+            rule_status="generalized_side_drill_sequence",
+            transition_id=transition_id,
+        )
+    for line in selection_lines.selection:
         _append(
             lines,
             line,
@@ -2957,53 +2947,6 @@ def _work_family(evaluation: IsoStateEvaluation) -> str:
     return "top_drill"
 
 
-def _has_non_side_work(evaluation: IsoStateEvaluation) -> bool:
-    for differential in evaluation.differentials:
-        if differential.stage_key in _COMMON_STAGE_KEYS:
-            continue
-        for change in differential.target_changes + differential.forced_values:
-            if change.layer == "trabajo" and change.key == "family" and str(change.after) != "side_drill":
-                return True
-    return False
-
-
-def _first_work_value(
-    evaluation: IsoStateEvaluation,
-    layer: str,
-    key: str,
-    default: object = None,
-) -> object:
-    for differential in sorted(evaluation.differentials, key=lambda item: item.order_index):
-        if differential.stage_key in _COMMON_STAGE_KEYS:
-            continue
-        for change in differential.target_changes + differential.forced_values:
-            if change.layer == layer and change.key == key:
-                return change.after
-    return default
-
-
-def _side_value(evaluation: IsoStateEvaluation, layer: str, key: str) -> object:
-    for differential in evaluation.differentials:
-        for change in differential.target_changes + differential.forced_values:
-            if change.layer == layer and change.key == key:
-                return change.after
-    raise IsoCandidateEmissionError(f"El plan no contiene {layer}.{key}.")
-
-
-def _side_plane_frame_shift(evaluation: IsoStateEvaluation, plane_name: str) -> tuple[float, float]:
-    length = evaluation.initial_state.get("pieza", "length")
-    width = evaluation.initial_state.get("pieza", "width")
-    origin_x = evaluation.initial_state.get("pieza", "origin_x")
-    origin_y = evaluation.initial_state.get("pieza", "origin_y")
-    base_x = -(length + origin_x)
-    base_y = _base_shf_y(origin_y)
-    if plane_name == "Left":
-        return base_x, base_y + width
-    if plane_name == "Back":
-        return base_x + length, base_y
-    return base_x, base_y
-
-
 def _mirrored_side_fixed(
     evaluation: IsoStateEvaluation,
     prepare: StageDifferential,
@@ -3018,10 +2961,6 @@ def _mirrored_side_fixed(
     )
     sign = -1.0 if fixed < 0 else 1.0
     return sign * (span - abs(fixed))
-
-
-def _base_shf_y(origin_y: object = 0.0) -> float:
-    return -1515.6 + float(origin_y)
 
 
 def _fmt(value: object) -> str:
