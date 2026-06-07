@@ -22,14 +22,18 @@ Ultima actualizacion: 2026-06-06
   `_line_milling_prepare_after_boring_lines`,
   `_top_drill_prepare_after_router_base_lines`,
   `_side_drill_prepare_after_router_lines` y `_tool_shift_lines`.
+- El subcorte de resets separa builders de lineas para router, top drill, side
+  drill y slot milling: `_line_milling_reset_lines`,
+  `_top_drill_reset_lines`, `_side_drill_reset_lines` y
+  `_slot_milling_reset_lines`.
 - Los builders internos de traza router cubren center con leads
   (`OpenPolyline`, `ClosedPolyline*`, `Circle`), estrategias, compensacion
   lateral, sin-leads generico y fallback final.
 - La separacion a modulos fuera de `emitter.py` queda como decision futura del
   laboratorio ISO; este checkpoint solo cierra la delegacion interna del bloque
-  de fresado router sin ampliar reglas ISO.
+  de fresado router y resets sin ampliar reglas ISO.
 - Cobertura local del checkpoint: `tests.test_iso_state_synthesis` fija los
-  builders de movimiento con tests puros.
+  builders de movimiento y resets con tests puros.
 
 ## Retiro De `iso_generation/`
 

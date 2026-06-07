@@ -289,12 +289,29 @@ Hallazgos aplicados:
   preparaciones base y shifts de herramienta en entradas desde router.
 - Se agregaron tests puros para cada helper nuevo del bloque.
 
+## Subcorte Resets Por Cabezal
+
+Hallazgos aplicados:
+
+- Se extrajo `_line_milling_reset_lines` como builder interno del reset router
+  base; `profile_milling` conserva su delegacion sobre el mismo reset.
+- Se extrajeron `_top_drill_reset_lines` y `_side_drill_reset_lines` sobre un
+  builder comun de boring head para fijar las variantes parcial/final sin
+  duplicar la secuencia `MLV/SHF/ETK/G61`.
+- Se extrajo `_slot_milling_reset_lines` para aislar las variantes final,
+  parcial y parcial sin `?%ETK[7]=0` usadas por las transiciones de sierra.
+- Los emisores de reset siguen dentro de `emitter.py` porque todavia adjuntan
+  fuentes, confianza, `block_id` y notas explicativas por linea.
+- Se agregaron tests puros para reset router, reset top/side parcial/final y
+  reset de ranura final/parcial.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome
-  la generacion ISO, porque todavia concentra preparacion, transiciones,
-  resets, formato y comparacion. La traza router ya tiene builders internos de
-  `motion_lines`, pero aun no se movio a modulos separados.
+  la generacion ISO, porque todavia concentra preparacion, apendice explicado
+  de resets, formato y comparacion. La traza router y los resets principales
+  ya tienen builders internos de lineas, pero aun no se movieron a modulos
+  separados.
 - Agregar fixtures PGMX/ISO chicos dentro de `tests/fixtures` o `tmp` controlado
   para cubrir `pgmx_source.py` y una emision real sin depender de rutas `S:` o
   `P:`.

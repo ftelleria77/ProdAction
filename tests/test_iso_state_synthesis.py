@@ -25,6 +25,7 @@ from iso_state_synthesis.emitter import (
     _line_milling_open_center_leads_motion_lines,
     _line_milling_open_polyline_side_compensation_motion_lines,
     _line_milling_rapid_point,
+    _line_milling_reset_lines,
     _line_milling_side_compensation_fallback_motion_lines,
     _line_milling_strategy_lead_path_motion_lines,
     _line_milling_strategy_motion_lines,
@@ -44,9 +45,12 @@ from iso_state_synthesis.emitter import (
     _router_inter_work_reset_lines,
     _router_to_boring_transition_lines,
     _side_drill_prepare_after_router_lines,
+    _side_drill_reset_lines,
+    _slot_milling_reset_lines,
     _side_normal,
     _tool_shift_lines,
     _top_drill_prepare_after_router_base_lines,
+    _top_drill_reset_lines,
     _trace_move_tangent_unit,
     _trace_point_tangent,
     _unit_vector,
@@ -714,6 +718,96 @@ class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
                 "SHF[X]=-45.000",
                 "SHF[Y]=-3.500",
                 "SHF[Z]=-80.000",
+            ),
+        )
+
+    def test_line_milling_reset_lines_emit_router_reset(self) -> None:
+        self.assertEqual(
+            _line_milling_reset_lines(),
+            (
+                "D0",
+                "SVL 0.000",
+                "VL6=0.000",
+                "SVR 0.000",
+                "VL7=0.000",
+                "?%ETK[7]=0",
+            ),
+        )
+
+    def test_boring_drill_reset_lines_cover_partial_and_complete_resets(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector(),
+            differentials=(),
+            final_state=StateVector((StateValue("pieza", "header_dz", 37.25, _TEST_SOURCE),)),
+        )
+        top_reset = StageDifferential(
+            stage_key="top_drill_reset",
+            family="top_drill",
+            order_index=1,
+            target_changes=(),
+            reset_changes=(_change("salida", "etk_17", 0),),
+        )
+        side_reset = StageDifferential(
+            stage_key="side_drill_reset",
+            family="side_drill",
+            order_index=1,
+            target_changes=(),
+            reset_changes=(_change("salida", "etk_17", 257),),
+        )
+
+        self.assertEqual(
+            _top_drill_reset_lines(evaluation, top_reset, final=False),
+            (
+                "MLV=1",
+                "SHF[Z]=37.250+%ETK[114]/1000",
+                "?%ETK[7]=0",
+            ),
+        )
+        self.assertEqual(
+            _side_drill_reset_lines(evaluation, side_reset),
+            (
+                "MLV=1",
+                "SHF[Z]=37.250+%ETK[114]/1000",
+                "?%ETK[7]=0",
+                "G61",
+                "MLV=0",
+                "?%ETK[0]=0",
+                "?%ETK[17]=257",
+                "G4F1.200",
+                "M5",
+                "D0",
+            ),
+        )
+
+    def test_slot_milling_reset_lines_cover_final_partial_and_trimmed_etk7(self) -> None:
+        self.assertEqual(
+            _slot_milling_reset_lines(),
+            (
+                "D0",
+                "SVL 0.000",
+                "VL6=0.000",
+                "SVR 0.000",
+                "VL7=0.000",
+                "?%ETK[7]=0",
+                "G61",
+                "MLV=0",
+                "?%ETK[1]=0",
+                "?%ETK[17]=0",
+                "G4F1.200",
+                "M5",
+                "D0",
+            ),
+        )
+        self.assertEqual(
+            _slot_milling_reset_lines(final=False, emit_etk7=False),
+            (
+                "D0",
+                "SVL 0.000",
+                "VL6=0.000",
+                "SVR 0.000",
+                "VL7=0.000",
             ),
         )
 

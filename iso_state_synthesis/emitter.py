@@ -3963,14 +3963,7 @@ def _emit_line_milling_reset(
     differential: StageDifferential,
 ) -> None:
     source = _change_source(differential, "salida", "etk_7", reset=True)
-    for line in (
-        "D0",
-        "SVL 0.000",
-        "VL6=0.000",
-        "SVR 0.000",
-        "VL7=0.000",
-        "?%ETK[7]=0",
-    ):
+    for line in _line_milling_reset_lines():
         _append(
             lines,
             line,
@@ -3980,6 +3973,17 @@ def _emit_line_milling_reset(
             confidence="confirmed",
             rule_status="generalized_line_milling_020_023",
         )
+
+
+def _line_milling_reset_lines() -> tuple[str, ...]:
+    return (
+        "D0",
+        "SVL 0.000",
+        "VL6=0.000",
+        "SVR 0.000",
+        "VL7=0.000",
+        "?%ETK[7]=0",
+    )
 
 
 def _emit_top_to_slot_milling_transition(
@@ -4294,6 +4298,24 @@ def _emit_slot_milling_reset(
 ) -> None:
     source = _observed_rule_source("slot_milling_reset")
     reset_block_id = "B-BH-011" if final else "B-BH-012"
+    for line in _slot_milling_reset_lines(final=final, emit_etk7=emit_etk7):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Reset posterior SlotSide con sierra vertical observado.",
+            confidence="confirmed",
+            rule_status="generalized_slot_milling_006_011_087_091",
+            block_id=reset_block_id,
+        )
+
+
+def _slot_milling_reset_lines(
+    *,
+    final: bool = True,
+    emit_etk7: bool = True,
+) -> tuple[str, ...]:
     reset_lines = [
         "D0",
         "SVL 0.000",
@@ -4315,17 +4337,7 @@ def _emit_slot_milling_reset(
                 "D0",
             )
         )
-    for line in reset_lines:
-        _append(
-            lines,
-            line,
-            differential,
-            source,
-            "Reset posterior SlotSide con sierra vertical observado.",
-            confidence="confirmed",
-            rule_status="generalized_slot_milling_006_011_087_091",
-            block_id=reset_block_id,
-        )
+    return tuple(reset_lines)
 
 
 def _emit_side_drill_prepare(
@@ -5037,53 +5049,17 @@ def _emit_side_drill_reset(
     *,
     final: bool = True,
 ) -> None:
-    header_dz = evaluation.final_state.get("pieza", "header_dz")
-    etk17 = _reset_after(differential, "salida", "etk_17")
     source = _change_source(differential, "salida", "etk_17", reset=True)
     reset_block_id = "B-BH-009" if final else "B-BH-010"
-    for line in (
-        "MLV=1",
-        f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
-        "?%ETK[7]=0",
-    ):
-        _append(
-            lines,
-            line,
-            differential,
-            source,
-            "Reset posterior de taladro lateral observado.",
-            rule_status="side_drill_reset_observed",
-            block_id=reset_block_id,
-        )
-    if not final:
-        return
-    _append(
+    _append_boring_drill_reset_lines(
         lines,
-        "G61",
         differential,
-        _observed_rule_source("side_drill_reset"),
-        "Reset observado; falta clasificar si depende de familia o plantilla.",
-        confidence="hypothesis",
-        rule_status="modal_reset_hypothesis",
+        _side_drill_reset_lines(evaluation, differential, final=final),
+        source=source,
+        note="Reset posterior de taladro lateral observado.",
+        rule_status="side_drill_reset_observed",
         block_id=reset_block_id,
     )
-    for line in (
-        "MLV=0",
-        "?%ETK[0]=0",
-        f"?%ETK[17]={int(etk17)}",
-        "G4F1.200",
-        "M5",
-        "D0",
-    ):
-        _append(
-            lines,
-            line,
-            differential,
-            source,
-            "Reset posterior de taladro lateral observado.",
-            rule_status="side_drill_reset_observed",
-            block_id=reset_block_id,
-        )
 
 
 def _emit_top_drill_reset(
@@ -5093,53 +5069,97 @@ def _emit_top_drill_reset(
     *,
     final: bool = True,
 ) -> None:
-    header_dz = evaluation.final_state.get("pieza", "header_dz")
     source = _change_source(differential, "salida", "etk_17", reset=True)
     reset_block_id = "B-BH-003" if final else "B-BH-008"
-    for line in (
+    _append_boring_drill_reset_lines(
+        lines,
+        differential,
+        _top_drill_reset_lines(evaluation, differential, final=final),
+        source=source,
+        note="Reset posterior de taladro superior observado.",
+        rule_status="top_drill_reset_observed",
+        block_id=reset_block_id,
+    )
+
+
+def _append_boring_drill_reset_lines(
+    lines: list[ExplainedIsoLine],
+    differential: StageDifferential,
+    reset_lines: tuple[str, ...],
+    *,
+    source: EvidenceSource,
+    note: str,
+    rule_status: str,
+    block_id: str,
+) -> None:
+    for line in reset_lines:
+        if line == "G61":
+            _append(
+                lines,
+                line,
+                differential,
+                _observed_rule_source(differential.stage_key),
+                "Reset observado; falta clasificar si depende de familia o plantilla.",
+                confidence="hypothesis",
+                rule_status="modal_reset_hypothesis",
+                block_id=block_id,
+            )
+            continue
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            note,
+            rule_status=rule_status,
+            block_id=block_id,
+        )
+
+
+def _top_drill_reset_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+    *,
+    final: bool = True,
+) -> tuple[str, ...]:
+    return _boring_drill_reset_lines(evaluation, differential, final=final)
+
+
+def _side_drill_reset_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+    *,
+    final: bool = True,
+) -> tuple[str, ...]:
+    return _boring_drill_reset_lines(evaluation, differential, final=final)
+
+
+def _boring_drill_reset_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+    *,
+    final: bool = True,
+) -> tuple[str, ...]:
+    header_dz = evaluation.final_state.get("pieza", "header_dz")
+    reset_lines = [
         "MLV=1",
         f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
         "?%ETK[7]=0",
-    ):
-        _append(
-            lines,
-            line,
-            differential,
-            source,
-            "Reset posterior de taladro superior observado.",
-            rule_status="top_drill_reset_observed",
-            block_id=reset_block_id,
+    ]
+    if final:
+        etk17 = _reset_after(differential, "salida", "etk_17")
+        reset_lines.extend(
+            (
+                "G61",
+                "MLV=0",
+                "?%ETK[0]=0",
+                f"?%ETK[17]={int(etk17)}",
+                "G4F1.200",
+                "M5",
+                "D0",
+            )
         )
-    if not final:
-        return
-    etk17 = _reset_after(differential, "salida", "etk_17")
-    _append(
-        lines,
-        "G61",
-        differential,
-        _observed_rule_source("top_drill_reset"),
-        "Reset observado; falta clasificar si depende de familia o plantilla.",
-        confidence="hypothesis",
-        rule_status="modal_reset_hypothesis",
-        block_id=reset_block_id,
-    )
-    for line in (
-        "MLV=0",
-        "?%ETK[0]=0",
-        f"?%ETK[17]={int(etk17)}",
-        "G4F1.200",
-        "M5",
-        "D0",
-    ):
-        _append(
-            lines,
-            line,
-            differential,
-            source,
-            "Reset posterior de taladro superior observado.",
-            rule_status="top_drill_reset_observed",
-            block_id=reset_block_id,
-        )
+    return tuple(reset_lines)
 
 
 def _emit_program_close(
