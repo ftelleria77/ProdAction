@@ -4089,32 +4089,11 @@ def _emit_slot_milling_prepare_after_top(
     transition_id: Optional[str] = None,
     emit_mlv_after_g17: bool = False,
 ) -> None:
-    spindle = _change_after(differential, "herramienta", "spindle")
-    spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
-    etk1 = _change_after(differential, "salida", "etk_1")
-    etk17 = _optional_change_after(differential, "salida", "etk_17", None)
-    shf_x = _change_after(differential, "herramienta", "shf_x")
-    shf_y = _change_after(differential, "herramienta", "shf_y")
-    shf_z = _change_after(differential, "herramienta", "shf_z")
     source = _change_source(differential, "herramienta", "tool_offset_length")
-    prepare_lines = [
-        f"?%ETK[6]={int(spindle)}",
-        "G17",
-    ]
-    if emit_mlv_after_g17:
-        prepare_lines.append("MLV=2")
-    if etk17 is not None:
-        prepare_lines.extend((f"?%ETK[17]={int(etk17)}", f"S{int(spindle_speed)}M3"))
-    prepare_lines.extend(
-        (
-            f"?%ETK[1]={int(etk1)}",
-            "MLV=2",
-            f"SHF[X]={_fmt(shf_x)}",
-            f"SHF[Y]={_fmt(shf_y)}",
-            f"SHF[Z]={_fmt(shf_z)}",
-        )
-    )
-    for line in prepare_lines:
+    for line in _slot_milling_prepare_after_top_lines(
+        differential,
+        emit_mlv_after_g17=emit_mlv_after_g17,
+    ):
         _append(
             lines,
             line,
@@ -4127,11 +4106,50 @@ def _emit_slot_milling_prepare_after_top(
         )
 
 
+def _slot_milling_prepare_after_top_lines(
+    differential: StageDifferential,
+    *,
+    emit_mlv_after_g17: bool = False,
+) -> tuple[str, ...]:
+    spindle = _change_after(differential, "herramienta", "spindle")
+    spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
+    etk1 = _change_after(differential, "salida", "etk_1")
+    etk17 = _optional_change_after(differential, "salida", "etk_17", None)
+    prepare_lines = [
+        f"?%ETK[6]={int(spindle)}",
+        "G17",
+    ]
+    if emit_mlv_after_g17:
+        prepare_lines.append("MLV=2")
+    if etk17 is not None:
+        prepare_lines.extend((f"?%ETK[17]={int(etk17)}", f"S{int(spindle_speed)}M3"))
+    prepare_lines.extend((f"?%ETK[1]={int(etk1)}", "MLV=2"))
+    prepare_lines.extend(_tool_shift_lines(differential))
+    return tuple(prepare_lines)
+
+
 def _emit_slot_milling_prepare(
     lines: list[ExplainedIsoLine],
     evaluation: IsoStateEvaluation,
     differential: StageDifferential,
 ) -> None:
+    source = _change_source(differential, "herramienta", "tool_offset_length")
+    for line in _slot_milling_prepare_lines(evaluation, differential):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Preparacion SlotSide con sierra vertical observada en Pieza_006..011/087..091.",
+            confidence="confirmed",
+            rule_status="generalized_slot_milling_006_011_087_091",
+        )
+
+
+def _slot_milling_prepare_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> tuple[str, ...]:
     length = evaluation.initial_state.get("pieza", "length")
     origin_x = evaluation.initial_state.get("pieza", "origin_x")
     origin_y = evaluation.initial_state.get("pieza", "origin_y")
@@ -4140,10 +4158,6 @@ def _emit_slot_milling_prepare(
     spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
     etk1 = _change_after(differential, "salida", "etk_1")
     etk17 = _optional_change_after(differential, "salida", "etk_17", None)
-    shf_x = _change_after(differential, "herramienta", "shf_x")
-    shf_y = _change_after(differential, "herramienta", "shf_y")
-    shf_z = _change_after(differential, "herramienta", "shf_z")
-    source = _change_source(differential, "herramienta", "tool_offset_length")
     prep_origin_x = length + (2 * origin_x)
     frame_x = length + origin_x
     prepare_lines = [
@@ -4161,25 +4175,9 @@ def _emit_slot_milling_prepare(
     ]
     if etk17 is not None:
         prepare_lines.extend((f"?%ETK[17]={int(etk17)}", f"S{int(spindle_speed)}M3"))
-    prepare_lines.extend(
-        (
-            f"?%ETK[1]={int(etk1)}",
-            "MLV=2",
-            f"SHF[X]={_fmt(shf_x)}",
-            f"SHF[Y]={_fmt(shf_y)}",
-            f"SHF[Z]={_fmt(shf_z)}",
-        )
-    )
-    for line in prepare_lines:
-        _append(
-            lines,
-            line,
-            differential,
-            source,
-            "Preparacion SlotSide con sierra vertical observada en Pieza_006..011/087..091.",
-            confidence="confirmed",
-            rule_status="generalized_slot_milling_006_011_087_091",
-        )
+    prepare_lines.extend((f"?%ETK[1]={int(etk1)}", "MLV=2"))
+    prepare_lines.extend(_tool_shift_lines(differential))
+    return tuple(prepare_lines)
 
 
 def _emit_slot_milling_trace(

@@ -305,13 +305,27 @@ Hallazgos aplicados:
 - Se agregaron tests puros para reset router, reset top/side parcial/final y
   reset de ranura final/parcial.
 
+## Subcorte Preparacion SlotSide
+
+Hallazgos aplicados:
+
+- Se extrajo `_slot_milling_prepare_lines` para aislar la preparacion inicial
+  de ranura superior con sierra vertical.
+- Se extrajo `_slot_milling_prepare_after_top_lines` para aislar la preparacion
+  incremental de ranura despues de taladro superior, incluida la variante con
+  `MLV=2` despues de `G17` y velocidad opcional.
+- Ambos helpers reutilizan `_tool_shift_lines`, manteniendo el emisor como
+  capa de explicacion y anotacion de fuentes.
+- Se agregaron tests puros para la preparacion inicial SlotSide y para la
+  entrada incremental desde Top Drill.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome
   la generacion ISO, porque todavia concentra preparacion, apendice explicado
-  de resets, formato y comparacion. La traza router y los resets principales
-  ya tienen builders internos de lineas, pero aun no se movieron a modulos
-  separados.
+  de resets, formato y comparacion. La traza router, los resets principales y
+  la preparacion SlotSide ya tienen builders internos de lineas, pero aun no se
+  movieron a modulos separados.
 - Agregar fixtures PGMX/ISO chicos dentro de `tests/fixtures` o `tmp` controlado
   para cubrir `pgmx_source.py` y una emision real sin depender de rutas `S:` o
   `P:`.

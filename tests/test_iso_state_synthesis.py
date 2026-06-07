@@ -46,6 +46,8 @@ from iso_state_synthesis.emitter import (
     _router_to_boring_transition_lines,
     _side_drill_prepare_after_router_lines,
     _side_drill_reset_lines,
+    _slot_milling_prepare_after_top_lines,
+    _slot_milling_prepare_lines,
     _slot_milling_reset_lines,
     _side_normal,
     _tool_shift_lines,
@@ -808,6 +810,88 @@ class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
                 "VL6=0.000",
                 "SVR 0.000",
                 "VL7=0.000",
+            ),
+        )
+
+    def test_slot_milling_prepare_after_top_lines_include_optional_speed_and_modal(self) -> None:
+        differential = StageDifferential(
+            stage_key="slot_milling_prepare",
+            family="slot_milling",
+            order_index=1,
+            target_changes=(
+                _change("herramienta", "spindle", 82),
+                _change("herramienta", "spindle_speed_standard", 4000),
+                _change("herramienta", "shf_x", -64.0),
+                _change("herramienta", "shf_y", 0.0),
+                _change("herramienta", "shf_z", -0.95),
+                _change("salida", "etk_1", 16),
+                _change("salida", "etk_17", 257),
+            ),
+        )
+
+        self.assertEqual(
+            _slot_milling_prepare_after_top_lines(differential, emit_mlv_after_g17=True),
+            (
+                "?%ETK[6]=82",
+                "G17",
+                "MLV=2",
+                "?%ETK[17]=257",
+                "S4000M3",
+                "?%ETK[1]=16",
+                "MLV=2",
+                "SHF[X]=-64.000",
+                "SHF[Y]=0.000",
+                "SHF[Z]=-0.950",
+            ),
+        )
+
+    def test_slot_milling_prepare_lines_emit_initial_slot_prepare(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector(
+                (
+                    StateValue("pieza", "length", 400.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_x", 5.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_y", 7.0, _TEST_SOURCE),
+                )
+            ),
+            differentials=(),
+            final_state=StateVector((StateValue("pieza", "header_dz", 43.0, _TEST_SOURCE),)),
+        )
+        differential = StageDifferential(
+            stage_key="slot_milling_prepare",
+            family="slot_milling",
+            order_index=1,
+            target_changes=(
+                _change("herramienta", "spindle", 82),
+                _change("herramienta", "spindle_speed_standard", 4000),
+                _change("herramienta", "shf_x", -64.0),
+                _change("herramienta", "shf_y", 0.0),
+                _change("herramienta", "shf_z", -0.95),
+                _change("salida", "etk_1", 16),
+            ),
+        )
+
+        self.assertEqual(
+            _slot_milling_prepare_lines(evaluation, differential),
+            (
+                "?%ETK[6]=82",
+                "G17",
+                "MLV=2",
+                "%Or[0].ofX=-410000.000",
+                "%Or[0].ofY=-1515599.976",
+                "%Or[0].ofZ=43000.000",
+                "MLV=1",
+                "SHF[X]=-405.000",
+                "SHF[Y]=-1508.600",
+                "SHF[Z]=43.000",
+                "MLV=2",
+                "?%ETK[1]=16",
+                "MLV=2",
+                "SHF[X]=-64.000",
+                "SHF[Y]=0.000",
+                "SHF[Z]=-0.950",
             ),
         )
 
