@@ -1253,21 +1253,7 @@ def _emit_router_to_top_drill_transition(
     transition_id: Optional[str] = None,
 ) -> None:
     source = _observed_rule_source("router_to_top_drill_transition")
-    transition_lines: list[str] = []
-    if include_face_selection:
-        transition_lines.extend(("?%ETK[8]=1", "G40"))
-    transition_lines.extend((
-        "MLV=0",
-        "G0 G53 Z201.000",
-        "MLV=2",
-        "G61",
-        "MLV=0",
-        "?%ETK[13]=0",
-        "?%ETK[18]=0",
-        "G0 G53 Z201.000",
-        "G64",
-    ))
-    for line in transition_lines:
+    for line in _router_to_boring_transition_lines(include_face_selection=include_face_selection):
         _append(
             lines,
             line,
@@ -1287,19 +1273,7 @@ def _emit_router_to_slot_milling_transition(
     transition_id: Optional[str] = None,
 ) -> None:
     source = _observed_rule_source("router_to_slot_milling_transition")
-    for line in (
-        "?%ETK[8]=1",
-        "G40",
-        "MLV=0",
-        "G0 G53 Z201.000",
-        "MLV=2",
-        "G61",
-        "MLV=0",
-        "?%ETK[13]=0",
-        "?%ETK[18]=0",
-        "G0 G53 Z201.000",
-        "G64",
-    ):
+    for line in _router_to_boring_transition_lines(include_face_selection=True):
         _append(
             lines,
             line,
@@ -1312,6 +1286,26 @@ def _emit_router_to_slot_milling_transition(
         )
 
 
+def _router_to_boring_transition_lines(*, include_face_selection: bool = False) -> tuple[str, ...]:
+    transition_lines: list[str] = []
+    if include_face_selection:
+        transition_lines.extend(("?%ETK[8]=1", "G40"))
+    transition_lines.extend(
+        (
+            "MLV=0",
+            "G0 G53 Z201.000",
+            "MLV=2",
+            "G61",
+            "MLV=0",
+            "?%ETK[13]=0",
+            "?%ETK[18]=0",
+            "G0 G53 Z201.000",
+            "G64",
+        )
+    )
+    return tuple(transition_lines)
+
+
 def _emit_top_drill_prepare_after_router(
     lines: list[ExplainedIsoLine],
     evaluation: IsoStateEvaluation,
@@ -1320,24 +1314,9 @@ def _emit_top_drill_prepare_after_router(
     previous_family: Optional[str] = None,
     transition_id: Optional[str] = None,
 ) -> None:
-    origin_z = evaluation.initial_state.get("pieza", "origin_z")
-    tool_name = str(_change_after(differential, "herramienta", "tool_name"))
     mask = _change_after(differential, "salida", "etk_0_mask")
-    shf_x = _change_after(differential, "herramienta", "shf_x")
-    shf_y = _change_after(differential, "herramienta", "shf_y")
-    shf_z = _change_after(differential, "herramienta", "shf_z")
     source = _change_source(differential, "herramienta", "tool_offset_length")
-    tool_number = int(tool_name) if tool_name.isdigit() else tool_name
-    prepare_lines = [
-        "MLV=1",
-        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
-        "MLV=2",
-        "G17",
-        "MLV=2",
-    ]
-    if tool_number != 1:
-        prepare_lines.insert(4, f"?%ETK[6]={tool_number}")
-    for line in prepare_lines:
+    for line in _top_drill_prepare_after_router_base_lines(evaluation, differential):
         _append(
             lines,
             line,
@@ -1348,7 +1327,7 @@ def _emit_top_drill_prepare_after_router(
             rule_status="generalized_router_to_top_drill_sequence",
             transition_id=transition_id,
         )
-    for line in (f"SHF[X]={_fmt(shf_x)}", f"SHF[Y]={_fmt(shf_y)}", f"SHF[Z]={_fmt(shf_z)}"):
+    for line in _tool_shift_lines(differential):
         _append(
             lines,
             line,
@@ -1399,6 +1378,36 @@ def _emit_top_drill_prepare_after_router(
         confidence="confirmed",
         rule_status="generalized_router_to_top_drill_sequence",
         transition_id=transition_id,
+    )
+
+
+def _top_drill_prepare_after_router_base_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> tuple[str, ...]:
+    origin_z = evaluation.initial_state.get("pieza", "origin_z")
+    tool_name = str(_change_after(differential, "herramienta", "tool_name"))
+    tool_number = int(tool_name) if tool_name.isdigit() else tool_name
+    prepare_lines = [
+        "MLV=1",
+        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
+        "MLV=2",
+        "G17",
+        "MLV=2",
+    ]
+    if tool_number != 1:
+        prepare_lines.insert(4, f"?%ETK[6]={tool_number}")
+    return tuple(prepare_lines)
+
+
+def _tool_shift_lines(differential: StageDifferential) -> tuple[str, ...]:
+    shf_x = _change_after(differential, "herramienta", "shf_x")
+    shf_y = _change_after(differential, "herramienta", "shf_y")
+    shf_z = _change_after(differential, "herramienta", "shf_z")
+    return (
+        f"SHF[X]={_fmt(shf_x)}",
+        f"SHF[Y]={_fmt(shf_y)}",
+        f"SHF[Z]={_fmt(shf_z)}",
     )
 
 
@@ -2332,28 +2341,18 @@ def _emit_boring_to_router_transition(
 ) -> None:
     source = _observed_rule_source("boring_to_router_transition")
     if previous_family == "side_drill":
-        previous_plane = str(_optional_change_after(previous_prepare, "trabajo", "plane", ""))
-        if previous_plane in {"Back", "Left"}:
-            side_x, side_y = _side_plane_frame_shift(evaluation, "Right")
-            header_dz = evaluation.final_state.get("pieza", "header_dz")
-            for line in (
-                "MLV=1",
-                f"SHF[X]={_fmt(side_x)}",
-                f"SHF[Y]={_fmt(side_y)}",
-                f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
-                "?%ETK[7]=0",
-            ):
-                _append(
-                    lines,
-                    line,
-                    boring_reset,
-                    source,
-                    "Restauracion de marco lateral antes de cambiar de cabezal lateral a router.",
-                    confidence="confirmed",
-                    rule_status="generalized_boring_to_router_sequence",
-                    transition_id=transition_id,
-                )
-        for line in ("?%ETK[8]=1", "G40"):
+        for line in _boring_to_router_side_restore_lines(evaluation, previous_prepare):
+            _append(
+                lines,
+                line,
+                boring_reset,
+                source,
+                "Restauracion de marco lateral antes de cambiar de cabezal lateral a router.",
+                confidence="confirmed",
+                rule_status="generalized_boring_to_router_sequence",
+                transition_id=transition_id,
+            )
+        for line in _boring_to_router_top_face_lines(previous_family):
             _append(
                 lines,
                 line,
@@ -2364,6 +2363,55 @@ def _emit_boring_to_router_transition(
                 rule_status="generalized_boring_to_router_sequence",
                 transition_id=transition_id,
             )
+    for line in _boring_to_router_cleanup_lines(
+        previous_family,
+        router_prepare,
+        router_trace,
+        include_face_selection=include_face_selection,
+    ):
+        _append(
+            lines,
+            line,
+            boring_reset,
+            source,
+            "Transicion observada desde cabezal de perforacion/ranurado hacia router.",
+            confidence="confirmed",
+            rule_status="generalized_boring_to_router_sequence",
+            transition_id=transition_id,
+        )
+
+
+def _boring_to_router_side_restore_lines(
+    evaluation: IsoStateEvaluation,
+    previous_prepare: StageDifferential,
+) -> tuple[str, ...]:
+    previous_plane = str(_optional_change_after(previous_prepare, "trabajo", "plane", ""))
+    if previous_plane not in {"Back", "Left"}:
+        return ()
+    side_x, side_y = _side_plane_frame_shift(evaluation, "Right")
+    header_dz = evaluation.final_state.get("pieza", "header_dz")
+    return (
+        "MLV=1",
+        f"SHF[X]={_fmt(side_x)}",
+        f"SHF[Y]={_fmt(side_y)}",
+        f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
+        "?%ETK[7]=0",
+    )
+
+
+def _boring_to_router_top_face_lines(previous_family: str) -> tuple[str, ...]:
+    if previous_family != "side_drill":
+        return ()
+    return ("?%ETK[8]=1", "G40")
+
+
+def _boring_to_router_cleanup_lines(
+    previous_family: str,
+    router_prepare: StageDifferential,
+    router_trace: StageDifferential,
+    *,
+    include_face_selection: bool = False,
+) -> tuple[str, ...]:
     cleanup_lines: list[str] = []
     if previous_family == "top_drill" and _router_trace_requires_pre_router_etk7_reset(
         router_prepare,
@@ -2392,17 +2440,7 @@ def _emit_boring_to_router_transition(
             "G64",
         )
     )
-    for line in cleanup_lines:
-        _append(
-            lines,
-            line,
-            boring_reset,
-            source,
-            "Transicion observada desde cabezal de perforacion/ranurado hacia router.",
-            confidence="confirmed",
-            rule_status="generalized_boring_to_router_sequence",
-            transition_id=transition_id,
-        )
+    return tuple(cleanup_lines)
 
 
 def _router_trace_requires_pre_router_etk7_reset(
@@ -2481,6 +2519,32 @@ def _emit_line_milling_prepare_after_boring(
     previous_router_prepare: Optional[StageDifferential] = None,
     transition_id: Optional[str] = None,
 ) -> None:
+    source = _change_source(differential, "herramienta", "tool_offset_length")
+    for line in _line_milling_prepare_after_boring_lines(
+        differential,
+        previous_family=previous_family,
+        previous_prepare=previous_prepare,
+        previous_router_prepare=previous_router_prepare,
+    ):
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Preparacion incremental de router despues del cabezal de perforacion.",
+            confidence="confirmed",
+            rule_status="generalized_boring_to_router_sequence",
+            transition_id=transition_id,
+        )
+
+
+def _line_milling_prepare_after_boring_lines(
+    differential: StageDifferential,
+    *,
+    previous_family: str,
+    previous_prepare: StageDifferential,
+    previous_router_prepare: Optional[StageDifferential] = None,
+) -> tuple[str, ...]:
     spindle = _change_after(differential, "herramienta", "spindle")
     etk9 = _change_after(differential, "salida", "etk_9")
     etk18 = _change_after(differential, "salida", "etk_18")
@@ -2488,7 +2552,6 @@ def _emit_line_milling_prepare_after_boring(
     shf_x = _change_after(differential, "herramienta", "shf_x")
     shf_y = _change_after(differential, "herramienta", "shf_y")
     shf_z = _change_after(differential, "herramienta", "shf_z")
-    source = _change_source(differential, "herramienta", "tool_offset_length")
     prepare_lines: list[str] = []
     previous_tool_number = _optional_change_after(previous_prepare, "herramienta", "spindle", None)
     if previous_tool_number is None:
@@ -2510,17 +2573,7 @@ def _emit_line_milling_prepare_after_boring(
             f"SHF[Z]={_fmt(shf_z)}",
         )
     )
-    for line in prepare_lines:
-        _append(
-            lines,
-            line,
-            differential,
-            source,
-            "Preparacion incremental de router despues del cabezal de perforacion.",
-            confidence="confirmed",
-            rule_status="generalized_boring_to_router_sequence",
-            transition_id=transition_id,
-        )
+    return tuple(prepare_lines)
 
 
 def _emit_line_milling_trace(
@@ -4613,17 +4666,7 @@ def _emit_router_to_side_drill_transition(
     plane = str(_change_after(side_prepare, "trabajo", "plane"))
     source = _observed_rule_source("router_to_side_drill_transition")
     _emit_side_plane_selection(lines, evaluation, side_prepare, plane, include_right_frame=False)
-    for line in (
-        "MLV=0",
-        "G0 G53 Z201.000",
-        "MLV=2",
-        "G61",
-        "MLV=0",
-        "?%ETK[13]=0",
-        "?%ETK[18]=0",
-        "G0 G53 Z201.000",
-        "G64",
-    ):
+    for line in _router_to_boring_transition_lines():
         _append(
             lines,
             line,
@@ -4645,25 +4688,9 @@ def _emit_side_drill_prepare_after_router(
     multi_side_sequence: bool = False,
     transition_id: Optional[str] = None,
 ) -> None:
-    origin_z = evaluation.initial_state.get("pieza", "origin_z")
-    header_dz = evaluation.final_state.get("pieza", "header_dz")
-    spindle = _change_after(differential, "herramienta", "spindle")
     mask = _change_after(differential, "salida", "etk_0_mask")
-    shf_x = _change_after(differential, "herramienta", "shf_x")
-    shf_y = _change_after(differential, "herramienta", "shf_y")
-    shf_z = _change_after(differential, "herramienta", "shf_z")
     source = _change_source(differential, "herramienta", "tool_offset_length")
-    for line in (
-        "MLV=1",
-        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
-        "MLV=2",
-        "G17",
-        f"?%ETK[6]={int(spindle)}",
-        "MLV=2",
-        f"SHF[X]={_fmt(shf_x)}",
-        f"SHF[Y]={_fmt(shf_y)}",
-        f"SHF[Z]={_fmt(shf_z)}",
-    ):
+    for line in _side_drill_prepare_after_router_lines(evaluation, differential):
         _append(
             lines,
             line,
@@ -4726,6 +4753,22 @@ def _emit_side_drill_prepare_after_router(
             rule_status="generalized_router_to_side_drill_transition",
             transition_id=transition_id,
         )
+
+
+def _side_drill_prepare_after_router_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> tuple[str, ...]:
+    origin_z = evaluation.initial_state.get("pieza", "origin_z")
+    spindle = _change_after(differential, "herramienta", "spindle")
+    return (
+        "MLV=1",
+        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
+        "MLV=2",
+        "G17",
+        f"?%ETK[6]={int(spindle)}",
+        "MLV=2",
+    ) + _tool_shift_lines(differential)
 
 
 def _emit_slot_to_side_drill_transition(

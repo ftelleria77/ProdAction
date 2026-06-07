@@ -17,6 +17,11 @@ Ultima actualizacion: 2026-06-06
   `_line_milling_linear_side_compensation_motion_lines`.
 - El primer subcorte de transiciones separa `_router_inter_work_reset_lines`
   desde `_emit_router_inter_work_reset`.
+- El bloque de transiciones router/boring queda separado en helpers de lineas:
+  `_router_to_boring_transition_lines`, `_boring_to_router_*`,
+  `_line_milling_prepare_after_boring_lines`,
+  `_top_drill_prepare_after_router_base_lines`,
+  `_side_drill_prepare_after_router_lines` y `_tool_shift_lines`.
 - Los builders internos de traza router cubren center con leads
   (`OpenPolyline`, `ClosedPolyline*`, `Circle`), estrategias, compensacion
   lateral, sin-leads generico y fallback final.

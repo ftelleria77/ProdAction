@@ -272,6 +272,23 @@ Hallazgos aplicados:
 - Se agregaron tests puros para el reset completo y para el caso con estrategia
   en el siguiente router.
 
+## Subcorte Transiciones Router/Boring
+
+Hallazgos aplicados:
+
+- Se extrajo `_router_to_boring_transition_lines` para compartir el reset
+  router hacia top drill, side drill y slot milling.
+- Se extrajeron `_boring_to_router_side_restore_lines`,
+  `_boring_to_router_top_face_lines` y `_boring_to_router_cleanup_lines` para
+  separar restauracion de marco lateral, seleccion de cara Top y limpieza antes
+  de volver al router.
+- Se extrajo `_line_milling_prepare_after_boring_lines` para la preparacion
+  incremental del router despues del cabezal de perforacion/ranurado.
+- Se extrajeron `_top_drill_prepare_after_router_base_lines`,
+  `_side_drill_prepare_after_router_lines` y `_tool_shift_lines` para separar
+  preparaciones base y shifts de herramienta en entradas desde router.
+- Se agregaron tests puros para cada helper nuevo del bloque.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome

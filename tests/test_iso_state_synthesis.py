@@ -31,14 +31,22 @@ from iso_state_synthesis.emitter import (
     _line_milling_trace_context,
     _line_milling_trace_motion_lines,
     _line_milling_trace_modes,
+    _line_milling_prepare_after_boring_lines,
     _linear_profile_program_point,
     _linear_profile_tangent_axis,
     _no_lead_compensation_points,
     _open_polyline_center_lead_geometry,
     _plan_work_groups,
     _polyline_side_compensation_leads,
+    _boring_to_router_cleanup_lines,
+    _boring_to_router_side_restore_lines,
+    _boring_to_router_top_face_lines,
     _router_inter_work_reset_lines,
+    _router_to_boring_transition_lines,
+    _side_drill_prepare_after_router_lines,
     _side_normal,
+    _tool_shift_lines,
+    _top_drill_prepare_after_router_base_lines,
     _trace_move_tangent_unit,
     _trace_point_tangent,
     _unit_vector,
@@ -470,6 +478,242 @@ class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
                 "M5",
                 "MLV=0",
                 "G0 G53 Z201.000",
+            ),
+        )
+
+    def test_router_to_boring_transition_lines_optionally_selects_top_face(self) -> None:
+        self.assertEqual(
+            _router_to_boring_transition_lines(),
+            (
+                "MLV=0",
+                "G0 G53 Z201.000",
+                "MLV=2",
+                "G61",
+                "MLV=0",
+                "?%ETK[13]=0",
+                "?%ETK[18]=0",
+                "G0 G53 Z201.000",
+                "G64",
+            ),
+        )
+        self.assertEqual(
+            _router_to_boring_transition_lines(include_face_selection=True),
+            (
+                "?%ETK[8]=1",
+                "G40",
+                "MLV=0",
+                "G0 G53 Z201.000",
+                "MLV=2",
+                "G61",
+                "MLV=0",
+                "?%ETK[13]=0",
+                "?%ETK[18]=0",
+                "G0 G53 Z201.000",
+                "G64",
+            ),
+        )
+
+    def test_boring_to_router_side_restore_lines_return_to_right_frame(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector(
+                (
+                    StateValue("pieza", "length", 200.0, _TEST_SOURCE),
+                    StateValue("pieza", "width", 100.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_x", 5.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_y", 7.0, _TEST_SOURCE),
+                )
+            ),
+            differentials=(),
+            final_state=StateVector((StateValue("pieza", "header_dz", 43.0, _TEST_SOURCE),)),
+        )
+        previous_prepare = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=0,
+            target_changes=(_change("trabajo", "plane", "Left"),),
+        )
+
+        self.assertEqual(
+            _boring_to_router_side_restore_lines(evaluation, previous_prepare),
+            (
+                "MLV=1",
+                "SHF[X]=-205.000",
+                "SHF[Y]=-1508.600",
+                "SHF[Z]=43.000+%ETK[114]/1000",
+                "?%ETK[7]=0",
+            ),
+        )
+        self.assertEqual(_boring_to_router_top_face_lines("side_drill"), ("?%ETK[8]=1", "G40"))
+        self.assertEqual(_boring_to_router_top_face_lines("top_drill"), ())
+
+    def test_boring_to_router_cleanup_lines_cover_top_and_slot_sources(self) -> None:
+        router_prepare = StageDifferential(
+            stage_key="line_milling_prepare",
+            family="line_milling",
+            order_index=0,
+            target_changes=(
+                _change("herramienta", "tool_number", 4),
+                _change("trabajo", "side_of_feature", "Left"),
+            ),
+        )
+        router_trace = StageDifferential(
+            stage_key="line_milling_trace",
+            family="line_milling",
+            order_index=1,
+            target_changes=(_change("movimiento", "profile_family", "OpenPolyline"),),
+        )
+
+        self.assertEqual(
+            _boring_to_router_cleanup_lines(
+                "top_drill",
+                router_prepare,
+                router_trace,
+                include_face_selection=True,
+            ),
+            (
+                "?%ETK[7]=0",
+                "?%ETK[8]=1",
+                "G40",
+                "?%ETK[17]=0",
+                "M5",
+                "?%ETK[0]=0",
+                "MLV=0",
+                "G0 G53 Z201.000",
+                "MLV=2",
+                "MLV=0",
+                "G0 G53 Z201.000",
+                "MLV=0",
+                "T4",
+                "SYN",
+                "M06",
+                "G61",
+                "G0 G53 Z201.000",
+                "G64",
+            ),
+        )
+        self.assertIn("?%ETK[1]=0", _boring_to_router_cleanup_lines("slot_milling", router_prepare, router_trace))
+
+    def test_line_milling_prepare_after_boring_lines_skip_top_tool_one_spindle(self) -> None:
+        previous_prepare = StageDifferential(
+            stage_key="top_drill_prepare",
+            family="top_drill",
+            order_index=0,
+            target_changes=(_change("herramienta", "spindle", 1),),
+        )
+        differential = StageDifferential(
+            stage_key="line_milling_prepare",
+            family="line_milling",
+            order_index=1,
+            target_changes=(
+                _change("herramienta", "tool_number", 4),
+                _change("herramienta", "spindle", 4),
+                _change("herramienta", "spindle_speed_standard", 18000),
+                _change("herramienta", "shf_x", -12.0),
+                _change("herramienta", "shf_y", -2.0),
+                _change("herramienta", "shf_z", -90.0),
+                _change("salida", "etk_9", 4),
+                _change("salida", "etk_18", 1),
+            ),
+        )
+
+        self.assertEqual(
+            _line_milling_prepare_after_boring_lines(
+                differential,
+                previous_family="top_drill",
+                previous_prepare=previous_prepare,
+            ),
+            (
+                "?%ETK[9]=4",
+                "?%ETK[18]=1",
+                "S18000M3",
+                "G17",
+                "MLV=2",
+                "?%ETK[13]=1",
+                "MLV=2",
+                "SHF[X]=-12.000",
+                "SHF[Y]=-2.000",
+                "SHF[Z]=-90.000",
+            ),
+        )
+
+    def test_top_drill_prepare_after_router_base_lines_insert_spindle_when_needed(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector((StateValue("pieza", "origin_z", 25.0, _TEST_SOURCE),)),
+            differentials=(),
+            final_state=StateVector(),
+        )
+        differential = StageDifferential(
+            stage_key="top_drill_prepare",
+            family="top_drill",
+            order_index=1,
+            target_changes=(_change("herramienta", "tool_name", "005"),),
+        )
+
+        self.assertEqual(
+            _top_drill_prepare_after_router_base_lines(evaluation, differential),
+            (
+                "MLV=1",
+                "SHF[Z]=25.000+%ETK[114]/1000",
+                "MLV=2",
+                "G17",
+                "?%ETK[6]=5",
+                "MLV=2",
+            ),
+        )
+
+    def test_tool_shift_lines_emit_xyz_shift_triplet(self) -> None:
+        differential = StageDifferential(
+            stage_key="top_drill_prepare",
+            family="top_drill",
+            order_index=1,
+            target_changes=(
+                _change("herramienta", "shf_x", -64.0),
+                _change("herramienta", "shf_y", 0.0),
+                _change("herramienta", "shf_z", -0.95),
+            ),
+        )
+
+        self.assertEqual(
+            _tool_shift_lines(differential),
+            ("SHF[X]=-64.000", "SHF[Y]=0.000", "SHF[Z]=-0.950"),
+        )
+
+    def test_side_drill_prepare_after_router_lines_emit_lateral_base_prepare(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector((StateValue("pieza", "origin_z", 25.0, _TEST_SOURCE),)),
+            differentials=(),
+            final_state=StateVector(),
+        )
+        differential = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=1,
+            target_changes=(
+                _change("herramienta", "spindle", 82),
+                _change("herramienta", "shf_x", -45.0),
+                _change("herramienta", "shf_y", -3.5),
+                _change("herramienta", "shf_z", -80.0),
+            ),
+        )
+
+        self.assertEqual(
+            _side_drill_prepare_after_router_lines(evaluation, differential),
+            (
+                "MLV=1",
+                "SHF[Z]=25.000+%ETK[114]/1000",
+                "MLV=2",
+                "G17",
+                "?%ETK[6]=82",
+                "MLV=2",
+                "SHF[X]=-45.000",
+                "SHF[Y]=-3.500",
+                "SHF[Z]=-80.000",
             ),
         )
 
