@@ -52,6 +52,16 @@ Ultima actualizacion: 2026-06-07
   `iso_state_synthesis.slot_milling_lines`.
 - El subcorte de modulo Work Groups mueve `_WorkGroup`, `_work_stage_groups` y
   `_plan_work_groups` a `iso_state_synthesis.work_groups`.
+- El subcorte de modulo Program Lines mueve cabecera, preambulo, marcos de
+  pieza, seleccion de cara y cierres comunes/empty/router a
+  `iso_state_synthesis.program_lines`.
+- El subcorte de modulo Boring Trace Lines mueve las trazas Top Drill y Side
+  Drill a `iso_state_synthesis.boring_trace_lines`, separadas por grupos de
+  rapido, modal y corte.
+- El subcorte de modulo Profile Milling Lines mueve la traza de perfil E001
+  normal y estrategia PH5 a `iso_state_synthesis.profile_milling_lines`.
+- Los helpers geometricos duplicados que quedaron sin consumidores fueron
+  retirados de `emitter.py` despues de extraer la traza de perfil.
 - Los builders de traza router cubren center con leads (`OpenPolyline`,
   `ClosedPolyline*`, `Circle`), estrategias, compensacion lateral, sin-leads
   generico y fallback final desde el nuevo modulo.
@@ -64,7 +74,8 @@ Ultima actualizacion: 2026-06-07
   scripts vivos que comparan corpus contra el sintetizador actual ya importan
   `comparison.py` y `work_groups.py` en lugar de depender de `emitter.py`.
 - Cobertura local del checkpoint: `tests.test_iso_state_synthesis` fija los
-  builders de movimiento router y los builders de boring head con tests puros.
+  builders de movimiento router, boring head, programa, trazas boring y perfil
+  con tests puros.
 
 ## Retiro De `iso_generation/`
 

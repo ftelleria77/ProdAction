@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import math
 import struct
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional
 
 from .boring_head_lines import (
     _side_drill_prepare_after_router_lines,
@@ -36,6 +35,7 @@ from .boring_head_lines import (
     _top_drill_previous_approach_reposition_line,
     _top_drill_reset_lines,
 )
+from .boring_trace_lines import _side_drill_trace_lines, _top_drill_trace_lines
 from .catalog import (
     block_id_for_stage_key,
     select_transition_id,
@@ -50,6 +50,24 @@ from .model import (
     StageDifferential,
     StateChange,
 )
+from .program_lines import (
+    _common_program_close_tail_lines,
+    _empty_piece_frame_lines,
+    _empty_program_close_tail_lines,
+    _empty_program_explicit_close_lines,
+    _face_selection_lines,
+    _is_mixed_side_close,
+    _lateral_program_close_frame_lines,
+    _lateral_program_close_reset_lines,
+    _machine_metric_mode_line,
+    _machine_preamble_template_lines,
+    _piece_frame_base_lines,
+    _program_close_xy_line,
+    _program_header_lines,
+    _router_program_close_lines,
+    _side_program_close_prefix_lines,
+)
+from .profile_milling_lines import _profile_milling_trace_lines
 from .router_milling_lines import (
     _line_milling_entry_lines,
     _line_milling_prepare_after_boring_lines,
@@ -765,14 +783,15 @@ def _emit_program_header(
     differential: StageDifferential,
     program_name: str,
 ) -> None:
-    dx = _change_after(differential, "pieza", "header_dx")
-    dy = _change_after(differential, "pieza", "header_dy")
-    dz = _change_after(differential, "pieza", "header_dz")
-    area = evaluation.initial_state.get("pieza", "execution_fields", "HG")
     source = _change_source(differential, "pieza", "header_dx")
+    header_name_line, header_dimension_line = _program_header_lines(
+        evaluation,
+        differential,
+        program_name,
+    )
     _append(
         lines,
-        f"% {program_name}.pgm",
+        header_name_line,
         differential,
         source,
         "Nombre normalizado del programa.",
@@ -781,10 +800,7 @@ def _emit_program_header(
     )
     _append(
         lines,
-        (
-            f";H DX={_fmt(dx)} DY={_fmt(dy)} DZ={_fmt(dz)} "
-            f"BX=0.000 BY=0.000 BZ=0.000 -{area} V=0 *MM C=0 T=0"
-        ),
+        header_dimension_line,
         differential,
         source,
         "Cabecera de pieza calculada desde dimensiones y origen.",
@@ -798,12 +814,7 @@ def _emit_machine_preamble(
     differential: StageDifferential,
 ) -> None:
     source = _change_source(differential, "maquina", "preamble_template")
-    for line in (
-        "?%ETK[500]=100",
-        "_paras( 0x00, X, 3, %ax[0].pa[21]/1000, %ETK[500] )",
-        "G0 G53 Z %ax[2].pa[22]/1000",
-        "M58",
-    ):
+    for line in _machine_preamble_template_lines():
         _append(
             lines,
             line,
@@ -814,7 +825,7 @@ def _emit_machine_preamble(
         )
     _append(
         lines,
-        "G71",
+        _machine_metric_mode_line(),
         differential,
         _change_source(differential, "maquina", "metric_mode"),
         "Modo metrico observado; fuente causal literal pendiente.",
@@ -830,15 +841,11 @@ def _emit_piece_frame(
     work_plane: str,
     work_family: str,
 ) -> None:
-    length = evaluation.initial_state.get("pieza", "length")
-    origin_x = evaluation.initial_state.get("pieza", "origin_x")
-    origin_z = evaluation.initial_state.get("pieza", "origin_z")
-    header_dz = evaluation.final_state.get("pieza", "header_dz")
     source = _observed_rule_source("piece_frame_hg")
-    frame_x = length + origin_x
+    frame_lines = _piece_frame_base_lines(evaluation)
     _append(
         lines,
-        "MLV=0",
+        frame_lines[0],
         differential,
         source,
         "Cambio modal de marco observado antes del marco HG.",
@@ -846,7 +853,7 @@ def _emit_piece_frame(
     )
     _append(
         lines,
-        f"%Or[0].ofX={_fmt_scaled(-frame_x)}",
+        frame_lines[1],
         differential,
         source,
         "Marco HG derivado de length + origin_x.",
@@ -855,7 +862,7 @@ def _emit_piece_frame(
     )
     _append(
         lines,
-        "%Or[0].ofY=-1515599.976",
+        frame_lines[2],
         differential,
         source,
         "Constante de campo HG observada; no depende de DY/origin_y en las seis variantes.",
@@ -864,14 +871,14 @@ def _emit_piece_frame(
     )
     _append(
         lines,
-        f"%Or[0].ofZ={_fmt_scaled(header_dz)}",
+        frame_lines[3],
         differential,
         source,
         "Marco HG derivado de depth + origin_z.",
         confidence="confirmed",
         rule_status="generalized_top_drill_001_006",
     )
-    for line in ("?%EDK[0].0=0", "?%EDK[1].0=0", "MLV=1"):
+    for line in frame_lines[4:7]:
         _append(
             lines,
             line,
@@ -882,7 +889,7 @@ def _emit_piece_frame(
         )
     _append(
         lines,
-        f"SHF[X]={_fmt(-frame_x)}",
+        frame_lines[7],
         differential,
         source,
         "Shift HG derivado de -(length + origin_x).",
@@ -891,7 +898,7 @@ def _emit_piece_frame(
     )
     _append(
         lines,
-        "SHF[Y]=-1515.600",
+        frame_lines[8],
         differential,
         source,
         "Constante de campo HG observada; se conserva al cambiar ancho, origen Y y punto Y.",
@@ -900,7 +907,7 @@ def _emit_piece_frame(
     )
     _append(
         lines,
-        f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
+        frame_lines[9],
         differential,
         source,
         "Marco HG derivado de dimensiones/origen donde ya hay triangulacion.",
@@ -929,7 +936,7 @@ def _emit_piece_frame(
     )
     _append(
         lines,
-        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
+        f"SHF[Z]={_fmt(evaluation.initial_state.get('pieza', 'origin_z'))}+%ETK[114]/1000",
         differential,
         source,
         "Z de origen de pieza antes de activar plano de herramienta.",
@@ -945,21 +952,9 @@ def _emit_empty_piece_frame(
     *,
     face_pair_count: int,
 ) -> None:
-    frame_x = _change_after(differential, "pieza", "header_dx")
-    header_dz = _change_after(differential, "pieza", "header_dz")
     source = _change_source(differential, "pieza", "header_dx")
-    for line in (
-        "MLV=0",
-        f"%Or[0].ofX={_fmt_scaled(-frame_x)}",
-        "%Or[0].ofY=-1515599.976",
-        f"%Or[0].ofZ={_fmt_scaled(header_dz)}",
-        "?%EDK[0].0=0",
-        "?%EDK[1].0=0",
-        "MLV=1",
-        f"SHF[X]={_fmt(-frame_x)}",
-        "SHF[Y]=-1515.600",
-        f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
-    ):
+    frame_lines = _empty_piece_frame_lines(differential, face_pair_count=face_pair_count)
+    for line in frame_lines[:10]:
         _append(
             lines,
             line,
@@ -969,48 +964,16 @@ def _emit_empty_piece_frame(
             confidence="confirmed",
             rule_status="generalized_empty_program",
         )
-    for _ in range(face_pair_count):
-        for line in ("?%ETK[8]=1", "G40"):
-            _append(
-                lines,
-                line,
-                differential,
-                source,
-                "Seleccion/reset de cara observado en programa sin mecanizados.",
-                confidence="confirmed",
-                rule_status="generalized_empty_program",
-            )
-
-
-def _face_selection_lines(evaluation: IsoStateEvaluation, work_plane: str) -> tuple[str, ...]:
-    lines: list[str] = ["?%ETK[8]=1", "G40", "?%ETK[8]=1", "G40"]
-    if work_plane == "Top":
-        if (
-            _work_family(evaluation) == "profile_milling"
-            and not _first_work_value(evaluation, "trabajo", "strategy", "")
-        ) or (
-            _work_family(evaluation) == "line_milling"
-            and _first_work_value(evaluation, "trabajo", "side_of_feature", "Center")
-            in {"Left", "Right"}
-        ):
-            lines.append("?%ETK[7]=0")
-        lines.extend(["?%ETK[8]=1", "G40"])
-        return tuple(lines)
-
-    side_etk8 = _side_value(evaluation, "trabajo", "side_etk8")
-    if work_plane in {"Left", "Back"}:
-        side_x, side_y = _side_plane_frame_shift(evaluation, work_plane)
-        header_dz = evaluation.final_state.get("pieza", "header_dz")
-        lines.extend(
-            [
-                "MLV=1",
-                f"SHF[X]={_fmt(side_x)}",
-                f"SHF[Y]={_fmt(side_y)}",
-                f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
-            ]
+    for line in frame_lines[10:]:
+        _append(
+            lines,
+            line,
+            differential,
+            source,
+            "Seleccion/reset de cara observado en programa sin mecanizados.",
+            confidence="confirmed",
+            rule_status="generalized_empty_program",
         )
-    lines.extend([f"?%ETK[8]={int(side_etk8)}", "G40"])
-    return tuple(lines)
 
 
 def _emit_side_plane_selection(
@@ -1541,19 +1504,13 @@ def _emit_top_drill_trace(
     combine_rapid_z: bool = False,
 ) -> None:
     approach = _trace_move(differential, "Approach")
-    trajectory = _trace_move(differential, "TrajectoryPath")
-    lift = _trace_move(differential, "Lift")
     source = approach.source or _observed_rule_source("top_drill_trace")
-    rapid_xy = approach.points[0]
-    rapid_z = approach.points[0].iso_z
-    cut_z = trajectory.points[-1].iso_z
-    lift_z = lift.points[-1].iso_z
-    feed = trajectory.feed
-    if combine_rapid_z:
-        rapid_lines = (f"G0 X{_fmt(rapid_xy.x)} Y{_fmt(rapid_xy.y)} Z{_fmt(rapid_z)}",)
-    else:
-        rapid_lines = (f"G0 X{_fmt(rapid_xy.x)} Y{_fmt(rapid_xy.y)}", f"G0 Z{_fmt(rapid_z)}")
-    for line in rapid_lines:
+    trace_lines = _top_drill_trace_lines(
+        differential,
+        emit_mlv_after_etk7=emit_mlv_after_etk7,
+        combine_rapid_z=combine_rapid_z,
+    )
+    for line in trace_lines.rapid:
         _append(
             lines,
             line,
@@ -1563,10 +1520,7 @@ def _emit_top_drill_trace(
             confidence="confirmed",
             rule_status="generalized_top_drill_001_006",
         )
-    modal_lines = ["?%ETK[7]=3"]
-    if emit_mlv_after_etk7:
-        modal_lines.append("MLV=2")
-    for line in modal_lines:
+    for line in trace_lines.modal:
         _append(
             lines,
             line,
@@ -1576,7 +1530,7 @@ def _emit_top_drill_trace(
             confidence="hypothesis",
             rule_status="modal_trace_hypothesis",
         )
-    for line in (f"G1 G9 Z{_fmt(cut_z)} F{_fmt(feed)}", f"G0 Z{_fmt(lift_z)}"):
+    for line in trace_lines.cutting:
         _append(
             lines,
             line,
@@ -1601,84 +1555,31 @@ def _emit_profile_milling_trace(
     evaluation: IsoStateEvaluation,
     differential: StageDifferential,
 ) -> None:
-    rapid_x = _change_after(differential, "movimiento", "rapid_x")
-    rapid_y = _change_after(differential, "movimiento", "rapid_y")
-    rapid_z = _change_after(differential, "movimiento", "rapid_z")
-    entry_x = _change_after(differential, "movimiento", "entry_x")
-    entry_y = _change_after(differential, "movimiento", "entry_y")
-    exit_x = _change_after(differential, "movimiento", "exit_x")
-    exit_y = _change_after(differential, "movimiento", "exit_y")
-    leadout_x = _change_after(differential, "movimiento", "leadout_x")
-    leadout_y = _change_after(differential, "movimiento", "leadout_y")
-    arc_i = _change_after(differential, "movimiento", "arc_i")
-    arc_j = _change_after(differential, "movimiento", "arc_j")
-    exit_arc_i = arc_i
-    exit_arc_j = arc_j
-    cut_z = _change_after(differential, "movimiento", "cut_z")
-    security_z = _change_after(differential, "movimiento", "security_z")
-    tool_radius = _change_after(differential, "herramienta", "tool_radius")
-    plunge_feed = _change_after(differential, "movimiento", "plunge_feed")
-    milling_feed = _change_after(differential, "movimiento", "milling_feed")
-    contour_points = _change_after(differential, "movimiento", "contour_points")
-    compensation_code = str(_change_after(differential, "salida", "compensation_code"))
-    arc_code = str(_change_after(differential, "salida", "arc_code"))
-    approach_enabled = bool(_change_after(differential, "trabajo", "approach_enabled"))
-    approach_type = str(_change_after(differential, "trabajo", "approach_type"))
-    approach_mode = str(_change_after(differential, "trabajo", "approach_mode"))
-    strategy_name = str(_change_after(differential, "trabajo", "strategy"))
-    retract_enabled = bool(_change_after(differential, "trabajo", "retract_enabled"))
-    retract_type = str(_change_after(differential, "trabajo", "retract_type"))
-    retract_mode = str(_change_after(differential, "trabajo", "retract_mode"))
-    tool_offset = _change_after(differential, "herramienta", "tool_offset_length")
     source = _change_source(differential, "movimiento", "cut_z")
-    if strategy_name:
-        _emit_profile_milling_strategy_trace(
-            lines,
-            differential,
-            rapid_z=rapid_z,
-            security_z=security_z,
-            tool_offset=tool_offset,
-            tool_radius=tool_radius,
-            plunge_feed=plunge_feed,
-            milling_feed=milling_feed,
-            contour_points=contour_points,
-        )
-        return
-    approach_primitives = tuple(_optional_change_after(differential, "movimiento", "approach_primitives", ()))
-    lift_primitives = tuple(_optional_change_after(differential, "movimiento", "lift_primitives", ()))
-    if approach_enabled and retract_enabled and approach_type == "Arc" and retract_type == "Arc":
-        try:
-            lead_geometry = _profile_arc_leads_from_pgmxd_toolpaths(
-                contour_points,
-                approach_primitives,
-                lift_primitives,
-                float(tool_radius),
-                arc_code,
+    trace_lines = _profile_milling_trace_lines(differential)
+    if trace_lines.mode == "strategy":
+        for line in trace_lines.setup:
+            _append(
+                lines,
+                line,
+                differential,
+                source,
+                "Entrada E001 PH5 derivada de toolpath Maestro.",
+                confidence="confirmed",
+                rule_status="generalized_profile_milling_e001_ph5",
             )
-        except IsoCandidateEmissionError as exc:
-            if "radio cero" not in str(exc):
-                raise
-            lead_geometry = None
-        if lead_geometry is not None:
-            rapid_x, rapid_y = lead_geometry["rapid"]
-            entry_x, entry_y = lead_geometry["entry"]
-            exit_x, exit_y = lead_geometry["exit"]
-            leadout_x, leadout_y = lead_geometry["leadout"]
-            arc_i, arc_j = lead_geometry["approach_center"]
-            exit_arc_i, exit_arc_j = lead_geometry["retract_center"]
-
-    for line in (
-        f"G0 X{_fmt(rapid_x)} Y{_fmt(rapid_y)}",
-        f"G0 Z{_fmt(rapid_z)}",
-        "D1",
-        f"SVL {_fmt(tool_offset)}",
-        f"VL6={_fmt(tool_offset)}",
-        f"SVR {_fmt(tool_radius)}",
-        f"VL7={_fmt(tool_radius)}",
-        "?%ETK[7]=4",
-        compensation_code,
-        f"G1 X{_fmt(entry_x)} Y{_fmt(entry_y)} Z{_fmt(security_z)} F{_fmt(plunge_feed)}",
-    ):
+        for line in trace_lines.toolpath:
+            _append(
+                lines,
+                line,
+                differential,
+                source,
+                "Traza E001 PH5 derivada de toolpaths Maestro.",
+                confidence="confirmed",
+                rule_status="generalized_profile_milling_e001_ph5",
+            )
+        return
+    for line in trace_lines.setup:
         _append(
             lines,
             line,
@@ -1688,42 +1589,7 @@ def _emit_profile_milling_trace(
             confidence="confirmed",
             rule_status="generalized_profile_milling_e001",
         )
-
-    start_x, start_y = contour_points[0]
-    if not approach_enabled:
-        entry_lines = (f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}",)
-    elif approach_type == "Line":
-        line = _line_milling_motion_line(
-            float(start_x),
-            float(start_y),
-            float(cut_z),
-            float(entry_x),
-            float(entry_y),
-            float(security_z),
-            float(plunge_feed),
-        )
-        if approach_mode == "Down":
-            entry_lines = (line,)
-        else:
-            entry_lines = (f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}", line)
-    elif approach_mode == "Down":
-        entry_lines = (
-            _profile_milling_arc_line(
-                arc_code,
-                start_x,
-                start_y,
-                arc_i,
-                arc_j,
-                plunge_feed,
-                z=cut_z,
-            ),
-        )
-    else:
-        entry_lines = (
-            f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}",
-            _profile_milling_arc_line(arc_code, start_x, start_y, arc_i, arc_j, plunge_feed),
-        )
-    for line in entry_lines:
+    for line in trace_lines.entry:
         _append(
             lines,
             line,
@@ -1733,21 +1599,7 @@ def _emit_profile_milling_trace(
             confidence="confirmed",
             rule_status="generalized_profile_milling_e001",
         )
-
-    current_x = float(start_x)
-    current_y = float(start_y)
-    current_z = float(cut_z)
-    for point in contour_points[1:]:
-        x, y = point
-        line = _line_milling_motion_line(
-            float(x),
-            float(y),
-            float(cut_z),
-            current_x,
-            current_y,
-            current_z,
-            float(milling_feed),
-        )
+    for line in trace_lines.contour:
         _append(
             lines,
             line,
@@ -1757,54 +1609,7 @@ def _emit_profile_milling_trace(
             confidence="confirmed",
             rule_status="generalized_profile_milling_e001",
         )
-        current_x = float(x)
-        current_y = float(y)
-        current_z = float(cut_z)
-
-    if not retract_enabled:
-        exit_lines = (f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}",)
-    elif retract_type == "Line":
-        line = _line_milling_motion_line(
-            float(exit_x),
-            float(exit_y),
-            float(cut_z),
-            current_x,
-            current_y,
-            current_z,
-            float(milling_feed),
-        )
-        if retract_mode == "Up":
-            exit_lines = (
-                _line_milling_motion_line(
-                    float(exit_x),
-                    float(exit_y),
-                    float(security_z),
-                    current_x,
-                    current_y,
-                    current_z,
-                    float(milling_feed),
-                ),
-            )
-        else:
-            exit_lines = (line, f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}")
-    elif retract_mode == "Up":
-        exit_lines = (
-            _profile_milling_arc_line(
-                arc_code,
-                exit_x,
-                exit_y,
-                exit_arc_i,
-                exit_arc_j,
-                milling_feed,
-                z=security_z,
-            ),
-        )
-    else:
-        exit_lines = (
-            _profile_milling_arc_line(arc_code, exit_x, exit_y, exit_arc_i, exit_arc_j, milling_feed),
-            f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}",
-        )
-    for line in exit_lines:
+    for line in trace_lines.exit:
         _append(
             lines,
             line,
@@ -1814,11 +1619,7 @@ def _emit_profile_milling_trace(
             confidence="confirmed",
             rule_status="generalized_profile_milling_e001",
         )
-
-    for line in (
-        "G40",
-        f"G1 X{_fmt(leadout_x)} Y{_fmt(leadout_y)} Z{_fmt(security_z)} F{_fmt(milling_feed)}",
-    ):
+    for line in trace_lines.leadout:
         _append(
             lines,
             line,
@@ -1827,120 +1628,6 @@ def _emit_profile_milling_trace(
             "Alejamiento E001 posterior a cancelar compensacion.",
             confidence="confirmed",
             rule_status="generalized_profile_milling_e001",
-        )
-
-
-def _emit_profile_milling_strategy_trace(
-    lines: list[ExplainedIsoLine],
-    differential: StageDifferential,
-    *,
-    rapid_z: object,
-    security_z: object,
-    tool_offset: object,
-    tool_radius: object,
-    plunge_feed: object,
-    milling_feed: object,
-    contour_points: object,
-) -> None:
-    approach = _trace_move(differential, "Approach")
-    trajectory = _trace_move(differential, "TrajectoryPath")
-    lift = _trace_move(differential, "Lift")
-    if not approach.points or not trajectory.points or not lift.points:
-        raise IsoCandidateEmissionError("La estrategia E001 PH5 no contiene toolpaths completos.")
-    source = _change_source(differential, "movimiento", "cut_z")
-    rapid_point = approach.points[0]
-
-    for line in (
-        f"G0 X{_fmt(rapid_point.x)} Y{_fmt(rapid_point.y)}",
-        f"G0 Z{_fmt(rapid_z)}",
-        "D1",
-        f"SVL {_fmt(tool_offset)}",
-        f"VL6={_fmt(tool_offset)}",
-        f"SVR {_fmt(tool_radius)}",
-        f"VL7={_fmt(tool_radius)}",
-        f"G1 Z{_fmt(security_z)} F{_fmt(plunge_feed)}",
-        "?%ETK[7]=4",
-    ):
-        _append(
-            lines,
-            line,
-            differential,
-            source,
-            "Entrada E001 PH5 derivada de toolpath Maestro.",
-            confidence="confirmed",
-            rule_status="generalized_profile_milling_e001_ph5",
-        )
-
-    current_x = float(rapid_point.x)
-    current_y = float(rapid_point.y)
-    current_z = float(security_z)
-    start_x, _ = contour_points[0]
-
-    generated: list[str] = []
-    for point in approach.points[1:]:
-        line = _profile_toolpath_motion_line(
-            point,
-            current_x,
-            current_y,
-            current_z,
-            float(milling_feed),
-            center=(
-                (float(start_x), float(_change_after(differential, "movimiento", "arc_j")))
-                if _xy_changed(current_x, current_y, point)
-                else None
-            ),
-        )
-        generated.append(line)
-        current_x = float(point.x)
-        current_y = float(point.y)
-        current_z = float(point.iso_z)
-
-    for point in trajectory.points[1:]:
-        center = None
-        if _xy_changed(current_x, current_y, point):
-            center = _profile_corner_center(current_x, current_y, float(point.x), float(point.y), contour_points)
-        generated.append(
-            _profile_toolpath_motion_line(
-                point,
-                current_x,
-                current_y,
-                current_z,
-                float(milling_feed),
-                center=center,
-            )
-        )
-        current_x = float(point.x)
-        current_y = float(point.y)
-        current_z = float(point.iso_z)
-
-    for point in lift.points[1:]:
-        center = None
-        if _xy_changed(current_x, current_y, point):
-            center = (float(start_x), float(point.y))
-        generated.append(
-            _profile_toolpath_motion_line(
-                point,
-                current_x,
-                current_y,
-                current_z,
-                float(milling_feed),
-                center=center,
-            )
-        )
-        current_x = float(point.x)
-        current_y = float(point.y)
-        current_z = float(point.iso_z)
-    generated.append(f"G0 Z{_fmt(security_z)}")
-
-    for line in generated:
-        _append(
-            lines,
-            line,
-            differential,
-            source,
-            "Traza E001 PH5 derivada de toolpaths Maestro.",
-            confidence="confirmed",
-            rule_status="generalized_profile_milling_e001_ph5",
         )
 
 
@@ -2955,28 +2642,14 @@ def _emit_side_drill_trace(
     combine_rapid_z: bool = False,
     fixed_override: Optional[float] = None,
 ) -> None:
-    axis = str(_change_after(differential, "movimiento", "side_axis"))
-    rapid = _change_after(differential, "movimiento", "side_rapid")
-    cut = _change_after(differential, "movimiento", "side_cut")
-    fixed = (
-        fixed_override
-        if fixed_override is not None
-        else _change_after(differential, "movimiento", "side_fixed")
+    trace_lines = _side_drill_trace_lines(
+        differential,
+        fixed_override=fixed_override,
+        emit_mlv_after_etk7=emit_mlv_after_etk7,
+        combine_rapid_z=combine_rapid_z,
     )
-    z = _change_after(differential, "movimiento", "side_z")
-    feed = _change_after(differential, "movimiento", "side_feed")
     source = _change_source(differential, "movimiento", "side_iso_rule")
-    if axis == "X":
-        rapid_line = f"G0 X{_fmt(rapid)} Y{_fmt(fixed)}"
-        rapid_z_line = f"G0 X{_fmt(rapid)} Y{_fmt(fixed)} Z{_fmt(z)}" if combine_rapid_z else f"G0 Z{_fmt(z)}"
-        cut_line = f"G1 G9 X{_fmt(cut)} F{_fmt(feed)}"
-        retract_line = f"G0 X{_fmt(rapid)} Z{_fmt(z)}"
-    else:
-        rapid_line = f"G0 X{_fmt(fixed)} Y{_fmt(rapid)}"
-        rapid_z_line = f"G0 X{_fmt(fixed)} Y{_fmt(rapid)} Z{_fmt(z)}" if combine_rapid_z else f"G0 Z{_fmt(z)}"
-        cut_line = f"G1 G9 Y{_fmt(cut)} F{_fmt(feed)}"
-        retract_line = f"G0 Y{_fmt(rapid)} Z{_fmt(z)}"
-    for line in (rapid_z_line,) if combine_rapid_z else (rapid_line, rapid_z_line):
+    for line in trace_lines.rapid:
         _append(
             lines,
             line,
@@ -2986,8 +2659,7 @@ def _emit_side_drill_trace(
             confidence="confirmed",
             rule_status="generalized_side_drill_010_013",
         )
-    modal_lines = ("?%ETK[7]=3", "MLV=2") if emit_mlv_after_etk7 else ("?%ETK[7]=3",)
-    for line in modal_lines:
+    for line in trace_lines.modal:
         _append(
             lines,
             line,
@@ -2997,7 +2669,7 @@ def _emit_side_drill_trace(
             confidence="hypothesis",
             rule_status="modal_trace_hypothesis",
         )
-    for line in (cut_line, retract_line):
+    for line in trace_lines.cutting:
         _append(
             lines,
             line,
@@ -3095,22 +2767,7 @@ def _emit_program_close(
     plane = plane_override if plane_override is not None else _work_plane(evaluation)
     family = family_override if family_override is not None else _work_family(evaluation)
     if family in _ROUTER_MILLING_FAMILIES:
-        close_x = _optional_change_after(differential, "movimiento", "program_close_x", -3700.0)
-        close_y = _optional_change_after(differential, "movimiento", "program_close_y", None)
-        close_xy_line = f"G0 G53 X{_fmt(close_x)}"
-        if close_y is not None:
-            close_xy_line += f" Y{_fmt(close_y)}"
-        for line in (
-            "G61",
-            "MLV=0",
-            "?%ETK[13]=0",
-            "?%ETK[18]=0",
-            "M5",
-            "D0",
-            "G0 G53 Z201.000",
-            close_xy_line,
-            "G64",
-        ):
+        for line in _router_program_close_lines(differential):
             _append(
                 lines,
                 line,
@@ -3120,18 +2777,8 @@ def _emit_program_close(
                 rule_status="machine_close_observed",
             )
     else:
-        close_x = _optional_change_after(differential, "movimiento", "program_close_x", -3700.0)
-        close_y = _optional_change_after(differential, "movimiento", "program_close_y", None)
-        close_xy_line = f"G0 G53 X{_fmt(close_x)}"
-        if close_y is not None:
-            close_xy_line += f" Y{_fmt(close_y)}"
-        mixed_side_close = (
-            plane == "Right"
-            and _has_non_side_work(evaluation)
-            and float(close_x) != -3700.0
-            and close_y is None
-        )
-        if mixed_side_close:
+        close_xy_line = _program_close_xy_line(differential)
+        if _is_mixed_side_close(evaluation, differential, plane):
             _emit_side_program_close_prefix(lines, differential, plane)
             close_lines = (close_xy_line, "G64")
         else:
@@ -3139,44 +2786,26 @@ def _emit_program_close(
         for line in close_lines:
             _append(lines, line, differential, source, "Cierre comun observado.", rule_status="machine_close_observed")
     if family not in _ROUTER_MILLING_FAMILIES and plane != "Top":
-        if plane in {"Left", "Back"}:
-            length = evaluation.initial_state.get("pieza", "length")
-            origin_x = evaluation.initial_state.get("pieza", "origin_x")
-            origin_y = evaluation.initial_state.get("pieza", "origin_y")
-            header_dz = evaluation.final_state.get("pieza", "header_dz")
-            for line in (
-                "MLV=1",
-                f"SHF[X]={_fmt(-(length + origin_x))}",
-                f"SHF[Y]={_fmt(_base_shf_y(origin_y))}",
-                f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
-            ):
-                _append(
-                    lines,
-                    line,
-                    differential,
-                    source,
-                    "Reentrada de marco lateral antes del cierre comun.",
-                    rule_status="machine_close_observed",
-                )
+        for line in _lateral_program_close_frame_lines(evaluation, plane):
+            _append(
+                lines,
+                line,
+                differential,
+                source,
+                "Reentrada de marco lateral antes del cierre comun.",
+                rule_status="machine_close_observed",
+            )
+        reset_lines = _lateral_program_close_reset_lines(plane)
         _append(
             lines,
-            "G61",
+            reset_lines[0],
             differential,
             source,
             "Reset lateral observado antes del cierre comun.",
             confidence="hypothesis",
             rule_status="modal_reset_hypothesis",
         )
-        if plane in {"Left", "Back"}:
-            _append(
-                lines,
-                "MLV=0",
-                differential,
-                source,
-                "Reset lateral observado antes del cierre comun.",
-                rule_status="machine_close_observed",
-            )
-        for line in ("D0", "G0 G53 Z201.000", "G64"):
+        for line in reset_lines[1:]:
             _append(
                 lines,
                 line,
@@ -3185,7 +2814,8 @@ def _emit_program_close(
                 "Reset lateral observado antes del cierre comun.",
                 rule_status="machine_close_observed",
             )
-    for line in ("SYN",):
+    close_tail_lines = _common_program_close_tail_lines()
+    for line in close_tail_lines[:1]:
         _append(
             lines,
             line,
@@ -3195,29 +2825,7 @@ def _emit_program_close(
             confidence="hypothesis",
             rule_status="machine_close_hypothesis",
         )
-    for line in (
-        "?%ETK[0]=0",
-        "?%ETK[1]=0",
-        "?%ETK[2]=0",
-        "?%ETK[13]=0",
-        "?%ETK[17]=0",
-        "?%ETK[18]=0",
-        "?%ETK[19]=0",
-        "?%EDK[13].0=1",
-        "MLV=1",
-        "SHF[X]=0",
-        "SHF[Y]=0",
-        "SHF[Z]=0",
-        "MLV=2",
-        "SHF[X]=0",
-        "SHF[Y]=0",
-        "SHF[Z]=0",
-        "MLV=0",
-        "VL6=0",
-        "VL7=0",
-        "?%EDK[13].0=0",
-        "M2",
-    ):
+    for line in close_tail_lines[1:]:
         _append(lines, line, differential, source, "Cierre comun observado.", rule_status="machine_close_observed")
 
 
@@ -3227,21 +2835,7 @@ def _emit_side_program_close_prefix(
     plane: str,
 ) -> None:
     source = _observed_rule_source("side_program_close")
-    for line in (
-        "G0 G53 Z201.000",
-        "G64",
-        f"?%ETK[8]={_side_etk8_for_plane(plane)}",
-        "G40",
-        "MLV=0",
-        "G0 G53 Z201.000",
-        "MLV=0",
-        "T1",
-        "SYN",
-        "M06",
-        "G61",
-        "D0",
-        "G0 G53 Z201.000",
-    ):
+    for line in _side_program_close_prefix_lines(plane):
         _append(
             lines,
             line,
@@ -3262,15 +2856,7 @@ def _emit_empty_program_close(
 ) -> None:
     source = _observed_rule_source("empty_program_close")
     if explicit_close:
-        close_x = _optional_change_after(differential, "movimiento", "program_close_x", -3700.0)
-        for line in (
-            "G61",
-            "MLV=0",
-            "D0",
-            "G0 G53 Z201.000",
-            f"G0 G53 X{_fmt(close_x)}",
-            "G64",
-        ):
+        for line in _empty_program_explicit_close_lines(differential):
             _append(
                 lines,
                 line,
@@ -3280,30 +2866,7 @@ def _emit_empty_program_close(
                 confidence="confirmed",
                 rule_status="generalized_empty_program",
             )
-    for line in (
-        "SYN",
-        "?%ETK[0]=0",
-        "?%ETK[1]=0",
-        "?%ETK[2]=0",
-        "?%ETK[13]=0",
-        "?%ETK[17]=0",
-        "?%ETK[18]=0",
-        "?%ETK[19]=0",
-        "?%EDK[13].0=1",
-        "MLV=1",
-        "SHF[X]=0",
-        "SHF[Y]=0",
-        "SHF[Z]=0",
-        "MLV=2",
-        "SHF[X]=0",
-        "SHF[Y]=0",
-        "SHF[Z]=0",
-        "MLV=0",
-        "VL6=0",
-        "VL7=0",
-        "?%EDK[13].0=0",
-        "M2",
-    ):
+    for line in _empty_program_close_tail_lines():
         _append(
             lines,
             line,
@@ -3506,669 +3069,8 @@ def _mirrored_side_fixed(
     return sign * (span - abs(fixed))
 
 
-def _polyline_leaves_workpiece(
-    evaluation: IsoStateEvaluation,
-    points: Sequence[tuple[float, float]],
-) -> bool:
-    length = float(evaluation.initial_state.get("pieza", "length"))
-    width = float(evaluation.initial_state.get("pieza", "width"))
-    tolerance = 0.0005
-    return any(
-        x < -tolerance
-        or y < -tolerance
-        or x > length + tolerance
-        or y > width + tolerance
-        for x, y in points
-    )
-
-
-def _side_etk8_for_plane(plane_name: str) -> int:
-    return {
-        "Left": 3,
-        "Right": 2,
-        "Front": 5,
-        "Back": 4,
-    }.get(plane_name, 1)
-
-
 def _base_shf_y(origin_y: object = 0.0) -> float:
     return -1515.6 + float(origin_y)
-
-
-def _line_milling_motion_line(
-    x: float,
-    y: float,
-    z: float,
-    previous_x: float,
-    previous_y: float,
-    previous_z: float,
-    feed: float,
-    *,
-    always_include_z: bool = True,
-) -> str:
-    words = ["G1"]
-    if abs(x - previous_x) >= 0.0005:
-        words.append(f"X{_fmt(x)}")
-    if abs(y - previous_y) >= 0.0005:
-        words.append(f"Y{_fmt(y)}")
-    if always_include_z or abs(z - previous_z) >= 0.0005:
-        words.append(f"Z{_fmt(z)}")
-    words.append(f"F{_fmt(feed)}")
-    return " ".join(words)
-
-
-def _linear_side_compensation_rapid_point(
-    nominal_points: tuple[tuple[float, float], ...],
-    approach: object,
-) -> tuple[float, float]:
-    axis = _linear_profile_tangent_axis(nominal_points)
-    entry_tangent = _trace_point_tangent(approach.points[0], axis)
-    approach_unit = _trace_move_tangent_unit(approach, axis)
-    return _linear_profile_program_point(
-        nominal_points,
-        entry_tangent - approach_unit,
-        axis,
-    )
-
-
-def _linear_side_compensation_motion_lines(
-    nominal_points: tuple[tuple[float, float], ...],
-    approach: object,
-    lift: object,
-    compensation_code: str,
-    security_z: float,
-    cut_z: float,
-    plunge_feed: float,
-    milling_feed: float,
-    *,
-    include_cut_z: bool,
-) -> tuple[str, ...]:
-    if len(nominal_points) < 2:
-        raise IsoCandidateEmissionError("El perfil lineal compensado no contiene puntos suficientes.")
-    axis = _linear_profile_tangent_axis(nominal_points)
-    entry_tangent = _trace_point_tangent(approach.points[0], axis)
-    entry_x, entry_y = _linear_profile_program_point(nominal_points, entry_tangent, axis)
-    start_x, start_y = nominal_points[0]
-    generated = [
-        "?%ETK[7]=4",
-        compensation_code,
-        f"G1 X{_fmt(entry_x)} Y{_fmt(entry_y)} Z{_fmt(security_z)} F{_fmt(plunge_feed)}",
-    ]
-    current_x = entry_x
-    current_y = entry_y
-    current_z = security_z
-    generated.append(
-        _line_milling_motion_line(
-            start_x,
-            start_y,
-            cut_z,
-            current_x,
-            current_y,
-            current_z,
-            plunge_feed,
-        )
-    )
-    current_x = start_x
-    current_y = start_y
-    current_z = cut_z
-    for point in nominal_points[1:]:
-        generated.append(
-            _line_milling_motion_line(
-                point[0],
-                point[1],
-                cut_z,
-                current_x,
-                current_y,
-                current_z,
-                milling_feed,
-                always_include_z=include_cut_z,
-            )
-        )
-        current_x, current_y = point
-    current_z = cut_z
-    lift_tangent = _trace_point_tangent(lift.points[-1], axis)
-    lift_x, lift_y = _linear_profile_program_point(nominal_points, lift_tangent, axis)
-    generated.append(
-        _line_milling_motion_line(
-            lift_x,
-            lift_y,
-            security_z,
-            current_x,
-            current_y,
-            current_z,
-            milling_feed,
-        )
-    )
-    current_z = security_z
-    current_x = lift_x
-    current_y = lift_y
-    lift_unit = _trace_move_tangent_unit(lift, axis)
-    leadout_x, leadout_y = _linear_profile_program_point(
-        nominal_points,
-        lift_tangent + lift_unit,
-        axis,
-    )
-    generated.extend(
-        (
-            "G40",
-            f"G1 X{_fmt(leadout_x)} Y{_fmt(leadout_y)} Z{_fmt(current_z)} F{_fmt(milling_feed)}",
-        )
-    )
-    return tuple(generated)
-
-
-def _linear_profile_tangent_axis(points: tuple[tuple[float, float], ...]) -> str:
-    if len(points) < 2:
-        raise IsoCandidateEmissionError("El perfil lineal no contiene puntos suficientes.")
-    start_x, start_y = points[0]
-    end_x, end_y = points[-1]
-    return "X" if abs(end_x - start_x) >= abs(end_y - start_y) else "Y"
-
-
-def _linear_profile_program_point(
-    points: tuple[tuple[float, float], ...],
-    tangent: float,
-    axis: str,
-) -> tuple[float, float]:
-    if axis == "X":
-        return tangent, points[0][1]
-    return points[0][0], tangent
-
-
-def _trace_point_tangent(point: object, axis: str) -> float:
-    value = getattr(point, axis.lower(), None)
-    if value is None:
-        raise IsoCandidateEmissionError(f"El toolpath lineal compensado no contiene eje {axis}.")
-    return float(value)
-
-
-def _trace_move_tangent_unit(move: object, axis: str) -> float:
-    if len(move.points) < 2:
-        raise IsoCandidateEmissionError("El lead lineal compensado no contiene puntos suficientes.")
-    start = _trace_point_tangent(move.points[0], axis)
-    end = _trace_point_tangent(move.points[-1], axis)
-    distance = end - start
-    if abs(distance) < 0.0005:
-        raise IsoCandidateEmissionError("El lead lineal compensado no desplaza sobre el eje de corte.")
-    return 1.0 if distance > 0.0 else -1.0
-
-
-def _no_lead_compensation_points(
-    points: tuple[tuple[float, float], ...],
-    tool_radius: float,
-    profile_family: str,
-    profile_winding: str,
-) -> tuple[tuple[float, float], tuple[float, float]]:
-    if len(points) < 2:
-        raise IsoCandidateEmissionError("La traza sin lead no contiene puntos nominales suficientes.")
-    lead = 1.0
-    start_x, start_y = points[0]
-    end_x, end_y = points[-1]
-    if profile_family == "Circle":
-        direction = -1.0 if profile_winding == "CounterClockwise" else 1.0
-        return (start_x, start_y + direction * lead), (end_x, end_y - direction * lead)
-    first_dx, first_dy = _unit_vector(points[0], points[1])
-    last_dx, last_dy = _unit_vector(points[-2], points[-1])
-    return (
-        (start_x - first_dx * lead, start_y - first_dy * lead),
-        (end_x + last_dx * lead, end_y + last_dy * lead),
-    )
-
-
-def _polyline_side_compensation_leads(
-    points: tuple[tuple[float, float], ...],
-    tool_radius: float,
-    side_of_feature: str,
-    approach_type: str,
-    radius_multiplier: float,
-) -> dict[str, tuple[float, float]]:
-    if len(points) < 2:
-        raise IsoCandidateEmissionError("La polilinea compensada no contiene puntos nominales suficientes.")
-    lead_distance = float(tool_radius) * float(radius_multiplier)
-    rapid_extra = 1.0
-    first_dx, first_dy = _unit_vector(points[0], points[1])
-    last_dx, last_dy = _unit_vector(points[-2], points[-1])
-    start_x, start_y = points[0]
-    end_x, end_y = points[-1]
-    if approach_type == "Arc":
-        start_nx, start_ny = _side_normal(first_dx, first_dy, side_of_feature)
-        end_nx, end_ny = _side_normal(last_dx, last_dy, side_of_feature)
-        entry_center = (
-            start_x + start_nx * lead_distance,
-            start_y + start_ny * lead_distance,
-        )
-        entry = (
-            entry_center[0] - first_dx * lead_distance,
-            entry_center[1] - first_dy * lead_distance,
-        )
-        exit_center = (
-            end_x + end_nx * lead_distance,
-            end_y + end_ny * lead_distance,
-        )
-        exit_point = (
-            exit_center[0] + last_dx * lead_distance,
-            exit_center[1] + last_dy * lead_distance,
-        )
-        return {
-            "entry_rapid": (entry[0] + start_nx * rapid_extra, entry[1] + start_ny * rapid_extra),
-            "entry": entry,
-            "entry_center": entry_center,
-            "exit": exit_point,
-            "exit_center": exit_center,
-            "exit_rapid": (exit_point[0] + end_nx * rapid_extra, exit_point[1] + end_ny * rapid_extra),
-        }
-    return {
-        "entry_rapid": (
-            start_x - first_dx * (lead_distance + rapid_extra),
-            start_y - first_dy * (lead_distance + rapid_extra),
-        ),
-        "entry": (
-            start_x - first_dx * lead_distance,
-            start_y - first_dy * lead_distance,
-        ),
-        "exit": (
-            end_x + last_dx * lead_distance,
-            end_y + last_dy * lead_distance,
-        ),
-        "exit_rapid": (
-            end_x + last_dx * (lead_distance + rapid_extra),
-            end_y + last_dy * (lead_distance + rapid_extra),
-        ),
-    }
-
-
-def _side_normal(dx: float, dy: float, side_of_feature: str) -> tuple[float, float]:
-    if side_of_feature == "Left":
-        return -dy, dx
-    return dy, -dx
-
-
-def _unit_vector(
-    start: tuple[float, float],
-    end: tuple[float, float],
-) -> tuple[float, float]:
-    dx = end[0] - start[0]
-    dy = end[1] - start[1]
-    length = math.hypot(dx, dy)
-    if length < 0.0005:
-        raise IsoCandidateEmissionError("Segmento de trayectoria con longitud cero.")
-    return dx / length, dy / length
-
-
-def _profile_arc_leads_from_pgmxd_toolpaths(
-    contour_points: object,
-    approach_primitives: tuple[tuple[object, ...], ...],
-    lift_primitives: tuple[tuple[object, ...], ...],
-    tool_radius: float,
-    arc_code: str,
-) -> dict[str, tuple[float, float]]:
-    approach_arc = _first_arc_primitive(approach_primitives)
-    retract_arc = _first_arc_primitive(lift_primitives)
-    entry = _programmed_arc_point_from_centerline(approach_arc, "start", tool_radius)
-    contour_entry = _programmed_arc_point_from_centerline(approach_arc, "end", tool_radius)
-    contour_exit = _programmed_arc_point_from_centerline(retract_arc, "start", tool_radius)
-    exit_point = _programmed_arc_point_from_centerline(retract_arc, "end", tool_radius)
-    approach_center = _primitive_center_xy(approach_arc)
-    retract_center = _primitive_center_xy(retract_arc)
-    entry_tangent = _arc_forward_tangent(arc_code, approach_center, entry)
-    exit_tangent = _arc_forward_tangent(arc_code, retract_center, exit_point)
-    rapid = (entry[0] - entry_tangent[0], entry[1] - entry_tangent[1])
-    leadout = (exit_point[0] + exit_tangent[0], exit_point[1] + exit_tangent[1])
-    return {
-        "rapid": rapid,
-        "entry": entry,
-        "contour_entry": contour_entry,
-        "exit_start": contour_exit,
-        "exit": exit_point,
-        "leadout": leadout,
-        "approach_center": approach_center,
-        "retract_center": retract_center,
-    }
-
-
-def _first_arc_primitive(
-    primitives: tuple[tuple[object, ...], ...],
-) -> tuple[object, ...]:
-    for primitive in primitives:
-        if primitive and str(primitive[0]) == "Arc":
-            return primitive
-    raise IsoCandidateEmissionError("El perfil E001 indica arco pero el PGMX no trae primitiva Arc.")
-
-
-def _primitive_center_xy(primitive: tuple[object, ...]) -> tuple[float, float]:
-    if primitive[7] is None or primitive[8] is None:
-        raise IsoCandidateEmissionError("La primitiva Arc del PGMX no trae centro.")
-    return float(primitive[7]), float(primitive[8])
-
-
-def _programmed_arc_point_from_centerline(
-    primitive: tuple[object, ...],
-    endpoint: str,
-    tool_radius: float,
-) -> tuple[float, float]:
-    center_x, center_y = _primitive_center_xy(primitive)
-    if endpoint == "start":
-        point_x, point_y = float(primitive[1]), float(primitive[2])
-    elif endpoint == "end":
-        point_x, point_y = float(primitive[4]), float(primitive[5])
-    else:
-        raise IsoCandidateEmissionError(f"Endpoint de arco no soportado: {endpoint}.")
-    vector_x = point_x - center_x
-    vector_y = point_y - center_y
-    centerline_radius = math.hypot(vector_x, vector_y)
-    if centerline_radius < 0.0005:
-        raise IsoCandidateEmissionError("La primitiva Arc del PGMX tiene radio cero.")
-    programmed_radius = centerline_radius + tool_radius
-    scale = programmed_radius / centerline_radius
-    return center_x + (vector_x * scale), center_y + (vector_y * scale)
-
-
-def _arc_forward_tangent(
-    arc_code: str,
-    center: tuple[float, float],
-    point: tuple[float, float],
-) -> tuple[float, float]:
-    radius_x = point[0] - center[0]
-    radius_y = point[1] - center[1]
-    radius = math.hypot(radius_x, radius_y)
-    if radius < 0.0005:
-        raise IsoCandidateEmissionError("No se puede calcular tangente de arco con radio cero.")
-    unit_x = radius_x / radius
-    unit_y = radius_y / radius
-    if arc_code == "G2":
-        return unit_y, -unit_x
-    return -unit_y, unit_x
-
-
-def _profile_milling_arc_line(
-    code: str,
-    x: object,
-    y: object,
-    i: object,
-    j: object,
-    feed: object,
-    *,
-    z: Optional[object] = None,
-) -> str:
-    words = [code, f"X{_fmt(x)}", f"Y{_fmt(y)}"]
-    if z is not None:
-        words.append(f"Z{_fmt(z)}")
-    words.extend((f"I{_fmt(i)}", f"J{_fmt(j)}", f"F{_fmt(feed)}"))
-    return " ".join(words)
-
-
-def _profile_toolpath_motion_line(
-    point,
-    previous_x: float,
-    previous_y: float,
-    previous_z: float,
-    feed: float,
-    *,
-    center: Optional[tuple[float, float]] = None,
-    winding: str = "",
-    always_include_z: bool = True,
-) -> str:
-    if center is not None:
-        code = _arc_code_from_points(
-            previous_x,
-            previous_y,
-            float(point.x),
-            float(point.y),
-            center[0],
-            center[1],
-            winding=winding,
-        )
-        return _profile_milling_arc_line(
-            code,
-            point.x,
-            point.y,
-            center[0],
-            center[1],
-            feed,
-            z=point.iso_z if abs(float(point.iso_z) - previous_z) >= 0.0005 else None,
-        )
-    return _line_milling_motion_line(
-        float(point.x),
-        float(point.y),
-        float(point.iso_z),
-        previous_x,
-        previous_y,
-        previous_z,
-        feed,
-        always_include_z=always_include_z,
-    )
-
-
-def _closed_polyline_center_lead_geometry(
-    contour_points: tuple[tuple[float, float], ...],
-    lead_distance: float,
-    lead_type: str,
-    winding: str,
-) -> dict[str, tuple[float, float]]:
-    if len(contour_points) < 2:
-        raise IsoCandidateEmissionError("La polilinea cerrada no contiene suficientes puntos.")
-    start = contour_points[0]
-    next_point = contour_points[1]
-    tangent_x, tangent_y = _unit_vector(start, next_point)
-    normal_sign = 1.0 if winding == "CounterClockwise" else -1.0
-    normal_x = -tangent_y * normal_sign
-    normal_y = tangent_x * normal_sign
-    if lead_type == "Arc":
-        rapid = (
-            start[0] - (tangent_x * lead_distance) + (normal_x * lead_distance),
-            start[1] - (tangent_y * lead_distance) + (normal_y * lead_distance),
-        )
-        exit_point = (
-            start[0] + (tangent_x * lead_distance) + (normal_x * lead_distance),
-            start[1] + (tangent_y * lead_distance) + (normal_y * lead_distance),
-        )
-        center = (
-            start[0] + (normal_x * lead_distance),
-            start[1] + (normal_y * lead_distance),
-        )
-    else:
-        rapid = (
-            start[0] - (tangent_x * lead_distance),
-            start[1] - (tangent_y * lead_distance),
-        )
-        exit_point = (
-            start[0] + (tangent_x * lead_distance),
-            start[1] + (tangent_y * lead_distance),
-        )
-        center = start
-    return {
-        "rapid": rapid,
-        "exit": exit_point,
-        "approach_center": center,
-        "retract_center": center,
-    }
-
-
-def _open_polyline_center_lead_geometry(
-    contour_points: tuple[tuple[float, float], ...],
-    lead_distance: float,
-    lead_type: str,
-) -> dict[str, tuple[float, float]]:
-    if len(contour_points) < 2:
-        raise IsoCandidateEmissionError("La polilinea abierta no contiene suficientes puntos.")
-    start = contour_points[0]
-    next_point = contour_points[1]
-    previous_point = contour_points[-2]
-    end = contour_points[-1]
-    start_tx, start_ty = _unit_vector(start, next_point)
-    end_tx, end_ty = _unit_vector(previous_point, end)
-    start_normal = (-start_ty, start_tx)
-    end_normal = (-end_ty, end_tx)
-    if lead_type == "Arc":
-        rapid = (
-            start[0] - (start_tx * lead_distance) + (start_normal[0] * lead_distance),
-            start[1] - (start_ty * lead_distance) + (start_normal[1] * lead_distance),
-        )
-        exit_point = (
-            end[0] + (end_tx * lead_distance) + (end_normal[0] * lead_distance),
-            end[1] + (end_ty * lead_distance) + (end_normal[1] * lead_distance),
-        )
-        approach_center = (
-            start[0] + (start_normal[0] * lead_distance),
-            start[1] + (start_normal[1] * lead_distance),
-        )
-        retract_center = (
-            end[0] + (end_normal[0] * lead_distance),
-            end[1] + (end_normal[1] * lead_distance),
-        )
-    else:
-        rapid = (
-            start[0] - (start_tx * lead_distance),
-            start[1] - (start_ty * lead_distance),
-        )
-        exit_point = (
-            end[0] + (end_tx * lead_distance),
-            end[1] + (end_ty * lead_distance),
-        )
-        approach_center = start
-        retract_center = end
-    return {
-        "rapid": rapid,
-        "exit": exit_point,
-        "approach_center": approach_center,
-        "retract_center": retract_center,
-    }
-
-
-def _matching_primitive_record(
-    records: tuple[object, ...],
-    start_index: int,
-    point,
-    previous_x: float,
-    previous_y: float,
-) -> tuple[int, Optional[tuple[object, ...]]]:
-    for index in range(start_index, len(records)):
-        record = records[index]
-        if not isinstance(record, tuple) or len(record) < 14:
-            continue
-        if _primitive_record_matches_move(record, point, previous_x, previous_y):
-            return index, record
-    return -1, None
-
-
-def _primitive_record_matches_move(
-    record: tuple[object, ...],
-    point,
-    previous_x: float,
-    previous_y: float,
-) -> bool:
-    if point.x is None or point.y is None or point.local_z is None:
-        return False
-    return (
-        math.isclose(float(record[1]), previous_x, abs_tol=0.0005)
-        and math.isclose(float(record[2]), previous_y, abs_tol=0.0005)
-        and math.isclose(float(record[4]), float(point.x), abs_tol=0.0005)
-        and math.isclose(float(record[5]), float(point.y), abs_tol=0.0005)
-        and math.isclose(float(record[6]), float(point.local_z), abs_tol=0.0005)
-    )
-
-
-def _arc_record_motion_line(
-    record: tuple[object, ...],
-    point,
-    previous_z: float,
-    feed: float,
-    *,
-    fallback_center: tuple[float, float],
-    fallback_winding: str = "",
-) -> str:
-    center = _iso_arc_center_from_record(record, fallback_center)
-    code = _arc_code_from_record(record, fallback_winding)
-    return _profile_milling_arc_line(
-        code,
-        point.x,
-        point.y,
-        center[0],
-        center[1],
-        feed,
-        z=point.iso_z if abs(float(point.iso_z) - previous_z) >= 0.0005 else None,
-    )
-
-
-def _arc_code_from_record(record: tuple[object, ...], fallback_winding: str = "") -> str:
-    normal_z = record[13]
-    if normal_z is not None:
-        return "G3" if float(normal_z) >= 0.0 else "G2"
-    return "G3" if fallback_winding == "CounterClockwise" else "G2"
-
-
-def _iso_arc_center_from_record(
-    record: tuple[object, ...],
-    fallback_center: tuple[float, float],
-) -> tuple[float, float]:
-    if record[7] is None or record[8] is None:
-        return fallback_center
-    center_x = float(record[7])
-    center_y = float(record[8])
-    if record[10] is None or record[13] is None:
-        return center_x, center_y
-
-    start_x = float(record[1])
-    start_y = float(record[2])
-    end_x = float(record[4])
-    end_y = float(record[5])
-    radius = float(record[10])
-    flat_radius = math.hypot(start_x - center_x, start_y - center_y)
-    center_offset = radius - flat_radius
-    chord_length = math.hypot(end_x - start_x, end_y - start_y)
-    if center_offset <= 0.0005 or chord_length <= 0.0005:
-        return center_x, center_y
-
-    right_normal_x = (end_y - start_y) / chord_length
-    right_normal_y = -(end_x - start_x) / chord_length
-    normal_sign = 1.0 if float(record[13]) >= 0.0 else -1.0
-    return (
-        center_x + (normal_sign * right_normal_x * center_offset),
-        center_y + (normal_sign * right_normal_y * center_offset),
-    )
-
-
-def _xy_changed(previous_x: float, previous_y: float, point) -> bool:
-    return (
-        abs(float(point.x) - previous_x) >= 0.0005
-        or abs(float(point.y) - previous_y) >= 0.0005
-    )
-
-
-def _arc_code_from_points(
-    start_x: float,
-    start_y: float,
-    end_x: float,
-    end_y: float,
-    center_x: float,
-    center_y: float,
-    *,
-    winding: str = "",
-) -> str:
-    cross = ((start_x - center_x) * (end_y - center_y)) - (
-        (start_y - center_y) * (end_x - center_x)
-    )
-    if abs(cross) < 0.0005 and winding:
-        return "G3" if winding == "CounterClockwise" else "G2"
-    return "G3" if cross > 0 else "G2"
-
-
-def _profile_corner_center(
-    start_x: float,
-    start_y: float,
-    end_x: float,
-    end_y: float,
-    contour_points: object,
-) -> tuple[float, float]:
-    min_x = min(float(point[0]) for point in contour_points)
-    max_x = max(float(point[0]) for point in contour_points)
-    min_y = min(float(point[1]) for point in contour_points)
-    max_y = max(float(point[1]) for point in contour_points)
-    candidates = ((start_x, end_y), (end_x, start_y))
-    for x, y in candidates:
-        if min_x - 0.0005 <= x <= max_x + 0.0005 and min_y - 0.0005 <= y <= max_y + 0.0005:
-            return x, y
-    return candidates[0]
 
 
 def _fmt(value: object) -> str:

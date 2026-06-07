@@ -32,10 +32,16 @@ sintetizador por estado:
   Maestro.
 - `work_groups.py`: agrupamiento `prepare/trace/reset` y transiciones entre
   grupos de trabajo.
+- `program_lines.py`: builders internos para cabecera, preambulo, marco de
+  pieza y cierres de programa.
 - `boring_head_lines.py`: builders internos de lineas ISO para preparaciones y
   resets de Top Drill, Side Drill y SlotSide.
+- `boring_trace_lines.py`: builders internos de trazas ISO para Top Drill y
+  Side Drill.
 - `router_milling_lines.py`: builders internos de lineas ISO para fresados
-  router lineales y de perfil.
+  router lineales.
+- `profile_milling_lines.py`: builders internos de traza ISO para fresado de
+  perfil E001 y estrategia PH5.
 - `slot_milling_lines.py`: builders internos de traza ISO para SlotSide.
 - `transition_lines.py`: builders internos de lineas ISO para transiciones
   entre familias de mecanizado.

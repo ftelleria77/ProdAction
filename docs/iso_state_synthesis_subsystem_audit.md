@@ -20,7 +20,7 @@ estados, diferenciales, bloques, transiciones y evidencia observada.
 | Agrupamiento | `iso_state_synthesis.work_groups` | Reconoce triples `prepare/trace/reset` y calcula transiciones entre grupos de trabajo. |
 | Comparacion | `iso_state_synthesis.comparison` | Compara ISO candidato explicado contra ISO Maestro normalizado. |
 | Emisor | `iso_state_synthesis.emitter` | Orquesta la emision ISO candidata y adjunta explicaciones por linea. |
-| Builders ISO | `iso_state_synthesis.boring_head_lines`, `iso_state_synthesis.router_milling_lines`, `iso_state_synthesis.slot_milling_lines`, `iso_state_synthesis.transition_lines` | Construyen lineas ISO puras para boring head/ranura, fresados router, traza SlotSide y transiciones entre familias, sin metadata explicativa. |
+| Builders ISO | `iso_state_synthesis.program_lines`, `iso_state_synthesis.boring_head_lines`, `iso_state_synthesis.boring_trace_lines`, `iso_state_synthesis.router_milling_lines`, `iso_state_synthesis.profile_milling_lines`, `iso_state_synthesis.slot_milling_lines`, `iso_state_synthesis.transition_lines` | Construyen lineas ISO puras para programa, boring head/ranura, fresados router, perfil, traza SlotSide y transiciones entre familias, sin metadata explicativa. |
 | Errores | `iso_state_synthesis.errors` | Define la excepcion compartida del emisor candidato. |
 | Evidencia | `memory/`, `experiments/`, `contracts/`, `machine_config/` | Memoria viva, estudios fechados, contrato intermedio y snapshot local de maquina. |
 
@@ -30,7 +30,7 @@ estados, diferenciales, bloques, transiciones y evidencia observada.
 | --- | --- | --- | --- |
 | Inspeccion de estado | `.pgmx` Maestro | Plan interno y JSON opcional | `pgmx_source`, `model`, `cli`. |
 | Evaluacion de diferenciales | Plan de estado | Cambios por etapa y estado final | `differential`, `model`, `cli`. |
-| Emision candidata | `.pgmx` soportado | ISO candidato con fuente por linea | `emitter`, `catalog`, `differential`, `work_groups`, `boring_head_lines`, `router_milling_lines`, `slot_milling_lines`, `transition_lines`. |
+| Emision candidata | `.pgmx` soportado | ISO candidato con fuente por linea | `emitter`, `catalog`, `differential`, `work_groups`, `program_lines`, `boring_head_lines`, `boring_trace_lines`, `router_milling_lines`, `profile_milling_lines`, `slot_milling_lines`, `transition_lines`. |
 | Comparacion contra Maestro | `.pgmx` + `.iso` esperado | Igual/distinto, diferencias y diff opcional | `comparison`, `cli`. |
 | Investigacion | Corpus PGMX/ISO y config local | Reglas documentadas y pendientes | `experiments/`, `memory/`, `machine_config/`. |
 
@@ -42,9 +42,10 @@ estados, diferenciales, bloques, transiciones y evidencia observada.
   de ordenamiento y familias observadas; no debe confundirse con un parser PGMX
   general.
 - `emitter.py` sigue siendo el frente de orquestacion y explicacion. Las lineas
-  puras de boring head/ranura, fresado router, traza SlotSide y transiciones
-  principales ya viven en modulos separados, y la comparacion/agrupamiento se
-  separaron del emisor. El paquete completo todavia no es un
+  puras de programa, boring head/ranura, trazas Top/Side Drill, fresado router,
+  perfil E001/PH5, traza SlotSide y transiciones principales ya viven en
+  modulos separados, y la comparacion/agrupamiento se separaron del emisor. El
+  paquete completo todavia no es un
   traductor ISO general.
 - La CLI es operativa para investigacion y debe seguir funcionando con
   `py -3 -m iso_state_synthesis --help`.
@@ -84,7 +85,10 @@ Concentracion actual detectada en `emitter.py`:
 
 | Zona | Funcion dominante | Observacion |
 | --- | --- | --- |
+| Programa | `_emit_program_header`, `_emit_piece_frame`, `_emit_program_close` | Conservan apendice explicado; cabecera, preambulo, marcos y cierres viven en `program_lines.py`. |
+| Boring trace | `_emit_top_drill_trace`, `_emit_side_drill_trace` | Conservan fuentes por grupo; las lineas de rapido, modal y corte viven en `boring_trace_lines.py`. |
 | Fresado router | `_emit_line_milling_trace` | Conserva la orquestacion de entrada y apendice explicado; contexto, entrada, seleccion de rama y builders de movimiento viven en `router_milling_lines.py`. |
+| Fresado perfil | `_emit_profile_milling_trace` | Conserva apendice explicado; grupos E001 normal y PH5 viven en `profile_milling_lines.py`. |
 | Dispatcher de trabajos | `_emit_planned_work_group` | Centraliza decisiones entre familias y transiciones. Conviene mantenerlo como orquestador; los builders puros de transicion principales ya viven en `transition_lines.py`. |
 | Preparaciones por cabezal | `_emit_top_drill_prepare*`, `_emit_side_drill_prepare*` | Tienen variantes segun familia previa. Son candidatos a modulos de transicion o preparacion por cabezal. |
 | Helpers geometricos | `_line_milling_motion_line`, `_unit_vector`, `_side_normal`, `_xy_changed` | Quedaron cubiertos como helpers puros antes de cualquier extraccion estructural. |
@@ -372,7 +376,8 @@ Hallazgos aplicados:
 Hallazgos aplicados:
 
 - Se creo `iso_state_synthesis.router_milling_lines` como modulo interno de
-  builders puros para fresados router lineales y de perfil.
+  builders puros para fresados router lineales. La traza de perfil quedo
+  separada luego en `profile_milling_lines.py`.
 - Se movieron al nuevo modulo el contexto de traza, los predicados de modo, la
   entrada comun, los builders de `motion_lines`, el reset router y la
   preparacion incremental despues de boring head.
@@ -420,6 +425,23 @@ Hallazgos aplicados:
   consumen comparacion o agrupamiento para que apunten a `comparison.py` y
   `work_groups.py`.
 
+## Subcorte Program Lines Y Trazas Pendientes
+
+Hallazgos aplicados:
+
+- Se creo `iso_state_synthesis.program_lines` para aislar builders de cabecera,
+  preambulo, marcos de pieza, seleccion de cara y cierres comunes/empty/router.
+- Se creo `iso_state_synthesis.boring_trace_lines` para separar las trazas
+  Top Drill y Side Drill en grupos de rapido, modal y corte. `emitter.py`
+  conserva fuentes y notas por grupo.
+- Se creo `iso_state_synthesis.profile_milling_lines` para separar la traza de
+  fresado de perfil E001 normal y estrategia PH5. `emitter.py` conserva la
+  orquestacion explicativa.
+- Se retiraron de `emitter.py` los helpers geometricos duplicados que quedaron
+  sin consumidores despues de mover la traza de perfil.
+- `tests.test_iso_state_synthesis` agrega cobertura pura para los builders de
+  programa, trazas boring y traza de perfil.
+
 ## Subcorte Auditoria Tools Studies ISO
 
 Hallazgos aplicados:
@@ -439,9 +461,9 @@ Hallazgos aplicados:
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome
   la generacion ISO, porque todavia concentra wrappers explicativos `_emit_*`,
-  formato residual y cierres de programa. Boring head/ranura, router, SlotSide,
-  transiciones principales, comparacion y work groups ya tienen modulos
-  internos separados.
+  dispatcher, fuentes y notas por linea. Programa, boring head/ranura, trazas
+  Top/Side Drill, router, perfil E001/PH5, SlotSide, transiciones principales,
+  comparacion y work groups ya tienen modulos internos separados.
 - Agregar fixtures PGMX/ISO chicos dentro de `tests/fixtures` o `tmp` controlado
   para cubrir `pgmx_source.py` y una emision real sin depender de rutas `S:` o
   `P:`.

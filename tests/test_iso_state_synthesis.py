@@ -25,6 +25,10 @@ from iso_state_synthesis.boring_head_lines import (
     _top_drill_prepare_lines,
     _top_drill_reset_lines,
 )
+from iso_state_synthesis.boring_trace_lines import (
+    _side_drill_trace_lines,
+    _top_drill_trace_lines,
+)
 from iso_state_synthesis.catalog import select_transition_id
 from iso_state_synthesis.comparison import compare_candidate_to_iso
 from iso_state_synthesis.differential import evaluate_state_plan
@@ -32,6 +36,18 @@ from iso_state_synthesis.emitter import (
     ExplainedIsoLine,
     ExplainedIsoProgram,
 )
+from iso_state_synthesis.program_lines import (
+    _empty_piece_frame_lines,
+    _empty_program_explicit_close_lines,
+    _face_selection_lines,
+    _machine_metric_mode_line,
+    _machine_preamble_template_lines,
+    _program_close_xy_line,
+    _program_header_lines,
+    _router_program_close_lines,
+    _side_program_close_prefix_lines,
+)
+from iso_state_synthesis.profile_milling_lines import _profile_milling_trace_lines
 from iso_state_synthesis.router_milling_lines import (
     _closed_polyline_center_lead_geometry,
     _line_milling_center_circle_leads_motion_lines,
@@ -372,6 +388,153 @@ class IsoStateSynthesisCatalogTests(unittest.TestCase):
 
 
 class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
+    def test_program_header_and_machine_preamble_lines_are_built_without_metadata(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector(
+                (StateValue("pieza", "execution_fields", "HG", _TEST_SOURCE),)
+            ),
+            differentials=(),
+            final_state=StateVector(),
+        )
+        differential = StageDifferential(
+            stage_key="program_header",
+            family="program",
+            order_index=0,
+            target_changes=(
+                _change("pieza", "header_dx", 400.0),
+                _change("pieza", "header_dy", 350.0),
+                _change("pieza", "header_dz", 18.0),
+            ),
+        )
+
+        self.assertEqual(
+            _program_header_lines(evaluation, differential, "pieza_test"),
+            (
+                "% pieza_test.pgm",
+                ";H DX=400.000 DY=350.000 DZ=18.000 BX=0.000 BY=0.000 BZ=0.000 -HG V=0 *MM C=0 T=0",
+            ),
+        )
+        self.assertEqual(
+            _machine_preamble_template_lines(),
+            (
+                "?%ETK[500]=100",
+                "_paras( 0x00, X, 3, %ax[0].pa[21]/1000, %ETK[500] )",
+                "G0 G53 Z %ax[2].pa[22]/1000",
+                "M58",
+            ),
+        )
+        self.assertEqual(_machine_metric_mode_line(), "G71")
+
+    def test_program_piece_frame_and_face_selection_lines_cover_empty_and_router_cases(self) -> None:
+        empty_differential = StageDifferential(
+            stage_key="program_header",
+            family="program",
+            order_index=0,
+            target_changes=(
+                _change("pieza", "header_dx", 400.0),
+                _change("pieza", "header_dz", 18.0),
+            ),
+        )
+        self.assertEqual(
+            _empty_piece_frame_lines(empty_differential, face_pair_count=2),
+            (
+                "MLV=0",
+                "%Or[0].ofX=-400000.000",
+                "%Or[0].ofY=-1515599.976",
+                "%Or[0].ofZ=18000.000",
+                "?%EDK[0].0=0",
+                "?%EDK[1].0=0",
+                "MLV=1",
+                "SHF[X]=-400.000",
+                "SHF[Y]=-1515.600",
+                "SHF[Z]=18.000+%ETK[114]/1000",
+                "?%ETK[8]=1",
+                "G40",
+                "?%ETK[8]=1",
+                "G40",
+            ),
+        )
+
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector(),
+            differentials=(
+                StageDifferential(
+                    stage_key="line_milling_trace",
+                    family="line_milling",
+                    order_index=10,
+                    target_changes=(
+                        _change("trabajo", "family", "line_milling"),
+                        _change("trabajo", "side_of_feature", "Left"),
+                    ),
+                ),
+            ),
+            final_state=StateVector(),
+        )
+        self.assertEqual(
+            _face_selection_lines(evaluation, "Top"),
+            ("?%ETK[8]=1", "G40", "?%ETK[8]=1", "G40", "?%ETK[7]=0", "?%ETK[8]=1", "G40"),
+        )
+
+    def test_program_close_builders_cover_router_side_and_empty_closes(self) -> None:
+        close = StageDifferential(
+            stage_key="program_close",
+            family="program",
+            order_index=99,
+            target_changes=(
+                _change("movimiento", "program_close_x", -3540.0),
+                _change("movimiento", "program_close_y", 1515.6),
+            ),
+        )
+
+        self.assertEqual(_program_close_xy_line(close), "G0 G53 X-3540.000 Y1515.600")
+        self.assertEqual(
+            _router_program_close_lines(close),
+            (
+                "G61",
+                "MLV=0",
+                "?%ETK[13]=0",
+                "?%ETK[18]=0",
+                "M5",
+                "D0",
+                "G0 G53 Z201.000",
+                "G0 G53 X-3540.000 Y1515.600",
+                "G64",
+            ),
+        )
+        self.assertEqual(
+            _side_program_close_prefix_lines("Right"),
+            (
+                "G0 G53 Z201.000",
+                "G64",
+                "?%ETK[8]=2",
+                "G40",
+                "MLV=0",
+                "G0 G53 Z201.000",
+                "MLV=0",
+                "T1",
+                "SYN",
+                "M06",
+                "G61",
+                "D0",
+                "G0 G53 Z201.000",
+            ),
+        )
+        self.assertEqual(
+            _empty_program_explicit_close_lines(close),
+            (
+                "G61",
+                "MLV=0",
+                "D0",
+                "G0 G53 Z201.000",
+                "G0 G53 X-3540.000",
+                "G64",
+            ),
+        )
+
     def test_work_stage_groups_ignores_common_stages_and_links_router_to_boring_head(self) -> None:
         line = _work_triple("line_milling", 2, tool_number=4)
         profile = _work_triple("profile_milling", 5, tool_number=4)
@@ -785,6 +948,220 @@ class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
                 "SHF[Z]=-90.000",
             ),
         )
+
+    def test_top_drill_trace_lines_split_rapid_modal_and_cutting_groups(self) -> None:
+        differential = StageDifferential(
+            stage_key="top_drill_trace",
+            family="top_drill",
+            order_index=2,
+            target_changes=(),
+            trace=(
+                TraceMove(
+                    "Approach",
+                    (TracePoint(10.0, 20.0, 30.0, 30.0, _TEST_SOURCE),),
+                    source=_TEST_SOURCE,
+                ),
+                TraceMove(
+                    "TrajectoryPath",
+                    (TracePoint(10.0, 20.0, -15.0, -15.0, _TEST_SOURCE),),
+                    feed=500.0,
+                    source=_TEST_SOURCE,
+                ),
+                TraceMove(
+                    "Lift",
+                    (TracePoint(10.0, 20.0, 25.0, 25.0, _TEST_SOURCE),),
+                    source=_TEST_SOURCE,
+                ),
+            ),
+        )
+
+        trace_lines = _top_drill_trace_lines(
+            differential,
+            emit_mlv_after_etk7=False,
+            combine_rapid_z=True,
+        )
+
+        self.assertEqual(trace_lines.rapid, ("G0 X10.000 Y20.000 Z30.000",))
+        self.assertEqual(trace_lines.modal, ("?%ETK[7]=3",))
+        self.assertEqual(
+            trace_lines.cutting,
+            ("G1 G9 Z-15.000 F500.000", "G0 Z25.000"),
+        )
+        self.assertEqual(
+            trace_lines.all_lines(),
+            (
+                "G0 X10.000 Y20.000 Z30.000",
+                "?%ETK[7]=3",
+                "G1 G9 Z-15.000 F500.000",
+                "G0 Z25.000",
+            ),
+        )
+
+    def test_side_drill_trace_lines_cover_fixed_override_and_combined_rapid(self) -> None:
+        differential = StageDifferential(
+            stage_key="side_drill_trace",
+            family="side_drill",
+            order_index=2,
+            target_changes=(
+                _change("movimiento", "side_axis", "X"),
+                _change("movimiento", "side_rapid", 120.0),
+                _change("movimiento", "side_cut", 80.0),
+                _change("movimiento", "side_fixed", 45.0),
+                _change("movimiento", "side_z", -20.0),
+                _change("movimiento", "side_feed", 750.0),
+            ),
+        )
+
+        trace_lines = _side_drill_trace_lines(
+            differential,
+            fixed_override=50.0,
+            emit_mlv_after_etk7=False,
+            combine_rapid_z=True,
+        )
+
+        self.assertEqual(trace_lines.rapid, ("G0 X120.000 Y50.000 Z-20.000",))
+        self.assertEqual(trace_lines.modal, ("?%ETK[7]=3",))
+        self.assertEqual(
+            trace_lines.cutting,
+            ("G1 G9 X80.000 F750.000", "G0 X120.000 Z-20.000"),
+        )
+
+    def test_profile_milling_trace_lines_group_normal_profile_sections(self) -> None:
+        differential = StageDifferential(
+            stage_key="profile_milling_trace",
+            family="profile_milling",
+            order_index=2,
+            target_changes=(
+                _change("movimiento", "rapid_x", 0.0),
+                _change("movimiento", "rapid_y", 0.0),
+                _change("movimiento", "rapid_z", 5.0),
+                _change("movimiento", "entry_x", 0.0),
+                _change("movimiento", "entry_y", 0.0),
+                _change("movimiento", "exit_x", 100.0),
+                _change("movimiento", "exit_y", 0.0),
+                _change("movimiento", "leadout_x", 110.0),
+                _change("movimiento", "leadout_y", 0.0),
+                _change("movimiento", "arc_i", 0.0),
+                _change("movimiento", "arc_j", 0.0),
+                _change("movimiento", "cut_z", -10.0),
+                _change("movimiento", "security_z", 2.0),
+                _change("herramienta", "tool_radius", 4.0),
+                _change("movimiento", "plunge_feed", 300.0),
+                _change("movimiento", "milling_feed", 1000.0),
+                _change("movimiento", "contour_points", ((0.0, 0.0), (100.0, 0.0))),
+                _change("salida", "compensation_code", "G41"),
+                _change("salida", "arc_code", "G2"),
+                _change("trabajo", "approach_enabled", False),
+                _change("trabajo", "approach_type", "Line"),
+                _change("trabajo", "approach_mode", "Down"),
+                _change("trabajo", "strategy", ""),
+                _change("trabajo", "retract_enabled", False),
+                _change("trabajo", "retract_type", "Line"),
+                _change("trabajo", "retract_mode", "Up"),
+                _change("herramienta", "tool_offset_length", 12.0),
+            ),
+        )
+
+        trace_lines = _profile_milling_trace_lines(differential)
+
+        self.assertEqual(trace_lines.mode, "profile")
+        self.assertEqual(
+            trace_lines.setup,
+            (
+                "G0 X0.000 Y0.000",
+                "G0 Z5.000",
+                "D1",
+                "SVL 12.000",
+                "VL6=12.000",
+                "SVR 4.000",
+                "VL7=4.000",
+                "?%ETK[7]=4",
+                "G41",
+                "G1 X0.000 Y0.000 Z2.000 F300.000",
+            ),
+        )
+        self.assertEqual(trace_lines.entry, ("G1 Z-10.000 F300.000",))
+        self.assertEqual(trace_lines.contour, ("G1 X100.000 Z-10.000 F1000.000",))
+        self.assertEqual(trace_lines.exit, ("G1 Z2.000 F1000.000",))
+        self.assertEqual(
+            trace_lines.leadout,
+            ("G40", "G1 X110.000 Y0.000 Z2.000 F1000.000"),
+        )
+
+    def test_profile_milling_trace_lines_group_strategy_toolpath_sections(self) -> None:
+        differential = StageDifferential(
+            stage_key="profile_milling_trace",
+            family="profile_milling",
+            order_index=2,
+            target_changes=(
+                _change("movimiento", "rapid_x", 0.0),
+                _change("movimiento", "rapid_y", 0.0),
+                _change("movimiento", "rapid_z", 5.0),
+                _change("movimiento", "entry_x", 0.0),
+                _change("movimiento", "entry_y", 0.0),
+                _change("movimiento", "exit_x", 100.0),
+                _change("movimiento", "exit_y", 0.0),
+                _change("movimiento", "leadout_x", 110.0),
+                _change("movimiento", "leadout_y", 0.0),
+                _change("movimiento", "arc_i", 0.0),
+                _change("movimiento", "arc_j", 0.0),
+                _change("movimiento", "cut_z", -10.0),
+                _change("movimiento", "security_z", 2.0),
+                _change("herramienta", "tool_radius", 4.0),
+                _change("movimiento", "plunge_feed", 300.0),
+                _change("movimiento", "milling_feed", 1000.0),
+                _change("movimiento", "contour_points", ((0.0, 0.0), (100.0, 0.0))),
+                _change("salida", "compensation_code", "G41"),
+                _change("salida", "arc_code", "G2"),
+                _change("trabajo", "approach_enabled", True),
+                _change("trabajo", "approach_type", "Arc"),
+                _change("trabajo", "approach_mode", "Down"),
+                _change("trabajo", "strategy", "PH5"),
+                _change("trabajo", "retract_enabled", True),
+                _change("trabajo", "retract_type", "Arc"),
+                _change("trabajo", "retract_mode", "Up"),
+                _change("herramienta", "tool_offset_length", 12.0),
+            ),
+            trace=(
+                TraceMove(
+                    "Approach",
+                    (TracePoint(0.0, 0.0, 2.0, 2.0, _TEST_SOURCE),),
+                    source=_TEST_SOURCE,
+                ),
+                TraceMove(
+                    "TrajectoryPath",
+                    (
+                        TracePoint(0.0, 0.0, 2.0, 2.0, _TEST_SOURCE),
+                        TracePoint(0.0, 0.0, -10.0, -10.0, _TEST_SOURCE),
+                    ),
+                    source=_TEST_SOURCE,
+                ),
+                TraceMove(
+                    "Lift",
+                    (TracePoint(0.0, 0.0, 2.0, 2.0, _TEST_SOURCE),),
+                    source=_TEST_SOURCE,
+                ),
+            ),
+        )
+
+        trace_lines = _profile_milling_trace_lines(differential)
+
+        self.assertEqual(trace_lines.mode, "strategy")
+        self.assertEqual(
+            trace_lines.setup,
+            (
+                "G0 X0.000 Y0.000",
+                "G0 Z5.000",
+                "D1",
+                "SVL 12.000",
+                "VL6=12.000",
+                "SVR 4.000",
+                "VL7=4.000",
+                "G1 Z2.000 F300.000",
+                "?%ETK[7]=4",
+            ),
+        )
+        self.assertEqual(trace_lines.toolpath, ("G1 Z-10.000 F1000.000", "G0 Z2.000"))
 
     def test_top_drill_prepare_after_router_base_lines_insert_spindle_when_needed(self) -> None:
         evaluation = IsoStateEvaluation(
