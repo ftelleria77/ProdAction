@@ -42,14 +42,18 @@ Ultima actualizacion: 2026-06-07
   predicados de modo, la entrada comun, los builders de movimiento, el reset
   router y la preparacion incremental despues de boring head a
   `iso_state_synthesis.router_milling_lines`.
+- El subcorte de modulo Transition Lines mueve builders puros de transicion a
+  `iso_state_synthesis.transition_lines`: reset router-router, router hacia
+  boring head/ranura, retorno boring head hacia router y transiciones
+  Top/Side/Slot hacia SlotSide.
 - Los builders de traza router cubren center con leads (`OpenPolyline`,
   `ClosedPolyline*`, `Circle`), estrategias, compensacion lateral, sin-leads
   generico y fallback final desde el nuevo modulo.
 - `IsoCandidateEmissionError` vive en `iso_state_synthesis.errors` para que el
   CLI, `emitter.py` y los builders compartan el mismo contrato sin ciclos.
 - La separacion modular de builders queda cerrada sin ampliar reglas ISO:
-  `emitter.py` conserva dispatcher, transiciones entre familias, apendice
-  explicado, formato residual y comparacion contra Maestro.
+  `emitter.py` conserva dispatcher, wrappers explicativos `_emit_*`, formato
+  residual y comparacion contra Maestro.
 - Cobertura local del checkpoint: `tests.test_iso_state_synthesis` fija los
   builders de movimiento router y los builders de boring head con tests puros.
 

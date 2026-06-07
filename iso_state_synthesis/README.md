@@ -32,6 +32,8 @@ sintetizador por estado:
   resets de Top Drill, Side Drill y SlotSide.
 - `router_milling_lines.py`: builders internos de lineas ISO para fresados
   router lineales y de perfil.
+- `transition_lines.py`: builders internos de lineas ISO para transiciones
+  entre familias de mecanizado.
 - `emitter.py`: emisor candidato explicativo para el subset soportado, con
   fuente por linea.
 - `cli.py`: inspeccion del plan interno desde linea de comandos.

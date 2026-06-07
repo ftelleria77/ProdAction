@@ -18,7 +18,7 @@ estados, diferenciales, bloques, transiciones y evidencia observada.
 | Diferencial | `iso_state_synthesis.differential` | Calcula cambios entre estado activo, objetivo, valores forzados y resets. |
 | Catalogo | `iso_state_synthesis.catalog` | Nombra bloques `B-*` y transiciones `T-*` observadas contra el contrato ISO. |
 | Emisor | `iso_state_synthesis.emitter` | Orquesta la emision ISO candidata, adjunta explicaciones por linea y compara contra Maestro. |
-| Builders ISO | `iso_state_synthesis.boring_head_lines`, `iso_state_synthesis.router_milling_lines` | Construyen lineas ISO puras para boring head/ranura y fresados router, sin metadata explicativa. |
+| Builders ISO | `iso_state_synthesis.boring_head_lines`, `iso_state_synthesis.router_milling_lines`, `iso_state_synthesis.transition_lines` | Construyen lineas ISO puras para boring head/ranura, fresados router y transiciones entre familias, sin metadata explicativa. |
 | Errores | `iso_state_synthesis.errors` | Define la excepcion compartida del emisor candidato. |
 | Evidencia | `memory/`, `experiments/`, `contracts/`, `machine_config/` | Memoria viva, estudios fechados, contrato intermedio y snapshot local de maquina. |
 
@@ -28,7 +28,7 @@ estados, diferenciales, bloques, transiciones y evidencia observada.
 | --- | --- | --- | --- |
 | Inspeccion de estado | `.pgmx` Maestro | Plan interno y JSON opcional | `pgmx_source`, `model`, `cli`. |
 | Evaluacion de diferenciales | Plan de estado | Cambios por etapa y estado final | `differential`, `model`, `cli`. |
-| Emision candidata | `.pgmx` soportado | ISO candidato con fuente por linea | `emitter`, `catalog`, `differential`, `boring_head_lines`, `router_milling_lines`. |
+| Emision candidata | `.pgmx` soportado | ISO candidato con fuente por linea | `emitter`, `catalog`, `differential`, `boring_head_lines`, `router_milling_lines`, `transition_lines`. |
 | Comparacion contra Maestro | `.pgmx` + `.iso` esperado | Igual/distinto, diferencias y diff opcional | `emitter`, `cli`. |
 | Investigacion | Corpus PGMX/ISO y config local | Reglas documentadas y pendientes | `experiments/`, `memory/`, `machine_config/`. |
 
@@ -40,8 +40,9 @@ estados, diferenciales, bloques, transiciones y evidencia observada.
   de ordenamiento y familias observadas; no debe confundirse con un parser PGMX
   general.
 - `emitter.py` sigue siendo el frente de orquestacion y explicacion. Las lineas
-  puras de boring head/ranura y fresado router ya viven en modulos separados,
-  pero el paquete completo todavia no es un traductor ISO general.
+  puras de boring head/ranura, fresado router y transiciones principales ya
+  viven en modulos separados, pero el paquete completo todavia no es un
+  traductor ISO general.
 - La CLI es operativa para investigacion y debe seguir funcionando con
   `py -3 -m iso_state_synthesis --help`.
 
@@ -80,8 +81,8 @@ Concentracion actual detectada en `emitter.py`:
 
 | Zona | Funcion dominante | Observacion |
 | --- | --- | --- |
-| Fresado router | `_emit_line_milling_trace` | Conserva la orquestacion de entrada, seleccion de rama y apendice explicado; las ramas de `motion_lines` ya delegan en builders internos. |
-| Dispatcher de trabajos | `_emit_planned_work_group` | Centraliza decisiones entre familias y transiciones. Conviene mantenerlo como orquestador, pero extraer reglas de transicion cuando se estabilicen. |
+| Fresado router | `_emit_line_milling_trace` | Conserva la orquestacion de entrada y apendice explicado; contexto, entrada, seleccion de rama y builders de movimiento viven en `router_milling_lines.py`. |
+| Dispatcher de trabajos | `_emit_planned_work_group` | Centraliza decisiones entre familias y transiciones. Conviene mantenerlo como orquestador; los builders puros de transicion principales ya viven en `transition_lines.py`. |
 | Preparaciones por cabezal | `_emit_top_drill_prepare*`, `_emit_side_drill_prepare*` | Tienen variantes segun familia previa. Son candidatos a modulos de transicion o preparacion por cabezal. |
 | Helpers geometricos | `_line_milling_motion_line`, `_unit_vector`, `_side_normal`, `_xy_changed` | Quedaron cubiertos como helpers puros antes de cualquier extraccion estructural. |
 
@@ -133,8 +134,10 @@ Orden recomendado de extraccion futura:
    comportamiento.
 3. Hecho: extraer builders de `motion_lines` por familia/rama, empezando por
    las ramas de geometria ya cubierta.
-4. Pendiente futuro: mover esos builders a modulos separados si el corte queda
-   estable y si el laboratorio ISO retoma una separacion por familias.
+4. Hecho: mover los builders router estables a
+   `iso_state_synthesis.router_milling_lines`.
+5. Pendiente futuro: separar transiciones y orquestacion de `emitter.py` sin
+   mezclar esa capa con los builders de lineas.
 
 ## Subcorte Fresado Router Predicados
 
@@ -380,12 +383,28 @@ Hallazgos aplicados:
   `iso_state_synthesis.router_milling_lines`, de modo que la cobertura fija el
   nuevo limite modular.
 
+## Subcorte Modulo Transition Lines
+
+Hallazgos aplicados:
+
+- Se creo `iso_state_synthesis.transition_lines` como modulo interno de
+  builders puros para transiciones entre familias de mecanizado.
+- Se movieron al nuevo modulo el reset router-router, el puente router hacia
+  boring head/ranura, el retorno boring head hacia router y las transiciones
+  Top/Side/Slot hacia SlotSide que son listas de lineas.
+- `emitter.py` conserva los wrappers `_emit_*` de transicion porque todavia
+  adjuntan fuente, confianza, `rule_status`, `block_id`/`transition_id` y
+  notas explicativas por linea.
+- Los tests de helpers de transicion ahora importan desde
+  `iso_state_synthesis.transition_lines`, de modo que la cobertura fija el
+  nuevo limite modular.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome
-  la generacion ISO, porque todavia concentra dispatcher, transiciones entre
-  familias, apendice explicado de lineas, formato residual y comparacion.
-  Boring head/ranura y router ya tienen modulos internos de builders de lineas.
+  la generacion ISO, porque todavia concentra dispatcher, wrappers explicativos
+  `_emit_*`, formato residual y comparacion. Boring head/ranura, router y
+  transiciones principales ya tienen modulos internos de builders de lineas.
 - Agregar fixtures PGMX/ISO chicos dentro de `tests/fixtures` o `tmp` controlado
   para cubrir `pgmx_source.py` y una emision real sin depender de rutas `S:` o
   `P:`.

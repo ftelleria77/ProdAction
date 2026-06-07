@@ -31,11 +31,6 @@ from iso_state_synthesis.emitter import (
     ExplainedIsoLine,
     ExplainedIsoProgram,
     _plan_work_groups,
-    _boring_to_router_cleanup_lines,
-    _boring_to_router_side_restore_lines,
-    _boring_to_router_top_face_lines,
-    _router_inter_work_reset_lines,
-    _router_to_boring_transition_lines,
     _work_stage_groups,
     compare_candidate_to_iso,
 )
@@ -72,6 +67,16 @@ from iso_state_synthesis.router_milling_lines import (
     _trace_point_tangent,
     _unit_vector,
     _xy_changed,
+)
+from iso_state_synthesis.transition_lines import (
+    _boring_to_router_cleanup_lines,
+    _boring_to_router_side_restore_lines,
+    _boring_to_router_top_face_lines,
+    _router_inter_work_reset_lines,
+    _router_to_boring_transition_lines,
+    _side_to_slot_milling_transition_lines,
+    _slot_to_slot_milling_transition_lines,
+    _top_to_slot_milling_transition_lines,
 )
 from iso_state_synthesis.model import (
     EvidenceSource,
@@ -531,6 +536,56 @@ class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
                 "G64",
             ),
         )
+
+    def test_slot_transition_lines_cover_top_side_and_slot_sources(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector(
+                (
+                    StateValue("pieza", "length", 200.0, _TEST_SOURCE),
+                    StateValue("pieza", "width", 100.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_x", 5.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_y", 7.0, _TEST_SOURCE),
+                )
+            ),
+            differentials=(),
+            final_state=StateVector((StateValue("pieza", "header_dz", 43.0, _TEST_SOURCE),)),
+        )
+        side_prepare = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=0,
+            target_changes=(_change("trabajo", "plane", "Left"),),
+        )
+
+        self.assertEqual(
+            _top_to_slot_milling_transition_lines(),
+            (
+                "?%ETK[8]=1",
+                "G40",
+                "MLV=0",
+                "G0 G53 Z201.000",
+                "MLV=2",
+                "?%ETK[0]=0",
+            ),
+        )
+        self.assertEqual(
+            _side_to_slot_milling_transition_lines(evaluation, side_prepare),
+            (
+                "MLV=1",
+                "SHF[X]=-205.000",
+                "SHF[Y]=-1508.600",
+                "SHF[Z]=43.000+%ETK[114]/1000",
+                "?%ETK[8]=1",
+                "G40",
+                "MLV=0",
+                "G0 G53 Z201.000",
+                "MLV=2",
+                "?%ETK[0]=0",
+            ),
+        )
+        self.assertEqual(_slot_to_slot_milling_transition_lines(), ("?%ETK[8]=1", "G40", "G17"))
 
     def test_boring_to_router_side_restore_lines_return_to_right_frame(self) -> None:
         evaluation = IsoStateEvaluation(

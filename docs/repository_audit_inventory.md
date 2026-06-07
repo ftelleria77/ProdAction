@@ -167,6 +167,7 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | `iso_state_synthesis.catalog` | Catalogo de bloques/transiciones ISO observadas. | `head_for_family`, `block_id_for_stage_key`, `select_transition_id`. |
 | `iso_state_synthesis.boring_head_lines` | Builders puros de lineas ISO para preparaciones y resets del cabezal de perforacion/ranurado. | Helpers internos `_top_drill_*`, `_side_drill_*`, `_slot_milling_*`. |
 | `iso_state_synthesis.router_milling_lines` | Builders puros de lineas ISO para fresados router lineales y de perfil. | Helpers internos `_line_milling_*`, geometria de leads y compensacion. |
+| `iso_state_synthesis.transition_lines` | Builders puros de lineas ISO para transiciones entre familias. | Helpers internos `_router_*`, `_boring_to_router_*`, `_top_to_slot_*`, `_side_to_slot_*`, `_slot_to_slot_*`. |
 | `iso_state_synthesis.errors` | Excepciones compartidas del emisor candidato. | `IsoCandidateEmissionError`. |
 | `iso_state_synthesis.emitter` | Orquestacion de emision candidata ISO explicable y comparacion contra Maestro. | `emit_candidate_for_pgmx`, `emit_candidate_from_evaluation`, `compare_candidate_to_iso`. |
 | `iso_state_synthesis.cli` | CLI experimental. | `main`. |

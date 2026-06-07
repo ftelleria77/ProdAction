@@ -59,6 +59,16 @@ from .router_milling_lines import (
     _line_milling_trace_context,
     _line_milling_trace_motion_lines,
 )
+from .transition_lines import (
+    _boring_to_router_cleanup_lines,
+    _boring_to_router_side_restore_lines,
+    _boring_to_router_top_face_lines,
+    _router_inter_work_reset_lines,
+    _router_to_boring_transition_lines,
+    _side_to_slot_milling_transition_lines,
+    _slot_to_slot_milling_transition_lines,
+    _top_to_slot_milling_transition_lines,
+)
 
 
 _COMMON_STAGE_KEYS = {"program_header", "machine_preamble", "program_close"}
@@ -846,30 +856,6 @@ def _emit_router_inter_work_reset(
         )
 
 
-def _router_inter_work_reset_lines(next_prepare: StageDifferential) -> tuple[str, ...]:
-    strategy_change = _find_change(next_prepare.target_changes, "trabajo", "strategy")
-    next_strategy = "" if strategy_change is None else str(strategy_change.after or "")
-    approach_change = _find_change(next_prepare.target_changes, "trabajo", "approach_enabled")
-    if approach_change is None:
-        approach_change = _find_change(next_prepare.forced_values, "trabajo", "approach_enabled")
-    next_approach_enabled = True if approach_change is None else bool(approach_change.after)
-    next_side = str(_optional_change_after(next_prepare, "trabajo", "side_of_feature", "Center"))
-    reset_lines = [
-        "?%ETK[7]=0",
-        "MLV=0",
-        "G0 G53 Z201.000",
-        "MLV=2",
-        "?%ETK[13]=0",
-        "?%ETK[18]=0",
-        "M5",
-        "MLV=0",
-        "G0 G53 Z201.000",
-    ]
-    if next_strategy or (not next_approach_enabled and next_side not in {"Left", "Right"}):
-        reset_lines = reset_lines[1:]
-    return tuple(reset_lines)
-
-
 def compare_candidate_to_iso(
     expected_iso_path: Path,
     candidate: ExplainedIsoProgram,
@@ -1260,26 +1246,6 @@ def _emit_router_to_slot_milling_transition(
             rule_status="generalized_router_to_slot_milling_sequence",
             transition_id=transition_id,
         )
-
-
-def _router_to_boring_transition_lines(*, include_face_selection: bool = False) -> tuple[str, ...]:
-    transition_lines: list[str] = []
-    if include_face_selection:
-        transition_lines.extend(("?%ETK[8]=1", "G40"))
-    transition_lines.extend(
-        (
-            "MLV=0",
-            "G0 G53 Z201.000",
-            "MLV=2",
-            "G61",
-            "MLV=0",
-            "?%ETK[13]=0",
-            "?%ETK[18]=0",
-            "G0 G53 Z201.000",
-            "G64",
-        )
-    )
-    return tuple(transition_lines)
 
 
 def _emit_top_drill_prepare_after_router(
@@ -2252,85 +2218,6 @@ def _emit_boring_to_router_transition(
         )
 
 
-def _boring_to_router_side_restore_lines(
-    evaluation: IsoStateEvaluation,
-    previous_prepare: StageDifferential,
-) -> tuple[str, ...]:
-    previous_plane = str(_optional_change_after(previous_prepare, "trabajo", "plane", ""))
-    if previous_plane not in {"Back", "Left"}:
-        return ()
-    side_x, side_y = _side_plane_frame_shift(evaluation, "Right")
-    header_dz = evaluation.final_state.get("pieza", "header_dz")
-    return (
-        "MLV=1",
-        f"SHF[X]={_fmt(side_x)}",
-        f"SHF[Y]={_fmt(side_y)}",
-        f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
-        "?%ETK[7]=0",
-    )
-
-
-def _boring_to_router_top_face_lines(previous_family: str) -> tuple[str, ...]:
-    if previous_family != "side_drill":
-        return ()
-    return ("?%ETK[8]=1", "G40")
-
-
-def _boring_to_router_cleanup_lines(
-    previous_family: str,
-    router_prepare: StageDifferential,
-    router_trace: StageDifferential,
-    *,
-    include_face_selection: bool = False,
-) -> tuple[str, ...]:
-    cleanup_lines: list[str] = []
-    if previous_family == "top_drill" and _router_trace_requires_pre_router_etk7_reset(
-        router_prepare,
-        router_trace,
-    ):
-        cleanup_lines.append("?%ETK[7]=0")
-    if include_face_selection:
-        cleanup_lines.extend(("?%ETK[8]=1", "G40"))
-    if previous_family in {"top_drill", "side_drill"}:
-        cleanup_lines.extend(("?%ETK[17]=0", "M5", "?%ETK[0]=0"))
-    elif previous_family == "slot_milling":
-        cleanup_lines.extend(("?%ETK[17]=0", "M5", "?%ETK[1]=0"))
-    cleanup_lines.extend(
-        (
-            "MLV=0",
-            "G0 G53 Z201.000",
-            "MLV=2",
-            "MLV=0",
-            "G0 G53 Z201.000",
-            "MLV=0",
-            f"T{int(_change_after(router_prepare, 'herramienta', 'tool_number'))}",
-            "SYN",
-            "M06",
-            "G61",
-            "G0 G53 Z201.000",
-            "G64",
-        )
-    )
-    return tuple(cleanup_lines)
-
-
-def _router_trace_requires_pre_router_etk7_reset(
-    router_prepare: StageDifferential,
-    router_trace: StageDifferential,
-) -> bool:
-    profile_family = str(_optional_change_after(router_trace, "movimiento", "profile_family", ""))
-    side_of_feature = str(_optional_change_after(router_prepare, "trabajo", "side_of_feature", "Center"))
-    approach_enabled = bool(
-        _optional_change_after(router_prepare, "trabajo", "approach_enabled", False)
-    )
-    retract_enabled = bool(
-        _optional_change_after(router_prepare, "trabajo", "retract_enabled", False)
-    )
-    return profile_family == "OpenPolyline" and (
-        side_of_feature in {"Left", "Right"} or (approach_enabled and retract_enabled)
-    )
-
-
 def _profile_to_top_requires_face_selection(
     evaluation: IsoStateEvaluation,
     previous_group: _WorkGroup,
@@ -2474,14 +2361,7 @@ def _emit_top_to_slot_milling_transition(
     transition_id: Optional[str] = None,
 ) -> None:
     source = _observed_rule_source("top_to_slot_milling_transition")
-    for line in (
-        "?%ETK[8]=1",
-        "G40",
-        "MLV=0",
-        "G0 G53 Z201.000",
-        "MLV=2",
-        "?%ETK[0]=0",
-    ):
+    for line in _top_to_slot_milling_transition_lines():
         _append(
             lines,
             line,
@@ -2503,40 +2383,18 @@ def _emit_side_to_slot_milling_transition(
     transition_id: Optional[str] = None,
 ) -> None:
     source = _observed_rule_source("side_to_slot_milling_transition")
-    previous_plane = str(_change_after(side_prepare, "trabajo", "plane"))
-    if previous_plane in {"Back", "Left"}:
-        side_x, side_y = _side_plane_frame_shift(evaluation, "Right")
-        header_dz = evaluation.final_state.get("pieza", "header_dz")
-        for line in (
-            "MLV=1",
-            f"SHF[X]={_fmt(side_x)}",
-            f"SHF[Y]={_fmt(side_y)}",
-            f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
-        ):
-            _append(
-                lines,
-                line,
-                differential,
-                source,
-                "Restauracion de marco lateral antes de volver a ranura superior.",
-                confidence="confirmed",
-                rule_status="generalized_side_to_slot_milling_sequence",
-                transition_id=transition_id,
-            )
-    for line in (
-        "?%ETK[8]=1",
-        "G40",
-        "MLV=0",
-        "G0 G53 Z201.000",
-        "MLV=2",
-        "?%ETK[0]=0",
-    ):
+    for line in _side_to_slot_milling_transition_lines(evaluation, side_prepare):
+        note = (
+            "Restauracion de marco lateral antes de volver a ranura superior."
+            if line.startswith("SHF[") or line == "MLV=1"
+            else "Transicion observada entre taladro lateral y ranura superior."
+        )
         _append(
             lines,
             line,
             differential,
             source,
-            "Transicion observada entre taladro lateral y ranura superior.",
+            note,
             confidence="confirmed",
             rule_status="generalized_side_to_slot_milling_sequence",
             transition_id=transition_id,
@@ -2550,7 +2408,7 @@ def _emit_slot_to_slot_milling_transition(
     transition_id: Optional[str] = None,
 ) -> None:
     source = _observed_rule_source("slot_to_slot_milling_transition")
-    for line in ("?%ETK[8]=1", "G40", "G17"):
+    for line in _slot_to_slot_milling_transition_lines():
         _append(
             lines,
             line,
