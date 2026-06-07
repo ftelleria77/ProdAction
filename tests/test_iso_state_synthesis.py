@@ -45,6 +45,11 @@ from iso_state_synthesis.emitter import (
     _router_inter_work_reset_lines,
     _router_to_boring_transition_lines,
     _side_drill_prepare_after_router_lines,
+    _side_drill_prepare_after_slot_lines,
+    _side_drill_prepare_after_top_lines,
+    _side_drill_prepare_lines,
+    _side_drill_same_spindle_reposition_lines,
+    _side_drill_spindle_change_lines,
     _side_drill_reset_lines,
     _slot_milling_prepare_after_top_lines,
     _slot_milling_prepare_lines,
@@ -52,6 +57,10 @@ from iso_state_synthesis.emitter import (
     _side_normal,
     _tool_shift_lines,
     _top_drill_prepare_after_router_base_lines,
+    _top_drill_prepare_after_side_lines,
+    _top_drill_prepare_after_slot_lines,
+    _top_drill_prepare_between_top_lines,
+    _top_drill_prepare_lines,
     _top_drill_reset_lines,
     _trace_move_tangent_unit,
     _trace_point_tangent,
@@ -892,6 +901,403 @@ class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
                 "SHF[X]=-64.000",
                 "SHF[Y]=0.000",
                 "SHF[Z]=-0.950",
+            ),
+        )
+
+    def test_top_drill_prepare_lines_emit_initial_top_prepare(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector(
+                (
+                    StateValue("pieza", "length", 400.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_x", 5.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_y", 7.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_z", 25.0, _TEST_SOURCE),
+                )
+            ),
+            differentials=(),
+            final_state=StateVector((StateValue("pieza", "header_dz", 43.0, _TEST_SOURCE),)),
+        )
+        differential = StageDifferential(
+            stage_key="top_drill_prepare",
+            family="top_drill",
+            order_index=1,
+            target_changes=(
+                _change("herramienta", "tool_name", "005"),
+                _change("herramienta", "spindle_speed_standard", 6000),
+                _change("herramienta", "shf_x", -64.0),
+                _change("herramienta", "shf_y", 0.0),
+                _change("herramienta", "shf_z", -0.95),
+                _change("salida", "etk_0_mask", 5),
+                _change("salida", "etk_17", 257),
+            ),
+        )
+
+        self.assertEqual(
+            _top_drill_prepare_lines(evaluation, differential),
+            (
+                "MLV=2",
+                "G17",
+                "?%ETK[6]=5",
+                "%Or[0].ofX=-410000.000",
+                "%Or[0].ofY=-1515599.976",
+                "%Or[0].ofZ=43000.000",
+                "MLV=1",
+                "SHF[X]=-405.000",
+                "SHF[Y]=-1508.600",
+                "SHF[Z]=25.000",
+                "MLV=2",
+                "MLV=2",
+                "SHF[X]=-64.000",
+                "SHF[Y]=0.000",
+                "SHF[Z]=-0.950",
+                "?%ETK[17]=257",
+                "S6000M3",
+                "?%ETK[0]=5",
+            ),
+        )
+
+    def test_top_drill_prepare_between_top_lines_cover_same_and_changed_tool(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector((StateValue("pieza", "origin_z", 25.0, _TEST_SOURCE),)),
+            differentials=(),
+            final_state=StateVector(),
+        )
+        previous_prepare = StageDifferential(
+            stage_key="top_drill_prepare",
+            family="top_drill",
+            order_index=1,
+            target_changes=(_change("herramienta", "tool_name", "005"),),
+        )
+        previous_trace = StageDifferential(
+            stage_key="top_drill_trace",
+            family="top_drill",
+            order_index=2,
+            target_changes=(),
+            trace=(_trace_move("Approach", (10.0, 20.0, 30.0)),),
+        )
+        same_tool = StageDifferential(
+            stage_key="top_drill_prepare",
+            family="top_drill",
+            order_index=3,
+            target_changes=(_change("herramienta", "tool_name", "005"),),
+        )
+        changed_tool = StageDifferential(
+            stage_key="top_drill_prepare",
+            family="top_drill",
+            order_index=3,
+            target_changes=(
+                _change("herramienta", "tool_name", "006"),
+                _change("herramienta", "spindle_speed_standard", 6000),
+                _change("herramienta", "shf_x", -61.0),
+                _change("herramienta", "shf_y", 1.0),
+                _change("herramienta", "shf_z", -1.25),
+                _change("salida", "etk_0_mask", 6),
+                _change("salida", "etk_17", 257),
+            ),
+        )
+
+        self.assertEqual(
+            _top_drill_prepare_between_top_lines(
+                evaluation,
+                same_tool,
+                previous_prepare,
+                previous_trace,
+            ),
+            (
+                "MLV=1",
+                "SHF[Z]=25.000+%ETK[114]/1000",
+                "MLV=2",
+                "G17",
+                "G0 X10.000 Y20.000 Z30.000",
+            ),
+        )
+        self.assertEqual(
+            _top_drill_prepare_between_top_lines(
+                evaluation,
+                changed_tool,
+                previous_prepare,
+                previous_trace,
+            ),
+            (
+                "MLV=1",
+                "SHF[Z]=25.000+%ETK[114]/1000",
+                "MLV=2",
+                "G17",
+                "?%ETK[6]=6",
+                "G0 X10.000 Y20.000 Z30.000",
+                "MLV=2",
+                "SHF[X]=-61.000",
+                "SHF[Y]=1.000",
+                "SHF[Z]=-1.250",
+                "?%ETK[17]=257",
+                "S6000M3",
+                "?%ETK[0]=6",
+            ),
+        )
+
+    def test_top_drill_prepare_transition_lines_cover_slot_and_side_entries(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector(
+                (
+                    StateValue("pieza", "length", 400.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_x", 5.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_y", 7.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_z", 25.0, _TEST_SOURCE),
+                )
+            ),
+            differentials=(),
+            final_state=StateVector((StateValue("pieza", "header_dz", 43.0, _TEST_SOURCE),)),
+        )
+        differential = StageDifferential(
+            stage_key="top_drill_prepare",
+            family="top_drill",
+            order_index=1,
+            target_changes=(
+                _change("herramienta", "tool_name", "005"),
+                _change("herramienta", "spindle_speed_standard", 6000),
+                _change("herramienta", "shf_x", -64.0),
+                _change("herramienta", "shf_y", 0.0),
+                _change("herramienta", "shf_z", -0.95),
+                _change("salida", "etk_0_mask", 5),
+                _change("salida", "etk_17", 257),
+            ),
+        )
+        previous_side = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=0,
+            target_changes=(
+                _change("trabajo", "plane", "Left"),
+                _change("herramienta", "shf_z", -20.0),
+            ),
+        )
+
+        self.assertEqual(
+            _top_drill_prepare_after_slot_lines(evaluation, differential),
+            (
+                "?%ETK[8]=1",
+                "G40",
+                "MLV=0",
+                "G0 G53 Z201.000",
+                "MLV=2",
+                "?%ETK[1]=0",
+                "MLV=1",
+                "SHF[Z]=25.000+%ETK[114]/1000",
+                "MLV=2",
+                "G17",
+                "?%ETK[6]=5",
+                "MLV=2",
+                "SHF[X]=-64.000",
+                "SHF[Y]=0.000",
+                "SHF[Z]=-0.950",
+                "?%ETK[17]=257",
+                "S6000M3",
+                "?%ETK[0]=5",
+            ),
+        )
+        self.assertEqual(
+            _top_drill_prepare_after_side_lines(evaluation, differential, previous_side),
+            (
+                "MLV=1",
+                "SHF[X]=-405.000",
+                "SHF[Y]=-1508.600",
+                "SHF[Z]=43.000+%ETK[114]/1000",
+                "?%ETK[8]=1",
+                "G40",
+                "MLV=1",
+                "SHF[Z]=25.000+%ETK[114]/1000",
+                "MLV=2",
+                "G17",
+                "?%ETK[6]=5",
+                "MLV=0",
+                "G0 G53 Z63.000",
+                "MLV=2",
+                "MLV=2",
+                "SHF[X]=-64.000",
+                "SHF[Y]=0.000",
+                "SHF[Z]=-0.950",
+                "?%ETK[17]=257",
+                "S6000M3",
+                "?%ETK[0]=5",
+            ),
+        )
+
+    def test_side_drill_prepare_lines_emit_initial_side_prepare(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector(
+                (
+                    StateValue("pieza", "length", 400.0, _TEST_SOURCE),
+                    StateValue("pieza", "width", 350.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_x", 5.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_y", 7.0, _TEST_SOURCE),
+                    StateValue("pieza", "origin_z", 25.0, _TEST_SOURCE),
+                )
+            ),
+            differentials=(),
+            final_state=StateVector((StateValue("pieza", "header_dz", 43.0, _TEST_SOURCE),)),
+        )
+        differential = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=1,
+            target_changes=(
+                _change("trabajo", "plane", "Left"),
+                _change("herramienta", "spindle", 82),
+                _change("herramienta", "spindle_speed_standard", 6000),
+                _change("herramienta", "shf_x", -45.0),
+                _change("herramienta", "shf_y", -3.5),
+                _change("herramienta", "shf_z", -20.0),
+                _change("salida", "etk_0_mask", 6),
+                _change("salida", "etk_17", 257),
+            ),
+        )
+
+        self.assertEqual(
+            _side_drill_prepare_lines(evaluation, differential, multi_side_sequence=True),
+            (
+                "MLV=2",
+                "G17",
+                "?%ETK[6]=82",
+                "%Or[0].ofX=-410000.000",
+                "%Or[0].ofY=-1515599.976",
+                "%Or[0].ofZ=43000.000",
+                "MLV=1",
+                "SHF[X]=-405.000",
+                "SHF[Y]=-1158.600",
+                "SHF[Z]=25.000",
+                "MLV=2",
+                "MLV=2",
+                "SHF[X]=-45.000",
+                "SHF[Y]=-3.500",
+                "SHF[Z]=-20.000",
+                "?%ETK[17]=257",
+                "S6000M3",
+                "?%ETK[0]=6",
+                "G4F0.500",
+            ),
+        )
+
+    def test_side_drill_prepare_between_lines_cover_same_and_changed_spindle(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector(),
+            differentials=(),
+            final_state=StateVector((StateValue("pieza", "header_dz", 43.0, _TEST_SOURCE),)),
+        )
+        previous_trace = StageDifferential(
+            stage_key="side_drill_trace",
+            family="side_drill",
+            order_index=2,
+            target_changes=(),
+            trace=(_trace_move("Approach", (11.0, 22.0, 33.0)),),
+        )
+        same_spindle = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=3,
+            target_changes=(
+                _change("movimiento", "side_axis", "X"),
+                _change("herramienta", "shf_z", -20.0),
+            ),
+        )
+        previous_prepare = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=1,
+            target_changes=(_change("herramienta", "shf_z", -20.0),),
+        )
+        changed_spindle = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=3,
+            target_changes=(
+                _change("herramienta", "spindle", 83),
+                _change("herramienta", "shf_x", -44.0),
+                _change("herramienta", "shf_y", -2.0),
+                _change("herramienta", "shf_z", -10.0),
+            ),
+        )
+
+        self.assertEqual(
+            _side_drill_same_spindle_reposition_lines(
+                same_spindle,
+                previous_trace,
+                multi_side_sequence=True,
+            ),
+            ("G0 X11.000 Y22.000 Z33.000", "G4F0.500"),
+        )
+        self.assertEqual(
+            _side_drill_spindle_change_lines(evaluation, changed_spindle, previous_prepare),
+            (
+                "?%ETK[6]=83",
+                "MLV=0",
+                "G0 G53 Z73.000",
+                "MLV=2",
+                "MLV=2",
+                "SHF[X]=-44.000",
+                "SHF[Y]=-2.000",
+                "SHF[Z]=-10.000",
+            ),
+        )
+
+    def test_side_drill_prepare_transition_lines_cover_slot_and_top_entries(self) -> None:
+        evaluation = IsoStateEvaluation(
+            source_path=Path("fixture.pgmx"),
+            project_name="Fixture",
+            initial_state=StateVector((StateValue("pieza", "origin_z", 25.0, _TEST_SOURCE),)),
+            differentials=(),
+            final_state=StateVector((StateValue("pieza", "header_dz", 43.0, _TEST_SOURCE),)),
+        )
+        differential = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=1,
+            target_changes=(
+                _change("herramienta", "spindle", 82),
+                _change("herramienta", "shf_x", -45.0),
+                _change("herramienta", "shf_y", -3.5),
+                _change("herramienta", "shf_z", -20.0),
+            ),
+        )
+
+        self.assertEqual(
+            _side_drill_prepare_after_slot_lines(evaluation, differential),
+            (
+                "MLV=1",
+                "SHF[Z]=25.000+%ETK[114]/1000",
+                "MLV=2",
+                "G17",
+                "?%ETK[6]=82",
+                "MLV=2",
+                "SHF[X]=-45.000",
+                "SHF[Y]=-3.500",
+                "SHF[Z]=-20.000",
+            ),
+        )
+        self.assertEqual(
+            _side_drill_prepare_after_top_lines(evaluation, differential),
+            (
+                "MLV=1",
+                "SHF[Z]=25.000+%ETK[114]/1000",
+                "MLV=2",
+                "G17",
+                "?%ETK[6]=82",
+                "MLV=0",
+                "G0 G53 Z63.000",
+                "MLV=2",
+                "MLV=2",
+                "SHF[X]=-45.000",
+                "SHF[Y]=-3.500",
+                "SHF[Z]=-20.000",
             ),
         )
 

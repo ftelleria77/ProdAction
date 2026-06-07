@@ -1411,6 +1411,23 @@ def _tool_shift_lines(differential: StageDifferential) -> tuple[str, ...]:
     )
 
 
+def _boring_head_speed_lines(differential: StageDifferential) -> tuple[str, ...]:
+    speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
+    if speed_activation is None:
+        return ()
+    spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
+    return (f"?%ETK[17]={int(speed_activation.after)}", f"S{int(spindle_speed)}M3")
+
+
+def _vertical_mask_line(differential: StageDifferential) -> str:
+    return _etk0_mask_line(differential)
+
+
+def _etk0_mask_line(differential: StageDifferential) -> str:
+    mask = _change_after(differential, "salida", "etk_0_mask")
+    return f"?%ETK[0]={int(mask)}"
+
+
 def _emit_top_drill_prepare_after_slot(
     lines: list[ExplainedIsoLine],
     evaluation: IsoStateEvaluation,
@@ -1418,29 +1435,10 @@ def _emit_top_drill_prepare_after_slot(
     *,
     transition_id: Optional[str] = None,
 ) -> None:
-    origin_z = evaluation.initial_state.get("pieza", "origin_z")
-    tool_name = str(_change_after(differential, "herramienta", "tool_name"))
     mask = _change_after(differential, "salida", "etk_0_mask")
-    shf_x = _change_after(differential, "herramienta", "shf_x")
-    shf_y = _change_after(differential, "herramienta", "shf_y")
-    shf_z = _change_after(differential, "herramienta", "shf_z")
     source = _change_source(differential, "herramienta", "tool_offset_length")
-    tool_number = int(tool_name) if tool_name.isdigit() else tool_name
     transition_source = _observed_rule_source("slot_to_top_drill_transition")
-    for line in (
-        "?%ETK[8]=1",
-        "G40",
-        "MLV=0",
-        "G0 G53 Z201.000",
-        "MLV=2",
-        "?%ETK[1]=0",
-        "MLV=1",
-        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
-        "MLV=2",
-        "G17",
-        f"?%ETK[6]={tool_number}",
-        "MLV=2",
-    ):
+    for line in _top_drill_prepare_after_slot_base_lines(evaluation, differential):
         _append(
             lines,
             line,
@@ -1451,7 +1449,7 @@ def _emit_top_drill_prepare_after_slot(
             rule_status="generalized_slot_to_top_drill_sequence",
             transition_id=transition_id,
         )
-    for line in (f"SHF[X]={_fmt(shf_x)}", f"SHF[Y]={_fmt(shf_y)}", f"SHF[Z]={_fmt(shf_z)}"):
+    for line in _tool_shift_lines(differential):
         _append(
             lines,
             line,
@@ -1494,6 +1492,41 @@ def _emit_top_drill_prepare_after_slot(
         confidence="confirmed",
         rule_status="generalized_slot_to_top_drill_sequence",
         transition_id=transition_id,
+        )
+
+
+def _top_drill_prepare_after_slot_base_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> tuple[str, ...]:
+    origin_z = evaluation.initial_state.get("pieza", "origin_z")
+    tool_name = str(_change_after(differential, "herramienta", "tool_name"))
+    tool_number = int(tool_name) if tool_name.isdigit() else tool_name
+    return (
+        "?%ETK[8]=1",
+        "G40",
+        "MLV=0",
+        "G0 G53 Z201.000",
+        "MLV=2",
+        "?%ETK[1]=0",
+        "MLV=1",
+        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
+        "MLV=2",
+        "G17",
+        f"?%ETK[6]={tool_number}",
+        "MLV=2",
+    )
+
+
+def _top_drill_prepare_after_slot_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> tuple[str, ...]:
+    return (
+        _top_drill_prepare_after_slot_base_lines(evaluation, differential)
+        + _tool_shift_lines(differential)
+        + _boring_head_speed_lines(differential)
+        + (_vertical_mask_line(differential),)
     )
 
 
@@ -1505,38 +1538,20 @@ def _emit_top_drill_prepare_after_side(
     *,
     transition_id: Optional[str] = None,
 ) -> None:
-    origin_z = evaluation.initial_state.get("pieza", "origin_z")
-    header_dz = evaluation.final_state.get("pieza", "header_dz")
-    previous_plane = str(_change_after(previous_side_prepare, "trabajo", "plane"))
-    tool_name = str(_change_after(differential, "herramienta", "tool_name"))
     mask = _change_after(differential, "salida", "etk_0_mask")
-    shf_x = _change_after(differential, "herramienta", "shf_x")
-    shf_y = _change_after(differential, "herramienta", "shf_y")
-    shf_z = _change_after(differential, "herramienta", "shf_z")
     source = _change_source(differential, "herramienta", "tool_offset_length")
     transition_source = _observed_rule_source("side_to_top_drill_transition")
-    tool_number = int(tool_name) if tool_name.isdigit() else tool_name
-
-    if previous_plane in {"Left", "Back"}:
-        length = evaluation.initial_state.get("pieza", "length")
-        origin_x = evaluation.initial_state.get("pieza", "origin_x")
-        origin_y = evaluation.initial_state.get("pieza", "origin_y")
-        for line in (
-            "MLV=1",
-            f"SHF[X]={_fmt(-(length + origin_x))}",
-            f"SHF[Y]={_fmt(_base_shf_y(origin_y))}",
-            f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
-        ):
-            _append(
-                lines,
-                line,
-                differential,
-                transition_source,
-                "Restauracion de marco lateral antes de volver a Top Drill.",
-                confidence="confirmed",
-                rule_status="generalized_side_to_top_drill_sequence",
-                transition_id=transition_id,
-            )
+    for line in _top_drill_prepare_after_side_restore_lines(evaluation, previous_side_prepare):
+        _append(
+            lines,
+            line,
+            differential,
+            transition_source,
+            "Restauracion de marco lateral antes de volver a Top Drill.",
+            confidence="confirmed",
+            rule_status="generalized_side_to_top_drill_sequence",
+            transition_id=transition_id,
+        )
     for line in ("?%ETK[8]=1", "G40"):
         _append(
             lines,
@@ -1548,19 +1563,10 @@ def _emit_top_drill_prepare_after_side(
             rule_status="generalized_side_to_top_drill_sequence",
             transition_id=transition_id,
         )
-    for line in (
-        "MLV=1",
-        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
-        "MLV=2",
-        "G17",
-        f"?%ETK[6]={tool_number}",
-        "MLV=0",
-        f"G0 G53 Z{_fmt(_side_drill_g53_z(evaluation, previous_side_prepare))}",
-        "MLV=2",
-        "MLV=2",
-        f"SHF[X]={_fmt(shf_x)}",
-        f"SHF[Y]={_fmt(shf_y)}",
-        f"SHF[Z]={_fmt(shf_z)}",
+    for line in _top_drill_prepare_after_side_work_lines(
+        evaluation,
+        differential,
+        previous_side_prepare,
     ):
         _append(
             lines,
@@ -1604,6 +1610,64 @@ def _emit_top_drill_prepare_after_side(
         confidence="confirmed",
         rule_status="generalized_side_to_top_drill_sequence",
         transition_id=transition_id,
+        )
+
+
+def _top_drill_prepare_after_side_restore_lines(
+    evaluation: IsoStateEvaluation,
+    previous_side_prepare: StageDifferential,
+) -> tuple[str, ...]:
+    previous_plane = str(_change_after(previous_side_prepare, "trabajo", "plane"))
+    if previous_plane not in {"Left", "Back"}:
+        return ()
+    length = evaluation.initial_state.get("pieza", "length")
+    origin_x = evaluation.initial_state.get("pieza", "origin_x")
+    origin_y = evaluation.initial_state.get("pieza", "origin_y")
+    header_dz = evaluation.final_state.get("pieza", "header_dz")
+    return (
+        "MLV=1",
+        f"SHF[X]={_fmt(-(length + origin_x))}",
+        f"SHF[Y]={_fmt(_base_shf_y(origin_y))}",
+        f"SHF[Z]={_fmt(header_dz)}+%ETK[114]/1000",
+    )
+
+
+def _top_drill_prepare_after_side_work_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+    previous_side_prepare: StageDifferential,
+) -> tuple[str, ...]:
+    origin_z = evaluation.initial_state.get("pieza", "origin_z")
+    tool_name = str(_change_after(differential, "herramienta", "tool_name"))
+    tool_number = int(tool_name) if tool_name.isdigit() else tool_name
+    return (
+        "MLV=1",
+        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
+        "MLV=2",
+        "G17",
+        f"?%ETK[6]={tool_number}",
+        "MLV=0",
+        f"G0 G53 Z{_fmt(_side_drill_g53_z(evaluation, previous_side_prepare))}",
+        "MLV=2",
+        "MLV=2",
+    ) + _tool_shift_lines(differential)
+
+
+def _top_drill_prepare_after_side_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+    previous_side_prepare: StageDifferential,
+) -> tuple[str, ...]:
+    return (
+        _top_drill_prepare_after_side_restore_lines(evaluation, previous_side_prepare)
+        + ("?%ETK[8]=1", "G40")
+        + _top_drill_prepare_after_side_work_lines(
+            evaluation,
+            differential,
+            previous_side_prepare,
+        )
+        + _boring_head_speed_lines(differential)
+        + (_vertical_mask_line(differential),)
     )
 
 
@@ -1616,33 +1680,10 @@ def _emit_top_drill_prepare(
     previous_trace: Optional[StageDifferential] = None,
     transition_id: Optional[str] = None,
 ) -> None:
-    length = evaluation.initial_state.get("pieza", "length")
-    origin_x = evaluation.initial_state.get("pieza", "origin_x")
-    origin_y = evaluation.initial_state.get("pieza", "origin_y")
-    origin_z = evaluation.initial_state.get("pieza", "origin_z")
-    header_dz = evaluation.final_state.get("pieza", "header_dz")
-    tool_name = str(_change_after(differential, "herramienta", "tool_name"))
     mask = _change_after(differential, "salida", "etk_0_mask")
-    shf_x = _change_after(differential, "herramienta", "shf_x")
-    shf_y = _change_after(differential, "herramienta", "shf_y")
-    shf_z = _change_after(differential, "herramienta", "shf_z")
     source = _change_source(differential, "herramienta", "tool_offset_length")
-    tool_number = int(tool_name) if tool_name.isdigit() else tool_name
-    prep_origin_x = length + (2 * origin_x)
     if previous_trace is not None:
-        previous_approach = _trace_move(previous_trace, "Approach").points[0]
-        previous_rapid_z = previous_approach.iso_z
-        same_tool = (
-            previous_prepare is not None
-            and _change_after(previous_prepare, "herramienta", "tool_name") == tool_name
-        )
-        base_lines = (
-            "MLV=1",
-            f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
-            "MLV=2",
-            "G17",
-        )
-        for line in base_lines:
+        for line in _top_drill_prepare_between_top_base_lines(evaluation):
             _append(
                 lines,
                 line,
@@ -1653,10 +1694,10 @@ def _emit_top_drill_prepare(
                 rule_status="generalized_top_drill_sequence",
                 transition_id=transition_id,
             )
-        if same_tool:
+        if _same_top_drill_tool(previous_prepare, differential):
             _append(
                 lines,
-                f"G0 X{_fmt(previous_approach.x)} Y{_fmt(previous_approach.y)} Z{_fmt(previous_rapid_z)}",
+                _top_drill_previous_approach_reposition_line(previous_trace),
                 differential,
                 source,
                 "Reposicion de seguridad antes de repetir la misma herramienta.",
@@ -1665,11 +1706,7 @@ def _emit_top_drill_prepare(
                 transition_id=transition_id,
             )
             return
-        for line in (
-            f"?%ETK[6]={tool_number}",
-            f"G0 X{_fmt(previous_approach.x)} Y{_fmt(previous_approach.y)} Z{_fmt(previous_rapid_z)}",
-            "MLV=2",
-        ):
+        for line in _top_drill_prepare_between_tool_change_lines(differential, previous_trace):
             _append(
                 lines,
                 line,
@@ -1680,7 +1717,7 @@ def _emit_top_drill_prepare(
                 rule_status="generalized_top_drill_sequence",
                 transition_id=transition_id,
             )
-        for line in (f"SHF[X]={_fmt(shf_x)}", f"SHF[Y]={_fmt(shf_y)}", f"SHF[Z]={_fmt(shf_z)}"):
+        for line in _tool_shift_lines(differential):
             _append(
                 lines,
                 line,
@@ -1726,7 +1763,7 @@ def _emit_top_drill_prepare(
         )
         return
 
-    for line in ("MLV=2", "G17"):
+    for line in _top_drill_prepare_modal_lines():
         _append(
             lines,
             line,
@@ -1735,7 +1772,8 @@ def _emit_top_drill_prepare(
             "Modo/plano observado en preparacion de taladro superior.",
             rule_status="top_drill_modal_observed",
         )
-    for line in (f"?%ETK[6]={tool_number}", f"%Or[0].ofX={_fmt_scaled(-prep_origin_x)}"):
+    origin_lines = _top_drill_prepare_origin_lines(evaluation, differential)
+    for line in origin_lines[:2]:
         _append(
             lines,
             line,
@@ -1747,7 +1785,7 @@ def _emit_top_drill_prepare(
         )
     _append(
         lines,
-        "%Or[0].ofY=-1515599.976",
+        origin_lines[2],
         differential,
         _observed_rule_source("top_drill_prepare"),
         "Constante de campo HG observada; fuente de maquina/campo pendiente.",
@@ -1756,26 +1794,23 @@ def _emit_top_drill_prepare(
     )
     _append(
         lines,
-        f"%Or[0].ofZ={_fmt_scaled(header_dz)}",
+        origin_lines[3],
         differential,
         source,
         "Preparacion de herramienta derivada de depth + origin_z.",
         confidence="confirmed",
         rule_status="generalized_top_drill_001_006",
     )
+    frame_lines = _top_drill_prepare_frame_lines(evaluation)
     _append(
         lines,
-        "MLV=1",
+        frame_lines[0],
         differential,
         source,
         "Cambio modal observado durante preparacion de herramienta.",
         rule_status="top_drill_modal_observed",
     )
-    for line in (
-        f"SHF[X]={_fmt(-(length + origin_x))}",
-        f"SHF[Y]={_fmt(-1515.6 + origin_y)}",
-        f"SHF[Z]={_fmt(origin_z)}",
-    ):
+    for line in frame_lines[1:4]:
         _append(
             lines,
             line,
@@ -1785,7 +1820,7 @@ def _emit_top_drill_prepare(
             confidence="confirmed",
             rule_status="generalized_top_drill_001_006",
         )
-    for line in ("MLV=2", "MLV=2"):
+    for line in frame_lines[4:]:
         _append(
             lines,
             line,
@@ -1794,7 +1829,7 @@ def _emit_top_drill_prepare(
             "Cambio modal observado durante preparacion de herramienta.",
             rule_status="top_drill_modal_observed",
         )
-    for line in (f"SHF[X]={_fmt(shf_x)}", f"SHF[Y]={_fmt(shf_y)}", f"SHF[Z]={_fmt(shf_z)}"):
+    for line in _tool_shift_lines(differential):
         _append(
             lines,
             line,
@@ -1833,6 +1868,121 @@ def _emit_top_drill_prepare(
         "Mascara de agregado vertical derivada del spindle activo.",
         confidence="confirmed",
         rule_status="generalized_top_drill_spindle_mask",
+    )
+
+
+def _same_top_drill_tool(
+    previous_prepare: Optional[StageDifferential],
+    differential: StageDifferential,
+) -> bool:
+    return (
+        previous_prepare is not None
+        and _change_after(previous_prepare, "herramienta", "tool_name")
+        == _change_after(differential, "herramienta", "tool_name")
+    )
+
+
+def _top_drill_tool_number(differential: StageDifferential) -> object:
+    tool_name = str(_change_after(differential, "herramienta", "tool_name"))
+    return int(tool_name) if tool_name.isdigit() else tool_name
+
+
+def _top_drill_previous_approach_reposition_line(previous_trace: StageDifferential) -> str:
+    previous_approach = _trace_move(previous_trace, "Approach").points[0]
+    return (
+        f"G0 X{_fmt(previous_approach.x)} "
+        f"Y{_fmt(previous_approach.y)} "
+        f"Z{_fmt(previous_approach.iso_z)}"
+    )
+
+
+def _top_drill_prepare_between_top_base_lines(
+    evaluation: IsoStateEvaluation,
+) -> tuple[str, ...]:
+    origin_z = evaluation.initial_state.get("pieza", "origin_z")
+    return (
+        "MLV=1",
+        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
+        "MLV=2",
+        "G17",
+    )
+
+
+def _top_drill_prepare_between_tool_change_lines(
+    differential: StageDifferential,
+    previous_trace: StageDifferential,
+) -> tuple[str, ...]:
+    return (
+        f"?%ETK[6]={_top_drill_tool_number(differential)}",
+        _top_drill_previous_approach_reposition_line(previous_trace),
+        "MLV=2",
+    )
+
+
+def _top_drill_prepare_between_top_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+    previous_prepare: Optional[StageDifferential],
+    previous_trace: StageDifferential,
+) -> tuple[str, ...]:
+    base_lines = _top_drill_prepare_between_top_base_lines(evaluation)
+    if _same_top_drill_tool(previous_prepare, differential):
+        return base_lines + (_top_drill_previous_approach_reposition_line(previous_trace),)
+    return (
+        base_lines
+        + _top_drill_prepare_between_tool_change_lines(differential, previous_trace)
+        + _tool_shift_lines(differential)
+        + _boring_head_speed_lines(differential)
+        + (_vertical_mask_line(differential),)
+    )
+
+
+def _top_drill_prepare_modal_lines() -> tuple[str, ...]:
+    return ("MLV=2", "G17")
+
+
+def _top_drill_prepare_origin_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> tuple[str, ...]:
+    length = evaluation.initial_state.get("pieza", "length")
+    origin_x = evaluation.initial_state.get("pieza", "origin_x")
+    header_dz = evaluation.final_state.get("pieza", "header_dz")
+    prep_origin_x = length + (2 * origin_x)
+    return (
+        f"?%ETK[6]={_top_drill_tool_number(differential)}",
+        f"%Or[0].ofX={_fmt_scaled(-prep_origin_x)}",
+        "%Or[0].ofY=-1515599.976",
+        f"%Or[0].ofZ={_fmt_scaled(header_dz)}",
+    )
+
+
+def _top_drill_prepare_frame_lines(evaluation: IsoStateEvaluation) -> tuple[str, ...]:
+    length = evaluation.initial_state.get("pieza", "length")
+    origin_x = evaluation.initial_state.get("pieza", "origin_x")
+    origin_y = evaluation.initial_state.get("pieza", "origin_y")
+    origin_z = evaluation.initial_state.get("pieza", "origin_z")
+    return (
+        "MLV=1",
+        f"SHF[X]={_fmt(-(length + origin_x))}",
+        f"SHF[Y]={_fmt(-1515.6 + origin_y)}",
+        f"SHF[Z]={_fmt(origin_z)}",
+        "MLV=2",
+        "MLV=2",
+    )
+
+
+def _top_drill_prepare_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> tuple[str, ...]:
+    return (
+        _top_drill_prepare_modal_lines()
+        + _top_drill_prepare_origin_lines(evaluation, differential)
+        + _top_drill_prepare_frame_lines(evaluation)
+        + _tool_shift_lines(differential)
+        + _boring_head_speed_lines(differential)
+        + (_vertical_mask_line(differential),)
     )
 
 
@@ -4349,21 +4499,10 @@ def _emit_side_drill_prepare(
     final_left_pause: bool = False,
     transition_id: Optional[str] = None,
 ) -> None:
-    length = evaluation.initial_state.get("pieza", "length")
-    width = evaluation.initial_state.get("pieza", "width")
-    origin_x = evaluation.initial_state.get("pieza", "origin_x")
-    origin_y = evaluation.initial_state.get("pieza", "origin_y")
-    origin_z = evaluation.initial_state.get("pieza", "origin_z")
-    header_dz = evaluation.final_state.get("pieza", "header_dz")
     plane = str(_change_after(differential, "trabajo", "plane"))
     spindle = _change_after(differential, "herramienta", "spindle")
     mask = _change_after(differential, "salida", "etk_0_mask")
-    shf_x = _change_after(differential, "herramienta", "shf_x")
-    shf_y = _change_after(differential, "herramienta", "shf_y")
-    shf_z = _change_after(differential, "herramienta", "shf_z")
-    frame_x, frame_y = _side_plane_frame_shift(evaluation, plane)
     source = _change_source(differential, "herramienta", "tool_offset_length")
-    prep_origin_x = length + (2 * origin_x)
     if previous_prepare is not None:
         previous_plane = str(_change_after(previous_prepare, "trabajo", "plane"))
         previous_spindle = _change_after(previous_prepare, "herramienta", "spindle")
@@ -4377,12 +4516,7 @@ def _emit_side_drill_prepare(
                 previous_plane=previous_plane,
                 transition_id=transition_id,
             )
-        for line in (
-            "MLV=1",
-            f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
-            "MLV=2",
-            "G17",
-        ):
+        for line in _side_drill_prepare_between_base_lines(evaluation):
             _append(
                 lines,
                 line,
@@ -4394,12 +4528,15 @@ def _emit_side_drill_prepare(
                 transition_id=transition_id,
             )
         if spindle == previous_spindle:
-            axis = str(_change_after(differential, "movimiento", "side_axis"))
-            if axis == "X" and previous_trace is not None:
-                previous_approach = _trace_move(previous_trace, "Approach").points[0]
+            for line in _side_drill_same_spindle_reposition_lines(
+                differential,
+                previous_trace,
+                multi_side_sequence=multi_side_sequence,
+                final_left_pause=final_left_pause,
+            ):
                 _append(
                     lines,
-                    f"G0 X{_fmt(previous_approach.x)} Y{_fmt(previous_approach.y)} Z{_fmt(previous_approach.iso_z)}",
+                    line,
                     differential,
                     source,
                     "Reposicion lateral antes de repetir el mismo spindle.",
@@ -4407,36 +4544,15 @@ def _emit_side_drill_prepare(
                     rule_status="generalized_side_drill_sequence",
                     transition_id=transition_id,
                 )
-                if multi_side_sequence or final_left_pause:
-                    _append(
-                        lines,
-                        "G4F0.500",
-                        differential,
-                        source,
-                        "Pausa observada antes de repetir taladro lateral.",
-                        confidence="confirmed",
-                        rule_status="generalized_side_drill_sequence",
-                        transition_id=transition_id,
-                    )
-            else:
-                reposition_lines = ["MLV=0", "G0 G53 Z201.000", "MLV=2"]
-                if multi_side_sequence or final_left_pause:
-                    reposition_lines.append("G4F0.500")
-                for line in tuple(reposition_lines):
-                    _append(
-                        lines,
-                        line,
-                        differential,
-                        source,
-                        "Reposicion lateral antes de repetir el mismo spindle.",
-                        confidence="confirmed",
-                        rule_status="generalized_side_drill_sequence",
-                        transition_id=transition_id,
-                    )
             return
+        spindle_change_lines = _side_drill_spindle_change_lines(
+            evaluation,
+            differential,
+            previous_prepare,
+        )
         _append(
             lines,
-            f"?%ETK[6]={int(spindle)}",
+            spindle_change_lines[0],
             differential,
             source,
             "Cambio de spindle lateral desde politica de cara.",
@@ -4444,8 +4560,7 @@ def _emit_side_drill_prepare(
             rule_status="generalized_side_drill_sequence",
             transition_id=transition_id,
         )
-        park_z = _side_drill_g53_z(evaluation, previous_prepare, differential)
-        for line in ("MLV=0", f"G0 G53 Z{_fmt(park_z)}", "MLV=2", "MLV=2"):
+        for line in spindle_change_lines[1:5]:
             _append(
                 lines,
                 line,
@@ -4456,7 +4571,7 @@ def _emit_side_drill_prepare(
                 rule_status="generalized_side_drill_sequence",
                 transition_id=transition_id,
             )
-        for line in (f"SHF[X]={_fmt(shf_x)}", f"SHF[Y]={_fmt(shf_y)}", f"SHF[Z]={_fmt(shf_z)}"):
+        for line in spindle_change_lines[5:]:
             _append(
                 lines,
                 line,
@@ -4511,9 +4626,9 @@ def _emit_side_drill_prepare(
                     confidence="confirmed",
                     rule_status="generalized_side_drill_sequence",
                     transition_id=transition_id,
-                )
+        )
         return
-    for line in ("MLV=2", "G17"):
+    for line in _side_drill_prepare_modal_lines():
         _append(
             lines,
             line,
@@ -4522,7 +4637,8 @@ def _emit_side_drill_prepare(
             "Modo/plano observado en preparacion de taladro lateral.",
             rule_status="side_drill_modal_observed",
         )
-    for line in (f"?%ETK[6]={int(spindle)}", f"%Or[0].ofX={_fmt_scaled(-prep_origin_x)}"):
+    origin_lines = _side_drill_prepare_origin_lines(evaluation, differential)
+    for line in origin_lines[:2]:
         _append(
             lines,
             line,
@@ -4534,7 +4650,7 @@ def _emit_side_drill_prepare(
         )
     _append(
         lines,
-        "%Or[0].ofY=-1515599.976",
+        origin_lines[2],
         differential,
         _observed_rule_source("side_drill_prepare"),
         "Constante de campo HG observada; fuente de maquina/campo pendiente.",
@@ -4543,26 +4659,23 @@ def _emit_side_drill_prepare(
     )
     _append(
         lines,
-        f"%Or[0].ofZ={_fmt_scaled(header_dz)}",
+        origin_lines[3],
         differential,
         source,
         "Preparacion lateral derivada de depth + origin_z.",
         confidence="confirmed",
         rule_status="generalized_side_drill_010_013",
     )
+    frame_lines = _side_drill_prepare_frame_lines(evaluation, differential)
     _append(
         lines,
-        "MLV=1",
+        frame_lines[0],
         differential,
         source,
         "Cambio modal observado durante preparacion de herramienta lateral.",
         rule_status="side_drill_modal_observed",
     )
-    for line in (
-        f"SHF[X]={_fmt(frame_x)}",
-        f"SHF[Y]={_fmt(frame_y)}",
-        f"SHF[Z]={_fmt(origin_z)}",
-    ):
+    for line in frame_lines[1:4]:
         _append(
             lines,
             line,
@@ -4572,7 +4685,7 @@ def _emit_side_drill_prepare(
             confidence="confirmed",
             rule_status="generalized_side_drill_010_013",
         )
-    for line in ("MLV=2", "MLV=2"):
+    for line in frame_lines[4:]:
         _append(
             lines,
             line,
@@ -4581,7 +4694,7 @@ def _emit_side_drill_prepare(
             "Cambio modal observado durante preparacion lateral.",
             rule_status="side_drill_modal_observed",
         )
-    for line in (f"SHF[X]={_fmt(shf_x)}", f"SHF[Y]={_fmt(shf_y)}", f"SHF[Z]={_fmt(shf_z)}"):
+    for line in _tool_shift_lines(differential):
         _append(
             lines,
             line,
@@ -4631,6 +4744,114 @@ def _emit_side_drill_prepare(
             confidence="confirmed",
             rule_status="generalized_side_drill_sequence",
         )
+
+
+def _side_drill_prepare_between_base_lines(
+    evaluation: IsoStateEvaluation,
+) -> tuple[str, ...]:
+    origin_z = evaluation.initial_state.get("pieza", "origin_z")
+    return (
+        "MLV=1",
+        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
+        "MLV=2",
+        "G17",
+    )
+
+
+def _side_drill_same_spindle_reposition_lines(
+    differential: StageDifferential,
+    previous_trace: Optional[StageDifferential],
+    *,
+    multi_side_sequence: bool = False,
+    final_left_pause: bool = False,
+) -> tuple[str, ...]:
+    axis = str(_change_after(differential, "movimiento", "side_axis"))
+    pause_required = multi_side_sequence or final_left_pause
+    if axis == "X" and previous_trace is not None:
+        previous_approach = _trace_move(previous_trace, "Approach").points[0]
+        reposition_lines = [
+            f"G0 X{_fmt(previous_approach.x)} "
+            f"Y{_fmt(previous_approach.y)} "
+            f"Z{_fmt(previous_approach.iso_z)}"
+        ]
+    else:
+        reposition_lines = ["MLV=0", "G0 G53 Z201.000", "MLV=2"]
+    if pause_required:
+        reposition_lines.append("G4F0.500")
+    return tuple(reposition_lines)
+
+
+def _side_drill_spindle_change_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+    previous_prepare: StageDifferential,
+) -> tuple[str, ...]:
+    spindle = _change_after(differential, "herramienta", "spindle")
+    park_z = _side_drill_g53_z(evaluation, previous_prepare, differential)
+    return (
+        f"?%ETK[6]={int(spindle)}",
+        "MLV=0",
+        f"G0 G53 Z{_fmt(park_z)}",
+        "MLV=2",
+        "MLV=2",
+    ) + _tool_shift_lines(differential)
+
+
+def _side_drill_prepare_modal_lines() -> tuple[str, ...]:
+    return ("MLV=2", "G17")
+
+
+def _side_drill_prepare_origin_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> tuple[str, ...]:
+    length = evaluation.initial_state.get("pieza", "length")
+    origin_x = evaluation.initial_state.get("pieza", "origin_x")
+    header_dz = evaluation.final_state.get("pieza", "header_dz")
+    spindle = _change_after(differential, "herramienta", "spindle")
+    prep_origin_x = length + (2 * origin_x)
+    return (
+        f"?%ETK[6]={int(spindle)}",
+        f"%Or[0].ofX={_fmt_scaled(-prep_origin_x)}",
+        "%Or[0].ofY=-1515599.976",
+        f"%Or[0].ofZ={_fmt_scaled(header_dz)}",
+    )
+
+
+def _side_drill_prepare_frame_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> tuple[str, ...]:
+    origin_z = evaluation.initial_state.get("pieza", "origin_z")
+    plane = str(_change_after(differential, "trabajo", "plane"))
+    frame_x, frame_y = _side_plane_frame_shift(evaluation, plane)
+    return (
+        "MLV=1",
+        f"SHF[X]={_fmt(frame_x)}",
+        f"SHF[Y]={_fmt(frame_y)}",
+        f"SHF[Z]={_fmt(origin_z)}",
+        "MLV=2",
+        "MLV=2",
+    )
+
+
+def _side_drill_prepare_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+    *,
+    multi_side_sequence: bool = False,
+) -> tuple[str, ...]:
+    prepare_lines = (
+        _side_drill_prepare_modal_lines()
+        + _side_drill_prepare_origin_lines(evaluation, differential)
+        + _side_drill_prepare_frame_lines(evaluation, differential)
+        + _tool_shift_lines(differential)
+        + _boring_head_speed_lines(differential)
+        + (_etk0_mask_line(differential),)
+    )
+    if multi_side_sequence:
+        prepare_lines += ("G4F0.500",)
+    return prepare_lines
 
 
 def _requires_final_short_left_pause(
@@ -4817,24 +5038,9 @@ def _emit_side_drill_prepare_after_slot(
     multi_side_sequence: bool = False,
     transition_id: Optional[str] = None,
 ) -> None:
-    origin_z = evaluation.initial_state.get("pieza", "origin_z")
-    spindle = _change_after(differential, "herramienta", "spindle")
     mask = _change_after(differential, "salida", "etk_0_mask")
-    shf_x = _change_after(differential, "herramienta", "shf_x")
-    shf_y = _change_after(differential, "herramienta", "shf_y")
-    shf_z = _change_after(differential, "herramienta", "shf_z")
     source = _change_source(differential, "herramienta", "tool_offset_length")
-    for line in (
-        "MLV=1",
-        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
-        "MLV=2",
-        "G17",
-        f"?%ETK[6]={int(spindle)}",
-        "MLV=2",
-        f"SHF[X]={_fmt(shf_x)}",
-        f"SHF[Y]={_fmt(shf_y)}",
-        f"SHF[Z]={_fmt(shf_z)}",
-    ):
+    for line in _side_drill_prepare_after_slot_lines(evaluation, differential):
         _append(
             lines,
             line,
@@ -4891,6 +5097,22 @@ def _emit_side_drill_prepare_after_slot(
         )
 
 
+def _side_drill_prepare_after_slot_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> tuple[str, ...]:
+    origin_z = evaluation.initial_state.get("pieza", "origin_z")
+    spindle = _change_after(differential, "herramienta", "spindle")
+    return (
+        "MLV=1",
+        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
+        "MLV=2",
+        "G17",
+        f"?%ETK[6]={int(spindle)}",
+        "MLV=2",
+    ) + _tool_shift_lines(differential)
+
+
 def _emit_side_drill_prepare_after_top(
     lines: list[ExplainedIsoLine],
     evaluation: IsoStateEvaluation,
@@ -4899,29 +5121,11 @@ def _emit_side_drill_prepare_after_top(
     multi_side_sequence: bool = False,
     transition_id: Optional[str] = None,
 ) -> None:
-    origin_z = evaluation.initial_state.get("pieza", "origin_z")
     plane = str(_change_after(differential, "trabajo", "plane"))
-    spindle = _change_after(differential, "herramienta", "spindle")
     mask = _change_after(differential, "salida", "etk_0_mask")
-    shf_x = _change_after(differential, "herramienta", "shf_x")
-    shf_y = _change_after(differential, "herramienta", "shf_y")
-    shf_z = _change_after(differential, "herramienta", "shf_z")
     source = _change_source(differential, "herramienta", "tool_offset_length")
     _emit_side_plane_selection(lines, evaluation, differential, plane, include_right_frame=False)
-    for line in (
-        "MLV=1",
-        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
-        "MLV=2",
-        "G17",
-        f"?%ETK[6]={int(spindle)}",
-        "MLV=0",
-        f"G0 G53 Z{_fmt(_side_drill_g53_z(evaluation, differential))}",
-        "MLV=2",
-        "MLV=2",
-        f"SHF[X]={_fmt(shf_x)}",
-        f"SHF[Y]={_fmt(shf_y)}",
-        f"SHF[Z]={_fmt(shf_z)}",
-    ):
+    for line in _side_drill_prepare_after_top_lines(evaluation, differential):
         _append(
             lines,
             line,
@@ -4976,6 +5180,25 @@ def _emit_side_drill_prepare_after_top(
             rule_status="generalized_top_to_side_drill_sequence",
             transition_id=transition_id,
         )
+
+
+def _side_drill_prepare_after_top_lines(
+    evaluation: IsoStateEvaluation,
+    differential: StageDifferential,
+) -> tuple[str, ...]:
+    origin_z = evaluation.initial_state.get("pieza", "origin_z")
+    spindle = _change_after(differential, "herramienta", "spindle")
+    return (
+        "MLV=1",
+        f"SHF[Z]={_fmt(origin_z)}+%ETK[114]/1000",
+        "MLV=2",
+        "G17",
+        f"?%ETK[6]={int(spindle)}",
+        "MLV=0",
+        f"G0 G53 Z{_fmt(_side_drill_g53_z(evaluation, differential))}",
+        "MLV=2",
+        "MLV=2",
+    ) + _tool_shift_lines(differential)
 
 
 def _emit_side_drill_trace(

@@ -27,16 +27,23 @@ Ultima actualizacion: 2026-06-06
   `_top_drill_reset_lines`, `_side_drill_reset_lines` y
   `_slot_milling_reset_lines`.
 - El subcorte de preparacion SlotSide separa `_slot_milling_prepare_lines` y
-  `_slot_milling_prepare_after_top_lines`; todavia quedan pendientes las
-  preparaciones iniciales e incrementales de `top_drill` y `side_drill`.
+  `_slot_milling_prepare_after_top_lines`.
+- El subcorte de preparaciones Top/Side separa builders internos para:
+  `_top_drill_prepare_lines`, `_top_drill_prepare_between_top_lines`,
+  `_top_drill_prepare_after_slot_lines`, `_top_drill_prepare_after_side_lines`,
+  `_side_drill_prepare_lines`, `_side_drill_same_spindle_reposition_lines`,
+  `_side_drill_spindle_change_lines`, `_side_drill_prepare_after_slot_lines` y
+  `_side_drill_prepare_after_top_lines`.
 - Los builders internos de traza router cubren center con leads
   (`OpenPolyline`, `ClosedPolyline*`, `Circle`), estrategias, compensacion
   lateral, sin-leads generico y fallback final.
 - La separacion a modulos fuera de `emitter.py` queda como decision futura del
   laboratorio ISO; este checkpoint solo cierra la delegacion interna del bloque
-  de fresado router, resets y preparacion SlotSide sin ampliar reglas ISO.
+  de fresado router, resets y preparaciones de boring head sin ampliar reglas
+  ISO.
 - Cobertura local del checkpoint: `tests.test_iso_state_synthesis` fija los
-  builders de movimiento, resets y preparacion SlotSide con tests puros.
+  builders de movimiento, resets y preparaciones de boring head con tests
+  puros.
 
 ## Retiro De `iso_generation/`
 

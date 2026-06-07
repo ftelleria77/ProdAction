@@ -319,13 +319,38 @@ Hallazgos aplicados:
 - Se agregaron tests puros para la preparacion inicial SlotSide y para la
   entrada incremental desde Top Drill.
 
+## Subcorte Preparaciones Top/Side
+
+Hallazgos aplicados:
+
+- Se extrajo `_top_drill_prepare_lines` para aislar la preparacion inicial de
+  taladro superior.
+- Se extrajo `_top_drill_prepare_between_top_lines` para cubrir preparaciones
+  entre trabajos Top Drill, distinguiendo repeticion de herramienta y cambio de
+  herramienta.
+- Se extrajeron `_top_drill_prepare_after_slot_lines` y
+  `_top_drill_prepare_after_side_lines` para cubrir entradas a Top Drill desde
+  ranura y desde taladro lateral.
+- Se extrajo `_side_drill_prepare_lines` para aislar la preparacion inicial de
+  taladro lateral.
+- Se extrajeron helpers de preparacion lateral entre trabajos:
+  `_side_drill_same_spindle_reposition_lines` y
+  `_side_drill_spindle_change_lines`.
+- Se extrajeron `_side_drill_prepare_after_slot_lines` y
+  `_side_drill_prepare_after_top_lines` para cubrir entradas laterales desde
+  ranura y desde Top Drill. La entrada lateral desde router ya estaba cubierta
+  por `_side_drill_prepare_after_router_lines`.
+- Se agregaron tests puros para cada familia de helper, incluyendo velocidad
+  opcional, mascara `ETK[0]`, reposicion por traza previa, `G53 Z` lateral y
+  pausa lateral.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome
   la generacion ISO, porque todavia concentra preparacion, apendice explicado
   de resets, formato y comparacion. La traza router, los resets principales y
-  la preparacion SlotSide ya tienen builders internos de lineas, pero aun no se
-  movieron a modulos separados.
+  las preparaciones principales de boring head ya tienen builders internos de
+  lineas, pero aun no se movieron a modulos separados.
 - Agregar fixtures PGMX/ISO chicos dentro de `tests/fixtures` o `tmp` controlado
   para cubrir `pgmx_source.py` y una emision real sin depender de rutas `S:` o
   `P:`.
