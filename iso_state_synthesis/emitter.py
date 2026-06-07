@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 from .boring_head_lines import (
+    _boring_head_mask_line,
+    _boring_head_speed_lines,
     _side_drill_prepare_after_router_lines,
     _side_drill_prepare_after_slot_lines,
     _side_drill_prepare_after_top_lines,
@@ -18,6 +20,7 @@ from .boring_head_lines import (
     _side_drill_same_spindle_reposition_lines,
     _side_drill_spindle_change_lines,
     _side_plane_selection_lines,
+    _side_sequence_pause_line,
     _slot_milling_prepare_after_top_lines,
     _slot_milling_prepare_lines,
     _slot_milling_reset_lines,
@@ -1069,7 +1072,6 @@ def _emit_top_drill_prepare_after_router(
     previous_family: Optional[str] = None,
     transition_id: Optional[str] = None,
 ) -> None:
-    mask = _change_after(differential, "salida", "etk_0_mask")
     source = _change_source(differential, "herramienta", "tool_offset_length")
     for line in _top_drill_prepare_after_router_base_lines(evaluation, differential):
         _append(
@@ -1093,44 +1095,21 @@ def _emit_top_drill_prepare_after_router(
             rule_status="generalized_router_to_top_drill_sequence",
             transition_id=transition_id,
         )
-    speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
-    force_speed_reactivation = speed_activation is None and previous_family == "line_milling"
-    if speed_activation is not None or force_speed_reactivation:
-        spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
-        etk_17 = int(speed_activation.after) if speed_activation is not None else 257
-        speed_source = (
-            speed_activation.source
-            if speed_activation is not None
-            else _change_source(differential, "herramienta", "spindle_speed_standard")
-        )
-        speed_confidence = speed_activation.confidence if speed_activation is not None else "confirmed"
-        _append(
-            lines,
-            f"?%ETK[17]={etk_17}",
-            differential,
-            speed_source,
-            "Activacion de cambio de velocidad del cabezal perforador.",
-            confidence=speed_confidence,
-            rule_status="boring_head_speed_change",
-            transition_id=transition_id,
-        )
-        _append(
-            lines,
-            f"S{int(spindle_speed)}M3",
-            differential,
-            source,
-            "Velocidad de spindle desde def.tlgx embebido.",
-            confidence="confirmed",
-            rule_status="boring_head_speed_change",
-            transition_id=transition_id,
-        )
-    _append(
+    _append_boring_head_speed_lines(
         lines,
-        f"?%ETK[0]={int(mask)}",
+        differential,
+        source,
+        activation_note="Activacion de cambio de velocidad del cabezal perforador.",
+        speed_note="Velocidad de spindle desde def.tlgx embebido.",
+        rule_status="boring_head_speed_change",
+        transition_id=transition_id,
+        forced_etk17=257 if previous_family == "line_milling" else None,
+    )
+    _append_boring_head_mask_line(
+        lines,
         differential,
         _change_source(differential, "salida", "etk_0_mask"),
         "Mascara de agregado vertical derivada del spindle activo.",
-        confidence="confirmed",
         rule_status="generalized_router_to_top_drill_sequence",
         transition_id=transition_id,
     )
@@ -1143,7 +1122,6 @@ def _emit_top_drill_prepare_after_slot(
     *,
     transition_id: Optional[str] = None,
 ) -> None:
-    mask = _change_after(differential, "salida", "etk_0_mask")
     source = _change_source(differential, "herramienta", "tool_offset_length")
     transition_source = _observed_rule_source("slot_to_top_drill_transition")
     for line in _top_drill_prepare_after_slot_base_lines(evaluation, differential):
@@ -1168,39 +1146,23 @@ def _emit_top_drill_prepare_after_slot(
             rule_status="generalized_slot_to_top_drill_sequence",
             transition_id=transition_id,
         )
-    speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
-    if speed_activation is not None:
-        spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
-        _append(
-            lines,
-            f"?%ETK[17]={int(speed_activation.after)}",
-            differential,
-            speed_activation.source,
-            "Activacion de cambio de velocidad del cabezal perforador.",
-            confidence=speed_activation.confidence,
-            rule_status="boring_head_speed_change",
-            transition_id=transition_id,
-        )
-        _append(
-            lines,
-            f"S{int(spindle_speed)}M3",
-            differential,
-            source,
-            "Velocidad de spindle desde def.tlgx embebido.",
-            confidence="confirmed",
-            rule_status="boring_head_speed_change",
-            transition_id=transition_id,
-        )
-    _append(
+    _append_boring_head_speed_lines(
         lines,
-        f"?%ETK[0]={int(mask)}",
+        differential,
+        source,
+        activation_note="Activacion de cambio de velocidad del cabezal perforador.",
+        speed_note="Velocidad de spindle desde def.tlgx embebido.",
+        rule_status="boring_head_speed_change",
+        transition_id=transition_id,
+    )
+    _append_boring_head_mask_line(
+        lines,
         differential,
         _change_source(differential, "salida", "etk_0_mask"),
         "Mascara de agregado vertical derivada del spindle activo.",
-        confidence="confirmed",
         rule_status="generalized_slot_to_top_drill_sequence",
         transition_id=transition_id,
-        )
+    )
 
 
 def _emit_top_drill_prepare_after_side(
@@ -1211,7 +1173,6 @@ def _emit_top_drill_prepare_after_side(
     *,
     transition_id: Optional[str] = None,
 ) -> None:
-    mask = _change_after(differential, "salida", "etk_0_mask")
     source = _change_source(differential, "herramienta", "tool_offset_length")
     transition_source = _observed_rule_source("side_to_top_drill_transition")
     for line in _top_drill_prepare_after_side_restore_lines(evaluation, previous_side_prepare):
@@ -1251,39 +1212,23 @@ def _emit_top_drill_prepare_after_side(
             rule_status="generalized_side_to_top_drill_sequence",
             transition_id=transition_id,
         )
-    speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
-    if speed_activation is not None:
-        spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
-        _append(
-            lines,
-            f"?%ETK[17]={int(speed_activation.after)}",
-            differential,
-            speed_activation.source,
-            "Activacion de velocidad Top Drill despues de lateral.",
-            confidence=speed_activation.confidence,
-            rule_status="generalized_side_to_top_drill_sequence",
-            transition_id=transition_id,
-        )
-        _append(
-            lines,
-            f"S{int(spindle_speed)}M3",
-            differential,
-            source,
-            "Velocidad Top Drill desde def.tlgx embebido.",
-            confidence="confirmed",
-            rule_status="generalized_side_to_top_drill_sequence",
-            transition_id=transition_id,
-        )
-    _append(
+    _append_boring_head_speed_lines(
         lines,
-        f"?%ETK[0]={int(mask)}",
+        differential,
+        source,
+        activation_note="Activacion de velocidad Top Drill despues de lateral.",
+        speed_note="Velocidad Top Drill desde def.tlgx embebido.",
+        rule_status="generalized_side_to_top_drill_sequence",
+        transition_id=transition_id,
+    )
+    _append_boring_head_mask_line(
+        lines,
         differential,
         _change_source(differential, "salida", "etk_0_mask"),
         "Mascara vertical despues de transicion lateral a superior.",
-        confidence="confirmed",
         rule_status="generalized_side_to_top_drill_sequence",
         transition_id=transition_id,
-        )
+    )
 
 
 def _emit_top_drill_prepare(
@@ -1295,7 +1240,6 @@ def _emit_top_drill_prepare(
     previous_trace: Optional[StageDifferential] = None,
     transition_id: Optional[str] = None,
 ) -> None:
-    mask = _change_after(differential, "salida", "etk_0_mask")
     source = _change_source(differential, "herramienta", "tool_offset_length")
     if previous_trace is not None:
         for line in _top_drill_prepare_between_top_base_lines(evaluation):
@@ -1343,36 +1287,20 @@ def _emit_top_drill_prepare(
                 rule_status="generalized_top_drill_sequence",
                 transition_id=transition_id,
             )
-        speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
-        if speed_activation is not None:
-            spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
-            _append(
-                lines,
-                f"?%ETK[17]={int(speed_activation.after)}",
-                differential,
-                speed_activation.source,
-                "Activacion de cambio de velocidad del cabezal perforador.",
-                confidence=speed_activation.confidence,
-                rule_status="boring_head_speed_change",
-                transition_id=transition_id,
-            )
-            _append(
-                lines,
-                f"S{int(spindle_speed)}M3",
-                differential,
-                source,
-                "Velocidad de spindle desde def.tlgx embebido.",
-                confidence="confirmed",
-                rule_status="boring_head_speed_change",
-                transition_id=transition_id,
-            )
-        _append(
+        _append_boring_head_speed_lines(
             lines,
-            f"?%ETK[0]={int(mask)}",
+            differential,
+            source,
+            activation_note="Activacion de cambio de velocidad del cabezal perforador.",
+            speed_note="Velocidad de spindle desde def.tlgx embebido.",
+            rule_status="boring_head_speed_change",
+            transition_id=transition_id,
+        )
+        _append_boring_head_mask_line(
+            lines,
             differential,
             _change_source(differential, "salida", "etk_0_mask"),
             "Mascara de agregado vertical derivada del spindle activo.",
-            confidence="confirmed",
             rule_status="generalized_top_drill_spindle_mask",
             transition_id=transition_id,
         )
@@ -1454,34 +1382,19 @@ def _emit_top_drill_prepare(
             confidence="confirmed",
             rule_status="generalized_top_drill_001_006",
         )
-    speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
-    if speed_activation is not None:
-        spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
-        _append(
-            lines,
-            f"?%ETK[17]={int(speed_activation.after)}",
-            differential,
-            speed_activation.source,
-            "Activacion de cambio de velocidad del cabezal perforador.",
-            confidence=speed_activation.confidence,
-            rule_status="boring_head_speed_change",
-        )
-        _append(
-            lines,
-            f"S{int(spindle_speed)}M3",
-            differential,
-            source,
-            "Velocidad de spindle desde def.tlgx embebido.",
-            confidence="confirmed",
-            rule_status="boring_head_speed_change",
-        )
-    _append(
+    _append_boring_head_speed_lines(
         lines,
-        f"?%ETK[0]={int(mask)}",
+        differential,
+        source,
+        activation_note="Activacion de cambio de velocidad del cabezal perforador.",
+        speed_note="Velocidad de spindle desde def.tlgx embebido.",
+        rule_status="boring_head_speed_change",
+    )
+    _append_boring_head_mask_line(
+        lines,
         differential,
         _change_source(differential, "salida", "etk_0_mask"),
         "Mascara de agregado vertical derivada del spindle activo.",
-        confidence="confirmed",
         rule_status="generalized_top_drill_spindle_mask",
     )
 
@@ -2115,51 +2028,33 @@ def _emit_side_drill_prepare(
                 rule_status="generalized_side_drill_sequence",
                 transition_id=transition_id,
             )
-        speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
-        if speed_activation is not None:
-            spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
-            _append(
-                lines,
-                f"?%ETK[17]={int(speed_activation.after)}",
-                differential,
-                speed_activation.source,
-                "Activacion de cambio de velocidad del cabezal perforador lateral.",
-                confidence=speed_activation.confidence,
-                rule_status="boring_head_speed_change",
-                transition_id=transition_id,
-            )
-            _append(
-                lines,
-                f"S{int(spindle_speed)}M3",
-                differential,
-                source,
-                "Velocidad lateral desde def.tlgx embebido.",
-                confidence="confirmed",
-                rule_status="boring_head_speed_change",
-                transition_id=transition_id,
-            )
+        _append_boring_head_speed_lines(
+            lines,
+            differential,
+            source,
+            activation_note="Activacion de cambio de velocidad del cabezal perforador lateral.",
+            speed_note="Velocidad lateral desde def.tlgx embebido.",
+            rule_status="boring_head_speed_change",
+            transition_id=transition_id,
+        )
         if mask != previous_mask:
-            _append(
+            _append_boring_head_mask_line(
                 lines,
-                f"?%ETK[0]={int(mask)}",
                 differential,
                 _observed_rule_source("side_drill_prepare"),
                 "Mascara de agregado lateral observada por cara.",
-                confidence="confirmed",
                 rule_status="generalized_side_drill_sequence",
                 transition_id=transition_id,
             )
             if multi_side_sequence:
-                _append(
+                _append_side_sequence_pause_line(
                     lines,
-                    "G4F0.500",
                     differential,
                     source,
                     "Pausa observada despues de activar mascara lateral.",
-                    confidence="confirmed",
                     rule_status="generalized_side_drill_sequence",
                     transition_id=transition_id,
-        )
+                )
         return
     for line in _side_drill_prepare_modal_lines():
         _append(
@@ -2237,44 +2132,27 @@ def _emit_side_drill_prepare(
             confidence="confirmed",
             rule_status="generalized_side_drill_010_013",
         )
-    speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
-    if speed_activation is not None:
-        spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
-        _append(
-            lines,
-            f"?%ETK[17]={int(speed_activation.after)}",
-            differential,
-            speed_activation.source,
-            "Activacion de cambio de velocidad del cabezal perforador lateral.",
-            confidence=speed_activation.confidence,
-            rule_status="boring_head_speed_change",
-        )
-        _append(
-            lines,
-            f"S{int(spindle_speed)}M3",
-            differential,
-            source,
-            "Velocidad lateral desde def.tlgx embebido.",
-            confidence="confirmed",
-            rule_status="boring_head_speed_change",
-        )
-    _append(
+    _append_boring_head_speed_lines(
         lines,
-        f"?%ETK[0]={int(mask)}",
+        differential,
+        source,
+        activation_note="Activacion de cambio de velocidad del cabezal perforador lateral.",
+        speed_note="Velocidad lateral desde def.tlgx embebido.",
+        rule_status="boring_head_speed_change",
+    )
+    _append_boring_head_mask_line(
+        lines,
         differential,
         _observed_rule_source("side_drill_prepare"),
         "Mascara de agregado lateral observada por cara.",
-        confidence="confirmed",
         rule_status="generalized_side_drill_010_013",
     )
     if multi_side_sequence:
-        _append(
+        _append_side_sequence_pause_line(
             lines,
-            "G4F0.500",
             differential,
             source,
             "Pausa observada despues de activar mascara lateral en secuencias multiples.",
-            confidence="confirmed",
             rule_status="generalized_side_drill_sequence",
         )
 
@@ -2344,7 +2222,6 @@ def _emit_side_drill_prepare_after_router(
     multi_side_sequence: bool = False,
     transition_id: Optional[str] = None,
 ) -> None:
-    mask = _change_after(differential, "salida", "etk_0_mask")
     source = _change_source(differential, "herramienta", "tool_offset_length")
     for line in _side_drill_prepare_after_router_lines(evaluation, differential):
         _append(
@@ -2357,55 +2234,30 @@ def _emit_side_drill_prepare_after_router(
             rule_status="generalized_router_to_side_drill_transition",
             transition_id=transition_id,
         )
-    speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
-    force_speed_reactivation = speed_activation is None and previous_family == "line_milling"
-    if speed_activation is not None or force_speed_reactivation:
-        spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
-        etk_17 = int(speed_activation.after) if speed_activation is not None else 257
-        speed_source = (
-            speed_activation.source
-            if speed_activation is not None
-            else _change_source(differential, "herramienta", "spindle_speed_standard")
-        )
-        speed_confidence = speed_activation.confidence if speed_activation is not None else "confirmed"
-        _append(
-            lines,
-            f"?%ETK[17]={etk_17}",
-            differential,
-            speed_source,
-            "Activacion de velocidad lateral despues de router.",
-            confidence=speed_confidence,
-            rule_status="generalized_router_to_side_drill_transition",
-            transition_id=transition_id,
-        )
-        _append(
-            lines,
-            f"S{int(spindle_speed)}M3",
-            differential,
-            source,
-            "Velocidad lateral desde def.tlgx embebido.",
-            confidence="confirmed",
-            rule_status="generalized_router_to_side_drill_transition",
-            transition_id=transition_id,
-        )
-    _append(
+    _append_boring_head_speed_lines(
         lines,
-        f"?%ETK[0]={int(mask)}",
+        differential,
+        source,
+        activation_note="Activacion de velocidad lateral despues de router.",
+        speed_note="Velocidad lateral desde def.tlgx embebido.",
+        rule_status="generalized_router_to_side_drill_transition",
+        transition_id=transition_id,
+        forced_etk17=257 if previous_family == "line_milling" else None,
+    )
+    _append_boring_head_mask_line(
+        lines,
         differential,
         _observed_rule_source("side_drill_prepare"),
         "Mascara de agregado lateral observada por cara.",
-        confidence="confirmed",
         rule_status="generalized_router_to_side_drill_transition",
         transition_id=transition_id,
     )
     if multi_side_sequence:
-        _append(
+        _append_side_sequence_pause_line(
             lines,
-            "G4F0.500",
             differential,
             source,
             "Pausa observada despues de activar mascara lateral.",
-            confidence="confirmed",
             rule_status="generalized_router_to_side_drill_transition",
             transition_id=transition_id,
         )
@@ -2447,7 +2299,6 @@ def _emit_side_drill_prepare_after_slot(
     multi_side_sequence: bool = False,
     transition_id: Optional[str] = None,
 ) -> None:
-    mask = _change_after(differential, "salida", "etk_0_mask")
     source = _change_source(differential, "herramienta", "tool_offset_length")
     for line in _side_drill_prepare_after_slot_lines(evaluation, differential):
         _append(
@@ -2460,47 +2311,29 @@ def _emit_side_drill_prepare_after_slot(
             rule_status="generalized_slot_to_side_drill_sequence",
             transition_id=transition_id,
         )
-    speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
-    if speed_activation is not None:
-        spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
-        _append(
-            lines,
-            f"?%ETK[17]={int(speed_activation.after)}",
-            differential,
-            speed_activation.source,
-            "Activacion de velocidad lateral despues de ranura.",
-            confidence=speed_activation.confidence,
-            rule_status="generalized_slot_to_side_drill_sequence",
-            transition_id=transition_id,
-        )
-        _append(
-            lines,
-            f"S{int(spindle_speed)}M3",
-            differential,
-            source,
-            "Velocidad lateral desde def.tlgx embebido.",
-            confidence="confirmed",
-            rule_status="generalized_slot_to_side_drill_sequence",
-            transition_id=transition_id,
-        )
-    _append(
+    _append_boring_head_speed_lines(
         lines,
-        f"?%ETK[0]={int(mask)}",
+        differential,
+        source,
+        activation_note="Activacion de velocidad lateral despues de ranura.",
+        speed_note="Velocidad lateral desde def.tlgx embebido.",
+        rule_status="generalized_slot_to_side_drill_sequence",
+        transition_id=transition_id,
+    )
+    _append_boring_head_mask_line(
+        lines,
         differential,
         _observed_rule_source("side_drill_prepare"),
         "Mascara de agregado lateral observada por cara.",
-        confidence="confirmed",
         rule_status="generalized_slot_to_side_drill_sequence",
         transition_id=transition_id,
     )
     if multi_side_sequence:
-        _append(
+        _append_side_sequence_pause_line(
             lines,
-            "G4F0.500",
             differential,
             source,
             "Pausa observada despues de activar mascara lateral en secuencias multiples.",
-            confidence="confirmed",
             rule_status="generalized_slot_to_side_drill_sequence",
             transition_id=transition_id,
         )
@@ -2515,7 +2348,6 @@ def _emit_side_drill_prepare_after_top(
     transition_id: Optional[str] = None,
 ) -> None:
     plane = str(_change_after(differential, "trabajo", "plane"))
-    mask = _change_after(differential, "salida", "etk_0_mask")
     source = _change_source(differential, "herramienta", "tool_offset_length")
     _emit_side_plane_selection(lines, evaluation, differential, plane, include_right_frame=False)
     for line in _side_drill_prepare_after_top_lines(evaluation, differential):
@@ -2529,47 +2361,29 @@ def _emit_side_drill_prepare_after_top(
             rule_status="generalized_top_to_side_drill_sequence",
             transition_id=transition_id,
         )
-    speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
-    if speed_activation is not None:
-        spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
-        _append(
-            lines,
-            f"?%ETK[17]={int(speed_activation.after)}",
-            differential,
-            speed_activation.source,
-            "Activacion de velocidad lateral despues de taladro superior.",
-            confidence=speed_activation.confidence,
-            rule_status="generalized_top_to_side_drill_sequence",
-            transition_id=transition_id,
-        )
-        _append(
-            lines,
-            f"S{int(spindle_speed)}M3",
-            differential,
-            source,
-            "Velocidad lateral desde def.tlgx embebido.",
-            confidence="confirmed",
-            rule_status="generalized_top_to_side_drill_sequence",
-            transition_id=transition_id,
-        )
-    _append(
+    _append_boring_head_speed_lines(
         lines,
-        f"?%ETK[0]={int(mask)}",
+        differential,
+        source,
+        activation_note="Activacion de velocidad lateral despues de taladro superior.",
+        speed_note="Velocidad lateral desde def.tlgx embebido.",
+        rule_status="generalized_top_to_side_drill_sequence",
+        transition_id=transition_id,
+    )
+    _append_boring_head_mask_line(
+        lines,
         differential,
         _observed_rule_source("side_drill_prepare"),
         "Mascara de agregado lateral observada por cara.",
-        confidence="confirmed",
         rule_status="generalized_top_to_side_drill_sequence",
         transition_id=transition_id,
     )
     if multi_side_sequence:
-        _append(
+        _append_side_sequence_pause_line(
             lines,
-            "G4F0.500",
             differential,
             source,
             "Pausa observada despues de activar mascara lateral.",
-            confidence="confirmed",
             rule_status="generalized_top_to_side_drill_sequence",
             transition_id=transition_id,
         )
@@ -2817,6 +2631,96 @@ def _emit_empty_program_close(
             confidence="confirmed",
             rule_status="generalized_empty_program",
         )
+
+
+def _append_boring_head_speed_lines(
+    lines: list[ExplainedIsoLine],
+    differential: StageDifferential,
+    source: EvidenceSource,
+    *,
+    activation_note: str,
+    speed_note: str,
+    rule_status: str,
+    transition_id: Optional[str] = None,
+    forced_etk17: Optional[int] = None,
+) -> bool:
+    speed_lines = _boring_head_speed_lines(differential, forced_etk17=forced_etk17)
+    if not speed_lines:
+        return False
+    speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
+    if speed_activation is None:
+        activation_source = _change_source(
+            differential,
+            "herramienta",
+            "spindle_speed_standard",
+        )
+        activation_confidence = "confirmed"
+    else:
+        activation_source = speed_activation.source
+        activation_confidence = speed_activation.confidence
+    _append(
+        lines,
+        speed_lines[0],
+        differential,
+        activation_source,
+        activation_note,
+        confidence=activation_confidence,
+        rule_status=rule_status,
+        transition_id=transition_id,
+    )
+    _append(
+        lines,
+        speed_lines[1],
+        differential,
+        source,
+        speed_note,
+        confidence="confirmed",
+        rule_status=rule_status,
+        transition_id=transition_id,
+    )
+    return True
+
+
+def _append_boring_head_mask_line(
+    lines: list[ExplainedIsoLine],
+    differential: StageDifferential,
+    source: EvidenceSource,
+    note: str,
+    *,
+    rule_status: str,
+    transition_id: Optional[str] = None,
+) -> None:
+    _append(
+        lines,
+        _boring_head_mask_line(differential),
+        differential,
+        source,
+        note,
+        confidence="confirmed",
+        rule_status=rule_status,
+        transition_id=transition_id,
+    )
+
+
+def _append_side_sequence_pause_line(
+    lines: list[ExplainedIsoLine],
+    differential: StageDifferential,
+    source: EvidenceSource,
+    note: str,
+    *,
+    rule_status: str,
+    transition_id: Optional[str] = None,
+) -> None:
+    _append(
+        lines,
+        _side_sequence_pause_line(),
+        differential,
+        source,
+        note,
+        confidence="confirmed",
+        rule_status=rule_status,
+        transition_id=transition_id,
+    )
 
 
 def _append(

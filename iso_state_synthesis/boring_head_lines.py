@@ -60,12 +60,25 @@ def _tool_shift_lines(differential: StageDifferential) -> tuple[str, ...]:
     )
 
 
-def _boring_head_speed_lines(differential: StageDifferential) -> tuple[str, ...]:
+def _boring_head_speed_lines(
+    differential: StageDifferential,
+    *,
+    forced_etk17: Optional[int] = None,
+) -> tuple[str, ...]:
     speed_activation = _find_change(differential.target_changes, "salida", "etk_17")
-    if speed_activation is None:
+    if speed_activation is None and forced_etk17 is None:
         return ()
+    etk17 = forced_etk17 if speed_activation is None else int(speed_activation.after)
     spindle_speed = _change_after(differential, "herramienta", "spindle_speed_standard")
-    return (f"?%ETK[17]={int(speed_activation.after)}", f"S{int(spindle_speed)}M3")
+    return (f"?%ETK[17]={int(etk17)}", f"S{int(spindle_speed)}M3")
+
+
+def _boring_head_mask_line(differential: StageDifferential) -> str:
+    return _etk0_mask_line(differential)
+
+
+def _side_sequence_pause_line() -> str:
+    return "G4F0.500"
 
 
 def _vertical_mask_line(differential: StageDifferential) -> str:

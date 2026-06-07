@@ -38,6 +38,10 @@ Ultima actualizacion: 2026-06-07
   `top/side/slot`, los shifts, velocidad/mask y el calculo `G53 Z` lateral a
   `iso_state_synthesis.boring_head_lines`. `emitter.py` queda como orquestador
   y capa de explicacion para el cabezal de perforacion/ranurado.
+- `_boring_head_speed_lines`, `_boring_head_mask_line` y
+  `_side_sequence_pause_line` fijan activacion de velocidad, mascara `ETK[0]`
+  y pausa lateral como builders puros; `emitter.py` conserva las fuentes,
+  notas, confianza y `transition_id` de cada contexto.
 - `_side_plane_selection_lines` fija la seleccion de cara lateral y la
   recomposicion opcional de marco para `Left`, `Right`, `Front` y `Back`;
   `_emit_side_plane_selection` queda como wrapper explicativo.
@@ -80,8 +84,9 @@ Ultima actualizacion: 2026-06-07
   scripts vivos que comparan corpus contra el sintetizador actual ya importan
   `comparison.py` y `work_groups.py` en lugar de depender de `emitter.py`.
 - Cobertura local del checkpoint: `tests.test_iso_state_synthesis` fija los
-  builders de preparacion/movimiento router, boring head, programa, trazas
-  boring, seleccion lateral y perfil con tests puros.
+  builders de preparacion/movimiento router, boring head, activacion/mask/pausa
+  del cabezal, programa, trazas boring, seleccion lateral y perfil con tests
+  puros.
 
 ## Retiro De `iso_generation/`
 

@@ -7,6 +7,8 @@ from types import SimpleNamespace
 
 import iso_state_synthesis as iso
 from iso_state_synthesis.boring_head_lines import (
+    _boring_head_mask_line,
+    _boring_head_speed_lines,
     _side_drill_prepare_after_router_lines,
     _side_drill_prepare_after_slot_lines,
     _side_drill_prepare_after_top_lines,
@@ -15,6 +17,7 @@ from iso_state_synthesis.boring_head_lines import (
     _side_drill_same_spindle_reposition_lines,
     _side_drill_spindle_change_lines,
     _side_plane_selection_lines,
+    _side_sequence_pause_line,
     _slot_milling_prepare_after_top_lines,
     _slot_milling_prepare_lines,
     _slot_milling_reset_lines,
@@ -1282,6 +1285,39 @@ class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
             _tool_shift_lines(differential),
             ("SHF[X]=-64.000", "SHF[Y]=0.000", "SHF[Z]=-0.950"),
         )
+
+    def test_boring_head_activation_mask_and_pause_lines_are_pure_builders(self) -> None:
+        explicit_activation = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=1,
+            target_changes=(
+                _change("salida", "etk_17", 257),
+                _change("herramienta", "spindle_speed_standard", 6000),
+                _change("salida", "etk_0_mask", 6),
+            ),
+        )
+        forced_activation = StageDifferential(
+            stage_key="side_drill_prepare",
+            family="side_drill",
+            order_index=1,
+            target_changes=(
+                _change("herramienta", "spindle_speed_standard", 6000),
+                _change("salida", "etk_0_mask", 6),
+            ),
+        )
+
+        self.assertEqual(
+            _boring_head_speed_lines(explicit_activation),
+            ("?%ETK[17]=257", "S6000M3"),
+        )
+        self.assertEqual(_boring_head_speed_lines(forced_activation), ())
+        self.assertEqual(
+            _boring_head_speed_lines(forced_activation, forced_etk17=257),
+            ("?%ETK[17]=257", "S6000M3"),
+        )
+        self.assertEqual(_boring_head_mask_line(explicit_activation), "?%ETK[0]=6")
+        self.assertEqual(_side_sequence_pause_line(), "G4F0.500")
 
     def test_side_drill_prepare_after_router_lines_emit_lateral_base_prepare(self) -> None:
         evaluation = IsoStateEvaluation(

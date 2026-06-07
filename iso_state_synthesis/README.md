@@ -35,7 +35,8 @@ sintetizador por estado:
 - `program_lines.py`: builders internos para cabecera, preambulo, marco de
   pieza y cierres de programa.
 - `boring_head_lines.py`: builders internos de lineas ISO para preparaciones,
-  seleccion lateral y resets de Top Drill, Side Drill y SlotSide.
+  activacion/mask, pausa lateral, seleccion lateral y resets de Top Drill, Side
+  Drill y SlotSide.
 - `boring_trace_lines.py`: builders internos de trazas ISO para Top Drill y
   Side Drill.
 - `router_milling_lines.py`: builders internos de lineas ISO para fresados

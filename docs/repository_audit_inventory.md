@@ -168,7 +168,7 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | `iso_state_synthesis.comparison` | Comparacion normalizada entre candidato explicado e ISO Maestro. | `compare_candidate_to_iso`, `IsoCandidateComparison`, `IsoLineDifference`. |
 | `iso_state_synthesis.work_groups` | Agrupamiento `prepare/trace/reset` y planificacion de transiciones entre trabajos. | Helpers internos `_work_stage_groups`, `_plan_work_groups`. |
 | `iso_state_synthesis.program_lines` | Builders puros de lineas ISO para cabecera, preambulo, marcos y cierres de programa. | Helpers internos `_program_*`, `_piece_frame_*`, `_common_program_close_*`. |
-| `iso_state_synthesis.boring_head_lines` | Builders puros de lineas ISO para preparaciones, seleccion lateral y resets del cabezal de perforacion/ranurado. | Helpers internos `_top_drill_*`, `_side_drill_*`, `_side_plane_selection_lines`, `_slot_milling_*`. |
+| `iso_state_synthesis.boring_head_lines` | Builders puros de lineas ISO para preparaciones, activacion/mask, pausa, seleccion lateral y resets del cabezal de perforacion/ranurado. | Helpers internos `_top_drill_*`, `_side_drill_*`, `_boring_head_*`, `_side_plane_selection_lines`, `_slot_milling_*`. |
 | `iso_state_synthesis.boring_trace_lines` | Builders puros de trazas ISO para Top Drill y Side Drill. | Helpers internos `_top_drill_trace_lines`, `_side_drill_trace_lines`. |
 | `iso_state_synthesis.router_milling_lines` | Builders puros de preparacion, traza y reset ISO para fresados router lineales. | Helpers internos `_line_milling_*`, geometria de leads y compensacion. |
 | `iso_state_synthesis.profile_milling_lines` | Builders puros de trazas ISO para fresado de perfil E001 y estrategia PH5. | Helper interno `_profile_milling_trace_lines`. |
