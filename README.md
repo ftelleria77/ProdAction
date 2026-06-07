@@ -27,6 +27,7 @@ py -3 main.py
 
 ## Orientacion rapida del repo
 - Indice ordenado de documentacion: `docs/README.md`
+- Cierre formal de auditoria general: `docs/general_audit_closure.md`
 - Inventario de auditoria por subsistema: `docs/repository_audit_inventory.md`
 - Rumbo de reorganizacion de arquitectura: `docs/architecture_reorganization.md`
 - Guia rapida para estudiar el repo: `docs/repo_study_guide.md`

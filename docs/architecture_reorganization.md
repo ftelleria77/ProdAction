@@ -1,6 +1,6 @@
 # Reorganizacion De Arquitectura
 
-Estado: 2026-06-06
+Estado: 2026-06-07 - auditoria general cerrada
 
 Este documento fija el rumbo de reorganizacion del repo. El frente ISO por
 estado queda pausado como investigacion; el frente historico de Vaciado quedo
@@ -291,6 +291,19 @@ memorias historicas como contexto, no como API.
    puros; `tools/studies/` queda auditado en
    `docs/tools_studies_subsystem_audit.md` como laboratorio reproducible, no
    API productiva.
+
+## Cierre De Auditoria General
+
+Cierre formal: `docs/general_audit_closure.md`.
+
+La reorganizacion/auditoria general queda cerrada para esta etapa. `app/`,
+`core/`, `pgmx/`, `pgmx.synthesis`, `pgmx.machining_lab/`,
+`iso_state_synthesis/`, `cnc_traceability/`, `tools/studies/` y la
+documentacion rectora tienen frontera registrada.
+
+Los pendientes restantes no bloquean el mapa arquitectonico: son validaciones
+de entorno real, decisiones de producto, estudios funcionales pausados o deuda
+aceptada para una etapa posterior.
 
 ## Invariantes
 

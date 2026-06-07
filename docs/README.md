@@ -7,63 +7,67 @@ tener que leer todas las memorias historicas de una vez.
 
 1. `docs/architecture_reorganization.md`
    - Rumbo actual para ordenar codigo, fronteras y migracion por etapas.
-2. `docs/repository_audit_inventory.md`
+2. `docs/general_audit_closure.md`
+   - Cierre formal de la auditoria general: alcance cerrado, decisiones
+     estables, deuda aceptada y proxima etapa recomendada.
+3. `docs/repository_audit_inventory.md`
    - Inventario de auditoria por subsistema, modulos, procesos, tests y docs.
-3. `docs/repo_study_guide.md`
+4. `docs/repo_study_guide.md`
    - Mapa rapido de arquitectura, flujos y archivos importantes.
-4. `docs/app_subsystem_audit.md`
+5. `docs/app_subsystem_audit.md`
    - Auditoria del subsistema desktop PySide6: flujos, modulos, correcciones y
      deuda residual aceptada.
-5. `docs/core_subsystem_audit.md`
+6. `docs/core_subsystem_audit.md`
    - Auditoria del subsistema `core/`: dominio, parser, servicios productivos,
      fachadas compatibles y deuda residual.
-6. `docs/pgmx_subsystem_audit.md`
+7. `docs/pgmx_subsystem_audit.md`
    - Auditoria del subsistema `pgmx/`: fachadas publicas, lectura/dibujo,
      snapshot, adaptacion, sintesis y laboratorio.
-7. `docs/synthesize_pgmx_help.md`
+8. `docs/synthesize_pgmx_help.md`
    - Fuente de verdad para la API publica de sintesis `.pgmx`.
-8. `docs/pgmx_synthesis_modularization_plan.md`
+9. `docs/pgmx_synthesis_modularization_plan.md`
    - Plan para modularizar el sintetizador por familias de mecanizado e
      integrar Vaciado como `ClosedPocket`/pocket milling.
-9. `docs/pgmx_synthesis_modularization_temporary_memory.md`
+10. `docs/pgmx_synthesis_modularization_temporary_memory.md`
    - Memoria temporal para discutir el alcance modulo por modulo antes de
      escribir codigo.
-10. `docs/pgmx_snapshot_help.md` y `docs/pgmx_adapters_help.md`
+11. `docs/pgmx_snapshot_help.md` y `docs/pgmx_adapters_help.md`
    - Lectura/adaptacion de `.pgmx` existentes hacia specs publicos.
-11. `pgmx/machining_lab/README.md` y
+12. `pgmx/machining_lab/README.md` y
    `pgmx/machining_lab/pocket_milling/README.md`
    - Laboratorio general de mecanizados PGMX y laboratorio de
      `ClosedPocket`/pocket milling.
-12. `docs/cut_diagrams_temporary_memory.md`
+13. `docs/cut_diagrams_temporary_memory.md`
    - Estado del motor de diagramas de corte y algoritmos de guillotina.
-13. `docs/laboratory_frontiers.md`
+14. `docs/laboratory_frontiers.md`
    - Fronteras entre herramientas publicas, fachadas compatibles y laboratorios.
-14. `docs/cnc_traceability_subsystem_audit.md`
+15. `docs/cnc_traceability_subsystem_audit.md`
    - Auditoria del visor CNC standalone compatible con Windows XP y su deuda
      de validacion en maquina real.
-15. `docs/tools_studies_subsystem_audit.md`
+16. `docs/tools_studies_subsystem_audit.md`
    - Auditoria de laboratorios reproducibles bajo `tools/studies/`.
-16. `cnc_traceability/README.md`
+17. `cnc_traceability/README.md`
    - Entrada del subsistema de trazabilidad CNC compatible con Windows XP.
-17. `docs/iso_state_synthesis_subsystem_audit.md`
+18. `docs/iso_state_synthesis_subsystem_audit.md`
    - Auditoria del subsistema experimental ISO por estado: contratos, CLI,
      emisor candidato y deuda residual.
-18. `iso_state_synthesis/README.md`
+19. `iso_state_synthesis/README.md`
    - Entrada del subsistema experimental por estado para futura traduccion
      `.pgmx -> .iso`.
-19. `docs/iso_cnc_contract.md`
+20. `docs/iso_cnc_contract.md`
    - Contrato CNC/ISO observado: configuracion Maestro, toolset, variables y
      huecos pendientes para un sintetizador ISO.
-20. `docs/iso_minimal_fixtures_plan.md`
+21. `docs/iso_minimal_fixtures_plan.md`
    - Plan de reanudacion para generar `.pgmx` minimos comparables en la compu
      de fabrica y postprocesarlos con Maestro.
-21. `docs/iso_synthesis_temporary_memory.md`
+22. `docs/iso_synthesis_temporary_memory.md`
    - Ingenieria inversa del flujo PGMX -> Maestro/postprocesador -> ISO.
 
 ## Mapa por tema
 
 | Tema | Fuente principal | Codigo principal |
 | --- | --- | --- |
+| Cierre de auditoria general | `docs/general_audit_closure.md` | `app/`, `core/`, `pgmx/`, `iso_state_synthesis/`, `cnc_traceability/`, `tools/studies/` |
 | Inventario de auditoria | `docs/repository_audit_inventory.md` | `app/`, `core/`, `pgmx/`, `iso_state_synthesis/`, `cnc_traceability/`, `tools/studies/` |
 | Arquitectura del repo | `docs/architecture_reorganization.md` | `app/main_window.py`, `app/project_dialogs.py`, `app/project_detail_core.py`, `app/project_detail_dialog_lifecycle.py`, `app/project_detail_processing.py`, `app/project_detail_modules.py`, `app/project_detail_inspection.py`, `app/project_detail_color_changes.py`, `app/project_detail_module_persistence.py`, `app/project_detail_module_settings_panel.py`, `app/project_detail_colors.py`, `app/project_detail_piece_editor.py`, `app/project_detail_piece_editor_dialog.py`, `app/project_detail_piece_actions.py`, `app/project_detail_piece_table.py`, `app/project_detail_piece_table_rows.py`, `app/project_detail_programs.py`, `app/project_detail_pgmx.py`, `app/project_detail_en_juego_state.py`, `app/project_detail_en_juego_layout.py`, `app/project_detail_en_juego_view.py`, `app/project_detail_en_juego_preview.py`, `app/project_detail_en_juego_dimensions.py`, `app/project_detail_en_juego_configuration.py`, `app/project_detail_en_juego_settings.py`, `app/project_detail_en_juego_dialogs.py`, `app/project_detail_en_juego_output.py`, `app/project_detail_piece_rows.py`, `app/project_detail_drawings.py`, `app/project_detail_selectors.py`, `app/project_detail_output.py`, `app/runtime.py`, `app/project_registry.py`, `app/project_store.py`, `app/settings.py`, `app/qt_helpers.py`, `app/options_dialogs.py`, `app/options_helpers.py`, `app/ui_constants.py`, `app/ui.py` |
 | App desktop | `docs/repo_study_guide.md`, `docs/app_subsystem_audit.md` | `app/ui.py`, `app/main_window.py`, `app/project_detail_*.py`, `main.py` |

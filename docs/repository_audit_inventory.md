@@ -1,6 +1,6 @@
 # Inventario De Auditoria Del Repositorio
 
-Estado: inventario operativo actualizado, 2026-06-07.
+Estado: inventario operativo cerrado para auditoria general, 2026-06-07.
 
 Este documento es la base de trabajo para auditar ProdAction modulo por modulo y
 actualizar la documentacion vigente. No reemplaza las guias publicas; sirve para
@@ -8,6 +8,7 @@ mantener una matriz de control mientras se revisan los subsistemas.
 
 ## Regla De Lectura
 
+- Cierre de la pasada general: `docs/general_audit_closure.md`.
 - Codigo productivo: `app/`, `core/`, `pgmx/`, `iso_state_synthesis/` y
   `cnc_traceability/`.
 - Laboratorios reproducibles: `tools/studies/` y
@@ -30,6 +31,19 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | `cnc_traceability/` | Visor CNC standalone compatible con Windows XP. | Lectura de indice, seguimiento de mecanizado, preparacion USBMIX, previews de piezas. | `tests/test_cnc_traceability.py` para helpers puros; UI/XP queda manual. | `docs/cnc_traceability_subsystem_audit.md`, `cnc_traceability/README.md`, `cnc_traceability/docs/contract.md`. |
 | `tools/studies/` | Estudios reproducibles archivados. | Generacion de fixtures ISO, auditorias de corpus, laboratorio de ordenamiento de corte. | Se validan por `compileall`, imports/ejecucion puntual y corpus externo cuando aplica. | `docs/tools_studies_subsystem_audit.md`, `tools/studies/README.md`, `tools/studies/iso/README.md`. |
 | `tests/` | Cobertura automatizada. | Verificacion de contratos publicos, helpers de UI, nesting, PGMX y planillas. | `py -3 -m unittest discover -s tests -p "test*.py"`. | Este inventario y docs de subsistema. |
+
+## Cierre General 2026-06-07
+
+La auditoria general queda cerrada para esta etapa. El resumen estable vive en
+`docs/general_audit_closure.md`; este inventario queda como matriz de consulta
+por subsistema, modulo, proceso, tests y documentacion.
+
+No hay un bloque general pendiente de primera auditoria. Los pendientes
+restantes son deuda aceptada o frentes especificos: validacion XP real de
+`cnc_traceability/`, cobertura manual/corpus externo para `tools/studies/`,
+reactivacion funcional opcional de `iso_state_synthesis/`, reproducibilidad de
+dependencias y refinamientos puntuales de flujos amplios cuando aparezca una
+necesidad funcional.
 
 ## Procesos Transversales
 

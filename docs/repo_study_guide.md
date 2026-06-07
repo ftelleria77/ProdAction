@@ -24,6 +24,7 @@ El sintetizador PGMX real vive en `pgmx.synthesis` y expone
 | --- | --- |
 | `main.py` | Entrada de la app PySide6. |
 | `docs/repository_audit_inventory.md` | Inventario de auditoria por subsistema, modulo, proceso, tests y docs. |
+| `docs/general_audit_closure.md` | Cierre formal de la auditoria general y lista de deuda aceptada. |
 | `docs/app_subsystem_audit.md` | Corte dedicado del subsistema `app/`, con flujos, correcciones y deuda residual aceptada. |
 | `docs/core_subsystem_audit.md` | Corte dedicado del subsistema `core/`, iniciado por modelo/parser. |
 | `docs/pgmx_subsystem_audit.md` | Corte dedicado del subsistema `pgmx/`, con fachadas, procesos y deuda residual. |
@@ -227,6 +228,10 @@ Prueba de humo PGMX recomendada:
 4. confirmar `git status --short --branch`.
 
 ## Riesgos actuales
+
+La auditoria general esta cerrada para esta etapa. El cierre formal vive en
+`docs/general_audit_closure.md`; los puntos siguientes son deuda aceptada o
+frentes especificos, no bloques generales sin auditar.
 
 - El frente `app/project_detail_*` sigue siendo amplio y conviene auditarlo por
   flujo, no por archivo aislado.
