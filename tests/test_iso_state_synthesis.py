@@ -26,13 +26,11 @@ from iso_state_synthesis.boring_head_lines import (
     _top_drill_reset_lines,
 )
 from iso_state_synthesis.catalog import select_transition_id
+from iso_state_synthesis.comparison import compare_candidate_to_iso
 from iso_state_synthesis.differential import evaluate_state_plan
 from iso_state_synthesis.emitter import (
     ExplainedIsoLine,
     ExplainedIsoProgram,
-    _plan_work_groups,
-    _work_stage_groups,
-    compare_candidate_to_iso,
 )
 from iso_state_synthesis.router_milling_lines import (
     _closed_polyline_center_lead_geometry,
@@ -68,6 +66,7 @@ from iso_state_synthesis.router_milling_lines import (
     _unit_vector,
     _xy_changed,
 )
+from iso_state_synthesis.slot_milling_lines import _slot_milling_trace_lines
 from iso_state_synthesis.transition_lines import (
     _boring_to_router_cleanup_lines,
     _boring_to_router_side_restore_lines,
@@ -78,6 +77,7 @@ from iso_state_synthesis.transition_lines import (
     _slot_to_slot_milling_transition_lines,
     _top_to_slot_milling_transition_lines,
 )
+from iso_state_synthesis.work_groups import _plan_work_groups, _work_stage_groups
 from iso_state_synthesis.model import (
     EvidenceSource,
     IsoStateEvaluation,
@@ -586,6 +586,80 @@ class IsoStateSynthesisEmitterDispatcherTests(unittest.TestCase):
             ),
         )
         self.assertEqual(_slot_to_slot_milling_transition_lines(), ("?%ETK[8]=1", "G40", "G17"))
+
+    def test_slot_milling_trace_lines_cover_initial_and_transition_trace(self) -> None:
+        previous_trace = StageDifferential(
+            stage_key="slot_milling_trace",
+            family="slot_milling",
+            order_index=0,
+            target_changes=(
+                _change("movimiento", "rapid_x", 20.0),
+                _change("movimiento", "rapid_y", 30.0),
+                _change("movimiento", "cut_x", 24.0),
+            ),
+        )
+        differential = StageDifferential(
+            stage_key="slot_milling_trace",
+            family="slot_milling",
+            order_index=1,
+            target_changes=(
+                _change("movimiento", "rapid_x", 50.0),
+                _change("movimiento", "rapid_y", 30.0),
+                _change("movimiento", "cut_x", 80.0),
+                _change("movimiento", "rapid_z", 20.0),
+                _change("movimiento", "cut_z", -10.0),
+                _change("movimiento", "security_z", 20.0),
+                _change("herramienta", "tool_offset_length", 4.0),
+                _change("herramienta", "tool_radius", 1.5),
+                _change("movimiento", "plunge_feed", 1200.0),
+                _change("movimiento", "milling_feed", 1800.0),
+            ),
+        )
+
+        self.assertEqual(
+            _slot_milling_trace_lines(differential)[:10],
+            (
+                "G0 X50.000 Y30.000",
+                "G0 Z20.000",
+                "D1",
+                "SVL 4.000",
+                "VL6=4.000",
+                "SVR 1.500",
+                "VL7=1.500",
+                "G1 Z-10.000 F1200.000",
+                "?%ETK[7]=1",
+                "G1 X80.000 Z-10.000 F1800.000",
+            ),
+        )
+        self.assertEqual(
+            _slot_milling_trace_lines(
+                differential,
+                previous_slot_trace=previous_trace,
+                previous_slot_exit_emitted=False,
+                emit_transition_lift=True,
+                emit_transition_exit=True,
+                emit_etk7_before_lift=True,
+            ),
+            (
+                "G0 X24.000 Y30.000 Z20.000",
+                "G0 X50.000 Y30.000 Z20.000",
+                "D1",
+                "SVL 4.000",
+                "VL6=4.000",
+                "SVR 1.500",
+                "VL7=1.500",
+                "G1 Z-10.000 F1200.000",
+                "?%ETK[7]=1",
+                "G1 X80.000 Z-10.000 F1800.000",
+                "G1 Z20.000 F1800.000",
+                "G1 X49.250 Z20.000 F1800.000",
+                "G1 X50.000 Z20.000 F1800.000",
+                "G1 Z20.000 F1800.000",
+                "G1 Z-10.000 F1800.000",
+                "?%ETK[7]=0",
+                "G0 Z20.000",
+            ),
+        )
 
     def test_boring_to_router_side_restore_lines_return_to_right_frame(self) -> None:
         evaluation = IsoStateEvaluation(

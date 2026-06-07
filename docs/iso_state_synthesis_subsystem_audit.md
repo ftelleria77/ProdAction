@@ -17,8 +17,10 @@ estados, diferenciales, bloques, transiciones y evidencia observada.
 | Adaptador PGMX | `iso_state_synthesis.pgmx_source` | Convierte `pgmx.snapshot` en un plan de estados ordenado por worksteps. |
 | Diferencial | `iso_state_synthesis.differential` | Calcula cambios entre estado activo, objetivo, valores forzados y resets. |
 | Catalogo | `iso_state_synthesis.catalog` | Nombra bloques `B-*` y transiciones `T-*` observadas contra el contrato ISO. |
-| Emisor | `iso_state_synthesis.emitter` | Orquesta la emision ISO candidata, adjunta explicaciones por linea y compara contra Maestro. |
-| Builders ISO | `iso_state_synthesis.boring_head_lines`, `iso_state_synthesis.router_milling_lines`, `iso_state_synthesis.transition_lines` | Construyen lineas ISO puras para boring head/ranura, fresados router y transiciones entre familias, sin metadata explicativa. |
+| Agrupamiento | `iso_state_synthesis.work_groups` | Reconoce triples `prepare/trace/reset` y calcula transiciones entre grupos de trabajo. |
+| Comparacion | `iso_state_synthesis.comparison` | Compara ISO candidato explicado contra ISO Maestro normalizado. |
+| Emisor | `iso_state_synthesis.emitter` | Orquesta la emision ISO candidata y adjunta explicaciones por linea. |
+| Builders ISO | `iso_state_synthesis.boring_head_lines`, `iso_state_synthesis.router_milling_lines`, `iso_state_synthesis.slot_milling_lines`, `iso_state_synthesis.transition_lines` | Construyen lineas ISO puras para boring head/ranura, fresados router, traza SlotSide y transiciones entre familias, sin metadata explicativa. |
 | Errores | `iso_state_synthesis.errors` | Define la excepcion compartida del emisor candidato. |
 | Evidencia | `memory/`, `experiments/`, `contracts/`, `machine_config/` | Memoria viva, estudios fechados, contrato intermedio y snapshot local de maquina. |
 
@@ -28,8 +30,8 @@ estados, diferenciales, bloques, transiciones y evidencia observada.
 | --- | --- | --- | --- |
 | Inspeccion de estado | `.pgmx` Maestro | Plan interno y JSON opcional | `pgmx_source`, `model`, `cli`. |
 | Evaluacion de diferenciales | Plan de estado | Cambios por etapa y estado final | `differential`, `model`, `cli`. |
-| Emision candidata | `.pgmx` soportado | ISO candidato con fuente por linea | `emitter`, `catalog`, `differential`, `boring_head_lines`, `router_milling_lines`, `transition_lines`. |
-| Comparacion contra Maestro | `.pgmx` + `.iso` esperado | Igual/distinto, diferencias y diff opcional | `emitter`, `cli`. |
+| Emision candidata | `.pgmx` soportado | ISO candidato con fuente por linea | `emitter`, `catalog`, `differential`, `work_groups`, `boring_head_lines`, `router_milling_lines`, `slot_milling_lines`, `transition_lines`. |
+| Comparacion contra Maestro | `.pgmx` + `.iso` esperado | Igual/distinto, diferencias y diff opcional | `comparison`, `cli`. |
 | Investigacion | Corpus PGMX/ISO y config local | Reglas documentadas y pendientes | `experiments/`, `memory/`, `machine_config/`. |
 
 ## Frontera Actual
@@ -40,8 +42,9 @@ estados, diferenciales, bloques, transiciones y evidencia observada.
   de ordenamiento y familias observadas; no debe confundirse con un parser PGMX
   general.
 - `emitter.py` sigue siendo el frente de orquestacion y explicacion. Las lineas
-  puras de boring head/ranura, fresado router y transiciones principales ya
-  viven en modulos separados, pero el paquete completo todavia no es un
+  puras de boring head/ranura, fresado router, traza SlotSide y transiciones
+  principales ya viven en modulos separados, y la comparacion/agrupamiento se
+  separaron del emisor. El paquete completo todavia no es un
   traductor ISO general.
 - La CLI es operativa para investigacion y debe seguir funcionando con
   `py -3 -m iso_state_synthesis --help`.
@@ -399,15 +402,48 @@ Hallazgos aplicados:
   `iso_state_synthesis.transition_lines`, de modo que la cobertura fija el
   nuevo limite modular.
 
+## Subcorte Modulos Comparison, SlotSide Y Work Groups
+
+Hallazgos aplicados:
+
+- Se creo `iso_state_synthesis.comparison` para separar la comparacion
+  normalizada contra ISO Maestro. `compare_candidate_to_iso`,
+  `IsoCandidateComparison`, `IsoLineDifference` y `_normalize_iso_lines` ya no
+  viven en `emitter.py`.
+- Se creo `iso_state_synthesis.slot_milling_lines` para aislar la traza
+  SlotSide. `_emit_slot_milling_trace` queda como wrapper explicativo y delega
+  la lista de movimientos en `_slot_milling_trace_lines`.
+- Se creo `iso_state_synthesis.work_groups` para separar `_WorkGroup`,
+  `_work_stage_groups` y `_plan_work_groups`. `emitter.py` consume grupos
+  planificados, pero ya no define el contrato de agrupamiento.
+- Se actualizaron los scripts vivos de auditoria en `tools/studies/iso/` que
+  consumen comparacion o agrupamiento para que apunten a `comparison.py` y
+  `work_groups.py`.
+
+## Subcorte Auditoria Tools Studies ISO
+
+Hallazgos aplicados:
+
+- `tools/studies/iso/` queda clasificado como laboratorio reproducible, no API
+  productiva.
+- Los scripts fechados de fixtures PGMX permanecen como evidencia historica y
+  reproducible para generar lotes externos.
+- Los scripts de auditoria que siguen vivos para comparar corpus contra el
+  sintetizador actual son `block_transition_corpus_analysis_2026_05_13.py` y
+  `txh001_transition_audit_2026_05_13.py`; ambos fueron alineados con los
+  modulos vigentes.
+- La promocion de reglas queda limitada a `pgmx/`, `iso_state_synthesis/` o
+  herramientas publicas documentadas, con cobertura o comando reproducible.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome
-  la generacion ISO, porque todavia concentra dispatcher, wrappers explicativos
-  `_emit_*`, formato residual y comparacion. Boring head/ranura, router y
-  transiciones principales ya tienen modulos internos de builders de lineas.
+  la generacion ISO, porque todavia concentra wrappers explicativos `_emit_*`,
+  formato residual y cierres de programa. Boring head/ranura, router, SlotSide,
+  transiciones principales, comparacion y work groups ya tienen modulos
+  internos separados.
 - Agregar fixtures PGMX/ISO chicos dentro de `tests/fixtures` o `tmp` controlado
   para cubrir `pgmx_source.py` y una emision real sin depender de rutas `S:` o
   `P:`.
-- Separar claramente los estudios fechados de las reglas promovidas al catalogo.
-- Auditar `tools/studies/iso/` despues de este bloque para confirmar que los
-  estudios reproducibles apuntan al paquete vigente.
+- Separar claramente los estudios fechados de las reglas promovidas al catalogo
+  cuando se retome investigacion de corpus.

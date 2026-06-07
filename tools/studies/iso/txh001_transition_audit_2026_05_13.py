@@ -20,16 +20,18 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from iso_state_synthesis.comparison import (  # noqa: E402
+    compare_candidate_to_iso,
+    _normalize_iso_lines,
+)
 from iso_state_synthesis.differential import evaluate_pgmx_state_plan  # noqa: E402
 from iso_state_synthesis.emitter import (  # noqa: E402
     ExplainedIsoLine,
     IsoCandidateEmissionError,
-    compare_candidate_to_iso,
     emit_candidate_from_evaluation,
-    _normalize_iso_lines,
-    _work_stage_groups,
 )
 from iso_state_synthesis.model import StageDifferential  # noqa: E402
+from iso_state_synthesis.work_groups import _work_stage_groups  # noqa: E402
 
 
 DEFAULT_PGMX_ROOT = Path(r"S:\Maestro\Projects\ProdAction\Prod 26-01-01 Cazaux")

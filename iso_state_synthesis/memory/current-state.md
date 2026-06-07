@@ -46,14 +46,23 @@ Ultima actualizacion: 2026-06-07
   `iso_state_synthesis.transition_lines`: reset router-router, router hacia
   boring head/ranura, retorno boring head hacia router y transiciones
   Top/Side/Slot hacia SlotSide.
+- El subcorte de modulo Comparison mueve la comparacion normalizada contra ISO
+  Maestro a `iso_state_synthesis.comparison`.
+- El subcorte de modulo Slot Milling Lines mueve la traza SlotSide a
+  `iso_state_synthesis.slot_milling_lines`.
+- El subcorte de modulo Work Groups mueve `_WorkGroup`, `_work_stage_groups` y
+  `_plan_work_groups` a `iso_state_synthesis.work_groups`.
 - Los builders de traza router cubren center con leads (`OpenPolyline`,
   `ClosedPolyline*`, `Circle`), estrategias, compensacion lateral, sin-leads
   generico y fallback final desde el nuevo modulo.
 - `IsoCandidateEmissionError` vive en `iso_state_synthesis.errors` para que el
   CLI, `emitter.py` y los builders compartan el mismo contrato sin ciclos.
 - La separacion modular de builders queda cerrada sin ampliar reglas ISO:
-  `emitter.py` conserva dispatcher, wrappers explicativos `_emit_*`, formato
-  residual y comparacion contra Maestro.
+  `emitter.py` conserva wrappers explicativos `_emit_*`, formato residual y
+  cierres de programa.
+- `tools/studies/iso/` queda auditado como laboratorio reproducible. Los
+  scripts vivos que comparan corpus contra el sintetizador actual ya importan
+  `comparison.py` y `work_groups.py` en lugar de depender de `emitter.py`.
 - Cobertura local del checkpoint: `tests.test_iso_state_synthesis` fija los
   builders de movimiento router y los builders de boring head con tests puros.
 

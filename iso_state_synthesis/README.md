@@ -28,10 +28,15 @@ sintetizador por estado:
 - `differential.py`: calculo de cambios entre estado activo, estado objetivo y
   resets.
 - `errors.py`: excepciones compartidas del emisor candidato.
+- `comparison.py`: comparacion normalizada entre candidato explicado e ISO
+  Maestro.
+- `work_groups.py`: agrupamiento `prepare/trace/reset` y transiciones entre
+  grupos de trabajo.
 - `boring_head_lines.py`: builders internos de lineas ISO para preparaciones y
   resets de Top Drill, Side Drill y SlotSide.
 - `router_milling_lines.py`: builders internos de lineas ISO para fresados
   router lineales y de perfil.
+- `slot_milling_lines.py`: builders internos de traza ISO para SlotSide.
 - `transition_lines.py`: builders internos de lineas ISO para transiciones
   entre familias de mecanizado.
 - `emitter.py`: emisor candidato explicativo para el subset soportado, con

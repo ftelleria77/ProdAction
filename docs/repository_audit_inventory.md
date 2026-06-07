@@ -165,11 +165,14 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | `iso_state_synthesis.pgmx_source` | Construccion de planes desde snapshots PGMX. | `build_state_plan_from_pgmx`, `build_state_plan_from_snapshot`. |
 | `iso_state_synthesis.differential` | Calculo de cambios entre etapas. | `evaluate_pgmx_state_plan`, `evaluate_state_plan`. |
 | `iso_state_synthesis.catalog` | Catalogo de bloques/transiciones ISO observadas. | `head_for_family`, `block_id_for_stage_key`, `select_transition_id`. |
+| `iso_state_synthesis.comparison` | Comparacion normalizada entre candidato explicado e ISO Maestro. | `compare_candidate_to_iso`, `IsoCandidateComparison`, `IsoLineDifference`. |
+| `iso_state_synthesis.work_groups` | Agrupamiento `prepare/trace/reset` y planificacion de transiciones entre trabajos. | Helpers internos `_work_stage_groups`, `_plan_work_groups`. |
 | `iso_state_synthesis.boring_head_lines` | Builders puros de lineas ISO para preparaciones y resets del cabezal de perforacion/ranurado. | Helpers internos `_top_drill_*`, `_side_drill_*`, `_slot_milling_*`. |
 | `iso_state_synthesis.router_milling_lines` | Builders puros de lineas ISO para fresados router lineales y de perfil. | Helpers internos `_line_milling_*`, geometria de leads y compensacion. |
+| `iso_state_synthesis.slot_milling_lines` | Builders puros de traza ISO para SlotSide. | Helper interno `_slot_milling_trace_lines`. |
 | `iso_state_synthesis.transition_lines` | Builders puros de lineas ISO para transiciones entre familias. | Helpers internos `_router_*`, `_boring_to_router_*`, `_top_to_slot_*`, `_side_to_slot_*`, `_slot_to_slot_*`. |
 | `iso_state_synthesis.errors` | Excepciones compartidas del emisor candidato. | `IsoCandidateEmissionError`. |
-| `iso_state_synthesis.emitter` | Orquestacion de emision candidata ISO explicable y comparacion contra Maestro. | `emit_candidate_for_pgmx`, `emit_candidate_from_evaluation`, `compare_candidate_to_iso`. |
+| `iso_state_synthesis.emitter` | Orquestacion de emision candidata ISO explicable. | `emit_candidate_for_pgmx`, `emit_candidate_from_evaluation`. |
 | `iso_state_synthesis.cli` | CLI experimental. | `main`. |
 | `iso_state_synthesis.__main__` | Entrada `py -3 -m iso_state_synthesis`. | Delegacion a CLI. |
 | `iso_state_synthesis.machine_config/` | Configuracion observada de maquina. | Documentacion/datos, no modulo Python. |
@@ -185,7 +188,7 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | Ruta | Funcion En El Sistema | API Publica Principal |
 | --- | --- | --- |
 | `tools/studies/cut_diagrams/ordering_lab.py` | Laboratorio archivado de algoritmos/ordenamientos de corte. | `run_experiments`, `order_pieces`, `pack_*`, `main`. |
-| `tools/studies/iso/*.py` | Generadores y auditorias fechadas del corpus ISO. | Patron comun: `build_fixtures`, `generate`, `parse_args`, `main`; algunos agregan `analyze_corpus` o `audit_corpus`. |
+| `tools/studies/iso/*.py` | Laboratorio auditado de fixtures, ordenamiento y auditorias fechadas del corpus ISO. | Patron comun: `build_fixtures`, `generate`, `parse_args`, `main`; auditorias vivas: `block_transition_corpus_analysis_2026_05_13.py`, `txh001_transition_audit_2026_05_13.py`. |
 
 ## Cobertura De Tests
 

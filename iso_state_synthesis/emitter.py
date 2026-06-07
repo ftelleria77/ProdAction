@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import difflib
 import math
 import struct
 from dataclasses import dataclass
@@ -59,6 +58,7 @@ from .router_milling_lines import (
     _line_milling_trace_context,
     _line_milling_trace_motion_lines,
 )
+from .slot_milling_lines import _slot_milling_trace_lines
 from .transition_lines import (
     _boring_to_router_cleanup_lines,
     _boring_to_router_side_restore_lines,
@@ -69,16 +69,9 @@ from .transition_lines import (
     _slot_to_slot_milling_transition_lines,
     _top_to_slot_milling_transition_lines,
 )
+from .work_groups import _COMMON_STAGE_KEYS, _WorkGroup, _work_stage_groups
 
 
-_COMMON_STAGE_KEYS = {"program_header", "machine_preamble", "program_close"}
-_WORK_STAGE_KEYS = {
-    "top_drill": ("top_drill_prepare", "top_drill_trace", "top_drill_reset"),
-    "side_drill": ("side_drill_prepare", "side_drill_trace", "side_drill_reset"),
-    "slot_milling": ("slot_milling_prepare", "slot_milling_trace", "slot_milling_reset"),
-    "line_milling": ("line_milling_prepare", "line_milling_trace", "line_milling_reset"),
-    "profile_milling": ("profile_milling_prepare", "profile_milling_trace", "profile_milling_reset"),
-}
 _ROUTER_MILLING_FAMILIES = {"line_milling", "profile_milling"}
 
 
@@ -113,41 +106,6 @@ class ExplainedIsoProgram:
         output_path.write_text(self.text(), encoding="utf-8")
         return output_path
 
-
-@dataclass(frozen=True)
-class IsoLineDifference:
-    """One differing normalized line."""
-
-    line_number: int
-    expected: Optional[str]
-    actual: Optional[str]
-
-
-@dataclass(frozen=True)
-class IsoCandidateComparison:
-    """Comparison between Maestro ISO and an explained candidate."""
-
-    equal: bool
-    expected_line_count: int
-    actual_line_count: int
-    differences: tuple[IsoLineDifference, ...]
-    diff: str = ""
-
-    @property
-    def difference_count(self) -> int:
-        return len(self.differences)
-
-
-@dataclass(frozen=True)
-class _WorkGroup:
-    """Prepared work group plus catalog transitions to neighboring groups."""
-
-    family: str
-    prepare: StageDifferential
-    trace: StageDifferential
-    reset: StageDifferential
-    incoming_transition_id: Optional[str] = None
-    outgoing_transition_id: Optional[str] = None
 
 def emit_candidate_for_pgmx(
     pgmx_path: Path,
@@ -249,61 +207,6 @@ def emit_candidate_from_evaluation(
         differentials,
         work_groups,
     )
-
-
-def _work_stage_groups(
-    ordered_differentials: list[StageDifferential],
-) -> tuple[_WorkGroup, ...]:
-    work = [
-        differential
-        for differential in ordered_differentials
-        if differential.stage_key not in _COMMON_STAGE_KEYS
-    ]
-    if not work or len(work) % 3:
-        return ()
-
-    raw_groups: list[tuple[str, StageDifferential, StageDifferential, StageDifferential]] = []
-    for index in range(0, len(work), 3):
-        stage_group = work[index : index + 3]
-        stage_keys = tuple(differential.stage_key for differential in stage_group)
-        for family, expected_keys in _WORK_STAGE_KEYS.items():
-            if stage_keys == expected_keys:
-                prepare, trace, reset = stage_group
-                raw_groups.append((family, prepare, trace, reset))
-                break
-        else:
-            return ()
-    return _plan_work_groups(tuple(raw_groups))
-
-
-def _plan_work_groups(
-    groups: tuple[tuple[str, StageDifferential, StageDifferential, StageDifferential], ...],
-) -> tuple[_WorkGroup, ...]:
-    planned: list[_WorkGroup] = []
-    for index, (family, prepare, trace, reset) in enumerate(groups):
-        previous = groups[index - 1] if index > 0 else None
-        next_group = groups[index + 1] if index < len(groups) - 1 else None
-        incoming_transition_id = (
-            select_transition_id(previous[0], previous[1], family, prepare)
-            if previous is not None
-            else None
-        )
-        outgoing_transition_id = (
-            select_transition_id(family, prepare, next_group[0], next_group[1])
-            if next_group is not None
-            else None
-        )
-        planned.append(
-            _WorkGroup(
-                family=family,
-                prepare=prepare,
-                trace=trace,
-                reset=reset,
-                incoming_transition_id=incoming_transition_id,
-                outgoing_transition_id=outgoing_transition_id,
-            )
-        )
-    return tuple(planned)
 
 
 def _emit_empty_program_candidate(
@@ -854,49 +757,6 @@ def _emit_router_inter_work_reset(
             rule_status="router_inter_work_observed",
             transition_id=transition_id,
         )
-
-
-def compare_candidate_to_iso(
-    expected_iso_path: Path,
-    candidate: ExplainedIsoProgram,
-    *,
-    include_diff: bool = False,
-) -> IsoCandidateComparison:
-    """Compare an explained candidate against a Maestro ISO file."""
-
-    expected_text = Path(expected_iso_path).read_text(encoding="utf-8", errors="replace")
-    expected = _normalize_iso_lines(expected_text)
-    actual = _normalize_iso_lines(candidate.text())
-    differences: list[IsoLineDifference] = []
-    for index in range(max(len(expected), len(actual))):
-        expected_line = expected[index] if index < len(expected) else None
-        actual_line = actual[index] if index < len(actual) else None
-        if expected_line != actual_line:
-            differences.append(
-                IsoLineDifference(
-                    line_number=index + 1,
-                    expected=expected_line,
-                    actual=actual_line,
-                )
-            )
-    diff = ""
-    if include_diff and differences:
-        diff = "\n".join(
-            difflib.unified_diff(
-                expected,
-                actual,
-                fromfile=str(expected_iso_path),
-                tofile="candidate",
-                lineterm="",
-            )
-        )
-    return IsoCandidateComparison(
-        equal=not differences,
-        expected_line_count=len(expected),
-        actual_line_count=len(actual),
-        differences=tuple(differences),
-        diff=diff,
-    )
 
 
 def _emit_program_header(
@@ -2474,74 +2334,15 @@ def _emit_slot_milling_trace(
     emit_transition_exit: bool = False,
     emit_etk7_before_lift: bool = False,
 ) -> None:
-    rapid_x = _change_after(differential, "movimiento", "rapid_x")
-    rapid_y = _change_after(differential, "movimiento", "rapid_y")
-    cut_x = _change_after(differential, "movimiento", "cut_x")
-    rapid_z = _change_after(differential, "movimiento", "rapid_z")
-    cut_z = _change_after(differential, "movimiento", "cut_z")
-    security_z = _change_after(differential, "movimiento", "security_z")
-    tool_offset = _change_after(differential, "herramienta", "tool_offset_length")
-    tool_radius = _change_after(differential, "herramienta", "tool_radius")
-    plunge_feed = _change_after(differential, "movimiento", "plunge_feed")
-    milling_feed = _change_after(differential, "movimiento", "milling_feed")
     source = _change_source(differential, "movimiento", "cut_z")
-    motion_lines: list[str] = []
-    if previous_slot_trace is not None:
-        previous_rapid_x = _change_after(
-            previous_slot_trace,
-            "movimiento",
-            "rapid_x" if previous_slot_exit_emitted else "cut_x",
-        )
-        previous_rapid_y = _change_after(previous_slot_trace, "movimiento", "rapid_y")
-        motion_lines.extend(
-            (
-                f"G0 X{_fmt(previous_rapid_x)} Y{_fmt(previous_rapid_y)} Z{_fmt(rapid_z)}",
-                f"G0 X{_fmt(rapid_x)} Y{_fmt(rapid_y)} Z{_fmt(rapid_z)}",
-            )
-        )
-    else:
-        motion_lines.extend(
-            (
-                f"G0 X{_fmt(rapid_x)} Y{_fmt(rapid_y)}",
-                f"G0 Z{_fmt(rapid_z)}",
-            )
-        )
-    motion_lines.extend(
-        (
-            "D1",
-            f"SVL {_fmt(tool_offset)}",
-            f"VL6={_fmt(tool_offset)}",
-            f"SVR {_fmt(tool_radius)}",
-            f"VL7={_fmt(tool_radius)}",
-            f"G1 Z{_fmt(cut_z)} F{_fmt(plunge_feed)}",
-            "?%ETK[7]=1",
-            _line_milling_motion_line(
-                float(cut_x),
-                float(rapid_y),
-                float(cut_z),
-                float(rapid_x),
-                float(rapid_y),
-                float(cut_z),
-                float(milling_feed),
-            ),
-        )
-    )
-    if emit_transition_lift:
-        motion_lines.append(f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}")
-    if emit_transition_exit:
-        clearance_x = float(rapid_x) - 0.75
-        motion_lines.extend(
-            [
-                f"G1 X{_fmt(clearance_x)} Z{_fmt(security_z)} F{_fmt(milling_feed)}",
-                f"G1 X{_fmt(rapid_x)} Z{_fmt(security_z)} F{_fmt(milling_feed)}",
-                f"G1 Z{_fmt(security_z)} F{_fmt(milling_feed)}",
-                f"G1 Z{_fmt(cut_z)} F{_fmt(milling_feed)}",
-            ]
-        )
-    if emit_etk7_before_lift:
-        motion_lines.append("?%ETK[7]=0")
-    motion_lines.append(f"G0 Z{_fmt(security_z)}")
-    for line in motion_lines:
+    for line in _slot_milling_trace_lines(
+        differential,
+        previous_slot_trace=previous_slot_trace,
+        previous_slot_exit_emitted=previous_slot_exit_emitted,
+        emit_transition_lift=emit_transition_lift,
+        emit_transition_exit=emit_transition_exit,
+        emit_etk7_before_lift=emit_etk7_before_lift,
+    ):
         _append(
             lines,
             line,
@@ -4394,16 +4195,3 @@ def _last_emitted_xy(lines: list[ExplainedIsoLine]) -> Optional[tuple[float, flo
 def _fmt_scaled(value: object) -> str:
     number = struct.unpack("f", struct.pack("f", float(value)))[0]
     return f"{number * 1000.0:.3f}"
-
-
-def _normalize_iso_lines(text: str) -> tuple[str, ...]:
-    lines: list[str] = []
-    for raw_line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
-        line = raw_line.strip()
-        if not line:
-            continue
-        line = " ".join(line.split())
-        if line == "%" or line.startswith("% "):
-            line = "%"
-        lines.append(line)
-    return tuple(lines)

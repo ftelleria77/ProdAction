@@ -7,10 +7,10 @@ import json
 from pathlib import Path
 from typing import Optional
 
+from .comparison import compare_candidate_to_iso
 from .differential import evaluate_pgmx_state_plan
 from .errors import IsoCandidateEmissionError
 from .emitter import (
-    compare_candidate_to_iso,
     emit_candidate_for_pgmx,
 )
 from .model import IsoStateEvaluation, IsoStatePlan, StageDifferential, StateStage, to_jsonable

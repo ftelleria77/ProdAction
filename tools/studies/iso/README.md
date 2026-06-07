@@ -44,6 +44,19 @@ documentada.
 | `txh001_transition_audit_2026_05_13.py` | Auditoria | Audita candidatos que ejercitan la transicion T-XH-001. |
 | `block_transition_corpus_analysis_2026_05_13.py` | Auditoria | Clasifica residuales ISO por bloques y secuencias de transicion. |
 
+## Estado De Auditoria 2026-06-07
+
+| Grupo | Scripts | Estado |
+| --- | --- | --- |
+| Fixtures fechados | `minimal_*`, `side_g53_z_*`, `router_*`, `tbh*`, `txh*_fixtures*` | Laboratorio historico reproducible. Mantener fechados; no son API publica. |
+| Ordenamiento top drill | `top_drill_ordering_fixtures_2026_05_13.py`, `top_drill_corpus_order_analysis_2026_05_13.py` | Evidencia viva para reglas de orden en `pgmx_source.py`; ejecutar solo con corpus Maestro/ISO pareado. |
+| Auditoria de transiciones | `txh001_transition_audit_2026_05_13.py`, `block_transition_corpus_analysis_2026_05_13.py` | Herramientas vivas para comparar corpus contra el sintetizador actual; importan `iso_state_synthesis.comparison` y `iso_state_synthesis.work_groups`. |
+
+Los estudios que comparan contra el sintetizador vigente deben importar
+comparacion desde `iso_state_synthesis.comparison` y agrupamiento desde
+`iso_state_synthesis.work_groups`. `iso_state_synthesis.emitter` queda reservado
+para emitir candidatos explicados.
+
 ## Criterio De Promocion
 
 Un estudio puede promoverse fuera de esta carpeta solo si:

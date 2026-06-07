@@ -28,12 +28,14 @@ from .catalog import (
 from .pgmx_source import build_state_plan_from_pgmx, build_state_plan_from_snapshot
 from .differential import evaluate_pgmx_state_plan, evaluate_state_plan
 from .errors import IsoCandidateEmissionError
-from .emitter import (
-    ExplainedIsoLine,
-    ExplainedIsoProgram,
+from .comparison import (
     IsoCandidateComparison,
     IsoLineDifference,
     compare_candidate_to_iso,
+)
+from .emitter import (
+    ExplainedIsoLine,
+    ExplainedIsoProgram,
     emit_candidate_for_pgmx,
     emit_candidate_from_evaluation,
 )
