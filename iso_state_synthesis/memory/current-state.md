@@ -3,9 +3,9 @@
 Nueva memoria de trabajo para redisenar la generacion ISO desde cero sin
 arrastrar la arquitectura por patrones de `iso_generation/`.
 
-Ultima actualizacion: 2026-06-06
+Ultima actualizacion: 2026-06-07
 
-## Checkpoint 2026-06-06 - Modularizacion Interna Del Emisor Router
+## Checkpoint 2026-06-07 - Modularizacion De Builders ISO
 
 - `_emit_line_milling_trace` queda reducido a lectura de contexto, calculo de
   entrada comun, seleccion de builder de `motion_lines` y apendice explicado de
@@ -38,13 +38,18 @@ Ultima actualizacion: 2026-06-06
   `top/side/slot`, los shifts, velocidad/mask y el calculo `G53 Z` lateral a
   `iso_state_synthesis.boring_head_lines`. `emitter.py` queda como orquestador
   y capa de explicacion para el cabezal de perforacion/ranurado.
-- Los builders internos de traza router cubren center con leads
-  (`OpenPolyline`, `ClosedPolyline*`, `Circle`), estrategias, compensacion
-  lateral, sin-leads generico y fallback final.
-- La separacion a modulos fuera de `emitter.py` queda como decision futura del
-  laboratorio ISO; este checkpoint solo cierra la delegacion interna del bloque
-  de fresado router y la extraccion modular de boring head sin ampliar reglas
-  ISO.
+- El subcorte de modulo Router Milling Lines mueve el contexto de traza, los
+  predicados de modo, la entrada comun, los builders de movimiento, el reset
+  router y la preparacion incremental despues de boring head a
+  `iso_state_synthesis.router_milling_lines`.
+- Los builders de traza router cubren center con leads (`OpenPolyline`,
+  `ClosedPolyline*`, `Circle`), estrategias, compensacion lateral, sin-leads
+  generico y fallback final desde el nuevo modulo.
+- `IsoCandidateEmissionError` vive en `iso_state_synthesis.errors` para que el
+  CLI, `emitter.py` y los builders compartan el mismo contrato sin ciclos.
+- La separacion modular de builders queda cerrada sin ampliar reglas ISO:
+  `emitter.py` conserva dispatcher, transiciones entre familias, apendice
+  explicado, formato residual y comparacion contra Maestro.
 - Cobertura local del checkpoint: `tests.test_iso_state_synthesis` fija los
   builders de movimiento router y los builders de boring head con tests puros.
 

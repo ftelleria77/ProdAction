@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Optional
 
 from .differential import evaluate_pgmx_state_plan
+from .errors import IsoCandidateEmissionError
 from .emitter import (
-    IsoCandidateEmissionError,
     compare_candidate_to_iso,
     emit_candidate_for_pgmx,
 )

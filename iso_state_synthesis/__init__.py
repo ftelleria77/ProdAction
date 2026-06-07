@@ -27,11 +27,11 @@ from .catalog import (
 )
 from .pgmx_source import build_state_plan_from_pgmx, build_state_plan_from_snapshot
 from .differential import evaluate_pgmx_state_plan, evaluate_state_plan
+from .errors import IsoCandidateEmissionError
 from .emitter import (
     ExplainedIsoLine,
     ExplainedIsoProgram,
     IsoCandidateComparison,
-    IsoCandidateEmissionError,
     IsoLineDifference,
     compare_candidate_to_iso,
     emit_candidate_for_pgmx,

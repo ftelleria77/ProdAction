@@ -1,6 +1,6 @@
 # Auditoria Del Subsistema `iso_state_synthesis/`
 
-Estado: corte inicial del bloque `iso_state_synthesis/`, 2026-06-06.
+Estado: corte modular del bloque `iso_state_synthesis/`, 2026-06-07.
 
 Este documento registra el primer corte estable de auditoria del subsistema ISO
 por estado. El paquete sigue siendo experimental: no reemplaza a Maestro ni al
@@ -17,7 +17,9 @@ estados, diferenciales, bloques, transiciones y evidencia observada.
 | Adaptador PGMX | `iso_state_synthesis.pgmx_source` | Convierte `pgmx.snapshot` en un plan de estados ordenado por worksteps. |
 | Diferencial | `iso_state_synthesis.differential` | Calcula cambios entre estado activo, objetivo, valores forzados y resets. |
 | Catalogo | `iso_state_synthesis.catalog` | Nombra bloques `B-*` y transiciones `T-*` observadas contra el contrato ISO. |
-| Emisor | `iso_state_synthesis.emitter` | Emite ISO candidato explicado para el subset soportado y compara contra Maestro. |
+| Emisor | `iso_state_synthesis.emitter` | Orquesta la emision ISO candidata, adjunta explicaciones por linea y compara contra Maestro. |
+| Builders ISO | `iso_state_synthesis.boring_head_lines`, `iso_state_synthesis.router_milling_lines` | Construyen lineas ISO puras para boring head/ranura y fresados router, sin metadata explicativa. |
+| Errores | `iso_state_synthesis.errors` | Define la excepcion compartida del emisor candidato. |
 | Evidencia | `memory/`, `experiments/`, `contracts/`, `machine_config/` | Memoria viva, estudios fechados, contrato intermedio y snapshot local de maquina. |
 
 ## Procesos Donde Interviene
@@ -26,7 +28,7 @@ estados, diferenciales, bloques, transiciones y evidencia observada.
 | --- | --- | --- | --- |
 | Inspeccion de estado | `.pgmx` Maestro | Plan interno y JSON opcional | `pgmx_source`, `model`, `cli`. |
 | Evaluacion de diferenciales | Plan de estado | Cambios por etapa y estado final | `differential`, `model`, `cli`. |
-| Emision candidata | `.pgmx` soportado | ISO candidato con fuente por linea | `emitter`, `catalog`, `differential`. |
+| Emision candidata | `.pgmx` soportado | ISO candidato con fuente por linea | `emitter`, `catalog`, `differential`, `boring_head_lines`, `router_milling_lines`. |
 | Comparacion contra Maestro | `.pgmx` + `.iso` esperado | Igual/distinto, diferencias y diff opcional | `emitter`, `cli`. |
 | Investigacion | Corpus PGMX/ISO y config local | Reglas documentadas y pendientes | `experiments/`, `memory/`, `machine_config/`. |
 
@@ -37,9 +39,9 @@ estados, diferenciales, bloques, transiciones y evidencia observada.
 - `pgmx_source.py` es adaptador experimental desde `pgmx.snapshot`. Tiene reglas
   de ordenamiento y familias observadas; no debe confundirse con un parser PGMX
   general.
-- `emitter.py` es el frente mas grande y menos modular. Produce candidatos
-  explicables para familias y secuencias controladas, pero no es traductor ISO
-  general.
+- `emitter.py` sigue siendo el frente de orquestacion y explicacion. Las lineas
+  puras de boring head/ranura y fresado router ya viven en modulos separados,
+  pero el paquete completo todavia no es un traductor ISO general.
 - La CLI es operativa para investigacion y debe seguir funcionando con
   `py -3 -m iso_state_synthesis --help`.
 
@@ -359,13 +361,31 @@ Hallazgos aplicados:
 - Los tests de helpers ahora importan desde `iso_state_synthesis.boring_head_lines`,
   de modo que la cobertura fija el nuevo limite modular.
 
+## Subcorte Modulo Router Milling Lines
+
+Hallazgos aplicados:
+
+- Se creo `iso_state_synthesis.router_milling_lines` como modulo interno de
+  builders puros para fresados router lineales y de perfil.
+- Se movieron al nuevo modulo el contexto de traza, los predicados de modo, la
+  entrada comun, los builders de `motion_lines`, el reset router y la
+  preparacion incremental despues de boring head.
+- `emitter.py` conserva la orquestacion y el apendice explicado: lee el modulo
+  de router, decide la etapa y adjunta fuente, confianza, `block_id`,
+  `transition_id` y nota por linea.
+- Se agrego `iso_state_synthesis.errors` para compartir
+  `IsoCandidateEmissionError` entre el emisor, el CLI y los builders sin crear
+  ciclos de importacion.
+- Los tests de helpers router ahora importan desde
+  `iso_state_synthesis.router_milling_lines`, de modo que la cobertura fija el
+  nuevo limite modular.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome
-  la generacion ISO, porque todavia concentra preparacion, apendice explicado
-  de resets, formato y comparacion. Boring head ya tiene modulo interno de
-  builders de lineas; la traza router todavia conserva builders internos dentro
-  de `emitter.py`.
+  la generacion ISO, porque todavia concentra dispatcher, transiciones entre
+  familias, apendice explicado de lineas, formato residual y comparacion.
+  Boring head/ranura y router ya tienen modulos internos de builders de lineas.
 - Agregar fixtures PGMX/ISO chicos dentro de `tests/fixtures` o `tmp` controlado
   para cubrir `pgmx_source.py` y una emision real sin depender de rutas `S:` o
   `P:`.

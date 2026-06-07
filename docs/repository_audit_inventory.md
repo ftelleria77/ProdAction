@@ -166,7 +166,9 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | `iso_state_synthesis.differential` | Calculo de cambios entre etapas. | `evaluate_pgmx_state_plan`, `evaluate_state_plan`. |
 | `iso_state_synthesis.catalog` | Catalogo de bloques/transiciones ISO observadas. | `head_for_family`, `block_id_for_stage_key`, `select_transition_id`. |
 | `iso_state_synthesis.boring_head_lines` | Builders puros de lineas ISO para preparaciones y resets del cabezal de perforacion/ranurado. | Helpers internos `_top_drill_*`, `_side_drill_*`, `_slot_milling_*`. |
-| `iso_state_synthesis.emitter` | Emision candidata ISO explicable. | `emit_candidate_for_pgmx`, `emit_candidate_from_evaluation`, `compare_candidate_to_iso`. |
+| `iso_state_synthesis.router_milling_lines` | Builders puros de lineas ISO para fresados router lineales y de perfil. | Helpers internos `_line_milling_*`, geometria de leads y compensacion. |
+| `iso_state_synthesis.errors` | Excepciones compartidas del emisor candidato. | `IsoCandidateEmissionError`. |
+| `iso_state_synthesis.emitter` | Orquestacion de emision candidata ISO explicable y comparacion contra Maestro. | `emit_candidate_for_pgmx`, `emit_candidate_from_evaluation`, `compare_candidate_to_iso`. |
 | `iso_state_synthesis.cli` | CLI experimental. | `main`. |
 | `iso_state_synthesis.__main__` | Entrada `py -3 -m iso_state_synthesis`. | Delegacion a CLI. |
 | `iso_state_synthesis.machine_config/` | Configuracion observada de maquina. | Documentacion/datos, no modulo Python. |
