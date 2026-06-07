@@ -165,6 +165,7 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | `iso_state_synthesis.pgmx_source` | Construccion de planes desde snapshots PGMX. | `build_state_plan_from_pgmx`, `build_state_plan_from_snapshot`. |
 | `iso_state_synthesis.differential` | Calculo de cambios entre etapas. | `evaluate_pgmx_state_plan`, `evaluate_state_plan`. |
 | `iso_state_synthesis.catalog` | Catalogo de bloques/transiciones ISO observadas. | `head_for_family`, `block_id_for_stage_key`, `select_transition_id`. |
+| `iso_state_synthesis.boring_head_lines` | Builders puros de lineas ISO para preparaciones y resets del cabezal de perforacion/ranurado. | Helpers internos `_top_drill_*`, `_side_drill_*`, `_slot_milling_*`. |
 | `iso_state_synthesis.emitter` | Emision candidata ISO explicable. | `emit_candidate_for_pgmx`, `emit_candidate_from_evaluation`, `compare_candidate_to_iso`. |
 | `iso_state_synthesis.cli` | CLI experimental. | `main`. |
 | `iso_state_synthesis.__main__` | Entrada `py -3 -m iso_state_synthesis`. | Delegacion a CLI. |

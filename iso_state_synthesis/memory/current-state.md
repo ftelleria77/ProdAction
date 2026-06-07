@@ -34,16 +34,19 @@ Ultima actualizacion: 2026-06-06
   `_side_drill_prepare_lines`, `_side_drill_same_spindle_reposition_lines`,
   `_side_drill_spindle_change_lines`, `_side_drill_prepare_after_slot_lines` y
   `_side_drill_prepare_after_top_lines`.
+- El subcorte de modulo Boring Head Lines mueve esos builders, los resets
+  `top/side/slot`, los shifts, velocidad/mask y el calculo `G53 Z` lateral a
+  `iso_state_synthesis.boring_head_lines`. `emitter.py` queda como orquestador
+  y capa de explicacion para el cabezal de perforacion/ranurado.
 - Los builders internos de traza router cubren center con leads
   (`OpenPolyline`, `ClosedPolyline*`, `Circle`), estrategias, compensacion
   lateral, sin-leads generico y fallback final.
 - La separacion a modulos fuera de `emitter.py` queda como decision futura del
   laboratorio ISO; este checkpoint solo cierra la delegacion interna del bloque
-  de fresado router, resets y preparaciones de boring head sin ampliar reglas
+  de fresado router y la extraccion modular de boring head sin ampliar reglas
   ISO.
 - Cobertura local del checkpoint: `tests.test_iso_state_synthesis` fija los
-  builders de movimiento, resets y preparaciones de boring head con tests
-  puros.
+  builders de movimiento router y los builders de boring head con tests puros.
 
 ## Retiro De `iso_generation/`
 

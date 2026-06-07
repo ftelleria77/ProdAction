@@ -344,13 +344,28 @@ Hallazgos aplicados:
   opcional, mascara `ETK[0]`, reposicion por traza previa, `G53 Z` lateral y
   pausa lateral.
 
+## Subcorte Modulo Boring Head Lines
+
+Hallazgos aplicados:
+
+- Se creo `iso_state_synthesis.boring_head_lines` como modulo interno de
+  builders puros para preparaciones y resets de boring head.
+- Se movieron al nuevo modulo las secuencias de lineas de Top Drill, Side Drill
+  y SlotSide, junto con utilidades compartidas de shift, velocidad, mascara y
+  `G53 Z` lateral.
+- `emitter.py` conserva la orquestacion y el apendice explicado: decide que
+  etapa emitir y adjunta fuente, confianza, `block_id`, `transition_id` y nota
+  por linea.
+- Los tests de helpers ahora importan desde `iso_state_synthesis.boring_head_lines`,
+  de modo que la cobertura fija el nuevo limite modular.
+
 ## Deuda Residual
 
 - Extraer `iso_state_synthesis.emitter` por familias o etapas cuando se retome
   la generacion ISO, porque todavia concentra preparacion, apendice explicado
-  de resets, formato y comparacion. La traza router, los resets principales y
-  las preparaciones principales de boring head ya tienen builders internos de
-  lineas, pero aun no se movieron a modulos separados.
+  de resets, formato y comparacion. Boring head ya tiene modulo interno de
+  builders de lineas; la traza router todavia conserva builders internos dentro
+  de `emitter.py`.
 - Agregar fixtures PGMX/ISO chicos dentro de `tests/fixtures` o `tmp` controlado
   para cubrir `pgmx_source.py` y una emision real sin depender de rutas `S:` o
   `P:`.

@@ -27,6 +27,8 @@ sintetizador por estado:
   estados.
 - `differential.py`: calculo de cambios entre estado activo, estado objetivo y
   resets.
+- `boring_head_lines.py`: builders internos de lineas ISO para preparaciones y
+  resets de Top Drill, Side Drill y SlotSide.
 - `emitter.py`: emisor candidato explicativo para el subset soportado, con
   fuente por linea.
 - `cli.py`: inspeccion del plan interno desde linea de comandos.

@@ -6,6 +6,25 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import iso_state_synthesis as iso
+from iso_state_synthesis.boring_head_lines import (
+    _side_drill_prepare_after_router_lines,
+    _side_drill_prepare_after_slot_lines,
+    _side_drill_prepare_after_top_lines,
+    _side_drill_prepare_lines,
+    _side_drill_reset_lines,
+    _side_drill_same_spindle_reposition_lines,
+    _side_drill_spindle_change_lines,
+    _slot_milling_prepare_after_top_lines,
+    _slot_milling_prepare_lines,
+    _slot_milling_reset_lines,
+    _tool_shift_lines,
+    _top_drill_prepare_after_router_base_lines,
+    _top_drill_prepare_after_side_lines,
+    _top_drill_prepare_after_slot_lines,
+    _top_drill_prepare_between_top_lines,
+    _top_drill_prepare_lines,
+    _top_drill_reset_lines,
+)
 from iso_state_synthesis.catalog import select_transition_id
 from iso_state_synthesis.differential import evaluate_state_plan
 from iso_state_synthesis.emitter import (
@@ -44,24 +63,7 @@ from iso_state_synthesis.emitter import (
     _boring_to_router_top_face_lines,
     _router_inter_work_reset_lines,
     _router_to_boring_transition_lines,
-    _side_drill_prepare_after_router_lines,
-    _side_drill_prepare_after_slot_lines,
-    _side_drill_prepare_after_top_lines,
-    _side_drill_prepare_lines,
-    _side_drill_same_spindle_reposition_lines,
-    _side_drill_spindle_change_lines,
-    _side_drill_reset_lines,
-    _slot_milling_prepare_after_top_lines,
-    _slot_milling_prepare_lines,
-    _slot_milling_reset_lines,
     _side_normal,
-    _tool_shift_lines,
-    _top_drill_prepare_after_router_base_lines,
-    _top_drill_prepare_after_side_lines,
-    _top_drill_prepare_after_slot_lines,
-    _top_drill_prepare_between_top_lines,
-    _top_drill_prepare_lines,
-    _top_drill_reset_lines,
     _trace_move_tangent_unit,
     _trace_point_tangent,
     _unit_vector,
