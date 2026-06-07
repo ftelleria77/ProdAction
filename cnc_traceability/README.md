@@ -28,7 +28,7 @@ py -3 cnc_traceability\viewer_xp.py
 Validacion rapida:
 
 ```powershell
-py -3 -m py_compile cnc_traceability\viewer_xp.py
+py -3 -m compileall -q cnc_traceability
 ```
 
 ## Compatibilidad

@@ -1,6 +1,6 @@
 # Guia Rapida De Estudio Del Repo
 
-Esta guia resume como esta organizado ProdAction al 2026-06-06. Sirve para
+Esta guia resume como esta organizado ProdAction al 2026-06-07. Sirve para
 entrar rapido al repo antes de tocar codigo.
 
 ## Estado actual
@@ -28,6 +28,8 @@ El sintetizador PGMX real vive en `pgmx.synthesis` y expone
 | `docs/core_subsystem_audit.md` | Corte dedicado del subsistema `core/`, iniciado por modelo/parser. |
 | `docs/pgmx_subsystem_audit.md` | Corte dedicado del subsistema `pgmx/`, con fachadas, procesos y deuda residual. |
 | `docs/iso_state_synthesis_subsystem_audit.md` | Corte dedicado del subsistema ISO por estado, con contratos, CLI y deuda residual. |
+| `docs/cnc_traceability_subsystem_audit.md` | Corte dedicado del visor CNC standalone y su frontera XP/USBMIX. |
+| `docs/tools_studies_subsystem_audit.md` | Corte dedicado de laboratorios reproducibles bajo `tools/studies/`. |
 | `app/ui.py` | Compone `ProjectDetailWindow` a partir de mixins. La logica de detalle vive en `app/project_detail_*.py`. |
 | `app/main_window.py` | Ventana inicial de seleccion de proyectos. |
 | `app/project_detail_*.py` | Flujos de detalle: procesamiento, inspeccion, salida, piezas, PGMX, colores y En-Juego. |
@@ -165,6 +167,7 @@ Codigo: `cnc_traceability/viewer_xp.py`.
 Entrada del subsistema: `cnc_traceability/README.md`.
 Contrato: `cnc_traceability/docs/contract.md`.
 Memoria: `cnc_traceability/memory/current-state.md`.
+Auditoria del bloque: `docs/cnc_traceability_subsystem_audit.md`.
 
 Caracteristicas:
 
@@ -199,7 +202,9 @@ Estado actual documentado:
   router y herramientas especiales;
 - `iso_state_synthesis/` contiene el esqueleto separado con adaptador PGMX,
   diferenciales de estado y emisor candidato explicado;
-- el siguiente paso es extender el emisor multi-trabajo por diferenciales.
+- el frente funcional ISO queda pausado para la auditoria general; al reactivarlo,
+  el siguiente pendiente operativo es estudiar reglas concretas contra corpus,
+  no cambiar la arquitectura productiva.
 
 ## Comandos utiles de verificacion
 
@@ -229,9 +234,9 @@ Prueba de humo PGMX recomendada:
   sigue siendo un modulo grande con varias responsabilidades internas.
 - `iso_state_synthesis.emitter` ya tiene auditoria inicial y cobertura de
   contratos puros, pero sigue siendo grande y experimental.
-- La suite automatizada cubre app/core/PGMX/nesting/planillas e ISO inicial,
-  pero `cnc_traceability/` y `tools/studies/` aun tienen cobertura dedicada
-  limitada.
+- La suite automatizada cubre app/core/PGMX/nesting/planillas, ISO inicial y
+  helpers puros de `cnc_traceability/`, pero la UI XP real y `tools/studies/`
+  siguen con cobertura dedicada limitada.
 - `requirements.txt` no fija versiones.
 - La investigacion ISO es extensa, pero aun no es API productiva.
 - Las memorias historicas son utiles, pero conviene promover decisiones

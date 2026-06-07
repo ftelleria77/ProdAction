@@ -286,6 +286,11 @@ memorias historicas como contexto, no como API.
    Cierre: etapa 9 queda cerrada como limpieza de fronteras, fachadas y
    laboratorios. `iso_state_synthesis.emitter` sigue incompleto y se mantiene
    como frente experimental pausado; terminarlo no forma parte de esta etapa.
+   Auditoria general posterior 2026-06-07: `cnc_traceability/` queda auditado
+   en `docs/cnc_traceability_subsystem_audit.md` con cobertura focal de helpers
+   puros; `tools/studies/` queda auditado en
+   `docs/tools_studies_subsystem_audit.md` como laboratorio reproducible, no
+   API productiva.
 
 ## Invariantes
 

@@ -1,6 +1,6 @@
 # Inventario De Auditoria Del Repositorio
 
-Estado: inventario operativo actualizado, 2026-06-06.
+Estado: inventario operativo actualizado, 2026-06-07.
 
 Este documento es la base de trabajo para auditar ProdAction modulo por modulo y
 actualizar la documentacion vigente. No reemplaza las guias publicas; sirve para
@@ -27,8 +27,8 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | `core/` | Dominio compartido, parser, planillas, PDF, nesting y En-Juego. | Escaneo de proyectos, modelo de datos, resumen CSV, planillas Excel/PDF, diagramas de corte, composicion En-Juego. | `tests/test_core_*.py`, `tests/test_nesting_*`, `tests/test_summary_exports.py`, `tests/test_production_*`. | `docs/repo_study_guide.md`, `docs/core_subsystem_audit.md`, `docs/cut_diagrams_temporary_memory.md`, `docs/en_juego_synthesis_temporary_memory.md`. |
 | `pgmx/` | Subsistema PGMX productivo. | Lectura de programas, dibujos de piezas, snapshot, adaptacion, sintesis PGMX, laboratorio pocket milling. | `tests/test_pgmx_*`, `tests/test_project_detail_pgmx.py`. | `docs/pgmx_subsystem_audit.md`, `docs/synthesize_pgmx_help.md`, `docs/pgmx_snapshot_help.md`, `docs/pgmx_adapters_help.md`, `docs/pgmx_synthesis_modularization_plan.md`, `pgmx/machining_lab/README.md`. |
 | `iso_state_synthesis/` | Sintesis ISO experimental basada en estados. | Lectura de snapshot PGMX, plan de estados, diferencial, emision candidata ISO, comparacion. | `tests/test_iso_state_synthesis.py`. | `docs/iso_state_synthesis_subsystem_audit.md`, `iso_state_synthesis/README.md`, `iso_state_synthesis/memory/current-state.md`, `docs/iso_cnc_contract.md`. |
-| `cnc_traceability/` | Visor CNC standalone compatible con Windows XP. | Lectura de indice, seguimiento de mecanizado, preparacion USBMIX, previews de piezas. | Sin suite automatizada actual. | `cnc_traceability/README.md`, `cnc_traceability/docs/contract.md`. |
-| `tools/studies/` | Estudios reproducibles archivados. | Generacion de fixtures ISO, auditorias de corpus, laboratorio de ordenamiento de corte. | Se validan por imports/ejecucion puntual, no como API productiva. | `tools/studies/README.md`, `tools/studies/iso/README.md`. |
+| `cnc_traceability/` | Visor CNC standalone compatible con Windows XP. | Lectura de indice, seguimiento de mecanizado, preparacion USBMIX, previews de piezas. | `tests/test_cnc_traceability.py` para helpers puros; UI/XP queda manual. | `docs/cnc_traceability_subsystem_audit.md`, `cnc_traceability/README.md`, `cnc_traceability/docs/contract.md`. |
+| `tools/studies/` | Estudios reproducibles archivados. | Generacion de fixtures ISO, auditorias de corpus, laboratorio de ordenamiento de corte. | Se validan por `compileall`, imports/ejecucion puntual y corpus externo cuando aplica. | `docs/tools_studies_subsystem_audit.md`, `tools/studies/README.md`, `tools/studies/iso/README.md`. |
 | `tests/` | Cobertura automatizada. | Verificacion de contratos publicos, helpers de UI, nesting, PGMX y planillas. | `py -3 -m unittest discover -s tests -p "test*.py"`. | Este inventario y docs de subsistema. |
 
 ## Procesos Transversales
@@ -206,7 +206,8 @@ mantener una matriz de control mientras se revisan los subsistemas.
 | Nesting | `tests/test_nesting_*.py`. |
 | PGMX | `tests/test_pgmx_processing.py`, `tests/test_pgmx_synthesis_package.py`, `tests/test_pgmx_public_facades.py`, `tests/test_pgmx_vaciado_v2.py`, `tests/test_pgmx_vaciado.py`, `tests/test_project_detail_pgmx.py`. |
 | ISO experimental | `tests/test_iso_state_synthesis.py`. |
-| Gaps conocidos | `cnc_traceability/` y `tools/studies/` no tienen suite dedicada completa; `iso_state_synthesis/` tiene cobertura inicial pero no fixtures PGMX/ISO reales. |
+| Trazabilidad CNC | `tests/test_cnc_traceability.py`. |
+| Gaps conocidos | `cnc_traceability/` no tiene cobertura automatizada de UI/XP real; `tools/studies/` no tiene suite dedicada completa; `iso_state_synthesis/` tiene cobertura inicial pero no fixtures PGMX/ISO reales. |
 
 Comando de validacion general:
 
@@ -275,5 +276,9 @@ py -3 -m unittest discover -s tests -p "test*.py"
 - El subcorte de `iso_state_synthesis.emitter` extrae los builders internos de
   `line_milling_trace`: center con leads, estrategias, compensacion lateral,
   sin-leads generico y fallback final quedan cubiertos en tests puros.
-- `cnc_traceability/` tiene documentacion propia, pero poca o ninguna cobertura
-  automatizada dedicada.
+- `docs/cnc_traceability_subsystem_audit.md` agrega el corte del visor CNC
+  standalone y `tests/test_cnc_traceability.py` fija helpers puros de indice,
+  escaneo, resolucion de pieza y progreso.
+- `docs/tools_studies_subsystem_audit.md` agrega el corte de laboratorios
+  reproducibles; `tools/studies/` queda clasificado como evidencia ejecutable,
+  no como API productiva.
