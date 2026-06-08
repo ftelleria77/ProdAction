@@ -39,6 +39,7 @@ Mapa vigente:
 | --- | --- | --- |
 | `pgmx.machining_lab` | Laboratorio general de mecanizados | Paquete vigente para evidencia, memoria y analizadores por familia. No debe ser dependencia productiva directa. |
 | `pgmx.machining_lab.pocket_milling` | Laboratorio de `ClosedPocket` dentro del laboratorio general | Destino vigente del laboratorio historico de Vaciado. |
+| `pgmx.machining_lab.machine_operations` | Laboratorio de operaciones de maquina y flujo de programa | Estudia multiples `MainWorkplan`, `Xn`, `Xmsg`, cambios de setup/origen y orden operativo. |
 
 ## Pocket Milling PGMX
 
@@ -55,6 +56,17 @@ que falta o de extender ese frente, leer ese archivo y
 Las suites `tests.test_pgmx_vaciado_v2` y `tests.test_pgmx_vaciado` corren por
 defecto; los casos dependientes del corpus externo de Maestro se saltan solo si
 ese corpus no esta disponible.
+
+## Machine Operations PGMX
+
+| Ruta | Rol | Frontera |
+| --- | --- | --- |
+| `pgmx.machining_lab.machine_operations` | Laboratorio de `Xn`, `Xmsg` y fases operativas | Puede usar muestras Maestro y PGMX sintetizados; no es dependencia productiva directa. |
+| `pgmx.snapshot` | Reconocimiento productivo futuro | Debe exponer fases y operaciones de maquina cuando las reglas del laboratorio se estabilicen. |
+| `pgmx.synthesis.common.program` | Sintesis productiva futura | Debe escribir multiples workplans y operaciones de maquina intercaladas cuando el contrato quede cerrado. |
+
+El tracker vivo del laboratorio es
+`pgmx/machining_lab/machine_operations/memory/current-state.md`.
 
 ## Estudios Reproducibles
 

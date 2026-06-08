@@ -17,9 +17,11 @@ No es dependencia productiva directa del sintetizador PGMX.
 | Ruta | Familia | Estado |
 | --- | --- | --- |
 | `pgmx.machining_lab.pocket_milling` | `ClosedPocket` / pocket milling | Laboratorio heredado del frente historico de Vaciado. |
+| `pgmx.machining_lab.machine_operations` | Flujo de programa, `Xn`, `Xmsg` y fases | Laboratorio para operaciones de maquina y multiples workplans. |
 
 ## Documentacion
 
 - Fronteras generales: `docs/laboratory_frontiers.md`.
 - Inventario actual: `docs/repository_audit_inventory.md`.
+- Machine operations: `pgmx/machining_lab/machine_operations/README.md`.
 - Pocket milling: `pgmx/machining_lab/pocket_milling/README.md`.

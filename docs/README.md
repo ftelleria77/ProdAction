@@ -78,6 +78,7 @@ tener que leer todas las memorias historicas de una vez.
 | Sintesis PGMX | `docs/pgmx_subsystem_audit.md`, `docs/synthesize_pgmx_help.md`, `docs/pgmx_synthesis_modularization_plan.md`, `docs/pgmx_synthesis_modularization_temporary_memory.md` | `pgmx/synthesis/` |
 | Snapshot/adaptacion PGMX | `docs/pgmx_subsystem_audit.md`, `docs/pgmx_snapshot_help.md`, `docs/pgmx_adapters_help.md` | `pgmx/snapshot.py`, `pgmx/adapters.py` |
 | Pocket milling PGMX | `pgmx/machining_lab/pocket_milling/README.md`, `pgmx/machining_lab/pocket_milling/memory/current-state.md`, `docs/laboratory_frontiers.md` | `pgmx/synthesis/milling/pocket.py`, `pgmx/synthesis/milling/pocket_contract.py`, `pgmx/machining_lab/pocket_milling/` |
+| Machine operations PGMX | `pgmx/machining_lab/machine_operations/README.md`, `pgmx/machining_lab/machine_operations/memory/current-state.md`, `docs/laboratory_frontiers.md` | `pgmx/machining_lab/machine_operations/`, `pgmx/synthesis/common/program.py`, `pgmx/snapshot.py` |
 | Reparacion SlotSide | `docs/repo_study_guide.md`, `docs/pgmx_temporary_memory.md` | `pgmx/processing.py`, `core/pgmx_processing.py`, `app/project_detail_pgmx.py`, `app/project_detail_programs.py`, `app/project_detail_selected_piece_actions.py` |
 | En-Juego | `docs/en_juego_synthesis_temporary_memory.md`, `docs/core_subsystem_audit.md` | `core/en_juego_synthesis.py`, `core/en_juego_transform.py` |
 | Diagramas de corte | `docs/cut_diagrams_temporary_memory.md`, `docs/core_subsystem_audit.md` | `core/nesting_service.py`, `core/nesting_compat.py` |

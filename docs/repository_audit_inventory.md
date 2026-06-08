@@ -170,6 +170,7 @@ necesidad funcional.
 | `pgmx.synthesis.drilling.single` | Taladro individual. | `DrillingSpec`, `build_drilling_spec`. |
 | `pgmx.synthesis.drilling.pattern` | Patron rectangular de taladros. | `DrillingPatternSpec`, `build_drilling_pattern_spec`. |
 | `pgmx.machining_lab.pocket_milling` | Laboratorio de evidencia pocket/vaciado. | `scan_samples`, `contour_parallel`, `island_analysis`, `trace_primitives`, `trace_engine`. |
+| `pgmx.machining_lab.machine_operations` | Laboratorio de operaciones de maquina y flujo multifase PGMX. | `scan_samples`, memoria de `Xn`/`Xmsg`/`MainWorkplan`. |
 
 ## Inventario `iso_state_synthesis/`
 
