@@ -16,17 +16,27 @@ from . import ANALYSIS_ROOT, EXTERNAL_ROOT
 @dataclass(frozen=True)
 class ProgramFlowRow:
     path: Path
+    current_workplan_index: str
+    workplan_count: int
     workplan_index: int
+    workplan_id: str
     workplan_name: str
+    setup_id: str
     setup_x: str
     setup_y: str
     setup_z: str
     step_index: int
     runtime_type: str
     name: str
+    geometry_id: str
+    geometry_object_type: str
+    workpiece_id: str
+    workpiece_object_type: str
     feature_id: str
     operation_id: str
     reference: str
+    speed: str
+    spindle_enable: str
     x: str
     y: str
     y_nil: str
@@ -36,6 +46,9 @@ class ProgramFlowRow:
     stop: str
     text: str
     input_enabled: str
+    variable_id: str
+    variable_object_type: str
+    variable_name: str
 
 
 def _local_name(tag: str) -> str:
@@ -71,6 +84,10 @@ def _object_type_ref(node: Optional[ET.Element], local_name: str) -> str:
 def _name_ref(node: Optional[ET.Element], local_name: str) -> str:
     ref = _child(node, local_name)
     return _text(ref, "Name")
+
+
+def _key_id(node: Optional[ET.Element]) -> str:
+    return _text(_child(node, "Key"), "ID")
 
 
 def _xsi_type(node: ET.Element) -> str:
@@ -115,31 +132,83 @@ def _setup_origin(workplan: ET.Element) -> tuple[str, str, str]:
 def scan_pgmx(path: Path) -> tuple[ProgramFlowRow, ...]:
     root = _xml_root(path)
     rows: list[ProgramFlowRow] = []
+    current_workplan_index = _text(root, "CurrentWorkplanIndex")
     workplans = [
         node
         for node in root.findall("./{*}Workplans/{*}MainWorkplan")
     ]
+    workplan_count = len(workplans)
     for workplan_index, workplan in enumerate(workplans, start=1):
+        setup = _child(workplan, "Setup")
         setup_x, setup_y, setup_z = _setup_origin(workplan)
         elements = _child(workplan, "Elements")
-        if elements is None:
+        executables = list(elements) if elements is not None else []
+        if not executables:
+            rows.append(
+                ProgramFlowRow(
+                    path=path,
+                    current_workplan_index=current_workplan_index,
+                    workplan_count=workplan_count,
+                    workplan_index=workplan_index,
+                    workplan_id=_key_id(workplan),
+                    workplan_name=_text(workplan, "Name"),
+                    setup_id=_key_id(setup),
+                    setup_x=setup_x,
+                    setup_y=setup_y,
+                    setup_z=setup_z,
+                    step_index=0,
+                    runtime_type="",
+                    name="",
+                    geometry_id="",
+                    geometry_object_type="",
+                    workpiece_id="",
+                    workpiece_object_type="",
+                    feature_id="",
+                    operation_id="",
+                    reference="",
+                    speed="",
+                    spindle_enable="",
+                    x="",
+                    y="",
+                    y_nil="",
+                    tool_id="",
+                    tool_object_type="",
+                    tool_name="",
+                    stop="",
+                    text="",
+                    input_enabled="",
+                    variable_id="",
+                    variable_object_type="",
+                    variable_name="",
+                )
+            )
             continue
-        for step_index, executable in enumerate(list(elements), start=1):
+        for step_index, executable in enumerate(executables, start=1):
             y_node = _child(executable, "Y")
             rows.append(
                 ProgramFlowRow(
                     path=path,
+                    current_workplan_index=current_workplan_index,
+                    workplan_count=workplan_count,
                     workplan_index=workplan_index,
+                    workplan_id=_key_id(workplan),
                     workplan_name=_text(workplan, "Name"),
+                    setup_id=_key_id(setup),
                     setup_x=setup_x,
                     setup_y=setup_y,
                     setup_z=setup_z,
                     step_index=step_index,
                     runtime_type=_xsi_type(executable),
                     name=_text(executable, "Name"),
+                    geometry_id=_id_ref(executable, "GeometryID"),
+                    geometry_object_type=_object_type_ref(executable, "GeometryID"),
+                    workpiece_id=_id_ref(executable, "WorkpieceID"),
+                    workpiece_object_type=_object_type_ref(executable, "WorkpieceID"),
                     feature_id=_id_ref(executable, "ManufacturingFeatureID"),
                     operation_id=_id_ref(executable, "OperationID"),
                     reference=_text(executable, "Reference"),
+                    speed=_text(executable, "Speed"),
+                    spindle_enable=_text(executable, "SpindleEnable"),
                     x=_text(executable, "X"),
                     y=_text(executable, "Y"),
                     y_nil=_nil_attr(y_node),
@@ -149,6 +218,9 @@ def scan_pgmx(path: Path) -> tuple[ProgramFlowRow, ...]:
                     stop=_text(executable, "Stop"),
                     text=_text(executable, "Text"),
                     input_enabled=_text(executable, "IsInputEnable"),
+                    variable_id=_id_ref(executable, "Variable"),
+                    variable_object_type=_object_type_ref(executable, "Variable"),
+                    variable_name=_name_ref(executable, "Variable"),
                 )
             )
     return tuple(rows)

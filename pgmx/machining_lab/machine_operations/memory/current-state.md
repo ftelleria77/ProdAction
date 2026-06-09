@@ -101,11 +101,378 @@ Implicacion para sintesis:
 - El scanner del laboratorio debe conservar explicitamente `y_nil` para no
   confundir `Y` vacio/nulo con un valor numerico `0`.
 
+## Ronda 3 - Xn Con Nombre De Texto
+
+Corpus manual:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_TextName.pgmx`
+
+Comparado contra:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_Absolute.pgmx`
+
+Hallazgos:
+
+- El archivo conserva una unica fase, un unico `Executable i:type="Xn"`, sin
+  features ni operations.
+- Conserva `WorkpieceSetup/Placement = (5, 5, 25)`.
+- Conserva `Reference=Absolute`, `X=-2500`, `Y i:nil="true"`, `Tool=System.Object ID=0`,
+  `Speed=0` y `SpindleEnable=Off`.
+- La diferencia semantica exacta contra `MachineOps_001_XN_Absolute.pgmx` es
+  solo `Xn/Name`: `Xn` -> `Operación Nula`.
+- `def.tlgx` conserva el mismo hash de contenido que las variantes anteriores.
+
+Implicacion para sintesis:
+
+- `XnSpec` deberia admitir un `name` opcional para reproducir el texto visible
+  de Maestro sin afectar la operacion de maquina.
+
+## Ronda 4 - Xn Con Velocidad
+
+Corpus manual:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_V2,5.pgmx`
+
+Comparado contra:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_Absolute.pgmx`
+
+Hallazgos:
+
+- El archivo conserva una unica fase, un unico `Executable i:type="Xn"`, sin
+  features ni operations.
+- Conserva `WorkpieceSetup/Placement = (5, 5, 25)`.
+- Conserva `Name=Xn`, `Reference=Absolute`, `X=-2500`, `Y i:nil="true"`,
+  `Tool=System.Object ID=0` y `SpindleEnable=Off`.
+- La diferencia semantica exacta contra `MachineOps_001_XN_Absolute.pgmx` es
+  solo `Xn/Speed`: `0` -> `2.5`.
+- `def.tlgx` conserva el mismo hash de contenido que las variantes anteriores.
+
+Implicacion para sintesis:
+
+- `XnSpec` debe conservar un `speed` opcional para reproducir la velocidad de
+  desplazamiento de la operacion nula.
+- El scanner del laboratorio debe conservar `speed` y `spindle_enable` como
+  campos propios de operaciones de maquina.
+
+## Ronda 5 - Xn Con Electromandril Encendido
+
+Corpus manual:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_EM_ON.pgmx`
+
+Comparado contra:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_Absolute.pgmx`
+
+Hallazgos:
+
+- El archivo conserva una unica fase, un unico `Executable i:type="Xn"`, sin
+  features ni operations.
+- Conserva `WorkpieceSetup/Placement = (5, 5, 25)`.
+- Conserva `Name=Xn`, `Reference=Absolute`, `Speed=0`, `X=-2500`,
+  `Y i:nil="true"` y `Tool=System.Object ID=0`.
+- La diferencia semantica exacta contra `MachineOps_001_XN_Absolute.pgmx` es
+  solo `Xn/SpindleEnable`: `Off` -> `On`.
+- `def.tlgx` conserva el mismo hash de contenido que las variantes anteriores.
+
+Implicacion para sintesis:
+
+- `XnSpec` debe conservar `spindle_enable` opcional para reproducir
+  `EM_ON`/`EM_OFF`.
+
+## Cierre - Operacion Nula `Xn`
+
+Estado: evidencia de laboratorio cerrada.
+
+Las opciones observadas de la operacion nula quedan cubiertas por el corpus
+`MachineOps_001_XN_*.pgmx`:
+
+| Campo Maestro | Nodo XML | Estado observado |
+| --- | --- | --- |
+| Nombre visible | `Executable/Name` | Default `Xn`; puede cambiar a texto libre. |
+| Referencia | `Executable/Reference` | `Absolute` o `Relative`. |
+| Velocidad | `Executable/Speed` | Default `0`; puede tomar valor decimal como `2.5`. |
+| Electromandril | `Executable/SpindleEnable` | `Off` o `On`. |
+| Informacion de herramienta | `Executable/Tool` | Default `System.Object ID=0`; puede referenciar `CuttingTool` `E001..E007`. |
+| Posicion X | `Executable/X` | Valor numerico, observado `-2500`. |
+| Posicion Y | `Executable/Y` | Puede quedar `i:nil="true"` cuando el campo esta vacio. |
+| Pieza | `Executable/WorkpieceID` | Referencia a la pieza activa. |
+| Geometria | `Executable/GeometryID` | `ID=0` con `ObjectType i:nil="true"` en los casos con `Y=nil`. |
+
+Reglas cerradas:
+
+- `Xn` es una operacion de maquina, no un feature ni una operation de
+  mecanizado.
+- No agrega entradas en `Features` ni en `Operations`.
+- Vive como `Executable i:type="Xn"` dentro de `MainWorkplan/Elements`.
+- Puede ubicarse dentro de una fase, entre fases o al final de un programa.
+- La herramienta de `Xn`, cuando existe, se expresa como referencia al catalogo
+  embebido; no modifica `def.tlgx`.
+- Cambios de `Name`, `Reference`, `Speed`, `SpindleEnable` y `Tool` no alteran
+  el resto del arbol Maestro del caso minimo.
+
+Contrato objetivo para promocion:
+
+```text
+XnSpec(
+  name: str = "Xn",
+  reference: str = "Absolute",
+  speed: float = 0,
+  spindle_enable: str = "Off",
+  x: float,
+  y: float | None,
+  tool_id: str | None,
+  tool_name: str | None,
+)
+```
+
+La promocion productiva queda pendiente para `pgmx.snapshot` y
+`pgmx.synthesis.common.program`, pero el frente de investigacion de `Xn` queda
+cerrado.
+
+## Ronda 6 - Nombre Libre De Fase
+
+Corpus manual:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_only_FaseInicial.pgmx`
+
+Comparado contra:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_Absolute.pgmx`
+
+Hallazgos:
+
+- El archivo conserva una unica fase, un unico `Executable i:type="Xn"`, sin
+  features ni operations.
+- Conserva `CurrentWorkplanIndex=0`.
+- Conserva la misma clave de fase:
+  `ScmGroup.XCam.MachiningDataModel.ProjectModule.MainWorkplan`, `ID=1912`.
+- Conserva `WorkpieceSetup/Placement = (5, 5, 25)`.
+- Conserva todo el bloque `Xn`: `Name=Xn`, `Reference=Absolute`, `Speed=0`,
+  `SpindleEnable=Off`, `X=-2500`, `Y i:nil="true"` y
+  `Tool=System.Object ID=0`.
+- La diferencia semantica exacta contra `MachineOps_001_XN_Absolute.pgmx` es
+  solo `MainWorkplan/Name`: `Setup` -> `Fase Inicial`.
+- `def.tlgx` conserva el mismo hash de contenido que las variantes anteriores.
+
+Implicacion para sintesis:
+
+- La fase debe tener `name` libre en el contrato futuro; no debe inferirse
+  geometria ni comportamiento desde nombres como `Setup`, `Fase Inicial`,
+  `Cara Interior` o equivalentes.
+- `pgmx.snapshot` debe exponer el nombre de cada `MainWorkplan` como dato de
+  programa/fase.
+
+## Ronda 7 - Dos Fases, Segunda Fase Vacia
+
+Corpus manual:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_only_FaseFinal.pgmx`
+
+Comparado contra:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_only_FaseInicial.pgmx`
+
+Hallazgos:
+
+- `MachineOps_001_XN_only_FaseInicial.pgmx` tiene una fase:
+  - `CurrentWorkplanIndex=0`;
+  - `MainWorkplan ID=1912`;
+  - `Name=Fase Inicial`;
+  - `Setup ID=1913`;
+  - `WorkpieceSetup/Placement=(5, 5, 25)`;
+  - `Elements` contiene un unico `Executable i:type="Xn"`.
+- `MachineOps_001_XN_only_FaseFinal.pgmx` tiene dos fases:
+  - `CurrentWorkplanIndex=1`;
+  - fase 1: `MainWorkplan ID=1912`, `Name=Fase Inicial`,
+    `Setup ID=1913`, `Placement=(5, 5, 25)`, con el mismo `Xn`;
+  - fase 2: `MainWorkplan ID=1932`, `Name=Fase Final`,
+    `Setup ID=1933`, `Placement=(0, 0, 25)`, `Elements` vacio.
+- No agrega features ni operations.
+- `def.tlgx` conserva el mismo hash de contenido que las variantes anteriores.
+- La diferencia estructural contra `FaseInicial` es:
+  - `Project/CurrentWorkplanIndex`: `0` -> `1`;
+  - `Project/Workplans`: pasa de 1 a 2 `MainWorkplan`.
+
+Implicacion para lectura/sintesis:
+
+- Una fase puede existir sin operaciones ni `Executable`.
+- El scanner y `pgmx.snapshot` deben modelar fases/workplans como entidades
+  propias, no solo como una lista plana de `working_steps`.
+- `CurrentWorkplanIndex` debe conservarse como dato de programa. En este caso
+  apunta a la segunda fase (`1`), pero queda pendiente confirmar si Maestro lo
+  usa como fase activa, ultima editada o seleccionada.
+- Cada fase tiene su propio `Setup/WorkpieceSetup/Placement`, aun cuando no
+  tenga pasos.
+
+## Ronda 8 - Dos Fases, Xn En Fase Final
+
+Corpus manual:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_only_FaseFinal_XN.pgmx`
+
+Comparado contra el estado actual de:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_only_FaseFinal.pgmx`
+
+Hallazgos:
+
+- Ambos archivos tienen dos fases, sin features ni operations.
+- En el archivo base actual:
+  - `CurrentWorkplanIndex=0`;
+  - fase 1 `Fase Inicial`, `Placement=(5, 5, 25)`, contiene un unico `Xn`;
+  - fase 2 `Fase Final`, `Placement=(0, 0, 25)`, tiene `Elements` vacio.
+- En `MachineOps_001_XN_only_FaseFinal_XN.pgmx`:
+  - `CurrentWorkplanIndex=1`;
+  - fase 1 `Fase Inicial`, `Placement=(5, 5, 25)`, tiene `Elements` vacio;
+  - fase 2 `Fase Final`, `Placement=(0, 0, 25)`, contiene un unico `Xn`.
+- El `Xn` movido conserva la misma clave:
+  `ScmGroup.XCam.MachiningDataModel.Xn`, `ID=1927`.
+- El bloque `Xn` conserva `Name=Xn`, `Reference=Absolute`, `Speed=0`,
+  `SpindleEnable=Off`, `X=-2500`, `Y i:nil="true"` y
+  `Tool=System.Object ID=0`.
+- La diferencia estructural exacta contra el archivo base actual es:
+  - `Project/CurrentWorkplanIndex`: `0` -> `1`;
+  - `Fase Inicial/Elements`: pasa de 1 `Executable` a 0;
+  - `Fase Final/Elements`: pasa de 0 `Executable` a 1.
+- `def.tlgx` conserva el mismo hash de contenido que las variantes anteriores.
+
+Implicacion para lectura/sintesis:
+
+- Las operaciones de maquina pertenecen al `Elements` de una fase concreta y
+  pueden moverse entre fases sin cambiar su `Key`.
+- La sintesis multifase debe permitir fases vacias y operaciones de maquina
+  ubicadas en cualquier fase.
+- `CurrentWorkplanIndex` acompaña la fase activa/seleccionada en estos casos,
+  pero sigue pendiente confirmar si debe emitirse siempre como indice de la
+  ultima fase creada, fase activa o fase seleccionada al guardar.
+
+## Ronda 9 - Dos Fases, Un Xn En Cada Fase
+
+Corpus manual:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_FI_XN_FF_XN.pgmx`
+
+Comparado contra:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_only_FaseFinal_XN.pgmx`
+
+Hallazgos:
+
+- Ambos archivos tienen dos fases, sin features ni operations.
+- En `MachineOps_001_XN_only_FaseFinal_XN.pgmx`:
+  - `CurrentWorkplanIndex=1`;
+  - `Fase Inicial` esta vacia;
+  - `Fase Final` contiene un unico `Xn`, `ID=1927`, `X=-2500`.
+- En `MachineOps_001_XN_FI_XN_FF_XN.pgmx`:
+  - `CurrentWorkplanIndex=0`;
+  - `Fase Inicial` contiene un `Xn` nuevo:
+    - `ID=1934`;
+    - `Name=Xn Fase Inicial`;
+    - `Reference=Absolute`;
+    - `Speed=0`;
+    - `SpindleEnable=Off`;
+    - `X=-2000`;
+    - `Y i:nil="true"`;
+    - `Tool=System.Object ID=0`;
+  - `Fase Final` conserva el `Xn` anterior:
+    - `ID=1927`;
+    - `Name=Xn`;
+    - `Reference=Absolute`;
+    - `Speed=0`;
+    - `SpindleEnable=Off`;
+    - `X=-2500`;
+    - `Y i:nil="true"`;
+    - `Tool=System.Object ID=0`.
+- `def.tlgx` conserva el mismo hash de contenido que las variantes anteriores.
+
+Implicacion para lectura/sintesis:
+
+- Una fase puede contener su propia operacion nula y un programa multifase puede
+  tener multiples `Xn`.
+- Agregar un `Xn` en otra fase crea un nuevo `Executable` con nueva `Key`, no
+  reutiliza necesariamente el `Xn` existente.
+- `CurrentWorkplanIndex` vuelve a cambiar segun la fase activa/seleccionada al
+  guardar; en esta ronda queda `0` aunque existen dos fases.
+- El contrato de sintesis debe permitir multiples `XnSpec` ubicados por fase y
+  preservar orden/keys mediante reserva de IDs.
+
+## Ronda 10 - Xmsg Con Modos De Paro
+
+Corpus manual:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_FI_XN_MSG_NP_FF_XN.pgmx`
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_FI_XN_MSG_PEI_FF_XN.pgmx`
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_FI_XN_MSG_PDEI_FF_XN.pgmx`
+
+Comparado contra:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\machine_operations\manual\MachineOps_001_XN_FI_XN_FF_XN.pgmx`
+
+Estructura comun:
+
+- Dos fases, sin features ni operations.
+- `CurrentWorkplanIndex=0`.
+- `Fase Inicial`, `Placement=(5, 5, 25)`:
+  - paso 1: `Xn`, `ID=1934`, `Name=Despeje de pieza`, `X=-2000`;
+  - paso 2: `Xmsg`, `ID=1935`, `Name=Mensaje a operador`,
+    `Text=Girar la Pieza`.
+- `Fase Final`, `Placement=(0, 0, 25)`:
+  - paso 1: `Xn`, `ID=1927`, `Name=Despeje y Fin`, `X=-2500`.
+- `Xmsg/GeometryID` usa `ID=0` con `ObjectType i:nil="true"`.
+- `Xmsg/WorkpieceID` referencia la pieza `ID=1917`.
+- `Xmsg/IsInputEnable=false`.
+- `Xmsg/Variable` queda vacio.
+- `def.tlgx` conserva el mismo hash de contenido que las variantes anteriores.
+
+Variantes observadas:
+
+| Archivo | Paro Maestro | `Xmsg/Stop` |
+| --- | --- | --- |
+| `MachineOps_001_FI_XN_MSG_NP_FF_XN.pgmx` | Ningun paro | `Nothing` |
+| `MachineOps_001_FI_XN_MSG_PEI_FF_XN.pgmx` | Paro con Espera de Inicio | `NoUnlock` |
+| `MachineOps_001_FI_XN_MSG_PDEI_FF_XN.pgmx` | Paro con Desbloqueo y Espera de Inicio | `Unlock` |
+
+Hallazgos:
+
+- `Xmsg` es un `Executable i:type="Xmsg"` dentro de
+  `MainWorkplan/Elements`.
+- No agrega entradas en `Features` ni en `Operations`.
+- Las tres variantes conservan la misma clave `Xmsg`, `ID=1935`.
+- La diferencia semantica exacta entre las tres variantes es solo
+  `Xmsg/Stop`.
+- Al agregar el mensaje, Maestro tambien permite renombrar los `Xn` existentes
+  (`Despeje de pieza`, `Despeje y Fin`), pero eso pertenece a `Xn/Name`, no al
+  contrato propio de `Xmsg`.
+
+Contrato objetivo para promocion:
+
+```text
+XmsgSpec(
+  name: str = "Xmsg",
+  text: str,
+  stop: Literal["Nothing", "NoUnlock", "Unlock"],
+  input_enabled: bool = False,
+  variable_id: str | None = None,
+)
+```
+
+Implicacion para lectura/sintesis:
+
+- `pgmx.snapshot` debe exponer `Xmsg` como operacion de maquina con `text`,
+  `stop`, `input_enabled`, `variable`, `geometry_ref` y `workpiece_ref`.
+- La sintesis multifase debe permitir ubicar `XmsgSpec` en cualquier fase y
+  preservar su orden respecto de `Xn` y mecanizados.
+
 ## Pendientes
 
 1. Reconocer fases en `pgmx.snapshot` sin perder compatibilidad con
    `snapshot.working_steps`.
-2. Exponer campos completos de `Xmsg`: texto, parada, input y variable.
+2. Promover el contrato cerrado de `Xmsg` a `pgmx.snapshot` y
+   `pgmx.synthesis.common.program`.
 3. Ajustar `pgmx.processing` para dibujar solo la primera fase util.
-4. Agregar contratos publicos de sintesis para fases y operaciones de maquina
+4. Promover el contrato cerrado de `Xn` a `pgmx.snapshot` y
+   `pgmx.synthesis.common.program`.
+5. Agregar contratos publicos de sintesis para fases y operaciones de maquina
    intercaladas.
