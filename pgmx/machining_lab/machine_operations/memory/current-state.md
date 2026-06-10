@@ -11,6 +11,9 @@ multifase Maestro en archivos `.pgmx`.
   a la pieza.
 - `Xmsg` es una operacion de maquina: muestra un mensaje al operario y puede
   detener la ejecucion hasta confirmacion.
+- Existen otras operaciones de maquina en Maestro, como `Aparcamiento` o `ISO`,
+  que agregan funcionalidad al programa CNC. Quedan reconocidas como familia
+  futura, pero fuera del alcance de investigacion e implementacion actual.
 - En dibujo 2D se representara solamente la primera fase util con mecanizados.
 
 ## Evidencia Inicial
@@ -465,14 +468,143 @@ Implicacion para lectura/sintesis:
 - La sintesis multifase debe permitir ubicar `XmsgSpec` en cualquier fase y
   preservar su orden respecto de `Xn` y mecanizados.
 
+## Alcance Actual
+
+- El contrato productivo inmediato de operaciones de maquina debe cubrir fases,
+  `Xn` y `Xmsg`.
+- Operaciones como `Aparcamiento` o `ISO` deben quedar reservadas para una
+  extension futura. No se investigan, sintetizan ni exponen como contrato
+  publico en esta etapa.
+
+## Ronda 11 - Promocion Productiva Inicial
+
+Estado: promocion inicial ejecutada.
+
+Cambios productivos:
+
+- `pgmx.snapshot` ahora expone:
+  - `current_workplan_index`;
+  - `workplans` como entidades propias;
+  - origen de setup por fase;
+  - `working_steps` compatibles con la vista plana historica, pero enriquecidos
+    con `workplan_index`, `workplan_id`, `workplan_name`, `geometry_ref`,
+    `workpiece_ref`, `tool_ref`, `speed`, `spindle_enable`, `text`, `stop`,
+    `input_enabled` y `variable_ref`;
+  - `machine_operations` como vista filtrada de `Xn` y `Xmsg`.
+- `pgmx.synthesis.common.program` ahora expone:
+  - `WorkplanSpec`;
+  - `MachineOperationSpec`;
+  - `XmsgSpec`;
+  - `build_workplan_spec(...)`;
+  - `build_xmsg_spec(...)`;
+  - `XnSpec` ampliado con `name`, `speed`, `spindle_enable`, herramienta y
+    coordenadas.
+- `synthesize_request(...)` conserva el comportamiento historico cuando no se
+  pasan `workplans`: sigue agregando el `Xn` final mediante `xn`.
+- Cuando se pasan `workplans`, la sintesis usa el contrato multifase explicito
+  y ubica `Xn`/`Xmsg` por fase.
+- `pgmx.processing` toma solamente la primera fase util con mecanizados para el
+  dibujo 2D.
+
+Validacion:
+
+- `tests.test_pgmx_machine_operations`: OK.
+- `tests.test_pgmx_processing`: OK.
+- `tests.test_pgmx_synthesis_package`: OK.
+- `tests.test_pgmx_public_facades`: OK.
+- `tests.test_project_detail_pgmx`: OK.
+- `py -3 -m pgmx.machining_lab.machine_operations.scan_samples`: OK.
+- `py -3 -m compileall pgmx`: OK.
+
+## Ronda 12 - Semantica De `Xn/Y`
+
+Estado: regla promovida a codigo productivo.
+
+Regla operativa:
+
+- `Xn/X` es una coordenada explicita de destino.
+- `Xn/Y` puede ser un valor numerico `float` o puede ser nulo.
+- Si `Y` es numerico, la operacion nula mueve el cabezal hasta `(X, Y)`.
+- Si `Y` es nulo, la operacion nula mueve el cabezal hasta la posicion `X`
+  indicada y conserva la coordenada `Y` actual.
+
+Caso de referencia:
+
+- `S:\Maestro\Projects\ProdAction\Prod-2026-01 - Vargas\Cocina\Mod.3 - BM-3C-PC-800\Fondo.pgmx`
+  contiene un `Xn` final con `X=-2300`, `Y=0`, `Tool=E001`.
+
+Cambios productivos:
+
+- `XnSpec.y` sigue siendo `float | None`.
+- La sintesis serializa `Y i:nil="true"` cuando `XnSpec.y is None`.
+- La sintesis serializa `Y=<numero>` cuando `XnSpec.y` es numerico.
+- Para `Y` numerico se emite `GeometryID` como referencia `ID=0`,
+  `ObjectType=System.Object`, siguiendo el caso observado en `Fondo.pgmx`.
+- `pgmx.adapters` conserva la ultima operacion `Xn` del snapshot como
+  `PgmxAdaptationResult.xn` y la pasa a `build_synthesis_request(...)`, para
+  no perder `X`, `Y`, nombre, velocidad, electromandril ni herramienta.
+
+## Ronda 13 - Mecanizados Por Fase
+
+Estado: promocion productiva ejecutada y validada.
+
+Regla operativa:
+
+- `WorkplanSpec` ahora puede contener `machinings`, ademas de
+  `machine_operations`.
+- Los mecanizados de cada fase se serializan en el `MainWorkplan/Elements`
+  correspondiente.
+- Dentro de cada fase, el orden queda:
+  1. mecanizados declarados en `machinings`;
+  2. operaciones de maquina declaradas en `machine_operations`.
+- El comportamiento historico se mantiene cuando no se usan `workplans`:
+  el request de una sola fase sigue agregando el `Xn` final por `xn`.
+
+Caso sintetizado:
+
+- `S:\Maestro\Projects\ProdAction\Prod-2026-01 - Vargas\Cocina\Mod.3 - BM-3C-PC-800\Fondo_DobleFase.pgmx`
+  se genero con baseline limpio y se hidrato desde:
+  - `Fondo.pgmx` para la fase `Cara_Superior`;
+  - `FondoF6.pgmx` para la fase `Cara_Inferior`.
+- `Cara_Superior` conserva origen `(5, 5, 25)`, contiene los 10 mecanizados
+  adaptados de `Fondo.pgmx`, cierra con el `XN` del archivo principal y luego
+  agrega `Xmsg` con nombre/texto `Girar Pieza` y `Stop=NoUnlock`.
+- `Cara_Inferior` usa origen `(0, 0, 25)`, contiene los 16 taladros adaptados
+  de `FondoF6.pgmx` y cierra con el mismo `XN` del archivo principal.
+- Correccion posterior: no usar `Fondo.pgmx` como `baseline_path` para este
+  archivo combinado. Eso deja features/operaciones/expresiones originales
+  huerfanas y puede provocar en Maestro `VariableValueNotValid` al aplicar la
+  pieza. Usar `source_pgmx_path=Fondo.pgmx` solo para hidratacion.
+- Segunda correccion posterior: Maestro rechazo el archivo con un error de
+  deserializacion de `Xmsg`:
+  `MachiningDataModel.ProjectModule:Xmsg` no era un tipo conocido para
+  `Executable`.
+  La causa era que el finalizador XML solo agregaba el namespace base al primer
+  `Xn`; los `Xmsg` y los `Xn` siguientes quedaban con `i:type` resuelto contra
+  el namespace heredado de `ProjectModule`. El finalizador ahora aplica
+  `xmlns="http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel"`
+  a todos los `Executable i:type="Xn"` y `Executable i:type="Xmsg"`.
+
+Validacion:
+
+- `read_pgmx_snapshot(...)` lee dos workplans:
+  - `Cara_Superior`: 12 working steps;
+  - `Cara_Inferior`: 17 working steps.
+- El archivo corregido tiene 26 features, 26 operaciones y 29 working steps.
+- El XML crudo del PGMX corregido contiene 2 `Xn` y 1 `Xmsg` con namespace
+  base explicito sobre el `Executable`.
+- `tests.test_pgmx_machine_operations`: OK.
+- `tests.test_pgmx_synthesis_package`: OK.
+- `py -3 -m compileall pgmx`: OK.
+- `py -3 -m unittest discover tests`: 367 tests OK.
+
 ## Pendientes
 
-1. Reconocer fases en `pgmx.snapshot` sin perder compatibilidad con
-   `snapshot.working_steps`.
-2. Promover el contrato cerrado de `Xmsg` a `pgmx.snapshot` y
-   `pgmx.synthesis.common.program`.
-3. Ajustar `pgmx.processing` para dibujar solo la primera fase util.
-4. Promover el contrato cerrado de `Xn` a `pgmx.snapshot` y
-   `pgmx.synthesis.common.program`.
-5. Agregar contratos publicos de sintesis para fases y operaciones de maquina
-   intercaladas.
+1. Validar en Maestro `Fondo_DobleFase.pgmx` con dos fases, mecanizados por
+   fase, `Xn` y `Xmsg`.
+2. Si aparece necesidad real, estudiar `Xmsg/Variable` e `IsInputEnable=true`.
+3. Definir intercalacion libre entre mecanizados y operaciones de maquina
+   dentro de una misma fase solo si aparece un caso real que necesite mezclar
+   `Xn`/`Xmsg` entre mecanizados.
+4. Mantener `Aparcamiento` e `ISO` fuera de alcance hasta que el usuario abra
+   explicitamente ese frente.

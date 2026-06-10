@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import sys
 import xml.etree.ElementTree as ET
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Sequence, Union
@@ -103,11 +104,15 @@ __all__ = [
     "PgmxSynthesisRequest",
     "PgmxSynthesisResult",
     "SYNTHESIZER_VERSION",
+    "MachineOperationSpec",
+    "WorkplanSpec",
     "XnSpec",
+    "XmsgSpec",
     "_apply_circle_millings",
     "_apply_drilling_patterns",
     "_apply_drillings",
     "_append_hydrated_machining",
+    "_append_machine_operation",
     "_apply_line_millings",
     "_apply_piece_state",
     "_apply_pocket_millings",
@@ -117,20 +122,29 @@ __all__ = [
     "_build_xn_step",
     "_drilling_plane_priority",
     "_ensure_xn_step",
+    "_append_hydrated_machining_to_workplan",
+    "_append_workplan_machinings",
     "_finalize_pgmx_xml_bytes",
     "_finalize_synthesized_pgmx_xml_bytes",
+    "_ensure_workplans",
     "_hydrate_machining_spec",
     "_normalize_machining_order",
     "_normalize_execution_fields",
+    "_normalize_machine_operations",
+    "_normalize_workplan_spec",
+    "_normalize_workplan_specs",
     "_normalize_xn_reference",
     "_normalize_xn_spec",
+    "_normalize_xmsg_spec",
     "_merge_state",
     "_module_data_dir",
     "_split_hydrated_machinings",
     "_validate_tool_sinking_lengths",
     "_write_pgmx_zip",
     "build_synthesis_request",
+    "build_workplan_spec",
     "build_xn_spec",
+    "build_xmsg_spec",
     "read_pgmx_state",
     "synthesize_pgmx",
     "synthesize_request",
@@ -201,11 +215,45 @@ HydratedMachiningSpec = Union[
 
 @dataclass(frozen=True)
 class XnSpec:
-    """Configuracion publica de `Xn`, la operacion nula final del workplan."""
+    """Configuracion publica de `Xn`, la operacion nula de Maestro."""
 
     reference: str = "Absolute"
     x: float = -3700.0
     y: Optional[float] = None
+    name: str = "Xn"
+    speed: float = 0.0
+    spindle_enable: str = "Off"
+    tool_id: Optional[str] = None
+    tool_object_type: str = "System.Object"
+    tool_name: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class XmsgSpec:
+    """Mensaje al operario con modo de parada Maestro."""
+
+    text: str
+    stop: str = "Nothing"
+    name: str = "Xmsg"
+    input_enabled: bool = False
+    variable_id: Optional[str] = None
+    variable_object_type: str = ""
+    variable_name: Optional[str] = None
+
+
+MachineOperationSpec = Union[XnSpec, XmsgSpec]
+
+
+@dataclass(frozen=True)
+class WorkplanSpec:
+    """Fase Maestro con origen propio y operaciones de maquina ordenadas."""
+
+    name: str = "Setup"
+    origin_x: Optional[float] = None
+    origin_y: Optional[float] = None
+    origin_z: Optional[float] = None
+    machinings: tuple[MachiningSpec, ...] = ()
+    machine_operations: tuple[MachineOperationSpec, ...] = ()
 
 
 def _normalize_xn_reference(value: Optional[str]) -> str:
@@ -222,11 +270,59 @@ def _normalize_xn_reference(value: Optional[str]) -> str:
     return normalized
 
 
+def _normalize_spindle_enable(value: Optional[str]) -> str:
+    raw = (value or "Off").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+    mapping = {
+        "off": "Off",
+        "apagado": "Off",
+        "emoff": "Off",
+        "false": "Off",
+        "0": "Off",
+        "on": "On",
+        "encendido": "On",
+        "emon": "On",
+        "true": "On",
+        "1": "On",
+    }
+    normalized = mapping.get(raw)
+    if normalized is None:
+        raise ValueError("SpindleEnable invalido para Xn. Valores admitidos: On/Off.")
+    return normalized
+
+
+def _normalize_xmsg_stop(value: Optional[str]) -> str:
+    raw = (value or "Nothing").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+    mapping = {
+        "nothing": "Nothing",
+        "ningunparo": "Nothing",
+        "sinparo": "Nothing",
+        "np": "Nothing",
+        "nounlock": "NoUnlock",
+        "paroconesperadeinicio": "NoUnlock",
+        "esperadeinicio": "NoUnlock",
+        "pei": "NoUnlock",
+        "unlock": "Unlock",
+        "parocondesbloqueoyesperadeinicio": "Unlock",
+        "desbloqueoyesperadeinicio": "Unlock",
+        "pdei": "Unlock",
+    }
+    normalized = mapping.get(raw)
+    if normalized is None:
+        raise ValueError("Stop invalido para Xmsg. Valores admitidos: Nothing, NoUnlock o Unlock.")
+    return normalized
+
+
 def build_xn_spec(
     *,
+    name: Optional[str] = None,
     reference: Optional[str] = None,
+    speed: Optional[float] = None,
+    spindle_enable: Optional[str] = None,
     x: Optional[float] = None,
     y: Optional[float] = None,
+    tool_id: Optional[str] = None,
+    tool_object_type: Optional[str] = None,
+    tool_name: Optional[str] = None,
 ) -> XnSpec:
     """Construye la spec publica `Xn` con defaults observados en Maestro."""
 
@@ -234,6 +330,59 @@ def build_xn_spec(
         reference=_normalize_xn_reference(reference),
         x=-3700.0 if x is None else float(x),
         y=None if y is None else float(y),
+        name=(name or "Xn").strip() or "Xn",
+        speed=0.0 if speed is None else float(speed),
+        spindle_enable=_normalize_spindle_enable(spindle_enable),
+        tool_id=None if tool_id is None or str(tool_id).strip() == "" else str(tool_id).strip(),
+        tool_object_type=(tool_object_type or "System.Object").strip() or "System.Object",
+        tool_name=None if tool_name is None else str(tool_name),
+    )
+
+
+def build_xmsg_spec(
+    text: str,
+    *,
+    name: Optional[str] = None,
+    stop: Optional[str] = None,
+    input_enabled: bool = False,
+    variable_id: Optional[str] = None,
+    variable_object_type: Optional[str] = None,
+    variable_name: Optional[str] = None,
+) -> XmsgSpec:
+    """Construye la spec publica `Xmsg` con los modos de paro observados."""
+
+    normalized_text = str(text)
+    if not normalized_text:
+        raise ValueError("`text` es obligatorio para Xmsg.")
+    return XmsgSpec(
+        text=normalized_text,
+        stop=_normalize_xmsg_stop(stop),
+        name=(name or "Xmsg").strip() or "Xmsg",
+        input_enabled=bool(input_enabled),
+        variable_id=None if variable_id is None or str(variable_id).strip() == "" else str(variable_id).strip(),
+        variable_object_type=(variable_object_type or "").strip(),
+        variable_name=None if variable_name is None else str(variable_name),
+    )
+
+
+def build_workplan_spec(
+    *,
+    name: Optional[str] = None,
+    origin_x: Optional[float] = None,
+    origin_y: Optional[float] = None,
+    origin_z: Optional[float] = None,
+    machinings: Optional[Sequence[MachiningSpec]] = None,
+    machine_operations: Optional[Sequence[MachineOperationSpec]] = None,
+) -> WorkplanSpec:
+    """Construye una fase Maestro para sintesis multifase."""
+
+    return WorkplanSpec(
+        name=(name or "Setup").strip() or "Setup",
+        origin_x=None if origin_x is None else float(origin_x),
+        origin_y=None if origin_y is None else float(origin_y),
+        origin_z=None if origin_z is None else float(origin_z),
+        machinings=tuple(machinings or ()),
+        machine_operations=_normalize_machine_operations(machine_operations or ()),
     )
 
 
@@ -241,9 +390,65 @@ def _normalize_xn_spec(xn: Optional[XnSpec]) -> XnSpec:
     if xn is None:
         return build_xn_spec()
     return build_xn_spec(
+        name=xn.name,
         reference=xn.reference,
+        speed=xn.speed,
+        spindle_enable=xn.spindle_enable,
         x=xn.x,
         y=xn.y,
+        tool_id=xn.tool_id,
+        tool_object_type=xn.tool_object_type,
+        tool_name=xn.tool_name,
+    )
+
+
+def _normalize_xmsg_spec(xmsg: XmsgSpec) -> XmsgSpec:
+    return build_xmsg_spec(
+        xmsg.text,
+        name=xmsg.name,
+        stop=xmsg.stop,
+        input_enabled=xmsg.input_enabled,
+        variable_id=xmsg.variable_id,
+        variable_object_type=xmsg.variable_object_type,
+        variable_name=xmsg.variable_name,
+    )
+
+
+def _normalize_machine_operations(
+    machine_operations: Sequence[MachineOperationSpec],
+) -> tuple[MachineOperationSpec, ...]:
+    normalized: list[MachineOperationSpec] = []
+    for operation in machine_operations:
+        if isinstance(operation, XnSpec):
+            normalized.append(_normalize_xn_spec(operation))
+        elif isinstance(operation, XmsgSpec):
+            normalized.append(_normalize_xmsg_spec(operation))
+        else:
+            raise TypeError(f"Operacion de maquina no soportada: {type(operation).__name__}")
+    return tuple(normalized)
+
+
+def _normalize_workplan_spec(spec: WorkplanSpec, state: PgmxState, index: int) -> WorkplanSpec:
+    default_x = state.origin_x if index == 0 else 0.0
+    default_y = state.origin_y if index == 0 else 0.0
+    default_z = state.origin_z
+    return build_workplan_spec(
+        name=spec.name,
+        origin_x=default_x if spec.origin_x is None else spec.origin_x,
+        origin_y=default_y if spec.origin_y is None else spec.origin_y,
+        origin_z=default_z if spec.origin_z is None else spec.origin_z,
+        machinings=spec.machinings,
+        machine_operations=spec.machine_operations,
+    )
+
+
+def _normalize_workplan_specs(
+    workplans: Sequence[WorkplanSpec],
+    state: PgmxState,
+) -> tuple[WorkplanSpec, ...]:
+    return tuple(
+        _normalize_workplan_spec(workplan, state, index)
+        for index, workplan in enumerate(workplans)
     )
 
 
@@ -258,7 +463,7 @@ def _build_xn_step(
         {f"{{{XSI_NS}}}type": "Xn"},
     )
     _append_key(step, step_id, "ScmGroup.XCam.MachiningDataModel.Xn")
-    _append_blank_name(step).text = "Xn"
+    _append_blank_name(step).text = spec.name
     _append_node(step, BASE_MODEL_NS, "Description", "")
     _append_node(step, BASE_MODEL_NS, "IsEnabled", "true")
     _append_node(step, BASE_MODEL_NS, "Priority", "0")
@@ -269,7 +474,14 @@ def _build_xn_step(
         _append_node(geometry_ref, UTILITY_NS, "ObjectType", attrib={f"{{{XSI_NS}}}nil": "true"})
         _set_xmlns(geometry_ref, "a", UTILITY_NS)
     else:
-        _append_node(step, BASE_MODEL_NS, "GeometryID", attrib={f"{{{XSI_NS}}}nil": "true"})
+        geometry_ref = _append_object_ref(
+            step,
+            BASE_MODEL_NS,
+            "GeometryID",
+            "0",
+            "System.Object",
+        )
+        _set_xmlns(geometry_ref, "a", UTILITY_NS)
 
     workpiece_ref = _append_object_ref(
         step,
@@ -281,17 +493,17 @@ def _build_xn_step(
     _set_xmlns(workpiece_ref, "a", UTILITY_NS)
 
     _append_node(step, BASE_MODEL_NS, "Reference", spec.reference)
-    _append_node(step, BASE_MODEL_NS, "Speed", "0")
-    _append_node(step, BASE_MODEL_NS, "SpindleEnable", "Off")
+    _append_node(step, BASE_MODEL_NS, "Speed", _compact_number(spec.speed))
+    _append_node(step, BASE_MODEL_NS, "SpindleEnable", spec.spindle_enable)
 
     tool_ref = _append_object_ref(
         step,
         BASE_MODEL_NS,
         "Tool",
-        "0",
-        "System.Object",
+        spec.tool_id or "0",
+        spec.tool_object_type,
         include_name=True,
-        name_text="",
+        name_text=spec.tool_name or "",
     )
     _set_xmlns(tool_ref, "a", UTILITY_NS)
 
@@ -303,20 +515,208 @@ def _build_xn_step(
     return step
 
 
+def _build_xmsg_step(
+    step_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+    spec: XmsgSpec,
+) -> ET.Element:
+    step = ET.Element(
+        _qname(BASE_MODEL_NS, "Executable"),
+        {f"{{{XSI_NS}}}type": "Xmsg"},
+    )
+    _append_key(step, step_id, "ScmGroup.XCam.MachiningDataModel.Xmsg")
+    _append_blank_name(step).text = spec.name
+    _append_node(step, BASE_MODEL_NS, "Description", "")
+    _append_node(step, BASE_MODEL_NS, "IsEnabled", "true")
+    _append_node(step, BASE_MODEL_NS, "Priority", "0")
+
+    geometry_ref = _append_node(step, BASE_MODEL_NS, "GeometryID")
+    _append_node(geometry_ref, UTILITY_NS, "ID", "0")
+    _append_node(geometry_ref, UTILITY_NS, "ObjectType", attrib={f"{{{XSI_NS}}}nil": "true"})
+    _set_xmlns(geometry_ref, "a", UTILITY_NS)
+
+    workpiece_ref = _append_object_ref(
+        step,
+        BASE_MODEL_NS,
+        "WorkpieceID",
+        workpiece_id,
+        workpiece_object_type,
+    )
+    _set_xmlns(workpiece_ref, "a", UTILITY_NS)
+
+    _append_node(step, BASE_MODEL_NS, "IsInputEnable", "true" if spec.input_enabled else "false")
+    _append_node(step, BASE_MODEL_NS, "Stop", spec.stop)
+    _append_node(step, BASE_MODEL_NS, "Text", spec.text)
+    if spec.variable_id:
+        variable_ref = _append_object_ref(
+            step,
+            BASE_MODEL_NS,
+            "Variable",
+            spec.variable_id,
+            spec.variable_object_type,
+            include_name=spec.variable_name is not None,
+            name_text=spec.variable_name or "",
+        )
+        _set_xmlns(variable_ref, "a", UTILITY_NS)
+    else:
+        _append_node(step, BASE_MODEL_NS, "Variable")
+    return step
+
+
+def _append_machine_operation(
+    root: ET.Element,
+    elements: ET.Element,
+    workpiece_id: str,
+    workpiece_object_type: str,
+    spec: MachineOperationSpec,
+) -> None:
+    [step_id] = _reserve_ids(root, 1)
+    if isinstance(spec, XnSpec):
+        elements.append(_build_xn_step(step_id, workpiece_id, workpiece_object_type, spec))
+        return
+    if isinstance(spec, XmsgSpec):
+        elements.append(_build_xmsg_step(step_id, workpiece_id, workpiece_object_type, spec))
+        return
+    raise TypeError(f"Operacion de maquina no soportada: {type(spec).__name__}")
+
+
+def _workpiece_ref(root: ET.Element) -> tuple[str, str]:
+    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
+    if workpiece is None:
+        raise ValueError("La plantilla no contiene WorkPiece.")
+    return (
+        _text(workpiece, "./{*}Key/{*}ID"),
+        _text(workpiece, "./{*}Key/{*}ObjectType"),
+    )
+
+
 def _ensure_xn_step(root: ET.Element, xn: XnSpec) -> None:
     elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
-    workpiece = root.find("./{*}Workpieces/{*}WorkPiece")
-    if elements is None or workpiece is None:
+    if elements is None:
         raise ValueError("La plantilla no contiene MainWorkplan/Elements o WorkPiece para sintetizar Xn.")
 
     for executable in list(elements):
         if _xsi_type(executable) == "Xn":
             elements.remove(executable)
 
-    workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
-    workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
-    [step_id] = _reserve_ids(root, 1)
-    elements.append(_build_xn_step(step_id, workpiece_id, workpiece_object_type, _normalize_xn_spec(xn)))
+    workpiece_id, workpiece_object_type = _workpiece_ref(root)
+    _append_machine_operation(root, elements, workpiece_id, workpiece_object_type, _normalize_xn_spec(xn))
+
+
+def _workplan_setup_origin_node(workplan: ET.Element) -> Optional[ET.Element]:
+    return workplan.find(
+        "./{*}Setup/{*}WorkpieceSetups/{*}WorkpieceSetup/{*}Placement"
+    )
+
+
+def _set_workplan_setup_origin(workplan: ET.Element, spec: WorkplanSpec) -> None:
+    placement = _workplan_setup_origin_node(workplan)
+    if placement is None:
+        raise ValueError("La plantilla no contiene Setup/WorkpieceSetup/Placement.")
+    _set_text(placement.find("./{*}_xP"), _compact_number(float(spec.origin_x or 0.0)))
+    _set_text(placement.find("./{*}_yP"), _compact_number(float(spec.origin_y or 0.0)))
+    _set_text(placement.find("./{*}_zP"), _compact_number(float(spec.origin_z or 0.0)))
+
+
+def _set_workplan_name(workplan: ET.Element, name: str) -> None:
+    name_node = workplan.find("./{*}Name")
+    if name_node is None:
+        _append_blank_name(workplan).text = name
+    else:
+        _set_text(name_node, name)
+
+
+def _clear_workplan_elements(workplan: ET.Element) -> ET.Element:
+    elements = workplan.find("./{*}Elements")
+    if elements is None:
+        elements = _append_node(workplan, BASE_MODEL_NS, "Elements")
+    for child in list(elements):
+        elements.remove(child)
+    return elements
+
+
+def _set_workplan_ids(workplan: ET.Element, workplan_id: str, setup_id: str) -> None:
+    _set_text(workplan.find("./{*}Key/{*}ID"), workplan_id)
+    setup = workplan.find("./{*}Setup")
+    if setup is None:
+        raise ValueError("La plantilla no contiene Setup para crear fases.")
+    _set_text(setup.find("./{*}Key/{*}ID"), setup_id)
+
+
+def _ensure_workplans(
+    root: ET.Element,
+    state: PgmxState,
+    workplans: Sequence[WorkplanSpec],
+    *,
+    current_workplan_index: int = 0,
+) -> tuple[ET.Element, ...]:
+    """Configura las fases Maestro solicitadas y devuelve sus nodos XML."""
+
+    workplans_node = root.find("./{*}Workplans")
+    if workplans_node is None:
+        raise ValueError("La plantilla no contiene Workplans.")
+    existing_workplans = list(workplans_node.findall("./{*}MainWorkplan"))
+    if not existing_workplans:
+        raise ValueError("La plantilla no contiene MainWorkplan.")
+    if not workplans:
+        return tuple(existing_workplans)
+
+    normalized = _normalize_workplan_specs(workplans, state)
+    template = deepcopy(existing_workplans[0])
+    configured: list[ET.Element] = []
+
+    for child in list(workplans_node):
+        workplans_node.remove(child)
+
+    for index, spec in enumerate(normalized):
+        workplan = existing_workplans[0] if index == 0 else deepcopy(template)
+        if index == 0:
+            workplan_id = _text(workplan, "./{*}Key/{*}ID")
+            setup_id = _text(workplan, "./{*}Setup/{*}Key/{*}ID")
+        else:
+            workplan_id, setup_id = _reserve_ids(root, 2)
+            _set_workplan_ids(workplan, workplan_id, setup_id)
+        _set_workplan_name(workplan, spec.name)
+        _set_workplan_setup_origin(workplan, spec)
+        _clear_workplan_elements(workplan)
+        workplans_node.append(workplan)
+        configured.append(workplan)
+
+    current_index = max(0, min(int(current_workplan_index), len(configured) - 1))
+    _set_text(root.find("./{*}CurrentWorkplanIndex"), str(current_index))
+    return tuple(configured)
+
+
+def _append_workplan_machine_operations(
+    root: ET.Element,
+    workplan_nodes: Sequence[ET.Element],
+    workplans: Sequence[WorkplanSpec],
+) -> None:
+    workpiece_id, workpiece_object_type = _workpiece_ref(root)
+    for workplan, spec in zip(workplan_nodes, workplans):
+        elements = workplan.find("./{*}Elements")
+        if elements is None:
+            elements = _append_node(workplan, BASE_MODEL_NS, "Elements")
+        for operation in spec.machine_operations:
+            _append_machine_operation(
+                root,
+                elements,
+                workpiece_id,
+                workpiece_object_type,
+                operation,
+            )
+
+
+def _append_workplan_machinings(
+    root: ET.Element,
+    state: PgmxState,
+    workplan_nodes: Sequence[ET.Element],
+    hydrated_workplan_machinings: Sequence[Sequence[HydratedMachiningSpec]],
+) -> None:
+    for workplan, machinings in zip(workplan_nodes, hydrated_workplan_machinings):
+        for machining in machinings:
+            _append_hydrated_machining_to_workplan(root, state, machining, workplan)
 
 
 @dataclass(frozen=True)
@@ -338,6 +738,8 @@ class PgmxSynthesisRequest:
     ordered_machinings: tuple[MachiningSpec, ...] = ()
     machining_order: tuple[str, ...] = DEFAULT_MACHINING_ORDER
     xn: XnSpec = field(default_factory=XnSpec)
+    workplans: tuple[WorkplanSpec, ...] = ()
+    current_workplan_index: int = 0
 
 
 @dataclass(frozen=True)
@@ -358,6 +760,8 @@ class PgmxSynthesisResult:
     ordered_machinings: tuple[MachiningSpec, ...] = ()
     machining_order: tuple[str, ...] = DEFAULT_MACHINING_ORDER
     xn: XnSpec = field(default_factory=XnSpec)
+    workplans: tuple[WorkplanSpec, ...] = ()
+    current_workplan_index: int = 0
 
 
 def _hydrate_machining_spec(
@@ -413,6 +817,33 @@ def _append_hydrated_machining(
         _append_drilling_pattern(root, state, spec)
         return
     raise TypeError(f"Spec hidratado no soportado: {type(spec).__name__}")
+
+
+def _append_hydrated_machining_to_workplan(
+    root: ET.Element,
+    state: PgmxState,
+    spec: HydratedMachiningSpec,
+    workplan: ET.Element,
+) -> None:
+    default_elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
+    if default_elements is None:
+        raise ValueError("La plantilla no contiene MainWorkplan/Elements.")
+
+    target_elements = workplan.find("./{*}Elements")
+    if target_elements is None:
+        target_elements = _append_node(workplan, BASE_MODEL_NS, "Elements")
+
+    previous_count = len(default_elements)
+    _append_hydrated_machining(root, state, spec)
+    appended_steps = list(default_elements)[previous_count:]
+    if not appended_steps:
+        raise ValueError("El mecanizado no agrego ningun working step al workplan.")
+
+    if target_elements is default_elements:
+        return
+    for step in appended_steps:
+        default_elements.remove(step)
+        target_elements.append(step)
 
 
 def _split_hydrated_machinings(
@@ -850,6 +1281,8 @@ def build_synthesis_request(
     ordered_machinings: Optional[Sequence[MachiningSpec]] = None,
     machining_order: Optional[Sequence[str]] = None,
     xn: Optional[XnSpec] = None,
+    workplans: Optional[Sequence[WorkplanSpec]] = None,
+    current_workplan_index: int = 0,
 ) -> PgmxSynthesisRequest:
     """Arma una solicitud reusable de sintesis para el flujo principal.
 
@@ -907,6 +1340,8 @@ def build_synthesis_request(
         ordered_machinings=tuple(ordered_machinings or ()),
         machining_order=_normalize_machining_order(machining_order),
         xn=_normalize_xn_spec(xn),
+        workplans=_normalize_workplan_specs(tuple(workplans or ()), target_piece),
+        current_workplan_index=max(0, int(current_workplan_index)),
     )
 
 
@@ -964,19 +1399,47 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         ordered_drilling_patterns,
     ) = _split_hydrated_machinings(hydrated_ordered_machinings)
     normalized_xn = _normalize_xn_spec(request.xn)
+    normalized_workplans = _normalize_workplan_specs(request.workplans, request.piece)
+    hydrated_workplan_machinings = tuple(
+        tuple(_hydrate_machining_spec(spec, request.source_pgmx_path) for spec in workplan.machinings)
+        for workplan in normalized_workplans
+    )
+    flattened_workplan_machinings = [
+        spec
+        for workplan_machinings in hydrated_workplan_machinings
+        for spec in workplan_machinings
+    ]
+    (
+        workplan_line_millings,
+        workplan_slot_millings,
+        workplan_polyline_millings,
+        workplan_circle_millings,
+        workplan_squaring_millings,
+        workplan_pocket_millings,
+        workplan_drillings,
+        workplan_drilling_patterns,
+    ) = _split_hydrated_machinings(flattened_workplan_machinings)
     _validate_tool_sinking_lengths(
         request.piece,
-        hydrated_line_millings + ordered_line_millings,
-        hydrated_slot_millings + ordered_slot_millings,
-        hydrated_polyline_millings + ordered_polyline_millings,
-        hydrated_circle_millings + ordered_circle_millings,
-        hydrated_squaring_millings + ordered_squaring_millings,
-        hydrated_pocket_millings + ordered_pocket_millings,
-        hydrated_drillings + ordered_drillings,
-        hydrated_drilling_patterns + ordered_drilling_patterns,
+        hydrated_line_millings + ordered_line_millings + workplan_line_millings,
+        hydrated_slot_millings + ordered_slot_millings + workplan_slot_millings,
+        hydrated_polyline_millings + ordered_polyline_millings + workplan_polyline_millings,
+        hydrated_circle_millings + ordered_circle_millings + workplan_circle_millings,
+        hydrated_squaring_millings + ordered_squaring_millings + workplan_squaring_millings,
+        hydrated_pocket_millings + ordered_pocket_millings + workplan_pocket_millings,
+        hydrated_drillings + ordered_drillings + workplan_drillings,
+        hydrated_drilling_patterns + ordered_drilling_patterns + workplan_drilling_patterns,
     )
 
     _apply_piece_state(baseline_root, request.piece)
+    workplan_nodes: tuple[ET.Element, ...] = ()
+    if normalized_workplans:
+        workplan_nodes = _ensure_workplans(
+            baseline_root,
+            request.piece,
+            normalized_workplans,
+            current_workplan_index=request.current_workplan_index,
+        )
     for spec in hydrated_ordered_machinings:
         _append_hydrated_machining(baseline_root, request.piece, spec)
     apply_group = {
@@ -1023,7 +1486,16 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
     }
     for group_name in _normalize_machining_order(request.machining_order):
         apply_group[group_name]()
-    _ensure_xn_step(baseline_root, normalized_xn)
+    if normalized_workplans:
+        _append_workplan_machinings(
+            baseline_root,
+            request.piece,
+            workplan_nodes,
+            hydrated_workplan_machinings,
+        )
+        _append_workplan_machine_operations(baseline_root, workplan_nodes, normalized_workplans)
+    else:
+        _ensure_xn_step(baseline_root, normalized_xn)
 
     xml_bytes = _finalize_synthesized_pgmx_xml_bytes(
         ET.tostring(
@@ -1053,6 +1525,12 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         ordered_machinings=request.ordered_machinings,
         machining_order=_normalize_machining_order(request.machining_order),
         xn=normalized_xn,
+        workplans=normalized_workplans,
+        current_workplan_index=(
+            max(0, min(int(request.current_workplan_index), len(normalized_workplans) - 1))
+            if normalized_workplans
+            else 0
+        ),
     )
 
 
@@ -1075,6 +1553,8 @@ def synthesize_pgmx(
     drilling: Optional[DrillingSpec] = None,
     drilling_pattern: Optional[DrillingPatternSpec] = None,
     xn: Optional[XnSpec] = None,
+    workplans: Optional[Sequence[WorkplanSpec]] = None,
+    current_workplan_index: int = 0,
     execution_fields: Optional[str] = None,
 ) -> PgmxState:
     """Wrapper de compatibilidad para el flujo historico basado en argumentos sueltos.
@@ -1103,5 +1583,7 @@ def synthesize_pgmx(
         drillings=[drilling] if drilling is not None else (),
         drilling_patterns=[drilling_pattern] if drilling_pattern is not None else (),
         xn=xn,
+        workplans=workplans,
+        current_workplan_index=current_workplan_index,
     )
     return synthesize_request(request).piece

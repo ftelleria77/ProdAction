@@ -184,6 +184,15 @@ class PgmxAdaptationResult:
             if isinstance(entry.spec, sp.DrillingPatternSpec)
         )
 
+    @property
+    def xn(self) -> Optional[sp.XnSpec]:
+        """Devuelve la ultima operacion `Xn` del workplan como spec sintetizable."""
+
+        for step in reversed(self.snapshot.working_steps):
+            if step.runtime_type == "Xn":
+                return _xn_spec_from_step(step)
+        return None
+
     def build_synthesis_request(
         self,
         output_path: Path,
@@ -228,6 +237,7 @@ class PgmxAdaptationResult:
             pocket_millings=self.pocket_millings,
             drillings=self.drillings,
             drilling_patterns=self.drilling_patterns,
+            xn=self.xn,
         )
 
 
@@ -424,6 +434,21 @@ def _workplan_step_entry_without_feature(
         spec=None,
         reasons=tuple(reasons),
         warnings=(),
+    )
+
+
+def _xn_spec_from_step(step: PgmxWorkingStepSnapshot) -> sp.XnSpec:
+    tool_ref = step.tool_ref
+    return sp.build_xn_spec(
+        name=step.name,
+        reference=step.reference,
+        speed=step.speed,
+        spindle_enable=step.spindle_enable,
+        x=step.x,
+        y=step.y,
+        tool_id=tool_ref.id if tool_ref is not None else None,
+        tool_object_type=tool_ref.object_type if tool_ref is not None else None,
+        tool_name=tool_ref.name if tool_ref is not None else None,
     )
 
 
@@ -1529,16 +1554,23 @@ def adapt_pgmx_snapshot(snapshot: PgmxSnapshot) -> PgmxAdaptationResult:
             )
             continue
         if feature_ref is None or not feature_ref.id:
+            reasons = [
+                "El working step no referencia una manufacturing feature y se "
+                "omite del subset publico."
+            ]
+            if step.runtime_type == "Xn":
+                reasons = [
+                    "`Xn` no referencia una manufacturing feature; se omite "
+                    "del subset de mecanizados y se conserva como operacion "
+                    "de maquina `xn` del request."
+                ]
             entries.append(
                 _workplan_step_entry_without_feature(
                     step,
                     order_index=order_index,
                     status="ignored",
                     operation_id=step.operation_ref.id if step.operation_ref is not None else None,
-                    reasons=[
-                        "El working step no referencia una manufacturing feature y se "
-                        "omite del subset publico."
-                    ],
+                    reasons=reasons,
                 )
             )
             continue
@@ -1628,7 +1660,9 @@ def adaptation_to_dict(result: PgmxAdaptationResult) -> dict[str, Any]:
             "pocket_millings": len(result.pocket_millings),
             "drillings": len(result.drillings),
             "drilling_patterns": len(result.drilling_patterns),
+            "has_xn": result.xn is not None,
         },
+        "xn": convert(result.xn),
         "entries": convert(result.entries),
     }
 

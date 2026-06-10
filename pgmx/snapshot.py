@@ -38,6 +38,7 @@ __all__ = [
     "PgmxOperationSnapshot",
     "PgmxWorkingStepSnapshot",
     "PgmxResolvedWorkingStepSnapshot",
+    "PgmxWorkplanSnapshot",
     "PgmxToolingTechnologySnapshot",
     "PgmxEmbeddedToolSnapshot",
     "PgmxEmbeddedSpindleSnapshot",
@@ -282,6 +283,18 @@ class PgmxWorkingStepSnapshot:
     reference: str
     x: Optional[float]
     y: Optional[float]
+    workplan_index: int = 1
+    workplan_id: str = ""
+    workplan_name: str = ""
+    geometry_ref: Optional[PgmxObjectRefSnapshot] = None
+    workpiece_ref: Optional[PgmxObjectRefSnapshot] = None
+    speed: Optional[float] = None
+    spindle_enable: str = ""
+    tool_ref: Optional[PgmxObjectRefSnapshot] = None
+    stop: str = ""
+    text: str = ""
+    input_enabled: Optional[bool] = None
+    variable_ref: Optional[PgmxObjectRefSnapshot] = None
 
 
 @dataclass(frozen=True)
@@ -292,6 +305,23 @@ class PgmxResolvedWorkingStepSnapshot:
     operation: Optional[PgmxOperationSnapshot]
     geometry: Optional[PgmxGeometrySnapshot]
     plane: Optional[PgmxPlaneSnapshot]
+
+
+@dataclass(frozen=True)
+class PgmxWorkplanSnapshot:
+    index: int
+    id: str
+    object_type: str
+    name: str
+    description: str
+    is_enabled: bool
+    priority: int
+    setup_id: str
+    setup_object_type: str
+    origin_x: float
+    origin_y: float
+    origin_z: float
+    working_steps: tuple[PgmxWorkingStepSnapshot, ...]
 
 
 @dataclass(frozen=True)
@@ -338,6 +368,7 @@ class PgmxSnapshot:
     embedded_tools: tuple[PgmxEmbeddedToolSnapshot, ...]
     embedded_spindles: tuple[PgmxEmbeddedSpindleSnapshot, ...]
     project_name: str
+    current_workplan_index: int
     state: sp.PgmxState
     workpiece: Optional[PgmxWorkpieceSnapshot]
     variables: tuple[PgmxVariableSnapshot, ...]
@@ -346,6 +377,7 @@ class PgmxSnapshot:
     geometries: tuple[PgmxGeometrySnapshot, ...]
     features: tuple[PgmxFeatureSnapshot, ...]
     operations: tuple[PgmxOperationSnapshot, ...]
+    workplans: tuple[PgmxWorkplanSnapshot, ...]
     working_steps: tuple[PgmxWorkingStepSnapshot, ...]
     xml_text: Optional[str] = None
 
@@ -364,6 +396,14 @@ class PgmxSnapshot:
     @property
     def working_step_by_id(self) -> dict[str, PgmxWorkingStepSnapshot]:
         return {item.id: item for item in self.working_steps}
+
+    @property
+    def machine_operations(self) -> tuple[PgmxWorkingStepSnapshot, ...]:
+        return tuple(
+            step
+            for step in self.working_steps
+            if step.runtime_type in {"Xn", "Xmsg"}
+        )
 
     @property
     def plane_by_id(self) -> dict[str, PgmxPlaneSnapshot]:
@@ -1118,10 +1158,22 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
             )
         )
 
+    workplans: list[PgmxWorkplanSnapshot] = []
     working_steps: list[PgmxWorkingStepSnapshot] = []
-    for step in root.findall("./{*}Workplans/{*}MainWorkplan/{*}Elements/{*}Executable"):
-        working_steps.append(
-            PgmxWorkingStepSnapshot(
+    for workplan_index, workplan in enumerate(
+        root.findall("./{*}Workplans/{*}MainWorkplan"),
+        start=1,
+    ):
+        setup = _first_child(workplan, "Setup")
+        placement = _first_descendant(setup, "Placement")
+        workplan_id = sp._text(workplan, "./{*}Key/{*}ID")
+        workplan_name = sp._text(workplan, "./{*}Name")
+        workplan_steps: list[PgmxWorkingStepSnapshot] = []
+        elements = _first_child(workplan, "Elements")
+        executables = list(elements) if elements is not None else []
+        for step in executables:
+            input_node = _first_child(step, "IsInputEnable")
+            step_snapshot = PgmxWorkingStepSnapshot(
                 id=sp._text(step, "./{*}Key/{*}ID"),
                 object_type=sp._text(step, "./{*}Key/{*}ObjectType"),
                 runtime_type=sp._xsi_type(step),
@@ -1134,6 +1186,41 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
                 reference=sp._text(step, "./{*}Reference"),
                 x=_optional_float_text(step, "X"),
                 y=_optional_float_text(step, "Y"),
+                workplan_index=workplan_index,
+                workplan_id=workplan_id,
+                workplan_name=workplan_name,
+                geometry_ref=_object_ref(_first_child(step, "GeometryID")),
+                workpiece_ref=_object_ref(_first_child(step, "WorkpieceID")),
+                speed=_optional_float_text(step, "Speed"),
+                spindle_enable=sp._text(step, "./{*}SpindleEnable"),
+                tool_ref=_object_ref(_first_child(step, "Tool")),
+                stop=sp._text(step, "./{*}Stop"),
+                text=sp._text(step, "./{*}Text"),
+                input_enabled=(
+                    sp._safe_bool(input_node.text, False)
+                    if input_node is not None and input_node.text is not None
+                    else None
+                ),
+                variable_ref=_object_ref(_first_child(step, "Variable")),
+            )
+            working_steps.append(step_snapshot)
+            workplan_steps.append(step_snapshot)
+
+        workplans.append(
+            PgmxWorkplanSnapshot(
+                index=workplan_index,
+                id=workplan_id,
+                object_type=sp._text(workplan, "./{*}Key/{*}ObjectType"),
+                name=workplan_name,
+                description=sp._text(workplan, "./{*}Description"),
+                is_enabled=sp._safe_bool(sp._text(workplan, "./{*}IsEnabled"), False),
+                priority=int(sp._safe_float(sp._text(workplan, "./{*}Priority"), 0.0)),
+                setup_id=sp._text(setup, "./{*}Key/{*}ID") if setup is not None else "",
+                setup_object_type=sp._text(setup, "./{*}Key/{*}ObjectType") if setup is not None else "",
+                origin_x=_float_text(placement, "_xP"),
+                origin_y=_float_text(placement, "_yP"),
+                origin_z=_float_text(placement, "_zP"),
+                working_steps=tuple(workplan_steps),
             )
         )
 
@@ -1149,6 +1236,7 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
         embedded_tools=embedded_tools,
         embedded_spindles=embedded_spindles,
         project_name=sp._text(root, "./{*}Name"),
+        current_workplan_index=int(sp._safe_float(sp._text(root, "./{*}CurrentWorkplanIndex"), 0.0)),
         state=state,
         workpiece=workpiece,
         variables=tuple(variables),
@@ -1157,6 +1245,7 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
         geometries=tuple(geometries),
         features=tuple(features),
         operations=tuple(operations),
+        workplans=tuple(workplans),
         working_steps=tuple(working_steps),
         xml_text=xml_text,
     )

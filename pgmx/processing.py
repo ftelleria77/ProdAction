@@ -1625,8 +1625,20 @@ def _ordered_snapshot_features(
     ordered_entries: list[tuple[PgmxFeatureSnapshot, Optional[PgmxOperationSnapshot], Optional[PgmxWorkingStepSnapshot]]] = []
     seen_feature_ids: set[str] = set()
     has_workplan_features = False
+    candidate_steps = snapshot.working_steps
+    for workplan in snapshot.workplans:
+        useful_steps = tuple(
+            step
+            for step in workplan.working_steps
+            if step.is_enabled
+            and step.manufacturing_feature_ref is not None
+            and bool(step.manufacturing_feature_ref.id)
+        )
+        if useful_steps:
+            candidate_steps = useful_steps
+            break
 
-    for step in snapshot.working_steps:
+    for step in candidate_steps:
         if not step.is_enabled:
             continue
         feature_ref = step.manufacturing_feature_ref
