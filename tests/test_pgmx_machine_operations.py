@@ -317,7 +317,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                     xml_text,
                 )
 
-    def test_park_limit_and_name_are_configurable(self) -> None:
+    def test_park_name_is_configurable(self) -> None:
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "Park_Custom.pgmx"
             request = sp.build_synthesis_request(
@@ -333,7 +333,6 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                         machine_operations=(
                             sp.build_park_spec(
                                 name="Aparcar Cabezal",
-                                limit="minimum",
                                 stop="np",
                             ),
                         ),

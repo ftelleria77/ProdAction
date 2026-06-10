@@ -149,6 +149,7 @@ __all__ = [
     "build_park_spec",
     "_normalize_park_spec",
     "_build_park_step",
+
     "read_pgmx_state",
     "synthesize_pgmx",
     "synthesize_request",
@@ -250,7 +251,6 @@ class ParkSpec:
     """Aparcamiento del cabezal a la posicion limite."""
 
     name: str = "Park"
-    limit: str = "Minimum"
     stop: str = "Nothing"
 
 
@@ -325,22 +325,6 @@ def _normalize_xmsg_stop(value: Optional[str]) -> str:
     return normalized
 
 
-def _normalize_park_limit(value: Optional[str]) -> str:
-    raw = (value or "Minimum").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
-    mapping = {
-        "minimum": "Minimum",
-        "minimo": "Minimum",
-        "min": "Minimum",
-        "maximum": "Maximum",
-        "maximo": "Maximum",
-        "max": "Maximum",
-    }
-    normalized = mapping.get(raw)
-    if normalized is None:
-        raise ValueError("Limit invalido para Park. Valores admitidos: Minimum o Maximum.")
-    return normalized
-
-
 def build_xn_spec(
     *,
     name: Optional[str] = None,
@@ -397,14 +381,12 @@ def build_xmsg_spec(
 def build_park_spec(
     *,
     name: Optional[str] = None,
-    limit: Optional[str] = None,
     stop: Optional[str] = None,
 ) -> ParkSpec:
     """Construye la spec publica `Park` (aparcamiento de cabezal)."""
 
     return ParkSpec(
         name=(name or "Park").strip() or "Park",
-        limit=_normalize_park_limit(limit),
         stop=_normalize_xmsg_stop(stop),
     )
 
@@ -459,7 +441,7 @@ def _normalize_xmsg_spec(xmsg: XmsgSpec) -> XmsgSpec:
 
 
 def _normalize_park_spec(park: ParkSpec) -> ParkSpec:
-    return build_park_spec(name=park.name, limit=park.limit, stop=park.stop)
+    return build_park_spec(name=park.name, stop=park.stop)
 
 
 def _normalize_machine_operations(
@@ -645,7 +627,7 @@ def _build_park_step(
     )
     _set_xmlns(workpiece_ref, "a", UTILITY_NS)
 
-    _append_node(step, BASE_MODEL_NS, "Limit", spec.limit)
+    _append_node(step, BASE_MODEL_NS, "Limit", "Minimum")
     _append_node(step, BASE_MODEL_NS, "Stop", spec.stop)
     return step
 
