@@ -108,6 +108,7 @@ __all__ = [
     "WorkplanSpec",
     "XnSpec",
     "XmsgSpec",
+    "ParkSpec",
     "_apply_circle_millings",
     "_apply_drilling_patterns",
     "_apply_drillings",
@@ -145,6 +146,9 @@ __all__ = [
     "build_workplan_spec",
     "build_xn_spec",
     "build_xmsg_spec",
+    "build_park_spec",
+    "_normalize_park_spec",
+    "_build_park_step",
     "read_pgmx_state",
     "synthesize_pgmx",
     "synthesize_request",
@@ -241,7 +245,16 @@ class XmsgSpec:
     variable_name: Optional[str] = None
 
 
-MachineOperationSpec = Union[XnSpec, XmsgSpec]
+@dataclass(frozen=True)
+class ParkSpec:
+    """Aparcamiento del cabezal a la posicion limite."""
+
+    name: str = "Park"
+    limit: str = "Minimum"
+    stop: str = "Nothing"
+
+
+MachineOperationSpec = Union[XnSpec, XmsgSpec, ParkSpec]
 
 
 @dataclass(frozen=True)
@@ -312,6 +325,22 @@ def _normalize_xmsg_stop(value: Optional[str]) -> str:
     return normalized
 
 
+def _normalize_park_limit(value: Optional[str]) -> str:
+    raw = (value or "Minimum").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+    mapping = {
+        "minimum": "Minimum",
+        "minimo": "Minimum",
+        "min": "Minimum",
+        "maximum": "Maximum",
+        "maximo": "Maximum",
+        "max": "Maximum",
+    }
+    normalized = mapping.get(raw)
+    if normalized is None:
+        raise ValueError("Limit invalido para Park. Valores admitidos: Minimum o Maximum.")
+    return normalized
+
+
 def build_xn_spec(
     *,
     name: Optional[str] = None,
@@ -365,6 +394,21 @@ def build_xmsg_spec(
     )
 
 
+def build_park_spec(
+    *,
+    name: Optional[str] = None,
+    limit: Optional[str] = None,
+    stop: Optional[str] = None,
+) -> ParkSpec:
+    """Construye la spec publica `Park` (aparcamiento de cabezal)."""
+
+    return ParkSpec(
+        name=(name or "Park").strip() or "Park",
+        limit=_normalize_park_limit(limit),
+        stop=_normalize_xmsg_stop(stop),
+    )
+
+
 def build_workplan_spec(
     *,
     name: Optional[str] = None,
@@ -414,6 +458,10 @@ def _normalize_xmsg_spec(xmsg: XmsgSpec) -> XmsgSpec:
     )
 
 
+def _normalize_park_spec(park: ParkSpec) -> ParkSpec:
+    return build_park_spec(name=park.name, limit=park.limit, stop=park.stop)
+
+
 def _normalize_machine_operations(
     machine_operations: Sequence[MachineOperationSpec],
 ) -> tuple[MachineOperationSpec, ...]:
@@ -423,6 +471,8 @@ def _normalize_machine_operations(
             normalized.append(_normalize_xn_spec(operation))
         elif isinstance(operation, XmsgSpec):
             normalized.append(_normalize_xmsg_spec(operation))
+        elif isinstance(operation, ParkSpec):
+            normalized.append(_normalize_park_spec(operation))
         else:
             raise TypeError(f"Operacion de maquina no soportada: {type(operation).__name__}")
     return tuple(normalized)
@@ -564,6 +614,42 @@ def _build_xmsg_step(
     return step
 
 
+def _build_park_step(
+    step_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+    spec: ParkSpec,
+) -> ET.Element:
+    step = ET.Element(
+        _qname(BASE_MODEL_NS, "Executable"),
+        {f"{{{XSI_NS}}}type": "Park"},
+    )
+    _append_key(step, step_id, "ScmGroup.XCam.MachiningDataModel.Park")
+    _append_blank_name(step).text = spec.name
+    _append_node(step, BASE_MODEL_NS, "Description", "")
+    _append_node(step, BASE_MODEL_NS, "IsEnabled", "true")
+    _append_node(step, BASE_MODEL_NS, "Priority", "0")
+
+    geometry_ref = _append_node(
+        step, BASE_MODEL_NS, "GeometryID",
+        attrib={f"{{{XSI_NS}}}nil": "true"},
+    )
+    _set_xmlns(geometry_ref, "a", UTILITY_NS)
+
+    workpiece_ref = _append_object_ref(
+        step,
+        BASE_MODEL_NS,
+        "WorkpieceID",
+        workpiece_id,
+        workpiece_object_type,
+    )
+    _set_xmlns(workpiece_ref, "a", UTILITY_NS)
+
+    _append_node(step, BASE_MODEL_NS, "Limit", spec.limit)
+    _append_node(step, BASE_MODEL_NS, "Stop", spec.stop)
+    return step
+
+
 def _append_machine_operation(
     root: ET.Element,
     elements: ET.Element,
@@ -577,6 +663,9 @@ def _append_machine_operation(
         return
     if isinstance(spec, XmsgSpec):
         elements.append(_build_xmsg_step(step_id, workpiece_id, workpiece_object_type, spec))
+        return
+    if isinstance(spec, ParkSpec):
+        elements.append(_build_park_step(step_id, workpiece_id, workpiece_object_type, spec))
         return
     raise TypeError(f"Operacion de maquina no soportada: {type(spec).__name__}")
 

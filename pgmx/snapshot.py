@@ -295,6 +295,7 @@ class PgmxWorkingStepSnapshot:
     text: str = ""
     input_enabled: Optional[bool] = None
     variable_ref: Optional[PgmxObjectRefSnapshot] = None
+    limit: str = ""
 
 
 @dataclass(frozen=True)
@@ -402,7 +403,7 @@ class PgmxSnapshot:
         return tuple(
             step
             for step in self.working_steps
-            if step.runtime_type in {"Xn", "Xmsg"}
+            if step.runtime_type in {"Xn", "Xmsg", "Park"}
         )
 
     @property
@@ -1202,6 +1203,7 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
                     else None
                 ),
                 variable_ref=_object_ref(_first_child(step, "Variable")),
+                limit=sp._text(step, "./{*}Limit"),
             )
             working_steps.append(step_snapshot)
             workplan_steps.append(step_snapshot)

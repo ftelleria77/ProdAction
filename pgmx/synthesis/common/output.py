@@ -136,7 +136,7 @@ def _finalize_pgmx_xml_bytes(xml_bytes: bytes) -> bytes:
         xml_text,
     )
     xml_text = re.sub(
-        r'<(?P<prefix>[A-Za-z_][\w.-]*:)?Executable i:type="(?P<dtype>Xn|Xmsg)">',
+        r'<(?P<prefix>[A-Za-z_][\w.-]*:)?Executable i:type="(?P<dtype>Xn|Xmsg|Park)">',
         lambda match: (
             f'<{match.group("prefix") or ""}Executable i:type="{match.group("dtype")}" '
             f'xmlns="{BASE_MODEL_NS}">'

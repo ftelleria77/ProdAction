@@ -273,6 +273,83 @@ class PgmxMachineOperationsTests(unittest.TestCase):
         self.assertEqual(adapted_xn.tool_ref.id, "1900")
 
 
+    def test_synthesizes_park_operation_stop_modes(self) -> None:
+        stop_cases = [
+            ("Nothing", "NP"),
+            ("NoUnlock", "PEI"),
+            ("Unlock", "PDEI"),
+        ]
+        for stop_value, label in stop_cases:
+            with self.subTest(stop=stop_value):
+                with TemporaryDirectory() as tmpdir:
+                    output_path = Path(tmpdir) / f"Park_{label}.pgmx"
+                    request = sp.build_synthesis_request(
+                        output_path=output_path,
+                        piece_name="Park_Test",
+                        length=400,
+                        width=400,
+                        depth=18,
+                        origin_x=5,
+                        origin_y=5,
+                        origin_z=25,
+                        workplans=(
+                            sp.build_workplan_spec(
+                                name="Setup",
+                                machine_operations=(
+                                    sp.build_park_spec(stop=stop_value),
+                                ),
+                            ),
+                        ),
+                    )
+                    result = sp.synthesize_request(request)
+                    snapshot = read_pgmx_snapshot(result.output_path)
+                    xml_text = _pgmx_xml_text(result.output_path)
+
+                self.assertEqual(len(snapshot.machine_operations), 1)
+                park = snapshot.machine_operations[0]
+                self.assertEqual(park.runtime_type, "Park")
+                self.assertEqual(park.name, "Park")
+                self.assertEqual(park.limit, "Minimum")
+                self.assertEqual(park.stop, stop_value)
+                self.assertIsNotNone(park.workpiece_ref)
+                self.assertIn(
+                    f'i:type="Park" xmlns="http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel"',
+                    xml_text,
+                )
+
+    def test_park_limit_and_name_are_configurable(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Park_Custom.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                workplans=(
+                    sp.build_workplan_spec(
+                        machine_operations=(
+                            sp.build_park_spec(
+                                name="Aparcar Cabezal",
+                                limit="minimum",
+                                stop="np",
+                            ),
+                        ),
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            snapshot = read_pgmx_snapshot(result.output_path)
+
+        park = snapshot.machine_operations[0]
+        self.assertEqual(park.runtime_type, "Park")
+        self.assertEqual(park.name, "Aparcar Cabezal")
+        self.assertEqual(park.limit, "Minimum")
+        self.assertEqual(park.stop, "Nothing")
+
+
 def _pgmx_xml_text(path: Path) -> str:
     with zipfile.ZipFile(path) as archive:
         entry_name = next(name for name in archive.namelist() if name.lower().endswith(".xml"))
