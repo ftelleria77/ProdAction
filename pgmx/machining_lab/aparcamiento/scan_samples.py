@@ -183,19 +183,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    rows: list[AparcamientoRow] = []
+    all_rows: list[AparcamientoRow] = []
     for path in iter_pgmx_files(args.root):
-        rows.extend(scan_pgmx(path))
+        all_rows.extend(scan_pgmx(path))
 
-    if not rows:
+    if not all_rows:
         print(f"No se encontraron archivos .pgmx en {args.root}")
         return 0
 
-    write_rows(rows, args.output)
-    aparcamiento_count = sum(1 for r in rows if r.runtime_type == "Park")
+    park_rows = [r for r in all_rows if r.runtime_type == "Park"]
+    write_rows(park_rows, args.output)
     print(
-        f"Escaneados {len(rows)} executable steps "
-        f"({aparcamiento_count} Aparcamiento) en {args.output}"
+        f"Escaneados {len(all_rows)} executable steps "
+        f"({len(park_rows)} Park) en {args.output}"
     )
     return 0
 

@@ -93,11 +93,21 @@ ParkSpec(
 
 ## Pendientes
 
-1. Confirmar si `Limit` admite valores distintos de `Minimum` (p. ej. `Maximum`
-   u otros), creando variantes en Maestro.
+1. ~~Confirmar si `Limit` admite valores distintos de `Minimum`.~~
+   Resuelto por `CreatePark` en el scripting API (`XilogMaestroScripting.chm`):
+   ```csharp
+   Operation CreatePark(string name, string stopType, Nullable<bool> toMinQuote)
+   // toMinQuote = true  → Limit = "Minimum"  (lado izquierdo)
+   // toMinQuote = false → Limit = "Maximum"  (lado derecho)
+   // toMinQuote = null  → default (Minimum)
+   ```
+   `ParkSpec.limit` es un `bool` nullable que mapea a `Minimum`/`Maximum`.
+   Pendiente: crear variante con `Maximum` en Maestro para confirmar el XML.
 2. Confirmar el `ObjectType` exacto del `Key` de los tres archivos para asegurar
    que es `ScmGroup.XCam.MachiningDataModel.Park` de forma consistente.
-3. Actualizar el scanner para filtrar explicitamente `runtime_type == "Park"`.
+3. ~~Actualizar el scanner para filtrar explicitamente `runtime_type == "Park"`.~~
+   Resuelto: `scan_samples.py` filtra las filas a `runtime_type == "Park"` antes
+   de escribir el CSV.
 4. Cuando el contrato quede cerrado, promover a:
    - `pgmx.snapshot` (lectura);
    - `pgmx.synthesis.common.program` (sintesis: `ParkSpec`, `build_park_spec`);
