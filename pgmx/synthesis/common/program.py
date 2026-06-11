@@ -120,6 +120,7 @@ __all__ = [
     "_apply_polyline_millings",
     "_apply_slot_millings",
     "_apply_squaring_millings",
+    "_build_xmsg_step",
     "_build_xn_step",
     "_drilling_plane_priority",
     "_ensure_xn_step",
@@ -136,6 +137,7 @@ __all__ = [
     "_normalize_workplan_specs",
     "_normalize_xn_reference",
     "_normalize_xn_spec",
+    "_normalize_xmsg_spec",
     "_normalize_xmsg_spec",
     "_merge_state",
     "_module_data_dir",
@@ -303,7 +305,7 @@ def _normalize_spindle_enable(value: Optional[str]) -> str:
     return normalized
 
 
-def _normalize_xmsg_stop(value: Optional[str]) -> str:
+def _normalize_stop_mode(value: Optional[str]) -> str:
     raw = (value or "Nothing").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
     mapping = {
         "nothing": "Nothing",
@@ -321,7 +323,7 @@ def _normalize_xmsg_stop(value: Optional[str]) -> str:
     }
     normalized = mapping.get(raw)
     if normalized is None:
-        raise ValueError("Stop invalido para Xmsg. Valores admitidos: Nothing, NoUnlock o Unlock.")
+        raise ValueError("Stop invalido. Valores admitidos: Nothing, NoUnlock o Unlock.")
     return normalized
 
 
@@ -353,8 +355,8 @@ def build_xn_spec(
 
 
 def build_xmsg_spec(
-    text: str,
     *,
+    text: str,
     name: Optional[str] = None,
     stop: Optional[str] = None,
     input_enabled: bool = False,
@@ -369,7 +371,7 @@ def build_xmsg_spec(
         raise ValueError("`text` es obligatorio para Xmsg.")
     return XmsgSpec(
         text=normalized_text,
-        stop=_normalize_xmsg_stop(stop),
+        stop=_normalize_stop_mode(stop),
         name=(name or "Xmsg").strip() or "Xmsg",
         input_enabled=bool(input_enabled),
         variable_id=None if variable_id is None or str(variable_id).strip() == "" else str(variable_id).strip(),
@@ -387,7 +389,7 @@ def build_park_spec(
 
     return ParkSpec(
         name=(name or "Park").strip() or "Park",
-        stop=_normalize_xmsg_stop(stop),
+        stop=_normalize_stop_mode(stop),
     )
 
 
@@ -430,7 +432,7 @@ def _normalize_xn_spec(xn: Optional[XnSpec]) -> XnSpec:
 
 def _normalize_xmsg_spec(xmsg: XmsgSpec) -> XmsgSpec:
     return build_xmsg_spec(
-        xmsg.text,
+        text=xmsg.text,
         name=xmsg.name,
         stop=xmsg.stop,
         input_enabled=xmsg.input_enabled,
@@ -830,7 +832,7 @@ class PgmxSynthesisResult:
     drilling_patterns: tuple[DrillingPatternSpec, ...] = ()
     ordered_machinings: tuple[MachiningSpec, ...] = ()
     machining_order: tuple[str, ...] = DEFAULT_MACHINING_ORDER
-    xn: XnSpec = field(default_factory=XnSpec)
+    xn: Optional[XnSpec] = None
     workplans: tuple[WorkplanSpec, ...] = ()
     current_workplan_index: int = 0
 
@@ -1595,7 +1597,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         drilling_patterns=request.drilling_patterns,
         ordered_machinings=request.ordered_machinings,
         machining_order=_normalize_machining_order(request.machining_order),
-        xn=normalized_xn,
+        xn=normalized_xn if not normalized_workplans else None,
         workplans=normalized_workplans,
         current_workplan_index=(
             max(0, min(int(request.current_workplan_index), len(normalized_workplans) - 1))

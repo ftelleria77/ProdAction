@@ -34,7 +34,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                                 y=None,
                             ),
                             sp.build_xmsg_spec(
-                                "Girar la Pieza",
+                                text="Girar la Pieza",
                                 name="Mensaje a operador",
                                 stop="PEI",
                             ),
