@@ -62,6 +62,7 @@ from ..common.strategy import (
 from ..common.piece import _workpiece_depth_name
 from ..common.xml import (
     _build_depth_expression,
+    _build_property_expression,
     _build_working_step,
     _find_plane_ref,
     _reserve_ids,
@@ -109,6 +110,7 @@ class PolylineMillingSpec:
     approach: ApproachSpec = field(default_factory=ApproachSpec)
     retract: RetractSpec = field(default_factory=RetractSpec)
     milling_strategy: Optional[MillingStrategySpec] = None
+    is_enabled_expr: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -169,6 +171,10 @@ class _HydratedPolylineMillingSpec:
     @property
     def milling_strategy(self) -> Optional[MillingStrategySpec]:
         return self.spec.milling_strategy
+
+    @property
+    def is_enabled_expr(self) -> Optional[str]:
+        return self.spec.is_enabled_expr
 
 
 def _validate_polyline_postprocessable_by_maestro(spec: PolylineMillingSpec) -> None:
@@ -285,11 +291,13 @@ def _append_curve_profile_milling(
     depth_variable_name = _workpiece_depth_name(workpiece)
     plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
     uses_depth_expressions = _uses_feature_depth_expressions(spec)
+    has_enabled_expr = getattr(spec, "is_enabled_expr", None) is not None
 
     geometry_member_count = len(generated_geometry_curve.member_serializations)
+    n_extra = (2 if uses_depth_expressions else 0) + has_enabled_expr
     reserved_ids = _reserve_ids(
         root,
-        geometry_member_count + (6 if uses_depth_expressions else 4),
+        geometry_member_count + 4 + n_extra,
         spec.preferred_id_start,
     )
     geometry_id = reserved_ids[0]
@@ -301,8 +309,13 @@ def _append_curve_profile_milling(
     operation_id = reserved_ids[operation_index]
     feature_id = reserved_ids[operation_index + 1]
     step_id = reserved_ids[operation_index + 2]
-    start_expression_id = reserved_ids[operation_index + 3] if uses_depth_expressions else None
-    end_expression_id = reserved_ids[operation_index + 4] if uses_depth_expressions else None
+    j = operation_index + 3
+    start_expression_id = end_expression_id = None
+    if uses_depth_expressions:
+        start_expression_id = reserved_ids[j]; j += 1
+        end_expression_id = reserved_ids[j]; j += 1
+    enabled_expr_id = reserved_ids[j] if has_enabled_expr else None
+    last_reserved_id = enabled_expr_id or end_expression_id or step_id
 
     generated_trajectory_curve = _curve_spec_from_profile_geometry(generated_toolpath_profile)
     trajectory_curve = spec.trajectory_curve or generated_trajectory_curve
@@ -315,7 +328,7 @@ def _append_curve_profile_milling(
     if lift_curve is None:
         lift_curve = _build_generated_lift_curve_for_profile(state, spec, generated_toolpath_profile)
 
-    next_generated_aux_id = int(end_expression_id or step_id) + 1
+    next_generated_aux_id = int(last_reserved_id) + 1
     trajectory_curve_member_keys: tuple[str, ...] = ()
     if trajectory_curve.geometry_type == "GeomCompositeCurve" and not trajectory_curve.member_keys:
         if trajectory_curve.member_serializations == generated_geometry_curve.member_serializations:
@@ -377,6 +390,16 @@ def _append_curve_profile_milling(
     if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
         expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
         expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
+    if has_enabled_expr and enabled_expr_id is not None:
+        expressions.append(
+            _build_property_expression(
+                enabled_expr_id,
+                step_id,
+                "ScmGroup.XCam.MachiningDataModel.ProjectModule.MachiningWorkingStep",
+                "IsEnabled",
+                getattr(spec, "is_enabled_expr"),
+            )
+        )
 
 
 def _matches_polyline_geometry(template: dict[str, object], spec: PolylineMillingSpec, tolerance: float = 1e-6) -> bool:
@@ -557,6 +580,7 @@ def build_polyline_milling_spec(
     retract_arc_side: Optional[str] = None,
     retract_overlap: Optional[float] = None,
     milling_strategy: Optional[MillingStrategySpec] = None,
+    is_enabled_expr: Optional[str] = None,
 ) -> PolylineMillingSpec:
     """Construye un `PolylineMillingSpec` reusable para una polilinea lineal.
 
@@ -600,6 +624,7 @@ def build_polyline_milling_spec(
             overlap=retract_overlap,
         ),
         milling_strategy=normalized_strategy,
+        is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,
     )
     _validate_polyline_postprocessable_by_maestro(normalized_spec)
     return normalized_spec

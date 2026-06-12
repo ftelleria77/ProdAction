@@ -85,6 +85,7 @@ class CircleMillingSpec:
     approach: ApproachSpec = field(default_factory=ApproachSpec)
     retract: RetractSpec = field(default_factory=RetractSpec)
     milling_strategy: Optional[MillingStrategySpec] = None
+    is_enabled_expr: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -157,6 +158,10 @@ class _HydratedCircleMillingSpec:
     @property
     def milling_strategy(self) -> Optional[MillingStrategySpec]:
         return self.spec.milling_strategy
+
+    @property
+    def is_enabled_expr(self) -> Optional[str]:
+        return self.spec.is_enabled_expr
 
 
 def _normalize_circle_milling_spec(circle_milling: CircleMillingSpec) -> CircleMillingSpec:
@@ -419,6 +424,7 @@ def build_circle_milling_spec(
     retract_arc_side: Optional[str] = None,
     retract_overlap: Optional[float] = None,
     milling_strategy: Optional[MillingStrategySpec] = None,
+    is_enabled_expr: Optional[str] = None,
 ) -> CircleMillingSpec:
     """Construye un `CircleMillingSpec` reusable para un fresado circular."""
 
@@ -457,5 +463,6 @@ def build_circle_milling_spec(
                 overlap=retract_overlap,
             ),
             milling_strategy=_normalize_milling_strategy_spec(milling_strategy),
+            is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,
         )
     )

@@ -39,6 +39,7 @@ __all__ = [
     "_append_reference_key",
     "_build_depth_expression",
     "_build_point_geometry",
+    "_build_property_expression",
     "_build_working_step",
     "_compact_number",
     "_find_plane_ref",
@@ -287,6 +288,30 @@ def _build_depth_expression(
         referenced_object_type,
     )
     _append_node(expression, PARAMETRIC_NS, "Value", depth_variable_name)
+    return expression
+
+
+def _build_property_expression(
+    expression_id: str,
+    obj_id: str,
+    obj_type: str,
+    property_name: str,
+    value: str,
+) -> ET.Element:
+    """Builds an Expression binding obj.property_name to a formula string.
+
+    Covers simple (non-CompositeField) properties: X, Y on GeomCartesianPoint
+    and IsEnabled on MachiningWorkingStep.
+    """
+    expression = ET.Element(_qname(PARAMETRIC_NS, "Expression"))
+    _append_key(expression, expression_id, "ScmGroup.XCam.MachiningDataModel.Parametrics.Expression")
+    _append_blank_name(expression)
+    property_node = _append_node(expression, PARAMETRIC_NS, "Property")
+    _append_node(property_node, PARAMETRIC_NS, "Index", "-1")
+    _append_node(property_node, PARAMETRIC_NS, "Key", attrib={f"{{{XSI_NS}}}nil": "true"})
+    _append_node(property_node, PARAMETRIC_NS, "Name", property_name)
+    _append_object_ref(expression, PARAMETRIC_NS, "ReferencedObject", obj_id, obj_type)
+    _append_node(expression, PARAMETRIC_NS, "Value", value)
     return expression
 
 

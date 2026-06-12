@@ -44,6 +44,7 @@ from ..common.xml import (
     _append_reference_key,
     _build_depth_expression,
     _build_point_geometry,
+    _build_property_expression,
     _build_working_step,
     _compact_number,
     _find_plane_ref,
@@ -89,6 +90,14 @@ class DrillingSpec:
     tool_resolution: str = "Auto"
     tool_id: str = "0"
     tool_name: str = ""
+    step_number: int = 0
+    step_depth: float = 0.0
+    feedrate: float = 0.0
+    spindle: float = 0.0
+    taper_height: float = 0.0
+    center_x_expr: Optional[str] = None
+    center_y_expr: Optional[str] = None
+    is_enabled_expr: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -149,6 +158,38 @@ class _HydratedDrillingSpec:
     def tool_object_type(self) -> str:
         return self.resolved_tool_object_type
 
+    @property
+    def step_number(self) -> int:
+        return self.spec.step_number
+
+    @property
+    def step_depth(self) -> float:
+        return self.spec.step_depth
+
+    @property
+    def feedrate(self) -> float:
+        return self.spec.feedrate
+
+    @property
+    def spindle(self) -> float:
+        return self.spec.spindle
+
+    @property
+    def taper_height(self) -> float:
+        return self.spec.taper_height
+
+    @property
+    def center_x_expr(self) -> Optional[str]:
+        return self.spec.center_x_expr
+
+    @property
+    def center_y_expr(self) -> Optional[str]:
+        return self.spec.center_y_expr
+
+    @property
+    def is_enabled_expr(self) -> Optional[str]:
+        return self.spec.is_enabled_expr
+
 
 def _normalize_drill_family(value: Optional[str]) -> str:
     raw = (value or "Flat").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
@@ -185,6 +226,16 @@ def _default_drill_family(
     return "Flat"
 
 
+def _normalize_peck_drilling(step_number: int, step_depth: float) -> tuple[int, float]:
+    if step_number < 0:
+        raise ValueError("step_number no puede ser negativo.")
+    if step_depth < 0.0:
+        raise ValueError("step_depth no puede ser negativo.")
+    if step_number > 0 and step_depth > 0.0:
+        raise ValueError("step_number y step_depth son mutuamente excluyentes: usar uno o el otro.")
+    return step_number, step_depth
+
+
 def _normalize_drilling_spec(drilling: DrillingSpec) -> DrillingSpec:
     normalized_plane_name = _normalize_plane_name(drilling.plane_name)
     normalized_depth_spec = _normalize_milling_depth_spec(drilling.depth_spec)
@@ -204,6 +255,18 @@ def _normalize_drilling_spec(drilling: DrillingSpec) -> DrillingSpec:
     security_plane_value = float(drilling.security_plane)
     if security_plane_value < 0.0:
         raise ValueError("SecurityPlane no puede ser negativo.")
+    normalized_step_number, normalized_step_depth = _normalize_peck_drilling(
+        int(drilling.step_number), float(drilling.step_depth)
+    )
+    taper_height_value = float(drilling.taper_height)
+    if taper_height_value < 0.0:
+        raise ValueError("taper_height no puede ser negativo.")
+    feedrate_value = float(drilling.feedrate)
+    if feedrate_value < 0.0:
+        raise ValueError("feedrate no puede ser negativo.")
+    spindle_value = float(drilling.spindle)
+    if spindle_value < 0.0:
+        raise ValueError("spindle no puede ser negativo.")
     return replace(
         drilling,
         center_x=float(drilling.center_x),
@@ -217,6 +280,11 @@ def _normalize_drilling_spec(drilling: DrillingSpec) -> DrillingSpec:
         tool_resolution=_normalize_tool_resolution(drilling.tool_resolution),
         tool_id=(drilling.tool_id or "").strip() or "0",
         tool_name=(drilling.tool_name or "").strip(),
+        step_number=normalized_step_number,
+        step_depth=normalized_step_depth,
+        feedrate=feedrate_value,
+        spindle=spindle_value,
+        taper_height=taper_height_value,
     )
 
 
@@ -235,6 +303,14 @@ def build_drilling_spec(
     tool_resolution: Optional[str] = None,
     tool_id: Optional[str] = None,
     tool_name: Optional[str] = None,
+    step_number: Optional[int] = None,
+    step_depth: Optional[float] = None,
+    feedrate: Optional[float] = None,
+    spindle: Optional[float] = None,
+    taper_height: Optional[float] = None,
+    center_x_expr: Optional[str] = None,
+    center_y_expr: Optional[str] = None,
+    is_enabled_expr: Optional[str] = None,
 ) -> DrillingSpec:
     """Construye un `DrillingSpec` reusable para taladros puntuales."""
 
@@ -262,6 +338,14 @@ def build_drilling_spec(
         tool_resolution=_normalize_tool_resolution(tool_resolution or "Auto"),
         tool_id=(tool_id or "0").strip() or "0",
         tool_name=(tool_name or "").strip(),
+        step_number=0 if step_number is None else int(step_number),
+        step_depth=0.0 if step_depth is None else float(step_depth),
+        feedrate=0.0 if feedrate is None else float(feedrate),
+        spindle=0.0 if spindle is None else float(spindle),
+        taper_height=0.0 if taper_height is None else float(taper_height),
+        center_x_expr=None if center_x_expr is None else str(center_x_expr).strip() or None,
+        center_y_expr=None if center_y_expr is None else str(center_y_expr).strip() or None,
+        is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,
     )
 
 
@@ -365,7 +449,7 @@ def _build_drilling_feature(
     _append_node(depth, PGMX_NS, "EndDepth", depth_value)
     _append_node(depth, PGMX_NS, "StartDepth", depth_value)
     _append_node(feature, DRILLING_NS, "Diameter", _compact_number(spec.diameter))
-    _append_node(feature, DRILLING_NS, "TaperHeight", "0")
+    _append_node(feature, DRILLING_NS, "TaperHeight", _compact_number(spec.taper_height))
     return feature
 
 
@@ -418,7 +502,7 @@ def _append_drilling_feature_payload(
     _append_node(depth, PGMX_NS, "EndDepth", depth_value)
     _append_node(depth, PGMX_NS, "StartDepth", depth_value)
     _append_node(parent, DRILLING_NS, "Diameter", _compact_number(spec.diameter))
-    _append_node(parent, DRILLING_NS, "TaperHeight", "0")
+    _append_node(parent, DRILLING_NS, "TaperHeight", _compact_number(spec.taper_height))
 
 
 def _build_drilling_operation(
@@ -483,9 +567,9 @@ def _build_drilling_operation(
         "Technology",
         attrib={f"{{{XSI_NS}}}type": "MillingTechnology"},
     )
-    _append_node(technology, PGMX_NS, "Feedrate", "0")
+    _append_node(technology, PGMX_NS, "Feedrate", _compact_number(spec.feedrate))
     _append_node(technology, PGMX_NS, "CutSpeed", "0")
-    _append_node(technology, PGMX_NS, "Spindle", "0")
+    _append_node(technology, PGMX_NS, "Spindle", _compact_number(spec.spindle))
     _append_object_ref(
         operation,
         PGMX_NS,
@@ -497,13 +581,27 @@ def _build_drilling_operation(
     )
     _append_node(operation, PGMX_NS, "OvercutLength", "0")
     _append_node(operation, DRILLING_NS, "CuttingDepth", "0")
-    machining_strategy = _append_node(
-        operation,
-        DRILLING_NS,
-        "MachiningStrategy",
-        attrib={f"{{{XSI_NS}}}type": "b:SingleStepDrilling"},
-    )
-    _set_xmlns(machining_strategy, "b", BASE_MODEL_NS)
+    use_peck = spec.step_number > 0 or spec.step_depth > 0.0
+    if use_peck:
+        machining_strategy = _append_node(
+            operation,
+            DRILLING_NS,
+            "MachiningStrategy",
+            attrib={f"{{{XSI_NS}}}type": "b:MultiStepDrilling"},
+        )
+        _set_xmlns(machining_strategy, "b", BASE_MODEL_NS)
+        is_step_depth = spec.step_depth > 0.0
+        _append_node(machining_strategy, BASE_MODEL_NS, "IsStepDepth", "true" if is_step_depth else "false")
+        _append_node(machining_strategy, BASE_MODEL_NS, "StepDepth", _compact_number(spec.step_depth))
+        _append_node(machining_strategy, BASE_MODEL_NS, "StepNumber", str(spec.step_number))
+    else:
+        machining_strategy = _append_node(
+            operation,
+            DRILLING_NS,
+            "MachiningStrategy",
+            attrib={f"{{{XSI_NS}}}type": "b:SingleStepDrilling"},
+        )
+        _set_xmlns(machining_strategy, "b", BASE_MODEL_NS)
     return operation
 
 
@@ -525,10 +623,30 @@ def _append_drilling(root: ET.Element, state, spec: _HydratedDrillingSpec) -> No
     depth_variable_name = _drilling_axis_variable_name(workpiece, spec.plane_name)
     plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
     uses_depth_expressions = _uses_drilling_depth_expressions(spec)
-    reserved_ids = _reserve_ids(root, 6 if uses_depth_expressions else 4, spec.preferred_id_start)
+    has_x_expr = spec.center_x_expr is not None
+    has_y_expr = spec.center_y_expr is not None
+    has_enabled_expr = spec.is_enabled_expr is not None
+    n_total = (
+        4
+        + (2 if uses_depth_expressions else 0)
+        + has_x_expr
+        + has_y_expr
+        + has_enabled_expr
+    )
+    reserved_ids = _reserve_ids(root, n_total, spec.preferred_id_start)
     geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
-    start_expression_id = reserved_ids[4] if uses_depth_expressions else None
-    end_expression_id = reserved_ids[5] if uses_depth_expressions else None
+    i = 4
+    start_expression_id = end_expression_id = None
+    if uses_depth_expressions:
+        start_expression_id = reserved_ids[i]; i += 1
+        end_expression_id = reserved_ids[i]; i += 1
+    x_expr_id = None
+    if has_x_expr:
+        x_expr_id = reserved_ids[i]; i += 1
+    y_expr_id = None
+    if has_y_expr:
+        y_expr_id = reserved_ids[i]; i += 1
+    enabled_expr_id = reserved_ids[i] if has_enabled_expr else None
 
     geometries.append(
         _build_point_geometry(
@@ -581,20 +699,52 @@ def _append_drilling(root: ET.Element, state, spec: _HydratedDrillingSpec) -> No
                 referenced_object_type="ScmGroup.XCam.MachiningDataModel.Drilling.RoundHole",
             )
         )
+    if has_x_expr and x_expr_id is not None:
+        expressions.append(
+            _build_property_expression(
+                x_expr_id,
+                geometry_id,
+                "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCartesianPoint",
+                "X",
+                spec.center_x_expr,
+            )
+        )
+    if has_y_expr and y_expr_id is not None:
+        expressions.append(
+            _build_property_expression(
+                y_expr_id,
+                geometry_id,
+                "ScmGroup.XCam.MachiningDataModel.Geometry.GeomCartesianPoint",
+                "Y",
+                spec.center_y_expr,
+            )
+        )
+    if has_enabled_expr and enabled_expr_id is not None:
+        expressions.append(
+            _build_property_expression(
+                enabled_expr_id,
+                step_id,
+                "ScmGroup.XCam.MachiningDataModel.ProjectModule.MachiningWorkingStep",
+                "IsEnabled",
+                spec.is_enabled_expr,
+            )
+        )
 
 
 def _validate_drilling_center(state, spec: _HydratedDrillingSpec) -> None:
     max_x, max_y = _plane_local_dimensions(state, spec.plane_name)
-    if spec.center_x < -1e-9 or spec.center_x > max_x + 1e-9:
-        raise ValueError(
-            f"El centro X del taladro cae fuera del plano '{spec.plane_name}': "
-            f"{_compact_number(spec.center_x)} no pertenece a [0, {_compact_number(max_x)}]."
-        )
-    if spec.center_y < -1e-9 or spec.center_y > max_y + 1e-9:
-        raise ValueError(
-            f"El centro Y del taladro cae fuera del plano '{spec.plane_name}': "
-            f"{_compact_number(spec.center_y)} no pertenece a [0, {_compact_number(max_y)}]."
-        )
+    if spec.center_x_expr is None:
+        if spec.center_x < -1e-9 or spec.center_x > max_x + 1e-9:
+            raise ValueError(
+                f"El centro X del taladro cae fuera del plano '{spec.plane_name}': "
+                f"{_compact_number(spec.center_x)} no pertenece a [0, {_compact_number(max_x)}]."
+            )
+    if spec.center_y_expr is None:
+        if spec.center_y < -1e-9 or spec.center_y > max_y + 1e-9:
+            raise ValueError(
+                f"El centro Y del taladro cae fuera del plano '{spec.plane_name}': "
+                f"{_compact_number(spec.center_y)} no pertenece a [0, {_compact_number(max_y)}]."
+            )
 
 
 def _validate_tool_sinking_length_for_drilling_spec(

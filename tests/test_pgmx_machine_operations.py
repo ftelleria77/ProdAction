@@ -348,6 +348,474 @@ class PgmxMachineOperationsTests(unittest.TestCase):
         self.assertEqual(park.limit, "Minimum")
         self.assertEqual(park.stop, "Nothing")
 
+    def test_park_limit_maximum(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Park_Maximum.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                workplans=(
+                    sp.build_workplan_spec(
+                        machine_operations=(
+                            sp.build_park_spec(limit="Maximum"),
+                        ),
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            snapshot = read_pgmx_snapshot(result.output_path)
+
+        park = snapshot.machine_operations[0]
+        self.assertEqual(park.runtime_type, "Park")
+        self.assertEqual(park.limit, "Maximum")
+
+    def test_park_limit_default_is_minimum(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Park_DefaultLimit.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                workplans=(
+                    sp.build_workplan_spec(
+                        machine_operations=(
+                            sp.build_park_spec(),
+                        ),
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            snapshot = read_pgmx_snapshot(result.output_path)
+
+        park = snapshot.machine_operations[0]
+        self.assertEqual(park.runtime_type, "Park")
+        self.assertEqual(park.limit, "Minimum")
+
+    def test_synthesizes_iso_operation(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Iso_G0Z100.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                piece_name="Iso_Test",
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                workplans=(
+                    sp.build_workplan_spec(
+                        name="Setup",
+                        machine_operations=(
+                            sp.build_iso_spec(text="G0Z100"),
+                        ),
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            snapshot = read_pgmx_snapshot(result.output_path)
+            xml_text = _pgmx_xml_text(result.output_path)
+
+        self.assertEqual(len(snapshot.machine_operations), 1)
+        iso = snapshot.machine_operations[0]
+        self.assertEqual(iso.runtime_type, "Iso")
+        self.assertEqual(iso.name, "ISO")
+        self.assertEqual(iso.text, "G0Z100")
+        self.assertEqual(iso.is_xiso, False)
+        self.assertEqual(iso.option_parameters, "")
+        self.assertIsNotNone(iso.workpiece_ref)
+        self.assertIn(
+            'i:type="Iso" xmlns="http://schemas.datacontract.org/2004/07/ScmGroup.XCam.MachiningDataModel"',
+            xml_text,
+        )
+
+    def test_iso_is_xiso_flag(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Iso_Xiso.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                workplans=(
+                    sp.build_workplan_spec(
+                        machine_operations=(
+                            sp.build_iso_spec(
+                                text="G1X100Y50F3000",
+                                name="Mi ISO",
+                                is_xiso=True,
+                            ),
+                        ),
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            snapshot = read_pgmx_snapshot(result.output_path)
+
+        iso = snapshot.machine_operations[0]
+        self.assertEqual(iso.runtime_type, "Iso")
+        self.assertEqual(iso.name, "Mi ISO")
+        self.assertEqual(iso.text, "G1X100Y50F3000")
+        self.assertEqual(iso.is_xiso, True)
+
+    def test_iso_option_parameters(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Iso_Opts.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                workplans=(
+                    sp.build_workplan_spec(
+                        machine_operations=(
+                            sp.build_iso_spec(
+                                text="G0Z100",
+                                option_parameters="OPT1",
+                            ),
+                        ),
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            snapshot = read_pgmx_snapshot(result.output_path)
+
+        iso = snapshot.machine_operations[0]
+        self.assertEqual(iso.option_parameters, "OPT1")
+
+
+    def test_drill_step_number(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Drill_StepNumber.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                drillings=(
+                    sp.build_drilling_spec(
+                        center_x=100,
+                        center_y=100,
+                        diameter=5,
+                        target_depth=10,
+                        tool_resolution="None",
+                        step_number=2,
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            xml_text = _pgmx_xml_text(result.output_path)
+
+        self.assertIn('i:type="b:MultiStepDrilling"', xml_text)
+        self.assertRegex(xml_text, r'<\w+:IsStepDepth>false</\w+:IsStepDepth>')
+        self.assertRegex(xml_text, r'<\w+:StepNumber>2</\w+:StepNumber>')
+        self.assertRegex(xml_text, r'<\w+:StepDepth>0</\w+:StepDepth>')
+
+    def test_drill_step_depth(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Drill_StepDepth.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                drillings=(
+                    sp.build_drilling_spec(
+                        center_x=100,
+                        center_y=100,
+                        diameter=5,
+                        target_depth=10,
+                        tool_resolution="None",
+                        step_depth=3.0,
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            xml_text = _pgmx_xml_text(result.output_path)
+
+        self.assertIn('i:type="b:MultiStepDrilling"', xml_text)
+        self.assertRegex(xml_text, r'<\w+:IsStepDepth>true</\w+:IsStepDepth>')
+        self.assertRegex(xml_text, r'<\w+:StepDepth>3</\w+:StepDepth>')
+
+    def test_drill_feedrate_and_spindle(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Drill_Technology.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                drillings=(
+                    sp.build_drilling_spec(
+                        center_x=100,
+                        center_y=100,
+                        diameter=5,
+                        target_depth=10,
+                        tool_resolution="None",
+                        feedrate=3.0,
+                        spindle=15000.0,
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            xml_text = _pgmx_xml_text(result.output_path)
+
+        self.assertIn('<Feedrate>3</Feedrate>', xml_text)
+        self.assertIn('<Spindle>15000</Spindle>', xml_text)
+
+    def test_drill_taper_height(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Drill_TaperHeight.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                drillings=(
+                    sp.build_drilling_spec(
+                        center_x=100,
+                        center_y=100,
+                        diameter=5,
+                        target_depth=10,
+                        tool_resolution="None",
+                        taper_height=10.0,
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            xml_text = _pgmx_xml_text(result.output_path)
+
+        self.assertRegex(xml_text, r'<\w+:TaperHeight>10</\w+:TaperHeight>')
+
+    def test_parametric_variable_double_written_to_xml(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "ParamVar_Double.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                parametric_variables=(
+                    sp.build_parametric_variable_spec(
+                        name="GrusorPanel",
+                        value=18.0,
+                        description="Grosor en mm",
+                        variable_type="double",
+                        physical_unit="length",
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            xml_text = _pgmx_xml_text(result.output_path)
+
+        self.assertRegex(xml_text, r'<\w+:Name>GrusorPanel</\w+:Name>')
+        self.assertRegex(xml_text, r'<\w+:Type>Double</\w+:Type>')
+        self.assertRegex(xml_text, r'<\w+:FisicalUnitType>Lenght</\w+:FisicalUnitType>')
+        self.assertRegex(xml_text, r'i:type="b:double"')
+        self.assertIn('>18<', xml_text)
+
+    def test_parametric_variable_boolean_written_to_xml(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "ParamVar_Bool.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                parametric_variables=(
+                    sp.build_parametric_variable_spec(
+                        name="EsActivo",
+                        value=True,
+                        variable_type="bool",
+                        physical_unit="unitless",
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            xml_text = _pgmx_xml_text(result.output_path)
+
+        self.assertRegex(xml_text, r'<\w+:Name>EsActivo</\w+:Name>')
+        self.assertRegex(xml_text, r'<\w+:Type>Boolean</\w+:Type>')
+        self.assertRegex(xml_text, r'i:type="b:boolean"')
+        self.assertIn('>true<', xml_text)
+
+    def test_drill_is_enabled_expr_writes_expression_node(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Drill_IsEnabled.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                drillings=(
+                    sp.build_drilling_spec(
+                        center_x=100,
+                        center_y=100,
+                        diameter=5,
+                        target_depth=10,
+                        tool_resolution="None",
+                        is_enabled_expr="HabilitarTaladro",
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            xml_text = _pgmx_xml_text(result.output_path)
+
+        self.assertRegex(xml_text, r'<\w+:Name>IsEnabled</\w+:Name>')
+        self.assertIn('>HabilitarTaladro<', xml_text)
+
+    def test_drill_center_xy_expr_writes_expression_nodes(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Drill_CenterXY.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                drillings=(
+                    sp.build_drilling_spec(
+                        center_x=100,
+                        center_y=100,
+                        diameter=5,
+                        target_depth=10,
+                        tool_resolution="None",
+                        center_x_expr="PosX",
+                        center_y_expr="PosY",
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            xml_text = _pgmx_xml_text(result.output_path)
+
+        self.assertIn('>PosX<', xml_text)
+        self.assertIn('>PosY<', xml_text)
+        self.assertRegex(xml_text, r'<\w+:Name>X</\w+:Name>')
+        self.assertRegex(xml_text, r'<\w+:Name>Y</\w+:Name>')
+
+    def test_slot_is_enabled_expr_writes_expression_node(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Slot_IsEnabled.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                slot_millings=(
+                    sp.build_slot_milling_spec(
+                        start_x=10,
+                        start_y=100,
+                        end_x=390,
+                        end_y=100,
+                        target_depth=8,
+                        is_enabled_expr="HabilitarRanura",
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            xml_text = _pgmx_xml_text(result.output_path)
+
+        self.assertRegex(xml_text, r'<\w+:Name>IsEnabled</\w+:Name>')
+        self.assertIn('>HabilitarRanura<', xml_text)
+
+    def test_pocket_is_enabled_expr_writes_expression_node(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Pocket_IsEnabled.pgmx"
+            contour = [(50.0, 50.0), (350.0, 50.0), (350.0, 350.0), (50.0, 350.0), (50.0, 50.0)]
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                pocket_millings=(
+                    sp.build_pocket_milling_spec(
+                        contour_points=contour,
+                        target_depth=10,
+                        is_enabled_expr="HabilitarVaciado",
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            xml_text = _pgmx_xml_text(result.output_path)
+
+        self.assertRegex(xml_text, r'<\w+:Name>IsEnabled</\w+:Name>')
+        self.assertIn('>HabilitarVaciado<', xml_text)
+
+    def test_drilling_pattern_is_enabled_expr_writes_expression_node(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "Pattern_IsEnabled.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                origin_x=5,
+                origin_y=5,
+                origin_z=25,
+                drilling_patterns=(
+                    sp.build_drilling_pattern_spec(
+                        center_x=50,
+                        center_y=50,
+                        diameter=5,
+                        columns=3,
+                        rows=2,
+                        spacing=100,
+                        target_depth=10,
+                        tool_resolution="None",
+                        is_enabled_expr="HabilitarPatron",
+                    ),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            xml_text = _pgmx_xml_text(result.output_path)
+
+        self.assertRegex(xml_text, r'<\w+:Name>IsEnabled</\w+:Name>')
+        self.assertIn('>HabilitarPatron<', xml_text)
+
 
 def _pgmx_xml_text(path: Path) -> str:
     with zipfile.ZipFile(path) as archive:

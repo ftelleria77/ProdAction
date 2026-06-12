@@ -296,6 +296,8 @@ class PgmxWorkingStepSnapshot:
     input_enabled: Optional[bool] = None
     variable_ref: Optional[PgmxObjectRefSnapshot] = None
     limit: str = ""
+    is_xiso: Optional[bool] = None
+    option_parameters: str = ""
 
 
 @dataclass(frozen=True)
@@ -403,7 +405,7 @@ class PgmxSnapshot:
         return tuple(
             step
             for step in self.working_steps
-            if step.runtime_type in {"Xn", "Xmsg", "Park"}
+            if step.runtime_type in {"Xn", "Xmsg", "Park", "Iso"}
         )
 
     @property
@@ -1204,6 +1206,12 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
                 ),
                 variable_ref=_object_ref(_first_child(step, "Variable")),
                 limit=sp._text(step, "./{*}Limit"),
+                is_xiso=(
+                    sp._safe_bool(sp._text(step, "./{*}IsXiso"), False)
+                    if _first_child(step, "IsXiso") is not None
+                    else None
+                ),
+                option_parameters=sp._text(step, "./{*}OptionParameters"),
             )
             working_steps.append(step_snapshot)
             workplan_steps.append(step_snapshot)

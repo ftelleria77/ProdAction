@@ -40,6 +40,7 @@ from ..common.xml import (
     _append_object_ref,
     _append_reference_key,
     _build_depth_expression,
+    _build_property_expression,
     _build_working_step,
     _compact_number,
     _find_plane_ref,
@@ -96,6 +97,7 @@ class SlotMillingSpec:
     side_offset: float = 0.0
     end_radius: float = 60.0
     slot_angle: float = 1.5707963267948966
+    is_enabled_expr: Optional[str] = None
 
     @property
     def milling_strategy(self) -> None:
@@ -188,6 +190,10 @@ class _HydratedSlotMillingSpec:
     @property
     def slot_angle(self) -> float:
         return self.spec.slot_angle
+
+    @property
+    def is_enabled_expr(self) -> Optional[str]:
+        return self.spec.is_enabled_expr
 
 
 def _normalize_slot_milling_spec(slot_milling: SlotMillingSpec) -> SlotMillingSpec:
@@ -320,10 +326,16 @@ def _append_slot_milling(root: ET.Element, state, spec: _HydratedSlotMillingSpec
     depth_variable_name = _workpiece_depth_name(workpiece)
     plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
     uses_depth_expressions = _uses_feature_depth_expressions(spec)
-    reserved_ids = _reserve_ids(root, 6 if uses_depth_expressions else 4, spec.preferred_id_start)
+    has_enabled_expr = spec.is_enabled_expr is not None
+    n_total = 4 + (2 if uses_depth_expressions else 0) + has_enabled_expr
+    reserved_ids = _reserve_ids(root, n_total, spec.preferred_id_start)
     geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
-    start_expression_id = reserved_ids[4] if uses_depth_expressions else None
-    end_expression_id = reserved_ids[5] if uses_depth_expressions else None
+    i = 4
+    start_expression_id = end_expression_id = None
+    if uses_depth_expressions:
+        start_expression_id = reserved_ids[i]; i += 1
+        end_expression_id = reserved_ids[i]; i += 1
+    enabled_expr_id = reserved_ids[i] if has_enabled_expr else None
     generated_toolpath_profile = _build_line_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
     toolpath_start, toolpath_end, _, _ = _profile_entry_exit_context(generated_toolpath_profile)
     approach_curve = spec.approach_curve
@@ -371,6 +383,16 @@ def _append_slot_milling(root: ET.Element, state, spec: _HydratedSlotMillingSpec
     if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
         expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
         expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
+    if has_enabled_expr and enabled_expr_id is not None:
+        expressions.append(
+            _build_property_expression(
+                enabled_expr_id,
+                step_id,
+                "ScmGroup.XCam.MachiningDataModel.ProjectModule.MachiningWorkingStep",
+                "IsEnabled",
+                spec.is_enabled_expr,
+            )
+        )
 
 
 def build_slot_milling_spec(
@@ -406,6 +428,7 @@ def build_slot_milling_spec(
     side_offset: Optional[float] = None,
     end_radius: Optional[float] = None,
     slot_angle: Optional[float] = None,
+    is_enabled_expr: Optional[str] = None,
 ) -> SlotMillingSpec:
     """Construye una ranura lineal `SlotSide` compatible con Sierra Vertical X."""
 
@@ -449,5 +472,6 @@ def build_slot_milling_spec(
             side_offset=0.0 if side_offset is None else float(side_offset),
             end_radius=60.0 if end_radius is None else float(end_radius),
             slot_angle=1.5707963267948966 if slot_angle is None else float(slot_angle),
+            is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,
         )
     )

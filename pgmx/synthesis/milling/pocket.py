@@ -59,6 +59,7 @@ from ..common.xml import (
     _append_object_ref,
     _append_reference_key,
     _build_depth_expression,
+    _build_property_expression,
     _build_working_step,
     _compact_number,
     _find_plane_ref,
@@ -161,6 +162,7 @@ class PocketMillingSpec:
     allowance_side: float = 0.0
     boss_contours: tuple[tuple[tuple[float, float], ...], ...] = ()
     boss_route_seeds: tuple[PocketBossRouteSeedSpec, ...] = ()
+    is_enabled_expr: Optional[str] = None
 
     @property
     def effective_contour_offset(self) -> float:
@@ -261,6 +263,10 @@ class _HydratedPocketMillingSpec:
     def radial_step(self) -> float:
         return self.spec.radial_step
 
+    @property
+    def is_enabled_expr(self) -> Optional[str]:
+        return self.spec.is_enabled_expr
+
 
 def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPocketMillingSpec) -> None:
     geometries = root.find("./{*}Geometries")
@@ -280,6 +286,9 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
     depth_variable_name = _workpiece_depth_name(workpiece)
     plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
     uses_depth_expressions = _uses_feature_depth_expressions(spec)
+    has_enabled_expr = spec.is_enabled_expr is not None
+    depth_block = 2 if uses_depth_expressions else 0
+    enabled_block = 1 if has_enabled_expr else 0
 
     trajectory_sequences = _build_pocket_trajectory_xyz_sequences(state, spec)
     boundary_curve = spec.geometry_curve or _curve_spec_from_profile_geometry(
@@ -305,7 +314,9 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
         + boundary_member_count
         + boss_geometry_member_count
         + route_seed_member_count
-        + (6 if uses_depth_expressions else 4)
+        + 3
+        + depth_block
+        + enabled_block
         + trajectory_member_count
     )
     reserved_ids = _reserve_ids(root, reserve_count, spec.preferred_id_start)
@@ -330,7 +341,8 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
     step_id = reserved_ids[operation_index + 2]
     start_expression_id = reserved_ids[operation_index + 3] if uses_depth_expressions else None
     end_expression_id = reserved_ids[operation_index + 4] if uses_depth_expressions else None
-    trajectory_index = operation_index + (5 if uses_depth_expressions else 3)
+    enabled_expr_id = reserved_ids[operation_index + 3 + depth_block] if has_enabled_expr else None
+    trajectory_index = operation_index + 3 + depth_block + enabled_block
     trajectory_member_keys: list[tuple[str, ...]] = []
     cursor = trajectory_index
     for member_count in trajectory_member_counts:
@@ -408,6 +420,16 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
     if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
         expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
         expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
+    if has_enabled_expr and enabled_expr_id is not None:
+        expressions.append(
+            _build_property_expression(
+                enabled_expr_id,
+                step_id,
+                "ScmGroup.XCam.MachiningDataModel.ProjectModule.MachiningWorkingStep",
+                "IsEnabled",
+                spec.is_enabled_expr,
+            )
+        )
 
 
 def _build_closed_pocket_feature(
@@ -1667,6 +1689,7 @@ def build_pocket_milling_spec(
     allowance_side: Optional[float] = None,
     boss_contours: Optional[Sequence[Sequence[tuple[float, float]]]] = None,
     boss_route_seeds: Optional[Sequence[PocketBossRouteSeedSpec]] = None,
+    is_enabled_expr: Optional[str] = None,
 ) -> PocketMillingSpec:
     """Construye la spec publica de `Vaciado` para lectura/adaptacion."""
 
@@ -1752,6 +1775,7 @@ def build_pocket_milling_spec(
         allowance_side=0.0 if allowance_side is None else float(allowance_side),
         boss_contours=tuple(normalized_boss_contours),
         boss_route_seeds=normalized_boss_route_seeds,
+        is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,
     )
 
 

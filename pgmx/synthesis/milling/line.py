@@ -71,6 +71,7 @@ from ..common.xml import (
     _append_node,
     _append_object_ref,
     _build_depth_expression,
+    _build_property_expression,
     _build_working_step,
     _compact_number,
     _find_plane_ref,
@@ -125,6 +126,7 @@ class LineMillingSpec:
     approach: ApproachSpec = field(default_factory=ApproachSpec)
     retract: RetractSpec = field(default_factory=RetractSpec)
     milling_strategy: Optional[MillingStrategySpec] = None
+    is_enabled_expr: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -197,6 +199,10 @@ class _HydratedLineMillingSpec:
     @property
     def milling_strategy(self) -> Optional[MillingStrategySpec]:
         return self.spec.milling_strategy
+
+    @property
+    def is_enabled_expr(self) -> Optional[str]:
+        return self.spec.is_enabled_expr
 
 
 def _normalize_line_milling_spec(line_milling: LineMillingSpec) -> LineMillingSpec:
@@ -423,10 +429,17 @@ def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec
     depth_variable_name = _workpiece_depth_name(workpiece)
     plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
     uses_depth_expressions = _uses_feature_depth_expressions(spec)
-    reserved_ids = _reserve_ids(root, 6 if uses_depth_expressions else 4, spec.preferred_id_start)
+    has_enabled_expr = spec.is_enabled_expr is not None
+    n_total = 4 + (2 if uses_depth_expressions else 0) + has_enabled_expr
+    reserved_ids = _reserve_ids(root, n_total, spec.preferred_id_start)
     geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
-    start_expression_id = reserved_ids[4] if uses_depth_expressions else None
-    end_expression_id = reserved_ids[5] if uses_depth_expressions else None
+    i = 4
+    start_expression_id = end_expression_id = None
+    if uses_depth_expressions:
+        start_expression_id = reserved_ids[i]; i += 1
+        end_expression_id = reserved_ids[i]; i += 1
+    enabled_expr_id = reserved_ids[i] if has_enabled_expr else None
+    last_reserved_id = enabled_expr_id or end_expression_id or step_id
     generated_toolpath_profile = _build_line_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
     toolpath_start, toolpath_end, _, _ = _profile_entry_exit_context(generated_toolpath_profile)
     approach_curve = spec.approach_curve
@@ -438,7 +451,7 @@ def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec
     trajectory_curve = spec.trajectory_curve or _curve_spec_from_profile_geometry(generated_toolpath_profile)
 
     trajectory_curve_member_keys: tuple[str, ...] = ()
-    next_generated_aux_id = int(end_expression_id or step_id) + 1
+    next_generated_aux_id = int(last_reserved_id) + 1
     if trajectory_curve.geometry_type == "GeomCompositeCurve" and not trajectory_curve.member_keys:
         member_count = len(trajectory_curve.member_serializations)
         trajectory_curve_member_keys = tuple(str(next_generated_aux_id + offset) for offset in range(member_count))
@@ -488,6 +501,16 @@ def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec
     if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
         expressions.append(_build_depth_expression(start_expression_id, feature_id, "StartDepth", depth_variable_name))
         expressions.append(_build_depth_expression(end_expression_id, feature_id, "EndDepth", depth_variable_name))
+    if has_enabled_expr and enabled_expr_id is not None:
+        expressions.append(
+            _build_property_expression(
+                enabled_expr_id,
+                step_id,
+                "ScmGroup.XCam.MachiningDataModel.ProjectModule.MachiningWorkingStep",
+                "IsEnabled",
+                spec.is_enabled_expr,
+            )
+        )
 
 
 def _matches_line_geometry(template: dict[str, object], spec: LineMillingSpec, tolerance: float = 1e-6) -> bool:
@@ -667,6 +690,7 @@ def build_line_milling_spec(
     line_retract_arc_side: Optional[str] = None,
     line_retract_overlap: Optional[float] = None,
     line_milling_strategy: Optional[MillingStrategySpec] = None,
+    is_enabled_expr: Optional[str] = None,
 ) -> Optional[LineMillingSpec]:
     """Construye un `LineMillingSpec` reusable para un fresado lineal.
 
@@ -719,4 +743,5 @@ def build_line_milling_spec(
             overlap=line_retract_overlap,
         ),
         milling_strategy=normalized_strategy,
+        is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,
     )

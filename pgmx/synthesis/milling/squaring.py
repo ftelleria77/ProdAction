@@ -98,6 +98,7 @@ class SquaringMillingSpec:
         )
     )
     milling_strategy: Optional[MillingStrategySpec] = None
+    is_enabled_expr: Optional[str] = None
 
     @property
     def side_of_feature(self) -> str:
@@ -167,6 +168,10 @@ class _HydratedSquaringMillingSpec:
     @property
     def milling_strategy(self) -> Optional[MillingStrategySpec]:
         return self.spec.milling_strategy
+
+    @property
+    def is_enabled_expr(self) -> Optional[str]:
+        return self.spec.is_enabled_expr
 
 
 def _build_squaring_outline_points(
@@ -455,6 +460,7 @@ def build_squaring_milling_spec(
     retract_arc_side: Optional[str] = None,
     retract_overlap: Optional[float] = None,
     milling_strategy: Optional[MillingStrategySpec] = None,
+    is_enabled_expr: Optional[str] = None,
 ) -> SquaringMillingSpec:
     """Construye un `SquaringMillingSpec` reusable para escuadrar la pieza."""
 
@@ -552,4 +558,5 @@ def build_squaring_milling_spec(
         approach=approach_spec,
         retract=retract_spec,
         milling_strategy=normalized_strategy,
+        is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,
     )

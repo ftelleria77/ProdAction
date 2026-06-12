@@ -75,6 +75,7 @@ from .tools import (
 )
 from .xml import (
     BASE_MODEL_NS,
+    PARAMETRIC_NS,
     UTILITY_NS,
     XSD_NS,
     XSI_NS,
@@ -100,6 +101,7 @@ __all__ = [
     "HydratedMachiningSpec",
     "MachiningSpec",
     "MODULE_DIR",
+    "ParametricVariableSpec",
     "PgmxState",
     "PgmxSynthesisRequest",
     "PgmxSynthesisResult",
@@ -109,12 +111,14 @@ __all__ = [
     "XnSpec",
     "XmsgSpec",
     "ParkSpec",
+    "IsoSpec",
     "_apply_circle_millings",
     "_apply_drilling_patterns",
     "_apply_drillings",
     "_append_hydrated_machining",
     "_append_machine_operation",
     "_apply_line_millings",
+    "_apply_parametric_variables",
     "_apply_piece_state",
     "_apply_pocket_millings",
     "_apply_polyline_millings",
@@ -144,6 +148,10 @@ __all__ = [
     "_split_hydrated_machinings",
     "_validate_tool_sinking_lengths",
     "_write_pgmx_zip",
+    "_build_variable_node",
+    "_normalize_physical_unit",
+    "_normalize_variable_type",
+    "build_parametric_variable_spec",
     "build_synthesis_request",
     "build_workplan_spec",
     "build_xn_spec",
@@ -151,6 +159,9 @@ __all__ = [
     "build_park_spec",
     "_normalize_park_spec",
     "_build_park_step",
+    "build_iso_spec",
+    "_normalize_iso_spec",
+    "_build_iso_step",
 
     "read_pgmx_state",
     "synthesize_pgmx",
@@ -254,9 +265,31 @@ class ParkSpec:
 
     name: str = "Park"
     stop: str = "Nothing"
+    limit: str = "Minimum"
 
 
-MachineOperationSpec = Union[XnSpec, XmsgSpec, ParkSpec]
+@dataclass(frozen=True)
+class IsoSpec:
+    """Instruccion ISO/PGM embebida en un programa Maestro."""
+
+    text: str
+    name: str = "ISO"
+    option_parameters: str = ""
+    is_xiso: bool = False
+
+
+MachineOperationSpec = Union[XnSpec, XmsgSpec, ParkSpec, IsoSpec]
+
+
+@dataclass(frozen=True)
+class ParametricVariableSpec:
+    """Variable parametrica de usuario para calculos en tiempo de ejecucion Maestro."""
+
+    name: str
+    value: Union[float, int, bool]
+    description: str = ""
+    variable_type: str = "Double"
+    physical_unit: str = "UnitLess"
 
 
 @dataclass(frozen=True)
@@ -269,6 +302,144 @@ class WorkplanSpec:
     origin_z: Optional[float] = None
     machinings: tuple[MachiningSpec, ...] = ()
     machine_operations: tuple[MachineOperationSpec, ...] = ()
+
+
+def _normalize_variable_type(value: Optional[str]) -> str:
+    raw = (value or "Double").strip().lower()
+    mapping = {
+        "double": "Double",
+        "float": "Double",
+        "real": "Double",
+        "decimal": "Double",
+        "integer": "Integer",
+        "int": "Integer",
+        "entero": "Integer",
+        "boolean": "Boolean",
+        "bool": "Boolean",
+        "booleano": "Boolean",
+        "logico": "Boolean",
+    }
+    result = mapping.get(raw)
+    if result is None:
+        raise ValueError("variable_type invalido. Valores admitidos: Double, Integer o Boolean.")
+    return result
+
+
+def _normalize_physical_unit(value: Optional[str]) -> str:
+    raw = (value or "UnitLess").strip().lower().replace(" ", "").replace("_", "").replace("-", "")
+    mapping = {
+        "unitless": "UnitLess",
+        "sinunidades": "UnitLess",
+        "adimensional": "UnitLess",
+        "length": "Lenght",
+        "lenght": "Lenght",
+        "longitud": "Lenght",
+        "speed": "Speed",
+        "velocidad": "Speed",
+    }
+    result = mapping.get(raw)
+    if result is None:
+        raise ValueError("physical_unit invalido. Valores admitidos: UnitLess, Length o Speed.")
+    return result
+
+
+def _build_variable_node(var: ParametricVariableSpec, var_id: str) -> ET.Element:
+    variable = ET.Element(_qname(PARAMETRIC_NS, "Variable"))
+    _append_key(variable, var_id, "ScmGroup.XCam.MachiningDataModel.Parametrics.Variable")
+    _append_node(variable, PARAMETRIC_NS, "Name", var.name)
+    _append_node(variable, PARAMETRIC_NS, "Description", var.description)
+    _append_node(variable, PARAMETRIC_NS, "FisicalUnitType", var.physical_unit)
+    _append_node(variable, PARAMETRIC_NS, "IsReadOnly", "false")
+    _append_node(variable, PARAMETRIC_NS, "Scope", "Local")
+    _append_node(variable, PARAMETRIC_NS, "Type", var.variable_type)
+    xsd_type_map = {"Double": "b:double", "Integer": "b:int", "Boolean": "b:boolean"}
+    value_node = _append_node(
+        variable,
+        PARAMETRIC_NS,
+        "Value",
+        attrib={f"{{{XSI_NS}}}type": xsd_type_map[var.variable_type]},
+    )
+    _set_xmlns(value_node, "b", XSD_NS)
+    if var.variable_type == "Double":
+        value_node.text = _compact_number(float(var.value))
+    elif var.variable_type == "Integer":
+        value_node.text = str(int(var.value))
+    else:
+        value_node.text = "true" if var.value else "false"
+    return variable
+
+
+def _apply_parametric_variables(
+    root: ET.Element,
+    variables: Sequence[ParametricVariableSpec],
+) -> None:
+    if not variables:
+        return
+    variables_node = root.find("./{*}Variables")
+    if variables_node is None:
+        raise ValueError("La plantilla no contiene Variables para insertar variables parametricas.")
+    existing: dict[str, ET.Element] = {
+        _text(var, "./{*}Name").lower(): var
+        for var in list(variables_node)
+    }
+    for var in variables:
+        normalized = build_parametric_variable_spec(
+            name=var.name,
+            value=var.value,
+            description=var.description,
+            variable_type=var.variable_type,
+            physical_unit=var.physical_unit,
+        )
+        existing_node = existing.get(normalized.name.lower())
+        if existing_node is not None:
+            value_node = existing_node.find("./{*}Value")
+            if value_node is not None:
+                _set_xmlns(value_node, "b", XSD_NS)
+                if normalized.variable_type == "Double":
+                    value_node.text = _compact_number(float(normalized.value))
+                elif normalized.variable_type == "Integer":
+                    value_node.text = str(int(normalized.value))
+                else:
+                    value_node.text = "true" if normalized.value else "false"
+        else:
+            [var_id] = _reserve_ids(root, 1)
+            new_node = _build_variable_node(normalized, var_id)
+            variables_node.append(new_node)
+            existing[normalized.name.lower()] = new_node
+
+
+def build_parametric_variable_spec(
+    *,
+    name: str,
+    value: Union[float, int, bool],
+    description: str = "",
+    variable_type: Optional[str] = None,
+    physical_unit: Optional[str] = None,
+) -> ParametricVariableSpec:
+    """Construye una variable parametrica de usuario para el bloque Variables del PGMX."""
+
+    normalized_name = str(name).strip()
+    if not normalized_name:
+        raise ValueError("`name` es obligatorio para ParametricVariableSpec.")
+    if normalized_name.lower() in {"dx1", "dy1", "dz1"}:
+        raise ValueError(
+            f"El nombre '{normalized_name}' esta reservado para las dimensiones de la pieza."
+        )
+    normalized_type = _normalize_variable_type(variable_type)
+    normalized_unit = _normalize_physical_unit(physical_unit)
+    if normalized_type == "Double":
+        normalized_value: Union[float, int, bool] = float(value)
+    elif normalized_type == "Integer":
+        normalized_value = int(value)
+    else:
+        normalized_value = bool(value)
+    return ParametricVariableSpec(
+        name=normalized_name,
+        value=normalized_value,
+        description=str(description),
+        variable_type=normalized_type,
+        physical_unit=normalized_unit,
+    )
 
 
 def _normalize_xn_reference(value: Optional[str]) -> str:
@@ -302,6 +473,28 @@ def _normalize_spindle_enable(value: Optional[str]) -> str:
     normalized = mapping.get(raw)
     if normalized is None:
         raise ValueError("SpindleEnable invalido para Xn. Valores admitidos: On/Off.")
+    return normalized
+
+
+def _normalize_park_limit(value: Optional[str]) -> str:
+    raw = (value or "Minimum").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+    mapping = {
+        "minimum": "Minimum",
+        "minimo": "Minimum",
+        "min": "Minimum",
+        "izquierdo": "Minimum",
+        "izquierda": "Minimum",
+        "left": "Minimum",
+        "maximum": "Maximum",
+        "maximo": "Maximum",
+        "max": "Maximum",
+        "derecho": "Maximum",
+        "derecha": "Maximum",
+        "right": "Maximum",
+    }
+    normalized = mapping.get(raw)
+    if normalized is None:
+        raise ValueError("Limit invalido para Park. Valores admitidos: Minimum/Minimo/Izquierdo o Maximum/Maximo/Derecho.")
     return normalized
 
 
@@ -384,12 +577,34 @@ def build_park_spec(
     *,
     name: Optional[str] = None,
     stop: Optional[str] = None,
+    limit: Optional[str] = None,
 ) -> ParkSpec:
     """Construye la spec publica `Park` (aparcamiento de cabezal)."""
 
     return ParkSpec(
         name=(name or "Park").strip() or "Park",
         stop=_normalize_stop_mode(stop),
+        limit=_normalize_park_limit(limit),
+    )
+
+
+def build_iso_spec(
+    *,
+    text: str,
+    name: Optional[str] = None,
+    option_parameters: Optional[str] = None,
+    is_xiso: bool = False,
+) -> IsoSpec:
+    """Construye la spec publica `Iso` (instruccion G-code embebida en Maestro)."""
+
+    normalized_text = str(text)
+    if not normalized_text:
+        raise ValueError("`text` es obligatorio para Iso.")
+    return IsoSpec(
+        text=normalized_text,
+        name=(name or "ISO").strip() or "ISO",
+        option_parameters=(option_parameters or "").strip(),
+        is_xiso=bool(is_xiso),
     )
 
 
@@ -443,7 +658,16 @@ def _normalize_xmsg_spec(xmsg: XmsgSpec) -> XmsgSpec:
 
 
 def _normalize_park_spec(park: ParkSpec) -> ParkSpec:
-    return build_park_spec(name=park.name, stop=park.stop)
+    return build_park_spec(name=park.name, stop=park.stop, limit=park.limit)
+
+
+def _normalize_iso_spec(iso: IsoSpec) -> IsoSpec:
+    return build_iso_spec(
+        text=iso.text,
+        name=iso.name,
+        option_parameters=iso.option_parameters,
+        is_xiso=iso.is_xiso,
+    )
 
 
 def _normalize_machine_operations(
@@ -457,6 +681,8 @@ def _normalize_machine_operations(
             normalized.append(_normalize_xmsg_spec(operation))
         elif isinstance(operation, ParkSpec):
             normalized.append(_normalize_park_spec(operation))
+        elif isinstance(operation, IsoSpec):
+            normalized.append(_normalize_iso_spec(operation))
         else:
             raise TypeError(f"Operacion de maquina no soportada: {type(operation).__name__}")
     return tuple(normalized)
@@ -629,8 +855,45 @@ def _build_park_step(
     )
     _set_xmlns(workpiece_ref, "a", UTILITY_NS)
 
-    _append_node(step, BASE_MODEL_NS, "Limit", "Minimum")
+    _append_node(step, BASE_MODEL_NS, "Limit", spec.limit)
     _append_node(step, BASE_MODEL_NS, "Stop", spec.stop)
+    return step
+
+
+def _build_iso_step(
+    step_id: str,
+    workpiece_id: str,
+    workpiece_object_type: str,
+    spec: IsoSpec,
+) -> ET.Element:
+    step = ET.Element(
+        _qname(BASE_MODEL_NS, "Executable"),
+        {f"{{{XSI_NS}}}type": "Iso"},
+    )
+    _append_key(step, step_id, "ScmGroup.XCam.MachiningDataModel.Iso")
+    _append_blank_name(step).text = spec.name
+    _append_node(step, BASE_MODEL_NS, "Description", "")
+    _append_node(step, BASE_MODEL_NS, "IsEnabled", "true")
+    _append_node(step, BASE_MODEL_NS, "Priority", "0")
+
+    geometry_ref = _append_node(
+        step, BASE_MODEL_NS, "GeometryID",
+        attrib={f"{{{XSI_NS}}}nil": "true"},
+    )
+    _set_xmlns(geometry_ref, "a", UTILITY_NS)
+
+    workpiece_ref = _append_object_ref(
+        step,
+        BASE_MODEL_NS,
+        "WorkpieceID",
+        workpiece_id,
+        workpiece_object_type,
+    )
+    _set_xmlns(workpiece_ref, "a", UTILITY_NS)
+
+    _append_node(step, BASE_MODEL_NS, "IsXiso", "true" if spec.is_xiso else "false")
+    _append_node(step, BASE_MODEL_NS, "OptionParameters", spec.option_parameters)
+    _append_node(step, BASE_MODEL_NS, "Text", spec.text)
     return step
 
 
@@ -650,6 +913,9 @@ def _append_machine_operation(
         return
     if isinstance(spec, ParkSpec):
         elements.append(_build_park_step(step_id, workpiece_id, workpiece_object_type, spec))
+        return
+    if isinstance(spec, IsoSpec):
+        elements.append(_build_iso_step(step_id, workpiece_id, workpiece_object_type, spec))
         return
     raise TypeError(f"Operacion de maquina no soportada: {type(spec).__name__}")
 
@@ -813,6 +1079,7 @@ class PgmxSynthesisRequest:
     xn: XnSpec = field(default_factory=XnSpec)
     workplans: tuple[WorkplanSpec, ...] = ()
     current_workplan_index: int = 0
+    parametric_variables: tuple[ParametricVariableSpec, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1356,6 +1623,7 @@ def build_synthesis_request(
     xn: Optional[XnSpec] = None,
     workplans: Optional[Sequence[WorkplanSpec]] = None,
     current_workplan_index: int = 0,
+    parametric_variables: Optional[Sequence[ParametricVariableSpec]] = None,
 ) -> PgmxSynthesisRequest:
     """Arma una solicitud reusable de sintesis para el flujo principal.
 
@@ -1415,6 +1683,7 @@ def build_synthesis_request(
         xn=_normalize_xn_spec(xn),
         workplans=_normalize_workplan_specs(tuple(workplans or ()), target_piece),
         current_workplan_index=max(0, int(current_workplan_index)),
+        parametric_variables=tuple(parametric_variables or ()),
     )
 
 
@@ -1505,6 +1774,7 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
     )
 
     _apply_piece_state(baseline_root, request.piece)
+    _apply_parametric_variables(baseline_root, request.parametric_variables)
     workplan_nodes: tuple[ET.Element, ...] = ()
     if normalized_workplans:
         workplan_nodes = _ensure_workplans(

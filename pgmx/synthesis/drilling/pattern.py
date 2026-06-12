@@ -22,6 +22,7 @@ from ..common.xml import (
     _append_object_ref,
     _append_reference_key,
     _build_point_geometry,
+    _build_property_expression,
     _build_working_step,
     _compact_number,
     _find_plane_ref,
@@ -76,6 +77,7 @@ class DrillingPatternSpec:
     tool_resolution: str = "Auto"
     tool_id: str = "0"
     tool_name: str = ""
+    is_enabled_expr: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -148,6 +150,10 @@ class _HydratedDrillingPatternSpec:
     @property
     def tool_object_type(self) -> str:
         return self.base_drilling.tool_object_type
+
+    @property
+    def is_enabled_expr(self) -> Optional[str]:
+        return self.spec.is_enabled_expr
 
 
 def _normalize_drilling_pattern_spec(pattern: DrillingPatternSpec) -> DrillingPatternSpec:
@@ -382,10 +388,14 @@ def _append_drilling_pattern(root: ET.Element, state, spec: _HydratedDrillingPat
     depth_variable_name = _drilling_axis_variable_name(workpiece, spec.plane_name)
     plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
     uses_depth_expressions = _uses_drilling_depth_expressions(spec.base_drilling)
-    reserved_ids = _reserve_ids(root, 6 if uses_depth_expressions else 4)
+    has_enabled_expr = spec.is_enabled_expr is not None
+    depth_block = 2 if uses_depth_expressions else 0
+    n_total = 4 + depth_block + (1 if has_enabled_expr else 0)
+    reserved_ids = _reserve_ids(root, n_total)
     geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
     start_expression_id = reserved_ids[4] if uses_depth_expressions else None
     end_expression_id = reserved_ids[5] if uses_depth_expressions else None
+    enabled_expr_id = reserved_ids[4 + depth_block] if has_enabled_expr else None
 
     geometries.append(
         _build_point_geometry(
@@ -436,6 +446,16 @@ def _append_drilling_pattern(root: ET.Element, state, spec: _HydratedDrillingPat
                 depth_variable_name,
             )
         )
+    if has_enabled_expr and enabled_expr_id is not None:
+        expressions.append(
+            _build_property_expression(
+                enabled_expr_id,
+                step_id,
+                "ScmGroup.XCam.MachiningDataModel.ProjectModule.MachiningWorkingStep",
+                "IsEnabled",
+                spec.is_enabled_expr,
+            )
+        )
 
 
 def build_drilling_pattern_spec(
@@ -457,6 +477,7 @@ def build_drilling_pattern_spec(
     tool_resolution: str = "Auto",
     tool_id: Optional[str] = None,
     tool_name: Optional[str] = None,
+    is_enabled_expr: Optional[str] = None,
 ) -> DrillingPatternSpec:
     """Construye una repeticion rectangular Maestro (`ReplicateFeature`)."""
 
@@ -489,5 +510,6 @@ def build_drilling_pattern_spec(
             tool_resolution=_normalize_tool_resolution(tool_resolution or "Auto"),
             tool_id=(tool_id or "0").strip() or "0",
             tool_name=(tool_name or "").strip(),
+            is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,
         )
     )
