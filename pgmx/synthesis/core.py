@@ -13,6 +13,7 @@ from .common.hydration import *  # noqa: F401,F403
 from .common.leads import *  # noqa: F401,F403
 from .common.piece import *  # noqa: F401,F403
 from .common.program import *  # noqa: F401,F403
+from .common.reader import *  # noqa: F401,F403
 from .common.strategy import *  # noqa: F401,F403
 from .common.tools import *  # noqa: F401,F403
 from .common.xml import *  # noqa: F401,F403
@@ -59,6 +60,7 @@ __all__ = [
     "IsoSpec",
     "ParkSpec",
     "ParametricVariableSpec",
+    "PieceSpec",
     "PgmxSynthesisRequest",
     "PgmxSynthesisResult",
     "build_approach_spec",
@@ -90,6 +92,7 @@ __all__ = [
     "build_iso_spec",
     "build_park_spec",
     "build_parametric_variable_spec",
+    "build_piece_spec",
     "read_pgmx_state",
     "read_pgmx_geometries",
     "build_synthesis_request",
@@ -97,6 +100,8 @@ __all__ = [
     "_append_workplan_machinings",
     "synthesize_request",
     "synthesize_pgmx",
+    "split_pgmx_pieces",
+    "merge_pgmx_pieces",
 ]
 
 

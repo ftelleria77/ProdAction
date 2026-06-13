@@ -64,6 +64,7 @@ from ..milling.squaring import (
     _hydrate_squaring_milling_spec,
 )
 from .hydration import _load_pgmx_container
+from .multi_piece import _active_workpiece_ctx, _add_piece_to_xml
 from .output import (
     _finalize_pgmx_xml_bytes,
     _finalize_synthesized_pgmx_xml_bytes,
@@ -105,6 +106,7 @@ __all__ = [
     "PgmxState",
     "PgmxSynthesisRequest",
     "PgmxSynthesisResult",
+    "PieceSpec",
     "SYNTHESIZER_VERSION",
     "MachineOperationSpec",
     "WorkplanSpec",
@@ -152,6 +154,7 @@ __all__ = [
     "_normalize_physical_unit",
     "_normalize_variable_type",
     "build_parametric_variable_spec",
+    "build_piece_spec",
     "build_synthesis_request",
     "build_workplan_spec",
     "build_xn_spec",
@@ -279,6 +282,30 @@ class IsoSpec:
 
 
 MachineOperationSpec = Union[XnSpec, XmsgSpec, ParkSpec, IsoSpec]
+
+
+@dataclass(frozen=True)
+class PieceSpec:
+    """Especificacion de una pieza individual para sintesis multipieza."""
+
+    name: str
+    length: float
+    width: float
+    depth: float
+    origin_x: float = 0.0
+    origin_y: float = 0.0
+    origin_z: float = 0.0
+    line_millings: tuple[LineMillingSpec, ...] = ()
+    slot_millings: tuple[SlotMillingSpec, ...] = ()
+    polyline_millings: tuple[PolylineMillingSpec, ...] = ()
+    circle_millings: tuple[CircleMillingSpec, ...] = ()
+    squaring_millings: tuple[SquaringMillingSpec, ...] = ()
+    pocket_millings: tuple[PocketMillingSpec, ...] = ()
+    drillings: tuple[DrillingSpec, ...] = ()
+    drilling_patterns: tuple[DrillingPatternSpec, ...] = ()
+    ordered_machinings: tuple[MachiningSpec, ...] = ()
+    machine_operations: tuple[MachineOperationSpec, ...] = ()
+    parametric_variables: tuple[ParametricVariableSpec, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -439,6 +466,54 @@ def build_parametric_variable_spec(
         description=str(description),
         variable_type=normalized_type,
         physical_unit=normalized_unit,
+    )
+
+
+def build_piece_spec(
+    *,
+    name: str,
+    length: float,
+    width: float,
+    depth: float,
+    origin_x: float = 0.0,
+    origin_y: float = 0.0,
+    origin_z: float = 0.0,
+    line_millings: Optional[Sequence[LineMillingSpec]] = None,
+    slot_millings: Optional[Sequence[SlotMillingSpec]] = None,
+    polyline_millings: Optional[Sequence[PolylineMillingSpec]] = None,
+    circle_millings: Optional[Sequence[CircleMillingSpec]] = None,
+    squaring_millings: Optional[Sequence[SquaringMillingSpec]] = None,
+    pocket_millings: Optional[Sequence[PocketMillingSpec]] = None,
+    drillings: Optional[Sequence[DrillingSpec]] = None,
+    drilling_patterns: Optional[Sequence[DrillingPatternSpec]] = None,
+    ordered_machinings: Optional[Sequence[MachiningSpec]] = None,
+    machine_operations: Optional[Sequence[MachineOperationSpec]] = None,
+    parametric_variables: Optional[Sequence[ParametricVariableSpec]] = None,
+) -> PieceSpec:
+    """Construye la especificacion de una pieza para sintesis multipieza."""
+
+    normalized_name = str(name).strip()
+    if not normalized_name:
+        raise ValueError("`name` es obligatorio para PieceSpec.")
+    return PieceSpec(
+        name=normalized_name,
+        length=float(length),
+        width=float(width),
+        depth=float(depth),
+        origin_x=float(origin_x),
+        origin_y=float(origin_y),
+        origin_z=float(origin_z),
+        line_millings=tuple(line_millings or ()),
+        slot_millings=tuple(slot_millings or ()),
+        polyline_millings=tuple(polyline_millings or ()),
+        circle_millings=tuple(circle_millings or ()),
+        squaring_millings=tuple(squaring_millings or ()),
+        pocket_millings=tuple(pocket_millings or ()),
+        drillings=tuple(drillings or ()),
+        drilling_patterns=tuple(drilling_patterns or ()),
+        ordered_machinings=tuple(ordered_machinings or ()),
+        machine_operations=_normalize_machine_operations(machine_operations or ()),
+        parametric_variables=tuple(parametric_variables or ()),
     )
 
 
@@ -1080,6 +1155,7 @@ class PgmxSynthesisRequest:
     workplans: tuple[WorkplanSpec, ...] = ()
     current_workplan_index: int = 0
     parametric_variables: tuple[ParametricVariableSpec, ...] = ()
+    pieces: tuple[PieceSpec, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1102,6 +1178,7 @@ class PgmxSynthesisResult:
     xn: Optional[XnSpec] = None
     workplans: tuple[WorkplanSpec, ...] = ()
     current_workplan_index: int = 0
+    pieces: tuple[PieceSpec, ...] = ()
 
 
 def _hydrate_machining_spec(
@@ -1593,6 +1670,105 @@ def _apply_pocket_millings(
 
 
 # ============================================================================
+# Multi-piece synthesis helpers
+# ============================================================================
+
+def _piece_to_state(piece: PieceSpec, execution_fields: str) -> PgmxState:
+    return PgmxState(
+        piece_name=piece.name,
+        length=piece.length,
+        width=piece.width,
+        depth=piece.depth,
+        origin_x=piece.origin_x,
+        origin_y=piece.origin_y,
+        origin_z=piece.origin_z,
+        execution_fields=execution_fields,
+    )
+
+
+def _synthesize_piece_machinings(
+    root: ET.Element,
+    piece: PieceSpec,
+    workpiece_id: str,
+    workpiece_object_type: str,
+    source_pgmx_path: Optional[Path],
+    machining_order: tuple[str, ...],
+    execution_fields: str,
+) -> None:
+    """Hidratan, validan y aplican todos los mecanizados de una PieceSpec."""
+    state = _piece_to_state(piece, execution_fields)
+
+    hydrated_line_millings = [
+        _hydrate_line_milling_spec(s, source_pgmx_path) for s in piece.line_millings
+    ]
+    hydrated_slot_millings = [
+        _hydrate_slot_milling_spec(s, source_pgmx_path) for s in piece.slot_millings
+    ]
+    hydrated_polyline_millings = [
+        _hydrate_polyline_milling_spec(s, source_pgmx_path) for s in piece.polyline_millings
+    ]
+    hydrated_circle_millings = [
+        _hydrate_circle_milling_spec(s, source_pgmx_path) for s in piece.circle_millings
+    ]
+    hydrated_squaring_millings = [
+        _hydrate_squaring_milling_spec(s, source_pgmx_path) for s in piece.squaring_millings
+    ]
+    hydrated_pocket_millings = [
+        _hydrate_pocket_milling_spec(s, source_pgmx_path) for s in piece.pocket_millings
+    ]
+    hydrated_drillings = [
+        _hydrate_drilling_spec(s, source_pgmx_path) for s in piece.drillings
+    ]
+    hydrated_drilling_patterns = [
+        _hydrate_drilling_pattern_spec(s, source_pgmx_path) for s in piece.drilling_patterns
+    ]
+    hydrated_ordered = [
+        _hydrate_machining_spec(s, source_pgmx_path) for s in piece.ordered_machinings
+    ]
+    (
+        ordered_line, ordered_slot, ordered_polyline, ordered_circle,
+        ordered_squaring, ordered_pocket, ordered_drilling, ordered_pattern,
+    ) = _split_hydrated_machinings(hydrated_ordered)
+
+    _validate_tool_sinking_lengths(
+        state,
+        hydrated_line_millings + ordered_line,
+        hydrated_slot_millings + ordered_slot,
+        hydrated_polyline_millings + ordered_polyline,
+        hydrated_circle_millings + ordered_circle,
+        hydrated_squaring_millings + ordered_squaring,
+        hydrated_pocket_millings + ordered_pocket,
+        hydrated_drillings + ordered_drilling,
+        hydrated_drilling_patterns + ordered_pattern,
+    )
+
+    apply_group = {
+        "line":             lambda: _apply_line_millings(root, state, hydrated_line_millings),
+        "slot":             lambda: _apply_slot_millings(root, state, hydrated_slot_millings),
+        "polyline":         lambda: _apply_polyline_millings(root, state, hydrated_polyline_millings),
+        "circle":           lambda: _apply_circle_millings(root, state, hydrated_circle_millings),
+        "squaring":         lambda: _apply_squaring_millings(root, state, hydrated_squaring_millings),
+        "pocket":           lambda: _apply_pocket_millings(root, state, hydrated_pocket_millings),
+        "drilling":         lambda: _apply_drillings(root, state, hydrated_drillings),
+        "drilling_pattern": lambda: _apply_drilling_patterns(root, state, hydrated_drilling_patterns),
+    }
+
+    with _active_workpiece_ctx(root, workpiece_id):
+        for spec in hydrated_ordered:
+            _append_hydrated_machining(root, state, spec)
+        for group_name in machining_order:
+            apply_group[group_name]()
+
+    elements = root.find("./{*}Workplans/{*}MainWorkplan/{*}Elements")
+    if elements is None:
+        raise ValueError("La plantilla no contiene MainWorkplan/Elements.")
+    for op in piece.machine_operations:
+        _append_machine_operation(root, elements, workpiece_id, workpiece_object_type, op)
+
+    _apply_parametric_variables(root, piece.parametric_variables)
+
+
+# ============================================================================
 # Public execution API
 # ============================================================================
 
@@ -1624,6 +1800,7 @@ def build_synthesis_request(
     workplans: Optional[Sequence[WorkplanSpec]] = None,
     current_workplan_index: int = 0,
     parametric_variables: Optional[Sequence[ParametricVariableSpec]] = None,
+    pieces: Optional[Sequence[PieceSpec]] = None,
 ) -> PgmxSynthesisRequest:
     """Arma una solicitud reusable de sintesis para el flujo principal.
 
@@ -1684,6 +1861,82 @@ def build_synthesis_request(
         workplans=_normalize_workplan_specs(tuple(workplans or ()), target_piece),
         current_workplan_index=max(0, int(current_workplan_index)),
         parametric_variables=tuple(parametric_variables or ()),
+        pieces=tuple(pieces or ()),
+    )
+
+
+def _synthesize_multi_piece(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
+    """Ejecuta la rama multi-pieza de synthesize_request."""
+    if request.workplans:
+        raise ValueError(
+            "Los campos `workplans` y `pieces` son mutuamente excluyentes."
+        )
+    pieces = request.pieces
+    if not pieces:
+        raise ValueError("_synthesize_multi_piece requiere al menos una pieza.")
+
+    baseline_root, baseline_entries, _ = _load_pgmx_container(request.baseline_path)
+    execution_fields = request.piece.execution_fields
+    machining_order = _normalize_machining_order(request.machining_order)
+
+    # Piece 1: update the existing WorkPiece, variables, planes and Setup origin.
+    piece1 = pieces[0]
+    state1 = _piece_to_state(piece1, execution_fields)
+    _apply_piece_state(baseline_root, state1)
+
+    # Piece 1 workpiece reference (already in the baseline).
+    wp1 = baseline_root.find("./{*}Workpieces/{*}WorkPiece")
+    if wp1 is None:
+        raise ValueError("La plantilla no contiene WorkPiece.")
+    piece_refs: list[tuple[str, str]] = [
+        (_text(wp1, "./{*}Key/{*}ID"), _text(wp1, "./{*}Key/{*}ObjectType"))
+    ]
+
+    # Pieces 2..N: add WorkPiece, variables, expressions, planes, WorkpieceSetup.
+    for piece_index, piece in enumerate(pieces[1:], start=2):
+        wp_id, wp_ot = _add_piece_to_xml(
+            baseline_root,
+            piece_index,
+            piece.name,
+            piece.length,
+            piece.width,
+            piece.depth,
+            piece.origin_x,
+            piece.origin_y,
+            piece.origin_z,
+        )
+        piece_refs.append((wp_id, wp_ot))
+
+    # Apply machinings for each piece in order.
+    for piece, (wp_id, wp_ot) in zip(pieces, piece_refs):
+        _synthesize_piece_machinings(
+            baseline_root,
+            piece,
+            wp_id,
+            wp_ot,
+            request.source_pgmx_path,
+            machining_order,
+            execution_fields,
+        )
+
+    xml_bytes = _finalize_synthesized_pgmx_xml_bytes(
+        ET.tostring(
+            baseline_root,
+            encoding="utf-8",
+            xml_declaration=request.source_pgmx_path is None,
+        )
+    )
+    _write_pgmx_zip(
+        output_path=request.output_path,
+        xml_bytes=xml_bytes,
+        template_entries=baseline_entries,
+        xml_entry_name=f"{request.output_path.stem}.xml",
+    )
+    return PgmxSynthesisResult(
+        output_path=request.output_path,
+        piece=state1,
+        sha256=hashlib.sha256(request.output_path.read_bytes()).hexdigest(),
+        pieces=pieces,
     )
 
 
@@ -1692,6 +1945,9 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
 
     Esta es la funcion principal para el flujo programatico.
     """
+
+    if request.pieces:
+        return _synthesize_multi_piece(request)
 
     baseline_root, baseline_entries, _ = _load_pgmx_container(request.baseline_path)
     hydrated_line_millings = [

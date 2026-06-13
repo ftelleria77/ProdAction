@@ -598,10 +598,35 @@ Validacion:
 - `py -3 -m compileall pgmx`: OK.
 - `py -3 -m unittest discover tests`: 367 tests OK.
 
+## Ronda 14 - Validacion En Maestro De Doble Fase
+
+Estado: validado. Frente cerrado.
+
+Archivo validado:
+
+- `S:\Maestro\Projects\ProdAction\Prod-2026-01 - Vargas\Cocina\Mod.3 - BM-3C-PC-800\Fondo_DobleFase.pgmx`
+
+Maestro abrio el archivo sin errores. El usuario lo guardo sin modificaciones como
+`Fondo_DobleFase(Maestro).pgmx`. Comparacion XML entre sintetizado y re-guardado:
+
+- 9552 tags identicos.
+- Un unico token distinto: `<CurrentWorkplanIndex>0</CurrentWorkplanIndex>`
+  en el sintetizado vs. `<CurrentWorkplanIndex>1</CurrentWorkplanIndex>`
+  en el guardado por Maestro.
+- La diferencia se explica porque Maestro actualiza `CurrentWorkplanIndex`
+  al indice de la fase seleccionada al momento de guardar. No es un error
+  estructural; el archivo es semanticamente identico.
+
+Regla confirmada:
+
+- `CurrentWorkplanIndex` es un campo de estado de UI que Maestro actualiza
+  al guardar. La sintesis puede emitir cualquier valor valido; Maestro lo
+  sobreescribe al abrir y guardar.
+
 ## Pendientes
 
-1. Validar en Maestro `Fondo_DobleFase.pgmx` con dos fases, mecanizados por
-   fase, `Xn` y `Xmsg`.
+1. ~~Validar en Maestro `Fondo_DobleFase.pgmx` con dos fases, mecanizados por
+   fase, `Xn` y `Xmsg`.~~ Resuelto — Ronda 14.
 2. Si aparece necesidad real, estudiar `Xmsg/Variable` e `IsInputEnable=true`.
 3. Definir intercalacion libre entre mecanizados y operaciones de maquina
    dentro de una misma fase solo si aparece un caso real que necesite mezclar

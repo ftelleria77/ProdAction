@@ -12,6 +12,7 @@ from .xml import (
     GEOMETRY_NS,
     MILLING_NS,
     PARAMETRIC_NS,
+    PATTERNS_NS,
     PGMX_NS,
     STRATEGY_NS,
     UTILITY_NS,
@@ -21,8 +22,75 @@ from .xml import (
 __all__ = [
     "_finalize_pgmx_xml_bytes",
     "_finalize_synthesized_pgmx_xml_bytes",
+    "_build_itype_ns_map",
+    "_fix_itype_namespaces",
     "_write_pgmx_zip",
 ]
+
+
+def _build_itype_ns_map(xml_text: str) -> dict[tuple[str, str], str]:
+    """Scans raw XML text and returns {(element_local_name, type_name): namespace_uri}.
+
+    Collects all i:type='prefix:TypeName' + xmlns:prefix='NS' pairs that appear
+    together on the same opening tag, regardless of attribute order.
+    """
+    result: dict[tuple[str, str], str] = {}
+    # i:type appears before xmlns
+    for m in re.finditer(
+        r'<([\w:]+)[^>]*i:type="(\w+):(\w+)"[^>]*xmlns:\2="([^"]+)"[^>]*>',
+        xml_text,
+    ):
+        elem_local = m.group(1).split(":")[-1]
+        result[(elem_local, m.group(3))] = m.group(4)
+    # xmlns appears before i:type
+    for m in re.finditer(
+        r'<([\w:]+)[^>]*xmlns:(\w+)="([^"]+)"[^>]*i:type="\2:(\w+)"[^>]*>',
+        xml_text,
+    ):
+        elem_local = m.group(1).split(":")[-1]
+        result[(elem_local, m.group(4))] = m.group(3)
+    return result
+
+
+def _fix_itype_namespaces(
+    xml_text: str,
+    ns_map: dict[tuple[str, str], str],
+) -> str:
+    """Ensures every i:type='prefix:TypeName' opening tag has the correct xmlns:prefix.
+
+    Uses *ns_map* (built from the original source file) to look up the authoritative
+    namespace URI for each (element_local_name, type_name) pair.  Only tags where the
+    namespace declaration is absent or wrong are modified.
+    """
+    if not ns_map:
+        return xml_text
+
+    def fix_tag(match: re.Match) -> str:
+        full_tag = match.group(0)
+        elem_local = match.group("elem").split(":")[-1]
+        ns_prefix = match.group("ns_prefix")
+        dtype = match.group("dtype")
+        correct_ns = ns_map.get((elem_local, dtype))
+        if correct_ns is None:
+            return full_tag
+        wanted = f'xmlns:{ns_prefix}="{correct_ns}"'
+        if wanted in full_tag:
+            return full_tag
+        # Remove any wrong xmlns:prefix binding already on this tag
+        cleaned = re.sub(rf'\s+xmlns:{re.escape(ns_prefix)}="[^"]*"', "", full_tag)
+        # Inject correct binding right after the i:type attribute
+        return re.sub(
+            rf'(i:type="{re.escape(ns_prefix)}:{re.escape(dtype)}")',
+            rf"\1 {wanted}",
+            cleaned,
+            count=1,
+        )
+
+    return re.sub(
+        r'<(?P<elem>[\w:]+)(?P<before>[^>]*?) i:type="(?P<ns_prefix>\w+):(?P<dtype>\w+)"(?P<after>[^>]*)>',
+        fix_tag,
+        xml_text,
+    )
 
 
 def _write_pgmx_zip(
@@ -165,9 +233,9 @@ def _finalize_pgmx_xml_bytes(xml_bytes: bytes) -> bytes:
         xml_text,
     )
     xml_text = re.sub(
-        r'<(?P<prefix>[A-Za-z_][\w.-]*:)?BasicCurve i:type="c:GeomCompositeCurve">',
+        r'<(?P<prefix>[A-Za-z_][\w.-]*:)?BasicCurve i:type="(?:c:)?(?P<dtype>Geom\w+)">',
         lambda match: (
-            f'<{match.group("prefix") or ""}BasicCurve i:type="c:GeomCompositeCurve" '
+            f'<{match.group("prefix") or ""}BasicCurve i:type="c:{match.group("dtype")}" '
             f'xmlns:c="{GEOMETRY_NS}">'
         ),
         xml_text,
@@ -203,6 +271,7 @@ def _finalize_synthesized_pgmx_xml_bytes(xml_bytes: bytes) -> bytes:
             return {
                 "GeneralProfileFeature": MILLING_NS,
                 "RoundHole": DRILLING_NS,
+                "ReplicateFeature": PATTERNS_NS,
             }.get(dtype, MILLING_NS)
         if element_name == "Operation":
             return {

@@ -91,24 +91,41 @@ ParkSpec(
 )
 ```
 
+## Ronda 2 - Validacion De Limit=Maximum
+
+Estado: validado. Frente cerrado.
+
+Hallazgos:
+
+- La UI de Maestro no expone la opcion de posicion de aparcamiento (`Limit`).
+  Maestro siempre crea `Park` con `Limit=Minimum` desde la interfaz.
+- `Limit=Maximum` solo es alcanzable via scripting API (`toMinQuote=false`) o
+  sintetizando el XML directamente.
+- Se sintetizo `Aparcamiento_Park_Maximum.pgmx` con `ParkSpec(limit='Maximum')`.
+  Maestro lo abrio sin errores y lo re-guardo preservando `Limit=Maximum`.
+- La UI no distingue visualmente entre `Minimum` y `Maximum`.
+
+Archivos de evidencia:
+
+- `S:\Maestro\Projects\ProdAction\PGMX\aparcamiento\generated\Aparcamiento_Park_Maximum.pgmx`
+- `S:\Maestro\Projects\ProdAction\PGMX\aparcamiento\generated\Aparcamiento_Park_Maximum(Maestro).pgmx`
+
+Reglas cerradas:
+
+- `Limit` acepta `Minimum` y `Maximum`. Default: `Minimum`.
+- `ObjectType` del `Key` de `Park` es `ScmGroup.XCam.MachiningDataModel.Park`
+  de forma consistente en los tres archivos manuales.
+- `ParkSpec` promovido a produccion con `limit: str = "Minimum"` y aliases
+  en `_normalize_park_limit()`.
+
 ## Pendientes
 
 1. ~~Confirmar si `Limit` admite valores distintos de `Minimum`.~~
-   Resuelto por `CreatePark` en el scripting API (`XilogMaestroScripting.chm`):
-   ```csharp
-   Operation CreatePark(string name, string stopType, Nullable<bool> toMinQuote)
-   // toMinQuote = true  → Limit = "Minimum"  (lado izquierdo)
-   // toMinQuote = false → Limit = "Maximum"  (lado derecho)
-   // toMinQuote = null  → default (Minimum)
-   ```
-   `ParkSpec.limit` es un `bool` nullable que mapea a `Minimum`/`Maximum`.
-   Pendiente: crear variante con `Maximum` en Maestro para confirmar el XML.
-2. Confirmar el `ObjectType` exacto del `Key` de los tres archivos para asegurar
-   que es `ScmGroup.XCam.MachiningDataModel.Park` de forma consistente.
+   Resuelto — Ronda 2: `Maximum` valido y preservado por Maestro.
+2. ~~Confirmar el `ObjectType` exacto del `Key` de los tres archivos.~~
+   Resuelto: `ScmGroup.XCam.MachiningDataModel.Park` en los tres.
 3. ~~Actualizar el scanner para filtrar explicitamente `runtime_type == "Park"`.~~
-   Resuelto: `scan_samples.py` filtra las filas a `runtime_type == "Park"` antes
-   de escribir el CSV.
-4. Cuando el contrato quede cerrado, promover a:
-   - `pgmx.snapshot` (lectura);
-   - `pgmx.synthesis.common.program` (sintesis: `ParkSpec`, `build_park_spec`);
-   - `pgmx.synthesis.common.output` (namespace injection para `Park`).
+   Resuelto: `scan_samples.py` filtra las filas a `runtime_type == "Park"`.
+4. ~~Promover a snapshot, synthesis y output.~~
+   Resuelto: `ParkSpec`, `build_park_spec` y namespace injection para `Park`
+   ya estan en produccion.
