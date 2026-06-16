@@ -1,0 +1,152 @@
+[STRUCT]
+KEY_PROBE {
+    if(Prb2 < 10 ) {
+        PRBDAT0;
+        PRBDAT1;
+        *,PRBDAT2;
+        PRBDAT3;
+        PRBDAT4;
+        PRBDAT5;
+        PRBDAT6;
+        PRBDAT7;
+        PRBDAT8;
+        PRBDAT9;
+        PRBDAT10;
+        PRBIN;
+        PRBDAT11;
+        PRBDAT12;
+        PRBDAT13;
+        PRBDAT14;
+        PRBAV;
+        PRBDAT15;
+    }
+    if(Prb2 == 10 ) {
+        CZOTRJ0;
+        CZOTRJ1;
+        *,PRBDAT2;
+        CZOTRJ3;
+        CZOTRJ4;
+        SPACE;
+        SPACE;
+        SPACE;
+        SPACE;
+        SPACE;
+        SPACE;
+        CZOTRJ5;
+        CZOTRJ6;
+        CZOTRJ7;
+        CZOTRJ8;
+        CZOTRJ9;
+        CZOTRJ10;
+    }
+}
+
+[CZOTRJ0]
+ADR = Prb0
+FRM = DEC, 0
+[CZOTRJ1]
+ADR = Prb1
+FRM = DEC, 0
+[CZOTRJ3]
+ADR = Prb3
+FRM = DEC, 0
+[CZOTRJ4]
+ADR = Prb4
+FRM = DEC, 0
+[CZOTRJ5]
+ADR = Prb5
+FRM = DEC, 0
+RNG = {0:2047}
+[CZOTRJ6]
+ADR = Prb6
+FRM = DEC, 0
+RNG = {0:4095}
+[CZOTRJ7]
+ADR = Prb7
+FRM = DEC, 0
+RNG = {0:4095}
+[CZOTRJ8]
+ADR = Prb8
+FRM = QTA, 3
+RNG = {-10000:10000}
+[CZOTRJ9]
+ADR = Prb9
+FRM = QTA, 3
+RNG = {-10000:10000}
+[CZOTRJ10]
+ADR = Prb10
+FRM = DEC, 0
+RNG = {0,10000:50000}
+
+[PRBDAT0]
+ADR = Prb0
+FRM = DEC, 1
+HLP = PRBDAT0
+[PRBDAT1]
+ADR = Prb1
+FRM = QTA, 3
+HLP = PRBDAT1
+[PRBDAT2]
+ADR = Prb2
+FRM = DEC,0
+RNG = {0:5,10}
+HLP = PRBDAT2
+[PRBDAT3]
+ADR = Prb3
+FRM = DEC, 0
+HLP = PRBDAT3
+[PRBDAT4]
+ADR = Prb4
+FRM = DEC, 0
+HLP = PRBDAT4
+[PRBDAT5]
+ADR = Prb5
+FRM = DEC, 0
+HLP = PRBDAT5
+[PRBDAT6]
+ADR = Prb6
+FRM = DEC, 3
+HLP = PRBDAT6
+[PRBDAT7]
+ADR = Prb7
+FRM = DEC, 3
+HLP = PRBDAT7
+[PRBDAT8]
+ADR = Prb8
+FRM = DEC
+HLP = PRBDAT8
+[PRBDAT9]
+ADR = Prb9
+FRM = DEC, 0
+HLP = PRBDAT9
+[PRBDAT10]
+ADR = Prb10
+FRM = DEC, 0
+HLP = PRBDAT10
+[PRBDAT11]
+ADR = Prb11
+FRM = DEC, 0
+HLP = PRBDAT11
+[PRBDAT12]
+ADR = Prb12
+FRM = QTA, 3
+HLP = PRBDAT12
+[PRBDAT13]
+ADR = Prb13
+FRM = DEC, 0
+HLP = PRBDAT13
+[PRBDAT14]
+ADR = Prb14
+FRM = DEC, 0
+HLP = PRBDAT14
+[PRBDAT15]
+ADR = Prb15
+FRM = DEC, 0
+HLP = PRBDAT15
+[PRBIN]
+ADR = PrbIn0
+FRM = STR, 16
+[PRBAV]
+ADR = PrbAv0
+FRM = STR, 16
+

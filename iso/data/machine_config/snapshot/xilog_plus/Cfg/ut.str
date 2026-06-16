@@ -1,0 +1,181 @@
+[STRUCT]
+KEY_UT {
+        *,UT_TYPE;
+        if (du0==1) {
+                     FC_LUNGZ;
+                     FC_RAD;
+                     FC_PRES;
+                     FC_VITA;
+                     FC_USLUNGZ;
+                     FC_USRAD;
+                     FC_THDLUNGZ;
+        }
+        if (du0==2) {
+                     FA_LUNGZ;
+                     FA_LUNGX;
+                     FA_RAD;
+                     FA_PRES;
+                     FA_VITA;
+                     FA_USLUNGZ;
+                     FA_USLUNGX;
+                     FA_USRAD;
+                     FA_THDLUNGZ;
+		     FA_THDLUNGX;
+	  }
+        if (du0==3) {
+                     TN_LUNGZ;
+                     TN_LUNGX;
+                     TN_RAD;
+                     TN_PRES;
+                     TN_VITA;
+                     TN_USLUNGZ;
+                     TN_USLUNGX;
+                     TN_USRAD;
+                     TN_THDLUNGZ;
+		     TN_THDLUNGX;
+		     TN_THDLUNGY;
+        }
+        if (du0==4) {
+                     PT_LUNGZ;
+                     PT_PRES;
+                     PT_VITA;
+                     PT_USLUNGZ;
+                     PT_THDLUNGZ;
+	  }
+}
+
+[DEFAULT]
+MSK = 0, 32
+FRM = DEC, 0
+LEN = 10
+[UT_TYPE]
+ADR = du0
+HLP = UT_TYPE
+
+[FC_LUNGZ]
+ADR = du1
+FRM = QTA, 3
+HLP = FC_LUNGZ
+[FC_RAD]
+ADR = du2
+FRM = QTA, 3
+HLP = FC_RAD
+[FC_PRES]
+ADR = du3
+HLP = FC_PRES
+[FC_VITA]
+ADR = du4
+HLP = FC_VITA
+[FC_USLUNGZ]
+ADR = du5
+FRM = QTA, 3
+HLP = FC_USLUNGZ
+[FC_USRAD]
+ADR = du6
+FRM = QTA, 3
+HLP = FC_USRAD
+[FC_THDLUNGZ]
+ADR = du7
+FRM = QTA, 3
+HLP = FC_THDLUNGZ
+
+[FA_LUNGZ]
+ADR = du1
+FRM = QTA, 3
+HLP = FA_LUNGZ
+[FA_LUNGX]
+ADR = du2
+FRM = QTA, 3
+HLP = FA_LUNGX
+[FA_RAD]
+ADR = du3
+FRM = QTA, 3
+HLP = FA_RAD
+[FA_PRES]
+ADR = du4
+HLP = FA_PRES
+[FA_VITA]
+ADR = du5
+HLP = FA_VITA
+[FA_USLUNGZ]
+ADR = du6
+FRM = QTA, 3
+HLP = FA_USLUNGZ
+[FA_USLUNGX]
+ADR = du7
+FRM = QTA, 3
+HLP = FA_USLUNGX
+[FA_USRAD]
+ADR = du8
+FRM = QTA, 3
+HLP = FA_USRAD
+[FA_THDLUNGZ]
+ADR = du9
+FRM = QTA, 3
+HLP = FA_THDLUNGZ
+[FA_THDLUNGX]
+ADR = du10
+FRM = QTA, 3
+HLP = FA_THDLUNGX
+
+[TN_LUNGZ]
+ADR = du1
+FRM = QTA, 3
+HLP = TN_LUNGZ
+[TN_LUNGX]
+ADR = du2
+FRM = QTA, 3
+HLP = TN_LUNGX
+[TN_RAD]
+ADR = du3
+FRM = QTA, 3
+HLP = TN_RAD
+[TN_PRES]
+ADR = du4
+HLP = TN_PRES
+[TN_VITA]
+ADR = du5
+HLP = TN_VITA
+[TN_USLUNGZ]
+ADR = du6
+FRM = QTA, 3
+HLP = TN_USLUNGZ
+[TN_USLUNGX]
+ADR = du7
+FRM = QTA, 3
+HLP = TN_USLUNGX
+[TN_USRAD]
+ADR = du8
+FRM = QTA, 3
+HLP = TN_USRAD
+[TN_THDLUNGZ]
+ADR = du9
+FRM = QTA, 3
+HLP = TN_THDLUNGZ
+[TN_THDLUNGX]
+ADR = du10
+FRM = QTA, 3
+HLP = TN_THDLUNGX
+[TN_THDLUNGY]
+ADR = du11
+FRM = QTA, 3
+HLP = TN_THDLUNGY
+
+[PT_LUNGZ]
+ADR = du1
+FRM = QTA, 3
+HLP = PT_LUNGZ
+[PT_PRES]
+ADR = du2
+HLP = PT_PRES
+[PT_VITA]
+ADR = du3
+HLP = PT_VITA
+[PT_USLUNGZ]
+ADR = du4
+FRM = QTA, 3
+HLP = PT_USLUNGZ
+[PT_THDLUNGZ]
+ADR = du5
+FRM = QTA, 3
+HLP = PT_THDLUNGZ
