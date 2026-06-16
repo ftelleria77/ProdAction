@@ -277,7 +277,10 @@ def _profile_milling_strategy_trace_lines(
 
     for point in trajectory.points[1:]:
         center = None
-        if _xy_changed(current_x, current_y, point):
+        if (
+            abs(float(point.x) - current_x) >= 0.0005
+            and abs(float(point.y) - current_y) >= 0.0005
+        ):
             center = _profile_corner_center(current_x, current_y, float(point.x), float(point.y), contour_points)
         generated.append(
             _profile_toolpath_motion_line(
@@ -409,7 +412,7 @@ def _profile_corner_center(
     end_x: float,
     end_y: float,
     contour_points: object,
-) -> tuple[float, float]:
+) -> tuple[float, float] | None:
     min_x = min(float(point[0]) for point in contour_points)
     max_x = max(float(point[0]) for point in contour_points)
     min_y = min(float(point[1]) for point in contour_points)
@@ -418,7 +421,7 @@ def _profile_corner_center(
     for x, y in candidates:
         if min_x - 0.0005 <= x <= max_x + 0.0005 and min_y - 0.0005 <= y <= max_y + 0.0005:
             return x, y
-    return candidates[0]
+    return None
 
 
 def _change_after(differential: StageDifferential, layer: str, key: str) -> object:

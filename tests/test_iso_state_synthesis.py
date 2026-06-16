@@ -99,6 +99,11 @@ from iso_state_synthesis.transition_lines import (
     _top_to_slot_milling_transition_lines,
 )
 from iso_state_synthesis.work_groups import _plan_work_groups, _work_stage_groups
+from iso_state_synthesis.pgmx_source import (
+    _SIDE_DRILL_POLICIES,
+    _side_drill_uses_geometry_fixed_for_synthesis,
+    _side_fixed_for_resolved_step,
+)
 from iso_state_synthesis.model import (
     EvidenceSource,
     IsoStateEvaluation,
@@ -2818,6 +2823,67 @@ class IsoStateSynthesisEmitterTests(unittest.TestCase):
         self.assertEqual(_side_normal(0.6, 0.8, "Right"), (0.8, -0.6))
         with self.assertRaisesRegex(Exception, "longitud cero"):
             _unit_vector((1.0, 1.0), (1.0, 1.0))
+
+
+class IsoStateSynthesisPgmxSourceSideDrillTests(unittest.TestCase):
+    def _make_side_step(
+        self,
+        feature_name: str,
+        plane_name: str,
+        raw: float,
+        geom_x: float,
+        step_name: str = "step",
+        plane_x: float = 600.0,
+    ) -> object:
+        if plane_name in ("Left", "Right"):
+            pt: tuple[float, float, float] = (0.0, raw, 12.5)
+        else:
+            pt = (raw, 0.0, 12.5)
+        curve = SimpleNamespace(sampled_points=[pt])
+        toolpath = SimpleNamespace(path_type="Approach", curve=curve)
+        return SimpleNamespace(
+            feature=SimpleNamespace(name=feature_name, plane_name=plane_name, replication_pattern=None),
+            operation=SimpleNamespace(toolpaths=[toolpath]),
+            geometry=SimpleNamespace(point=(geom_x, 0.0, 12.5)),
+            plane=SimpleNamespace(x_dimension=plane_x),
+            step=SimpleNamespace(name=step_name),
+        )
+
+    def test_synthesis_name_check_identifies_generated_vs_maestro_features(self) -> None:
+        def step_with_feature(name: str) -> object:
+            return SimpleNamespace(feature=SimpleNamespace(name=name))
+
+        for name in ("LEFT_D8_LOW", "BACK_D8_HIGH", "RIGHT_D8_MID", "FRONT_D8_LOW", "LEFT_D16_HIGH"):
+            self.assertTrue(_side_drill_uses_geometry_fixed_for_synthesis(step_with_feature(name)), name)
+
+        for name in ("XBO_5", "Taladrado(10)", "Tarugo 3", "Perno-MF 2", "", "Left_D8_Low"):
+            self.assertFalse(_side_drill_uses_geometry_fixed_for_synthesis(step_with_feature(name)), name)
+
+        self.assertFalse(_side_drill_uses_geometry_fixed_for_synthesis(SimpleNamespace(feature=None)))
+
+    def test_side_fixed_for_resolved_step_uses_geometry_for_synthesis_left(self) -> None:
+        # G53 fixture Left: raw=240, geom=60, plane_x=300; sign*geom = -60
+        step = self._make_side_step("LEFT_D8_LOW", "Left", 240.0, 60.0, plane_x=300.0)
+        result = _side_fixed_for_resolved_step(step, _SIDE_DRILL_POLICIES["Left"])
+        self.assertAlmostEqual(result, -60.0)
+
+    def test_side_fixed_for_resolved_step_uses_geometry_for_synthesis_back(self) -> None:
+        # G53 fixture Back: raw=320, geom=80, plane_x=400; sign*geom = -80
+        step = self._make_side_step("BACK_D8_LOW", "Back", 320.0, 80.0, plane_x=400.0)
+        result = _side_fixed_for_resolved_step(step, _SIDE_DRILL_POLICIES["Back"])
+        self.assertAlmostEqual(result, -80.0)
+
+    def test_side_fixed_for_resolved_step_uses_raw_for_maestro_left(self) -> None:
+        # Cazaux Maestro Left: raw=434, geom=96, plane_x=600; sign*raw = -434
+        step = self._make_side_step("Taladrado(5)", "Left", 434.0, 96.0, step_name="Taladrado(5)", plane_x=600.0)
+        result = _side_fixed_for_resolved_step(step, _SIDE_DRILL_POLICIES["Left"])
+        self.assertAlmostEqual(result, -434.0)
+
+    def test_side_fixed_for_resolved_step_uses_raw_for_maestro_back(self) -> None:
+        # Cazaux Maestro Back: raw=100, geom=120, plane_x=220; sign*raw = -100
+        step = self._make_side_step("XBO_9", "Back", 100.0, 120.0, step_name="XBO_9", plane_x=300.0)
+        result = _side_fixed_for_resolved_step(step, _SIDE_DRILL_POLICIES["Back"])
+        self.assertAlmostEqual(result, -100.0)
 
 
 if __name__ == "__main__":
