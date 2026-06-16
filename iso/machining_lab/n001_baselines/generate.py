@@ -10,8 +10,12 @@ Grupos:
   D — Router básico (line milling)
 
 Uso:
-    python -m iso.machining_lab.n001_baselines.generate \
-        --output-dir "S:\\Maestro\\Projects\\ProdAction\\ISO\\N_new_engine_2026_06_15"
+    python -m iso.machining_lab.n001_baselines.generate
+    python -m iso.machining_lab.n001_baselines.generate --output-dir <ruta>
+
+Salida por defecto:
+    PGMX: S:\\Maestro\\Projects\\ProdAction\\N001_baselines\\
+    ISO:  P:\\USBMIX\\ProdAction\\N001_baselines\\  (postprocesado por Maestro)
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import (  # noqa: E402
     build_drilling_spec,
     build_line_milling_spec,
@@ -33,7 +38,7 @@ from pgmx.synthesis import (  # noqa: E402
 from pgmx.synthesis.drilling.single import DrillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
 
-DEFAULT_OUTPUT_DIR = Path(r"S:\Maestro\Projects\ProdAction\ISO\N_new_engine_2026_06_15")
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N001_baselines"
 
 
 # ---------------------------------------------------------------------------
