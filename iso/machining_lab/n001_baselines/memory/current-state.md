@@ -2,27 +2,43 @@
 
 Última actualización: 2026-06-16
 
-## Fixtures generados
+## Fixtures
 
-20 archivos `.pgmx` en `S:\Maestro\Projects\ProdAction\ISO\N_new_engine_2026_06_15\`.
-Generados con `generate.py`. SHA256 registrado en el manifiesto de salida.
+24 archivos `.pgmx` en `S:\Maestro\Projects\ProdAction\N001_baselines\`.  
+24 archivos `.iso` postprocesados en `P:\USBMIX\ProdAction\N001_baselines\`.
 
-## Pendiente
+## Análisis
 
-- Conversión a ISO con Maestro (requiere acceso físico a la máquina CNC).
-- Análisis de los ISO resultantes con `analyze.py`.
+**Completado.** Ver `iso/docs/experiments/n001/analysis.md`.
 
-## Preguntas abiertas que responde este lote
+Todas las preguntas abiertas (Q-A01..Q-D02) tienen respuesta.
 
-| ID | Pregunta |
-| --- | --- |
-| Q-A01 | ¿Qué valores toman ETK[6] y ETK[0] para cada diámetro de taladro vertical (D5, D8, D15)? |
-| Q-A02 | ¿Cuál es la fórmula exacta de Z de corte en taladro vertical? |
-| Q-A03 | ¿Cómo cambia el bloque de herramienta entre dos agujeros de la misma herramienta vs. herramienta distinta? |
-| Q-A04 | ¿Qué velocidad de spindle (S...M3) usa cada diámetro de taladro vertical? |
-| Q-B01 | ¿Qué valores toman ETK[6] y ETK[0] para cada cara lateral (Left, Right, Front, Back)? |
-| Q-B02 | ¿Cuál es la fórmula de la cota fija lateral en cada cara? |
-| Q-B03 | ¿Cómo se representa el cambio de cara en el ISO? |
-| Q-C01 | ¿Cuál es la secuencia exacta de transición top→side, side→top, top→router, router→top? |
-| Q-D01 | ¿Cuál es el bloque completo de preparación de router E004 para una pasada lineal? |
-| Q-D02 | ¿Cómo se representa una segunda pasada con la misma herramienta? |
+## Hallazgos principales
+
+### Reordenamiento de Maestro
+Maestro ignora el orden del PGMX. Ejecuta siempre: **Router → Top drill → Side drill**.
+Dentro de la misma familia, misma herramienta = mismo bloque (sin re-setup).
+
+### Top drill
+- ETK[6]: D5=5, D8=1, D15=2
+- ETK[0]: D5=16, D8=1, D15=2
+- Z_cut = 95 − target_depth | Z_security = 115
+- Spindle: D5/D8 = 6000 rpm, D15 = 4000 rpm
+
+### Side drill
+- ETK[6]: Left=61, Right=60, Front=58, Back=59
+- ETK[0]: Left/Right = 0x80000000, Front/Back = 0x40000000
+- ETK[8]: Left=3, Right=2, Front=5, Back=4
+- TLC_LATERAL = 37 (constante de máquina)
+- Security margin = 20 mm
+- Z_side = center_y (height from piece bottom)
+
+### Router E004
+- ATC: T4 / M06 / ETK[6]=1 / ETK[9]=4 / ETK[18]=1 / S18000M3
+- Z_approach = 127.200, Z_cut = −target_depth, Z_retract = security_plane
+- SVL = Z_approach − security_plane, SVR = tool_width / 2
+- Segunda pasada: no re-setup, G17 + doble G0 a nueva posición
+
+## Próximo paso
+
+Implementar el convertidor productivo en `iso/synthesis/` usando las reglas del análisis.
