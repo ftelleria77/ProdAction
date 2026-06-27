@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pgmx.synthesis.drilling.single import DrillingSpec
 
-from ._machine import ROUTER_SPINDLE, TOP_TOOL
+from ._machine import ROUTER_SPINDLE, effective_top_feed_spindle, resolve_top_tool
 from ._preamble import render_epilogue, render_preamble
 from ._reader import ProgramOps, read_pgmx
 from ._router import render_router
@@ -50,7 +50,11 @@ def convert(pgmx_path: Path) -> str:
 
         if has_top:
             prev_family = "top"
-            top_spindle = TOP_TOOL[ops.top_drills[-1].diameter].spindle
+            last_top = ops.top_drills[-1]
+            last_tool = resolve_top_tool(
+                last_top.diameter, last_top.drill_family, last_top.tool_name)
+            _, top_spindle = effective_top_feed_spindle(
+                last_tool, last_top.feedrate, last_top.spindle)
         elif has_router:
             prev_family = "router"
             top_spindle = ROUTER_SPINDLE

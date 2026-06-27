@@ -8,10 +8,11 @@ from pgmx.synthesis.drilling.single import DrillingSpec
 from ._machine import (
     OR_OFX, OR_OFY,
     SECURITY_SIDE, SIDE_FACE, SHF_Y_MACHINE,
-    TLC_LATERAL,
+    TLC_LATERAL_CUT,
+    effective_side_feed,
     side_transition_g53_z,
 )
-from ._reader import PieceCtx
+from ._reader import PieceCtx, side_effective_depth
 
 
 @dataclass
@@ -46,8 +47,9 @@ def render_side_drill(
     for drill in drills:
         face = drill.plane_name
         fd = SIDE_FACE[face]
-        depth = drill.depth_spec.target_depth or 0.0
+        depth = side_effective_depth(drill, ctx)  # pasante → dimensión cruzada del panel
         approach, perp, z_height, cut = _hole_coords(drill, ctx, depth)
+        feed = effective_side_feed(drill.feedrate)  # spindle lateral fijo; peck se ignora (N011)
 
         face_changed = (face != state.current_face)
 
@@ -61,17 +63,17 @@ def render_side_drill(
                 # G4F0.500 for side-only programs with 2+ holes
                 if total_side_holes >= 2:
                     lines.append("G4F0.500")
-                lines += _cut_first_hole_side_only(face, approach, perp, z_height, cut, ctx)
+                lines += _cut_first_hole_side_only(face, approach, perp, z_height, cut, feed, ctx)
             elif state.current_face is None:
                 # First side face, but another family preceded it
                 lines += _face_after_other_family(face, ctx, fd, prev_family, drill.security_plane)
                 # Top→Side and Router→Side transitions do NOT get G4F0.500
-                lines += _cut_first_hole_in_body(face, approach, perp, z_height, cut, ctx)
+                lines += _cut_first_hole_in_body(face, approach, perp, z_height, cut, feed, ctx)
             else:
                 # Face-to-face transition within side drill
                 lines += _face_change(face, ctx, fd, state, drill.security_plane)
                 # Face changes DO NOT get G4F0.500 (empirically: B005 Right, B008)
-                lines += _cut_first_hole_in_body(face, approach, perp, z_height, cut, ctx)
+                lines += _cut_first_hole_in_body(face, approach, perp, z_height, cut, feed, ctx)
 
             state.current_face = face
             state.etk0 = fd.etk0
@@ -79,7 +81,7 @@ def render_side_drill(
         else:
             # Same face — repositioning with passthrough move
             lines += _same_face_cut_block(
-                face, approach, perp, z_height, cut,
+                face, approach, perp, z_height, cut, feed,
                 state.prev_approach, state.prev_perp,
                 ctx,
             )
@@ -98,18 +100,25 @@ def render_side_drill(
 def _hole_coords(
     drill: DrillingSpec, ctx: PieceCtx, depth: float,
 ) -> tuple[float, float, float, float]:
-    """(approach, perp, z_height, cut) — all in MLV2 frame."""
+    """(approach, perp, z_height, cut) — all in MLV2 frame.
+
+    El plano retraído (approach) es FIJO = borde ± (TLC_CUT + SEC); el corte avanza con la
+    profundidad: cut = borde ∓ TLC_CUT ± depth. (N011: el código viejo fijaba el cut y movía
+    el approach — coincidía solo a depth=28, la carrera del husillo lateral.)
+    """
     face = drill.plane_name
     cx, cy = drill.center_x, drill.center_y
 
     if face == "Left":
-        return -(TLC_LATERAL + depth + SECURITY_SIDE), -cx, cy, -TLC_LATERAL
+        return -(TLC_LATERAL_CUT + SECURITY_SIDE), -cx, cy, -TLC_LATERAL_CUT + depth
     if face == "Right":
-        return ctx.length + TLC_LATERAL + depth + SECURITY_SIDE, cx, cy, ctx.length + TLC_LATERAL
+        edge = ctx.length + TLC_LATERAL_CUT
+        return edge + SECURITY_SIDE, cx, cy, edge - depth
     if face == "Front":
-        return -(TLC_LATERAL + depth + SECURITY_SIDE), cx, cy, -TLC_LATERAL
+        return -(TLC_LATERAL_CUT + SECURITY_SIDE), cx, cy, -TLC_LATERAL_CUT + depth
     # Back
-    return ctx.width + TLC_LATERAL + depth + SECURITY_SIDE, -cx, cy, ctx.width + TLC_LATERAL
+    edge = ctx.width + TLC_LATERAL_CUT
+    return edge + SECURITY_SIDE, -cx, cy, edge - depth
 
 
 # ---------------------------------------------------------------------------
@@ -260,7 +269,8 @@ def _face_change(
 # ---------------------------------------------------------------------------
 
 def _cut_first_hole_side_only(
-    face: str, approach: float, perp: float, z_height: float, cut: float, ctx: PieceCtx,
+    face: str, approach: float, perp: float, z_height: float, cut: float, feed: float,
+    ctx: PieceCtx,
 ) -> list[str]:
     """First hole of a face in a side-only program.  Includes MLV=2 before G1 G9."""
     if face in ("Left", "Right"):
@@ -269,7 +279,7 @@ def _cut_first_hole_side_only(
             f"G0 Z{z_height:.3f}",
             "?%ETK[7]=3",
             "MLV=2",
-            f"G1 G9 X{cut:.3f} F2000.000",
+            f"G1 G9 X{cut:.3f} F{feed:.3f}",
             f"G0 X{approach:.3f} Z{z_height:.3f}",
             "MLV=1",
             f"SHF[Z]={ctx.DZ:.3f}+%ETK[114]/1000",
@@ -281,7 +291,7 @@ def _cut_first_hole_side_only(
         f"G0 Z{z_height:.3f}",
         "?%ETK[7]=3",
         "MLV=2",
-        f"G1 G9 Y{cut:.3f} F2000.000",
+        f"G1 G9 Y{cut:.3f} F{feed:.3f}",
         f"G0 Y{approach:.3f} Z{z_height:.3f}",
         "MLV=1",
         f"SHF[Z]={ctx.DZ:.3f}+%ETK[114]/1000",
@@ -290,7 +300,8 @@ def _cut_first_hole_side_only(
 
 
 def _cut_first_hole_in_body(
-    face: str, approach: float, perp: float, z_height: float, cut: float, ctx: PieceCtx,
+    face: str, approach: float, perp: float, z_height: float, cut: float, feed: float,
+    ctx: PieceCtx,
 ) -> list[str]:
     """First hole after an in-body G40 setup (Top→Side, Router→Side, or face change).
     No MLV=2 before G1 G9.
@@ -300,7 +311,7 @@ def _cut_first_hole_in_body(
             f"G0 X{approach:.3f} Y{perp:.3f}",
             f"G0 Z{z_height:.3f}",
             "?%ETK[7]=3",
-            f"G1 G9 X{cut:.3f} F2000.000",
+            f"G1 G9 X{cut:.3f} F{feed:.3f}",
             f"G0 X{approach:.3f} Z{z_height:.3f}",
             "MLV=1",
             f"SHF[Z]={ctx.DZ:.3f}+%ETK[114]/1000",
@@ -311,7 +322,7 @@ def _cut_first_hole_in_body(
         f"G0 X{perp:.3f} Y{approach:.3f}",
         f"G0 Z{z_height:.3f}",
         "?%ETK[7]=3",
-        f"G1 G9 Y{cut:.3f} F2000.000",
+        f"G1 G9 Y{cut:.3f} F{feed:.3f}",
         f"G0 Y{approach:.3f} Z{z_height:.3f}",
         "MLV=1",
         f"SHF[Z]={ctx.DZ:.3f}+%ETK[114]/1000",
@@ -321,7 +332,7 @@ def _cut_first_hole_in_body(
 
 def _same_face_cut_block(
     face: str,
-    approach: float, perp: float, z_height: float, cut: float,
+    approach: float, perp: float, z_height: float, cut: float, feed: float,
     prev_approach: float, prev_perp: float,
     ctx: PieceCtx,
 ) -> list[str]:
@@ -337,7 +348,7 @@ def _same_face_cut_block(
             f"G0 X{approach:.3f} Y{prev_perp:.3f} Z{z_height:.3f}",
             f"G0 X{approach:.3f} Y{perp:.3f} Z{z_height:.3f}",
             "?%ETK[7]=3",
-            f"G1 G9 X{cut:.3f} F2000.000",
+            f"G1 G9 X{cut:.3f} F{feed:.3f}",
             f"G0 X{approach:.3f} Z{z_height:.3f}",
         ]
     else:  # Front or Back
@@ -345,7 +356,7 @@ def _same_face_cut_block(
             f"G0 X{prev_perp:.3f} Y{approach:.3f} Z{z_height:.3f}",
             f"G0 X{perp:.3f} Y{approach:.3f} Z{z_height:.3f}",
             "?%ETK[7]=3",
-            f"G1 G9 Y{cut:.3f} F2000.000",
+            f"G1 G9 Y{cut:.3f} F{feed:.3f}",
             f"G0 Y{approach:.3f} Z{z_height:.3f}",
         ]
     lines += [

@@ -2,11 +2,59 @@
 
 from __future__ import annotations
 
+import dataclasses
+import math
 from dataclasses import dataclass
 from pgmx.synthesis.drilling.single import DrillingSpec
 
-from ._machine import OR_OFX, OR_OFY, SHF_Y_MACHINE, TOP_TOOL
+from ._machine import (
+    OR_OFX, OR_OFY, SHF_Y_MACHINE, effective_top_feed_spindle, resolve_top_tool,
+)
 from ._reader import PieceCtx
+
+
+def _peck_depths(z_top_surface: float, z_cut: float, step_number: int,
+                 step_depth: float) -> list[float]:
+    """Profundidades de corte z₁…zₙ (la última == z_cut).
+
+    Sin escalonado (step_number==0 y step_depth==0) → una sola pasada [z_cut].
+    Con escalonado → n pasos iguales: n = step_number, o n = ceil(total/step_depth)
+    (step_depth es un máximo). Validado N006.
+    """
+    total = z_top_surface - z_cut
+    if step_number > 0:
+        n = step_number
+    elif step_depth > 0.0:
+        n = max(1, math.ceil(total / step_depth - 1e-9))
+    else:
+        return [z_cut]
+    step = total / n
+    depths = [z_top_surface - step * i for i in range(1, n)]
+    depths.append(z_cut)   # exacto, sin arrastre de float
+    return depths
+
+
+def _cut_motion(cx: float, cy: float, security: float, feed: float,
+                depths: list[float]) -> list[str]:
+    """Movimiento de corte de un agujero (pasada simple o peck). Validado N006.
+
+    Asume el husillo ya posicionado en (cx, cy) sobre la pieza.
+    """
+    if len(depths) == 1:
+        return [f"G1 G9 Z{depths[0]:.3f} F{feed:.3f}", f"G0 Z{security:.3f}"]
+    n = len(depths)
+    lines = [
+        f"G1 G9 Z{depths[0]:.3f} F{feed:.3f}",
+        f"G0 X{cx:.3f} Y{cy:.3f} Z{security:.3f}",   # retracción total tras pass 1
+    ]
+    for i in range(1, n):
+        prev = depths[i - 1]
+        lines.append(f"G0 Z{prev + 1.0:.3f}")                 # aproxima 1 mm sobre la previa
+        lines.append(f"G1 G9 Z{depths[i]:.3f} F{feed:.3f}")
+        if i < n - 1:
+            lines.append(f"G0 Z{prev:.3f}")                   # retrae a la profundidad previa
+    lines.append(f"G0 X{cx:.3f} Y{cy:.3f} Z{security:.3f}")    # retracción total final
+    return lines
 
 
 @dataclass
@@ -35,22 +83,28 @@ def render_top_drill(
     lines: list[str] = []
 
     for i, drill in enumerate(drills):
-        tool = TOP_TOOL[drill.diameter]
+        base_tool = resolve_top_tool(drill.diameter, drill.drill_family, drill.tool_name)
+        eff_feed, eff_spindle = effective_top_feed_spindle(
+            base_tool, drill.feedrate, drill.spindle)
+        tool = dataclasses.replace(base_tool, feed=eff_feed, spindle=eff_spindle)
         depth = drill.depth_spec.target_depth or 0.0
         z_top_surface = tool.tlc + ctx.depth
-        z_cut = z_top_surface - depth
+        # Pasante: el taladro vertical para en la cara inferior (mesa, z=tlc); no baja
+        # más (chocaría el bancal), por eso Maestro ignora extra_depth. (N005)
+        z_cut = tool.tlc if drill.depth_spec.is_through else z_top_surface - depth
         z_top_security = z_top_surface + drill.security_plane
+        depths = _peck_depths(z_top_surface, z_cut, drill.step_number, drill.step_depth)
 
         same_tool = (state.etk6 == tool.etk6)
 
         if i == 0 and after_router:
-            lines += _first_hole_after_router(drill, ctx, tool, state, z_cut, z_top_security)
+            lines += _first_hole_after_router(drill, ctx, tool, state, depths, z_top_security)
         elif i == 0:
-            lines += _first_hole_no_prior(drill, ctx, tool, state, z_cut, z_top_security)
+            lines += _first_hole_no_prior(drill, ctx, tool, state, depths, z_top_security)
         elif same_tool:
-            lines += _same_tool_hole(drill, ctx, tool, state, z_cut, z_top_security)
+            lines += _same_tool_hole(drill, ctx, tool, state, depths, z_top_security)
         else:
-            lines += _tool_change_hole(drill, ctx, tool, state, z_cut, z_top_security)
+            lines += _tool_change_hole(drill, ctx, tool, state, depths, z_top_security)
 
         state.etk6 = tool.etk6
         state.spindle = tool.spindle
@@ -65,7 +119,7 @@ def render_top_drill(
 # ---------------------------------------------------------------------------
 
 def _first_hole_no_prior(
-    drill: DrillingSpec, ctx: PieceCtx, tool, state: _TopDrillState, z_cut: float,
+    drill: DrillingSpec, ctx: PieceCtx, tool, state: _TopDrillState, depths: list[float],
     z_top_security: float,
 ) -> list[str]:
     shf_y = SHF_Y_MACHINE + ctx.origin_y
@@ -87,7 +141,7 @@ def _first_hole_no_prior(
         f"S{tool.spindle}M3",
         f"?%ETK[0]={tool.etk0}",
     ]
-    lines += _cut_block(drill, ctx, tool, z_cut, z_top_security)
+    lines += _cut_block(drill, ctx, tool, depths, z_top_security)
     return lines
 
 
@@ -96,7 +150,7 @@ def _first_hole_no_prior(
 # ---------------------------------------------------------------------------
 
 def _first_hole_after_router(
-    drill: DrillingSpec, ctx: PieceCtx, tool, state: _TopDrillState, z_cut: float,
+    drill: DrillingSpec, ctx: PieceCtx, tool, state: _TopDrillState, depths: list[float],
     z_top_security: float,
 ) -> list[str]:
     """Transition from router to top drill + first hole."""
@@ -123,7 +177,7 @@ def _first_hole_after_router(
         f"S{tool.spindle}M3",
         f"?%ETK[0]={tool.etk0}",
     ]
-    lines += _cut_block_no_mlv2(drill, ctx, tool, z_cut, z_top_security)
+    lines += _cut_block_no_mlv2(drill, ctx, tool, depths, z_top_security)
     return lines
 
 
@@ -132,7 +186,7 @@ def _first_hole_after_router(
 # ---------------------------------------------------------------------------
 
 def _same_tool_hole(
-    drill: DrillingSpec, ctx: PieceCtx, tool, state: _TopDrillState, z_cut: float,
+    drill: DrillingSpec, ctx: PieceCtx, tool, state: _TopDrillState, depths: list[float],
     z_top_security: float,
 ) -> list[str]:
     lines = [
@@ -143,8 +197,7 @@ def _same_tool_hole(
         f"G0 X{state.prev_x:.3f} Y{state.prev_y:.3f} Z{z_top_security:.3f}",
         f"G0 X{drill.center_x:.3f} Y{drill.center_y:.3f} Z{z_top_security:.3f}",
         "?%ETK[7]=3",
-        f"G1 G9 Z{z_cut:.3f} F{tool.feed:.3f}",
-        f"G0 Z{z_top_security:.3f}",
+        *_cut_motion(drill.center_x, drill.center_y, z_top_security, tool.feed, depths),
         "MLV=1",
         f"SHF[Z]={ctx.DZ:.3f}+%ETK[114]/1000",
         "?%ETK[7]=0",
@@ -157,7 +210,7 @@ def _same_tool_hole(
 # ---------------------------------------------------------------------------
 
 def _tool_change_hole(
-    drill: DrillingSpec, ctx: PieceCtx, tool, state: _TopDrillState, z_cut: float,
+    drill: DrillingSpec, ctx: PieceCtx, tool, state: _TopDrillState, depths: list[float],
     z_top_security: float,
 ) -> list[str]:
     lines = [
@@ -179,8 +232,7 @@ def _tool_change_hole(
         f"G0 X{drill.center_x:.3f} Y{drill.center_y:.3f}",
         f"G0 Z{z_top_security:.3f}",
         "?%ETK[7]=3",
-        f"G1 G9 Z{z_cut:.3f} F{tool.feed:.3f}",
-        f"G0 Z{z_top_security:.3f}",
+        *_cut_motion(drill.center_x, drill.center_y, z_top_security, tool.feed, depths),
         "MLV=1",
         f"SHF[Z]={ctx.DZ:.3f}+%ETK[114]/1000",
         "?%ETK[7]=0",
@@ -193,7 +245,7 @@ def _tool_change_hole(
 # ---------------------------------------------------------------------------
 
 def _cut_block(
-    drill: DrillingSpec, ctx: PieceCtx, tool, z_cut: float, z_top_security: float,
+    drill: DrillingSpec, ctx: PieceCtx, tool, depths: list[float], z_top_security: float,
 ) -> list[str]:
     """First cut when top drill is first family (needs MLV=2 before G1 G9)."""
     return [
@@ -201,8 +253,7 @@ def _cut_block(
         f"G0 Z{z_top_security:.3f}",
         "?%ETK[7]=3",
         "MLV=2",
-        f"G1 G9 Z{z_cut:.3f} F{tool.feed:.3f}",
-        f"G0 Z{z_top_security:.3f}",
+        *_cut_motion(drill.center_x, drill.center_y, z_top_security, tool.feed, depths),
         "MLV=1",
         f"SHF[Z]={ctx.DZ:.3f}+%ETK[114]/1000",
         "?%ETK[7]=0",
@@ -210,15 +261,14 @@ def _cut_block(
 
 
 def _cut_block_no_mlv2(
-    drill: DrillingSpec, ctx: PieceCtx, tool, z_cut: float, z_top_security: float,
+    drill: DrillingSpec, ctx: PieceCtx, tool, depths: list[float], z_top_security: float,
 ) -> list[str]:
     """First cut after router→top transition (no MLV=2 before G1 G9)."""
     return [
         f"G0 X{drill.center_x:.3f} Y{drill.center_y:.3f}",
         f"G0 Z{z_top_security:.3f}",
         "?%ETK[7]=3",
-        f"G1 G9 Z{z_cut:.3f} F{tool.feed:.3f}",
-        f"G0 Z{z_top_security:.3f}",
+        *_cut_motion(drill.center_x, drill.center_y, z_top_security, tool.feed, depths),
         "MLV=1",
         f"SHF[Z]={ctx.DZ:.3f}+%ETK[114]/1000",
         "?%ETK[7]=0",

@@ -647,6 +647,23 @@ def _detect_squaring_signature(
     return (start_edge, winding, float(start_coordinate))
 
 
+def _drill_family_from_bottom(bottom_condition_type: str,
+                              bottom_is_flat: Optional[bool]) -> Optional[str]:
+    """Familia de punta del taladro a partir del BottomCondition.
+
+    En agujeros ciegos el tipo lo da el xsi:type (Conical/FlatHoleBottom). En pasantes
+    el tipo es 'ThroughHoleBottom' y la punta está en IsFlat (true=plana, false=cónica);
+    sin IsFlat se devuelve None y el default del builder decide.
+    """
+    if "ConicalHoleBottom" in bottom_condition_type:
+        return "Conical"
+    if "FlatHoleBottom" in bottom_condition_type:
+        return "Flat"
+    if "ThroughHoleBottom" in bottom_condition_type and bottom_is_flat is not None:
+        return "Flat" if bottom_is_flat else "Conical"
+    return None
+
+
 def _adapt_drilling(
     snapshot: PgmxSnapshot,
     feature: PgmxFeatureSnapshot,
@@ -709,12 +726,8 @@ def _adapt_drilling(
         )
 
     plane_name = _plane_name_or_default(feature)
-    bottom_condition_type = feature.bottom_condition_type
-    drill_family = None
-    if "ConicalHoleBottom" in bottom_condition_type:
-        drill_family = "Conical"
-    elif "FlatHoleBottom" in bottom_condition_type:
-        drill_family = "Flat"
+    drill_family = _drill_family_from_bottom(
+        feature.bottom_condition_type, feature.bottom_is_flat)
 
     tool_key = operation.tool_key
     tool_resolution = "None"
@@ -724,6 +737,11 @@ def _adapt_drilling(
         tool_resolution = "Explicit"
         tool_id = tool_key.id
         tool_name = tool_key.name
+
+    technology = operation.technology
+    feedrate = float(technology.feedrate) if technology is not None else 0.0
+    spindle = float(technology.spindle) if technology is not None else 0.0
+    taper_height = float(feature.taper_height) if feature.taper_height is not None else 0.0
 
     try:
         depth_kwargs = _depth_kwargs(feature.depth_spec)
@@ -741,6 +759,11 @@ def _adapt_drilling(
             tool_resolution=tool_resolution,
             tool_id=tool_id,
             tool_name=tool_name,
+            feedrate=feedrate,
+            spindle=spindle,
+            taper_height=taper_height,
+            step_number=operation.step_number,
+            step_depth=operation.step_depth,
         )
     except Exception as exc:
         return _unsupported_entry(
@@ -859,11 +882,8 @@ def _adapt_drilling_pattern(
     assert base_feature is not None
     assert geometry is not None
     assert depth_kwargs is not None
-    drill_family = None
-    if "ConicalHoleBottom" in base_feature.bottom_condition_type:
-        drill_family = "Conical"
-    elif "FlatHoleBottom" in base_feature.bottom_condition_type:
-        drill_family = "Flat"
+    drill_family = _drill_family_from_bottom(
+        base_feature.bottom_condition_type, base_feature.bottom_is_flat)
 
     tool_key = operation.tool_key
     tool_resolution = "None"
