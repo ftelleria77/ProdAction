@@ -7,8 +7,8 @@ from pgmx.synthesis.drilling.single import DrillingSpec
 
 from ._machine import (
     OR_OFX, OR_OFY,
-    SECURITY_SIDE, SIDE_FACE, SHF_Y_MACHINE,
-    TLC_LATERAL_CUT,
+    SIDE_APPROACH_FLOOR, SIDE_FACE, SHF_Y_MACHINE, SIDE_SPINDLE,
+    TLC_LATERAL_CUT, Z_PARK,
     effective_side_feed,
     side_transition_g53_z,
 )
@@ -35,6 +35,7 @@ def render_side_drill(
     ctx: PieceCtx,
     prev_family: str | None,  # None=side is first family, "top", "router"
     top_spindle: int,
+    prev_tlc: float = 0.0,  # ToolOffsetLength del tool que venía (top/router): piso del g53
 ) -> list[str]:
     if not drills:
         return []
@@ -66,7 +67,7 @@ def render_side_drill(
                 lines += _cut_first_hole_side_only(face, approach, perp, z_height, cut, feed, ctx)
             elif state.current_face is None:
                 # First side face, but another family preceded it
-                lines += _face_after_other_family(face, ctx, fd, prev_family, drill.security_plane)
+                lines += _face_after_other_family(face, ctx, fd, prev_family, drill.security_plane, prev_tlc)
                 # Top→Side and Router→Side transitions do NOT get G4F0.500
                 lines += _cut_first_hole_in_body(face, approach, perp, z_height, cut, feed, ctx)
             else:
@@ -77,7 +78,7 @@ def render_side_drill(
 
             state.current_face = face
             state.etk0 = fd.etk0
-            state.spindle = 6000
+            state.spindle = SIDE_SPINDLE
         else:
             # Same face — repositioning with passthrough move
             lines += _same_face_cut_block(
@@ -102,23 +103,25 @@ def _hole_coords(
 ) -> tuple[float, float, float, float]:
     """(approach, perp, z_height, cut) — all in MLV2 frame.
 
-    El plano retraído (approach) es FIJO = borde ± (TLC_CUT + SEC); el corte avanza con la
-    profundidad: cut = borde ∓ TLC_CUT ± depth. (N011: el código viejo fijaba el cut y movía
-    el approach — coincidía solo a depth=28, la carrera del husillo lateral.)
+    El plano retraído (approach) usa el `security_plane` de la OPERACIÓN con piso 5 (N014 sp≥5:
+    -70/-75/-95; N016 sp=2 → -70 = -(TLC_CUT+5)). El corte avanza con la profundidad:
+    cut = borde ∓ TLC_CUT ± depth (independiente de sp). (El 20 fijo anterior era sobreajuste:
+    N001/N011 todos con sp=20 por defecto.)
     """
     face = drill.plane_name
     cx, cy = drill.center_x, drill.center_y
+    sp = max(drill.security_plane, SIDE_APPROACH_FLOOR)
 
     if face == "Left":
-        return -(TLC_LATERAL_CUT + SECURITY_SIDE), -cx, cy, -TLC_LATERAL_CUT + depth
+        return -(TLC_LATERAL_CUT + sp), -cx, cy, -TLC_LATERAL_CUT + depth
     if face == "Right":
         edge = ctx.length + TLC_LATERAL_CUT
-        return edge + SECURITY_SIDE, cx, cy, edge - depth
+        return edge + sp, cx, cy, edge - depth
     if face == "Front":
-        return -(TLC_LATERAL_CUT + SECURITY_SIDE), cx, cy, -TLC_LATERAL_CUT + depth
+        return -(TLC_LATERAL_CUT + sp), cx, cy, -TLC_LATERAL_CUT + depth
     # Back
     edge = ctx.width + TLC_LATERAL_CUT
-    return edge + SECURITY_SIDE, -cx, cy, edge - depth
+    return edge + sp, -cx, cy, edge - depth
 
 
 # ---------------------------------------------------------------------------
@@ -159,15 +162,16 @@ def _first_face_setup_side_only(face: str, ctx: PieceCtx, fd) -> list[str]:
         f"SHF[Y]={fd.shf_y_mlv2:.3f}",
         f"SHF[Z]={fd.shf_z_mlv2:.3f}",
         "?%ETK[17]=257",
-        "S6000M3",
+        f"S{SIDE_SPINDLE}M3",
         f"?%ETK[0]={fd.etk0}",
     ]
 
 
 def _face_after_other_family(
-    face: str, ctx: PieceCtx, fd, prev_family: str | None, dest_sp: float,
+    face: str, ctx: PieceCtx, fd, prev_family: str | None, dest_sp: float, head_tlc: float,
 ) -> list[str]:
-    """First side face when top drill or router preceded."""
+    """First side face when top drill or router preceded. `head_tlc` = ToolOffsetLength del
+    tool que se retrae (top vertical o router): es el piso del g53."""
     shf_x, shf_y = _shf_mlv1(face, ctx)
 
     if prev_family == "router":
@@ -180,13 +184,13 @@ def _face_after_other_family(
             f"?%ETK[8]={fd.etk8}",
             "G40",
             "MLV=0",
-            "G0 G53 Z201.000",
+            f"G0 G53 Z{Z_PARK:.3f}",
             "MLV=2",
             "G61",
             "MLV=0",
             "?%ETK[13]=0",
             "?%ETK[18]=0",
-            "G0 G53 Z201.000",
+            f"G0 G53 Z{Z_PARK:.3f}",
             "G64",
             "MLV=1",
             f"SHF[Z]={ctx.origin_z:.3f}+%ETK[114]/1000",
@@ -198,18 +202,23 @@ def _face_after_other_family(
             f"SHF[Y]={fd.shf_y_mlv2:.3f}",
             f"SHF[Z]={fd.shf_z_mlv2:.3f}",
             "?%ETK[17]=257",
-            "S6000M3",
+            f"S{SIDE_SPINDLE}M3",
             f"?%ETK[0]={fd.etk0}",
         ]
 
     # Top→Side (no %Or needed, already set from top drill setup).
     # Solo el destino aporta mandril lateral (el cabezal venía del top drill).
-    g53_z = side_transition_g53_z(ctx.DZ, [(face, dest_sp)])
-    return [
+    # El SHF[X/Y/Z] previo al G40 solo lo necesitan Left/Back; Front/Right ya tienen el SHF
+    # correcto del top drill (mismo patrón que la restauración del epílogo). (N016: top→Front
+    # NO lo lleva; N001 c001 top→Left SÍ.)
+    g53_z = side_transition_g53_z(ctx.DZ, [(face, dest_sp)], head_tlc)
+    pre_g40 = [
         "MLV=1",
         f"SHF[X]={shf_x:.3f}",
         f"SHF[Y]={shf_y:.3f}",
         f"SHF[Z]={ctx.DZ:.3f}+%ETK[114]/1000",
+    ] if face in ("Left", "Back") else []
+    return pre_g40 + [
         f"?%ETK[8]={fd.etk8}",
         "G40",
         "MLV=1",
@@ -235,9 +244,11 @@ def _face_change(
     shf_x, shf_y = _shf_mlv1(face, ctx)
     # El G53 despeja AMBOS mandriles: cara que sale (state) y cara que entra.
     prev_face = state.current_face or face
+    # Side→Side: el tool en el cabezal es la broca lateral → su ToolOffsetLength (TLC_LATERAL_CUT).
     g53_z = side_transition_g53_z(
         ctx.DZ,
         [(prev_face, state.prev_security_plane), (face, dest_sp)],
+        TLC_LATERAL_CUT,
     )
     lines = [
         "MLV=1",

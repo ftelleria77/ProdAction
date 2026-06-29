@@ -43,9 +43,16 @@ class SideCutFormulaTest(unittest.TestCase):
         # Right borde = length+65 = 365; cut = 365-15 = 350
         self.assertIn("G1 G9 X350.000", _convert(plane_name="Right", target_depth=15.0))
 
-    def test_approach_is_fixed(self):  # approach Front = -(65+20) = -85, en ambos depths
+    def test_approach_independent_of_depth(self):  # approach no depende de la profundidad
         self.assertIn("Y-85.000", _convert(plane_name="Front", target_depth=28.0))
         self.assertIn("Y-85.000", _convert(plane_name="Front", target_depth=15.0))
+
+    def test_approach_uses_security_plane(self):  # approach Front = -(65 + sp). N014
+        self.assertIn("Y-70.000", _convert(plane_name="Front", target_depth=20.0, security_plane=5.0))
+        self.assertIn("Y-95.000", _convert(plane_name="Front", target_depth=20.0, security_plane=30.0))
+        # el cut NO cambia con sp (solo con la profundidad): -65+20 = -45
+        iso = _convert(plane_name="Front", target_depth=20.0, security_plane=5.0)
+        self.assertIn("G1 G9 Y-45.000", iso)
 
 
 class SidePeckFeedSpindleTest(unittest.TestCase):

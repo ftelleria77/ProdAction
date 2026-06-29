@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pgmx.synthesis.drilling.single import DrillingSpec
 
-from ._machine import ROUTER_SPINDLE, effective_top_feed_spindle, resolve_top_tool
+from ._machine import ROUTER_SPINDLE, ROUTER_TLC, effective_top_feed_spindle, resolve_top_tool
 from ._preamble import render_epilogue, render_preamble
 from ._reader import ProgramOps, read_pgmx
 from ._router import render_router
@@ -55,18 +55,22 @@ def convert(pgmx_path: Path) -> str:
                 last_top.diameter, last_top.drill_family, last_top.tool_name)
             _, top_spindle = effective_top_feed_spindle(
                 last_tool, last_top.feedrate, last_top.spindle)
+            prev_tlc = last_tool.tlc  # piso del g53 = longitud del tool que se retrae
         elif has_router:
             prev_family = "router"
             top_spindle = ROUTER_SPINDLE
+            prev_tlc = ROUTER_TLC
         else:
             prev_family = None
             top_spindle = 0
+            prev_tlc = 0.0
 
         lines += render_side_drill(
             side_drills,
             ctx,
             prev_family=prev_family,
             top_spindle=top_spindle,
+            prev_tlc=prev_tlc,
         )
 
         last_side_face: str | None = side_drills[-1].plane_name

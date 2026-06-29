@@ -15,7 +15,7 @@ from pgmx.synthesis.drilling.pattern import DrillingPatternSpec
 from pgmx.synthesis.drilling.single import DrillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
 
-from ._machine import FACE_PRIORITY, SIDE_MAX_DEPTH, resolve_top_tool
+from ._machine import FACE_PRIORITY, SIDE_MAX_DEPTH, X_PARK, resolve_top_tool
 from ._validation import UnsupportedOperationError, validate_entries
 
 Op = Union[DrillingSpec, LineMillingSpec]
@@ -74,6 +74,10 @@ class PieceCtx:
     origin_x: float
     origin_y: float
     origin_z: float
+    # Park del footer (G53, coord. de máquina): X (y opcional Y) salen de la operación nula Xn
+    # del .pgmx; sin Xn, el default de Maestro. El Z del park es machine config (Z_PARK). (N015)
+    park_x: float = X_PARK
+    park_y: float | None = None
 
     @property
     def DX(self) -> float:  # noqa: N802
@@ -86,6 +90,17 @@ class PieceCtx:
     @property
     def DZ(self) -> float:  # noqa: N802
         return self.origin_z + self.depth
+
+
+def _xn_park(snapshot) -> tuple[float, float | None]:
+    """(park_x, park_y) del footer a partir del Xn del programa. park_x = Xn.x; park_y = -Xn.y
+    (la cama va 0..-1500 en pgmx → 0..+1500 en máquina); sin Xn → default. (N015)"""
+    xns = [op for op in getattr(snapshot, "machine_operations", ())
+           if getattr(op, "runtime_type", "") == "Xn" or "Xn" in getattr(op, "object_type", "")]
+    if not xns:
+        return X_PARK, None
+    xn = xns[-1]
+    return float(xn.x), (None if xn.y is None else -float(xn.y))
 
 
 @dataclass(frozen=True)
@@ -103,6 +118,7 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
     # en lugar de ignorarla en silencio o crashear más adelante.
     validate_entries(result.adapted_entries)
 
+    park_x, park_y = _xn_park(result.snapshot)
     ctx = PieceCtx(
         piece_name=state.piece_name,
         length=state.length,
@@ -111,6 +127,8 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
         origin_x=state.origin_x,
         origin_y=state.origin_y,
         origin_z=state.origin_z,
+        park_x=park_x,
+        park_y=park_y,
     )
 
     routers: list[LineMillingSpec] = []

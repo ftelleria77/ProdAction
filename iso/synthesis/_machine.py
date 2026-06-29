@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
+from ._machine_config import param_float, phead_float, phead_shf, spindle_shf
 from ._tool_catalog import tool_geometry
 
 # ---------------------------------------------------------------------------
@@ -14,8 +15,13 @@ OR_OFY: float = -1515599.976      # Or[0].ofY en µm (posición Y de mesa)
 SHF_Y_MACHINE: float = -1515.600  # En mm; equivalente a OR_OFY/1000
 
 TLC_LATERAL: float = 37.0         # Tool Length Constant cabezales laterales (g53/shf)
-SECURITY_SIDE: float = 20.0       # Margen de seguridad taladro lateral (mm)
-SIDE_SECURITY_FLOOR: float = 5.0  # Piso del plano de seguridad efectivo (validado N003)
+# Margen de seguridad del g53 lateral (el +20 fijo). Candidato confirmado por Fermín: la Cabeza 1
+# (boring head) tiene Configuración 1 Eje Z = -20 en pheads.cfg → SECURITY_SIDE = -(Config1 Z).
+# Match exacto y byte-validado; revisar si esa config cambia.
+SECURITY_SIDE: float = -phead_float(1, 5)  # Config1 Eje Z de la Cabeza 1 (índice 5) = -20 → 20
+SIDE_APPROACH_FLOOR: float = 5.0   # Piso del security_plane en el APPROACH lateral (N016 sp=2 → -70;
+                                   # N017 Right/Back idem). (El piso del g53 NO es constante: es la
+                                   # longitud del tool que se retrae — su ToolOffsetLength — N016/N017.)
 # Geometría/límites de la broca lateral (058) — del catálogo (def.tlgx), no horneados.
 # - tool_offset_length (65): offset del CORTE lateral. approach fijo = -(TLC_CUT+SEC);
 #   cut = -TLC_CUT + depth. (N011: d28→-37, d15→-50)
@@ -29,8 +35,10 @@ SIDE_FEED_MAX: float = _SIDE_TOOL.feed_max
 SIDE_FEED_DEFAULT: float = 2000.0  # mm/min sin override (MEDIDO del ISO; def.tlgx Std no es fiable)
 SIDE_SPINDLE: int = 6000           # husillo lateral fijo; el override de spindle se ignora (N011)
 
-Z_PARK: float = 201.0             # Park Z de máquina (Params.cfg [ax2] AP_PARKQTA/1000)
-X_PARK: float = -3700.0           # Park X de máquina
+# Park Z de máquina ← Params.cfg [ax2] (eje Z) AP_PARKQTA / 1000 (= 201). Es machine config:
+# el Xn no tiene Z. (En [ax0]=X, AP_PARKQTA=0 → el X park NO sale de acá, sale del Xn; N015.)
+Z_PARK: float = param_float("Params.cfg", "ax2", "AP_PARKQTA") / 1000.0
+X_PARK: float = -3700.0           # Default del park X cuando el .pgmx no trae Xn (= default del Xn)
 
 OR_OFX: float = -310000.0         # Or[0].ofX en µm (constante)
 
@@ -60,9 +68,9 @@ class _TopToolData:
 # PROFUNDIDAD (tlc, max_sink, max_feed, max_spindle) NO se hornea: sale del tool_catalog.csv
 # (= def.tlgx) vía `tool_geometry`. Para agregar un diámetro: medir etk0/feed/spindle/shf del
 # ISO; el resto lo aporta el catálogo.
-def _top_tool(etk6: int, etk0: int, spindle: int, feed: float,
-              shf_x: float, shf_y: float, shf_z: float) -> _TopToolData:
+def _top_tool(etk6: int, etk0: int, spindle: int, feed: float) -> _TopToolData:
     g = tool_geometry(f"{etk6:03d}")
+    shf_x, shf_y, shf_z = spindle_shf(etk6)  # = -(Offset X/Y/Z) del mandril (spindles.cfg)
     return _TopToolData(
         etk6=etk6, etk0=etk0, spindle=spindle, feed=feed, tlc=g.tool_offset_length,
         shf_x=shf_x, shf_y=shf_y, shf_z=shf_z,
@@ -71,12 +79,12 @@ def _top_tool(etk6: int, etk0: int, spindle: int, feed: float,
 
 
 TOP_TOOL: dict[float, _TopToolData] = {
-    4.0:  _top_tool(etk6=6, etk0=32, spindle=6000, feed=2000.0, shf_x=-96.0, shf_y=0.0,  shf_z=-0.200),
-    5.0:  _top_tool(etk6=5, etk0=16, spindle=6000, feed=2000.0, shf_x=-64.0, shf_y=0.0,  shf_z=-0.950),
-    8.0:  _top_tool(etk6=1, etk0=1,  spindle=6000, feed=2000.0, shf_x=0.0,   shf_y=0.0,  shf_z=0.0),
-    15.0: _top_tool(etk6=2, etk0=2,  spindle=4000, feed=1000.0, shf_x=0.0,   shf_y=32.0, shf_z=-0.200),
-    20.0: _top_tool(etk6=3, etk0=4,  spindle=4000, feed=1000.0, shf_x=0.0,   shf_y=64.0, shf_z=-0.250),
-    35.0: _top_tool(etk6=4, etk0=8,  spindle=4000, feed=1000.0, shf_x=-32.0, shf_y=0.0,  shf_z=-0.350),
+    4.0:  _top_tool(etk6=6, etk0=32, spindle=6000, feed=2000.0),
+    5.0:  _top_tool(etk6=5, etk0=16, spindle=6000, feed=2000.0),
+    8.0:  _top_tool(etk6=1, etk0=1,  spindle=6000, feed=2000.0),
+    15.0: _top_tool(etk6=2, etk0=2,  spindle=4000, feed=1000.0),
+    20.0: _top_tool(etk6=3, etk0=4,  spindle=4000, feed=1000.0),
+    35.0: _top_tool(etk6=4, etk0=8,  spindle=4000, feed=1000.0),
 }
 
 # Brocas cónicas (punta de lanza) por diámetro. Hoy la máquina solo tiene la tool 007
@@ -87,7 +95,7 @@ TOP_TOOL: dict[float, _TopToolData] = {
 # (de BottomCondition/IsFlat en pasantes). NO se usa la herramienta seleccionada: la forma
 # canónica del .pgmx no trae herramienta (Maestro la resuelve al postprocesar). (N007)
 TOP_TOOL_CONICAL: dict[float, _TopToolData] = {
-    5.0:  _top_tool(etk6=7, etk0=64, spindle=6000, feed=2000.0, shf_x=-128.0, shf_y=0.0, shf_z=0.0),
+    5.0:  _top_tool(etk6=7, etk0=64, spindle=6000, feed=2000.0),
 }
 
 # Índice por etk6 (= ToolKey.Name del .pgmx con padding). Permite resolver por la
@@ -156,29 +164,30 @@ class _SideFaceData:
     etk6: int
     etk0: int
     etk8: int
-    shf_x_mlv2: float
-    shf_y_mlv2: float
-    shf_z_mlv2: float   # offset Z del mandril lateral (= -fpos5 de spindles.cfg)
+    shf_x_mlv2: float   # = -OffsetX del mandril (spindles.cfg), no horneado
+    shf_y_mlv2: float   # = -OffsetY
+    shf_z_mlv2: float   # = -OffsetZ
+
+
+def _side_face(etk6: int, etk0: int, etk8: int) -> _SideFaceData:
+    """Cara lateral: el SHF de máquina = -(Offset X/Y/Z) del mandril (= ETK[6]) en spindles.cfg.
+    Los offsets son montaje de husillo (las 4 brocas son idénticas en def.tlgx)."""
+    sx, sy, sz = spindle_shf(etk6)
+    return _SideFaceData(etk6=etk6, etk0=etk0, etk8=etk8,
+                         shf_x_mlv2=sx, shf_y_mlv2=sy, shf_z_mlv2=sz)
 
 
 SIDE_FACE: dict[str, _SideFaceData] = {
-    "Left":  _SideFaceData(etk6=61, etk0=2147483648, etk8=3,
-                           shf_x_mlv2=-118.0, shf_y_mlv2=-32.0,  shf_z_mlv2=66.3),
-    "Right": _SideFaceData(etk6=60, etk0=2147483648, etk8=2,
-                           shf_x_mlv2=-66.9,  shf_y_mlv2=-32.0,  shf_z_mlv2=66.45),
-    "Front": _SideFaceData(etk6=58, etk0=1073741824, etk8=5,
-                           shf_x_mlv2=32.0,   shf_y_mlv2=-21.75, shf_z_mlv2=66.5),
-    "Back":  _SideFaceData(etk6=59, etk0=1073741824, etk8=4,
-                           shf_x_mlv2=32.0,   shf_y_mlv2=29.5,   shf_z_mlv2=66.5),
+    "Left":  _side_face(etk6=61, etk0=2147483648, etk8=3),
+    "Right": _side_face(etk6=60, etk0=2147483648, etk8=2),
+    "Front": _side_face(etk6=58, etk0=1073741824, etk8=5),
+    "Back":  _side_face(etk6=59, etk0=1073741824, etk8=4),
 }
 
 
-def _eff_security_plane(security_plane: float) -> float:
-    """Plano de seguridad efectivo: piso duro de 5 mm (codo validado en N003)."""
-    return max(security_plane, SIDE_SECURITY_FLOOR)
-
-
-def side_transition_g53_z(dz: float, faces: Sequence[tuple[str, float]]) -> float:
+def side_transition_g53_z(
+    dz: float, faces: Sequence[tuple[str, float]], head_tlc: float,
+) -> float:
     """G53 Z absoluto de máquina al entrar a una cara lateral en una transición.
 
     Parameters
@@ -191,18 +200,17 @@ def side_transition_g53_z(dz: float, faces: Sequence[tuple[str, float]]) -> floa
         mandril lateral), o ``[(prev_face, prev_sp), (dest_face, dest_sp)]`` entre
         dos caras laterales.
 
-    Fórmula validada empíricamente 20/20 (lotes N001 + N002 + N003)::
+    Fórmula (N016 Top→Side + N017 Right/Back, config canónica)::
 
-        G53 Z = DZ + SECURITY_SIDE + max_i( eff(sp_i) + shf_z(cara_i) )
-        eff(sp) = max(sp, SIDE_SECURITY_FLOOR)
+        G53 Z = DZ + SECURITY_SIDE + max( head_tlc, max_i( sp_i + shf_z(cara_i) ) )
 
-    El ``max`` despeja el peor caso de plano de seguridad + offset de mandril de
-    las caras de la transición (la que sale y la que entra).
+    El ``max`` interno despeja el peor caso (plano de seguridad + offset de mandril) de las
+    caras de la transición; el piso es ``head_tlc`` = ToolOffsetLength del tool que está en el
+    cabezal y se retrae (vertical 77 en Top→Side; lateral 65 en Side→Side; router 107.2). NO es
+    una constante: sale del catálogo (N016/N017 confirman 77 con el top vertical).
     """
-    return dz + SECURITY_SIDE + max(
-        _eff_security_plane(sp) + SIDE_FACE[face].shf_z_mlv2
-        for face, sp in faces
-    )
+    worst = max(sp + SIDE_FACE[face].shf_z_mlv2 for face, sp in faces)
+    return dz + SECURITY_SIDE + max(worst, head_tlc)
 
 # Prioridad de ejecución por cara lateral (Maestro reordena por esta prioridad)
 FACE_PRIORITY: dict[str, int] = {"Front": 0, "Left": 1, "Right": 2, "Back": 3}
@@ -214,6 +222,7 @@ ROUTER_ETK18: int = 1
 ROUTER_SPINDLE: int = 18000
 ROUTER_ATC_SLOT: int = 4
 ROUTER_TLC: float = tool_geometry("E004").tool_offset_length  # del catálogo (def.tlgx), = 107.2
-ROUTER_SHF_X: float = 32.050      # offsets del husillo (spindles.cfg), aún no sourced
-ROUTER_SHF_Y: float = -246.650
-ROUTER_SHF_Z: float = -125.300
+# SHF del router = -(Configuración 0) de su cabeza en pheads.cfg. El router/electromandril es la
+# Cabeza 3 (Cabezas Operadoras/PHEADS) → (32.05, -246.65, -125.30). No horneado.
+ROUTER_PHEAD: int = 3
+ROUTER_SHF_X, ROUTER_SHF_Y, ROUTER_SHF_Z = phead_shf(ROUTER_PHEAD)

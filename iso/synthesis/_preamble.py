@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ._machine import OR_OFY, SIDE_FACE, SHF_Y_MACHINE
+from ._machine import OR_OFY, SIDE_FACE, SHF_Y_MACHINE, Z_PARK
 from ._reader import PieceCtx
 
 
@@ -104,6 +104,10 @@ def render_epilogue(
     """
     dx, dz = ctx.DX, ctx.DZ
     shf_y = SHF_Y_MACHINE + ctx.origin_y  # e.g. -1510.600
+    # Park del footer: X (y opcional Y) de la operación nula Xn del .pgmx (N015). El Z es
+    # machine config (Z_PARK). Maestro pone X e Y en el MISMO bloque G53 cuando hay Y.
+    park_xy = f"G0 G53 X{ctx.park_x:.3f}" + (
+        f" Y{ctx.park_y:.3f}" if ctx.park_y is not None else "")
 
     syn_block = [
         "SYN",
@@ -139,8 +143,8 @@ def render_epilogue(
             "?%ETK[18]=0",
             "M5",
             "D0",
-            "G0 G53 Z201.000",
-            "G0 G53 X-3700.000",
+            f"G0 G53 Z{Z_PARK:.3f}",
+            park_xy,
             "G64",
         ]
         return router_shutdown + syn_block
@@ -153,8 +157,8 @@ def render_epilogue(
         "G4F1.200",
         "M5",
         "D0",
-        "G0 G53 Z201.000",
-        "G0 G53 X-3700.000",
+        f"G0 G53 Z{Z_PARK:.3f}",
+        park_xy,
         "G64",
     ]
 
@@ -172,14 +176,14 @@ def render_epilogue(
             "G61",
             "MLV=0",
             "D0",
-            "G0 G53 Z201.000",
+            f"G0 G53 Z{Z_PARK:.3f}",
             "G64",
         ]
     else:
         restoration = [
             "G61",
             "D0",
-            "G0 G53 Z201.000",
+            f"G0 G53 Z{Z_PARK:.3f}",
             "G64",
         ]
 

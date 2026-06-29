@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pgmx.synthesis.drilling.single import DrillingSpec
 
 from ._machine import (
-    OR_OFX, OR_OFY, SHF_Y_MACHINE, effective_top_feed_spindle, resolve_top_tool,
+    OR_OFX, OR_OFY, SHF_Y_MACHINE, Z_PARK, effective_top_feed_spindle, resolve_top_tool,
 )
 from ._reader import PieceCtx
 
@@ -156,13 +156,13 @@ def _first_hole_after_router(
     """Transition from router to top drill + first hole."""
     lines = [
         "MLV=0",
-        "G0 G53 Z201.000",
+        f"G0 G53 Z{Z_PARK:.3f}",
         "MLV=2",
         "G61",
         "MLV=0",
         "?%ETK[13]=0",
         "?%ETK[18]=0",
-        "G0 G53 Z201.000",
+        f"G0 G53 Z{Z_PARK:.3f}",
         "G64",
         "MLV=1",
         f"SHF[Z]={ctx.origin_z:.3f}+%ETK[114]/1000",
