@@ -56,9 +56,10 @@ SIDE_SPINDLE: int = 6000           # husillo lateral fijo; el override de spindl
 Z_PARK: float = param_float("Params.cfg", "ax2", "AP_PARKQTA") / 1000.0
 X_PARK: float = -3700.0           # Default del park X cuando el .pgmx no trae Xn (= default del Xn)
 
-# Or[0].ofX: cero-máquina absoluto en µm. NO es el origen X del campo (HG.x = 0): es otra
-# referencia de máquina (varía por bloque en el ISO: -305000/-310000). Constante de máquina.
-OR_OFX: float = -310000.0
+# Or[0].ofX (origen de trabajo X, en µm) NO es constante: depende de la pieza. Derivado con N018
+# (geometría variada): preamble = -DX×1000; bloque de operación = -(DX + origin_x)×1000. El viejo
+# OR_OFX=-310000 era sobreajuste a la pieza 305/5 (bug latente; daba -310000 para toda pieza).
+# Se calcula inline en _preamble/_top_drill/_router/_side_drill. (ofY sí es constante: OR_OFY.)
 
 
 # ---------------------------------------------------------------------------

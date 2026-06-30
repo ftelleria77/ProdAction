@@ -5,7 +5,7 @@ from __future__ import annotations
 from pgmx.synthesis.milling.line import LineMillingSpec
 
 from ._machine import (
-    OR_OFX, OR_OFY,
+    OR_OFY,
     ROUTER_ATC_SLOT, ROUTER_ETK6, ROUTER_ETK9, ROUTER_ETK18, ROUTER_SPINDLE,
     ROUTER_SHF_X, ROUTER_SHF_Y, ROUTER_SHF_Z,
     ROUTER_TLC,
@@ -104,7 +104,7 @@ def _first_pass_setup(ctx: PieceCtx) -> list[str]:
     return [
         "G17",
         "MLV=2",
-        f"%Or[0].ofX={OR_OFX:.3f}",
+        f"%Or[0].ofX={-(ctx.DX + ctx.origin_x) * 1000:.3f}",
         f"%Or[0].ofY={OR_OFY:.3f}",
         f"%Or[0].ofZ={ctx.DZ * 1000:.3f}",
         "MLV=1",
