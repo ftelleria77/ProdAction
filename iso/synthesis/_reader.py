@@ -6,6 +6,8 @@ Dentro de Side drill: prioridad Front > Left > Right > Back (empírico N001).
 
 from __future__ import annotations
 
+import re
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Union
@@ -15,8 +17,24 @@ from pgmx.synthesis.drilling.pattern import DrillingPatternSpec
 from pgmx.synthesis.drilling.single import DrillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
 
-from ._machine import FACE_PRIORITY, SIDE_MAX_DEPTH, X_PARK, resolve_top_tool
+from ._machine import FACE_PRIORITY, SIDE_MAX_DEPTH, SUPPORTED_FIELDS, X_PARK, resolve_top_tool
 from ._validation import UnsupportedOperationError, validate_entries
+
+_EXECUTION_FIELD_RE = re.compile(r"<[^>]*ExecutionFields>([^<]*)</")
+
+
+def _execution_field(path: Path) -> str:
+    """Campo de trabajo elegido en Maestro, registrado en el .pgmx como
+    <ExecutionFields>HG</ExecutionFields> (dentro de XilogHeaderParameters). El .pgmx es un ZIP
+    con un .xml adentro. Determina el origen del campo (field_origin) y el espejado geométrico.
+    Default "HG" si no aparece (el único campo calibrado hoy)."""
+    with zipfile.ZipFile(path) as z:
+        xml_name = next((n for n in z.namelist() if n.endswith(".xml")), None)
+        if xml_name is None:
+            return "HG"
+        xml = z.read(xml_name).decode("utf-8", errors="replace")
+    m = _EXECUTION_FIELD_RE.search(xml)
+    return m.group(1).strip() if m and m.group(1).strip() else "HG"
 
 Op = Union[DrillingSpec, LineMillingSpec]
 
@@ -74,6 +92,9 @@ class PieceCtx:
     origin_x: float
     origin_y: float
     origin_z: float
+    # Campo de trabajo elegido en Maestro (de <ExecutionFields> del .pgmx): AB/DC/EF/HG. Determina
+    # el origen (field_origin) y el espejado de direcciones del 2×2. Hoy solo HG está validado.
+    field: str = "HG"
     # Park del footer (G53, coord. de máquina): X (y opcional Y) salen de la operación nula Xn
     # del .pgmx; sin Xn, el default de Maestro. El Z del park es machine config (Z_PARK). (N015)
     park_x: float = X_PARK
@@ -118,6 +139,17 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
     # en lugar de ignorarla en silencio o crashear más adelante.
     validate_entries(result.adapted_entries)
 
+    field = _execution_field(path)
+    # Fail-loud: solo HG está calibrado y con su espejado de direcciones validado byte-a-byte.
+    # AB/DC/EF tienen origen conocido (fields.cfg) pero calibración inválida y direcciones sin
+    # derivar → emitir su ISO sería un programa con origen ok pero trayectorias erróneas (peligroso).
+    if field not in SUPPORTED_FIELDS:
+        raise UnsupportedOperationError(
+            f"Campo de trabajo '{field}' no soportado todavía. Solo {SUPPORTED_FIELDS} está "
+            f"calibrado y con su espejado de direcciones validado. Para habilitar {field}: "
+            f"recalibrar el campo en la máquina y derivar las direcciones con fixtures de referencia."
+        )
+
     park_x, park_y = _xn_park(result.snapshot)
     ctx = PieceCtx(
         piece_name=state.piece_name,
@@ -127,6 +159,7 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
         origin_x=state.origin_x,
         origin_y=state.origin_y,
         origin_z=state.origin_z,
+        field=field,
         park_x=park_x,
         park_y=park_y,
     )

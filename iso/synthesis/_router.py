@@ -9,7 +9,7 @@ from ._machine import (
     ROUTER_ATC_SLOT, ROUTER_ETK6, ROUTER_ETK9, ROUTER_ETK18, ROUTER_SPINDLE,
     ROUTER_SHF_X, ROUTER_SHF_Y, ROUTER_SHF_Z,
     ROUTER_TLC,
-    SHF_Y_MACHINE,
+    SHF_X_MACHINE, SHF_Y_MACHINE,
 )
 from ._reader import PieceCtx
 
@@ -108,7 +108,7 @@ def _first_pass_setup(ctx: PieceCtx) -> list[str]:
         f"%Or[0].ofY={OR_OFY:.3f}",
         f"%Or[0].ofZ={ctx.DZ * 1000:.3f}",
         "MLV=1",
-        f"SHF[X]=-{ctx.DX:.3f}",
+        f"SHF[X]={SHF_X_MACHINE - ctx.DX:.3f}",
         f"SHF[Y]={shf_y:.3f}",
         f"SHF[Z]={ctx.DZ:.3f}",   # NOTE: no +%ETK[114] for router (vs drill)
         "MLV=2",

@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from pgmx.synthesis.drilling.single import DrillingSpec
 
 from ._machine import (
-    OR_OFX, OR_OFY, SHF_Y_MACHINE, Z_PARK, effective_top_feed_spindle, resolve_top_tool,
+    OR_OFX, OR_OFY, SHF_X_MACHINE, SHF_Y_MACHINE, Z_PARK,
+    effective_top_feed_spindle, resolve_top_tool,
 )
 from ._reader import PieceCtx
 
@@ -129,7 +130,7 @@ def _first_hole_no_prior(
         f"%Or[0].ofY={OR_OFY:.3f}",
         f"%Or[0].ofZ={ctx.DZ * 1000:.3f}",
         "MLV=1",
-        f"SHF[X]=-{ctx.DX:.3f}",
+        f"SHF[X]={SHF_X_MACHINE - ctx.DX:.3f}",
         f"SHF[Y]={shf_y:.3f}",
         f"SHF[Z]={ctx.origin_z:.3f}",
         "MLV=2",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ._machine import OR_OFY, SIDE_FACE, SHF_Y_MACHINE, Z_PARK
+from ._machine import OR_OFY, SIDE_FACE, SHF_X_MACHINE, SHF_Y_MACHINE, Z_PARK
 from ._reader import PieceCtx
 
 
@@ -22,7 +22,7 @@ def render_preamble(
     dx, dy, dz = ctx.DX, ctx.DY, ctx.DZ
     lines: list[str] = [
         f"% {ctx.piece_name.lower()}.pgm",
-        f";H DX={dx:.3f} DY={dy:.3f} DZ={dz:.3f} BX=0.000 BY=0.000 BZ=0.000 -HG V=0 *MM C=0 T=0 ",
+        f";H DX={dx:.3f} DY={dy:.3f} DZ={dz:.3f} BX=0.000 BY=0.000 BZ=0.000 -{ctx.field} V=0 *MM C=0 T=0 ",
         "?%ETK[500]=100",
         "",
         "_paras( 0x00, X, 3, %ax[0].pa[21]/1000, %ETK[500] )",
@@ -37,7 +37,7 @@ def render_preamble(
         "?%EDK[0].0=0",
         "?%EDK[1].0=0",
         "MLV=1",
-        f"SHF[X]=-{dx:.3f}",
+        f"SHF[X]={SHF_X_MACHINE - dx:.3f}",
         f"SHF[Y]={SHF_Y_MACHINE:.3f}",
         f"SHF[Z]={dz:.3f}+%ETK[114]/1000",
     ]
@@ -67,7 +67,7 @@ def _last_g40_block(ctx: PieceCtx, face: str | None) -> list[str]:
         shf_y = SHF_Y_MACHINE + ctx.DY
         return [
             "MLV=1",
-            f"SHF[X]=-{ctx.DX:.3f}",
+            f"SHF[X]={SHF_X_MACHINE - ctx.DX:.3f}",
             f"SHF[Y]={shf_y:.3f}",
             f"SHF[Z]={ctx.DZ:.3f}+%ETK[114]/1000",
             f"?%ETK[8]={SIDE_FACE['Left'].etk8}",
@@ -77,7 +77,7 @@ def _last_g40_block(ctx: PieceCtx, face: str | None) -> list[str]:
         shf_y = SHF_Y_MACHINE + ctx.origin_y
         return [
             "MLV=1",
-            f"SHF[X]=-{ctx.origin_x:.3f}",
+            f"SHF[X]={SHF_X_MACHINE - ctx.origin_x:.3f}",
             f"SHF[Y]={shf_y:.3f}",
             f"SHF[Z]={ctx.DZ:.3f}+%ETK[114]/1000",
             f"?%ETK[8]={SIDE_FACE['Back'].etk8}",
@@ -170,7 +170,7 @@ def render_epilogue(
     if needs_shf_restoration:
         restoration = [
             "MLV=1",
-            f"SHF[X]=-{dx:.3f}",
+            f"SHF[X]={SHF_X_MACHINE - dx:.3f}",
             f"SHF[Y]={shf_y:.3f}",
             f"SHF[Z]={dz:.3f}+%ETK[114]/1000",
             "G61",

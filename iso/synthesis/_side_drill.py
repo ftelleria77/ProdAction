@@ -7,7 +7,7 @@ from pgmx.synthesis.drilling.single import DrillingSpec
 
 from ._machine import (
     OR_OFX, OR_OFY,
-    SIDE_APPROACH_FLOOR, SIDE_FACE, SHF_Y_MACHINE, SIDE_SPINDLE,
+    SIDE_APPROACH_FLOOR, SIDE_FACE, SHF_X_MACHINE, SHF_Y_MACHINE, SIDE_SPINDLE,
     TLC_LATERAL_CUT, Z_PARK,
     effective_side_feed,
     side_transition_g53_z,
@@ -130,10 +130,10 @@ def _hole_coords(
 
 def _shf_mlv1(face: str, ctx: PieceCtx) -> tuple[float, float]:
     if face == "Left":
-        return -ctx.DX, SHF_Y_MACHINE + ctx.DY
+        return SHF_X_MACHINE - ctx.DX, SHF_Y_MACHINE + ctx.DY
     if face == "Back":
-        return -ctx.origin_x, SHF_Y_MACHINE + ctx.origin_y
-    return -ctx.DX, SHF_Y_MACHINE + ctx.origin_y
+        return SHF_X_MACHINE - ctx.origin_x, SHF_Y_MACHINE + ctx.origin_y
+    return SHF_X_MACHINE - ctx.DX, SHF_Y_MACHINE + ctx.origin_y
 
 
 # ---------------------------------------------------------------------------

@@ -4,15 +4,31 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
-from ._machine_config import param_float, phead_float, phead_shf, spindle_shf
+from ._machine_config import field_origin, param_float, phead_float, phead_shf, spindle_shf
 from ._tool_catalog import tool_geometry
 
 # ---------------------------------------------------------------------------
 # Constantes globales de máquina
 # ---------------------------------------------------------------------------
 
-OR_OFY: float = -1515599.976      # Or[0].ofY en µm (posición Y de mesa)
-SHF_Y_MACHINE: float = -1515.600  # En mm; equivalente a OR_OFY/1000
+# Campo de trabajo activo (el que mecaniza). Hoy SOLO HG está calibrado válido; EF/AB/DC tienen
+# la calibración inicial invalidada por intervenciones técnicas (ver bitácora de la máquina).
+# Cuando se recalibre EF, el pendular cambiará este valor (o lo elegirá la operación).
+ACTIVE_FIELD: str = "HG"
+# Campos soportados = los calibrados Y con su espejado de direcciones validado byte-a-byte. Hoy
+# solo HG. AB/DC/EF: origen conocido (fields.cfg) pero falta calibración + fixtures de dirección.
+SUPPORTED_FIELDS: tuple[str, ...] = ("HG",)
+# SHF[X]/SHF[Y] de máquina = origen (X, Y) del campo activo, leídos de fields.cfg (NO horneados).
+# HG = (0.000, -1515.600); byte-idénticos a los SHF de Maestro. Simétricos: el origen X del campo
+# entra en SHF[X] igual que el Y en SHF[Y] (SHF[X] = SHF_X_MACHINE - pieza, SHF[Y] = SHF_Y_MACHINE
+# + pieza). Con HG.x = 0 el término X es 0 (no se ve); en EF (x=-3688) NO será 0 — falta validar
+# con un fixture en un campo de X≠0 cómo entra exactamente ese offset (HG.x=0 hoy lo oculta).
+SHF_X_MACHINE, SHF_Y_MACHINE = field_origin(ACTIVE_FIELD)
+
+# Or[0].ofY: cero-máquina absoluto en µm. OJO: NO es SHF_Y_MACHINE*1000 (-1515599.976 ≠ -1515600);
+# lleva precisión de calibración que fields.cfg (2 decimales) no guarda → es constante de máquina,
+# no el origen del campo. Pendiente de sourcear de la calibración fina cuando aparezca esa clave.
+OR_OFY: float = -1515599.976
 
 TLC_LATERAL: float = 37.0         # Tool Length Constant cabezales laterales (g53/shf)
 # Margen de seguridad del g53 lateral (el +20 fijo). Candidato confirmado por Fermín: la Cabeza 1
@@ -40,7 +56,9 @@ SIDE_SPINDLE: int = 6000           # husillo lateral fijo; el override de spindl
 Z_PARK: float = param_float("Params.cfg", "ax2", "AP_PARKQTA") / 1000.0
 X_PARK: float = -3700.0           # Default del park X cuando el .pgmx no trae Xn (= default del Xn)
 
-OR_OFX: float = -310000.0         # Or[0].ofX en µm (constante)
+# Or[0].ofX: cero-máquina absoluto en µm. NO es el origen X del campo (HG.x = 0): es otra
+# referencia de máquina (varía por bloque en el ISO: -305000/-310000). Constante de máquina.
+OR_OFX: float = -310000.0
 
 
 # ---------------------------------------------------------------------------

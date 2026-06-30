@@ -97,3 +97,35 @@ def phead_float(cabeza: int, idx: int) -> float:
 def phead_shf(cabeza: int) -> tuple[float, float, float]:
     """SHF de una cabeza operadora = -(Configuración 0 Eje X/Y/Z) de pheads.cfg, cero normalizado."""
     return tuple(-phead_float(cabeza, i) + 0.0 for i in range(3))  # type: ignore[return-value]
+
+
+# fields.cfg: Campos de trabajo (FIELDS) — la cama partida en áreas. Dump posicional regular:
+# header de 30 líneas + un bloque de 30 líneas por campo (14 enteros + 15 floats + 1 letra de
+# etiqueta). Dentro del bloque, el origen del campo (X, Y) son los 2 primeros floats (índices
+# 14/15 del bloque) y la etiqueta (A..P) es la última línea (índice 29). Hay 16 campos (A-P);
+# las áreas de trabajo se nombran por pares (AB/DC/EF/HG) y toman el origen del PRIMER campo del
+# par. ⚠️ Solo HG está calibrado válido hoy (ver bitácora de la máquina); EF/AB/DC conservan la
+# calibración inicial, invalidada por intervenciones técnicas → no usar sus orígenes aún.
+_FIELDS_HEADER = 30
+_FIELDS_BLOCK = 30
+_FIELDS_ORIGIN = 14  # índice de OrigenX dentro del bloque (OrigenY a +1); etiqueta en +15
+
+
+@lru_cache(maxsize=1)
+def _fields_lines() -> list[str]:
+    return (_CFG_DIR / "fields.cfg").read_text(encoding="latin-1", errors="replace").splitlines()
+
+
+def field_origin(area: str) -> tuple[float, float]:
+    """Origen (X, Y) en mm del área de trabajo, leído de fields.cfg. El área (AB/DC/EF/HG) toma
+    el origen del PRIMER campo del par (su 1ª letra: HG→H, EF→E, AB→A, DC→D)."""
+    field = area[0].upper()
+    idx = ord(field) - ord("A")  # A=0 .. P=15
+    lines = _fields_lines()
+    base = _FIELDS_HEADER + idx * _FIELDS_BLOCK
+    # La etiqueta viene rellenada con \x03 (ETX): "H\x03\x03..." → quedarse con la 1ª letra.
+    label = lines[base + _FIELDS_ORIGIN + 15].replace("\x03", "").strip()
+    if label != field:
+        raise ValueError(
+            f"fields.cfg: esperaba el campo '{field}' en el bloque {idx}, encontré '{label}'")
+    return (float(lines[base + _FIELDS_ORIGIN]), float(lines[base + _FIELDS_ORIGIN + 1]))
