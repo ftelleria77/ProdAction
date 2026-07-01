@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from ._machine import OR_OFY, SIDE_FACE, SHF_X_MACHINE, SHF_Y_MACHINE, Z_PARK
+from ._machine import (
+    SIDE_FACE, SHF_X_MACHINE, SHF_Y_MACHINE, Z_PARK,
+    edk_field, or_ofx, or_ofy, shf_x, shf_y,
+)
 from ._reader import PieceCtx
 
 
@@ -31,14 +34,14 @@ def render_preamble(
         "M58",
         "G71",
         "MLV=0",
-        f"%Or[0].ofX={-dx * 1000:.3f}",
-        f"%Or[0].ofY={OR_OFY:.3f}",
+        f"%Or[0].ofX={or_ofx(ctx, block=False):.3f}",
+        f"%Or[0].ofY={or_ofy(ctx, block=False):.3f}",
         f"%Or[0].ofZ={dz * 1000:.3f}",
         "?%EDK[0].0=0",
         "?%EDK[1].0=0",
         "MLV=1",
-        f"SHF[X]={SHF_X_MACHINE - dx:.3f}",
-        f"SHF[Y]={SHF_Y_MACHINE:.3f}",
+        f"SHF[X]={shf_x(ctx, block=False):.3f}",
+        f"SHF[Y]={shf_y(ctx, block=False):.3f}",
         f"SHF[Z]={dz:.3f}+%ETK[114]/1000",
     ]
 
@@ -118,7 +121,7 @@ def render_epilogue(
         "?%ETK[17]=0",
         "?%ETK[18]=0",
         "?%ETK[19]=0",
-        "?%EDK[13].0=1",
+        f"?%EDK[{edk_field(ctx)}].0=1",
         "MLV=1",
         "SHF[X]=0",
         "SHF[Y]=0",
@@ -130,7 +133,7 @@ def render_epilogue(
         "MLV=0",
         "VL6=0",
         "VL7=0",
-        "?%EDK[13].0=0",
+        f"?%EDK[{edk_field(ctx)}].0=0",
         "M2",
     ]
 

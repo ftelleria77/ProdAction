@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from pgmx.synthesis.drilling.single import DrillingSpec
 
 from ._machine import (
-    OR_OFY,
     SIDE_APPROACH_FLOOR, SIDE_FACE, SHF_X_MACHINE, SHF_Y_MACHINE, SIDE_SPINDLE,
     TLC_LATERAL_CUT, Z_PARK,
     effective_side_feed,
+    or_ofx, or_ofy,
     side_transition_g53_z,
 )
 from ._reader import PieceCtx, side_effective_depth
@@ -149,8 +149,8 @@ def _first_face_setup_side_only(face: str, ctx: PieceCtx, fd) -> list[str]:
     shf_x, shf_y = _shf_mlv1(face, ctx)
     return [
         f"?%ETK[6]={fd.etk6}",
-        f"%Or[0].ofX={-(ctx.DX + ctx.origin_x) * 1000:.3f}",
-        f"%Or[0].ofY={OR_OFY:.3f}",
+        f"%Or[0].ofX={or_ofx(ctx, block=True):.3f}",
+        f"%Or[0].ofY={or_ofy(ctx, block=True):.3f}",
         f"%Or[0].ofZ={ctx.DZ * 1000:.3f}",
         "MLV=1",
         f"SHF[X]={shf_x:.3f}",

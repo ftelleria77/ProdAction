@@ -17,7 +17,9 @@ from pgmx.synthesis.drilling.pattern import DrillingPatternSpec
 from pgmx.synthesis.drilling.single import DrillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
 
-from ._machine import FACE_PRIORITY, SIDE_MAX_DEPTH, SUPPORTED_FIELDS, X_PARK, resolve_top_tool
+from ._machine import (
+    FACE_PRIORITY, SIDE_MAX_DEPTH, SIDE_SUPPORTED_FIELDS, SUPPORTED_FIELDS, X_PARK, resolve_top_tool,
+)
 from ._validation import UnsupportedOperationError, validate_entries
 
 _EXECUTION_FIELD_RE = re.compile(r"<[^>]*ExecutionFields>([^<]*)</")
@@ -140,15 +142,13 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
     validate_entries(result.adapted_entries)
 
     field = _execution_field(path)
-    # Fail-loud: solo HG está calibrado y con su espejado de direcciones validado byte-a-byte.
-    # AB/DC/EF tienen origen conocido (fields.cfg) pero calibración inválida y direcciones sin
-    # derivar → emitir su ISO sería un programa con origen ok pero trayectorias erróneas (peligroso).
+    # Fail-loud: campo fuera de la grilla 2×2 conocida (AB/DC/EF/HG). El modelo de origen/SHF/EDK
+    # está derivado y byte-validado para esos 4 (N019/N020/N021). ⚠️ EF/AB/DC están descalibrados:
+    # los valores que emite son los de la fields.cfg ACTUAL (stale); al recalibrar + re-snapshotear
+    # fields.cfg, entran solos. La guarda de CARAS laterales va aparte (abajo).
     if field not in SUPPORTED_FIELDS:
         raise UnsupportedOperationError(
-            f"Campo de trabajo '{field}' no soportado todavía. Solo {SUPPORTED_FIELDS} está "
-            f"calibrado y con su espejado de direcciones validado. Para habilitar {field}: "
-            f"recalibrar el campo en la máquina y derivar las direcciones con fixtures de referencia."
-        )
+            f"Campo de trabajo '{field}' no soportado (conocidos: {SUPPORTED_FIELDS}).")
 
     park_x, park_y = _xn_park(result.snapshot)
     ctx = PieceCtx(
@@ -184,6 +184,14 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
                 top_drills.append(drill)
             else:
                 side_drills.append(drill)
+
+    # Fail-loud: taladros laterales solo en HG por ahora. El SHF por-cara espejado (Left/Right/
+    # Front/Back) para EF/AB/DC todavía no está derivado; el modelo actual solo cubre origen/SHF de
+    # top/router. (Top y router SÍ andan en los 4 campos.)
+    if side_drills and field not in SIDE_SUPPORTED_FIELDS:
+        raise UnsupportedOperationError(
+            f"Taladros laterales en el campo '{field}' no soportados todavía (solo "
+            f"{SIDE_SUPPORTED_FIELDS}): falta derivar el SHF por-cara espejado. Top/router sí andan.")
 
     # Fail-loud por hundimiento: la profundidad efectiva (ciego o pasante) no puede superar el
     # hundimiento máximo de la herramienta (def.tlgx SinkingLength). Es lo que valida el propio

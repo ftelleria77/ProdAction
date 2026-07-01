@@ -5,11 +5,10 @@ from __future__ import annotations
 from pgmx.synthesis.milling.line import LineMillingSpec
 
 from ._machine import (
-    OR_OFY,
     ROUTER_ATC_SLOT, ROUTER_ETK6, ROUTER_ETK9, ROUTER_ETK18, ROUTER_SPINDLE,
     ROUTER_SHF_X, ROUTER_SHF_Y, ROUTER_SHF_Z,
     ROUTER_TLC,
-    SHF_X_MACHINE, SHF_Y_MACHINE,
+    or_ofx, or_ofy, shf_x, shf_y,
 )
 from ._reader import PieceCtx
 
@@ -100,16 +99,15 @@ def _atc_header() -> list[str]:
 
 
 def _first_pass_setup(ctx: PieceCtx) -> list[str]:
-    shf_y = SHF_Y_MACHINE + ctx.origin_y  # e.g. -1510.600
     return [
         "G17",
         "MLV=2",
-        f"%Or[0].ofX={-(ctx.DX + ctx.origin_x) * 1000:.3f}",
-        f"%Or[0].ofY={OR_OFY:.3f}",
+        f"%Or[0].ofX={or_ofx(ctx, block=True):.3f}",
+        f"%Or[0].ofY={or_ofy(ctx, block=True):.3f}",
         f"%Or[0].ofZ={ctx.DZ * 1000:.3f}",
         "MLV=1",
-        f"SHF[X]={SHF_X_MACHINE - ctx.DX:.3f}",
-        f"SHF[Y]={shf_y:.3f}",
+        f"SHF[X]={shf_x(ctx, block=True):.3f}",
+        f"SHF[Y]={shf_y(ctx, block=True):.3f}",
         f"SHF[Z]={ctx.DZ:.3f}",   # NOTE: no +%ETK[114] for router (vs drill)
         "MLV=2",
         "?%ETK[13]=1",

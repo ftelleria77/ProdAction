@@ -22,9 +22,11 @@ def _f32(x: float) -> float:
 # la calibración inicial invalidada por intervenciones técnicas (ver bitácora de la máquina).
 # Cuando se recalibre EF, el pendular cambiará este valor (o lo elegirá la operación).
 ACTIVE_FIELD: str = "HG"
-# Campos soportados = los calibrados Y con su espejado de direcciones validado byte-a-byte. Hoy
-# solo HG. AB/DC/EF: origen conocido (fields.cfg) pero falta calibración + fixtures de dirección.
-SUPPORTED_FIELDS: tuple[str, ...] = ("HG",)
+# Campos con el modelo de origen/SHF/EDK derivado y byte-validado (N019/N020/N021) para TOP/router:
+# los 4 de la grilla 2×2. Las CARAS laterales (side drills) por ahora solo en HG (falta derivar el
+# SHF por-cara espejado para los otros campos) → guarda aparte en _reader.
+SUPPORTED_FIELDS: tuple[str, ...] = ("HG", "EF", "DC", "AB")
+SIDE_SUPPORTED_FIELDS: tuple[str, ...] = ("HG",)
 # SHF[X]/SHF[Y] de máquina = origen (X, Y) del campo activo, leídos de fields.cfg (NO horneados).
 # HG = (0.000, -1515.600); byte-idénticos a los SHF de Maestro. Simétricos: el origen X del campo
 # entra en SHF[X] igual que el Y en SHF[Y] (SHF[X] = SHF_X_MACHINE - pieza, SHF[Y] = SHF_Y_MACHINE
@@ -32,11 +34,51 @@ SUPPORTED_FIELDS: tuple[str, ...] = ("HG",)
 # con un fixture en un campo de X≠0 cómo entra exactamente ese offset (HG.x=0 hoy lo oculta).
 SHF_X_MACHINE, SHF_Y_MACHINE = field_origin(ACTIVE_FIELD)
 
-# Or[0].ofY (campo front) = float32(origen Y del campo) × 1000, tal como lo computa Maestro (guarda
-# el origen en float32). El "-1515599.976" NO es calibración fina: es float32(-1515.60)×1000 (Fermín
-# ingresó 1515.60). Derivado de fields.cfg (N018 confirmó que ofY es constante por campo; N021 +
-# float32 lo cierran). Ya NO es número mágico.
-OR_OFY: float = _f32(SHF_Y_MACHINE) * 1000.0
+# ---------------------------------------------------------------------------
+# Modelo del origen de trabajo por CAMPO (N019/N020/N021, grilla 2×2 espejada).
+# Cada eje es independiente; el régimen depende del origen del campo en ese eje:
+#   - "near" (field_coord == 0): lado del cero de máquina (Right en X, Back en Y). El origen es
+#     DERIVADO de la pieza: SHF = -D; of[pre] = -D×1000; ofX[blk] = -(D+origin)×1000.
+#   - "far"  (field_coord <  0): lado lejano (Left en X, Front en Y). El origen es la ESQUINA del
+#     campo: SHF[pre] = field; SHF[blk] = field+origin; of = float32(field)×1000 (const).
+# El selector EDK sigue el eje X: near-X→13, far-X→10. (Caras: SIDE_FACE es igual en todo campo.)
+# `ctx` es un PieceCtx (duck-typed: .field/.DX/.DY/.origin_x/.origin_y). field_origin(area) toma
+# el origen del 1er campo del par (HG→H, EF→E, DC→D, AB→A).
+
+
+def or_ofx(ctx, block: bool) -> float:
+    """%Or[0].ofX (µm) del campo. Near: -(D[+origin])×1000. Far: float32(field_x)×1000."""
+    fx, _ = field_origin(ctx.field)
+    if fx == 0.0:
+        return -(ctx.DX + (ctx.origin_x if block else 0.0)) * 1000.0
+    return _f32(fx) * 1000.0
+
+
+def or_ofy(ctx, block: bool) -> float:
+    """%Or[0].ofY (µm) del campo. Near (back): -(DY[+origin_y])×1000. Far (front): float32(field_y)×1000.
+    (El bloque suma origin_y en near, igual que ofX en near-X; en far no depende del bloque.)"""
+    _, fy = field_origin(ctx.field)
+    if fy == 0.0:
+        return -(ctx.DY + (ctx.origin_y if block else 0.0)) * 1000.0
+    return _f32(fy) * 1000.0
+
+
+def shf_x(ctx, block: bool) -> float:
+    """SHF[X] (mm) del campo. Near: -DX. Far: field_x [+origin_x en bloque]."""
+    fx, _ = field_origin(ctx.field)
+    return (fx - ctx.DX) if fx == 0.0 else (fx + (ctx.origin_x if block else 0.0))
+
+
+def shf_y(ctx, block: bool) -> float:
+    """SHF[Y] (mm) del campo. Near (back): -DY. Far (front): field_y [+origin_y en bloque]."""
+    _, fy = field_origin(ctx.field)
+    return (fy - ctx.DY) if fy == 0.0 else (fy + (ctx.origin_y if block else 0.0))
+
+
+def edk_field(ctx) -> int:
+    """Selector de campo EDK: sigue el eje X. Right (near-X)→13, Left (far-X)→10."""
+    fx, _ = field_origin(ctx.field)
+    return 13 if fx == 0.0 else 10
 
 TLC_LATERAL: float = 37.0         # Tool Length Constant cabezales laterales (g53/shf)
 # Margen de seguridad del g53 lateral (el +20 fijo). Candidato confirmado por Fermín: la Cabeza 1

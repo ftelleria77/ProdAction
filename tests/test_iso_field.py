@@ -13,12 +13,13 @@ import zipfile
 from pathlib import Path
 
 from iso.synthesis import _reader
-from iso.synthesis._machine import SUPPORTED_FIELDS
+from iso.synthesis._machine import SIDE_SUPPORTED_FIELDS, SUPPORTED_FIELDS
 from iso.synthesis._machine_config import field_origin
 from iso.synthesis._reader import _execution_field, read_pgmx
 from iso.synthesis._validation import UnsupportedOperationError
 
 _FIXTURE = Path(r"S:\Maestro\Projects\ProdAction\N001_baselines\N_A001_top_1hole_D5.pgmx")
+_SIDE_FIXTURE = Path(r"S:\Maestro\Projects\ProdAction\N001_baselines\N_B001_left_1hole.pgmx")
 
 
 class FieldOriginTest(unittest.TestCase):
@@ -63,18 +64,46 @@ class ExecutionFieldTest(unittest.TestCase):
         self.assertEqual(_execution_field(tmp), "HG")
 
 
-class FailLoudTest(unittest.TestCase):
-    def test_hg_is_the_only_supported_field(self):
-        self.assertEqual(SUPPORTED_FIELDS, ("HG",))
+class FieldSupportTest(unittest.TestCase):
+    def test_supported_fields(self):
+        # Top/router: los 4 campos de la grilla 2×2. Side: solo HG (SHF por-cara sin derivar aún).
+        self.assertEqual(SUPPORTED_FIELDS, ("HG", "EF", "DC", "AB"))
+        self.assertEqual(SIDE_SUPPORTED_FIELDS, ("HG",))
 
-    def test_non_hg_field_raises(self):
+    def _with_field(self, value: str):
+        orig = _reader._execution_field
+        _reader._execution_field = lambda _p: value
+        return orig
+
+    def test_unknown_field_raises(self):
         if not _FIXTURE.exists():
             self.skipTest("fixture no disponible")
-        orig = _reader._execution_field
-        _reader._execution_field = lambda _p: "EF"
+        orig = self._with_field("XY")  # fuera de la grilla
         try:
             with self.assertRaises(UnsupportedOperationError):
                 read_pgmx(_FIXTURE)
+        finally:
+            _reader._execution_field = orig
+
+    def test_non_hg_top_is_allowed(self):
+        # El fixture es un taladro TOP → un campo no-HG (EF) YA está soportado (no fail-loud).
+        if not _FIXTURE.exists():
+            self.skipTest("fixture no disponible")
+        orig = self._with_field("EF")
+        try:
+            ctx, _ = read_pgmx(_FIXTURE)
+            self.assertEqual(ctx.field, "EF")
+        finally:
+            _reader._execution_field = orig
+
+    def test_non_hg_side_raises(self):
+        # Taladro lateral en campo no-HG → fail-loud (SHF por-cara espejado sin derivar).
+        if not _SIDE_FIXTURE.exists():
+            self.skipTest("fixture lateral no disponible")
+        orig = self._with_field("EF")
+        try:
+            with self.assertRaises(UnsupportedOperationError):
+                read_pgmx(_SIDE_FIXTURE)
         finally:
             _reader._execution_field = orig
 

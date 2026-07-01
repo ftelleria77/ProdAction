@@ -8,8 +8,7 @@ from dataclasses import dataclass
 from pgmx.synthesis.drilling.single import DrillingSpec
 
 from ._machine import (
-    OR_OFY, SHF_X_MACHINE, SHF_Y_MACHINE, Z_PARK,
-    effective_top_feed_spindle, resolve_top_tool,
+    Z_PARK, effective_top_feed_spindle, or_ofx, or_ofy, resolve_top_tool, shf_x, shf_y,
 )
 from ._reader import PieceCtx
 
@@ -123,15 +122,14 @@ def _first_hole_no_prior(
     drill: DrillingSpec, ctx: PieceCtx, tool, state: _TopDrillState, depths: list[float],
     z_top_security: float,
 ) -> list[str]:
-    shf_y = SHF_Y_MACHINE + ctx.origin_y
     lines = [
         f"?%ETK[6]={tool.etk6}",
-        f"%Or[0].ofX={-(ctx.DX + ctx.origin_x) * 1000:.3f}",
-        f"%Or[0].ofY={OR_OFY:.3f}",
+        f"%Or[0].ofX={or_ofx(ctx, block=True):.3f}",
+        f"%Or[0].ofY={or_ofy(ctx, block=True):.3f}",
         f"%Or[0].ofZ={ctx.DZ * 1000:.3f}",
         "MLV=1",
-        f"SHF[X]={SHF_X_MACHINE - ctx.DX:.3f}",
-        f"SHF[Y]={shf_y:.3f}",
+        f"SHF[X]={shf_x(ctx, block=True):.3f}",
+        f"SHF[Y]={shf_y(ctx, block=True):.3f}",
         f"SHF[Z]={ctx.origin_z:.3f}",
         "MLV=2",
         "MLV=2",
