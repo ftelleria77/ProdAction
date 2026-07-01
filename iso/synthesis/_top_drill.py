@@ -49,6 +49,8 @@ def _cut_motion(cx: float, cy: float, security: float, feed: float,
     ]
     for i in range(1, n):
         prev = depths[i - 1]
+        # +1.0 = gap de re-aproximación FIJO del ciclo de peck de Maestro (confirmado constante en
+        # N006: 1.0 indep. de step_number/step_depth; no está en Programaciones.settingsx → Tier D).
         lines.append(f"G0 Z{prev + 1.0:.3f}")                 # aproxima 1 mm sobre la previa
         lines.append(f"G1 G9 Z{depths[i]:.3f} F{feed:.3f}")
         if i < n - 1:

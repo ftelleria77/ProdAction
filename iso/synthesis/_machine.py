@@ -104,9 +104,11 @@ def side_shf(ctx, face: str) -> tuple[float, float]:
 # (boring head) tiene Configuración 1 Eje Z = -20 en pheads.cfg → SECURITY_SIDE = -(Config1 Z).
 # Match exacto y byte-validado; revisar si esa config cambia.
 SECURITY_SIDE: float = -phead_float(1, 5)  # Config1 Eje Z de la Cabeza 1 (índice 5) = -20 → 20
-SIDE_APPROACH_FLOOR: float = 5.0   # Piso del security_plane en el APPROACH lateral (N016 sp=2 → -70;
-                                   # N017 Right/Back idem). (El piso del g53 NO es constante: es la
-                                   # longitud del tool que se retrae — su ToolOffsetLength — N016/N017.)
+SIDE_APPROACH_FLOOR: float = 5.0   # Mínimo del plano de seguridad lateral (N016 sp=2 → -70; N017
+                                   # Right/Back idem). Constante del ciclo de Maestro: no tiene clave
+                                   # en Programaciones.settingsx (que sí trae SecurityDistance=20, el
+                                   # default del sp) → Tier D. (El piso del g53 SÍ es derivado: el
+                                   # ToolOffsetLength del tool que se retrae — N016/N017.)
 # Geometría/límites de la broca lateral (058) — del catálogo (def.tlgx), no horneados.
 # - tool_offset_length (65): offset del CORTE lateral. approach fijo = -(TLC_CUT+SEC);
 #   cut = -TLC_CUT + depth. (N011: d28→-37, d15→-50)
