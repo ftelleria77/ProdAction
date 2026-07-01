@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from pgmx.synthesis.drilling.single import DrillingSpec
 
 from ._machine import (
-    SIDE_APPROACH_FLOOR, SIDE_FACE, SHF_X_MACHINE, SHF_Y_MACHINE, SIDE_SPINDLE,
+    SIDE_APPROACH_FLOOR, SIDE_FACE, SIDE_SPINDLE,
     TLC_LATERAL_CUT, Z_PARK,
     effective_side_feed,
-    or_ofx, or_ofy,
+    or_ofx, or_ofy, side_shf,
     side_transition_g53_z,
 )
 from ._reader import PieceCtx, side_effective_depth
@@ -129,11 +129,7 @@ def _hole_coords(
 # ---------------------------------------------------------------------------
 
 def _shf_mlv1(face: str, ctx: PieceCtx) -> tuple[float, float]:
-    if face == "Left":
-        return SHF_X_MACHINE - ctx.DX, SHF_Y_MACHINE + ctx.DY
-    if face == "Back":
-        return SHF_X_MACHINE - ctx.origin_x, SHF_Y_MACHINE + ctx.origin_y
-    return SHF_X_MACHINE - ctx.DX, SHF_Y_MACHINE + ctx.origin_y
+    return side_shf(ctx, face)
 
 
 # ---------------------------------------------------------------------------

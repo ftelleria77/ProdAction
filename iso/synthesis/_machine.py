@@ -26,7 +26,9 @@ ACTIVE_FIELD: str = "HG"
 # los 4 de la grilla 2×2. Las CARAS laterales (side drills) por ahora solo en HG (falta derivar el
 # SHF por-cara espejado para los otros campos) → guarda aparte en _reader.
 SUPPORTED_FIELDS: tuple[str, ...] = ("HG", "EF", "DC", "AB")
-SIDE_SUPPORTED_FIELDS: tuple[str, ...] = ("HG",)
+# Caras laterales: el SHF por-cara (side_shf) ya está derivado y byte-validado en los 4 campos
+# (N019/N020/N021). El toolpath/g53/MLV2 son field-independientes.
+SIDE_SUPPORTED_FIELDS: tuple[str, ...] = ("HG", "EF", "DC", "AB")
 # SHF[X]/SHF[Y] de máquina = origen (X, Y) del campo activo, leídos de fields.cfg (NO horneados).
 # HG = (0.000, -1515.600); byte-idénticos a los SHF de Maestro. Simétricos: el origen X del campo
 # entra en SHF[X] igual que el Y en SHF[Y] (SHF[X] = SHF_X_MACHINE - pieza, SHF[Y] = SHF_Y_MACHINE
@@ -79,6 +81,23 @@ def edk_field(ctx) -> int:
     """Selector de campo EDK: sigue el eje X. Right (near-X)→13, Left (far-X)→10."""
     fx, _ = field_origin(ctx.field)
     return 13 if fx == 0.0 else 10
+
+
+def side_shf(ctx, face: str) -> tuple[float, float]:
+    """SHF[X]/SHF[Y] de MLV1 de un taladro LATERAL, por cara y por campo (N019/N020/N021).
+    Mismo modelo near/far que el top, con el borde según la cara: en X la cara "especial" es Back
+    (usa el borde opuesto al resto); en Y es Left. Near usa `field - borde`; far usa `field + borde`.
+    Byte-idéntico al _shf_mlv1 de HG y generalizado a los 4 campos; el toolpath/g53/MLV2 no cambian."""
+    fx, fy = field_origin(ctx.field)
+    if fx == 0.0:
+        sx = fx - (ctx.origin_x if face == "Back" else ctx.DX)
+    else:
+        sx = fx + (ctx.DX if face == "Back" else ctx.origin_x)
+    if fy == 0.0:
+        sy = fy - (ctx.origin_y if face == "Left" else ctx.DY)
+    else:
+        sy = fy + (ctx.DY if face == "Left" else ctx.origin_y)
+    return sx, sy
 
 TLC_LATERAL: float = 37.0         # Tool Length Constant cabezales laterales (g53/shf)
 # Margen de seguridad del g53 lateral (el +20 fijo). Candidato confirmado por Fermín: la Cabeza 1

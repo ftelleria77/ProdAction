@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from ._machine import (
-    SIDE_FACE, SHF_X_MACHINE, SHF_Y_MACHINE, Z_PARK,
-    edk_field, or_ofx, or_ofy, shf_x, shf_y,
+    SIDE_FACE, Z_PARK,
+    edk_field, or_ofx, or_ofy, shf_x, shf_y, side_shf,
 )
 from ._reader import PieceCtx
 
@@ -66,24 +66,14 @@ def _last_g40_block(ctx: PieceCtx, face: str | None) -> list[str]:
     if face is None:
         return ["?%ETK[8]=1", "G40"]
 
-    if face == "Left":
-        shf_y = SHF_Y_MACHINE + ctx.DY
+    if face in ("Left", "Back"):
+        sx, sy = side_shf(ctx, face)
         return [
             "MLV=1",
-            f"SHF[X]={SHF_X_MACHINE - ctx.DX:.3f}",
-            f"SHF[Y]={shf_y:.3f}",
+            f"SHF[X]={sx:.3f}",
+            f"SHF[Y]={sy:.3f}",
             f"SHF[Z]={ctx.DZ:.3f}+%ETK[114]/1000",
-            f"?%ETK[8]={SIDE_FACE['Left'].etk8}",
-            "G40",
-        ]
-    if face == "Back":
-        shf_y = SHF_Y_MACHINE + ctx.origin_y
-        return [
-            "MLV=1",
-            f"SHF[X]={SHF_X_MACHINE - ctx.origin_x:.3f}",
-            f"SHF[Y]={shf_y:.3f}",
-            f"SHF[Z]={ctx.DZ:.3f}+%ETK[114]/1000",
-            f"?%ETK[8]={SIDE_FACE['Back'].etk8}",
+            f"?%ETK[8]={SIDE_FACE[face].etk8}",
             "G40",
         ]
     # Right or Front: only ETK[8] changes, no SHF re-setup
@@ -105,8 +95,7 @@ def render_epilogue(
     has_router: True cuando hay router (cambia el bloque de shutdown).
     has_top: True cuando hay taladro vertical (solo router no lo tiene).
     """
-    dx, dz = ctx.DX, ctx.DZ
-    shf_y = SHF_Y_MACHINE + ctx.origin_y  # e.g. -1510.600
+    dz = ctx.DZ
     # Park del footer: X (y opcional Y) de la operación nula Xn del .pgmx (N015). El Z es
     # machine config (Z_PARK). Maestro pone X e Y en el MISMO bloque G53 cuando hay Y.
     park_xy = f"G0 G53 X{ctx.park_x:.3f}" + (
@@ -171,10 +160,11 @@ def render_epilogue(
     # Side drill programs: standard start + restoration block + SYN
     needs_shf_restoration = last_side_face in ("Left", "Back")
     if needs_shf_restoration:
+        rest_x, rest_y = side_shf(ctx, "Front")  # marco por defecto (no Left/Back) del campo
         restoration = [
             "MLV=1",
-            f"SHF[X]={SHF_X_MACHINE - dx:.3f}",
-            f"SHF[Y]={shf_y:.3f}",
+            f"SHF[X]={rest_x:.3f}",
+            f"SHF[Y]={rest_y:.3f}",
             f"SHF[Z]={dz:.3f}+%ETK[114]/1000",
             "G61",
             "MLV=0",

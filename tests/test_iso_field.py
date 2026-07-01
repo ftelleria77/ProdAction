@@ -66,9 +66,9 @@ class ExecutionFieldTest(unittest.TestCase):
 
 class FieldSupportTest(unittest.TestCase):
     def test_supported_fields(self):
-        # Top/router: los 4 campos de la grilla 2×2. Side: solo HG (SHF por-cara sin derivar aún).
+        # Los 4 campos de la grilla 2×2, para top/router Y caras laterales (side_shf derivado).
         self.assertEqual(SUPPORTED_FIELDS, ("HG", "EF", "DC", "AB"))
-        self.assertEqual(SIDE_SUPPORTED_FIELDS, ("HG",))
+        self.assertEqual(SIDE_SUPPORTED_FIELDS, ("HG", "EF", "DC", "AB"))
 
     def _with_field(self, value: str):
         orig = _reader._execution_field
@@ -96,14 +96,14 @@ class FieldSupportTest(unittest.TestCase):
         finally:
             _reader._execution_field = orig
 
-    def test_non_hg_side_raises(self):
-        # Taladro lateral en campo no-HG → fail-loud (SHF por-cara espejado sin derivar).
+    def test_non_hg_side_is_allowed(self):
+        # Taladro lateral en campo no-HG (EF) YA está soportado (side_shf por-cara derivado).
         if not _SIDE_FIXTURE.exists():
             self.skipTest("fixture lateral no disponible")
         orig = self._with_field("EF")
         try:
-            with self.assertRaises(UnsupportedOperationError):
-                read_pgmx(_SIDE_FIXTURE)
+            ctx, _ = read_pgmx(_SIDE_FIXTURE)
+            self.assertEqual(ctx.field, "EF")
         finally:
             _reader._execution_field = orig
 
