@@ -21,6 +21,8 @@ class ToolGeometry:
     sinking_length: float      # mm — hundimiento máximo (límite de profundidad/espesor)
     feed_max: float            # mm/min — tope de avance (feed_rate_max × 1000)
     spindle_max: int           # rpm — tope de husillo
+    spindle_std: int           # rpm — husillo por defecto (spindle_speed_std; fiable, a diferencia
+                               # del feed_std, que no lo es para D4/D5/cónica/lateral)
 
 
 @lru_cache(maxsize=1)
@@ -44,4 +46,5 @@ def tool_geometry(name: str) -> ToolGeometry:
         sinking_length=float(row["sinking_length"]),
         feed_max=float(row["feed_rate_max"]) * 1000.0,
         spindle_max=int(float(row["spindle_speed_max"])),
+        spindle_std=int(float(row["spindle_speed_std"])),
     )

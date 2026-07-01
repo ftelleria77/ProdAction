@@ -99,7 +99,7 @@ def side_shf(ctx, face: str) -> tuple[float, float]:
         sy = fy + (ctx.DY if face == "Left" else ctx.origin_y)
     return sx, sy
 
-TLC_LATERAL: float = 37.0         # Tool Length Constant cabezales laterales (g53/shf)
+
 # Margen de seguridad del g53 lateral (el +20 fijo). Candidato confirmado por Fermín: la Cabeza 1
 # (boring head) tiene Configuración 1 Eje Z = -20 en pheads.cfg → SECURITY_SIDE = -(Config1 Z).
 # Match exacto y byte-validado; revisar si esa config cambia.
@@ -118,7 +118,7 @@ TLC_LATERAL_CUT: float = _SIDE_TOOL.tool_offset_length
 SIDE_MAX_DEPTH: float = _SIDE_TOOL.sinking_length
 SIDE_FEED_MAX: float = _SIDE_TOOL.feed_max
 SIDE_FEED_DEFAULT: float = 2000.0  # mm/min sin override (MEDIDO del ISO; def.tlgx Std no es fiable)
-SIDE_SPINDLE: int = 6000           # husillo lateral fijo; el override de spindle se ignora (N011)
+SIDE_SPINDLE: int = _SIDE_TOOL.spindle_std   # husillo lateral (058 spindle_std=6000); override ignorado (N011)
 
 # Park Z de máquina ← Params.cfg [ax2] (eje Z) AP_PARKQTA / 1000 (= 201). Es machine config:
 # el Xn no tiene Z. (En [ax0]=X, AP_PARKQTA=0 → el X park NO sale de acá, sale del Xn; N015.)
@@ -156,23 +156,25 @@ class _TopToolData:
 # PROFUNDIDAD (tlc, max_sink, max_feed, max_spindle) NO se hornea: sale del tool_catalog.csv
 # (= def.tlgx) vía `tool_geometry`. Para agregar un diámetro: medir etk0/feed/spindle/shf del
 # ISO; el resto lo aporta el catálogo.
-def _top_tool(etk6: int, etk0: int, spindle: int, feed: float) -> _TopToolData:
+def _top_tool(etk6: int, etk0: int, feed: float) -> _TopToolData:
     g = tool_geometry(f"{etk6:03d}")
     shf_x, shf_y, shf_z = spindle_shf(etk6)  # = -(Offset X/Y/Z) del mandril (spindles.cfg)
+    # spindle por defecto = spindle_std del catálogo (fiable: matchea el ISO en las 7 brocas top +
+    # side + router). El feed default SÍ queda medido (def.tlgx Std miente para D4/D5/cónica: dice 3).
     return _TopToolData(
-        etk6=etk6, etk0=etk0, spindle=spindle, feed=feed, tlc=g.tool_offset_length,
+        etk6=etk6, etk0=etk0, spindle=g.spindle_std, feed=feed, tlc=g.tool_offset_length,
         shf_x=shf_x, shf_y=shf_y, shf_z=shf_z,
         max_feed=g.feed_max, max_spindle=g.spindle_max, max_sink=g.sinking_length,
     )
 
 
 TOP_TOOL: dict[float, _TopToolData] = {
-    4.0:  _top_tool(etk6=6, etk0=32, spindle=6000, feed=2000.0),
-    5.0:  _top_tool(etk6=5, etk0=16, spindle=6000, feed=2000.0),
-    8.0:  _top_tool(etk6=1, etk0=1,  spindle=6000, feed=2000.0),
-    15.0: _top_tool(etk6=2, etk0=2,  spindle=4000, feed=1000.0),
-    20.0: _top_tool(etk6=3, etk0=4,  spindle=4000, feed=1000.0),
-    35.0: _top_tool(etk6=4, etk0=8,  spindle=4000, feed=1000.0),
+    4.0:  _top_tool(etk6=6, etk0=32, feed=2000.0),
+    5.0:  _top_tool(etk6=5, etk0=16, feed=2000.0),
+    8.0:  _top_tool(etk6=1, etk0=1,  feed=2000.0),
+    15.0: _top_tool(etk6=2, etk0=2,  feed=1000.0),
+    20.0: _top_tool(etk6=3, etk0=4,  feed=1000.0),
+    35.0: _top_tool(etk6=4, etk0=8,  feed=1000.0),
 }
 
 # Brocas cónicas (punta de lanza) por diámetro. Hoy la máquina solo tiene la tool 007
@@ -183,7 +185,7 @@ TOP_TOOL: dict[float, _TopToolData] = {
 # (de BottomCondition/IsFlat en pasantes). NO se usa la herramienta seleccionada: la forma
 # canónica del .pgmx no trae herramienta (Maestro la resuelve al postprocesar). (N007)
 TOP_TOOL_CONICAL: dict[float, _TopToolData] = {
-    5.0:  _top_tool(etk6=7, etk0=64, spindle=6000, feed=2000.0),
+    5.0:  _top_tool(etk6=7, etk0=64, feed=2000.0),
 }
 
 # Índice por etk6 (= ToolKey.Name del .pgmx con padding). Permite resolver por la
@@ -307,7 +309,7 @@ FACE_PRIORITY: dict[str, int] = {"Front": 0, "Left": 1, "Right": 2, "Back": 3}
 ROUTER_ETK6: int = 1
 ROUTER_ETK9: int = 4
 ROUTER_ETK18: int = 1
-ROUTER_SPINDLE: int = 18000
+ROUTER_SPINDLE: int = tool_geometry("E004").spindle_std  # del catálogo (E004 spindle_std=18000)
 ROUTER_ATC_SLOT: int = 4
 ROUTER_TLC: float = tool_geometry("E004").tool_offset_length  # del catálogo (def.tlgx), = 107.2
 # SHF del router = -(Configuración 0) de su cabeza en pheads.cfg. El router/electromandril es la
