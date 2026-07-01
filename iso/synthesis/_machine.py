@@ -1,11 +1,18 @@
 """Constantes de máquina SCM Group validadas contra ISO Maestro (lotes N001-N003)."""
 
 from __future__ import annotations
+import struct
 from dataclasses import dataclass
 from typing import Sequence
 
 from ._machine_config import field_origin, param_float, phead_float, phead_shf, spindle_shf
 from ._tool_catalog import tool_geometry
+
+
+def _f32(x: float) -> float:
+    """Redondeo a float32 (single precision), tal como Maestro guarda el origen del campo.
+    Por eso los %Or[0] "raros" (-1515599.976) NO son calibración: son float32(origen)×1000."""
+    return struct.unpack("f", struct.pack("f", x))[0]
 
 # ---------------------------------------------------------------------------
 # Constantes globales de máquina
@@ -25,10 +32,11 @@ SUPPORTED_FIELDS: tuple[str, ...] = ("HG",)
 # con un fixture en un campo de X≠0 cómo entra exactamente ese offset (HG.x=0 hoy lo oculta).
 SHF_X_MACHINE, SHF_Y_MACHINE = field_origin(ACTIVE_FIELD)
 
-# Or[0].ofY: cero-máquina absoluto en µm. OJO: NO es SHF_Y_MACHINE*1000 (-1515599.976 ≠ -1515600);
-# lleva precisión de calibración que fields.cfg (2 decimales) no guarda → es constante de máquina,
-# no el origen del campo. Pendiente de sourcear de la calibración fina cuando aparezca esa clave.
-OR_OFY: float = -1515599.976
+# Or[0].ofY (campo front) = float32(origen Y del campo) × 1000, tal como lo computa Maestro (guarda
+# el origen en float32). El "-1515599.976" NO es calibración fina: es float32(-1515.60)×1000 (Fermín
+# ingresó 1515.60). Derivado de fields.cfg (N018 confirmó que ofY es constante por campo; N021 +
+# float32 lo cierran). Ya NO es número mágico.
+OR_OFY: float = _f32(SHF_Y_MACHINE) * 1000.0
 
 TLC_LATERAL: float = 37.0         # Tool Length Constant cabezales laterales (g53/shf)
 # Margen de seguridad del g53 lateral (el +20 fijo). Candidato confirmado por Fermín: la Cabeza 1
