@@ -307,13 +307,11 @@ def side_transition_g53_z(
 # Prioridad de ejecución por cara lateral (Maestro reordena por esta prioridad)
 FACE_PRIORITY: dict[str, int] = {"Front": 0, "Left": 1, "Right": 2, "Back": 3}
 
-# Router E004
+# Router / cabezal (electromandril). Lo específico de la FRESA (slot ATC, ETK[9], spindle, TLC,
+# feeds) se deriva por herramienta en `_router.py` (T{N}/ETK[9]={N} = E00N→N; resto del catálogo).
+# Acá solo lo del CABEZAL (constante para toda fresa): ETK[6]/ETK[18] y el SHF.
 ROUTER_ETK6: int = 1
-ROUTER_ETK9: int = 4
 ROUTER_ETK18: int = 1
-ROUTER_SPINDLE: int = tool_geometry("E004").spindle_std  # del catálogo (E004 spindle_std=18000)
-ROUTER_ATC_SLOT: int = 4
-ROUTER_TLC: float = tool_geometry("E004").tool_offset_length  # del catálogo (def.tlgx), = 107.2
 # SHF del router = -(Configuración 0) de su cabeza en pheads.cfg. El router/electromandril es la
 # Cabeza 3 (Cabezas Operadoras/PHEADS) → (32.05, -246.65, -125.30). No horneado.
 ROUTER_PHEAD: int = 3

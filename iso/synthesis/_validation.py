@@ -18,6 +18,7 @@ from pgmx.synthesis.drilling.single import DrillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
 
 from ._machine import SIDE_FACE, TOP_TOOL, TOP_TOOL_CONICAL, top_tool_or_none
+from ._tool_catalog import tool_geometry
 
 __all__ = ["UnsupportedOperationError", "validate_entries"]
 
@@ -27,7 +28,6 @@ class UnsupportedOperationError(ValueError):
 
 
 _SUPPORTED_DRILL_FACES = frozenset({"Top", *SIDE_FACE})
-_ROUTER_TOOL = "E004"
 
 
 def _top_tool_supported(spec: DrillingSpec) -> bool:
@@ -106,8 +106,13 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     if spec.plane_name != "Top":
         _fail(spec, f"fresado lineal en cara {spec.plane_name!r} no soportado "
                     f"(solo Top). [A3]")
-    if spec.tool_name != _ROUTER_TOOL:
-        _fail(spec, f"fresa {spec.tool_name!r} no soportada (solo {_ROUTER_TOOL}). [A3]")
+    # Cualquier herramienta del cabezal: no se distingue tipo (fresa o sierra). Solo hace falta
+    # que exista en el catálogo (para sourcear sus params) y que su nombre sea E00N (slot/ETK[9]).
+    try:
+        tool_geometry(spec.tool_name)
+        int(spec.tool_name.lstrip("E"))
+    except (KeyError, ValueError):
+        _fail(spec, f"fresa {spec.tool_name!r} no está en el catálogo o su nombre no es E00N. [A3]")
     if spec.depth_spec.is_through:
         _fail(spec, "fresado lineal pasante (is_through) no soportado aún. [A3]")
     if spec.side_of_feature != "Center":

@@ -185,6 +185,10 @@ def _is_hydrated_slot_milling_spec(spec) -> bool:
     return type(spec).__name__ == "_HydratedSlotMillingSpec"
 
 
+def _is_hydrated_line_milling_spec(spec) -> bool:
+    return type(spec).__name__ == "_HydratedLineMillingSpec"
+
+
 def _validate_tool_sinking_length_for_spec(
     state,
     spec,
@@ -237,6 +241,11 @@ def _validate_tool_type_for_milling_spec(spec, tool_catalog: dict[str, dict[str,
         )
 
     tool_type = (catalog_entry.get("type") or "").strip()
+    # Fresado LINEAL: no se distingue el tipo de herramienta. Una sierra (p.ej. E002 Sierra
+    # Horizontal) se programa igual que una fresa en una línea; el uso/recorrido es responsabilidad
+    # del programador de Maestro. (La ranura SlotSide sí exige Sierra Vertical X — se valida abajo.)
+    if _is_hydrated_line_milling_spec(spec):
+        return
     usage_group = _normalize_tool_usage_group(tool_type)
     if _is_hydrated_slot_milling_spec(spec):
         if not _is_vertical_x_saw(tool_type):

@@ -20,10 +20,12 @@ class ToolGeometry:
     tool_offset_length: float  # mm — referencia de longitud (tlc vertical / cut lateral / router)
     sinking_length: float      # mm — hundimiento máximo (límite de profundidad/espesor)
     feed_max: float            # mm/min — tope de avance (feed_rate_max × 1000)
-    feed_default: float        # mm/min — avance de taladro por defecto = min(descent_std, feed_std)
-                               # × 1000. El drill usa la más conservadora entre bajada (penetración)
-                               # y avance: descent topea las brocas chicas (2000), feed_std las
-                               # grandes (1000). Antes se creía "no sourceable"; era mirar solo feed.
+    feed_default: float        # mm/min — avance por defecto = min(descent_std, feed_std) × 1000.
+                               # Taladro: usa la más conservadora entre bajada (penetración) y avance:
+                               # descent topea las brocas chicas (2000), feed_std las grandes (1000).
+                               # Router: es el feed de PLUNGE (bajada G1 Z). (El feed de CORTE lateral
+                               # del router es `feed_std` — ver abajo.)
+    feed_std: float            # mm/min — feed_rate_std × 1000. Feed de CORTE del router (G1 X/Y).
     spindle_max: int           # rpm — tope de husillo
     spindle_std: int           # rpm — husillo por defecto (spindle_speed_std)
 
@@ -50,6 +52,7 @@ def tool_geometry(name: str) -> ToolGeometry:
         feed_max=float(row["feed_rate_max"]) * 1000.0,
         feed_default=min(float(row["descent_speed_std"]),
                          float(row["feed_rate_std"])) * 1000.0,
+        feed_std=float(row["feed_rate_std"]) * 1000.0,
         spindle_max=int(float(row["spindle_speed_max"])),
         spindle_std=int(float(row["spindle_speed_std"])),
     )
