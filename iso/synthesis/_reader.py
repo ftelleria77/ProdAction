@@ -217,6 +217,20 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
                 f"{eff:g} mm supera el hundimiento máximo de la broca lateral "
                 f"({SIDE_MAX_DEPTH:g} mm, def.tlgx SinkingLength). [A2]")
 
+    # Fail-loud por hundimiento del FRESADO: profundidad efectiva (pasante → espesor+extra;
+    # ciego → target) vs SinkingLength de la fresa (espejo de la guarda de taladros). N024: el
+    # borde inclusivo pasa (E004 sink=22, espesor 18 + extra 4 = 22 OK en Maestro).
+    from ._tool_catalog import tool_geometry as _tool_geometry
+    for milling in routers:
+        eff = (ctx.depth + milling.depth_spec.extra_depth if milling.depth_spec.is_through
+               else (milling.depth_spec.target_depth or 0.0))
+        sink = _tool_geometry(milling.tool_name).sinking_length
+        if eff > sink:
+            kind = "pasante (espesor+extra)" if milling.depth_spec.is_through else "ciego"
+            raise UnsupportedOperationError(
+                f"Fresado lineal {kind} con {milling.tool_name}: profundidad efectiva {eff:g} mm "
+                f"supera el hundimiento máximo de la fresa ({sink:g} mm, def.tlgx SinkingLength). [A3]")
+
     # Sort side drills by face priority then by original order within face
     side_drills.sort(key=lambda s: FACE_PRIORITY.get(s.plane_name, 99))
 

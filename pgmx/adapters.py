@@ -1339,11 +1339,18 @@ def _adapt_milling(
             )
             # Cambios durante el recorrido (SpeedAttribute/DepthAttribute del snapshot): el builder
             # no los recibe (solo lectura); se cablean por replace sobre el spec construido.
-            if spec is not None and (operation.speed_changes or operation.depth_changes):
+            if spec is not None and (
+                operation.speed_changes or operation.depth_changes
+                or feature.side_offset
+                or operation.allowance_side or operation.allowance_bottom
+            ):
                 spec = _dc_replace(
                     spec,
                     speed_changes=operation.speed_changes,
                     depth_changes=operation.depth_changes,
+                    side_offset=feature.side_offset or 0.0,
+                    allowance_side=operation.allowance_side or 0.0,
+                    allowance_bottom=operation.allowance_bottom or 0.0,
                 )
         except Exception as exc:
             return _unsupported_entry(

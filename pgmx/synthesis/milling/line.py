@@ -135,6 +135,14 @@ class LineMillingSpec:
     # Maestro). Ver iso/synthesis/_router.py para el render ISO.
     speed_changes: tuple[tuple[float, float], ...] = ()
     depth_changes: tuple[tuple[float, float], ...] = ()
+    # Rebaba (N024): en el fresado LINEAL Maestro la guarda como <SideOffset> del
+    # ManufacturingFeature (igual que el slot; NO usa AllowanceSide, que queda 0). En el ISO suma
+    # al corrector de radio: SVR = width/2 + rebaba (si da 0, las líneas SVR se omiten). Admite
+    # negativo. Solo LECTURA (la autoría hornea 0; los .pgmx con rebaba los genera Maestro).
+    side_offset: float = 0.0
+    # Allowance* de la operación: sin uso conocido en línea (siempre 0); si llegan ≠0 → fail-loud.
+    allowance_side: float = 0.0
+    allowance_bottom: float = 0.0
 
 
 @dataclass(frozen=True)

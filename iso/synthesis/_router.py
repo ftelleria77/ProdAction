@@ -83,11 +83,18 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
 
     for i, spec in enumerate(millings):
         geom = tool_geometry(spec.tool_name)
-        depth = spec.depth_spec.target_depth or 0.0
+        # Pasante: z = -(espesor + extra) — el fresado SÍ pasa la cara inferior (corta al
+        # spoilboard), a diferencia del taladro vertical que para en la mesa (N024: -18/-20/-22).
+        if spec.depth_spec.is_through:
+            depth = ctx.depth + spec.depth_spec.extra_depth
+        else:
+            depth = spec.depth_spec.target_depth or 0.0
         security = spec.security_plane
         z_router_approach = geom.tool_offset_length + security
         svl = z_router_approach - security   # = tool_offset_length (TLC)
-        svr = spec.tool_width / 2.0
+        # Rebaba (SideOffset del feature) suma al corrector de radio; si da 0 las líneas SVR se
+        # OMITEN (setup y teardown) — Maestro no emite un corrector nulo (N024 rebm2).
+        svr = spec.tool_width / 2.0 + spec.side_offset
         plunge_feed = geom.feed_default       # bajada G1 Z
         cut_feed = geom.feed_std              # corte lateral G1 X/Y
         is_last = (i == n - 1)
@@ -126,9 +133,9 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             "D1",
             f"SVL {svl:.3f}",
             f"VL6={svl:.3f}",
-            f"SVR {svr:.3f}",
-            f"VL7={svr:.3f}",
         ]
+        if svr != 0.0:
+            lines += [f"SVR {svr:.3f}", f"VL7={svr:.3f}"]
         if compensated:
             # ETK[7]=4 va ANTES de activar la corrección; el lead-in engancha G41/G42 moviéndose
             # al start en el plano de seguridad, y recién ahí baja (plunge).
@@ -160,8 +167,7 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 "D0",
                 "SVL 0.000",
                 "VL6=0.000",
-                "SVR 0.000",
-                "VL7=0.000",
+                *(("SVR 0.000", "VL7=0.000") if svr != 0.0 else ()),
                 "?%ETK[7]=0",
             ]
             prev_end = (spec.end_x, spec.end_y)
@@ -175,8 +181,7 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 "D0",
                 "SVL 0.000",
                 "VL6=0.000",
-                "SVR 0.000",
-                "VL7=0.000",
+                *(("SVR 0.000", "VL7=0.000") if svr != 0.0 else ()),
             ]
         else:
             # Last pass: retract first, ?%ETK[7]=0 after VL7
@@ -185,8 +190,7 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 "D0",
                 "SVL 0.000",
                 "VL6=0.000",
-                "SVR 0.000",
-                "VL7=0.000",
+                *(("SVR 0.000", "VL7=0.000") if svr != 0.0 else ()),
                 "?%ETK[7]=0",
             ]
 

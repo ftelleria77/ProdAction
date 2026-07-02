@@ -113,8 +113,15 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
         int(spec.tool_name.lstrip("E"))
     except (KeyError, ValueError):
         _fail(spec, f"fresa {spec.tool_name!r} no está en el catálogo o su nombre no es E00N. [A3]")
-    if spec.depth_spec.is_through:
-        _fail(spec, "fresado lineal pasante (is_through) no soportado aún. [A3]")
+    # Pasante: soportado (N024, z = -(espesor+extra)). El límite de hundimiento se valida en
+    # _reader (necesita el espesor de la pieza).
+    # Rebaba (SideOffset del feature): SVR = width/2 + rebaba (N024, Center/L/R/xrev, ±2).
+    if spec.allowance_side or spec.allowance_bottom:
+        _fail(spec, f"Allowance side/bottom={spec.allowance_side:g}/{spec.allowance_bottom:g} en "
+                    f"fresado lineal: sin uso conocido (la rebaba de línea es SideOffset). [A3]")
+    if spec.tool_width / 2.0 + spec.side_offset < 0.0:
+        _fail(spec, f"rebaba {spec.side_offset:g} deja el corrector de radio negativo "
+                    f"(width/2 + rebaba < 0): sin fixture de referencia. [A3]")
     # Corrección de herramienta (side Left/Right → G41/G42, radio del SVR): validada en N023 sobre
     # líneas alineadas a eje, ambos sentidos, sin combinar con cambios de recorrido.
     if spec.side_of_feature not in ("Center", "Left", "Right"):
