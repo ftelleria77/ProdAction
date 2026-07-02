@@ -64,6 +64,18 @@ def _g1_cut(prev_x: float, prev_y: float, x: float, y: float, z: float, feed: fl
     return "G1 " + " ".join(parts) + f" F{feed:.3f}"
 
 
+# Distancia de entrada/salida de la corrección (lead-in/out): 1 mm antes del start / después del
+# end sobre la dirección de avance, donde se activa G41/G42 y se desactiva G40. Constante del
+# ciclo de Maestro (N023: idéntica con E004 w=4 y E001 w=18.36 → no depende de la herramienta).
+_COMP_LEAD: float = 1.0
+
+
+def _unit_dir(spec: LineMillingSpec) -> tuple[float, float]:
+    dx, dy = spec.end_x - spec.start_x, spec.end_y - spec.start_y
+    length = (dx * dx + dy * dy) ** 0.5
+    return (dx / length, dy / length)
+
+
 def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
     lines: list[str] = []
     prev_end: tuple[float, float] | None = None
@@ -79,6 +91,10 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         plunge_feed = geom.feed_default       # bajada G1 Z
         cut_feed = geom.feed_std              # corte lateral G1 X/Y
         is_last = (i == n - 1)
+        # Corrección de herramienta (side_of_feature Left/Right): el control compensa el radio
+        # (SVR) vía G41/G42; las coordenadas del corte NO cambian (N023). El lado es relativo
+        # al avance: Left→G41, Right→G42.
+        compensated = spec.side_of_feature != "Center"
 
         if i == 0:
             lines += _atc_header(spec)
@@ -96,23 +112,60 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
 
         # First pass: explicit approach; subsequent passes already positioned by triple G0
         if i == 0:
-            lines += [
-                f"G0 X{spec.start_x:.3f} Y{spec.start_y:.3f}",
-                f"G0 Z{z_router_approach:.3f}",
-            ]
+            if compensated:
+                # Aproxima al punto de lead-in (1 mm antes del start, sobre la dirección).
+                ux, uy = _unit_dir(spec)
+                ax, ay = spec.start_x - _COMP_LEAD * ux, spec.start_y - _COMP_LEAD * uy
+                lines += [f"G0 X{ax:.3f} Y{ay:.3f}", f"G0 Z{z_router_approach:.3f}"]
+            else:
+                lines += [
+                    f"G0 X{spec.start_x:.3f} Y{spec.start_y:.3f}",
+                    f"G0 Z{z_router_approach:.3f}",
+                ]
         lines += [
             "D1",
             f"SVL {svl:.3f}",
             f"VL6={svl:.3f}",
             f"SVR {svr:.3f}",
             f"VL7={svr:.3f}",
-            f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
-            "?%ETK[7]=4",
         ]
+        if compensated:
+            # ETK[7]=4 va ANTES de activar la corrección; el lead-in engancha G41/G42 moviéndose
+            # al start en el plano de seguridad, y recién ahí baja (plunge).
+            lines += [
+                "?%ETK[7]=4",
+                "G41" if spec.side_of_feature == "Left" else "G42",
+                f"G1 X{spec.start_x:.3f} Y{spec.start_y:.3f} Z{security:.3f} F{plunge_feed:.3f}",
+                f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
+            ]
+        else:
+            lines += [
+                f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
+                "?%ETK[7]=4",
+            ]
         px, py = spec.start_x, spec.start_y
         for seg_x, seg_y, seg_z, seg_feed in _cut_segments(spec, depth, cut_feed):
             lines.append(_g1_cut(px, py, seg_x, seg_y, seg_z, seg_feed))
             px, py = seg_x, seg_y
+
+        if compensated:
+            # Salida: retrae en G1 (no G0), apaga la corrección y sale al punto de lead-out
+            # (1 mm después del end), todo a feed de corte.
+            ux, uy = _unit_dir(spec)
+            ox, oy = spec.end_x + _COMP_LEAD * ux, spec.end_y + _COMP_LEAD * uy
+            lines += [
+                f"G1 Z{security:.3f} F{cut_feed:.3f}",
+                "G40",
+                f"G1 X{ox:.3f} Y{oy:.3f} Z{security:.3f} F{cut_feed:.3f}",
+                "D0",
+                "SVL 0.000",
+                "VL6=0.000",
+                "SVR 0.000",
+                "VL7=0.000",
+                "?%ETK[7]=0",
+            ]
+            prev_end = (spec.end_x, spec.end_y)
+            continue
 
         if not is_last:
             # Non-last pass: ?%ETK[7]=0 before retract

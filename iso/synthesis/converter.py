@@ -9,6 +9,7 @@ from pgmx.synthesis.drilling.single import DrillingSpec
 from ._machine import effective_top_feed_spindle, resolve_top_tool
 from ._preamble import render_epilogue, render_preamble
 from ._reader import ProgramOps, read_pgmx
+from ._validation import UnsupportedOperationError
 from ._router import render_router
 from ._tool_catalog import tool_geometry
 from ._side_drill import render_side_drill
@@ -31,8 +32,17 @@ def convert(pgmx_path: Path) -> str:
     side_only = has_side and not has_router and not has_top
     first_side_face = ops.side_drills[0].plane_name if side_only else None
 
+    router_compensated = any(m.side_of_feature != "Center" for m in ops.routers)
+    # Compensación validada solo en programas de UNA línea (N023): las transiciones entre pasadas
+    # con G41/G42 activo no tienen fixture de referencia.
+    if router_compensated and len(ops.routers) > 1:
+        raise UnsupportedOperationError(
+            "corrección de herramienta con varias pasadas de fresado en el programa: "
+            "sin fixture de referencia aún. [A3]")
+
     lines: list[str] = []
-    lines += render_preamble(ctx, first_side_face, has_router=has_router)
+    lines += render_preamble(
+        ctx, first_side_face, has_router=has_router, router_compensated=router_compensated)
 
     if has_router:
         lines += render_router(list(ops.routers), ctx)

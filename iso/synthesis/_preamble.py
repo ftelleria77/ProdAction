@@ -13,6 +13,7 @@ def render_preamble(
     ctx: PieceCtx,
     first_side_face: str | None,
     has_router: bool,
+    router_compensated: bool = False,
 ) -> list[str]:
     """Genera el preamble ISO.
 
@@ -47,6 +48,9 @@ def render_preamble(
 
     # Three G40 blocks; third one may be face-specific for side-first programs.
     lines += ["?%ETK[8]=1", "G40", "?%ETK[8]=1", "G40"]
+    if router_compensated:
+        # Router con corrección de herramienta (G41/G42): Maestro resetea ?%ETK[7] acá (N023).
+        lines.append("?%ETK[7]=0")
     lines += _last_g40_block(ctx, first_side_face)
 
     # Footer: only for non-router programs (router handles its own MLV entry).

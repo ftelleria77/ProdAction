@@ -115,9 +115,17 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
         _fail(spec, f"fresa {spec.tool_name!r} no está en el catálogo o su nombre no es E00N. [A3]")
     if spec.depth_spec.is_through:
         _fail(spec, "fresado lineal pasante (is_through) no soportado aún. [A3]")
+    # Corrección de herramienta (side Left/Right → G41/G42, radio del SVR): validada en N023 sobre
+    # líneas alineadas a eje, ambos sentidos, sin combinar con cambios de recorrido.
+    if spec.side_of_feature not in ("Center", "Left", "Right"):
+        _fail(spec, f"side_of_feature={spec.side_of_feature!r} desconocido. [A3]")
     if spec.side_of_feature != "Center":
-        _fail(spec, f"side_of_feature={spec.side_of_feature!r} no soportado aún "
-                    f"(solo Center). [A3]")
+        if spec.start_x != spec.end_x and spec.start_y != spec.end_y:
+            _fail(spec, "corrección de herramienta sobre línea DIAGONAL: sin fixture de "
+                        "referencia aún (lead-in/out derivados solo en líneas a eje). [A3]")
+        if spec.speed_changes or spec.depth_changes:
+            _fail(spec, "corrección de herramienta combinada con cambios de velocidad/profundidad "
+                        "en el recorrido: sin fixture de referencia aún. [A3]")
     if spec.milling_strategy is not None:
         _fail(spec, "milling_strategy en fresado lineal no soportada aún. [A3]")
     # Cambios durante el recorrido: validados con UN cambio por tipo, no combinados (N_RT_E001_Vel/
