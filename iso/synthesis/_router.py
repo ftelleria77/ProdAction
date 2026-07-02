@@ -27,17 +27,41 @@ def _cutter_number(spec: LineMillingSpec) -> int:
     return int(spec.tool_name.lstrip("E"))
 
 
-def _cut_line(spec: LineMillingSpec, depth: float, cut_feed: float) -> str:
-    """G1 de corte hasta (end_x, end_y). Emite los ejes que se mueven; repite Z solo si se mueve
-    UN eje (la diagonal, con X e Y, omite Z). El sentido es implícito (va al end)."""
+def _cut_segments(
+    spec: LineMillingSpec, depth: float, cut_feed: float,
+) -> list[tuple[float, float, float, float]]:
+    """Tramos del corte: [(x_fin, y_fin, z_fin, feed), ...]. Sin cambios → un solo tramo al end.
+
+    Cambios DURANTE el recorrido (N_RT_E001_Vel/_Prof, byte-validados):
+    - speed_changes [(upar, speed)]: se parte en el punto UPar; el tramo posterior corre a
+      F = speed×1000 (m/min → mm/min). La Z no cambia.
+    - depth_changes [(upar, d2)]: RAMPA lineal desde la prof. de la operación (el plunge inicial)
+      hasta d2, alcanzándola en el punto UPar (el G1 interpola X y Z); sigue plano a d2.
+    El punto UPar es paramétrico sobre la línea: p = start + upar·(end-start).
+    """
+    sx, sy, ex, ey = spec.start_x, spec.start_y, spec.end_x, spec.end_y
+    if spec.speed_changes:
+        (upar, speed), = spec.speed_changes
+        mx, my = sx + upar * (ex - sx), sy + upar * (ey - sy)
+        return [(mx, my, -depth, cut_feed), (ex, ey, -depth, speed * 1000.0)]
+    if spec.depth_changes:
+        (upar, d2), = spec.depth_changes
+        mx, my = sx + upar * (ex - sx), sy + upar * (ey - sy)
+        return [(mx, my, -d2, cut_feed), (ex, ey, -d2, cut_feed)]
+    return [(ex, ey, -depth, cut_feed)]
+
+
+def _g1_cut(prev_x: float, prev_y: float, x: float, y: float, z: float, feed: float) -> str:
+    """G1 de corte de un tramo. Emite los ejes X/Y que se mueven; agrega Z solo cuando se mueve
+    UN eje del plano (la diagonal X+Y omite Z — quirk de Maestro, N022 dir_diag)."""
     parts: list[str] = []
-    if spec.end_x != spec.start_x:
-        parts.append(f"X{spec.end_x:.3f}")
-    if spec.end_y != spec.start_y:
-        parts.append(f"Y{spec.end_y:.3f}")
+    if x != prev_x:
+        parts.append(f"X{x:.3f}")
+    if y != prev_y:
+        parts.append(f"Y{y:.3f}")
     if len(parts) == 1:
-        parts.append(f"Z{-depth:.3f}")
-    return "G1 " + " ".join(parts) + f" F{cut_feed:.3f}"
+        parts.append(f"Z{z:.3f}")
+    return "G1 " + " ".join(parts) + f" F{feed:.3f}"
 
 
 def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
@@ -84,8 +108,11 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             f"VL7={svr:.3f}",
             f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
             "?%ETK[7]=4",
-            _cut_line(spec, depth, cut_feed),
         ]
+        px, py = spec.start_x, spec.start_y
+        for seg_x, seg_y, seg_z, seg_feed in _cut_segments(spec, depth, cut_feed):
+            lines.append(_g1_cut(px, py, seg_x, seg_y, seg_z, seg_feed))
+            px, py = seg_x, seg_y
 
         if not is_last:
             # Non-last pass: ?%ETK[7]=0 before retract

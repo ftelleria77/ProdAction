@@ -272,6 +272,9 @@ class PgmxOperationSnapshot:
     # MachiningStrategy i:type="MultiStepDrilling" (taladro multi-paso / peck)
     step_number: int = 0
     step_depth: float = 0.0
+    # Cambios DURANTE el recorrido (fresado): (UPar 0..1, valor). Ver _path_attributes_from_operation.
+    speed_changes: tuple[tuple[float, float], ...] = ()
+    depth_changes: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -551,6 +554,32 @@ def _multistep_from_operation(operation: ET.Element) -> tuple[int, float]:
     step_number = int(sp._safe_float(_child_text(strategy, "StepNumber"), 0.0))
     step_depth = sp._safe_float(_child_text(strategy, "StepDepth"), 0.0)
     return (step_number, step_depth)
+
+
+def _path_attributes_from_operation(
+    operation: ET.Element,
+) -> tuple[tuple[tuple[float, float], ...], tuple[tuple[float, float], ...]]:
+    """Lee los OperationAttribute de la operación (Attributes directos, no los del Toolpath):
+    cambios de velocidad/profundidad DURANTE el recorrido, anclados a una posición paramétrica.
+
+    - SpeedAttribute: (UPar, Speed[m/min]) — desde ese punto el avance pasa a Speed.
+    - DepthAttribute: (UPar, Depth[mm]) — rampa lineal desde la profundidad de la operación en el
+      inicio hasta Depth, alcanzándola en UPar; sigue a Depth. (Derivado de N_RT_E001_Vel/_Prof.)
+    Devuelve (speed_changes, depth_changes), ordenados por UPar.
+    """
+    speed: list[tuple[float, float]] = []
+    depth: list[tuple[float, float]] = []
+    attributes = _first_child(operation, "Attributes")
+    if attributes is None:
+        return ((), ())
+    for node in list(attributes):
+        xsi = sp._xsi_type(node)
+        upar = sp._safe_float(_child_text(node, "UPar"), 0.0)
+        if "SpeedAttribute" in xsi:
+            speed.append((upar, sp._safe_float(_child_text(node, "Speed"), 0.0)))
+        elif "DepthAttribute" in xsi:
+            depth.append((upar, sp._safe_float(_child_text(node, "Depth"), 0.0)))
+    return (tuple(sorted(speed)), tuple(sorted(depth)))
 
 
 def _first_descendant_float(node: Optional[ET.Element], local_name: str) -> Optional[float]:
@@ -1081,6 +1110,7 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
     for operation in operations_raw.values():
         approach, retract = _operation_specs(operation)
         multistep = _multistep_from_operation(operation)
+        speed_changes, depth_changes = _path_attributes_from_operation(operation)
         machine_functions_node = _first_child(operation, "MachineFunctions")
         machine_functions = ()
         if machine_functions_node is not None:
@@ -1117,6 +1147,8 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
                 machine_functions=machine_functions,
                 step_number=multistep[0],
                 step_depth=multistep[1],
+                speed_changes=speed_changes,
+                depth_changes=depth_changes,
             )
         )
 

@@ -120,3 +120,17 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
                     f"(solo Center). [A3]")
     if spec.milling_strategy is not None:
         _fail(spec, "milling_strategy en fresado lineal no soportada aún. [A3]")
+    # Cambios durante el recorrido: validados con UN cambio por tipo, no combinados (N_RT_E001_Vel/
+    # _Prof). Lo no validado → fail-loud hasta tener fixture de referencia.
+    if len(spec.speed_changes) > 1 or len(spec.depth_changes) > 1:
+        _fail(spec, "más de un cambio de velocidad/profundidad en el recorrido: sin fixture de "
+                    "referencia aún. [A3]")
+    if spec.speed_changes and spec.depth_changes:
+        _fail(spec, "cambio de velocidad Y de profundidad en el mismo fresado: sin fixture de "
+                    "referencia aún. [A3]")
+    for upar, _val in (*spec.speed_changes, *spec.depth_changes):
+        if not 0.0 < upar < 1.0:
+            _fail(spec, f"cambio en el recorrido con UPar={upar} fuera de (0,1). [A3]")
+    if spec.depth_changes and spec.start_x != spec.end_x and spec.start_y != spec.end_y:
+        _fail(spec, "cambio de profundidad sobre una línea DIAGONAL: la emisión del G1 con X+Y+Z "
+                    "no está validada aún (la diagonal plana omite Z). [A3]")

@@ -26,7 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass, replace as _dc_replace
 from pathlib import Path
 from typing import Any, Optional
 
@@ -1337,6 +1337,14 @@ def _adapt_milling(
                 line_retract_overlap=retract.overlap,
                 line_milling_strategy=operation.milling_strategy,
             )
+            # Cambios durante el recorrido (SpeedAttribute/DepthAttribute del snapshot): el builder
+            # no los recibe (solo lectura); se cablean por replace sobre el spec construido.
+            if spec is not None and (operation.speed_changes or operation.depth_changes):
+                spec = _dc_replace(
+                    spec,
+                    speed_changes=operation.speed_changes,
+                    depth_changes=operation.depth_changes,
+                )
         except Exception as exc:
             return _unsupported_entry(
                 feature,

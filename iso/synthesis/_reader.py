@@ -152,7 +152,10 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
 
     park_x, park_y = _xn_park(result.snapshot)
     ctx = PieceCtx(
-        piece_name=state.piece_name,
+        # Maestro usa el nombre del ARCHIVO .pgmx para el comentario "% x.pgm" del ISO, no el
+        # piece_name interno (evidencia: N007 _not_selected renombrados y N_RT_E001_Vel/_Prof,
+        # copias con piece_name viejo adentro).
+        piece_name=path.stem,
         length=state.length,
         width=state.width,
         depth=state.depth,

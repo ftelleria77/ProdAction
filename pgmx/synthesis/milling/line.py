@@ -127,6 +127,14 @@ class LineMillingSpec:
     retract: RetractSpec = field(default_factory=RetractSpec)
     milling_strategy: Optional[MillingStrategySpec] = None
     is_enabled_expr: Optional[str] = None
+    # Cambios DURANTE el recorrido (Maestro: OperationAttribute anclado a UPar 0..1 normalizado):
+    # - speed_changes: (UPar, Speed m/min) — desde ese punto el avance pasa a Speed.
+    # - depth_changes: (UPar, Depth mm) — rampa lineal desde la prof. de la operación en el inicio
+    #   hasta Depth, alcanzándola en UPar; sigue a Depth. (N_RT_E001_Vel/_Prof, hechos por Fermín.)
+    # Solo LECTURA por ahora: la autoría del sintetizador no los serializa (los .pgmx los genera
+    # Maestro). Ver iso/synthesis/_router.py para el render ISO.
+    speed_changes: tuple[tuple[float, float], ...] = ()
+    depth_changes: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True)
