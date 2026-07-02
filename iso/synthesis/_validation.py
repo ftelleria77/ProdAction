@@ -122,6 +122,22 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     if spec.tool_width / 2.0 + spec.side_offset < 0.0:
         _fail(spec, f"rebaba {spec.side_offset:g} deja el corrector de radio negativo "
                     f"(width/2 + rebaba < 0): sin fixture de referencia. [A3]")
+    # Corrección de longitud (IsPrecise): acorta el recorrido width/2 en cada extremo. Validada
+    # (N023 _long) en líneas a eje, ambos sentidos, con y sin G41/G42, E004 y E001.
+    if spec.is_precise:
+        if spec.start_x != spec.end_x and spec.start_y != spec.end_y:
+            _fail(spec, "corrección de longitud sobre línea DIAGONAL: sin fixture de "
+                        "referencia aún. [A3]")
+        if spec.side_offset:
+            _fail(spec, "corrección de longitud + rebaba: ¿el acorte usa width/2 o el SVR? "
+                        "Sin fixture de referencia aún. [A3]")
+        if spec.speed_changes or spec.depth_changes:
+            _fail(spec, "corrección de longitud + cambios en el recorrido: base del UPar "
+                        "ambigua. Sin fixture de referencia aún. [A3]")
+        length = abs(spec.end_x - spec.start_x) + abs(spec.end_y - spec.start_y)
+        if length <= spec.tool_width:
+            _fail(spec, f"corrección de longitud: la línea ({length:g} mm) no supera el ancho "
+                        f"de la fresa ({spec.tool_width:g} mm) — recorrido degenerado. [A3]")
     # Corrección de herramienta (side Left/Right → G41/G42, radio del SVR): validada en N023 sobre
     # líneas alineadas a eje, ambos sentidos, sin combinar con cambios de recorrido.
     if spec.side_of_feature not in ("Center", "Left", "Right"):

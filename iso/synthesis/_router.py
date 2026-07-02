@@ -11,6 +11,8 @@ distingue tipo — decisión de Fermín) y líneas en cualquier dirección/senti
 
 from __future__ import annotations
 
+from dataclasses import replace as _dc_replace
+
 from pgmx.synthesis.milling.line import LineMillingSpec
 
 from ._machine import (
@@ -95,6 +97,18 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         # Rebaba (SideOffset del feature) suma al corrector de radio; si da 0 las líneas SVR se
         # OMITEN (setup y teardown) — Maestro no emite un corrector nulo (N024 rebm2).
         svr = spec.tool_width / 2.0 + spec.side_offset
+        # Corrección de longitud (IsPrecise): acorta el recorrido el RADIO de la fresa en ambos
+        # extremos (centro en [start+r·dir, end−r·dir] → el filo cubre justo el segmento). N023
+        # _long: E004 ±2, E001 ±9.18. El resto del render usa los extremos ya corregidos (approach,
+        # lead-in/out de la compensación y corte).
+        if spec.is_precise:
+            r = spec.tool_width / 2.0
+            ux, uy = _unit_dir(spec)
+            spec = _dc_replace(
+                spec,
+                start_x=spec.start_x + r * ux, start_y=spec.start_y + r * uy,
+                end_x=spec.end_x - r * ux, end_y=spec.end_y - r * uy,
+            )
         plunge_feed = geom.feed_default       # bajada G1 Z
         cut_feed = geom.feed_std              # corte lateral G1 X/Y
         is_last = (i == n - 1)

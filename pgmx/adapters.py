@@ -1341,7 +1341,7 @@ def _adapt_milling(
             # no los recibe (solo lectura); se cablean por replace sobre el spec construido.
             if spec is not None and (
                 operation.speed_changes or operation.depth_changes
-                or feature.side_offset
+                or feature.side_offset or feature.is_precise
                 or operation.allowance_side or operation.allowance_bottom
             ):
                 spec = _dc_replace(
@@ -1351,6 +1351,7 @@ def _adapt_milling(
                     side_offset=feature.side_offset or 0.0,
                     allowance_side=operation.allowance_side or 0.0,
                     allowance_bottom=operation.allowance_bottom or 0.0,
+                    is_precise=bool(feature.is_precise),
                 )
         except Exception as exc:
             return _unsupported_entry(

@@ -143,6 +143,10 @@ class LineMillingSpec:
     # Allowance* de la operación: sin uso conocido en línea (siempre 0); si llegan ≠0 → fail-loud.
     allowance_side: float = 0.0
     allowance_bottom: float = 0.0
+    # Corrección de longitud (<IsPrecise> del feature, N023 _long): el recorrido se ACORTA el radio
+    # de la fresa en ambos extremos (centro viaja [start+r·dir, end−r·dir]) para que el FILO cubra
+    # exactamente el segmento programado. Solo LECTURA (la autoría hornea false).
+    is_precise: bool = False
 
 
 @dataclass(frozen=True)
