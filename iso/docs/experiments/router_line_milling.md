@@ -95,7 +95,30 @@ exactamente el segmento programado. E004 ±2, E001 ±9.18. Con G41/G42, el lead-
 calcula sobre los extremos ya acortados. Validada en líneas a eje, ambos sentidos, con y sin
 compensación.
 
-## 8. Guardas fail-loud (combos sin fixture de referencia)
+## 8. Multipasada en Z (N025 + N027 — estrategias Uni/Bidireccional)
+
+Pasadas `z_i = -min(i·cd, total_desbaste)`: pasos de `axial_cutting_depth`, la última del desbaste
+lleva el resto. Con **terminación** (`axial_finish_cutting_depth`): desbaste hasta `total − finish`
++ **una pasada final** a total (bi_cd4_f2: −4/−8/−10/−12). **Bidireccional**: alterna el sentido y
+desciende en el extremo donde quedó. **Unidireccional**: siempre start→end; entre pasadas retrae y
+vuelve en G1 a feed de corte — `Automatic` ≡ `SafetyHeight` (retorno a security); **`InPiece`**
+retorna a `z_pasada + MillingRetractDistance` (**sourced de `Programaciones.settingsx`**, =10).
+Quirk: bajada inicial `G1 Z{security}` a feed de PLUNGE; descensos por pasada a feed de CORTE.
+
+## 9. Approach/Retract programables (N026 + N027 — leads)
+
+`lead = (width/2) × radius_multiplier`. ⚠️ El default del RM con lead **habilitado es 2.0**
+(no 1.2): el fixture "rm2" de N026 no variaba nada — lección: verificar en el XML que el fixture
+realmente varió el parámetro. Confirmado con rm3 (lead 6) y E001 (lead 18.36).
+- **Arco tangente**: `Automatic` ≡ `Right` (byte-idéntico) → centro a `rot90ccw(û)`, **G3**;
+  `Left` → `rot90cw(û)`, **G2**. Validado en +X/+Y/−X.
+- **Approach**: `?%ETK[7]=4` antes del plunge (+ `?%ETK[7]=0` en el preamble); plunge en el punto
+  exterior y lead **a profundidad** hasta el start. La **velocidad del lead** (speed>0, ×1000)
+  aplica al plunge Y al lead (sentinel −1 = sin velocidad).
+- **Retract**: lead-out a profundidad desde el end + retracción en **G1** (reemplaza el G0 Z).
+- **Overlap INERTE** en líneas abiertas (0/0.25/5 → ISO idéntico): se ignora.
+
+## 10. Guardas fail-loud (combos sin fixture de referencia)
 
 - Más de un cambio de velocidad/profundidad; ambos tipos juntos; UPar ∉ (0,1).
 - Cambio de profundidad, corrección de herramienta o corrección de longitud sobre **diagonal**.
