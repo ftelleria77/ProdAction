@@ -128,10 +128,18 @@ realmente varió el parámetro. Confirmado con rm3 (lead 6) y E001 (lead 18.36).
   ambiguo); recorrido degenerado (largo ≤ ancho de fresa).
 - Hundimiento: profundidad efectiva > SinkingLength de la fresa.
 
+## Fuera de alcance
+
+**Fresado en caras laterales**: este CNC no tiene herramental para fresar caras laterales (existe
+un agregado instalable, no disponible). El fail-loud del converter (plane ≠ Top) es correcto y
+permanente. El trabajo de canto con la E002 (sierra horizontal) se programa DESDE CARA SUPERIOR:
+traza cercana al borde, la sierra entra por el canto sin bajar sobre la cara — es fresado lineal
+Top normal (§1-2); la traza es responsabilidad del programador de Maestro.
+
 ## Pendiente
 
-Estrategias multipasada Z (roughing), fresado en caras laterales, multi-fresa en un programa,
-autoría de las features solo-lectura en el sintetizador, y los combos de arriba (con fixtures).
+Multi-fresa en un programa (cambio de herramienta entre pasadas), autoría de las features
+solo-lectura en el sintetizador, y los combos de las guardas (§10) con fixtures.
 
 ## Hallazgo transversal (N022 Vel/Prof + N007)
 
