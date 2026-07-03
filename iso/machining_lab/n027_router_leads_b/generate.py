@@ -61,6 +61,14 @@ CASES = [
                                             line_approach_arc_side="Right", line_target_depth=5.0)),
     ("ld_ret_line",      LINE_X, E004, dict(line_retract_enabled=True, line_retract_type="Line",
                                             line_target_depth=5.0)),
+    # OJO: el default de radius_multiplier con lead HABILITADO es 2.0 (no 1.2) — el "rm2" de N026
+    # no varió nada. Hipótesis: lead = (width/2)×RM → rm3 con E004 daría 6.
+    ("ld_app_arc_rm3",   LINE_X, E004, dict(line_approach_enabled=True, line_approach_type="Arc",
+                                            line_approach_radius_multiplier=3.0,
+                                            line_target_depth=5.0)),
+    # Overlap 0.25 dio ISO idéntico: ¿solo aplica a contornos cerrados, o 0.25 era muy chico?
+    ("ld_ret_arc_ov5",   LINE_X, E004, dict(line_retract_enabled=True, line_retract_type="Arc",
+                                            line_retract_overlap=5.0, line_target_depth=5.0)),
     ("mp_bi_cd4_f2",     LINE_X, E004, dict(line_target_depth=12.0,
                                             line_milling_strategy=build_bidirectional_milling_strategy_spec(
                                                 allow_multiple_passes=True, axial_cutting_depth=4.0,
