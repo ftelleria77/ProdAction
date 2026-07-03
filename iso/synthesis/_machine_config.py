@@ -116,6 +116,33 @@ def _fields_lines() -> list[str]:
     return (_CFG_DIR / "fields.cfg").read_text(encoding="latin-1", errors="replace").splitlines()
 
 
+# Programaciones.settingsx: settings de programación de Maestro (defaults de ciclo). Es un ZIP
+# con .config .NET adentro; las claves viven en UI00.exe.Config como <add key=".." value="..">.
+# Ahí están p.ej. SecurityDistance=20 (default del security_plane) y MillingRetractDistance=10
+# (retorno "en la pieza" de la multipasada). Decimales con coma (es-ES).
+_MAESTRO_CFGX = (
+    Path(__file__).resolve().parents[1]
+    / "data" / "machine_config" / "snapshot" / "maestro" / "Cfgx"
+)
+
+
+@lru_cache(maxsize=1)
+def _maestro_settings() -> dict[str, str]:
+    import re
+    import zipfile
+    with zipfile.ZipFile(_MAESTRO_CFGX / "Programaciones.settingsx") as z:
+        text = z.read("UI00.exe.Config").decode("utf-8", errors="replace")
+    return dict(re.findall(r'<add key="([^"]+)" value="([^"]*)"', text))
+
+
+def maestro_setting_float(key: str) -> float:
+    """Setting numérico de Programaciones.settingsx (UI00.exe.Config)."""
+    raw = _maestro_settings().get(key)
+    if raw is None or not raw.strip():
+        raise KeyError(f"Programaciones.settingsx: la clave {key!r} no está en UI00.exe.Config")
+    return float(raw.replace(",", "."))
+
+
 def field_origin(area: str) -> tuple[float, float]:
     """Origen (X, Y) en mm del área de trabajo, leído de fields.cfg. El área (AB/DC/EF/HG) toma
     el origen del PRIMER campo del par (su 1ª letra: HG→H, EF→E, AB→A, DC→D)."""

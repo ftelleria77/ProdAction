@@ -5,7 +5,9 @@ import struct
 from dataclasses import dataclass
 from typing import Sequence
 
-from ._machine_config import field_origin, param_float, phead_float, phead_shf, spindle_shf
+from ._machine_config import (
+    field_origin, maestro_setting_float, param_float, phead_float, phead_shf, spindle_shf,
+)
 from ._tool_catalog import tool_geometry
 
 
@@ -121,6 +123,11 @@ SIDE_MAX_DEPTH: float = _SIDE_TOOL.sinking_length
 SIDE_FEED_MAX: float = _SIDE_TOOL.feed_max
 SIDE_FEED_DEFAULT: float = _SIDE_TOOL.feed_default  # = min(descent_std, feed_std)×1000 = 2000 (058)
 SIDE_SPINDLE: int = _SIDE_TOOL.spindle_std   # husillo lateral (058 spindle_std=6000); override ignorado (N011)
+
+# Retorno "en la pieza" (InPiece) de la multipasada del fresado: la vuelta va a z_pasada + este
+# valor. Sourced de Programaciones.settingsx MillingRetractDistance (= 10). (N025 uni_piece:
+# pasada -4 → retorno +6; pasada -8 → +2.)
+MILLING_RETRACT: float = maestro_setting_float("MillingRetractDistance")
 
 # Park Z de máquina ← Params.cfg [ax2] (eje Z) AP_PARKQTA / 1000 (= 201). Es machine config:
 # el Xn no tiene Z. (En [ax0]=X, AP_PARKQTA=0 → el X park NO sale de acá, sale del Xn; N015.)

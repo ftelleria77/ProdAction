@@ -149,8 +149,32 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
         if spec.speed_changes or spec.depth_changes:
             _fail(spec, "corrección de herramienta combinada con cambios de velocidad/profundidad "
                         "en el recorrido: sin fixture de referencia aún. [A3]")
-    if spec.milling_strategy is not None:
-        _fail(spec, "milling_strategy en fresado lineal no soportada aún. [A3]")
+    # Estrategia MULTIPASADA en Z (N025): Uni/Bidireccional con allow_multiple_passes. Lo no
+    # validado → fail-loud.
+    strategy = spec.milling_strategy
+    if strategy is not None:
+        if not getattr(strategy, "allow_multiple_passes", False):
+            _fail(spec, "estrategia sin allow_multiple_passes (modo 'pre-cast' de una pasada): "
+                        "sin fixture de referencia. [A3]")
+        if getattr(strategy, "axial_cutting_depth", 0.0) <= 0.0:
+            _fail(spec, "estrategia multipasada sin axial_cutting_depth > 0. [A3]")
+        if getattr(strategy, "axial_finish_cutting_depth", 0.0):
+            _fail(spec, "pasada de terminación (finish_cutting_depth): semántica ambigua en el "
+                        "fixture (bi_cd5_f2 ≡ bi_cd5) — falta fixture que la separe. [A3]")
+        if spec.start_x != spec.end_x and spec.start_y != spec.end_y:
+            _fail(spec, "multipasada sobre línea DIAGONAL: sin fixture de referencia. [A3]")
+        if spec.side_of_feature != "Center" or spec.is_precise or spec.side_offset:
+            _fail(spec, "multipasada combinada con corrección/rebaba: sin fixture de "
+                        "referencia. [A3]")
+        if spec.speed_changes or spec.depth_changes:
+            _fail(spec, "multipasada + cambios en el recorrido: sin fixture de referencia. [A3]")
+        if spec.depth_spec.is_through:
+            _fail(spec, "multipasada + pasante: sin fixture de referencia. [A3]")
+    # Approach/Retract programables (leads): fixtures N026 derivados, render PENDIENTE de la
+    # tanda B (radio con otra fresa, direcciones, arc_side explícito). Hasta entonces, fail-loud
+    # (mejor que ignorarlos en silencio y emitir un ISO sin la entrada/salida).
+    if spec.approach.is_enabled or spec.retract.is_enabled:
+        _fail(spec, "approach/retract programables aún sin render (N026 tanda B pendiente). [A3]")
     # Cambios durante el recorrido: validados con UN cambio por tipo, no combinados (N_RT_E001_Vel/
     # _Prof). Lo no validado → fail-loud hasta tener fixture de referencia.
     if len(spec.speed_changes) > 1 or len(spec.depth_changes) > 1:

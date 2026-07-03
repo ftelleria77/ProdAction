@@ -15,7 +15,10 @@ from dataclasses import replace as _dc_replace
 
 from pgmx.synthesis.milling.line import LineMillingSpec
 
+import math
+
 from ._machine import (
+    MILLING_RETRACT,
     ROUTER_ETK6, ROUTER_ETK18,
     ROUTER_SHF_X, ROUTER_SHF_Y, ROUTER_SHF_Z,
     or_ofx, or_ofy, shf_x, shf_y,
@@ -51,6 +54,36 @@ def _cut_segments(
         mx, my = sx + upar * (ex - sx), sy + upar * (ey - sy)
         return [(mx, my, -d2, cut_feed), (ex, ey, -d2, cut_feed)]
     return [(ex, ey, -depth, cut_feed)]
+
+
+def _multipass_cuts(
+    spec: LineMillingSpec, depth: float, security: float, cut_feed: float,
+) -> list[str]:
+    """Pasadas de la estrategia multipasada (N025). Bidireccional: alterna el sentido y baja en
+    el extremo donde quedó. Unidireccional: siempre start→end; entre pasadas retrae y vuelve en
+    G1 a feed de corte — retorno a security (Automatic/SafetyHeight) o a z_pasada +
+    MILLING_RETRACT (InPiece, sourced de Programaciones.settingsx)."""
+    strategy = spec.milling_strategy
+    cd = strategy.axial_cutting_depth
+    n = max(1, math.ceil(depth / cd - 1e-9))
+    is_uni = type(strategy).__name__.startswith("Unidirectional")
+    in_piece = is_uni and getattr(strategy, "connection_mode", "") == "InPiece"
+    start = (spec.start_x, spec.start_y)
+    end = (spec.end_x, spec.end_y)
+    lines: list[str] = []
+    pos = start
+    for i in range(1, n + 1):
+        z = -min(i * cd, depth)
+        lines.append(f"G1 Z{z:.3f} F{cut_feed:.3f}")
+        target = end if pos == start else start
+        lines.append(_g1_cut(pos[0], pos[1], target[0], target[1], z, cut_feed))
+        pos = target
+        if i < n and is_uni:
+            ret = (z + MILLING_RETRACT) if in_piece else security
+            lines.append(f"G1 Z{ret:.3f} F{cut_feed:.3f}")
+            lines.append(_g1_cut(pos[0], pos[1], start[0], start[1], ret, cut_feed))
+            pos = start
+    return lines
 
 
 def _g1_cut(prev_x: float, prev_y: float, x: float, y: float, z: float, feed: float) -> str:
@@ -150,24 +183,35 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         ]
         if svr != 0.0:
             lines += [f"SVR {svr:.3f}", f"VL7={svr:.3f}"]
-        if compensated:
-            # ETK[7]=4 va ANTES de activar la corrección; el lead-in engancha G41/G42 moviéndose
-            # al start en el plano de seguridad, y recién ahí baja (plunge).
+        if spec.milling_strategy is not None:
+            # MULTIPASADA en Z (N025): bajada inicial a security en G1 a feed de PLUNGE; después
+            # todo (descensos incluidos) a feed de CORTE. Pasadas z_i = -min(i·cd, total): pasos
+            # de axial_cutting_depth, la última lleva el resto.
             lines += [
+                f"G1 Z{security:.3f} F{plunge_feed:.3f}",
                 "?%ETK[7]=4",
-                "G41" if spec.side_of_feature == "Left" else "G42",
-                f"G1 X{spec.start_x:.3f} Y{spec.start_y:.3f} Z{security:.3f} F{plunge_feed:.3f}",
-                f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
             ]
+            lines += _multipass_cuts(spec, depth, security, cut_feed)
+            lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
         else:
-            lines += [
-                f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
-                "?%ETK[7]=4",
-            ]
-        px, py = spec.start_x, spec.start_y
-        for seg_x, seg_y, seg_z, seg_feed in _cut_segments(spec, depth, cut_feed):
-            lines.append(_g1_cut(px, py, seg_x, seg_y, seg_z, seg_feed))
-            px, py = seg_x, seg_y
+            if compensated:
+                # ETK[7]=4 va ANTES de activar la corrección; el lead-in engancha G41/G42
+                # moviéndose al start en el plano de seguridad, y recién ahí baja (plunge).
+                lines += [
+                    "?%ETK[7]=4",
+                    "G41" if spec.side_of_feature == "Left" else "G42",
+                    f"G1 X{spec.start_x:.3f} Y{spec.start_y:.3f} Z{security:.3f} F{plunge_feed:.3f}",
+                    f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
+                ]
+            else:
+                lines += [
+                    f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
+                    "?%ETK[7]=4",
+                ]
+            px, py = spec.start_x, spec.start_y
+            for seg_x, seg_y, seg_z, seg_feed in _cut_segments(spec, depth, cut_feed):
+                lines.append(_g1_cut(px, py, seg_x, seg_y, seg_z, seg_feed))
+                px, py = seg_x, seg_y
 
         if compensated:
             # Salida: retrae en G1 (no G0), apaga la corrección y sale al punto de lead-out

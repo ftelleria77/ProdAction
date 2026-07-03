@@ -39,6 +39,10 @@ def convert(pgmx_path: Path) -> str:
         raise UnsupportedOperationError(
             "corrección de herramienta con varias pasadas de fresado en el programa: "
             "sin fixture de referencia aún. [A3]")
+    if len(ops.routers) > 1 and any(m.milling_strategy is not None for m in ops.routers):
+        raise UnsupportedOperationError(
+            "estrategia multipasada con varios fresados en el programa: sin fixture de "
+            "referencia aún. [A3]")
 
     lines: list[str] = []
     lines += render_preamble(
