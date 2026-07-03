@@ -158,9 +158,14 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
                         "sin fixture de referencia. [A3]")
         if getattr(strategy, "axial_cutting_depth", 0.0) <= 0.0:
             _fail(spec, "estrategia multipasada sin axial_cutting_depth > 0. [A3]")
-        if getattr(strategy, "axial_finish_cutting_depth", 0.0):
-            _fail(spec, "pasada de terminación (finish_cutting_depth): semántica ambigua en el "
-                        "fixture (bi_cd5_f2 ≡ bi_cd5) — falta fixture que la separe. [A3]")
+        finish = getattr(strategy, "axial_finish_cutting_depth", 0.0)
+        if finish:
+            # Terminación (N027 bi_cd4_f2): desbaste hasta total−finish + una pasada final.
+            if type(strategy).__name__.startswith("Unidirectional"):
+                _fail(spec, "pasada de terminación en UNIDIRECCIONAL: sin fixture de "
+                            "referencia (solo validada en bidireccional). [A3]")
+            if finish >= (spec.depth_spec.target_depth or 0.0):
+                _fail(spec, f"terminación ({finish:g}) ≥ profundidad total: sin sentido. [A3]")
         if spec.start_x != spec.end_x and spec.start_y != spec.end_y:
             _fail(spec, "multipasada sobre línea DIAGONAL: sin fixture de referencia. [A3]")
         if spec.side_of_feature != "Center" or spec.is_precise or spec.side_offset:
@@ -170,11 +175,27 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
             _fail(spec, "multipasada + cambios en el recorrido: sin fixture de referencia. [A3]")
         if spec.depth_spec.is_through:
             _fail(spec, "multipasada + pasante: sin fixture de referencia. [A3]")
-    # Approach/Retract programables (leads): fixtures N026 derivados, render PENDIENTE de la
-    # tanda B (radio con otra fresa, direcciones, arc_side explícito). Hasta entonces, fail-loud
-    # (mejor que ignorarlos en silencio y emitir un ISO sin la entrada/salida).
+    # Approach/Retract programables (N026/N027): lead = (width/2)×radius_multiplier; arco
+    # tangente (Automatic≡Right→G3, Left→G2); overlap INERTE en líneas (ov 0/0.25/5 idénticos).
+    # Lo no validado → fail-loud.
     if spec.approach.is_enabled or spec.retract.is_enabled:
-        _fail(spec, "approach/retract programables aún sin render (N026 tanda B pendiente). [A3]")
+        if spec.start_x != spec.end_x and spec.start_y != spec.end_y:
+            _fail(spec, "approach/retract sobre línea DIAGONAL: sin fixture de referencia. [A3]")
+        if spec.side_of_feature != "Center" or spec.is_precise or spec.side_offset:
+            _fail(spec, "approach/retract combinado con corrección/rebaba: sin fixture de "
+                        "referencia. [A3]")
+        if spec.speed_changes or spec.depth_changes or spec.milling_strategy is not None:
+            _fail(spec, "approach/retract + cambios de recorrido/multipasada: sin fixture de "
+                        "referencia. [A3]")
+        if spec.depth_spec.is_through:
+            _fail(spec, "approach/retract + pasante: sin fixture de referencia. [A3]")
+        for lead in (spec.approach, spec.retract):
+            if lead.is_enabled and lead.mode != "Quote":
+                _fail(spec, f"lead con mode={lead.mode!r}: solo 'Quote' validado. [A3]")
+            if lead.is_enabled and lead.arc_side not in ("Automatic", "Left", "Right"):
+                _fail(spec, f"lead con arc_side={lead.arc_side!r} desconocido. [A3]")
+        if spec.retract.is_enabled and spec.retract.speed > 0:
+            _fail(spec, "velocidad propia del retract: sin fixture de referencia. [A3]")
     # Cambios durante el recorrido: validados con UN cambio por tipo, no combinados (N_RT_E001_Vel/
     # _Prof). Lo no validado → fail-loud hasta tener fixture de referencia.
     if len(spec.speed_changes) > 1 or len(spec.depth_changes) > 1:

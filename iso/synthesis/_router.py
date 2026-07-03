@@ -56,6 +56,30 @@ def _cut_segments(
     return [(ex, ey, -depth, cut_feed)]
 
 
+def _lead_geometry(
+    spec: LineMillingSpec, lead: float, arc_side: str, at_start: bool,
+) -> tuple[tuple[float, float], tuple[float, float], str]:
+    """Geometría del lead (N026/N027): devuelve (punto exterior, centro del arco, G2|G3).
+
+    lead = (width/2) × radius_multiplier. El centro del arco está a `lead` del punto de anclaje
+    (start o end), perpendicular al avance: Automatic≡Right → rot90ccw(û) y G3; Left → rot90cw(û)
+    y G2. El punto exterior del approach es centro − lead·û; el del retract es centro + lead·û.
+    Para lead tipo Line, el punto exterior es anclaje ∓ lead·û (sin centro).
+    """
+    ux, uy = _unit_dir(spec)
+    if arc_side == "Left":
+        nx, ny, g = uy, -ux, "G2"
+    else:  # Automatic o Right (byte-idénticos, N027)
+        nx, ny, g = -uy, ux, "G3"
+    ax_, ay_ = (spec.start_x, spec.start_y) if at_start else (spec.end_x, spec.end_y)
+    cx, cy = ax_ + lead * nx, ay_ + lead * ny
+    if at_start:
+        px, py = cx - lead * ux, cy - lead * uy
+    else:
+        px, py = cx + lead * ux, cy + lead * uy
+    return (px, py), (cx, cy), g
+
+
 def _multipass_cuts(
     spec: LineMillingSpec, depth: float, security: float, cut_feed: float,
 ) -> list[str]:
@@ -65,20 +89,26 @@ def _multipass_cuts(
     MILLING_RETRACT (InPiece, sourced de Programaciones.settingsx)."""
     strategy = spec.milling_strategy
     cd = strategy.axial_cutting_depth
-    n = max(1, math.ceil(depth / cd - 1e-9))
+    # Terminación (N027 bi_cd4_f2): desbaste en pasos de cd hasta (total − finish), la última
+    # del desbaste lleva el resto; después UNA pasada final a la profundidad total.
+    finish = getattr(strategy, "axial_finish_cutting_depth", 0.0)
+    rough_total = depth - finish
+    n_rough = max(1, math.ceil(rough_total / cd - 1e-9))
+    depths = [-min(i * cd, rough_total) for i in range(1, n_rough + 1)]
+    if finish:
+        depths.append(-depth)
     is_uni = type(strategy).__name__.startswith("Unidirectional")
     in_piece = is_uni and getattr(strategy, "connection_mode", "") == "InPiece"
     start = (spec.start_x, spec.start_y)
     end = (spec.end_x, spec.end_y)
     lines: list[str] = []
     pos = start
-    for i in range(1, n + 1):
-        z = -min(i * cd, depth)
+    for i, z in enumerate(depths):
         lines.append(f"G1 Z{z:.3f} F{cut_feed:.3f}")
         target = end if pos == start else start
         lines.append(_g1_cut(pos[0], pos[1], target[0], target[1], z, cut_feed))
         pos = target
-        if i < n and is_uni:
+        if i < len(depths) - 1 and is_uni:
             ret = (z + MILLING_RETRACT) if in_piece else security
             lines.append(f"G1 Z{ret:.3f} F{cut_feed:.3f}")
             lines.append(_g1_cut(pos[0], pos[1], start[0], start[1], ret, cut_feed))
@@ -149,6 +179,11 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         # (SVR) vía G41/G42; las coordenadas del corte NO cambian (N023). El lado es relativo
         # al avance: Left→G41, Right→G42.
         compensated = spec.side_of_feature != "Center"
+        # Leads programables (N026/N027): entrada/salida en línea o arco tangente.
+        has_app = spec.approach.is_enabled
+        has_ret = spec.retract.is_enabled
+        lead_app = spec.tool_width / 2.0 * spec.approach.radius_multiplier
+        lead_ret = spec.tool_width / 2.0 * spec.retract.radius_multiplier
 
         if i == 0:
             lines += _atc_header(spec)
@@ -171,6 +206,14 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 ux, uy = _unit_dir(spec)
                 ax, ay = spec.start_x - _COMP_LEAD * ux, spec.start_y - _COMP_LEAD * uy
                 lines += [f"G0 X{ax:.3f} Y{ay:.3f}", f"G0 Z{z_router_approach:.3f}"]
+            elif has_app:
+                # Aproxima al punto exterior del lead (línea: start − lead·û; arco: fuera del arco).
+                if spec.approach.approach_type == "Arc":
+                    (apx, apy), _c, _g = _lead_geometry(spec, lead_app, spec.approach.arc_side, True)
+                else:
+                    ux, uy = _unit_dir(spec)
+                    apx, apy = spec.start_x - lead_app * ux, spec.start_y - lead_app * uy
+                lines += [f"G0 X{apx:.3f} Y{apy:.3f}", f"G0 Z{z_router_approach:.3f}"]
             else:
                 lines += [
                     f"G0 X{spec.start_x:.3f} Y{spec.start_y:.3f}",
@@ -203,6 +246,25 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                     f"G1 X{spec.start_x:.3f} Y{spec.start_y:.3f} Z{security:.3f} F{plunge_feed:.3f}",
                     f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
                 ]
+            elif has_app:
+                # Approach programable: ETK[7]=4 antes del plunge; plunge en el punto exterior y
+                # lead-in A PROFUNDIDAD hasta el start (recto o arco tangente). La velocidad del
+                # lead (speed×1000) aplica al plunge Y al lead; sin speed usa el feed de plunge.
+                # speed ≤ 0 (0 o el sentinel -1 del XML) = sin velocidad propia → feed de plunge.
+                app_feed = (spec.approach.speed * 1000.0) if spec.approach.speed > 0 else plunge_feed
+                lines += [
+                    "?%ETK[7]=4",
+                    f"G1 Z{-depth:.3f} F{app_feed:.3f}",
+                ]
+                if spec.approach.approach_type == "Arc":
+                    (apx, apy), (acx, acy), ag = _lead_geometry(
+                        spec, lead_app, spec.approach.arc_side, True)
+                    lines.append(f"{ag} X{spec.start_x:.3f} Y{spec.start_y:.3f} "
+                                 f"I{acx:.3f} J{acy:.3f} F{app_feed:.3f}")
+                else:
+                    ux, uy = _unit_dir(spec)
+                    apx, apy = spec.start_x - lead_app * ux, spec.start_y - lead_app * uy
+                    lines.append(_g1_cut(apx, apy, spec.start_x, spec.start_y, -depth, app_feed))
             else:
                 lines += [
                     f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
@@ -212,6 +274,18 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             for seg_x, seg_y, seg_z, seg_feed in _cut_segments(spec, depth, cut_feed):
                 lines.append(_g1_cut(px, py, seg_x, seg_y, seg_z, seg_feed))
                 px, py = seg_x, seg_y
+            if has_ret:
+                # Retract programable: lead-out A PROFUNDIDAD desde el end (recto o arco) a feed
+                # de corte, y retracción en G1 (reemplaza el G0 Z del teardown).
+                if spec.retract.retract_type == "Arc":
+                    (rpx, rpy), (rcx, rcy), rg = _lead_geometry(
+                        spec, lead_ret, spec.retract.arc_side, False)
+                    lines.append(f"{rg} X{rpx:.3f} Y{rpy:.3f} I{rcx:.3f} J{rcy:.3f} F{cut_feed:.3f}")
+                else:
+                    ux, uy = _unit_dir(spec)
+                    rpx, rpy = spec.end_x + lead_ret * ux, spec.end_y + lead_ret * uy
+                    lines.append(_g1_cut(spec.end_x, spec.end_y, rpx, rpy, -depth, cut_feed))
+                lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
 
         if compensated:
             # Salida: retrae en G1 (no G0), apaga la corrección y sale al punto de lead-out
@@ -242,9 +316,10 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 *(("SVR 0.000", "VL7=0.000") if svr != 0.0 else ()),
             ]
         else:
-            # Last pass: retract first, ?%ETK[7]=0 after VL7
+            # Last pass: retract first, ?%ETK[7]=0 after VL7. Con retract programable la
+            # retracción ya se emitió en G1 (no va el G0 Z).
             lines += [
-                f"G0 Z{security:.3f}",
+                *(() if has_ret else (f"G0 Z{security:.3f}",)),
                 "D0",
                 "SVL 0.000",
                 "VL6=0.000",

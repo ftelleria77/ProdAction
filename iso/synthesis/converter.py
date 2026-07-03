@@ -32,7 +32,10 @@ def convert(pgmx_path: Path) -> str:
     side_only = has_side and not has_router and not has_top
     first_side_face = ops.side_drills[0].plane_name if side_only else None
 
-    router_compensated = any(m.side_of_feature != "Center" for m in ops.routers)
+    # El preamble lleva ?%ETK[7]=0 cuando el router mueve el ETK[7]=4 antes del plunge:
+    # con corrección de herramienta (N023) o con approach programable (N026).
+    router_compensated = any(
+        m.side_of_feature != "Center" or m.approach.is_enabled for m in ops.routers)
     # Compensación validada solo en programas de UNA línea (N023): las transiciones entre pasadas
     # con G41/G42 activo no tienen fixture de referencia.
     if router_compensated and len(ops.routers) > 1:
