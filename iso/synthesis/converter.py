@@ -46,10 +46,11 @@ def convert(pgmx_path: Path) -> str:
         raise UnsupportedOperationError(
             "estrategia multipasada con varios fresados en el programa: sin fixture de "
             "referencia aún. [A3]")
-    if len({m.tool_name for m in ops.routers}) > 1:
+    if len(ops.routers) > 1 and any(
+            m.approach.is_enabled or m.retract.is_enabled for m in ops.routers):
         raise UnsupportedOperationError(
-            "varias FRESAS en un programa (cambio de herramienta entre fresados): sin fixture "
-            "de referencia aún (N028). [A3]")
+            "approach/retract programables con varios fresados en el programa: sin fixture "
+            "de referencia aún. [A3]")
 
     lines: list[str] = []
     lines += render_preamble(

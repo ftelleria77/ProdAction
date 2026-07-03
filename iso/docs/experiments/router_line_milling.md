@@ -128,6 +128,20 @@ realmente varió el parámetro. Confirmado con rm3 (lead 6) y E001 (lead 18.36).
   ambiguo); recorrido degenerado (largo ≤ ancho de fresa).
 - Hundimiento: profundidad efectiva > SinkingLength de la fresa.
 
+## 11. Multi-fresa en un programa (N028 — cambio de herramienta entre pasadas)
+
+Con la MISMA fresa, la transición entre pasadas es `G17 / MLV=2 / triple G0` (N001 D002). Con
+fresa DISTINTA (validado en ambos sentidos y mezclado con transición misma-fresa):
+```
+?%ETK[7]=0 / G0 Z{sp} / D0 / SVL 0 / VL6=0 / SVR 0 / VL7=0     ← teardown estilo no-última
+MLV=0 / G0 G53 Z{park} / MLV=2 / ?%ETK[13]=0 / ?%ETK[18]=0 / M5
+MLV=0 / G0 G53 Z{park}                                          ← DOBLE park Z
+MLV=0 / T{n} / SYN / M06 / ?%ETK[9]={n} / ?%ETK[18]=1 / S{rpm}M3  ← header ATC SIN ?%ETK[6]
+G17 / MLV=2 / ?%ETK[13]=1                                       ← SIN re-setup de SHF/Or
+G0 X{start} Y{start} / G0 Z{TLC_nueva + sp} / D1 ...
+```
+Guarda: varios fresados + leads programables → fail-loud (transición con lead sin fixture).
+
 ## Fuera de alcance
 
 **Fresado en caras laterales**: este CNC no tiene herramental para fresar caras laterales (existe

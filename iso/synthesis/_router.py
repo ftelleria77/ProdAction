@@ -21,6 +21,7 @@ from ._machine import (
     MILLING_RETRACT,
     ROUTER_ETK6, ROUTER_ETK18,
     ROUTER_SHF_X, ROUTER_SHF_Y, ROUTER_SHF_Z,
+    Z_PARK,
     or_ofx, or_ofy, shf_x, shf_y,
 )
 from ._tool_catalog import tool_geometry
@@ -188,8 +189,35 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         if i == 0:
             lines += _atc_header(spec)
             lines += _first_pass_setup(ctx)
+        elif spec.tool_name != millings[i - 1].tool_name:
+            # CAMBIO DE HERRAMIENTA entre pasadas (N028): shutdown con doble park Z + header ATC
+            # nuevo (sin ?%ETK[6], que solo va en el primero) + ?%ETK[13]=1 SIN re-setup de
+            # SHF/Or, y posicionamiento a la pasada nueva.
+            n = _cutter_number(spec)
+            lines += [
+                "MLV=0",
+                f"G0 G53 Z{Z_PARK:.3f}",
+                "MLV=2",
+                "?%ETK[13]=0",
+                "?%ETK[18]=0",
+                "M5",
+                "MLV=0",
+                f"G0 G53 Z{Z_PARK:.3f}",
+                "MLV=0",
+                f"T{n}",
+                "SYN",
+                "M06",
+                f"?%ETK[9]={n}",
+                f"?%ETK[18]={ROUTER_ETK18}",
+                f"S{geom.spindle_std}M3",
+                "G17",
+                "MLV=2",
+                "?%ETK[13]=1",
+                f"G0 X{spec.start_x:.3f} Y{spec.start_y:.3f}",
+                f"G0 Z{z_router_approach:.3f}",
+            ]
         else:
-            # Between passes: G17 + double G0 to new start
+            # Between passes (misma fresa): G17 + double G0 to new start
             assert prev_end is not None
             lines += [
                 "G17",

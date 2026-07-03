@@ -123,5 +123,22 @@ class EndToEndTest(unittest.TestCase):
                 self.assertEqual(gen, exp)
 
 
+class MultiToolEndToEndTest(unittest.TestCase):
+    """Cambio de herramienta entre fresados (N028): shutdown con doble park Z + header ATC nuevo
+    (sin ?%ETK[6]) + ?%ETK[13]=1 sin re-setup de SHF/Or. Byte-idéntico contra Maestro."""
+
+    def test_byte_identico(self):
+        for stem in ("N_MF_mf_e4_e1", "N_MF_mf_e1_e4", "N_MF_mf_e4_e4_e1"):
+            with self.subTest(stem):
+                pgmx = Path(rf"S:\Maestro\Projects\ProdAction\N028_router_multitool\{stem}.pgmx")
+                ref = Path(rf"P:\USBMIX\ProdAction\N028_router_multitool\{stem.lower()}.iso")
+                if not pgmx.exists() or not ref.exists():
+                    self.skipTest("fixtures S:/P: no disponibles")
+                gen = [ln.rstrip() for ln in convert(pgmx).splitlines()]
+                exp = [ln.rstrip() for ln in ref.read_text(
+                    encoding="utf-8", errors="replace").replace("\r\n", "\n").splitlines()]
+                self.assertEqual(gen, exp)
+
+
 if __name__ == "__main__":
     unittest.main()
