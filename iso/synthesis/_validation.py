@@ -176,6 +176,9 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     # multipasada (coordenadas desplazadas estilo CAD) y con leads C.N. (anclaje del arco).
     if spec.side_of_feature != "Center" and spec.milling_strategy is not None:
         _fail(spec, "multipasada + corrección de lado: interacción en derivación (N029). [A3]")
+    if spec.milling_strategy is not None and (
+            spec.approach.is_enabled or spec.retract.is_enabled):
+        _fail(spec, "multipasada + acercamiento/alejamiento: interacción en derivación (N029). [A3]")
     if spec.side_of_feature != "Center" and (spec.approach.is_enabled or spec.retract.is_enabled):
         _fail(spec, "corrección de lado + acercamiento/alejamiento: anclaje del lead en "
                     "derivación (N029). [A3]")
