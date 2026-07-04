@@ -161,6 +161,13 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
         if spec.speed_changes or spec.depth_changes:
             _fail(spec, "corrección de herramienta combinada con cambios de velocidad/profundidad "
                         "en el recorrido: sin fixture de referencia aún. [A3]")
+    # Invertir trabajo (N023 _invert): validado en Center y lados C.N. (incl. E001/Y/xrev).
+    if spec.invert_work and (
+            spec.speed_changes or spec.depth_changes or spec.milling_strategy is not None
+            or spec.approach.is_enabled or spec.retract.is_enabled or spec.is_precise
+            or spec.side_offset or not spec.activate_cnc_correction):
+        _fail(spec, "Invertir trabajo combinado con cambios/estrategia/leads/longitud/rebaba/CAD: "
+                    "sin fixture de referencia. [A3]")
     # Avanz./Rotación por operación (N028 F3_S12K): F=Avanz×1000 en el corte; S{Rotación}M3.
     # El comportamiento en el TOPE (clamp tipo taladro) no está validado → fail-loud si excede.
     if spec.feedrate > 0 or spec.spindle > 0:

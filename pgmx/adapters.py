@@ -1348,6 +1348,7 @@ def _adapt_milling(
                 or operation.allowance_side or operation.allowance_bottom
                 or not operation.activate_cnc_correction
                 or _line_feed or _line_spindle
+                or feature.is_geom_same_direction is False
             ):
                 spec = _dc_replace(
                     spec,
@@ -1360,6 +1361,7 @@ def _adapt_milling(
                     activate_cnc_correction=bool(operation.activate_cnc_correction),
                     feedrate=_line_feed,
                     spindle=_line_spindle,
+                    invert_work=feature.is_geom_same_direction is False,
                 )
         except Exception as exc:
             return _unsupported_entry(

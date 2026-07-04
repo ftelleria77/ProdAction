@@ -157,6 +157,9 @@ class LineMillingSpec:
     # misma-fresa, o reemplaza el S del header en cambio de herramienta. 0 = sin override. LECTURA.
     feedrate: float = 0.0
     spindle: float = 0.0
+    # Invertir trabajo (Datos avanzados; <IsGeomSameDirection>=false): recorre la línea al revés
+    # manteniendo el lado FÍSICO (Left emite G42 con el avance invertido). N023 _invert. LECTURA.
+    invert_work: bool = False
 
 
 @dataclass(frozen=True)

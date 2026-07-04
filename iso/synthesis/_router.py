@@ -224,6 +224,13 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         # Leads programables (N026/N027): entrada/salida en línea o arco tangente.
         has_app = spec.approach.is_enabled
         has_ret = spec.retract.is_enabled
+        # Invertir trabajo (N023 _invert): swap start↔end y FLIP del lado (el lado es físico,
+        # relativo a la pieza: Left con avance invertido emite G42).
+        if spec.invert_work:
+            flip = {"Left": "Right", "Right": "Left"}.get(spec.side_of_feature, "Center")
+            spec = _dc_replace(
+                spec, start_x=spec.end_x, start_y=spec.end_y,
+                end_x=spec.start_x, end_y=spec.start_y, side_of_feature=flip)
         ret_suppresses_g0 = has_ret   # default (Quote); el branch de leads lo ajusta
         lead_app = spec.tool_width / 2.0 * spec.approach.radius_multiplier
         lead_ret = spec.tool_width / 2.0 * spec.retract.radius_multiplier
