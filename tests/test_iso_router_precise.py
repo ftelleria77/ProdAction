@@ -39,8 +39,9 @@ class FailLoudTest(unittest.TestCase):
     def test_precise_pasa(self):
         _validate_line_milling(_line(is_precise=True))
 
-    def test_precise_sobre_diagonal(self):
-        self._assert_rejects(is_precise=True, start_y=20.0, end_y=180.0)
+    def test_precise_sobre_diagonal_pasa(self):
+        # Validado en N030 dg_long re-postprocesado: acorte ±r·û genérico (21.703/21.048 exactos).
+        _validate_line_milling(_line(is_precise=True, start_y=20.0, end_y=180.0))
 
     def test_precise_con_rebaba(self):
         # ¿El acorte usa width/2 o el SVR (width/2+rebaba)? Sin fixture → fail-loud.

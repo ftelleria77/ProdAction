@@ -125,9 +125,6 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     # Corrección de longitud (IsPrecise): acorta el recorrido width/2 en cada extremo. Validada
     # (N023 _long) en líneas a eje, ambos sentidos, con y sin G41/G42, E004 y E001.
     if spec.is_precise:
-        if spec.start_x != spec.end_x and spec.start_y != spec.end_y:
-            _fail(spec, "corrección de longitud sobre línea DIAGONAL: sin fixture de "
-                        "referencia aún. [A3]")
         if spec.side_offset:
             _fail(spec, "corrección de longitud + rebaba: ¿el acorte usa width/2 o el SVR? "
                         "Sin fixture de referencia aún. [A3]")
