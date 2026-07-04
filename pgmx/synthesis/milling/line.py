@@ -237,6 +237,30 @@ class _HydratedLineMillingSpec:
     def is_enabled_expr(self) -> Optional[str]:
         return self.spec.is_enabled_expr
 
+    @property
+    def side_offset(self) -> float:
+        return self.spec.side_offset
+
+    @property
+    def is_precise(self) -> bool:
+        return self.spec.is_precise
+
+    @property
+    def invert_work(self) -> bool:
+        return self.spec.invert_work
+
+    @property
+    def activate_cnc_correction(self) -> bool:
+        return self.spec.activate_cnc_correction
+
+    @property
+    def feedrate(self) -> float:
+        return self.spec.feedrate
+
+    @property
+    def spindle(self) -> float:
+        return self.spec.spindle
+
 
 def _normalize_line_milling_spec(line_milling: LineMillingSpec) -> LineMillingSpec:
     normalized_strategy = _ensure_milling_strategy_allowed(
@@ -340,7 +364,9 @@ def _build_line_operation(
         operation,
         PGMX_NS,
         "ActivateCNCCorrection",
-        "true" if _should_activate_cnc_correction(spec) else "false",
+        # C.N. (true) salvo que el usuario elija CAD o la estrategia multipaso lo fuerce a false.
+        "true" if (getattr(spec, "activate_cnc_correction", True)
+                   and _should_activate_cnc_correction(spec)) else "false",
     )
     _append_node(operation, PGMX_NS, "Attributes", "")
     _append_node(operation, PGMX_NS, "ToolDirection", attrib={f"{{{XSI_NS}}}nil": "true"})
@@ -402,9 +428,9 @@ def _build_line_operation(
         "Technology",
         attrib={f"{{{XSI_NS}}}type": "MillingTechnology"},
     )
-    _append_node(technology, PGMX_NS, "Feedrate", "0")
+    _append_node(technology, PGMX_NS, "Feedrate", _compact_number(getattr(spec, "feedrate", 0.0)))
     _append_node(technology, PGMX_NS, "CutSpeed", "0")
-    _append_node(technology, PGMX_NS, "Spindle", "0")
+    _append_node(technology, PGMX_NS, "Spindle", _compact_number(getattr(spec, "spindle", 0.0)))
     _append_object_ref(
         operation,
         PGMX_NS,
@@ -706,6 +732,12 @@ def build_line_milling_spec(
     line_tool_name: Optional[str],
     line_tool_width: Optional[float],
     line_security_plane: Optional[float],
+    line_feedrate: Optional[float] = None,      # Avanz. m/min (0/None = default de la fresa)
+    line_spindle: Optional[float] = None,       # Rotación rpm
+    line_side_offset: Optional[float] = None,   # Rebaba (SideOffset)
+    line_is_precise: Optional[bool] = None,     # Corrección en longitud
+    line_invert_work: Optional[bool] = None,    # Invertir trabajo
+    line_cnc_correction: Optional[bool] = None, # True=C.N. (default) / False=CAD
     line_side_of_feature: Optional[str] = None,
     line_is_through: Optional[bool] = None,
     line_target_depth: Optional[float] = None,
@@ -755,6 +787,12 @@ def build_line_milling_spec(
         tool_name=(line_tool_name or "E003").strip() or "E003",
         tool_width=9.52 if line_tool_width is None else float(line_tool_width),
         security_plane=20.0 if line_security_plane is None else float(line_security_plane),
+        feedrate=0.0 if line_feedrate is None else float(line_feedrate),
+        spindle=0.0 if line_spindle is None else float(line_spindle),
+        side_offset=0.0 if line_side_offset is None else float(line_side_offset),
+        is_precise=bool(line_is_precise),
+        invert_work=bool(line_invert_work),
+        activate_cnc_correction=True if line_cnc_correction is None else bool(line_cnc_correction),
         depth_spec=build_milling_depth_spec(
             is_through=line_is_through,
             target_depth=line_target_depth,

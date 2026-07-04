@@ -154,13 +154,17 @@ def _build_profile_feature(
     )
     _set_xmlns(slot_end_a, "a", MILLING_NS)
     _set_xmlns(slot_end_b, "a", MILLING_NS)
-    _append_node(feature, PGMX_NS, "IsGeomSameDirection", "true")
-    _append_node(feature, PGMX_NS, "IsPrecise", "false")
+    # Autoría de los flags del feature (directiva Fermín 2026-07-04): salen del spec; los
+    # defaults reproducen los bytes históricos. getattr: specs sin estos campos (slot) → default.
+    _append_node(feature, PGMX_NS, "IsGeomSameDirection",
+                 "false" if getattr(spec, "invert_work", False) else "true")
+    _append_node(feature, PGMX_NS, "IsPrecise",
+                 "true" if getattr(spec, "is_precise", False) else "false")
     _append_node(feature, PGMX_NS, "MaterialPosition", "Left")
     _append_node(feature, PGMX_NS, "OvercutLenghtInput", "0")
     _append_node(feature, PGMX_NS, "OvercutLenghtOutput", "0")
     _append_node(feature, PGMX_NS, "SideOfFeature", spec.side_of_feature)
-    _append_node(feature, PGMX_NS, "SideOffset", "0")
+    _append_node(feature, PGMX_NS, "SideOffset", _compact_number(getattr(spec, "side_offset", 0.0)))
     swept_shape = _append_node(
         feature,
         PGMX_NS,
