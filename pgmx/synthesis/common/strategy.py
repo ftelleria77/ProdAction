@@ -372,6 +372,10 @@ def _strategy_is_multilevel(strategy: Optional[MillingStrategySpec]) -> bool:
         return False
     if isinstance(normalized_strategy, HelicalMillingStrategySpec):
         return True
+    if isinstance(normalized_strategy, ZigZagMillingStrategySpec):
+        return normalized_strategy.allow_multiple_passes and (
+            normalized_strategy.feed_cutting_depth > 0.0
+            or normalized_strategy.return_cutting_depth > 0.0)
     if not normalized_strategy.allow_multiple_passes:
         return False
     return (
@@ -454,6 +458,9 @@ def _build_milling_strategy_node(spec) -> ET.Element:
     elif isinstance(strategy, BidirectionalMillingStrategySpec):
         strategy_type = "b:BidirectionalMilling"
         stroke_connection_strategy = "Straghtline"
+    elif isinstance(strategy, ZigZagMillingStrategySpec):
+        strategy_type = "b:ZigZagMilling"
+        stroke_connection_strategy = "Straghtline"
     else:
         strategy_type = "b:HelicMilling"
         stroke_connection_strategy = "Straghtline"
@@ -464,7 +471,16 @@ def _build_milling_strategy_node(spec) -> ET.Element:
     )
     _set_xmlns(node, "b", STRATEGY_NS)
     if isinstance(strategy, ZigZagMillingStrategySpec):
-        return strategy
+        # Forma observada en el XML de Maestro (N025 zigzag).
+        _append_node(node, PGMX_NS, "AllowMultiplePasses",
+                     "true" if strategy.allow_multiple_passes else "false")
+        _append_node(node, PGMX_NS, "Overlap", _compact_number(strategy.overlap))
+        _append_node(node, STRATEGY_NS, "AxialFinishCuttingDepth",
+                     _compact_number(strategy.axial_finish_cutting_depth))
+        _append_node(node, STRATEGY_NS, "Cutmode", strategy.cutmode)
+        _append_node(node, STRATEGY_NS, "FeedCuttingDepth", _compact_number(strategy.feed_cutting_depth))
+        _append_node(node, STRATEGY_NS, "ReturnCuttingDepth", _compact_number(strategy.return_cutting_depth))
+        return node
     if isinstance(strategy, HelicalMillingStrategySpec):
         _append_node(node, PGMX_NS, "AllowMultiplePasses", "false")
     else:

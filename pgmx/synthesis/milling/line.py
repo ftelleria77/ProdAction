@@ -238,6 +238,14 @@ class _HydratedLineMillingSpec:
         return self.spec.is_enabled_expr
 
     @property
+    def speed_changes(self) -> tuple[tuple[float, float], ...]:
+        return self.spec.speed_changes
+
+    @property
+    def depth_changes(self) -> tuple[tuple[float, float], ...]:
+        return self.spec.depth_changes
+
+    @property
     def side_offset(self) -> float:
         return self.spec.side_offset
 
@@ -368,7 +376,31 @@ def _build_line_operation(
         "true" if (getattr(spec, "activate_cnc_correction", True)
                    and _should_activate_cnc_correction(spec)) else "false",
     )
-    _append_node(operation, PGMX_NS, "Attributes", "")
+    # Atributos de recorrido (autoría, directiva Fermín): Speed/DepthAttribute anclados a UPar.
+    # Forma disecada de los .pgmx de Maestro; Key ID=0/System.Object es tolerado (así viene el
+    # atributo de nivel-toolpath en los archivos hechos por Maestro).
+    _attrs = list(getattr(spec, "speed_changes", ()) or ())
+    _dattrs = list(getattr(spec, "depth_changes", ()) or ())
+    if _attrs or _dattrs:
+        attributes = _append_node(operation, PGMX_NS, "Attributes")
+        for upar, val, kind in sorted(
+                [(u, v, "Speed") for u, v in _attrs] + [(u, v, "Depth") for u, v in _dattrs]):
+            attr = _append_node(
+                attributes, PGMX_NS, "OperationAttribute",
+                attrib={f"{{{XSI_NS}}}type": f"b:{kind}Attribute"})
+            _set_xmlns(attr, "b", BASE_MODEL_NS)
+            key = _append_node(attr, PGMX_NS, "Key")
+            _append_node(key, PGMX_NS, "ID", "0")
+            _append_node(key, PGMX_NS, "ObjectType", "System.Object")
+            _append_node(attr, PGMX_NS, "Name", "")
+            ek = _append_node(attr, PGMX_NS, "ElementKey")
+            _append_node(ek, PGMX_NS, "ID", "0")
+            _append_node(ek, PGMX_NS, "ObjectType", "System.Object")
+            _append_node(attr, PGMX_NS, "IsNormalized", "true")
+            _append_node(attr, PGMX_NS, "UPar", _compact_number(upar))
+            _append_node(attr, PGMX_NS, kind, _compact_number(val))
+    else:
+        _append_node(operation, PGMX_NS, "Attributes", "")
     _append_node(operation, PGMX_NS, "ToolDirection", attrib={f"{{{XSI_NS}}}nil": "true"})
     toolpath_list = _append_node(operation, PGMX_NS, "ToolpathList")
     _set_xmlns(toolpath_list, "b", BASE_MODEL_NS)
