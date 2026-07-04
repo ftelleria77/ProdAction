@@ -261,13 +261,39 @@ def _build_toolpath(
     curve_spec: _CurveSpec,
     *,
     generated_member_keys: Sequence[str] = (),
+    speed_attributes: Sequence[tuple[str, float]] = (),
 ) -> ET.Element:
     toolpath = ET.Element(
         _qname(BASE_MODEL_NS, "Toolpath"),
         {f"{{{XSI_NS}}}type": "b:CutterLocationTrajectory"},
     )
     _set_xmlns(toolpath, "b", BASE_MODEL_NS)
-    _append_node(toolpath, BASE_MODEL_NS, "Attributes", "")
+    if speed_attributes:
+        # Cambio de velocidad on-route (forma Maestro, N022 Vel): SpeedAttribute anclado al
+        # segmento de la curva compuesta donde ARRANCA la nueva velocidad (ElementKey → clave
+        # del miembro, UPar=0 dentro del segmento). Solo velocidad: la profundidad es geometría.
+        attributes = _append_node(toolpath, BASE_MODEL_NS, "Attributes")
+        for member_key, speed_value in speed_attributes:
+            attribute = _append_node(
+                attributes,
+                BASE_MODEL_NS,
+                "OperationAttribute",
+                attrib={f"{{{XSI_NS}}}type": "b:SpeedAttribute"},
+            )
+            _append_key(attribute, "0", "System.Object")
+            _append_blank_name(attribute)
+            _append_object_ref(
+                attribute,
+                BASE_MODEL_NS,
+                "ElementKey",
+                member_key,
+                "OccExtension.OCGeom_CompositeCurveSegment",
+            )
+            _append_node(attribute, BASE_MODEL_NS, "IsNormalized", "true")
+            _append_node(attribute, BASE_MODEL_NS, "UPar", "0")
+            _append_node(attribute, BASE_MODEL_NS, "Speed", _compact_number(speed_value))
+    else:
+        _append_node(toolpath, BASE_MODEL_NS, "Attributes", "")
     _append_node(toolpath, BASE_MODEL_NS, "Priority", "true")
     _append_node(toolpath, BASE_MODEL_NS, "Type", toolpath_type)
     _append_node(toolpath, BASE_MODEL_NS, "Direction", "true")

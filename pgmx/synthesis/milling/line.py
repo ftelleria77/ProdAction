@@ -24,11 +24,13 @@ from ..common.geometry import (
     _build_toolpath_description,
     _curve_spec_from_profile_geometry,
     _curve_spec_from_toolpath_node,
+    _line_primitive_3d,
     _parse_line_serialization,
     _profile_entry_exit_context,
     _profile_endpoint_points,
     _trimmed_curve_spec,
     build_compensated_toolpath_profile,
+    build_composite_geometry_profile,
     build_line_geometry_profile,
 )
 from ..common.hydration import _load_pgmx_container
@@ -56,6 +58,7 @@ from ..common.strategy import (
     _build_bidirectional_line_strategy_profile,
     _build_milling_strategy_node,
     _build_unidirectional_line_strategy_profile,
+    _build_zigzag_line_strategy_profile,
     _normalize_milling_strategy_spec,
     _should_activate_cnc_correction,
     _strategy_comparison_key,
@@ -287,6 +290,58 @@ def _normalize_line_milling_spec(line_milling: LineMillingSpec) -> LineMillingSp
     )
 
 
+def _line_change_boundaries(spec: LineMillingSpec) -> tuple[float, ...]:
+    """UPars (ordenados, sin duplicados) donde la curva del toolpath se PARTE por un cambio
+    on-route de velocidad o profundidad (forma Maestro, N022 Vel/Prof y N028 _coment)."""
+
+    speed_changes = tuple(getattr(spec, "speed_changes", ()) or ())
+    depth_changes = tuple(getattr(spec, "depth_changes", ()) or ())
+    return tuple(sorted({float(u) for u, _ in speed_changes} | {float(u) for u, _ in depth_changes}))
+
+
+def _build_changes_line_profile(
+    top_level: float,
+    final_level: float,
+    base_profile: GeometryProfileSpec,
+    spec: LineMillingSpec,
+) -> GeometryProfileSpec:
+    """Toolpath con cambios on-route (forma Maestro, N028 _coment): la Z interpola LINEALMENTE
+    entre eventos de profundidad consecutivos — desde (0, prof. base) hasta el primero, y plana
+    después del último — y la curva se parte además en cada evento de velocidad. Ojo: el ISO de
+    Maestro NO sigue esta Z entre eventos (postprocesa desde los atributos de la operación con
+    tramos planos); esta es la forma que Maestro ALMACENA al generar el toolpath."""
+
+    start_xy, end_xy = _profile_endpoint_points(base_profile)
+    boundaries = _line_change_boundaries(spec)
+    depth_points = [(0.0, float(final_level))]
+    for upar, depth_value in sorted(getattr(spec, "depth_changes", ()) or ()):
+        depth_points.append((float(upar), float(top_level) - float(depth_value)))
+
+    def z_at(upar: float) -> float:
+        for (u_a, z_a), (u_b, z_b) in zip(depth_points, depth_points[1:]):
+            if upar <= u_b + 1e-12:
+                if upar <= u_a + 1e-12:
+                    return z_a
+                return z_a + (z_b - z_a) * (upar - u_a) / (u_b - u_a)
+        return depth_points[-1][1]
+
+    upars = (0.0,) + boundaries + (1.0,)
+    primitives = []
+    for u_start, u_end in zip(upars, upars[1:]):
+        point_start = (
+            start_xy[0] + u_start * (end_xy[0] - start_xy[0]),
+            start_xy[1] + u_start * (end_xy[1] - start_xy[1]),
+            z_at(u_start),
+        )
+        point_end = (
+            start_xy[0] + u_end * (end_xy[0] - start_xy[0]),
+            start_xy[1] + u_end * (end_xy[1] - start_xy[1]),
+            z_at(u_end),
+        )
+        primitives.append(_line_primitive_3d(point_start, point_end))
+    return build_composite_geometry_profile(tuple(primitives))
+
+
 def _build_line_toolpath_profile(
     top_level: float,
     final_level: float,
@@ -309,7 +364,15 @@ def _build_line_toolpath_profile(
         tool_width=spec.tool_width,
         z_value=cut_z,
     )
+    if _line_change_boundaries(spec):
+        return _build_changes_line_profile(float(top_level), cut_z, base_profile, spec)
     strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
+    if isinstance(strategy, ZigZagMillingStrategySpec):
+        if strategy.allow_multiple_passes and (
+            float(strategy.feed_cutting_depth) > 0.0 or float(strategy.return_cutting_depth) > 0.0
+        ):
+            return _build_zigzag_line_strategy_profile(float(top_level), cut_z, base_profile, strategy)
+        return base_profile
     if isinstance(strategy, UnidirectionalMillingStrategySpec):
         return _build_unidirectional_line_strategy_profile(
             float(top_level),
@@ -360,6 +423,8 @@ def _build_line_operation(
     trajectory_curve_member_keys: Sequence[str] = (),
     toolpath_start: Optional[tuple[float, float]] = None,
     toolpath_end: Optional[tuple[float, float]] = None,
+    attribute_key_ids: Sequence[str] = (),
+    trajectory_speed_attrs: Sequence[tuple[str, float]] = (),
 ) -> ET.Element:
     operation = ET.Element(
         _qname(PGMX_NS, "Operation"),
@@ -376,29 +441,30 @@ def _build_line_operation(
         "true" if (getattr(spec, "activate_cnc_correction", True)
                    and _should_activate_cnc_correction(spec)) else "false",
     )
-    # Atributos de recorrido (autoría, directiva Fermín): Speed/DepthAttribute anclados a UPar.
-    # Forma disecada de los .pgmx de Maestro; Key ID=0/System.Object es tolerado (así viene el
-    # atributo de nivel-toolpath en los archivos hechos por Maestro).
-    _attrs = list(getattr(spec, "speed_changes", ()) or ())
-    _dattrs = list(getattr(spec, "depth_changes", ()) or ())
-    if _attrs or _dattrs:
+    # Atributos de recorrido (forma Maestro, N022 Vel/Prof): el elemento OperationAttribute y sus
+    # campos escalares viven en el namespace del modelo base (¡no en el default del proyecto! —
+    # el deserializador de Maestro los IGNORA en silencio si van en otro namespace, N032); Key/Name
+    # y las hojas de las claves van en Utility. El Key lleva un ID real asignado; el ElementKey a
+    # nivel operación queda en 0/System.Object.
+    _attr_events = sorted(
+        [(u, v, "Speed") for u, v in (getattr(spec, "speed_changes", ()) or ())]
+        + [(u, v, "Depth") for u, v in (getattr(spec, "depth_changes", ()) or ())]
+    )
+    if _attr_events:
+        if len(attribute_key_ids) != len(_attr_events):
+            raise ValueError("Cada atributo de recorrido necesita un ID reservado para su Key.")
         attributes = _append_node(operation, PGMX_NS, "Attributes")
-        for upar, val, kind in sorted(
-                [(u, v, "Speed") for u, v in _attrs] + [(u, v, "Depth") for u, v in _dattrs]):
+        for (upar, val, kind), key_id in zip(_attr_events, attribute_key_ids):
             attr = _append_node(
-                attributes, PGMX_NS, "OperationAttribute",
+                attributes, BASE_MODEL_NS, "OperationAttribute",
                 attrib={f"{{{XSI_NS}}}type": f"b:{kind}Attribute"})
             _set_xmlns(attr, "b", BASE_MODEL_NS)
-            key = _append_node(attr, PGMX_NS, "Key")
-            _append_node(key, PGMX_NS, "ID", "0")
-            _append_node(key, PGMX_NS, "ObjectType", "System.Object")
-            _append_node(attr, PGMX_NS, "Name", "")
-            ek = _append_node(attr, PGMX_NS, "ElementKey")
-            _append_node(ek, PGMX_NS, "ID", "0")
-            _append_node(ek, PGMX_NS, "ObjectType", "System.Object")
-            _append_node(attr, PGMX_NS, "IsNormalized", "true")
-            _append_node(attr, PGMX_NS, "UPar", _compact_number(upar))
-            _append_node(attr, PGMX_NS, kind, _compact_number(val))
+            _append_key(attr, key_id, f"ScmGroup.XCam.MachiningDataModel.{kind}Attribute")
+            _append_blank_name(attr)
+            _append_object_ref(attr, BASE_MODEL_NS, "ElementKey", "0", "System.Object")
+            _append_node(attr, BASE_MODEL_NS, "IsNormalized", "true")
+            _append_node(attr, BASE_MODEL_NS, "UPar", _compact_number(upar))
+            _append_node(attr, BASE_MODEL_NS, kind, _compact_number(val))
     else:
         _append_node(operation, PGMX_NS, "Attributes", "")
     _append_node(operation, PGMX_NS, "ToolDirection", attrib={f"{{{XSI_NS}}}nil": "true"})
@@ -430,6 +496,7 @@ def _build_line_operation(
                 )
             ),
             generated_member_keys=trajectory_curve_member_keys,
+            speed_attributes=trajectory_speed_attrs,
         )
     )
     toolpath_list.append(
@@ -522,7 +589,8 @@ def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec
     plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
     uses_depth_expressions = _uses_feature_depth_expressions(spec)
     has_enabled_expr = spec.is_enabled_expr is not None
-    n_total = 4 + (2 if uses_depth_expressions else 0) + has_enabled_expr
+    n_attributes = len(getattr(spec, "speed_changes", ()) or ()) + len(getattr(spec, "depth_changes", ()) or ())
+    n_total = 4 + (2 if uses_depth_expressions else 0) + has_enabled_expr + n_attributes
     reserved_ids = _reserve_ids(root, n_total, spec.preferred_id_start)
     geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
     i = 4
@@ -531,7 +599,9 @@ def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec
         start_expression_id = reserved_ids[i]; i += 1
         end_expression_id = reserved_ids[i]; i += 1
     enabled_expr_id = reserved_ids[i] if has_enabled_expr else None
-    last_reserved_id = enabled_expr_id or end_expression_id or step_id
+    i += has_enabled_expr
+    attribute_key_ids = tuple(reserved_ids[i:i + n_attributes])
+    last_reserved_id = reserved_ids[n_total - 1]
     generated_toolpath_profile = _build_line_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
     toolpath_start, toolpath_end, _, _ = _profile_entry_exit_context(generated_toolpath_profile)
     approach_curve = spec.approach_curve
@@ -561,6 +631,18 @@ def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec
         lift_curve_member_keys = tuple(str(next_generated_aux_id + offset) for offset in range(member_count))
         next_generated_aux_id += member_count
 
+    # Cambios de velocidad on-route: SpeedAttribute a nivel toolpath anclado al miembro de la
+    # curva compuesta que ARRANCA en su UPar (forma Maestro, N022 Vel / N028 _coment). El miembro
+    # que arranca en boundaries[j] es el j+1 (el 0 arranca en el inicio de la línea).
+    trajectory_speed_attrs: tuple[tuple[str, float], ...] = ()
+    effective_trajectory_keys = trajectory_curve.member_keys or trajectory_curve_member_keys
+    if spec.trajectory_curve is None and getattr(spec, "speed_changes", ()) and effective_trajectory_keys:
+        boundaries = _line_change_boundaries(spec)
+        trajectory_speed_attrs = tuple(
+            (effective_trajectory_keys[boundaries.index(float(upar)) + 1], float(speed_value))
+            for upar, speed_value in sorted(spec.speed_changes)
+        )
+
     geometries.append(_build_line_geometry(geometry_id, plane_id, plane_object_type, spec))
     features.append(
         _build_profile_feature(
@@ -587,6 +669,8 @@ def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec
             trajectory_curve_member_keys=trajectory_curve.member_keys or trajectory_curve_member_keys,
             toolpath_start=toolpath_start,
             toolpath_end=toolpath_end,
+            attribute_key_ids=attribute_key_ids,
+            trajectory_speed_attrs=trajectory_speed_attrs,
         )
     )
     elements.append(_build_working_step(spec.feature_name, step_id, feature_id, operation_id))

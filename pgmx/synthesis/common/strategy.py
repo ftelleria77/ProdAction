@@ -712,6 +712,42 @@ def _build_unidirectional_line_strategy_profile(
     return build_composite_geometry_profile(tuple(primitives))
 
 
+def _build_zigzag_line_strategy_profile(
+    top_level: float,
+    final_level: float,
+    base_profile: GeometryProfileSpec,
+    strategy: "ZigZagMillingStrategySpec",
+) -> GeometryProfileSpec:
+    """Toolpath ZigZag (forma Maestro, N025 zigzag): corta EN RAMPA alternando el sentido desde
+    la superficie — la ida baja `feed_cutting_depth`, la vuelta `return_cutting_depth` — clavado
+    en (fondo + último hueco); luego la pasada del último hueco y UNA pasada final plana.
+    Maestro postprocesa el toolpath ALMACENADO (N032): estos strokes deben ir en la curva."""
+
+    start_xy, end_xy = _profile_endpoint_points(base_profile)
+    top_value = float(top_level)
+    final_value = float(final_level)
+    feed_step = float(strategy.feed_cutting_depth)
+    return_step = float(strategy.return_cutting_depth)
+    rough_level = final_value + float(strategy.axial_finish_cutting_depth)
+    primitives: list[GeometryPrimitiveSpec] = []
+    position, level, forward = start_xy, top_value, True
+    while level > rough_level + 1e-9:
+        step = feed_step if forward else return_step
+        next_level = max(level - step, rough_level)
+        target = end_xy if forward else start_xy
+        primitives.append(
+            _line_primitive_3d((position[0], position[1], level), (target[0], target[1], next_level))
+        )
+        position, level, forward = target, next_level, not forward
+    for next_level in (final_value, final_value):  # pasada del último hueco + pasada final plana
+        target = end_xy if forward else start_xy
+        primitives.append(
+            _line_primitive_3d((position[0], position[1], level), (target[0], target[1], next_level))
+        )
+        position, level, forward = target, next_level, not forward
+    return build_composite_geometry_profile(tuple(primitives))
+
+
 def _build_bidirectional_line_strategy_profile(
     top_level: float,
     final_level: float,
