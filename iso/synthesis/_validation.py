@@ -125,9 +125,6 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     # Corrección de longitud (IsPrecise): acorta el recorrido width/2 en cada extremo. Validada
     # (N023 _long) en líneas a eje, ambos sentidos, con y sin G41/G42, E004 y E001.
     if spec.is_precise:
-        if spec.side_offset:
-            _fail(spec, "corrección de longitud + rebaba: ¿el acorte usa width/2 o el SVR? "
-                        "Sin fixture de referencia aún. [A3]")
         if spec.speed_changes or spec.depth_changes:
             _fail(spec, "corrección de longitud + cambios en el recorrido: base del UPar "
                         "ambigua. Sin fixture de referencia aún. [A3]")
@@ -143,8 +140,6 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     # Corrección CAD (N023 _CAD, 6/6): coordenadas desplazadas radio×normal(lado), sin G41/leads,
     # entrada/salida Z estilo security. Validada en líneas a eje, single-pass, ciega. Combos → fail.
     if not spec.activate_cnc_correction and spec.milling_strategy is None:
-        if spec.start_x != spec.end_x and spec.start_y != spec.end_y:
-            _fail(spec, "Corrección CAD sobre DIAGONAL: sin fixture de referencia. [A3]")
         if spec.side_offset or spec.is_precise:
             _fail(spec, "Corrección CAD + rebaba/corrección de longitud: sin fixture. [A3]")
         if spec.approach.is_enabled or spec.retract.is_enabled:
@@ -164,8 +159,7 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     # Invertir trabajo (N023 _invert): validado en Center y lados C.N. (incl. E001/Y/xrev).
     if spec.invert_work and (
             spec.speed_changes or spec.depth_changes or spec.milling_strategy is not None
-            or spec.approach.is_enabled or spec.retract.is_enabled or spec.is_precise
-            or spec.side_offset or not spec.activate_cnc_correction):
+            or spec.is_precise or spec.side_offset or not spec.activate_cnc_correction):
         _fail(spec, "Invertir trabajo combinado con cambios/estrategia/leads/longitud/rebaba/CAD: "
                     "sin fixture de referencia. [A3]")
     # Avanz./Rotación por operación (N028 F3_S12K): F=Avanz×1000 en el corte; S{Rotación}M3.
@@ -178,6 +172,13 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
         if spec.spindle > _g.spindle_max:
             _fail(spec, f"Rotación {spec.spindle:g} supera el tope ({_g.spindle_max} rpm): "
                         f"clamp sin fixture. [A3]")
+    # Combos AÚN sin derivar (N029: los 3 DIFF): la interacción de la corrección de lado con
+    # multipasada (coordenadas desplazadas estilo CAD) y con leads C.N. (anclaje del arco).
+    if spec.side_of_feature != "Center" and spec.milling_strategy is not None:
+        _fail(spec, "multipasada + corrección de lado: interacción en derivación (N029). [A3]")
+    if spec.side_of_feature != "Center" and (spec.approach.is_enabled or spec.retract.is_enabled):
+        _fail(spec, "corrección de lado + acercamiento/alejamiento: anclaje del lead en "
+                    "derivación (N029). [A3]")
     # Estrategia MULTIPASADA en Z (N025): Uni/Bidireccional con allow_multiple_passes. Lo no
     # validado → fail-loud.
     strategy = spec.milling_strategy
@@ -202,9 +203,6 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
                 _fail(spec, f"terminación ({finish:g}) ≥ profundidad total: sin sentido. [A3]")
         if is_zigzag and spec.start_x != spec.end_x and spec.start_y != spec.end_y:
             _fail(spec, "ZigZag sobre línea DIAGONAL: sin fixture de referencia. [A3]")
-        if spec.side_of_feature != "Center" or spec.is_precise or spec.side_offset:
-            _fail(spec, "multipasada combinada con corrección/rebaba: sin fixture de "
-                        "referencia. [A3]")
         if spec.speed_changes or spec.depth_changes:
             _fail(spec, "multipasada + cambios en el recorrido: sin fixture de referencia. [A3]")
         if spec.depth_spec.is_through:
@@ -213,12 +211,6 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     # tangente (Automatic≡Right→G3, Left→G2); overlap INERTE en líneas (ov 0/0.25/5 idénticos).
     # Lo no validado → fail-loud.
     if spec.approach.is_enabled or spec.retract.is_enabled:
-        if spec.side_of_feature != "Center" or spec.is_precise or spec.side_offset:
-            _fail(spec, "approach/retract combinado con corrección/rebaba: sin fixture de "
-                        "referencia. [A3]")
-        if spec.speed_changes or spec.depth_changes or spec.milling_strategy is not None:
-            _fail(spec, "approach/retract + cambios de recorrido/multipasada: sin fixture de "
-                        "referencia. [A3]")
         if spec.depth_spec.is_through:
             _fail(spec, "approach/retract + pasante: sin fixture de referencia. [A3]")
         for lead in (spec.approach, spec.retract):
