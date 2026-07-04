@@ -31,6 +31,14 @@ son constantes del CICLO del postprocesador Maestro (documentadas como tales, Ti
 | **N022** | router: fresas + dirección + cambios en recorrido | ver [router_line_milling.md](router_line_milling.md) §1-3 | `_router.py`, `test_iso_router_path_changes.py` |
 | **N023** | corrección de herramienta y de longitud | ver [router_line_milling.md](router_line_milling.md) §4 y §7 | `_router.py`, `test_iso_router_side.py`, `test_iso_router_precise.py` |
 | **N024** | pasante/extra + rebaba | ver [router_line_milling.md](router_line_milling.md) §5-6 | `_router.py`, `test_iso_router_depth_finish.py` |
+| **N025** | estrategias multipasada Uni/Bi + ZigZag | ver [router_line_milling.md](router_line_milling.md) §8 y §13 | `_router.py`, `test_iso_router_depth_finish.py`, `test_iso_router_cad_zigzag.py` |
+| **N026/N027** | leads programables (tipos/modos/velocidades/lados) + terminación | ver [router_line_milling.md](router_line_milling.md) §9 | `_router.py`, `test_iso_router_multipass_leads.py` |
+| **N028** | multi-fresa + Avanz./Rotación + cambios múltiples/diagonal + desactivado/comentado | ver [router_line_milling.md](router_line_milling.md) §3, §11, §14-15 | `_router.py`, `test_iso_router_path_changes.py` |
+| **N029** | combos finos + CAD/invertir | levantadas invertir+leads, longitud+rebaba (w/2, no SVR), pasante+lado; re-guardadas multipaso+lado / lado+leads / multipaso+leads | `_validation.py`, [router_line_milling.md](router_line_milling.md) §10 |
+| **N030** | modos de lead En bajada/subida + CAD diagonal + long diagonal | arco helicoidal de bajada; lead-out ascendente + G0 Z | `_router.py`, `test_iso_router_multipass_leads.py` |
+| **N031** | autoría pgmx A (rebaba/longitud/invertir/CAD/F-S) | 5/5 byte-idéntico: features de postprocesador — autorables con curva plana | `pgmx/synthesis`, `test_pgmx_authoring_e2e.py` |
+| **N032** | autoría pgmx B (zigzag/atributos "mínimos") | **0/4 — falló adrede**: Maestro postprocesa el toolpath ALMACENADO; ns equivocado se ignora en silencio | [router_line_milling.md](router_line_milling.md) §16 |
+| **N033** | autoría pgmx C (forma-Maestro completa) | curvas partidas + strokes zigzag + ns/keys correctos; diff estructural 0 vs archivos reales — **pendiente de postproceso** | `test_pgmx_authoring_structural.py` |
 
 ## Constantes del ciclo Maestro (Tier D — se replican, no se sourcean)
 

@@ -33,20 +33,24 @@ Un `G1` por tramo hasta `(end_x, end_y)`; el **sentido es implícito** (va al en
 se emiten los ejes del plano que se MUEVEN; se agrega `Z` solo cuando se mueve UN eje — la
 **diagonal (X+Y) omite Z** (quirk de Maestro). `_g1_cut` en `_router.py`.
 
-## 3. Cambios DURANTE el recorrido (N022 — N_RT_E001_Vel / N_RT_E001_Prof, hechos en Maestro)
+## 3. Cambios DURANTE el recorrido (N022 Vel/Prof + N028 diag/_coment — múltiples y combinados)
 
 En el `.pgmx` son `Operation > Attributes > OperationAttribute` anclados a **UPar** (posición
 paramétrica 0..1 normalizada sobre la trayectoria). El punto es `p = start + upar·(end−start)`.
-La autoría del sintetizador NO los serializa (solo lectura): los `.pgmx` los genera Maestro.
 
 - **Cambio de velocidad** (`SpeedAttribute(UPar, Speed m/min)`): la línea se parte en `p`; el
   tramo posterior corre a `F = Speed×1000`. (Vel: `G1 X98 F5000` → `G1 X280 F1000`.)
-- **Cambio de profundidad** (`DepthAttribute(UPar, Depth mm)`): **rampa lineal** desde la
-  profundidad de la operación (el plunge inicial) hasta `Depth`, alcanzándola en `p` — el G1
-  interpola X y Z juntos — y sigue plano. (Prof: `G1 X85 Z-5` → `G1 X280 Z-5`.)
+- **Cambio de profundidad** (`DepthAttribute(UPar, Depth mm)`): **rampa lineal** hasta `Depth`,
+  alcanzándola en `p` — el G1 interpola X y Z juntos — y sigue. (Prof: `G1 X85 Z-5` → `G1 X280 Z-5`.)
+- **Múltiples/combinados** (N028 _coment: 2 rampas + 2 velocidades): lista de eventos ordenada por
+  UPar; un G1 por tramo; el feed de un tramo es el vigente al ENTRAR; la rampa arranca en el evento
+  ANTERIOR (semántica "plana entre eventos"). Diagonal: la rampa emite `G1 X Y Z` (§regla Z).
 
-En el `.pgmx` la trayectoria queda partida en segmentos serializados; el converter NO los parsea:
-deriva la geometría de los atributos semánticos (validado byte-a-byte).
+**Hallazgo N032/N033 (curvas partidas)**: Maestro ALMACENA en el TrajectoryPath una
+`GeomCompositeCurve` partida en cada evento, con la Z interpolada linealmente ENTRE eventos de
+profundidad (p.ej. −12.167 en X85 del _coment)… pero **el ISO NO la sigue**: postprocesa desde los
+atributos de la operación con la semántica plana de arriba (Z−13 en X85, byte-validado). El
+converter deriva de los atributos semánticos; la AUTORÍA (§16) replica la forma almacenada.
 
 ## 4. Corrección de herramienta (N023 — side_of_feature Left/Right)
 
@@ -118,15 +122,25 @@ realmente varió el parámetro. Confirmado con rm3 (lead 6) y E001 (lead 18.36).
 - **Retract**: lead-out a profundidad desde el end + retracción en **G1** (reemplaza el G0 Z).
 - **Overlap INERTE** en líneas abiertas (0/0.25/5 → ISO idéntico): se ignora.
 
-## 10. Guardas fail-loud (combos sin fixture de referencia)
+## 10. Guardas fail-loud (estado 2026-07-04; combos sin fixture de referencia)
 
-- Más de un cambio de velocidad/profundidad; ambos tipos juntos; UPar ∉ (0,1).
-- Cambio de profundidad, corrección de herramienta o corrección de longitud sobre **diagonal**.
-- Corrección de herramienta con **varias pasadas** en el programa; combinada con cambios de recorrido.
-- Rebaba que deja el corrector negativo (width/2 + rebaba < 0); `Allowance*` ≠ 0 en línea.
-- Corrección de longitud + rebaba (¿acorte por w/2 o por SVR?); + cambios de recorrido (UPar
-  ambiguo); recorrido degenerado (largo ≤ ancho de fresa).
-- Hundimiento: profundidad efectiva > SinkingLength de la fresa.
+Interacciones finas re-guardadas en N029 (derivar con cuerpos completos):
+- **multipasada + corrección de lado** (usa coordenadas desplazadas estilo CAD);
+- **corrección de lado + leads** (cambia el anclaje del arco); **multipasada + leads**.
+
+Resto vigente:
+- Cambios de recorrido combinados con lado, corrección de longitud, multipasada o CAD; UPar ∉ (0,1).
+- CAD + rebaba/longitud/leads/pasante; Invertir trabajo + cambios/estrategia/longitud/rebaba/CAD.
+- ZigZag sobre diagonal; ZigZag con pa/pr/uh ≤ 0; terminación ≥ profundidad total; multipasada +
+  pasante; leads + pasante; estrategia sin `allow_multiple_passes` (modo una-pasada).
+- Avanz./Rotación sobre el tope de la herramienta (defensiva: Maestro clampa AL GUARDAR el pgmx
+  al `feed_rate_max` de CADA herramienta — E004→5, E003→18 m/min).
+- Rebaba que deja el corrector negativo; `Allowance*` ≠ 0; recorrido degenerado (largo ≤ ancho);
+  hundimiento: profundidad efectiva > SinkingLength.
+
+LEVANTADAS con fixtures (ya soportadas): diagonal con rampa/velocidad, múltiples cambios y ambos
+tipos juntos (N028), longitud+rebaba (acorte usa width/2, NO el SVR), pasante+lado,
+invertir+leads, CAD en diagonal (N029/N030).
 
 ## 11. Multi-fresa en un programa (N028 — cambio de herramienta entre pasadas)
 
@@ -142,6 +156,53 @@ G0 X{start} Y{start} / G0 Z{TLC_nueva + sp} / D1 ...
 ```
 Guarda: varios fresados + leads programables → fail-loud (transición con lead sin fixture).
 
+## 12. Corrección CAD (N023 _CAD + N030 diagonal — ActivateCNCCorrection=false con lado)
+
+El CAD desplaza las COORDENADAS (no usa G41/G42 ni leads ni preamble-reset): cada punto se corre
+`radio×normal(lado)` — izquierda = rot90ccw(û) — y la entrada/salida en Z es estilo security
+(la misma de las estrategias multipaso; ambos escriben ACC=false en el pgmx). El SVR no cambia.
+Válido en cualquier dirección (diagonal incluida). Combos → §10.
+
+## 13. Estrategia ZigZag (N025 zigzag_pa2_pr3_uh1)
+
+Baja a Z0 (superficie) y corta EN RAMPA alternando el sentido — la ida baja `pasada avance`, la
+vuelta `pasada retorno` — clavado en (total − último hueco); luego la pasada del último hueco a
+−total y UNA pasada final plana. `Overlap`/`Cutmode` sin efecto observado en línea. Helicoidal
+sobre línea NO existe: Maestro falla en GenerateToolpath (probado en UI).
+
+## 14. Avanz./Rotación por operación (N028 F3_S12K + diag_vel5)
+
+`Technology/Feedrate|Spindle` de la operación: `F = Avanz×1000` SOLO en el corte (el plunge sigue
+con `feed_default`); `S{rpm}M3` antes del G17 (misma fresa) o en el header del cambio de
+herramienta. Maestro clampa AL GUARDAR al `feed_rate_max`/`spindle_max` de cada herramienta.
+Teardown pre-cambio: `?%ETK[7]=0` va al FINAL del bloque ⇔ hay cambio de herramienta Y la
+operación entrante trae Avanz./Rotación (9 transiciones consistentes).
+
+## 15. Datos avanzados (N023 _invert + N028 desactivado/comentado)
+
+- **Invertir trabajo** (`IsGeomSameDirection=false` en el feature): swap de extremos + flip del
+  lado FÍSICO (Left→G42); con leads, el arco también flipea (G3↔G2). Validado en Center y lados.
+- **Condición** (IsEnabled=false vía expresión): la operación se OMITE del ISO por completo.
+- **Comentario**: inerte en el ISO.
+- **Cota de seguridad**: ya modelada (§5, security_plane por operación).
+
+## 16. Autoría pgmx forma-Maestro (N031 5/5 → N032 0/4 → N033 pendiente de postproceso)
+
+Todo el espacio §1-15 es AUTORABLE por el sintetizador (fixtures sin toggles manuales en Maestro).
+Modelo derivado del FALLO de N032 (los 4 ISO salieron planos):
+- **Maestro postprocesa el toolpath ALMACENADO, no regenera desde la estrategia**: el zigzag va
+  como strokes en la `GeomCompositeCurve` del TrajectoryPath (entrada en SUPERFICIE → el Approach
+  mide `security`, no `security+prof`). Los cambios on-route van como curva partida (§3) con
+  `SpeedAttribute` a nivel toolpath anclado por `ElementKey` al segmento que arranca en su UPar
+  (la profundidad es pura geometría: sin atributo de toolpath).
+- Lo probado en N031 (rebaba/longitud/invertir/CAD/Avanz-Rotación) son features que el
+  POSTPROCESADOR aplica sobre el path almacenado — por eso pasaron con curva plana.
+- **`OperationAttribute` en namespace equivocado se ignora EN SILENCIO** (DataContract): elemento
+  y escalares en `…MachiningDataModel`, `Key`/`Name` y hojas de claves en `…Utility`, Key con ID
+  real reservado; `ElementKey` op-level = 0/System.Object.
+Red de regresión offline: `test_pgmx_authoring_structural.py` (subárbol Operation autorado ==
+real de Maestro, mod IDs). Validación final: N033 postprocesado byte-idéntico (pendiente).
+
 ## Fuera de alcance
 
 **Fresado en caras laterales**: este CNC no tiene herramental para fresar caras laterales (existe
@@ -152,8 +213,10 @@ Top normal (§1-2); la traza es responsabilidad del programador de Maestro.
 
 ## Pendiente
 
-Multi-fresa en un programa (cambio de herramienta entre pasadas), autoría de las features
-solo-lectura en el sintetizador, y los combos de las guardas (§10) con fixtures.
+Postprocesar N033 (cierra la autoría §16); derivar las 3 interacciones re-guardadas de N029 con
+cuerpos completos (multipaso+lado, lado+leads, multipaso+leads); ZigZag diagonal y uh=0 (ya
+sintetizables). Microuniones: rotas en esta versión de Maestro — candidata a implementación propia
+post-paridad.
 
 ## Hallazgo transversal (N022 Vel/Prof + N007)
 
