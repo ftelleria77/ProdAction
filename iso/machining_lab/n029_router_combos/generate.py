@@ -1,20 +1,20 @@
-"""N029 — Combos de guardas restantes + Invertir trabajo × arcos de Acercamiento/Alejamiento.
+r"""N029 - Combos de guardas restantes + Invertir trabajo x arcos de Acercamiento/Alejamiento.
 
 Sintetizables directo (postprocesar tal cual):
-  cmb_side_l_leads : corrección Izquierda (C.N.) + acercamiento y alejamiento en Arco
-  cmb_mp_side_l    : multipaso bidireccional (hueco 4) + corrección Izquierda, prof. 12
+  cmb_side_l_leads : correccion Izquierda (C.N.) + acercamiento y alejamiento en Arco
+  cmb_mp_side_l    : multipaso bidireccional (hueco 4) + correccion Izquierda, prof. 12
   cmb_mp_leads     : multipaso bidireccional + acercamiento/alejamiento Arco
-  cmb_th_side_l    : pasante + extra 2 + corrección Izquierda
+  cmb_th_side_l    : pasante + extra 2 + correccion Izquierda
 
-Requieren TILDAR UNA OPCIÓN en Maestro antes de postprocesar (en el nombre):
-  inv_app_ret_arc  : leads Arco → tildar "Invertir trabajo"   (¿el arco cambia G3→G2?)
-  inv_side_l_app   : Izquierda + acercamiento Arco → tildar "Invertir trabajo"
-  reb2_long        : (línea limpia) → tildar "Corrección en longitud" + Rebaba 2  (¿acorte w/2 o SVR?)
-  cad_diag         : diagonal → elegir Izquierda + "Corrección CAD"
-  f9_tope          : (línea limpia) → Avanz. 9 (tope E004=5: ¿clampa o error?)
+Requieren TILDAR UNA OPCION en Maestro antes de postprocesar (esta en el nombre):
+  inv_app_ret_arc  : leads Arco -> tildar "Invertir trabajo"  (el arco: G3->G2?)
+  inv_side_l_app   : Izquierda + acercamiento Arco -> tildar "Invertir trabajo"
+  reb2_long        : linea limpia -> tildar "Correccion en longitud" + Rebaba 2 (acorte w/2 o SVR?)
+  cad_diag         : diagonal -> elegir Izquierda + "Correccion CAD"
+  f9_tope          : linea limpia -> Avanz. 9 (tope E004=5: clampa o error?)
 
 Uso:  py -m iso.machining_lab.n029_router_combos.generate
-Salida: S:\Maestro\Projects\ProdAction\N029_router_combos\
+Salida: S:/Maestro/Projects/ProdAction/N029_router_combos/
 """
 from __future__ import annotations
 import argparse, sys
@@ -60,7 +60,7 @@ def main(argv=None):
             origin_x=5.0, origin_y=5.0, origin_z=25.0,
             line_millings=[build_line_milling_spec(**geom, **kw, **extra)]))
         print(f"  {path.name}")
-    print("\nOJO: inv_*/reb2_long/cad_diag/f9_tope requieren tocar la opción en Maestro (ver docstring).")
+    print("OJO: inv_*/reb2_long/cad_diag/f9_tope requieren tocar la opcion en Maestro (docstring).")
     return 0
 
 if __name__ == "__main__":
