@@ -88,12 +88,10 @@ class FailLoudTest(unittest.TestCase):
         _validate_line_milling(_line(speed_changes=((0.3, 1.0),)))
         _validate_line_milling(_line(depth_changes=((0.25, 5.0),)))
 
-    def test_multiples_cambios_por_tipo(self):
-        self._assert_rejects(speed_changes=((0.3, 1.0), (0.6, 2.0)))
-        self._assert_rejects(depth_changes=((0.25, 5.0), (0.6, 2.0)))
-
-    def test_ambos_tipos_juntos(self):
-        self._assert_rejects(speed_changes=((0.3, 1.0),), depth_changes=((0.25, 5.0),))
+    def test_multiples_cambios_y_combinados_pasan(self):
+        # Validado en N028 _coment: 2 rampas + 2 cambios de velocidad en una línea.
+        _validate_line_milling(_line(speed_changes=((0.3, 1.0), (0.6, 2.0))))
+        _validate_line_milling(_line(speed_changes=((0.25, 1.0),), depth_changes=((0.2, 13.0),)))
 
     def test_upar_fuera_de_rango(self):
         self._assert_rejects(speed_changes=((0.0, 1.0),))

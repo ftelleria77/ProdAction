@@ -46,15 +46,24 @@ def _cut_segments(
     El punto UPar es paramétrico sobre la línea: p = start + upar·(end-start).
     """
     sx, sy, ex, ey = spec.start_x, spec.start_y, spec.end_x, spec.end_y
-    if spec.speed_changes:
-        (upar, speed), = spec.speed_changes
+    # Eventos combinados (N028 _coment: 2 rampas + 2 cambios de velocidad en una línea): se ordenan
+    # por UPar; una rampa DESCIENDE/ASCIENDE linealmente hasta su profundidad alcanzándola en su
+    # punto; un cambio de velocidad aplica DESPUÉS de su punto. El feed de un tramo es el vigente
+    # al ENTRAR al tramo.
+    events = sorted([(u, "S", v) for u, v in spec.speed_changes]
+                    + [(u, "D", v) for u, v in spec.depth_changes])
+    segs: list[tuple[float, float, float, float]] = []
+    z, feed = -depth, cut_feed
+    for upar, kind, val in events:
         mx, my = sx + upar * (ex - sx), sy + upar * (ey - sy)
-        return [(mx, my, -depth, cut_feed), (ex, ey, -depth, speed * 1000.0)]
-    if spec.depth_changes:
-        (upar, d2), = spec.depth_changes
-        mx, my = sx + upar * (ex - sx), sy + upar * (ey - sy)
-        return [(mx, my, -d2, cut_feed), (ex, ey, -d2, cut_feed)]
-    return [(ex, ey, -depth, cut_feed)]
+        nz = -val if kind == "D" else z
+        segs.append((mx, my, nz, feed))
+        z = nz
+        if kind == "S":
+            feed = val * 1000.0
+    segs.append((ex, ey, z, feed))
+    # colapsar tramos duplicados en el mismo punto (evento doble en el mismo UPar)
+    return [s_ for i, s_ in enumerate(segs) if i == len(segs) - 1 or (s_[0], s_[1]) != (segs[i+1][0], segs[i+1][1])]
 
 
 def _lead_geometry(
@@ -421,7 +430,10 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             # pasada, con el reset después de los ceros (N028 diag: op2→op3 ETK-primero, op3→op4
             # con atributos ETK-último; 5 transiciones consistentes).
             nxt = millings[i + 1]
-            etk_last = bool(nxt.speed_changes or nxt.depth_changes)
+            # ETK-último ⇔ la op ENTRANTE tiene override de Avanz./Rotación (8 transiciones de
+            # N028 consistentes; la hipótesis previa por-atributos cayó con _coment).
+            etk_last = (nxt.tool_name != spec.tool_name
+                        and (nxt.feedrate > 0 or nxt.spindle > 0))
             lines += [
                 *(() if etk_last else ("?%ETK[7]=0",)),
                 f"G0 Z{security:.3f}",
