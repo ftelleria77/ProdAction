@@ -161,9 +161,6 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     if spec.side_of_feature not in ("Center", "Left", "Right"):
         _fail(spec, f"side_of_feature={spec.side_of_feature!r} desconocido. [A3]")
     if spec.side_of_feature != "Center":
-        if spec.start_x != spec.end_x and spec.start_y != spec.end_y:
-            _fail(spec, "corrección de herramienta sobre línea DIAGONAL: sin fixture de "
-                        "referencia aún (lead-in/out derivados solo en líneas a eje). [A3]")
         if spec.speed_changes or spec.depth_changes:
             _fail(spec, "corrección de herramienta combinada con cambios de velocidad/profundidad "
                         "en el recorrido: sin fixture de referencia aún. [A3]")
@@ -197,13 +194,10 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
         finish = 0.0 if is_zigzag else getattr(strategy, "axial_finish_cutting_depth", 0.0)
         if finish:
             # Terminación (N027 bi_cd4_f2): desbaste hasta total−finish + una pasada final.
-            if type(strategy).__name__.startswith("Unidirectional"):
-                _fail(spec, "pasada de terminación en UNIDIRECCIONAL: sin fixture de "
-                            "referencia (solo validada en bidireccional). [A3]")
             if finish >= (spec.depth_spec.target_depth or 0.0):
                 _fail(spec, f"terminación ({finish:g}) ≥ profundidad total: sin sentido. [A3]")
-        if spec.start_x != spec.end_x and spec.start_y != spec.end_y:
-            _fail(spec, "multipasada sobre línea DIAGONAL: sin fixture de referencia. [A3]")
+        if is_zigzag and spec.start_x != spec.end_x and spec.start_y != spec.end_y:
+            _fail(spec, "ZigZag sobre línea DIAGONAL: sin fixture de referencia. [A3]")
         if spec.side_of_feature != "Center" or spec.is_precise or spec.side_offset:
             _fail(spec, "multipasada combinada con corrección/rebaba: sin fixture de "
                         "referencia. [A3]")
@@ -215,8 +209,6 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     # tangente (Automatic≡Right→G3, Left→G2); overlap INERTE en líneas (ov 0/0.25/5 idénticos).
     # Lo no validado → fail-loud.
     if spec.approach.is_enabled or spec.retract.is_enabled:
-        if spec.start_x != spec.end_x and spec.start_y != spec.end_y:
-            _fail(spec, "approach/retract sobre línea DIAGONAL: sin fixture de referencia. [A3]")
         if spec.side_of_feature != "Center" or spec.is_precise or spec.side_offset:
             _fail(spec, "approach/retract combinado con corrección/rebaba: sin fixture de "
                         "referencia. [A3]")
@@ -226,12 +218,10 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
         if spec.depth_spec.is_through:
             _fail(spec, "approach/retract + pasante: sin fixture de referencia. [A3]")
         for lead in (spec.approach, spec.retract):
-            if lead.is_enabled and lead.mode != "Quote":
-                _fail(spec, f"lead con mode={lead.mode!r}: solo 'Quote' validado. [A3]")
+            if lead.is_enabled and lead.mode not in ("Quote", "Down", "Up"):
+                _fail(spec, f"lead con mode={lead.mode!r} desconocido. [A3]")
             if lead.is_enabled and lead.arc_side not in ("Automatic", "Left", "Right"):
                 _fail(spec, f"lead con arc_side={lead.arc_side!r} desconocido. [A3]")
-        if spec.retract.is_enabled and spec.retract.speed > 0:
-            _fail(spec, "velocidad propia del retract: sin fixture de referencia. [A3]")
     # Cambios durante el recorrido: validados con UN cambio por tipo, no combinados (N_RT_E001_Vel/
     # _Prof). Lo no validado → fail-loud hasta tener fixture de referencia.
     if len(spec.speed_changes) > 1 or len(spec.depth_changes) > 1:

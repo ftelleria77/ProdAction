@@ -89,8 +89,9 @@ class FailLoudTest(unittest.TestCase):
     def test_terminacion_mayor_que_total(self):
         self._assert_rejects(strategy=_strategy(4.0, 15.0))
 
-    def test_multipasada_diagonal(self):
-        self._assert_rejects(strategy=_strategy(4.0), start_y=20.0, end_y=180.0)
+    def test_multipasada_diagonal_pasa(self):
+        # Validado en N030 dg_mp_bi_cd4 (los tramos planos de la diagonal omiten Z).
+        _validate_line_milling(_line(strategy=_strategy(4.0), start_y=20.0, end_y=180.0))
 
     def test_multipasada_con_correccion(self):
         self._assert_rejects(strategy=_strategy(4.0), side_of_feature="Left")

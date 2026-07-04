@@ -41,8 +41,9 @@ class FailLoudTest(unittest.TestCase):
         _validate_line_milling(_line(side="Left"))
         _validate_line_milling(_line(side="Right"))
 
-    def test_side_sobre_diagonal(self):
-        self._assert_rejects(side="Left", start_y=20.0, end_y=180.0)
+    def test_side_sobre_diagonal_pasa(self):
+        # Validado en N030 dg_side_l (lead de 1 mm sobre la dirección, fórmula genérica).
+        _validate_line_milling(_line(side="Left", start_y=20.0, end_y=180.0))
 
     def test_side_con_cambios_de_recorrido(self):
         self._assert_rejects(side="Left", speed_changes=((0.3, 1.0),))

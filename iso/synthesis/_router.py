@@ -224,6 +224,7 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         # Leads programables (N026/N027): entrada/salida en línea o arco tangente.
         has_app = spec.approach.is_enabled
         has_ret = spec.retract.is_enabled
+        ret_suppresses_g0 = has_ret   # default (Quote); el branch de leads lo ajusta
         lead_app = spec.tool_width / 2.0 * spec.approach.radius_multiplier
         lead_ret = spec.tool_width / 2.0 * spec.retract.radius_multiplier
 
@@ -330,15 +331,16 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 # lead (speed×1000) aplica al plunge Y al lead; sin speed usa el feed de plunge.
                 # speed ≤ 0 (0 o el sentinel -1 del XML) = sin velocidad propia → feed de plunge.
                 app_feed = (spec.approach.speed * 1000.0) if spec.approach.speed > 0 else plunge_feed
-                lines += [
-                    "?%ETK[7]=4",
-                    f"G1 Z{-depth:.3f} F{app_feed:.3f}",
-                ]
+                down = spec.approach.mode == "Down"   # "En bajada": el lead DESCIENDE (sin plunge)
+                lines.append("?%ETK[7]=4")
+                if not down:
+                    lines.append(f"G1 Z{-depth:.3f} F{app_feed:.3f}")
                 if spec.approach.approach_type == "Arc":
                     (apx, apy), (acx, acy), ag = _lead_geometry(
                         spec, lead_app, spec.approach.arc_side, True)
+                    zpart = f"Z{-depth:.3f} " if down else ""   # arco helicoidal (N030 baja)
                     lines.append(f"{ag} X{spec.start_x:.3f} Y{spec.start_y:.3f} "
-                                 f"I{acx:.3f} J{acy:.3f} F{app_feed:.3f}")
+                                 f"{zpart}I{acx:.3f} J{acy:.3f} F{app_feed:.3f}")
                 else:
                     ux, uy = _unit_dir(spec)
                     apx, apy = spec.start_x - lead_app * ux, spec.start_y - lead_app * uy
@@ -363,17 +365,30 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             if cad:
                 lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
             if has_ret:
-                # Retract programable: lead-out A PROFUNDIDAD desde el end (recto o arco) a feed
-                # de corte, y retracción en G1 (reemplaza el G0 Z del teardown).
+                # Retract programable. "En cota" (Quote): lead-out A PROFUNDIDAD + retracción en
+                # G1 (sin G0 Z). "En subida" (Up): el lead-out ASCIENDE a security (arco helicoidal
+                # con Z) y el G0 Z del teardown vuelve (N030 sube). La velocidad propia del
+                # retract aplica SOLO al lead-out (N030 sp).
+                up = spec.retract.mode == "Up"
+                ret_feed = (spec.retract.speed * 1000.0) if spec.retract.speed > 0 else cut_feed
+                lead_z = security if up else -depth
                 if spec.retract.retract_type == "Arc":
                     (rpx, rpy), (rcx, rcy), rg = _lead_geometry(
                         spec, lead_ret, spec.retract.arc_side, False)
-                    lines.append(f"{rg} X{rpx:.3f} Y{rpy:.3f} I{rcx:.3f} J{rcy:.3f} F{cut_feed:.3f}")
+                    zpart = f"Z{security:.3f} " if up else ""
+                    lines.append(f"{rg} X{rpx:.3f} Y{rpy:.3f} "
+                                 f"{zpart}I{rcx:.3f} J{rcy:.3f} F{ret_feed:.3f}")
                 else:
                     ux, uy = _unit_dir(spec)
                     rpx, rpy = spec.end_x + lead_ret * ux, spec.end_y + lead_ret * uy
-                    lines.append(_g1_cut(spec.end_x, spec.end_y, rpx, rpy, -depth, cut_feed))
-                lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
+                    lines.append(_g1_cut(spec.end_x, spec.end_y, rpx, rpy, lead_z, ret_feed))
+                if not up:
+                    lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
+                    ret_suppresses_g0 = True
+                else:
+                    ret_suppresses_g0 = False
+            else:
+                ret_suppresses_g0 = False
 
         if compensated:
             # Salida: retrae en G1 (no G0), apaga la corrección y sale al punto de lead-out
@@ -413,7 +428,7 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             # Last pass: retract first, ?%ETK[7]=0 after VL7. Con retract programable la
             # retracción ya se emitió en G1 (no va el G0 Z).
             lines += [
-                *(() if has_ret else (f"G0 Z{security:.3f}",)),
+                *(() if (has_ret and ret_suppresses_g0) else (f"G0 Z{security:.3f}",)),
                 "D0",
                 "SVL 0.000",
                 "VL6=0.000",
