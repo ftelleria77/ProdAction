@@ -1343,6 +1343,7 @@ def _adapt_milling(
                 operation.speed_changes or operation.depth_changes
                 or feature.side_offset or feature.is_precise
                 or operation.allowance_side or operation.allowance_bottom
+                or not operation.activate_cnc_correction
             ):
                 spec = _dc_replace(
                     spec,
@@ -1352,6 +1353,7 @@ def _adapt_milling(
                     allowance_side=operation.allowance_side or 0.0,
                     allowance_bottom=operation.allowance_bottom or 0.0,
                     is_precise=bool(feature.is_precise),
+                    activate_cnc_correction=bool(operation.activate_cnc_correction),
                 )
         except Exception as exc:
             return _unsupported_entry(

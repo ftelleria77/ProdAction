@@ -138,6 +138,14 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
         if length <= spec.tool_width:
             _fail(spec, f"corrección de longitud: la línea ({length:g} mm) no supera el ancho "
                         f"de la fresa ({spec.tool_width:g} mm) — recorrido degenerado. [A3]")
+    # Corrección CAD (ActivateCNCCorrection=false) CON lado elegido: la trayectoria viene
+    # calculada al eje de la herramienta — EN INVESTIGACIÓN (todo lo validado es C.N.=true).
+    # Emitir estilo C.N. sería una trayectoria incorrecta → fail-loud hasta derivarla (N029).
+    # Con corrección CENTRADA el flag es irrelevante (no hay nada que compensar): el sintetizador
+    # escribe false con estrategia multipaso y esos fixtures están byte-validados.
+    if not spec.activate_cnc_correction and spec.side_of_feature != "Center":
+        _fail(spec, "Corrección CAD (ActivateCNCCorrection=false) con lado elegido: sin fixture "
+                    "de referencia aún — solo Corrección C.N. está derivada. [A3]")
     # Corrección de herramienta (side Left/Right → G41/G42, radio del SVR): validada en N023 sobre
     # líneas alineadas a eje, ambos sentidos, sin combinar con cambios de recorrido.
     if spec.side_of_feature not in ("Center", "Left", "Right"):

@@ -147,6 +147,10 @@ class LineMillingSpec:
     # de la fresa en ambos extremos (centro viaja [start+r·dir, end−r·dir]) para que el FILO cubra
     # exactamente el segmento programado. Solo LECTURA (la autoría hornea false).
     is_precise: bool = False
+    # Corrección C.N. (true, ActivateCNCCorrection: el control compensa con G41/G42 — TODO lo
+    # validado) vs Corrección CAD (false: trayectoria calculada al eje de la herramienta — EN
+    # INVESTIGACIÓN, fixtures de Fermín pendientes). Solo LECTURA.
+    activate_cnc_correction: bool = True
 
 
 @dataclass(frozen=True)
