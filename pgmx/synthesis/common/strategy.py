@@ -39,6 +39,7 @@ __all__ = [
     "HelicalMillingStrategySpec",
     "MillingStrategySpec",
     "UnidirectionalMillingStrategySpec",
+    "ZigZagMillingStrategySpec",
     "build_bidirectional_milling_strategy_spec",
     "build_contour_parallel_milling_strategy_spec",
     "build_helical_milling_strategy_spec",
@@ -95,6 +96,22 @@ class HelicalMillingStrategySpec:
 
 
 @dataclass(frozen=True)
+class ZigZagMillingStrategySpec:
+    """Estrategia `ZigZag` de Maestro (fresado lineal): corta EN RAMPA alternando el sentido.
+
+    UI: pasada avance (FeedCuttingDepth) / pasada retorno (ReturnCuttingDepth) / último hueco
+    (AxialFinishCuttingDepth). Solo LECTURA: la autoría no la escribe (los .pgmx salen de Maestro).
+    """
+
+    allow_multiple_passes: bool = True
+    feed_cutting_depth: float = 0.0
+    return_cutting_depth: float = 0.0
+    axial_finish_cutting_depth: float = 0.0
+    overlap: float = 0.0
+    cutmode: str = "Climb"
+
+
+@dataclass(frozen=True)
 class ContourParallelMillingStrategySpec:
     """Estrategia `Paralela al perfil/contorno` observada para vaciados."""
 
@@ -118,6 +135,7 @@ MillingStrategySpec = (
     UnidirectionalMillingStrategySpec
     | BidirectionalMillingStrategySpec
     | HelicalMillingStrategySpec
+    | ZigZagMillingStrategySpec
     | ContourParallelMillingStrategySpec
 )
 
@@ -445,6 +463,8 @@ def _build_milling_strategy_node(spec) -> ET.Element:
         {f"{{{XSI_NS}}}type": strategy_type},
     )
     _set_xmlns(node, "b", STRATEGY_NS)
+    if isinstance(strategy, ZigZagMillingStrategySpec):
+        return strategy
     if isinstance(strategy, HelicalMillingStrategySpec):
         _append_node(node, PGMX_NS, "AllowMultiplePasses", "false")
     else:
@@ -545,6 +565,15 @@ def _extract_milling_strategy_spec_from_operation(
             radial_finish_cutting_depth=_safe_float(_text(strategy_node, "./{*}RadialFinishCuttingDepth"), 0.0),
             allows_bidirectional=_safe_bool(_text(strategy_node, "./{*}AllowsBidirectional"), False),
             allows_finish_cutting=_safe_bool(_text(strategy_node, "./{*}AllowsFinishCutting"), False),
+        )
+    if "ZigZagMilling" in strategy_type:
+        return ZigZagMillingStrategySpec(
+            allow_multiple_passes=allow_multiple_passes,
+            feed_cutting_depth=_safe_float(_text(strategy_node, "./{*}FeedCuttingDepth"), 0.0),
+            return_cutting_depth=_safe_float(_text(strategy_node, "./{*}ReturnCuttingDepth"), 0.0),
+            axial_finish_cutting_depth=axial_finish_cutting_depth,
+            overlap=_safe_float(_text(strategy_node, "./{*}Overlap"), 0.0),
+            cutmode=_text(strategy_node, "./{*}Cutmode", "Climb"),
         )
     if "UnidirectionalMilling" in strategy_type:
         return build_unidirectional_milling_strategy_spec(
@@ -975,6 +1004,8 @@ def _normalize_milling_strategy_spec(
             allows_bidirectional=strategy.allows_bidirectional,
             allows_finish_cutting=strategy.allows_finish_cutting,
         )
+    if isinstance(strategy, ZigZagMillingStrategySpec):
+        return strategy
     raise ValueError(f"Tipo de estrategia de fresado no soportado: {type(strategy)!r}")
 
 

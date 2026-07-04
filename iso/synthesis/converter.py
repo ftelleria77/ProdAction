@@ -35,7 +35,8 @@ def convert(pgmx_path: Path) -> str:
     # El preamble lleva ?%ETK[7]=0 cuando el router mueve el ETK[7]=4 antes del plunge:
     # con corrección de herramienta (N023) o con approach programable (N026).
     router_compensated = any(
-        m.side_of_feature != "Center" or m.approach.is_enabled for m in ops.routers)
+        (m.side_of_feature != "Center" and m.activate_cnc_correction) or m.approach.is_enabled
+        for m in ops.routers)
     # Compensación validada solo en programas de UNA línea (N023): las transiciones entre pasadas
     # con G41/G42 activo no tienen fixture de referencia.
     if router_compensated and len(ops.routers) > 1:

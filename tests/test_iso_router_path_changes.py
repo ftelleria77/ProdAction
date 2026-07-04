@@ -99,9 +99,9 @@ class FailLoudTest(unittest.TestCase):
         self._assert_rejects(speed_changes=((0.0, 1.0),))
         self._assert_rejects(depth_changes=((1.0, 5.0),))
 
-    def test_profundidad_sobre_diagonal(self):
-        # G1 con X+Y+Z sin fixture de referencia (la diagonal plana omite Z).
-        self._assert_rejects(start_y=20.0, end_y=180.0, depth_changes=((0.25, 5.0),))
+    def test_profundidad_sobre_diagonal_pasa(self):
+        # Validado en N028 diag_prof10: la rampa en diagonal emite G1 X Y Z.
+        _validate_line_milling(_line(start_y=20.0, end_y=180.0, depth_changes=((0.25, 5.0),)))
 
 
 class EndToEndTest(unittest.TestCase):

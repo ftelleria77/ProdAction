@@ -117,15 +117,42 @@ def _multipass_cuts(
     return lines
 
 
-def _g1_cut(prev_x: float, prev_y: float, x: float, y: float, z: float, feed: float) -> str:
-    """G1 de corte de un tramo. Emite los ejes X/Y que se mueven; agrega Z solo cuando se mueve
-    UN eje del plano (la diagonal X+Y omite Z — quirk de Maestro, N022 dir_diag)."""
+def _zigzag_cuts(spec: LineMillingSpec, depth: float, cut_feed: float) -> list[str]:
+    """ZigZag (N025 pa2/pr3/uh1): baja a Z0 (superficie) y corta EN RAMPA alternando el sentido —
+    la ida baja `pasada avance`, la vuelta `pasada retorno` — clavado en (total − último hueco);
+    luego la pasada del último hueco a −total y UNA pasada final plana."""
+    st = spec.milling_strategy
+    pa, pr = st.feed_cutting_depth, st.return_cutting_depth
+    uh = st.axial_finish_cutting_depth
+    start = (spec.start_x, spec.start_y)
+    end = (spec.end_x, spec.end_y)
+    lines = [f"G1 Z0.000 F{cut_feed:.3f}"]
+    pos, z = start, 0.0
+    rough = -(depth - uh)
+    while z > rough + 1e-9:
+        step = pa if pos == start else pr
+        nz = max(z - step, rough)
+        target = end if pos == start else start
+        lines.append(_g1_cut(pos[0], pos[1], target[0], target[1], nz, cut_feed, prev_z=z))
+        pos, z = target, nz
+    for nz in (-depth, -depth):   # pasada del último hueco + pasada final plana
+        target = end if pos == start else start
+        lines.append(_g1_cut(pos[0], pos[1], target[0], target[1], nz, cut_feed, prev_z=z))
+        pos, z = target, nz
+    return lines
+
+
+def _g1_cut(prev_x: float, prev_y: float, x: float, y: float, z: float, feed: float,
+            prev_z: float | None = None) -> str:
+    """G1 de corte de un tramo. Emite los ejes X/Y que se mueven; agrega Z cuando CAMBIA
+    (rampa — incluso en diagonal: G1 X Y Z, N028 diag_prof10) o cuando se mueve UN solo eje
+    del plano (ahí se repite aunque no cambie; la diagonal plana omite Z — N022 dir_diag)."""
     parts: list[str] = []
     if x != prev_x:
         parts.append(f"X{x:.3f}")
     if y != prev_y:
         parts.append(f"Y{y:.3f}")
-    if len(parts) == 1:
+    if (prev_z is not None and z != prev_z) or len(parts) == 1:
         parts.append(f"Z{z:.3f}")
     return "G1 " + " ".join(parts) + f" F{feed:.3f}"
 
@@ -173,13 +200,27 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 start_x=spec.start_x + r * ux, start_y=spec.start_y + r * uy,
                 end_x=spec.end_x - r * ux, end_y=spec.end_y - r * uy,
             )
-        plunge_feed = geom.feed_default       # bajada G1 Z
-        cut_feed = geom.feed_std              # corte lateral G1 X/Y
+        plunge_feed = geom.feed_default       # bajada G1 Z (el override NO la cambia — N028)
+        # Avanz./Rotación por operación (N028 F3_S12K): corte a F=Avanz×1000; S{Rotación}M3.
+        cut_feed = spec.feedrate * 1000.0 if spec.feedrate > 0 else geom.feed_std
+        spindle_eff = int(spec.spindle) if spec.spindle > 0 else geom.spindle_std
         is_last = (i == n - 1)
         # Corrección de herramienta (side_of_feature Left/Right): el control compensa el radio
         # (SVR) vía G41/G42; las coordenadas del corte NO cambian (N023). El lado es relativo
         # al avance: Left→G41, Right→G42.
-        compensated = spec.side_of_feature != "Center"
+        # Corrección CAD (ActivateCNCCorrection=false, sin estrategia): las coordenadas van
+        # DESPLAZADAS radio×normal(lado) — izquierda=rot90ccw(û) — sin G41/G42 ni leads (N023 _CAD).
+        cad = (not spec.activate_cnc_correction) and spec.milling_strategy is None
+        if cad and spec.side_of_feature != "Center":
+            r_off = spec.tool_width / 2.0
+            ux, uy = _unit_dir(spec)
+            nx, ny = (-uy, ux) if spec.side_of_feature == "Left" else (uy, -ux)
+            spec = _dc_replace(
+                spec,
+                start_x=spec.start_x + r_off * nx, start_y=spec.start_y + r_off * ny,
+                end_x=spec.end_x + r_off * nx, end_y=spec.end_y + r_off * ny,
+            )
+        compensated = spec.side_of_feature != "Center" and spec.activate_cnc_correction
         # Leads programables (N026/N027): entrada/salida en línea o arco tangente.
         has_app = spec.approach.is_enabled
         has_ret = spec.retract.is_enabled
@@ -193,7 +234,7 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             # CAMBIO DE HERRAMIENTA entre pasadas (N028): shutdown con doble park Z + header ATC
             # nuevo (sin ?%ETK[6], que solo va en el primero) + ?%ETK[13]=1 SIN re-setup de
             # SHF/Or, y posicionamiento a la pasada nueva.
-            n = _cutter_number(spec)
+            tn = _cutter_number(spec)
             lines += [
                 "MLV=0",
                 f"G0 G53 Z{Z_PARK:.3f}",
@@ -204,12 +245,12 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 "MLV=0",
                 f"G0 G53 Z{Z_PARK:.3f}",
                 "MLV=0",
-                f"T{n}",
+                f"T{tn}",
                 "SYN",
                 "M06",
-                f"?%ETK[9]={n}",
+                f"?%ETK[9]={tn}",
                 f"?%ETK[18]={ROUTER_ETK18}",
-                f"S{geom.spindle_std}M3",
+                f"S{spindle_eff}M3",
                 "G17",
                 "MLV=2",
                 "?%ETK[13]=1",
@@ -217,8 +258,14 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 f"G0 Z{z_router_approach:.3f}",
             ]
         else:
-            # Between passes (misma fresa): G17 + double G0 to new start
+            # Between passes (misma fresa): G17 + double G0 to new start. Si el husillo efectivo
+            # cambia (override Rotación), va S{rpm}M3 ANTES del G17 (N028 F3_S12K).
             assert prev_end is not None
+            prev_geom = tool_geometry(millings[i - 1].tool_name)
+            prev_spindle = (int(millings[i - 1].spindle) if millings[i - 1].spindle > 0
+                            else prev_geom.spindle_std)
+            if spindle_eff != prev_spindle:
+                lines.append(f"S{spindle_eff}M3")
             lines += [
                 "G17",
                 "MLV=2",
@@ -262,7 +309,10 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 f"G1 Z{security:.3f} F{plunge_feed:.3f}",
                 "?%ETK[7]=4",
             ]
-            lines += _multipass_cuts(spec, depth, security, cut_feed)
+            if type(spec.milling_strategy).__name__.startswith("ZigZag"):
+                lines += _zigzag_cuts(spec, depth, cut_feed)
+            else:
+                lines += _multipass_cuts(spec, depth, security, cut_feed)
             lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
         else:
             if compensated:
@@ -293,15 +343,25 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                     ux, uy = _unit_dir(spec)
                     apx, apy = spec.start_x - lead_app * ux, spec.start_y - lead_app * uy
                     lines.append(_g1_cut(apx, apy, spec.start_x, spec.start_y, -depth, app_feed))
+            elif cad:
+                # CAD: bajada a security a feed de PLUNGE, ETK[7]=4, plunge a feed de CORTE
+                # (mismo patrón Z que la multipasada — ambos ActivateCNCCorrection=false).
+                lines += [
+                    f"G1 Z{security:.3f} F{plunge_feed:.3f}",
+                    "?%ETK[7]=4",
+                    f"G1 Z{-depth:.3f} F{cut_feed:.3f}",
+                ]
             else:
                 lines += [
                     f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
                     "?%ETK[7]=4",
                 ]
-            px, py = spec.start_x, spec.start_y
+            px, py, pz = spec.start_x, spec.start_y, -depth
             for seg_x, seg_y, seg_z, seg_feed in _cut_segments(spec, depth, cut_feed):
-                lines.append(_g1_cut(px, py, seg_x, seg_y, seg_z, seg_feed))
-                px, py = seg_x, seg_y
+                lines.append(_g1_cut(px, py, seg_x, seg_y, seg_z, seg_feed, prev_z=pz))
+                px, py, pz = seg_x, seg_y, seg_z
+            if cad:
+                lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
             if has_ret:
                 # Retract programable: lead-out A PROFUNDIDAD desde el end (recto o arco) a feed
                 # de corte, y retracción en G1 (reemplaza el G0 Z del teardown).
@@ -334,14 +394,20 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             continue
 
         if not is_last:
-            # Non-last pass: ?%ETK[7]=0 before retract
+            # Non-last pass: ?%ETK[7]=0 va PRIMERO — salvo que la op SIGUIENTE traiga atributos
+            # de recorrido (cambios de velocidad/profundidad): ahí Maestro usa el orden de última
+            # pasada, con el reset después de los ceros (N028 diag: op2→op3 ETK-primero, op3→op4
+            # con atributos ETK-último; 5 transiciones consistentes).
+            nxt = millings[i + 1]
+            etk_last = bool(nxt.speed_changes or nxt.depth_changes)
             lines += [
-                "?%ETK[7]=0",
+                *(() if etk_last else ("?%ETK[7]=0",)),
                 f"G0 Z{security:.3f}",
                 "D0",
                 "SVL 0.000",
                 "VL6=0.000",
                 *(("SVR 0.000", "VL7=0.000") if svr != 0.0 else ()),
+                *(("?%ETK[7]=0",) if etk_last else ()),
             ]
         else:
             # Last pass: retract first, ?%ETK[7]=0 after VL7. Con retract programable la
@@ -362,7 +428,8 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
 
 def _atc_header(spec: LineMillingSpec) -> list[str]:
     n = _cutter_number(spec)
-    spindle = tool_geometry(spec.tool_name).spindle_std
+    g = tool_geometry(spec.tool_name)
+    spindle = int(spec.spindle) if spec.spindle > 0 else g.spindle_std
     return [
         "MLV=0",
         f"T{n}",

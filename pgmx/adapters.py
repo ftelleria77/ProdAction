@@ -1339,11 +1339,15 @@ def _adapt_milling(
             )
             # Cambios durante el recorrido (SpeedAttribute/DepthAttribute del snapshot): el builder
             # no los recibe (solo lectura); se cablean por replace sobre el spec construido.
+            _tech = operation.technology
+            _line_feed = float(_tech.feedrate) if _tech is not None else 0.0
+            _line_spindle = float(_tech.spindle) if _tech is not None else 0.0
             if spec is not None and (
                 operation.speed_changes or operation.depth_changes
                 or feature.side_offset or feature.is_precise
                 or operation.allowance_side or operation.allowance_bottom
                 or not operation.activate_cnc_correction
+                or _line_feed or _line_spindle
             ):
                 spec = _dc_replace(
                     spec,
@@ -1354,6 +1358,8 @@ def _adapt_milling(
                     allowance_bottom=operation.allowance_bottom or 0.0,
                     is_precise=bool(feature.is_precise),
                     activate_cnc_correction=bool(operation.activate_cnc_correction),
+                    feedrate=_line_feed,
+                    spindle=_line_spindle,
                 )
         except Exception as exc:
             return _unsupported_entry(

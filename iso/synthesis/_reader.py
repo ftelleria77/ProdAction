@@ -138,7 +138,17 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
     state = result.snapshot.state
 
     # Fail-loud: aborta si hay alguna operación/parámetro fuera del subconjunto soportado,
-    # en lugar de ignorarla en silencio o crashear más adelante.
+    # en lugar de ignorarla en silencio o crashear más adelante. OJO: las entries que el ADAPTER
+    # no pudo adaptar no llegan a adapted_entries — sin este chequeo se DROPEABAN en silencio
+    # (ISO incompleto; detectado con el primer ZigZag).
+    unsupported = getattr(result, "unsupported_entries", ())
+    if unsupported:
+        reasons = "; ".join(
+            f"{e.feature_name or e.feature_id}: {', '.join(e.reasons) or 'sin detalle'}"
+            for e in unsupported[:3])
+        raise UnsupportedOperationError(
+            f"El .pgmx tiene {len(unsupported)} operación(es) que el adapter no pudo adaptar "
+            f"(se omitirían en silencio): {reasons}")
     validate_entries(result.adapted_entries)
 
     field = _execution_field(path)

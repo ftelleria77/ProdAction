@@ -143,9 +143,19 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     # Emitir estilo C.N. sería una trayectoria incorrecta → fail-loud hasta derivarla (N029).
     # Con corrección CENTRADA el flag es irrelevante (no hay nada que compensar): el sintetizador
     # escribe false con estrategia multipaso y esos fixtures están byte-validados.
-    if not spec.activate_cnc_correction and spec.side_of_feature != "Center":
-        _fail(spec, "Corrección CAD (ActivateCNCCorrection=false) con lado elegido: sin fixture "
-                    "de referencia aún — solo Corrección C.N. está derivada. [A3]")
+    # Corrección CAD (N023 _CAD, 6/6): coordenadas desplazadas radio×normal(lado), sin G41/leads,
+    # entrada/salida Z estilo security. Validada en líneas a eje, single-pass, ciega. Combos → fail.
+    if not spec.activate_cnc_correction and spec.milling_strategy is None:
+        if spec.start_x != spec.end_x and spec.start_y != spec.end_y:
+            _fail(spec, "Corrección CAD sobre DIAGONAL: sin fixture de referencia. [A3]")
+        if spec.side_offset or spec.is_precise:
+            _fail(spec, "Corrección CAD + rebaba/corrección de longitud: sin fixture. [A3]")
+        if spec.approach.is_enabled or spec.retract.is_enabled:
+            _fail(spec, "Corrección CAD + acercamiento/alejamiento: sin fixture. [A3]")
+        if spec.speed_changes or spec.depth_changes:
+            _fail(spec, "Corrección CAD + cambios en el recorrido: sin fixture. [A3]")
+        if spec.depth_spec.is_through:
+            _fail(spec, "Corrección CAD + pasante: sin fixture. [A3]")
     # Corrección de herramienta (side Left/Right → G41/G42, radio del SVR): validada en N023 sobre
     # líneas alineadas a eje, ambos sentidos, sin combinar con cambios de recorrido.
     if spec.side_of_feature not in ("Center", "Left", "Right"):
@@ -157,6 +167,16 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
         if spec.speed_changes or spec.depth_changes:
             _fail(spec, "corrección de herramienta combinada con cambios de velocidad/profundidad "
                         "en el recorrido: sin fixture de referencia aún. [A3]")
+    # Avanz./Rotación por operación (N028 F3_S12K): F=Avanz×1000 en el corte; S{Rotación}M3.
+    # El comportamiento en el TOPE (clamp tipo taladro) no está validado → fail-loud si excede.
+    if spec.feedrate > 0 or spec.spindle > 0:
+        _g = tool_geometry(spec.tool_name)
+        if spec.feedrate * 1000.0 > _g.feed_max:
+            _fail(spec, f"Avanz. {spec.feedrate:g} supera el tope de la fresa "
+                        f"({_g.feed_max/1000:g} m/min): clamp sin fixture. [A3]")
+        if spec.spindle > _g.spindle_max:
+            _fail(spec, f"Rotación {spec.spindle:g} supera el tope ({_g.spindle_max} rpm): "
+                        f"clamp sin fixture. [A3]")
     # Estrategia MULTIPASADA en Z (N025): Uni/Bidireccional con allow_multiple_passes. Lo no
     # validado → fail-loud.
     strategy = spec.milling_strategy
@@ -164,9 +184,17 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
         if not getattr(strategy, "allow_multiple_passes", False):
             _fail(spec, "estrategia sin allow_multiple_passes (modo 'pre-cast' de una pasada): "
                         "sin fixture de referencia. [A3]")
-        if getattr(strategy, "axial_cutting_depth", 0.0) <= 0.0:
+        is_zigzag = type(strategy).__name__.startswith("ZigZag")
+        if is_zigzag:
+            # ZigZag (N025): validado con pa/pr/uh > 0 sobre línea a eje.
+            if (getattr(strategy, "feed_cutting_depth", 0.0) <= 0.0
+                    or getattr(strategy, "return_cutting_depth", 0.0) <= 0.0):
+                _fail(spec, "ZigZag sin pasada avance/retorno > 0. [A3]")
+            if getattr(strategy, "axial_finish_cutting_depth", 0.0) <= 0.0:
+                _fail(spec, "ZigZag con último hueco = 0: sin fixture de referencia. [A3]")
+        elif getattr(strategy, "axial_cutting_depth", 0.0) <= 0.0:
             _fail(spec, "estrategia multipasada sin axial_cutting_depth > 0. [A3]")
-        finish = getattr(strategy, "axial_finish_cutting_depth", 0.0)
+        finish = 0.0 if is_zigzag else getattr(strategy, "axial_finish_cutting_depth", 0.0)
         if finish:
             # Terminación (N027 bi_cd4_f2): desbaste hasta total−finish + una pasada final.
             if type(strategy).__name__.startswith("Unidirectional"):
@@ -215,6 +243,3 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     for upar, _val in (*spec.speed_changes, *spec.depth_changes):
         if not 0.0 < upar < 1.0:
             _fail(spec, f"cambio en el recorrido con UPar={upar} fuera de (0,1). [A3]")
-    if spec.depth_changes and spec.start_x != spec.end_x and spec.start_y != spec.end_y:
-        _fail(spec, "cambio de profundidad sobre una línea DIAGONAL: la emisión del G1 con X+Y+Z "
-                    "no está validada aún (la diagonal plana omite Z). [A3]")

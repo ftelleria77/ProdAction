@@ -46,6 +46,7 @@ from ..common.leads import (
 )
 from ..common.strategy import (
     BidirectionalMillingStrategySpec,
+    ZigZagMillingStrategySpec,
     ContourParallelMillingStrategySpec,
     HelicalMillingStrategySpec,
     MillingStrategySpec,
@@ -151,6 +152,11 @@ class LineMillingSpec:
     # validado) vs Corrección CAD (false: trayectoria calculada al eje de la herramienta — EN
     # INVESTIGACIÓN, fixtures de Fermín pendientes). Solo LECTURA.
     activate_cnc_correction: bool = True
+    # Avanz./Rotación por operación (UI Datos tecnológicos → Parámetros de trabajo; N028 F3_S12K):
+    # corte a F=Avanz×1000 (el plunge no cambia); S{Rotación}M3 antes del G17 en transición
+    # misma-fresa, o reemplaza el S del header en cambio de herramienta. 0 = sin override. LECTURA.
+    feedrate: float = 0.0
+    spindle: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -232,7 +238,8 @@ class _HydratedLineMillingSpec:
 def _normalize_line_milling_spec(line_milling: LineMillingSpec) -> LineMillingSpec:
     normalized_strategy = _ensure_milling_strategy_allowed(
         _normalize_milling_strategy_spec(line_milling.milling_strategy),
-        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
+        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec,
+                       ZigZagMillingStrategySpec),
         context="LineMillingSpec",
     )
     return replace(
@@ -730,7 +737,8 @@ def build_line_milling_spec(
         raise ValueError("Para sintetizar el fresado lineal hay que indicar x1, y1, x2 e y2.")
     normalized_strategy = _ensure_milling_strategy_allowed(
         _normalize_milling_strategy_spec(line_milling_strategy),
-        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
+        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec,
+                       ZigZagMillingStrategySpec),
         context="LineMillingSpec",
     )
     return LineMillingSpec(
