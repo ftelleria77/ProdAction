@@ -1,0 +1,4 @@
+interface:
+  display_name: "CNC PGMX"
+  short_description: "Work with ProdAction PGMX/CNC modeling and program files."
+  default_prompt: "Use this skill to inspect ProdAction pgmx sources, understand CNC/PGMX file formats, and generate reviewable machining artifacts with safety checks."

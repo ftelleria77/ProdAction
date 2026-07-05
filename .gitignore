@@ -9,3 +9,4 @@ venv/
 dist/
 build/
 tools/cnc_project_viewer_settings.json
+.claude/settings.local.json
