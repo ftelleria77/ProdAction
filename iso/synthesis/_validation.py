@@ -172,16 +172,41 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
         if spec.spindle > _g.spindle_max:
             _fail(spec, f"Rotación {spec.spindle:g} supera el tope ({_g.spindle_max} rpm): "
                         f"clamp sin fixture. [A3]")
-    # Combos AÚN sin derivar (N029: los 3 DIFF): la interacción de la corrección de lado con
-    # multipasada (coordenadas desplazadas estilo CAD) y con leads C.N. (anclaje del arco).
+    # Combos derivados de los cuerpos completos de N029 (2026-07-05):
+    # - MULTIPASADA + LADO (mp_side_l): la estrategia fuerza ACC=false → coordenadas desplazadas
+    #   estilo CAD, sin G41; soportado SOLO Bidireccional (único fixtured).
+    # - LADO C.N. + LEADS (side_l_leads / inv_side_l_app): arco de contorno con G41/G42 activo;
+    #   el 1 mm de la corrección se ancla a la TANGENTE del arco; Automatic elige el lado LIBRE.
+    #   Soportado solo la forma fixtured: Arco / En cota / sin velocidad / Automatic.
+    # - MULTIPASADA + LEADS (mp_leads): REGLA DISTINTA observada (radio w/2 en vez de w/2×RM y
+    #   lado espejado con Automatic) — fórmula subdeterminada con un solo fixture → N034.
     if spec.side_of_feature != "Center" and spec.milling_strategy is not None:
-        _fail(spec, "multipasada + corrección de lado: interacción en derivación (N029). [A3]")
+        if not type(spec.milling_strategy).__name__.startswith("Bidirectional"):
+            _fail(spec, "corrección de lado + estrategia no Bidireccional: sin fixture "
+                        "(N029 valida solo Bi). [A3]")
+        if spec.activate_cnc_correction:
+            _fail(spec, "multipasada + lado con Corrección C.N. activa: Maestro fuerza CAD "
+                        "(ACC=false); combinación sin fixture. [A3]")
     if spec.milling_strategy is not None and (
             spec.approach.is_enabled or spec.retract.is_enabled):
-        _fail(spec, "multipasada + acercamiento/alejamiento: interacción en derivación (N029). [A3]")
-    if spec.side_of_feature != "Center" and (spec.approach.is_enabled or spec.retract.is_enabled):
-        _fail(spec, "corrección de lado + acercamiento/alejamiento: anclaje del lead en "
-                    "derivación (N029). [A3]")
+        _fail(spec, "multipasada + acercamiento/alejamiento: regla de lead distinta observada "
+                    "(N029 mp_leads: radio w/2, lado espejado) — subdeterminada; derivar con "
+                    "N034. [A3]")
+    if spec.side_of_feature != "Center" and spec.activate_cnc_correction:
+        for lead in (spec.approach, spec.retract):
+            if not lead.is_enabled:
+                continue
+            lead_type = getattr(lead, "approach_type", None) or getattr(lead, "retract_type", None)
+            if lead_type != "Arc":
+                _fail(spec, "lado C.N. + lead Lineal: sin fixture (N029 valida Arco). [A3]")
+            if lead.mode != "Quote":
+                _fail(spec, "lado C.N. + lead En bajada/subida: sin fixture "
+                            "(N029 valida En cota). [A3]")
+            if lead.speed > 0:
+                _fail(spec, "lado C.N. + velocidad propia del lead: sin fixture. [A3]")
+            if lead.arc_side != "Automatic":
+                _fail(spec, "lado C.N. + lado explícito del arco del lead: sin fixture "
+                            "(N029 valida Automatic → lado libre). [A3]")
     # Estrategia MULTIPASADA en Z (N025): Uni/Bidireccional con allow_multiple_passes. Lo no
     # validado → fail-loud.
     strategy = spec.milling_strategy

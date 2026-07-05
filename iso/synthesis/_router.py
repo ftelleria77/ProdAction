@@ -178,6 +178,22 @@ def _unit_dir(spec: LineMillingSpec) -> tuple[float, float]:
     return (dx / length, dy / length)
 
 
+def _arc_tangent(px: float, py: float, cx: float, cy: float, g: str) -> tuple[float, float]:
+    """Tangente unitaria del MOVIMIENTO en el punto P de un arco G2/G3 (sentido de recorrido)."""
+    rx, ry = px - cx, py - cy
+    r = (rx * rx + ry * ry) ** 0.5
+    if g == "G3":   # CCW
+        return (-ry / r, rx / r)
+    return (ry / r, -rx / r)
+
+
+def _comp_auto_arc_side(spec: LineMillingSpec) -> str:
+    """Con corrección G41/G42, el lado `Automatic` del lead elige el arco del lado LIBRE (el
+    opuesto al material/compensación): G41 (Left) → arco derecha/G3; G42 (Right) → arco
+    izquierda/G2. (N029 side_l_leads: G41+G3; inv_side_l_app: G42+G2.)"""
+    return "Right" if spec.side_of_feature == "Left" else "Left"
+
+
 def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
     lines: list[str] = []
     prev_end: tuple[float, float] | None = None
@@ -219,8 +235,10 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         # al avance: Left→G41, Right→G42.
         # Corrección CAD (ActivateCNCCorrection=false, sin estrategia): las coordenadas van
         # DESPLAZADAS radio×normal(lado) — izquierda=rot90ccw(û) — sin G41/G42 ni leads (N023 _CAD).
+        # El MISMO desplazamiento aplica a la multipasada con lado (N029 mp_side_l: la estrategia
+        # fuerza ACC=false y las pasadas corren en las coordenadas desplazadas, sin G41).
         cad = (not spec.activate_cnc_correction) and spec.milling_strategy is None
-        if cad and spec.side_of_feature != "Center":
+        if (not spec.activate_cnc_correction) and spec.side_of_feature != "Center":
             r_off = spec.tool_width / 2.0
             ux, uy = _unit_dir(spec)
             nx, ny = (-uy, ux) if spec.side_of_feature == "Left" else (uy, -ux)
@@ -291,9 +309,23 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 f"G0 X{spec.start_x:.3f} Y{spec.start_y:.3f} Z{z_router_approach:.3f}",
             ]
 
+        # Lead programable + compensación (N029 side_l_leads / inv_side_l_app): el arco del lead
+        # se emite en coordenadas de CONTORNO con G41/G42 activo; el lead-in de 1 mm de la
+        # corrección se ancla al punto EXTERIOR del arco, sobre su TANGENTE de entrada.
+        comp_app = compensated and has_app
+        if comp_app:
+            (capx, capy), (cacx, cacy), cag = _lead_geometry(
+                spec, lead_app, _comp_auto_arc_side(spec), True)
+            catx, caty = _arc_tangent(capx, capy, cacx, cacy, cag)
+
         # First pass: explicit approach; subsequent passes already positioned by triple G0
         if i == 0:
-            if compensated:
+            if comp_app:
+                lines += [
+                    f"G0 X{capx - _COMP_LEAD * catx:.3f} Y{capy - _COMP_LEAD * caty:.3f}",
+                    f"G0 Z{z_router_approach:.3f}",
+                ]
+            elif compensated:
                 # Aproxima al punto de lead-in (1 mm antes del start, sobre la dirección).
                 ux, uy = _unit_dir(spec)
                 ax, ay = spec.start_x - _COMP_LEAD * ux, spec.start_y - _COMP_LEAD * uy
@@ -335,12 +367,24 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             if compensated:
                 # ETK[7]=4 va ANTES de activar la corrección; el lead-in engancha G41/G42
                 # moviéndose al start en el plano de seguridad, y recién ahí baja (plunge).
+                # Con approach programable (arco): el 1 mm va sobre la tangente hasta el punto
+                # exterior, plunge ahí, y el arco (a feed de plunge) desemboca en el start.
                 lines += [
                     "?%ETK[7]=4",
                     "G41" if spec.side_of_feature == "Left" else "G42",
-                    f"G1 X{spec.start_x:.3f} Y{spec.start_y:.3f} Z{security:.3f} F{plunge_feed:.3f}",
-                    f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
                 ]
+                if comp_app:
+                    lines += [
+                        f"G1 X{capx:.3f} Y{capy:.3f} Z{security:.3f} F{plunge_feed:.3f}",
+                        f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
+                        f"{cag} X{spec.start_x:.3f} Y{spec.start_y:.3f} "
+                        f"I{cacx:.3f} J{cacy:.3f} F{plunge_feed:.3f}",
+                    ]
+                else:
+                    lines += [
+                        f"G1 X{spec.start_x:.3f} Y{spec.start_y:.3f} Z{security:.3f} F{plunge_feed:.3f}",
+                        f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
+                    ]
             elif has_app:
                 # Approach programable: ETK[7]=4 antes del plunge; plunge en el punto exterior y
                 # lead-in A PROFUNDIDAD hasta el start (recto o arco tangente). La velocidad del
@@ -380,11 +424,12 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 px, py, pz = seg_x, seg_y, seg_z
             if cad:
                 lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
-            if has_ret:
+            if has_ret and not compensated:
                 # Retract programable. "En cota" (Quote): lead-out A PROFUNDIDAD + retracción en
                 # G1 (sin G0 Z). "En subida" (Up): el lead-out ASCIENDE a security (arco helicoidal
                 # con Z) y el G0 Z del teardown vuelve (N030 sube). La velocidad propia del
-                # retract aplica SOLO al lead-out (N030 sp).
+                # retract aplica SOLO al lead-out (N030 sp). Con G41/G42 el lead-out se emite en
+                # el bloque de salida compensada (abajo).
                 up = spec.retract.mode == "Up"
                 ret_feed = (spec.retract.speed * 1000.0) if spec.retract.speed > 0 else cut_feed
                 lead_z = security if up else -depth
@@ -408,9 +453,19 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
 
         if compensated:
             # Salida: retrae en G1 (no G0), apaga la corrección y sale al punto de lead-out
-            # (1 mm después del end), todo a feed de corte.
-            ux, uy = _unit_dir(spec)
-            ox, oy = spec.end_x + _COMP_LEAD * ux, spec.end_y + _COMP_LEAD * uy
+            # (1 mm después del end), todo a feed de corte. Con retract programable (arco): el
+            # arco de salida va A PROFUNDIDAD antes de retraer, y el 1 mm del G40 sale sobre la
+            # tangente desde el punto exterior del arco (N029 side_l_leads).
+            if has_ret:
+                (crpx, crpy), (crcx, crcy), crg = _lead_geometry(
+                    spec, lead_ret, _comp_auto_arc_side(spec), False)
+                lines.append(f"{crg} X{crpx:.3f} Y{crpy:.3f} "
+                             f"I{crcx:.3f} J{crcy:.3f} F{cut_feed:.3f}")
+                crtx, crty = _arc_tangent(crpx, crpy, crcx, crcy, crg)
+                ox, oy = crpx + _COMP_LEAD * crtx, crpy + _COMP_LEAD * crty
+            else:
+                ux, uy = _unit_dir(spec)
+                ox, oy = spec.end_x + _COMP_LEAD * ux, spec.end_y + _COMP_LEAD * uy
             lines += [
                 f"G1 Z{security:.3f} F{cut_feed:.3f}",
                 "G40",

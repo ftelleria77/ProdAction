@@ -122,11 +122,16 @@ realmente varió el parámetro. Confirmado con rm3 (lead 6) y E001 (lead 18.36).
 - **Retract**: lead-out a profundidad desde el end + retracción en **G1** (reemplaza el G0 Z).
 - **Overlap INERTE** en líneas abiertas (0/0.25/5 → ISO idéntico): se ignora.
 
-## 10. Guardas fail-loud (estado 2026-07-04; combos sin fixture de referencia)
+## 10. Guardas fail-loud (estado 2026-07-05; combos sin fixture de referencia)
 
-Interacciones finas re-guardadas en N029 (derivar con cuerpos completos):
-- **multipasada + corrección de lado** (usa coordenadas desplazadas estilo CAD);
-- **corrección de lado + leads** (cambia el anclaje del arco); **multipasada + leads**.
+DERIVADAS de los cuerpos completos de N029 (byte-validadas, ver §10b):
+- **multipasada + lado** ✅ (Bi; ACC=false forzado → coordenadas desplazadas estilo CAD, sin G41);
+- **lado C.N. + leads** ✅ (arco de contorno con G41/G42; 1 mm sobre la TANGENTE del arco;
+  Automatic elige el lado LIBRE: G41→G3, G42→G2; leads independientes entre sí).
+Sigue guardada **multipasada + leads**: mp_leads mostró OTRA regla (radio w/2, lado espejado)
+subdeterminada con un solo fixture → lote N034 generado para desambiguar (RM/herramienta/lado
+explícito/Uni/paridad de pasadas/un extremo). También: lado+estrategia no-Bi, lado+lead
+Lineal/En bajada/subida/velocidad/lado explícito (formas no fixtured).
 
 Resto vigente:
 - Cambios de recorrido combinados con lado, corrección de longitud, multipasada o CAD; UPar ∉ (0,1).
@@ -141,6 +146,19 @@ Resto vigente:
 LEVANTADAS con fixtures (ya soportadas): diagonal con rampa/velocidad, múltiples cambios y ambos
 tipos juntos (N028), longitud+rebaba (acorte usa width/2, NO el SVR), pasante+lado,
 invertir+leads, CAD en diagonal (N029/N030).
+
+## 10b. Hallazgo metodológico (N029 revisitado, 2026-07-05): eco vs. genuino
+
+Al derivar los combos se verificó qué es eco del archivo y qué es regla de Maestro:
+- Los 3 pgmx problemáticos estaban INTACTOS (XML nuestro byte a byte; Maestro solo agregó el
+  .epl) — no hubo modificación involuntaria previa al postproceso.
+- **El TrajectoryPath almacenado SÍ se postprocesa tal cual** (N032/N033) — por eso mp_side_l
+  muestra las coordenadas desplazadas de nuestra curva (que coinciden con la convención Maestro,
+  cross-validada por th_side_l vía inversión G41 y por los CAD de N023 hechos en UI).
+- **Los leads se RECALCULAN del spec al postprocesar** — la curva Approach almacenada se IGNORA
+  (prueba: rm3 tenía almacenado un arco equivocado r4/−y y el ISO salió r6/+y/G3, la regla
+  derivada). Consecuencia: los fixtures de leads sintetizados son referencias genuinas aunque
+  nuestra autoría de la curva Approach tenga quirks.
 
 ## 11. Multi-fresa en un programa (N028 — cambio de herramienta entre pasadas)
 

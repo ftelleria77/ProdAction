@@ -16,6 +16,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
+from pgmx.synthesis.common.leads import build_approach_spec
 from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_spec
 from pgmx.synthesis.milling.line import LineMillingSpec, build_line_milling_spec
 
@@ -93,8 +94,19 @@ class FailLoudTest(unittest.TestCase):
         # Validado en N030 dg_mp_bi_cd4 (los tramos planos de la diagonal omiten Z).
         _validate_line_milling(_line(strategy=_strategy(4.0), start_y=20.0, end_y=180.0))
 
-    def test_multipasada_con_correccion(self):
+    def test_multipasada_bi_con_correccion_pasa(self):
+        # Derivado de N029 mp_side_l: la estrategia fuerza ACC=false → coords desplazadas sin G41.
+        _validate_line_milling(_line(strategy=_strategy(4.0), side_of_feature="Left",
+                                     activate_cnc_correction=False))
+
+    def test_multipasada_con_correccion_acc_true(self):
+        # Maestro fuerza CAD con multipaso; ACC=true + lado sería otra cosa — sin fixture.
         self._assert_rejects(strategy=_strategy(4.0), side_of_feature="Left")
+
+    def test_multipasada_con_leads(self):
+        # N029 mp_leads: regla de lead DISTINTA (r=w/2, lado espejado) — subdeterminada (N034).
+        self._assert_rejects(strategy=_strategy(4.0),
+                             approach=build_approach_spec(True, approach_type="Arc"))
 
 
 class EndToEndTest(unittest.TestCase):
