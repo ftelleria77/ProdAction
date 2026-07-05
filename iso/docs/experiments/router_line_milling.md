@@ -186,7 +186,7 @@ operación entrante trae Avanz./Rotación (9 transiciones consistentes).
 - **Comentario**: inerte en el ISO.
 - **Cota de seguridad**: ya modelada (§5, security_plane por operación).
 
-## 16. Autoría pgmx forma-Maestro (N031 5/5 → N032 0/4 → N033 pendiente de postproceso)
+## 16. Autoría pgmx forma-Maestro (N031 5/5 → N032 0/4 → N033 4/4 ✅ CERRADA)
 
 Todo el espacio §1-15 es AUTORABLE por el sintetizador (fixtures sin toggles manuales en Maestro).
 Modelo derivado del FALLO de N032 (los 4 ISO salieron planos):
@@ -201,7 +201,8 @@ Modelo derivado del FALLO de N032 (los 4 ISO salieron planos):
   y escalares en `…MachiningDataModel`, `Key`/`Name` y hojas de claves en `…Utility`, Key con ID
   real reservado; `ElementKey` op-level = 0/System.Object.
 Red de regresión offline: `test_pgmx_authoring_structural.py` (subárbol Operation autorado ==
-real de Maestro, mod IDs). Validación final: N033 postprocesado byte-idéntico (pendiente).
+real de Maestro, mod IDs). Validación final: **N033 postprocesado TAL CUAL = 4/4 byte-idéntico**
+(2026-07-05) — todo fixture futuro del fresado lineal sale del sintetizador sin tocar Maestro.
 
 ## Fuera de alcance
 
@@ -213,10 +214,9 @@ Top normal (§1-2); la traza es responsabilidad del programador de Maestro.
 
 ## Pendiente
 
-Postprocesar N033 (cierra la autoría §16); derivar las 3 interacciones re-guardadas de N029 con
-cuerpos completos (multipaso+lado, lado+leads, multipaso+leads); ZigZag diagonal y uh=0 (ya
-sintetizables). Microuniones: rotas en esta versión de Maestro — candidata a implementación propia
-post-paridad.
+Derivar las 3 interacciones re-guardadas de N029 con cuerpos completos (multipaso+lado,
+lado+leads, multipaso+leads); ZigZag diagonal y uh=0 (ya sintetizables vía §16). Microuniones:
+rotas en esta versión de Maestro — candidata a implementación propia post-paridad.
 
 ## Hallazgo transversal (N022 Vel/Prof + N007)
 
