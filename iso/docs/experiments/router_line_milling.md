@@ -127,11 +127,15 @@ realmente varió el parámetro. Confirmado con rm3 (lead 6) y E001 (lead 18.36).
 DERIVADAS de los cuerpos completos de N029 (byte-validadas, ver §10b):
 - **multipasada + lado** ✅ (Bi; ACC=false forzado → coordenadas desplazadas estilo CAD, sin G41);
 - **lado C.N. + leads** ✅ (arco de contorno con G41/G42; 1 mm sobre la TANGENTE del arco;
-  Automatic elige el lado LIBRE: G41→G3, G42→G2; leads independientes entre sí).
-Sigue guardada **multipasada + leads**: mp_leads mostró OTRA regla (radio w/2, lado espejado)
-subdeterminada con un solo fixture → lote N034 generado para desambiguar (RM/herramienta/lado
-explícito/Uni/paridad de pasadas/un extremo). También: lado+estrategia no-Bi, lado+lead
-Lineal/En bajada/subida/velocidad/lado explícito (formas no fixtured).
+  Automatic elige el lado LIBRE: G41→G3, G42→G2; leads independientes entre sí);
+- **multipasada + leads** ✅ (N034, 9/9): radio = **(w/2)×(RM−1)** — ¡NO w/2×RM! con RM=1 el arco
+  se OMITE —; lados ESPEJADOS respecto del single-pass (Automatic≡Right→G2/rot90cw, Left→G3);
+  arco de entrada tras el descenso a la primera pasada, arco de salida sobre la dirección de la
+  ÚLTIMA pasada (paridad: cd6 sale por el start en −û); leads independientes; todo a feed de
+  corte; el preamble NO lleva el reset ?%ETK[7]=0 (el ETK[7]=4 conserva su posición multipasada).
+Quedan guardadas (formas no fixtured): lado+estrategia no-Bi; ZigZag+leads; multipaso+lado+leads
+(triple); lado o multipaso + lead Lineal / En bajada/subida / velocidad propia; lado+arco
+explícito; multipaso+RM<1.
 
 Resto vigente:
 - Cambios de recorrido combinados con lado, corrección de longitud, multipasada o CAD; UPar ∉ (0,1).

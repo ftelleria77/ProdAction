@@ -33,9 +33,12 @@ def convert(pgmx_path: Path) -> str:
     first_side_face = ops.side_drills[0].plane_name if side_only else None
 
     # El preamble lleva ?%ETK[7]=0 cuando el router mueve el ETK[7]=4 antes del plunge:
-    # con corrección de herramienta (N023) o con approach programable (N026).
+    # con corrección de herramienta (N023) o con approach programable single-pass (N026).
+    # En MULTIPASADA el ETK[7]=4 conserva su posición (tras el descenso a security) aunque
+    # haya leads -> SIN reset (N034: ETK[8]=1 pelado en el tercer bloque).
     router_compensated = any(
-        (m.side_of_feature != "Center" and m.activate_cnc_correction) or m.approach.is_enabled
+        (m.side_of_feature != "Center" and m.activate_cnc_correction)
+        or (m.approach.is_enabled and m.milling_strategy is None)
         for m in ops.routers)
     # Compensación validada solo en programas de UNA línea (N023): las transiciones entre pasadas
     # con G41/G42 activo no tienen fixture de referencia.

@@ -103,9 +103,23 @@ class FailLoudTest(unittest.TestCase):
         # Maestro fuerza CAD con multipaso; ACC=true + lado sería otra cosa — sin fixture.
         self._assert_rejects(strategy=_strategy(4.0), side_of_feature="Left")
 
-    def test_multipasada_con_leads(self):
-        # N029 mp_leads: regla de lead DISTINTA (r=w/2, lado espejado) — subdeterminada (N034).
+    def test_multipasada_con_leads_pasa(self):
+        # Derivado de N034 (9/9): radio (w/2)×(RM−1), lados espejados, feed de corte.
+        _validate_line_milling(_line(strategy=_strategy(4.0),
+                                     approach=build_approach_spec(True, approach_type="Arc")))
+
+    def test_multipasada_con_leads_no_fixtured(self):
         self._assert_rejects(strategy=_strategy(4.0),
+                             approach=build_approach_spec(True, approach_type="Line"))
+        self._assert_rejects(strategy=_strategy(4.0),
+                             approach=build_approach_spec(True, approach_type="Arc", mode="Down"))
+        self._assert_rejects(strategy=_strategy(4.0),
+                             approach=build_approach_spec(True, approach_type="Arc", speed=2.0))
+        self._assert_rejects(strategy=_strategy(4.0),
+                             approach=build_approach_spec(True, approach_type="Arc",
+                                                          radius_multiplier=0.5))
+        self._assert_rejects(strategy=_strategy(4.0), side_of_feature="Left",
+                             activate_cnc_correction=False,
                              approach=build_approach_spec(True, approach_type="Arc"))
 
 
@@ -121,6 +135,18 @@ class EndToEndTest(unittest.TestCase):
         (r"N027_router_leads_b", "N_ld_app_arc_rm3"),
         (r"N027_router_leads_b", "N_ld_app_arc_left"),
         (r"N027_router_leads_b", "N_ld_ret_line"),
+        # Multipasada + leads (N034, 9/9): radio (w/2)×(RM−1) — rm1 omite el arco —, lados
+        # espejados (Automatic≡Right→G2, Left→G3), salida sobre la dirección de la última pasada
+        # (cd6 par: sale por el start en −û), leads independientes, todo a feed de corte.
+        (r"N034_router_mp_leads", "N_ML_mpl_rm1"),
+        (r"N034_router_mp_leads", "N_ML_mpl_rm3"),
+        (r"N034_router_mp_leads", "N_ML_mpl_e001"),
+        (r"N034_router_mp_leads", "N_ML_mpl_left"),
+        (r"N034_router_mp_leads", "N_ML_mpl_right"),
+        (r"N034_router_mp_leads", "N_ML_mpl_uni"),
+        (r"N034_router_mp_leads", "N_ML_mpl_cd6"),
+        (r"N034_router_mp_leads", "N_ML_mpl_app_only"),
+        (r"N034_router_mp_leads", "N_ML_mpl_ret_only"),
     ]
 
     def test_byte_identico(self):

@@ -90,13 +90,40 @@ def _lead_geometry(
     return (px, py), (cx, cy), g
 
 
+def _mp_lead(spec: LineMillingSpec, lead_spec) -> float:
+    """Radio del lead en MULTIPASADA (N034): (w/2)×(RM−1) — NO w/2×RM como en single-pass.
+    Con RM=1 da 0 y el arco se OMITE (rm1: cuerpo idéntico al multipaso pelado)."""
+    return spec.tool_width / 2.0 * (lead_spec.radius_multiplier - 1.0)
+
+
+def _mp_lead_arc(
+    anchor: tuple[float, float], u: tuple[float, float], lead: float, arc_side: str, at_start: bool,
+) -> tuple[tuple[float, float], tuple[float, float], str]:
+    """Geometría del lead en multipasada (N034): ESPEJADA respecto del single-pass —
+    Automatic≡Right → rot90cw(û) y G2; Left → rot90ccw(û) y G3. El arco de salida se ancla al
+    extremo final de la ÚLTIMA pasada, sobre su dirección de avance (cd6: pasadas pares salen
+    por el start en −û)."""
+    if arc_side == "Left":
+        nx, ny, g = -u[1], u[0], "G3"
+    else:  # Automatic o Right (byte-idénticos, N034 right)
+        nx, ny, g = u[1], -u[0], "G2"
+    cx, cy = anchor[0] + lead * nx, anchor[1] + lead * ny
+    if at_start:
+        px, py = cx - lead * u[0], cy - lead * u[1]
+    else:
+        px, py = cx + lead * u[0], cy + lead * u[1]
+    return (px, py), (cx, cy), g
+
+
 def _multipass_cuts(
     spec: LineMillingSpec, depth: float, security: float, cut_feed: float,
 ) -> list[str]:
     """Pasadas de la estrategia multipasada (N025). Bidireccional: alterna el sentido y baja en
     el extremo donde quedó. Unidireccional: siempre start→end; entre pasadas retrae y vuelve en
     G1 a feed de corte — retorno a security (Automatic/SafetyHeight) o a z_pasada +
-    MILLING_RETRACT (InPiece, sourced de Programaciones.settingsx)."""
+    MILLING_RETRACT (InPiece, sourced de Programaciones.settingsx).
+    Leads programables (N034): arco de entrada tras el descenso a la primera pasada y arco de
+    salida tras la última, ambos a feed de CORTE; radio (w/2)×(RM−1), lados espejados."""
     strategy = spec.milling_strategy
     cd = strategy.axial_cutting_depth
     # Terminación (N027 bi_cd4_f2): desbaste en pasos de cd hasta (total − finish), la última
@@ -111,10 +138,18 @@ def _multipass_cuts(
     in_piece = is_uni and getattr(strategy, "connection_mode", "") == "InPiece"
     start = (spec.start_x, spec.start_y)
     end = (spec.end_x, spec.end_y)
+    ux, uy = _unit_dir(spec)
     lines: list[str] = []
     pos = start
     for i, z in enumerate(depths):
         lines.append(f"G1 Z{z:.3f} F{cut_feed:.3f}")
+        if i == 0 and spec.approach.is_enabled:
+            lead = _mp_lead(spec, spec.approach)
+            if lead > 1e-9:
+                _p, (acx, acy), ag = _mp_lead_arc(start, (ux, uy), lead,
+                                                  spec.approach.arc_side, True)
+                lines.append(f"{ag} X{start[0]:.3f} Y{start[1]:.3f} "
+                             f"I{acx:.3f} J{acy:.3f} F{cut_feed:.3f}")
         target = end if pos == start else start
         lines.append(_g1_cut(pos[0], pos[1], target[0], target[1], z, cut_feed))
         pos = target
@@ -123,6 +158,13 @@ def _multipass_cuts(
             lines.append(f"G1 Z{ret:.3f} F{cut_feed:.3f}")
             lines.append(_g1_cut(pos[0], pos[1], start[0], start[1], ret, cut_feed))
             pos = start
+    if spec.retract.is_enabled:
+        lead = _mp_lead(spec, spec.retract)
+        if lead > 1e-9:
+            sign = 1.0 if pos == end else -1.0
+            (rpx, rpy), (rcx, rcy), rg = _mp_lead_arc(pos, (sign * ux, sign * uy), lead,
+                                                      spec.retract.arc_side, False)
+            lines.append(f"{rg} X{rpx:.3f} Y{rpy:.3f} I{rcx:.3f} J{rcy:.3f} F{cut_feed:.3f}")
     return lines
 
 
@@ -332,7 +374,17 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 lines += [f"G0 X{ax:.3f} Y{ay:.3f}", f"G0 Z{z_router_approach:.3f}"]
             elif has_app:
                 # Aproxima al punto exterior del lead (línea: start − lead·û; arco: fuera del arco).
-                if spec.approach.approach_type == "Arc":
+                # En multipasada (N034) el lead usa radio (w/2)×(RM−1) y lado espejado; con RM=1
+                # el arco se omite y se aproxima al start pelado.
+                if spec.milling_strategy is not None:
+                    mp_lead = _mp_lead(spec, spec.approach)
+                    if mp_lead > 1e-9:
+                        (apx, apy), _c, _g = _mp_lead_arc(
+                            (spec.start_x, spec.start_y), _unit_dir(spec), mp_lead,
+                            spec.approach.arc_side, True)
+                    else:
+                        apx, apy = spec.start_x, spec.start_y
+                elif spec.approach.approach_type == "Arc":
                     (apx, apy), _c, _g = _lead_geometry(spec, lead_app, spec.approach.arc_side, True)
                 else:
                     ux, uy = _unit_dir(spec)
@@ -363,6 +415,9 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             else:
                 lines += _multipass_cuts(spec, depth, security, cut_feed)
             lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
+            # Los leads de multipasada retraen dentro del patrón (G1 Z + G0 Z del teardown
+            # SIEMPRE presentes — N034 ret_only); no suprimen el G0 Z como el retract single-pass.
+            ret_suppresses_g0 = False
         else:
             if compensated:
                 # ETK[7]=4 va ANTES de activar la corrección; el lead-in engancha G41/G42

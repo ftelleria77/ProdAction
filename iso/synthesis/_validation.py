@@ -187,11 +187,30 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
         if spec.activate_cnc_correction:
             _fail(spec, "multipasada + lado con Corrección C.N. activa: Maestro fuerza CAD "
                         "(ACC=false); combinación sin fixture. [A3]")
+    # MULTIPASADA + LEADS: derivada de N034 (9/9): radio (w/2)×(RM−1) — RM=1 omite el arco —,
+    # lados ESPEJADOS (Automatic≡Right→G2, Left→G3), salida sobre la dirección de la última
+    # pasada, todo a feed de corte. Solo la forma fixtured: Uni/Bi + Arco + En cota + sin
+    # velocidad + RM≥1 + sin lado de corrección.
     if spec.milling_strategy is not None and (
             spec.approach.is_enabled or spec.retract.is_enabled):
-        _fail(spec, "multipasada + acercamiento/alejamiento: regla de lead distinta observada "
-                    "(N029 mp_leads: radio w/2, lado espejado) — subdeterminada; derivar con "
-                    "N034. [A3]")
+        if type(spec.milling_strategy).__name__.startswith("ZigZag"):
+            _fail(spec, "ZigZag + acercamiento/alejamiento: sin fixture de referencia. [A3]")
+        if spec.side_of_feature != "Center":
+            _fail(spec, "multipasada + lado + leads (triple): sin fixture de referencia. [A3]")
+        for lead in (spec.approach, spec.retract):
+            if not lead.is_enabled:
+                continue
+            lead_type = getattr(lead, "approach_type", None) or getattr(lead, "retract_type", None)
+            if lead_type != "Arc":
+                _fail(spec, "multipasada + lead Lineal: sin fixture (N034 valida Arco). [A3]")
+            if lead.mode != "Quote":
+                _fail(spec, "multipasada + lead En bajada/subida: sin fixture "
+                            "(N034 valida En cota). [A3]")
+            if lead.speed > 0:
+                _fail(spec, "multipasada + velocidad propia del lead: sin fixture. [A3]")
+            if lead.radius_multiplier < 1.0:
+                _fail(spec, "multipasada + lead con Multipl. radio < 1 (radio negativo con la "
+                            "regla (w/2)×(RM−1)): sin fixture. [A3]")
     if spec.side_of_feature != "Center" and spec.activate_cnc_correction:
         for lead in (spec.approach, spec.retract):
             if not lead.is_enabled:
