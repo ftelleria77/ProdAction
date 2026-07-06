@@ -108,17 +108,26 @@ class FailLoudTest(unittest.TestCase):
         _validate_line_milling(_line(strategy=_strategy(4.0),
                                      approach=build_approach_spec(True, approach_type="Arc")))
 
+    def test_multipasada_con_leads_variantes_pasan(self):
+        # N035: Lineal (approach), En bajada, velocidad (pisa el feed del cuerpo), RM<1 (omite
+        # el arco) y el triple Bi+Left+leads — todos byte-validados.
+        for kw in (dict(approach=build_approach_spec(True, approach_type="Line")),
+                   dict(approach=build_approach_spec(True, approach_type="Arc", mode="Down")),
+                   dict(approach=build_approach_spec(True, approach_type="Arc", speed=2.0)),
+                   dict(approach=build_approach_spec(True, approach_type="Arc",
+                                                     radius_multiplier=0.5)),
+                   dict(side_of_feature="Left", activate_cnc_correction=False,
+                        approach=build_approach_spec(True, approach_type="Arc"))):
+            _validate_line_milling(_line(strategy=_strategy(4.0), **kw))
+
     def test_multipasada_con_leads_no_fixtured(self):
+        from pgmx.synthesis.common.leads import build_retract_spec
+        # Alejamiento Lineal / con velocidad; triple con lado Right — siguen sin fixture.
         self._assert_rejects(strategy=_strategy(4.0),
-                             approach=build_approach_spec(True, approach_type="Line"))
+                             retract=build_retract_spec(True, retract_type="Line"))
         self._assert_rejects(strategy=_strategy(4.0),
-                             approach=build_approach_spec(True, approach_type="Arc", mode="Down"))
-        self._assert_rejects(strategy=_strategy(4.0),
-                             approach=build_approach_spec(True, approach_type="Arc", speed=2.0))
-        self._assert_rejects(strategy=_strategy(4.0),
-                             approach=build_approach_spec(True, approach_type="Arc",
-                                                          radius_multiplier=0.5))
-        self._assert_rejects(strategy=_strategy(4.0), side_of_feature="Left",
+                             retract=build_retract_spec(True, retract_type="Arc", speed=2.0))
+        self._assert_rejects(strategy=_strategy(4.0), side_of_feature="Right",
                              activate_cnc_correction=False,
                              approach=build_approach_spec(True, approach_type="Arc"))
 
@@ -147,6 +156,24 @@ class EndToEndTest(unittest.TestCase):
         (r"N034_router_mp_leads", "N_ML_mpl_cd6"),
         (r"N034_router_mp_leads", "N_ML_mpl_app_only"),
         (r"N034_router_mp_leads", "N_ML_mpl_ret_only"),
+        # Cierre de guardas (N035, 14/14): estrategia no-Bi + lado; ZigZag + leads; triple
+        # mp+lado+leads; variantes Lineal / En bajada (rampa) / En subida / velocidad (pisa el
+        # feed del cuerpo) / RM<1 (omite el arco); con G41: Lineal, helicoidal En bajada,
+        # ascendente En subida, velocidad, arco explícito IGNORADO (siempre lado libre).
+        (r"N035_router_guards", "N_G_uni_side_l"),
+        (r"N035_router_guards", "N_G_zz_side_l"),
+        (r"N035_router_guards", "N_G_zz_leads"),
+        (r"N035_router_guards", "N_G_mp_side_leads"),
+        (r"N035_router_guards", "N_G_side_app_line"),
+        (r"N035_router_guards", "N_G_side_app_down"),
+        (r"N035_router_guards", "N_G_side_ret_up"),
+        (r"N035_router_guards", "N_G_side_app_sp"),
+        (r"N035_router_guards", "N_G_side_app_arcleft"),
+        (r"N035_router_guards", "N_G_mp_app_line"),
+        (r"N035_router_guards", "N_G_mp_app_down"),
+        (r"N035_router_guards", "N_G_mp_ret_up"),
+        (r"N035_router_guards", "N_G_mp_app_sp"),
+        (r"N035_router_guards", "N_G_mp_rm05"),
     ]
 
     def test_byte_identico(self):

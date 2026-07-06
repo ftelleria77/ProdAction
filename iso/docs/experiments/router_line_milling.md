@@ -124,18 +124,22 @@ realmente varió el parámetro. Confirmado con rm3 (lead 6) y E001 (lead 18.36).
 
 ## 10. Guardas fail-loud (estado 2026-07-05; combos sin fixture de referencia)
 
-DERIVADAS de los cuerpos completos de N029 (byte-validadas, ver §10b):
-- **multipasada + lado** ✅ (Bi; ACC=false forzado → coordenadas desplazadas estilo CAD, sin G41);
-- **lado C.N. + leads** ✅ (arco de contorno con G41/G42; 1 mm sobre la TANGENTE del arco;
-  Automatic elige el lado LIBRE: G41→G3, G42→G2; leads independientes entre sí);
-- **multipasada + leads** ✅ (N034, 9/9): radio = **(w/2)×(RM−1)** — ¡NO w/2×RM! con RM=1 el arco
-  se OMITE —; lados ESPEJADOS respecto del single-pass (Automatic≡Right→G2/rot90cw, Left→G3);
-  arco de entrada tras el descenso a la primera pasada, arco de salida sobre la dirección de la
-  ÚLTIMA pasada (paridad: cd6 sale por el start en −û); leads independientes; todo a feed de
-  corte; el preamble NO lleva el reset ?%ETK[7]=0 (el ETK[7]=4 conserva su posición multipasada).
-Quedan guardadas (formas no fixtured): lado+estrategia no-Bi; ZigZag+leads; multipaso+lado+leads
-(triple); lado o multipaso + lead Lineal / En bajada/subida / velocidad propia; lado+arco
-explícito; multipaso+RM<1.
+DERIVADAS de los cuerpos completos de N029/N034/N035 (byte-validadas, ver §10b):
+- **estrategia + lado** ✅ (Bi N029; Uni y ZigZag N035): ACC=false forzado → coordenadas
+  desplazadas estilo CAD, sin G41, con las pasadas/strokes normales;
+- **lado C.N. + leads** ✅: lead de contorno con G41/G42; 1 mm sobre la TANGENTE (arco) o û
+  (línea); el lado explícito del arco se IGNORA (N035 arcleft): siempre el lado LIBRE (G41→G3,
+  G42→G2); Lineal en approach ✅; En bajada = arco helicoidal SIN plunge ✅; En subida = arco
+  ascendente con Z, sin G1 Z aparte ✅; velocidad propia (semántica N026) ✅;
+- **estrategia + leads** ✅ (N034 9/9 + N035): arco r = **(w/2)×(RM−1)** — ≤0 lo OMITE (rm1,
+  rm05) —, lados espejados (Automatic≡Right→G2; con lado, Automatic SIGUE el lado: Left→G3);
+  Lineal (approach) usa w/2×RM; En bajada/subida = RAMPAS rectas de largo `lead` (no arcos);
+  **la velocidad del approach PISA el feed de TODO el cuerpo** (N035 mp_app_sp); ZigZag + leads
+  ancla el arco en la SUPERFICIE (Z0); triple mp+lado+leads: el arco sigue el lado sobre las
+  coordenadas desplazadas; sin reset ?%ETK[7]=0 en preamble (solo single-pass con G41/approach).
+Quedan guardadas (formas residuales sin fixture): alejamiento Lineal (con lado o estrategia);
+velocidad del alejamiento en estrategia; triple con lado Right o con velocidad; ZigZag + lead
+Lineal/En bajada/subida/velocidad; lead Lineal En bajada.
 
 Resto vigente:
 - Cambios de recorrido combinados con lado, corrección de longitud, multipasada o CAD; UPar ∉ (0,1).

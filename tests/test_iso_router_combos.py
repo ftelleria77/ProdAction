@@ -60,24 +60,27 @@ class FailLoudTest(unittest.TestCase):
         _validate_line_milling(_line(side_of_feature="Left", invert_work=True,
                                      approach=build_approach_spec(True, approach_type="Arc")))
 
-    def test_lado_con_estrategia_no_bi(self):
-        # Solo Bidireccional tiene fixture (N029); Uni/ZigZag con lado siguen guardadas.
+    def test_lado_con_estrategia_no_bi_pasa(self):
+        # N035 uni_side_l / zz_side_l: coordenadas desplazadas con cualquier estrategia.
         from pgmx.synthesis.common.strategy import build_unidirectional_milling_strategy_spec
         uni = build_unidirectional_milling_strategy_spec(
             allow_multiple_passes=True, axial_cutting_depth=4.0)
-        self._assert_rejects(strategy=uni, depth=12.0, side_of_feature="Left",
-                             activate_cnc_correction=False)
+        _validate_line_milling(_line(strategy=uni, depth=12.0, side_of_feature="Left",
+                                     activate_cnc_correction=False))
+
+    def test_lado_con_lead_variantes_pasan(self):
+        # N035: Lineal, En bajada (helicoidal), velocidad, arco explícito (IGNORADO → lado libre).
+        for kw in (dict(approach=build_approach_spec(True, approach_type="Line")),
+                   dict(approach=build_approach_spec(True, approach_type="Arc", mode="Down")),
+                   dict(approach=build_approach_spec(True, approach_type="Arc", speed=2.0)),
+                   dict(approach=build_approach_spec(True, approach_type="Arc", arc_side="Left")),
+                   dict(retract=build_retract_spec(True, retract_type="Arc", mode="Up"))):
+            _validate_line_milling(_line(side_of_feature="Left", **kw))
 
     def test_lado_con_lead_no_fixtured(self):
+        # Alejamiento Lineal con G41 sigue sin fixture.
         self._assert_rejects(side_of_feature="Left",
-                             approach=build_approach_spec(True, approach_type="Line"))
-        self._assert_rejects(side_of_feature="Left",
-                             approach=build_approach_spec(True, approach_type="Arc", mode="Down"))
-        self._assert_rejects(side_of_feature="Left",
-                             approach=build_approach_spec(True, approach_type="Arc", speed=2.0))
-        self._assert_rejects(side_of_feature="Left",
-                             approach=build_approach_spec(True, approach_type="Arc",
-                                                          arc_side="Left"))
+                             retract=build_retract_spec(True, retract_type="Line"))
 
 
 class EndToEndTest(unittest.TestCase):

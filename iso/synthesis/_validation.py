@@ -181,51 +181,62 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     # - MULTIPASADA + LEADS (mp_leads): REGLA DISTINTA observada (radio w/2 en vez de w/2×RM y
     #   lado espejado con Automatic) — fórmula subdeterminada con un solo fixture → N034.
     if spec.side_of_feature != "Center" and spec.milling_strategy is not None:
-        if not type(spec.milling_strategy).__name__.startswith("Bidirectional"):
-            _fail(spec, "corrección de lado + estrategia no Bidireccional: sin fixture "
-                        "(N029 valida solo Bi). [A3]")
+        # Lado + estrategia: Bi (N029 mp_side_l), Uni y ZigZag (N035 uni/zz_side_l) validados —
+        # coordenadas desplazadas estilo CAD, sin G41.
         if spec.activate_cnc_correction:
             _fail(spec, "multipasada + lado con Corrección C.N. activa: Maestro fuerza CAD "
                         "(ACC=false); combinación sin fixture. [A3]")
-    # MULTIPASADA + LEADS: derivada de N034 (9/9): radio (w/2)×(RM−1) — RM=1 omite el arco —,
-    # lados ESPEJADOS (Automatic≡Right→G2, Left→G3), salida sobre la dirección de la última
-    # pasada, todo a feed de corte. Solo la forma fixtured: Uni/Bi + Arco + En cota + sin
-    # velocidad + RM≥1 + sin lado de corrección.
+    # ESTRATEGIA + LEADS (N034 9/9 + N035): arco r=(w/2)×(RM−1) — ≤0 lo omite (rm1/rm05) —,
+    # lados espejados (Automatic sigue el lado de la corrección si hay lado); Lineal (approach)
+    # usa w/2×RM; En bajada/subida = rampas rectas de largo `lead`; la velocidad del approach
+    # PISA el feed de todo el cuerpo. Formas sin fixture → fail-loud.
     if spec.milling_strategy is not None and (
             spec.approach.is_enabled or spec.retract.is_enabled):
-        if type(spec.milling_strategy).__name__.startswith("ZigZag"):
-            _fail(spec, "ZigZag + acercamiento/alejamiento: sin fixture de referencia. [A3]")
+        is_zz = type(spec.milling_strategy).__name__.startswith("ZigZag")
         if spec.side_of_feature != "Center":
-            _fail(spec, "multipasada + lado + leads (triple): sin fixture de referencia. [A3]")
-        for lead in (spec.approach, spec.retract):
+            # Triple fixtured (N035 mp_side_leads): Bi + Left + Arco/En cota/sin velocidad.
+            if is_zz or not type(spec.milling_strategy).__name__.startswith("Bidirectional"):
+                _fail(spec, "estrategia no-Bi + lado + leads: sin fixture de referencia. [A3]")
+            if spec.side_of_feature != "Left":
+                _fail(spec, "lado Right + leads + multipasada: sin fixture (N035 valida "
+                            "Left). [A3]")
+        for label, lead in (("acercamiento", spec.approach), ("alejamiento", spec.retract)):
             if not lead.is_enabled:
                 continue
             lead_type = getattr(lead, "approach_type", None) or getattr(lead, "retract_type", None)
-            if lead_type != "Arc":
-                _fail(spec, "multipasada + lead Lineal: sin fixture (N034 valida Arco). [A3]")
-            if lead.mode != "Quote":
-                _fail(spec, "multipasada + lead En bajada/subida: sin fixture "
-                            "(N034 valida En cota). [A3]")
+            if is_zz and (lead_type != "Arc" or lead.mode != "Quote" or lead.speed > 0):
+                _fail(spec, "ZigZag + lead Lineal/En bajada/subida/velocidad: sin fixture "
+                            "(N035 valida Arco/En cota). [A3]")
+            if lead_type == "Line":
+                if label == "alejamiento":
+                    _fail(spec, "multipasada + alejamiento Lineal: sin fixture "
+                                "(N035 valida approach). [A3]")
+                if lead.mode != "Quote":
+                    _fail(spec, "multipasada + lead Lineal En bajada: sin fixture. [A3]")
             if lead.speed > 0:
-                _fail(spec, "multipasada + velocidad propia del lead: sin fixture. [A3]")
-            if lead.radius_multiplier < 1.0:
-                _fail(spec, "multipasada + lead con Multipl. radio < 1 (radio negativo con la "
-                            "regla (w/2)×(RM−1)): sin fixture. [A3]")
+                if label == "alejamiento":
+                    _fail(spec, "multipasada + velocidad del alejamiento: sin fixture "
+                                "(N035 valida approach → pisa el feed del cuerpo). [A3]")
+                if spec.side_of_feature != "Center":
+                    _fail(spec, "triple lado+leads+multipasada con velocidad: sin fixture. [A3]")
+            if spec.side_of_feature != "Center" and (
+                    lead_type != "Arc" or lead.mode != "Quote" or lead.arc_side != "Automatic"):
+                _fail(spec, "triple lado+leads+multipasada: solo Arco/En cota/Automatic "
+                            "(N035 mp_side_leads). [A3]")
+    # LADO C.N. + LEADS (N029 + N035): Arco En cota/En bajada(app)/En subida(ret), Lineal en el
+    # approach, velocidad propia (semántica N026) — el lado explícito del arco se IGNORA con
+    # compensación (N035 arcleft: siempre el lado libre).
     if spec.side_of_feature != "Center" and spec.activate_cnc_correction:
-        for lead in (spec.approach, spec.retract):
+        for label, lead in (("acercamiento", spec.approach), ("alejamiento", spec.retract)):
             if not lead.is_enabled:
                 continue
             lead_type = getattr(lead, "approach_type", None) or getattr(lead, "retract_type", None)
-            if lead_type != "Arc":
-                _fail(spec, "lado C.N. + lead Lineal: sin fixture (N029 valida Arco). [A3]")
-            if lead.mode != "Quote":
-                _fail(spec, "lado C.N. + lead En bajada/subida: sin fixture "
-                            "(N029 valida En cota). [A3]")
-            if lead.speed > 0:
-                _fail(spec, "lado C.N. + velocidad propia del lead: sin fixture. [A3]")
-            if lead.arc_side != "Automatic":
-                _fail(spec, "lado C.N. + lado explícito del arco del lead: sin fixture "
-                            "(N029 valida Automatic → lado libre). [A3]")
+            if lead_type == "Line":
+                if label == "alejamiento":
+                    _fail(spec, "lado C.N. + alejamiento Lineal: sin fixture "
+                                "(N035 valida approach Lineal). [A3]")
+                if lead.mode != "Quote":
+                    _fail(spec, "lado C.N. + lead Lineal En bajada: sin fixture. [A3]")
     # Estrategia MULTIPASADA en Z (N025): Uni/Bidireccional con allow_multiple_passes. Lo no
     # validado → fail-loud.
     strategy = spec.milling_strategy
