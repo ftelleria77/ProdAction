@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
-EXTERNAL_ROOT = Path(r"S:\Maestro\Projects\ProdAction\PGMX")
+# Corpus movido a "Investigación previa" al arrancar la era del converter (lotes N0xx).
+EXTERNAL_ROOT = Path(r"S:\Maestro\Projects\ProdAction\Investigación previa\PGMX")
 
 __all__ = ["EXTERNAL_ROOT"]
