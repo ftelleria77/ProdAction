@@ -115,16 +115,16 @@ class EndToEndTest(unittest.TestCase):
 
 
 class GuardClosingN036Test(unittest.TestCase):
-    """N036: cierre total de guardas fixtureables (29/29 byte-idéntico; cad_long/inv_cad/inv_mp
-    quedaron guardadas como PENDIENTE DE REGENERACIÓN — sus fixtures son eco del toolpath
-    nuestro y no prueban el comportamiento de Maestro)."""
+    """N036: cierre total de guardas fixtureables (32/32 byte-idéntico). Los 3 eco
+    (cad_long/inv_cad/inv_mp) se derivaron tras REGENERAR el recorrido en Maestro (2026-07-07):
+    los eco previos mentían — el acorte, el swap y las pasadas invertidas SÍ aplican."""
 
     _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\N036_router_guards_b")
     _REFS = Path(r"P:\USBMIX\ProdAction\N036_router_guards_b")
 
     STEMS = (
-        "N_H_cad_reb2", "N_H_cad_leads", "N_H_cad_vel", "N_H_cad_th",
-        "N_H_inv_vel", "N_H_inv_long", "N_H_inv_reb2",
+        "N_H_cad_reb2", "N_H_cad_leads", "N_H_cad_vel", "N_H_cad_th", "N_H_cad_long",
+        "N_H_inv_vel", "N_H_inv_long", "N_H_inv_reb2", "N_H_inv_cad", "N_H_inv_mp",
         "N_H_long_vel", "N_H_side_vel", "N_H_mp_vel",
         "N_H_mp_th", "N_H_leads_th",
         "N_H_zz_diag", "N_H_zz_uh0", "N_H_zz_app_line", "N_H_zz_app_down",

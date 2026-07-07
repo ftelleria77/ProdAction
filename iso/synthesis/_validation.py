@@ -136,13 +136,10 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     # pasante (cad_th) y leads estilo-estrategia (cad_leads, solo Arco/En cota/sin velocidad)
     # validados. PENDIENTE DE REGENERACIÓN (los fixtures N036 son eco de nuestra trayectoria):
     # CAD + corrección de longitud y CAD + invertir — hasta regenerar en Maestro, fail-loud.
+    # CAD + longitud y CAD + invertir: derivados de los fixtures REGENERADOS en Maestro
+    # (2026-07-07): el acorte ±w/2 y el swap SÍ aplican sobre las coordenadas desplazadas
+    # (cad_long: X22→278 en y102; inv_cad: 280→20 en y102) — los eco previos mentían.
     if not spec.activate_cnc_correction and spec.milling_strategy is None:
-        if spec.is_precise:
-            _fail(spec, "Corrección CAD + corrección de longitud: fixture N036 es eco (¿el "
-                        "acorte aplica al toolpath de Maestro?) — regenerar cad_long. [A3]")
-        if spec.invert_work:
-            _fail(spec, "Corrección CAD + invertir trabajo: fixture N036 es eco (¿el swap "
-                        "aplica al toolpath de Maestro?) — regenerar inv_cad. [A3]")
         for label, lead in (("acercamiento", spec.approach), ("alejamiento", spec.retract)):
             if not lead.is_enabled:
                 continue
@@ -166,9 +163,8 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     # UPar corre sobre el recorrido invertido), longitud (inv_long: acorta y después invierte)
     # y rebaba (inv_reb2). PENDIENTE DE REGENERACIÓN (eco): invertir + estrategia (inv_mp) e
     # invertir + CAD (arriba).
-    if spec.invert_work and spec.milling_strategy is not None:
-        _fail(spec, "Invertir trabajo + estrategia: fixture N036 es eco (¿Maestro invierte las "
-                    "pasadas del toolpath?) — regenerar inv_mp. [A3]")
+    # Invertir + estrategia: derivado del inv_mp REGENERADO (2026-07-07): las pasadas alternan
+    # desde el extremo intercambiado (280→20 Z-4, 20→280 Z-8, …) — swap antes de la estrategia.
     # Avanz./Rotación por operación (N028 F3_S12K): F=Avanz×1000 en el corte; S{Rotación}M3.
     # El comportamiento en el TOPE (clamp tipo taladro) no está validado → fail-loud si excede.
     if spec.feedrate > 0 or spec.spindle > 0:

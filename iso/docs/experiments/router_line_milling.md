@@ -160,10 +160,13 @@ DERIVADAS en N036 (cierre total, 29/29 byte-idéntico):
   entrante (el exterior del lead) y ancla en la última posición FÍSICA del saliente; un op con
   leads C.N. también agrega el ?%ETK[7]=0 extra en su teardown no-último.
 
+DERIVADAS tras REGENERAR en Maestro (2026-07-07 — los eco previos MENTÍAN):
+- **CAD + longitud** ✅ (cad_long regenerado: SÍ acorta ±w/2, X22→278 sobre y102);
+- **CAD + invertir** ✅ (inv_cad: SÍ invierte, 280→20 sobre las coordenadas desplazadas);
+- **invertir + estrategia** ✅ (inv_mp: las pasadas alternan desde el extremo intercambiado).
+El orden del render (longitud → desplazamiento → invertir → estrategia) los produce natural.
+
 GUARDAS RESTANTES:
-- **Pendientes de REGENERACIÓN en Maestro** (los fixtures N036 son ECO de nuestra trayectoria y
-  no prueban el comportamiento real): CAD+longitud (cad_long), CAD+invertir (inv_cad),
-  invertir+estrategia (inv_mp) — regenerar el recorrido y re-postprocesar para derivarlas.
 - **PERMANENTES por decisión de Maestro**: estrategia + cambios de recorrido ("No es posible
   aplicar una estrategia a un trabajo con atributos asociados", N036 mp_vel).
 - **Sin fixture (residuales finas)**: cambios de recorrido + leads (agujero detectado en N036);
