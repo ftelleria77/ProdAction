@@ -1337,6 +1337,13 @@ def _adapt_milling(
                 line_retract_overlap=retract.overlap,
                 line_milling_strategy=operation.milling_strategy,
             )
+            # Estrategia con "Habilitar multipaso" APAGADO ≡ SIN estrategia (N036 strat_single:
+            # regenerada en Maestro, el cuerpo es idéntico al fresado plano) → se anula acá para
+            # que el converter la trate igual que None.
+            _strategy = operation.milling_strategy
+            if (spec is not None and _strategy is not None
+                    and not getattr(_strategy, "allow_multiple_passes", True)):
+                spec = _dc_replace(spec, milling_strategy=None)
             # Cambios durante el recorrido (SpeedAttribute/DepthAttribute del snapshot): el builder
             # no los recibe (solo lectura); se cablean por replace sobre el spec construido.
             _tech = operation.technology

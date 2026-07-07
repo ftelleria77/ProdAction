@@ -77,10 +77,15 @@ class FailLoudTest(unittest.TestCase):
                    dict(retract=build_retract_spec(True, retract_type="Arc", mode="Up"))):
             _validate_line_milling(_line(side_of_feature="Left", **kw))
 
-    def test_lado_con_lead_no_fixtured(self):
-        # Alejamiento Lineal con G41 sigue sin fixture.
-        self._assert_rejects(side_of_feature="Left",
-                             retract=build_retract_spec(True, retract_type="Line"))
+    def test_lado_con_ret_line_pasa(self):
+        # N036 side_ret_line: línea a profundidad más allá del end; el 1mm del G40 sigue û.
+        _validate_line_milling(_line(side_of_feature="Left",
+                                     retract=build_retract_spec(True, retract_type="Line")))
+
+    def test_cambios_con_leads_guardado(self):
+        # Agujero detectado en N036: interacción de feeds sin fixture.
+        self._assert_rejects(speed_changes=((0.3, 1.0),),
+                             approach=build_approach_spec(True, approach_type="Arc"))
 
 
 class EndToEndTest(unittest.TestCase):
@@ -107,6 +112,41 @@ class EndToEndTest(unittest.TestCase):
 
     def test_pasante_con_lado(self):
         self._check("N_C_cmb_th_side_l")
+
+
+class GuardClosingN036Test(unittest.TestCase):
+    """N036: cierre total de guardas fixtureables (29/29 byte-idéntico; cad_long/inv_cad/inv_mp
+    quedaron guardadas como PENDIENTE DE REGENERACIÓN — sus fixtures son eco del toolpath
+    nuestro y no prueban el comportamiento de Maestro)."""
+
+    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\N036_router_guards_b")
+    _REFS = Path(r"P:\USBMIX\ProdAction\N036_router_guards_b")
+
+    STEMS = (
+        "N_H_cad_reb2", "N_H_cad_leads", "N_H_cad_vel", "N_H_cad_th",
+        "N_H_inv_vel", "N_H_inv_long", "N_H_inv_reb2",
+        "N_H_long_vel", "N_H_side_vel", "N_H_mp_vel",
+        "N_H_mp_th", "N_H_leads_th",
+        "N_H_zz_diag", "N_H_zz_uh0", "N_H_zz_app_line", "N_H_zz_app_down",
+        "N_H_zz_ret_up", "N_H_zz_app_sp",
+        "N_H_mp_ret_line", "N_H_mp_ret_sp", "N_H_mp_app_line_down",
+        "N_H_side_ret_line", "N_H_side_app_line_down",
+        "N_H_mp_sider_leads", "N_H_mp_side_leads_sp", "N_H_strat_single",
+        "N_H_two_side", "N_H_two_mp", "N_H_two_leads",
+    )
+
+    def test_byte_identico(self):
+        for stem in self.STEMS:
+            with self.subTest(stem):
+                pgmx = self._FIXTURES / f"{stem}.pgmx"
+                ref = self._REFS / f"{stem.lower()}.iso"
+                if not pgmx.exists() or not ref.exists():
+                    self.skipTest("fixtures S:/P: no disponibles")
+                gen = [ln.rstrip() for ln in convert(pgmx).splitlines()]
+                exp = [ln.rstrip() for ln in
+                       ref.read_text(encoding="utf-8", errors="replace")
+                       .replace("\r\n", "\n").splitlines()]
+                self.assertEqual(gen, exp)
 
 
 if __name__ == "__main__":

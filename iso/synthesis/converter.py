@@ -38,22 +38,15 @@ def convert(pgmx_path: Path) -> str:
     # haya leads -> SIN reset (N034: ETK[8]=1 pelado en el tercer bloque).
     router_compensated = any(
         (m.side_of_feature != "Center" and m.activate_cnc_correction)
-        or (m.approach.is_enabled and m.milling_strategy is None)
+        or (m.approach.is_enabled and m.milling_strategy is None and m.activate_cnc_correction)
         for m in ops.routers)
-    # Compensación validada solo en programas de UNA línea (N023): las transiciones entre pasadas
-    # con G41/G42 activo no tienen fixture de referencia.
-    if router_compensated and len(ops.routers) > 1:
+    # Programas MULTI-fresado (N036 two_side/two_mp/two_leads, byte-validados): compensación,
+    # estrategia y approach conviven con las transiciones (triple G0 al punto de aproximación;
+    # la salida compensada no-última agrega un ?%ETK[7]=0 extra). El RETRACT programable en
+    # multi-op sigue sin fixture (interacción retracción-G1 vs transición).
+    if len(ops.routers) > 1 and any(m.retract.is_enabled for m in ops.routers):
         raise UnsupportedOperationError(
-            "corrección de herramienta con varias pasadas de fresado en el programa: "
-            "sin fixture de referencia aún. [A3]")
-    if len(ops.routers) > 1 and any(m.milling_strategy is not None for m in ops.routers):
-        raise UnsupportedOperationError(
-            "estrategia multipasada con varios fresados en el programa: sin fixture de "
-            "referencia aún. [A3]")
-    if len(ops.routers) > 1 and any(
-            m.approach.is_enabled or m.retract.is_enabled for m in ops.routers):
-        raise UnsupportedOperationError(
-            "approach/retract programables con varios fresados en el programa: sin fixture "
+            "alejamiento programable con varios fresados en el programa: sin fixture "
             "de referencia aún. [A3]")
 
     lines: list[str] = []

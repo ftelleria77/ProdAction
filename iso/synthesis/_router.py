@@ -153,26 +153,7 @@ def _multipass_cuts(
     pos = start
     for i, z in enumerate(depths):
         if i == 0 and spec.approach.is_enabled:
-            lead = _mp_lead(spec, spec.approach)
-            if spec.approach.approach_type == "Arc" and spec.approach.mode == "Down" and lead > 1e-9:
-                # "En bajada" en multipasada (N035 mp_app_down): NO es arco helicoidal — plunge a
-                # (z1 + lead) y RAMPA recta sobre û hasta el start a z1, largo = lead.
-                lines.append(f"G1 Z{z + lead:.3f} F{cut_feed:.3f}")
-                lines.append(_g1_cut(start[0] - lead * ux, start[1] - lead * uy,
-                                     start[0], start[1], z, cut_feed, prev_z=z + lead))
-            else:
-                lines.append(f"G1 Z{z:.3f} F{cut_feed:.3f}")
-                if spec.approach.approach_type == "Arc" and lead > 1e-9:
-                    _p, (acx, acy), ag = _mp_lead_arc(start, (ux, uy), lead,
-                                                      _mp_arc_side(spec, spec.approach), True)
-                    lines.append(f"{ag} X{start[0]:.3f} Y{start[1]:.3f} "
-                                 f"I{acx:.3f} J{acy:.3f} F{cut_feed:.3f}")
-                elif spec.approach.approach_type == "Line":
-                    # Lead LINEAL en multipasada (N035 mp_app_line): largo w/2×RM (fórmula
-                    # single-pass), a profundidad de la primera pasada, feed de corte.
-                    line_lead = spec.tool_width / 2.0 * spec.approach.radius_multiplier
-                    lines.append(_g1_cut(start[0] - line_lead * ux, start[1] - line_lead * uy,
-                                         start[0], start[1], z, cut_feed, prev_z=z))
+            lines += _strategy_lead_entry(spec, z, start, (ux, uy), cut_feed, security)
         else:
             lines.append(f"G1 Z{z:.3f} F{cut_feed:.3f}")
         target = end if pos == start else start
@@ -184,21 +165,84 @@ def _multipass_cuts(
             lines.append(_g1_cut(pos[0], pos[1], start[0], start[1], ret, cut_feed))
             pos = start
     if spec.retract.is_enabled:
-        lead = _mp_lead(spec, spec.retract)
         sign = 1.0 if pos == end else -1.0
-        if lead > 1e-9:
-            if spec.retract.mode == "Up":
-                # "En subida" en multipasada (N035 mp_ret_up): RAMPA recta ascendente más allá
-                # del extremo, largo = lead, subiendo `lead` (después retrae el G1 Z security).
-                z_last = depths[-1]
-                lines.append(_g1_cut(pos[0], pos[1],
-                                     pos[0] + lead * sign * ux, pos[1] + lead * sign * uy,
-                                     z_last + lead, cut_feed, prev_z=z_last))
-            else:
-                (rpx, rpy), (rcx, rcy), rg = _mp_lead_arc(pos, (sign * ux, sign * uy), lead,
-                                                          _mp_arc_side(spec, spec.retract), False)
-                lines.append(f"{rg} X{rpx:.3f} Y{rpy:.3f} I{rcx:.3f} J{rcy:.3f} F{cut_feed:.3f}")
+        lines += _strategy_lead_exit(spec, depths[-1], pos, (sign * ux, sign * uy), cut_feed)
+    return lines, pos
+
+
+def _strategy_lead_entry(
+    spec: LineMillingSpec,
+    first_z: float,
+    start: tuple[float, float],
+    u: tuple[float, float],
+    cut_feed: float,
+    security: float,
+) -> list[str]:
+    """Entrada del lead en ESTRATEGIA (N034/N035/N036): reemplaza el descenso inicial a la
+    primera pasada (o superficie en ZigZag). Arco En cota: Z + arco (RM−1); Arco En bajada:
+    plunge a (z+lead) y rampa recta; Lineal En cota: Z + línea w/2×RM; Lineal En bajada: SIN
+    plunge, la línea desciende desde security. Todo a feed de corte (efectivo)."""
+    ux, uy = u
+    lead = _mp_lead(spec, spec.approach)
+    lead_type = spec.approach.approach_type
+    down = spec.approach.mode == "Down"
+    if lead_type == "Arc" and down and lead > 1e-9:
+        return [
+            f"G1 Z{first_z + lead:.3f} F{cut_feed:.3f}",
+            _g1_cut(start[0] - lead * ux, start[1] - lead * uy,
+                    start[0], start[1], first_z, cut_feed, prev_z=first_z + lead),
+        ]
+    if lead_type == "Line":
+        line_lead = spec.tool_width / 2.0 * spec.approach.radius_multiplier
+        apx, apy = start[0] - line_lead * ux, start[1] - line_lead * uy
+        if down:
+            # N036 mp/side_app_line_down: la línea del lead DESCIENDE desde security a z1.
+            return [_g1_cut(apx, apy, start[0], start[1], first_z, cut_feed, prev_z=security)]
+        return [
+            f"G1 Z{first_z:.3f} F{cut_feed:.3f}",
+            _g1_cut(apx, apy, start[0], start[1], first_z, cut_feed, prev_z=first_z),
+        ]
+    lines = [f"G1 Z{first_z:.3f} F{cut_feed:.3f}"]
+    if lead > 1e-9:
+        _p, (acx, acy), ag = _mp_lead_arc(start, u, lead, _mp_arc_side(spec, spec.approach), True)
+        lines.append(f"{ag} X{start[0]:.3f} Y{start[1]:.3f} "
+                     f"I{acx:.3f} J{acy:.3f} F{cut_feed:.3f}")
     return lines
+
+
+def _strategy_lead_exit(
+    spec: LineMillingSpec,
+    last_z: float,
+    pos: tuple[float, float],
+    u: tuple[float, float],
+    cut_feed: float,
+) -> list[str]:
+    """Salida del lead en ESTRATEGIA, anclada al extremo final de la ÚLTIMA pasada sobre su
+    dirección. Arco En cota (RM−1); Arco En subida: rampa recta ascendente (+lead); Lineal:
+    línea plana w/2×RM a profundidad. La velocidad propia del retract aplica SOLO acá (y a la
+    retracción que sigue) — N036 mp_ret_sp."""
+    ret_feed = _strategy_ret_feed(spec, cut_feed)
+    lead = _mp_lead(spec, spec.retract)
+    if spec.retract.retract_type == "Line":
+        line_lead = spec.tool_width / 2.0 * spec.retract.radius_multiplier
+        return [_g1_cut(pos[0], pos[1], pos[0] + line_lead * u[0], pos[1] + line_lead * u[1],
+                        last_z, ret_feed, prev_z=last_z)]
+    if lead <= 1e-9:
+        return []
+    if spec.retract.mode == "Up":
+        return [_g1_cut(pos[0], pos[1], pos[0] + lead * u[0], pos[1] + lead * u[1],
+                        last_z + lead, ret_feed, prev_z=last_z)]
+    (rpx, rpy), (rcx, rcy), rg = _mp_lead_arc(pos, u, lead,
+                                              _mp_arc_side(spec, spec.retract), False)
+    return [f"{rg} X{rpx:.3f} Y{rpy:.3f} I{rcx:.3f} J{rcy:.3f} F{ret_feed:.3f}"]
+
+
+def _strategy_ret_feed(spec: LineMillingSpec, cut_feed: float) -> float:
+    """Feed del lead-out y de la retracción final en estrategia: la velocidad propia del
+    retract SOLO aplica ahí (no inunda el cuerpo como la del approach) — N036 mp_ret_sp."""
+    if spec.retract.is_enabled and spec.retract.speed > 0:
+        return spec.retract.speed * 1000.0
+    return cut_feed
 
 
 def _zigzag_cuts(spec: LineMillingSpec, depth: float, cut_feed: float) -> list[str]:
@@ -211,16 +255,12 @@ def _zigzag_cuts(spec: LineMillingSpec, depth: float, cut_feed: float) -> list[s
     start = (spec.start_x, spec.start_y)
     end = (spec.end_x, spec.end_y)
     ux, uy = _unit_dir(spec)
-    lines = [f"G1 Z0.000 F{cut_feed:.3f}"]
     if spec.approach.is_enabled:
-        # Leads en ZigZag (N035 zz_leads): misma regla que multipasada — arco r=(w/2)×(RM−1),
-        # lado espejado — anclado en la SUPERFICIE (Z0, la entrada del zigzag).
-        lead = _mp_lead(spec, spec.approach)
-        if lead > 1e-9:
-            _p, (acx, acy), ag = _mp_lead_arc(start, (ux, uy), lead,
-                                              _mp_arc_side(spec, spec.approach), True)
-            lines.append(f"{ag} X{start[0]:.3f} Y{start[1]:.3f} "
-                         f"I{acx:.3f} J{acy:.3f} F{cut_feed:.3f}")
+        # Leads en ZigZag (N035/N036): mismas reglas que multipasada, ancladas en la SUPERFICIE
+        # (Z0, la entrada del zigzag) — arco (RM−1) espejado, línea w/2×RM, bajada en rampa.
+        lines = _strategy_lead_entry(spec, 0.0, start, (ux, uy), cut_feed, spec.security_plane)
+    else:
+        lines = [f"G1 Z0.000 F{cut_feed:.3f}"]
     pos, z = start, 0.0
     rough = -(depth - uh)
     while z > rough + 1e-9:
@@ -229,18 +269,16 @@ def _zigzag_cuts(spec: LineMillingSpec, depth: float, cut_feed: float) -> list[s
         target = end if pos == start else start
         lines.append(_g1_cut(pos[0], pos[1], target[0], target[1], nz, cut_feed, prev_z=z))
         pos, z = target, nz
-    for nz in (-depth, -depth):   # pasada del último hueco + pasada final plana
+    # Con último hueco > 0: pasada del hueco a −total + UNA pasada final plana. Con uh = 0
+    # (N036 zz_uh0, regenerado en Maestro): las pasadas ya llegaron a −total → UNA sola plana.
+    for nz in ((-depth, -depth) if uh > 1e-9 else (-depth,)):
         target = end if pos == start else start
         lines.append(_g1_cut(pos[0], pos[1], target[0], target[1], nz, cut_feed, prev_z=z))
         pos, z = target, nz
     if spec.retract.is_enabled:
-        lead = _mp_lead(spec, spec.retract)
-        if lead > 1e-9:
-            sign = 1.0 if pos == end else -1.0
-            (rpx, rpy), (rcx, rcy), rg = _mp_lead_arc(pos, (sign * ux, sign * uy), lead,
-                                                      _mp_arc_side(spec, spec.retract), False)
-            lines.append(f"{rg} X{rpx:.3f} Y{rpy:.3f} I{rcx:.3f} J{rcy:.3f} F{cut_feed:.3f}")
-    return lines
+        sign = 1.0 if pos == end else -1.0
+        lines += _strategy_lead_exit(spec, -depth, pos, (sign * ux, sign * uy), cut_feed)
+    return lines, pos
 
 
 def _g1_cut(prev_x: float, prev_y: float, x: float, y: float, z: float, feed: float,
@@ -320,11 +358,14 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         plunge_feed = geom.feed_default       # bajada G1 Z (el override NO la cambia — N028)
         # Avanz./Rotación por operación (N028 F3_S12K): corte a F=Avanz×1000; S{Rotación}M3.
         cut_feed = spec.feedrate * 1000.0 if spec.feedrate > 0 else geom.feed_std
-        # Velocidad del lead en ESTRATEGIA (N035 mp_app_sp): pisa el feed de TODO el cuerpo
-        # (pasadas y descensos incluidos), no solo el lead.
+        # Velocidad del approach en ESTRATEGIA (N035 mp_app_sp + N036 zz_app_sp): pisa el feed
+        # de TODO el cuerpo — pasadas, descensos e INCLUSO la bajada inicial a security (el
+        # zz_app_sp con speed=3≠default lo discrimina: G1 Z20 F3000). La del retract NO (solo
+        # el lead-out, mp_ret_sp).
         if (spec.milling_strategy is not None and spec.approach.is_enabled
                 and spec.approach.speed > 0):
             cut_feed = spec.approach.speed * 1000.0
+            plunge_feed = cut_feed
         spindle_eff = int(spec.spindle) if spec.spindle > 0 else geom.spindle_std
         is_last = (i == n - 1)
         # Corrección de herramienta (side_of_feature Left/Right): el control compensa el radio
@@ -359,6 +400,57 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         lead_app = spec.tool_width / 2.0 * spec.approach.radius_multiplier
         lead_ret = spec.tool_width / 2.0 * spec.retract.radius_multiplier
 
+        # Lead programable + compensación (N029 side_l_leads / N035): el lead se emite en
+        # coordenadas de CONTORNO con G41/G42 activo; el 1 mm de la corrección se ancla al punto
+        # EXTERIOR del lead, sobre su TANGENTE de entrada (arco) o sobre û (línea). El lado
+        # explícito del arco se IGNORA con compensación (N035 arcleft): siempre el lado libre.
+        # La velocidad propia aplica a plunge+lead (semántica N026); la activación va a plunge.
+        comp_app = compensated and has_app
+        if comp_app:
+            comp_app_feed = ((spec.approach.speed * 1000.0) if spec.approach.speed > 0
+                             else plunge_feed)
+            if spec.approach.approach_type == "Line":
+                _ux, _uy = _unit_dir(spec)
+                capx = spec.start_x - lead_app * _ux
+                capy = spec.start_y - lead_app * _uy
+                catx, caty, cag = _ux, _uy, None
+            else:
+                (capx, capy), (cacx, cacy), cag = _lead_geometry(
+                    spec, lead_app, _comp_auto_arc_side(spec), True)
+                catx, caty = _arc_tangent(capx, capy, cacx, cacy, cag)
+
+        # Punto de APROXIMACIÓN de la pasada (el G0 inicial y el destino del triple G0 de las
+        # transiciones — N036 two_leads: apunta al punto exterior del lead, no al start).
+        if comp_app:
+            entry_xy = (capx - _COMP_LEAD * catx, capy - _COMP_LEAD * caty)
+        elif compensated:
+            ux, uy = _unit_dir(spec)
+            entry_xy = (spec.start_x - _COMP_LEAD * ux, spec.start_y - _COMP_LEAD * uy)
+        elif has_app:
+            # Punto exterior del lead (línea: start − lead·û; arco: fuera del arco). En
+            # estrategia y en CAD (N034/N035/N036): arco → radio (w/2)×(RM−1) espejado (≤0 lo
+            # omite); Lineal → w/2×RM sobre û; En bajada → exterior a lead·û del start.
+            ux, uy = _unit_dir(spec)
+            if spec.milling_strategy is not None or cad:
+                mp_lead = _mp_lead(spec, spec.approach)
+                if spec.approach.approach_type == "Line":
+                    line_lead = spec.tool_width / 2.0 * spec.approach.radius_multiplier
+                    entry_xy = (spec.start_x - line_lead * ux, spec.start_y - line_lead * uy)
+                elif mp_lead <= 1e-9:
+                    entry_xy = (spec.start_x, spec.start_y)
+                elif spec.approach.mode == "Down":
+                    entry_xy = (spec.start_x - mp_lead * ux, spec.start_y - mp_lead * uy)
+                else:
+                    entry_xy, _c, _g = _mp_lead_arc(
+                        (spec.start_x, spec.start_y), (ux, uy), mp_lead,
+                        _mp_arc_side(spec, spec.approach), True)
+            elif spec.approach.approach_type == "Arc":
+                entry_xy, _c, _g = _lead_geometry(spec, lead_app, spec.approach.arc_side, True)
+            else:
+                entry_xy = (spec.start_x - lead_app * ux, spec.start_y - lead_app * uy)
+        else:
+            entry_xy = (spec.start_x, spec.start_y)
+
         if i == 0:
             lines += _atc_header(spec)
             lines += _first_pass_setup(ctx)
@@ -386,7 +478,7 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 "G17",
                 "MLV=2",
                 "?%ETK[13]=1",
-                f"G0 X{spec.start_x:.3f} Y{spec.start_y:.3f}",
+                f"G0 X{entry_xy[0]:.3f} Y{entry_xy[1]:.3f}",
                 f"G0 Z{z_router_approach:.3f}",
             ]
         else:
@@ -402,70 +494,16 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 "G17",
                 "MLV=2",
                 f"G0 X{prev_end[0]:.3f} Y{prev_end[1]:.3f} Z{z_router_approach:.3f}",
-                f"G0 X{spec.start_x:.3f} Y{spec.start_y:.3f} Z{z_router_approach:.3f}",
-                f"G0 X{spec.start_x:.3f} Y{spec.start_y:.3f} Z{z_router_approach:.3f}",
+                f"G0 X{entry_xy[0]:.3f} Y{entry_xy[1]:.3f} Z{z_router_approach:.3f}",
+                f"G0 X{entry_xy[0]:.3f} Y{entry_xy[1]:.3f} Z{z_router_approach:.3f}",
             ]
-
-        # Lead programable + compensación (N029 side_l_leads / N035): el lead se emite en
-        # coordenadas de CONTORNO con G41/G42 activo; el 1 mm de la corrección se ancla al punto
-        # EXTERIOR del lead, sobre su TANGENTE de entrada (arco) o sobre û (línea). El lado
-        # explícito del arco se IGNORA con compensación (N035 arcleft): siempre el lado libre.
-        # La velocidad propia aplica a plunge+lead (semántica N026); la activación va a plunge.
-        comp_app = compensated and has_app
-        if comp_app:
-            comp_app_feed = ((spec.approach.speed * 1000.0) if spec.approach.speed > 0
-                             else plunge_feed)
-            if spec.approach.approach_type == "Line":
-                _ux, _uy = _unit_dir(spec)
-                capx = spec.start_x - lead_app * _ux
-                capy = spec.start_y - lead_app * _uy
-                catx, caty, cag = _ux, _uy, None
-            else:
-                (capx, capy), (cacx, cacy), cag = _lead_geometry(
-                    spec, lead_app, _comp_auto_arc_side(spec), True)
-                catx, caty = _arc_tangent(capx, capy, cacx, cacy, cag)
 
         # First pass: explicit approach; subsequent passes already positioned by triple G0
         if i == 0:
-            if comp_app:
-                lines += [
-                    f"G0 X{capx - _COMP_LEAD * catx:.3f} Y{capy - _COMP_LEAD * caty:.3f}",
-                    f"G0 Z{z_router_approach:.3f}",
-                ]
-            elif compensated:
-                # Aproxima al punto de lead-in (1 mm antes del start, sobre la dirección).
-                ux, uy = _unit_dir(spec)
-                ax, ay = spec.start_x - _COMP_LEAD * ux, spec.start_y - _COMP_LEAD * uy
-                lines += [f"G0 X{ax:.3f} Y{ay:.3f}", f"G0 Z{z_router_approach:.3f}"]
-            elif has_app:
-                # Aproxima al punto exterior del lead (línea: start − lead·û; arco: fuera del arco).
-                # En estrategia (N034/N035): arco → radio (w/2)×(RM−1) espejado (≤0 lo omite);
-                # Lineal → w/2×RM sobre û; En bajada → rampa: exterior a lead·û del start.
-                if spec.milling_strategy is not None:
-                    ux, uy = _unit_dir(spec)
-                    mp_lead = _mp_lead(spec, spec.approach)
-                    if spec.approach.approach_type == "Line":
-                        line_lead = spec.tool_width / 2.0 * spec.approach.radius_multiplier
-                        apx, apy = spec.start_x - line_lead * ux, spec.start_y - line_lead * uy
-                    elif mp_lead <= 1e-9:
-                        apx, apy = spec.start_x, spec.start_y
-                    elif spec.approach.mode == "Down":
-                        apx, apy = spec.start_x - mp_lead * ux, spec.start_y - mp_lead * uy
-                    else:
-                        (apx, apy), _c, _g = _mp_lead_arc(
-                            (spec.start_x, spec.start_y), (ux, uy), mp_lead,
-                            _mp_arc_side(spec, spec.approach), True)
-                elif spec.approach.approach_type == "Arc":
-                    (apx, apy), _c, _g = _lead_geometry(spec, lead_app, spec.approach.arc_side, True)
-                else:
-                    ux, uy = _unit_dir(spec)
-                    apx, apy = spec.start_x - lead_app * ux, spec.start_y - lead_app * uy
-                lines += [f"G0 X{apx:.3f} Y{apy:.3f}", f"G0 Z{z_router_approach:.3f}"]
-            else:
-                lines += [
-                    f"G0 X{spec.start_x:.3f} Y{spec.start_y:.3f}",
-                    f"G0 Z{z_router_approach:.3f}",
-                ]
+            lines += [
+                f"G0 X{entry_xy[0]:.3f} Y{entry_xy[1]:.3f}",
+                f"G0 Z{z_router_approach:.3f}",
+            ]
         lines += [
             "D1",
             f"SVL {svl:.3f}",
@@ -482,10 +520,12 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 "?%ETK[7]=4",
             ]
             if type(spec.milling_strategy).__name__.startswith("ZigZag"):
-                lines += _zigzag_cuts(spec, depth, cut_feed)
+                cuts, strategy_end = _zigzag_cuts(spec, depth, cut_feed)
             else:
-                lines += _multipass_cuts(spec, depth, security, cut_feed)
-            lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
+                cuts, strategy_end = _multipass_cuts(spec, depth, security, cut_feed)
+            lines += cuts
+            # La retracción final va al feed del retract si tiene velocidad propia (mp_ret_sp).
+            lines.append(f"G1 Z{security:.3f} F{_strategy_ret_feed(spec, cut_feed):.3f}")
             # Los leads de multipasada retraen dentro del patrón (G1 Z + G0 Z del teardown
             # SIEMPRE presentes — N034 ret_only); no suprimen el G0 Z como el retract single-pass.
             ret_suppresses_g0 = False
@@ -503,12 +543,17 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                     lines.append(f"G1 X{capx:.3f} Y{capy:.3f} Z{security:.3f} F{plunge_feed:.3f}")
                     if cag is None:
                         # Lead LINEAL con G41 (N035 side_app_line): plunge en el exterior y
-                        # lead-in recto a profundidad.
-                        lines += [
-                            f"G1 Z{-depth:.3f} F{comp_app_feed:.3f}",
-                            _g1_cut(capx, capy, spec.start_x, spec.start_y, -depth,
-                                    comp_app_feed, prev_z=-depth),
-                        ]
+                        # lead-in recto a profundidad. "En bajada" (N036 side_app_line_down):
+                        # SIN plunge — la línea del lead DESCIENDE desde security.
+                        if spec.approach.mode == "Down":
+                            lines.append(_g1_cut(capx, capy, spec.start_x, spec.start_y, -depth,
+                                                 comp_app_feed, prev_z=security))
+                        else:
+                            lines += [
+                                f"G1 Z{-depth:.3f} F{comp_app_feed:.3f}",
+                                _g1_cut(capx, capy, spec.start_x, spec.start_y, -depth,
+                                        comp_app_feed, prev_z=-depth),
+                            ]
                     elif spec.approach.mode == "Down":
                         # "En bajada" con G41 (N035 side_app_down): SIN plunge — arco helicoidal.
                         lines.append(f"{cag} X{spec.start_x:.3f} Y{spec.start_y:.3f} "
@@ -525,13 +570,14 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                         f"G1 X{spec.start_x:.3f} Y{spec.start_y:.3f} Z{security:.3f} F{plunge_feed:.3f}",
                         f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
                     ]
-            elif has_app:
+            elif has_app and not cad:
                 # Approach programable: ETK[7]=4 antes del plunge; plunge en el punto exterior y
                 # lead-in A PROFUNDIDAD hasta el start (recto o arco tangente). La velocidad del
                 # lead (speed×1000) aplica al plunge Y al lead; sin speed usa el feed de plunge.
                 # speed ≤ 0 (0 o el sentinel -1 del XML) = sin velocidad propia → feed de plunge.
                 app_feed = (spec.approach.speed * 1000.0) if spec.approach.speed > 0 else plunge_feed
                 down = spec.approach.mode == "Down"   # "En bajada": el lead DESCIENDE (sin plunge)
+                assert not cad  # CAD + leads va por la rama cad (estilo estrategia, N036)
                 lines.append("?%ETK[7]=4")
                 if not down:
                     lines.append(f"G1 Z{-depth:.3f} F{app_feed:.3f}")
@@ -548,28 +594,42 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             elif cad:
                 # CAD: bajada a security a feed de PLUNGE, ETK[7]=4, plunge a feed de CORTE
                 # (mismo patrón Z que la multipasada — ambos ActivateCNCCorrection=false).
+                # Con leads (N036 cad_leads): reglas de ESTRATEGIA — arco (RM−1), Automatic
+                # sigue el lado — sobre las coordenadas desplazadas.
                 lines += [
                     f"G1 Z{security:.3f} F{plunge_feed:.3f}",
                     "?%ETK[7]=4",
-                    f"G1 Z{-depth:.3f} F{cut_feed:.3f}",
                 ]
+                if has_app:
+                    lines += _strategy_lead_entry(
+                        spec, -depth, (spec.start_x, spec.start_y), _unit_dir(spec),
+                        cut_feed, security)
+                else:
+                    lines.append(f"G1 Z{-depth:.3f} F{cut_feed:.3f}")
             else:
                 lines += [
                     f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
                     "?%ETK[7]=4",
                 ]
             px, py, pz = spec.start_x, spec.start_y, -depth
+            last_feed = cut_feed
             for seg_x, seg_y, seg_z, seg_feed in _cut_segments(spec, depth, cut_feed):
                 lines.append(_g1_cut(px, py, seg_x, seg_y, seg_z, seg_feed, prev_z=pz))
                 px, py, pz = seg_x, seg_y, seg_z
+                last_feed = seg_feed
             if cad:
-                lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
-            if has_ret and not compensated:
+                if has_ret:
+                    ux, uy = _unit_dir(spec)
+                    lines += _strategy_lead_exit(
+                        spec, -depth, (spec.end_x, spec.end_y), (ux, uy), cut_feed)
+                # La retracción sale al feed VIGENTE tras los cambios (N036 cad_vel/mp_vel: F1000).
+                lines.append(f"G1 Z{security:.3f} F{last_feed:.3f}")
+            if has_ret and not compensated and not cad:
                 # Retract programable. "En cota" (Quote): lead-out A PROFUNDIDAD + retracción en
                 # G1 (sin G0 Z). "En subida" (Up): el lead-out ASCIENDE a security (arco helicoidal
                 # con Z) y el G0 Z del teardown vuelve (N030 sube). La velocidad propia del
                 # retract aplica SOLO al lead-out (N030 sp). Con G41/G42 el lead-out se emite en
-                # el bloque de salida compensada (abajo).
+                # el bloque de salida compensada (abajo); con CAD, en su propia rama (arriba).
                 up = spec.retract.mode == "Up"
                 ret_feed = (spec.retract.speed * 1000.0) if spec.retract.speed > 0 else cut_feed
                 lead_z = security if up else -depth
@@ -600,28 +660,45 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             comp_ret_up = has_ret and spec.retract.mode == "Up"
             if has_ret:
                 comp_ret_feed = ((spec.retract.speed * 1000.0) if spec.retract.speed > 0
-                                 else cut_feed)
-                (crpx, crpy), (crcx, crcy), crg = _lead_geometry(
-                    spec, lead_ret, _comp_auto_arc_side(spec), False)
-                zpart = f"Z{security:.3f} " if comp_ret_up else ""
-                lines.append(f"{crg} X{crpx:.3f} Y{crpy:.3f} "
-                             f"{zpart}I{crcx:.3f} J{crcy:.3f} F{comp_ret_feed:.3f}")
-                crtx, crty = _arc_tangent(crpx, crpy, crcx, crcy, crg)
+                                 else last_feed)
+                if spec.retract.retract_type == "Line":
+                    # Alejamiento LINEAL con G41 (N036 side_ret_line): línea a profundidad más
+                    # allá del end (w/2×RM); el 1 mm del G40 sigue sobre û desde su extremo.
+                    ux, uy = _unit_dir(spec)
+                    crpx = spec.end_x + lead_ret * ux
+                    crpy = spec.end_y + lead_ret * uy
+                    lines.append(_g1_cut(spec.end_x, spec.end_y, crpx, crpy, -depth,
+                                         comp_ret_feed, prev_z=-depth))
+                    crtx, crty = ux, uy
+                else:
+                    (crpx, crpy), (crcx, crcy), crg = _lead_geometry(
+                        spec, lead_ret, _comp_auto_arc_side(spec), False)
+                    zpart = f"Z{security:.3f} " if comp_ret_up else ""
+                    lines.append(f"{crg} X{crpx:.3f} Y{crpy:.3f} "
+                                 f"{zpart}I{crcx:.3f} J{crcy:.3f} F{comp_ret_feed:.3f}")
+                    crtx, crty = _arc_tangent(crpx, crpy, crcx, crcy, crg)
                 ox, oy = crpx + _COMP_LEAD * crtx, crpy + _COMP_LEAD * crty
             else:
                 ux, uy = _unit_dir(spec)
                 ox, oy = spec.end_x + _COMP_LEAD * ux, spec.end_y + _COMP_LEAD * uy
+            # La retracción y el 1 mm del G40 salen al feed VIGENTE tras los cambios de
+            # velocidad (N036 side_vel: F1000).
             lines += [
-                *(() if comp_ret_up else (f"G1 Z{security:.3f} F{cut_feed:.3f}",)),
+                *(() if comp_ret_up else (f"G1 Z{security:.3f} F{last_feed:.3f}",)),
                 "G40",
-                f"G1 X{ox:.3f} Y{oy:.3f} Z{security:.3f} F{cut_feed:.3f}",
+                f"G1 X{ox:.3f} Y{oy:.3f} Z{security:.3f} F{last_feed:.3f}",
                 "D0",
                 "SVL 0.000",
                 "VL6=0.000",
                 *(("SVR 0.000", "VL7=0.000") if svr != 0.0 else ()),
                 "?%ETK[7]=0",
             ]
-            prev_end = (spec.end_x, spec.end_y)
+            if not is_last:
+                # Transición compensada → siguiente pasada (N036 two_side): un ?%ETK[7]=0
+                # EXTRA tras el teardown de la salida (el G17/MLV=2/triple G0 lo emite la
+                # iteración siguiente, anclada en el punto del G40).
+                lines.append("?%ETK[7]=0")
+            prev_end = (ox, oy)
             continue
 
         if not is_last:
@@ -634,6 +711,11 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             # N028 consistentes; la hipótesis previa por-atributos cayó con _coment).
             etk_last = (nxt.tool_name != spec.tool_name
                         and (nxt.feedrate > 0 or nxt.spindle > 0))
+            # Op con leads C.N. (ETK[7]=4 movido antes del plunge): el teardown lleva ADEMÁS un
+            # ?%ETK[7]=0 extra al final, antes de la transición (N036 two_leads — doble reset,
+            # como la salida compensada de two_side).
+            leads_style = (has_app and spec.milling_strategy is None
+                           and spec.activate_cnc_correction)
             lines += [
                 *(() if etk_last else ("?%ETK[7]=0",)),
                 f"G0 Z{security:.3f}",
@@ -641,7 +723,7 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 "SVL 0.000",
                 "VL6=0.000",
                 *(("SVR 0.000", "VL7=0.000") if svr != 0.0 else ()),
-                *(("?%ETK[7]=0",) if etk_last else ()),
+                *(("?%ETK[7]=0",) if (etk_last or leads_style) else ()),
             ]
         else:
             # Last pass: retract first, ?%ETK[7]=0 after VL7. Con retract programable la
@@ -655,7 +737,10 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 "?%ETK[7]=0",
             ]
 
-        prev_end = (spec.end_x, spec.end_y)
+        # Ancla del triple G0 de la transición siguiente: la última posición FÍSICA — el extremo
+        # final de la última pasada en estrategia (N036 two_mp), el end en single-pass.
+        prev_end = (strategy_end if spec.milling_strategy is not None
+                    else (spec.end_x, spec.end_y))
 
     return lines
 

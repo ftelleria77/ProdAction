@@ -137,9 +137,41 @@ DERIVADAS de los cuerpos completos de N029/N034/N035 (byte-validadas, ver §10b)
   **la velocidad del approach PISA el feed de TODO el cuerpo** (N035 mp_app_sp); ZigZag + leads
   ancla el arco en la SUPERFICIE (Z0); triple mp+lado+leads: el arco sigue el lado sobre las
   coordenadas desplazadas; sin reset ?%ETK[7]=0 en preamble (solo single-pass con G41/approach).
-Quedan guardadas (formas residuales sin fixture): alejamiento Lineal (con lado o estrategia);
-velocidad del alejamiento en estrategia; triple con lado Right o con velocidad; ZigZag + lead
-Lineal/En bajada/subida/velocidad; lead Lineal En bajada.
+DERIVADAS en N036 (cierre total, 29/29 byte-idéntico):
+- **CAD + combos**: rebaba (desplazamiento usa w/2, la rebaba solo suma al SVR), cambios de
+  recorrido (la retracción sale al feed VIGENTE), pasante, y leads estilo-ESTRATEGIA (arco
+  (RM−1), Automatic sigue el lado, sin reset de preamble);
+- **invertir + combos**: cambios (UPar sobre el recorrido invertido), longitud (acorta y después
+  invierte), rebaba;
+- **cambios de recorrido**: con longitud (¡el UPar corre sobre el recorrido ACORTADO! long_vel:
+  X98.8 = 22+0.3·256) y con lado C.N. (feed vigente en la salida compensada);
+- **pasante**: con estrategia (pasos de cd hasta espesor+extra) y con leads;
+- **ZigZag**: diagonal ✅, último hueco = 0 ✅ (UNA sola pasada plana final; ambos regenerados en
+  Maestro), y TODAS las variantes de lead calzan las fórmulas de multipasada (línea en superficie,
+  bajada en rampa desde security+lead, subida, velocidad que pisa el cuerpo INCLUSO el descenso
+  inicial — zz_app_sp F3000 en el G1 Z20);
+- **leads residuales**: alejamiento Lineal (línea a profundidad más allá del end, con o sin G41),
+  velocidad del alejamiento (SOLO lead-out + retracción — asimetría con el approach), Lineal En
+  bajada (la línea del lead DESCIENDE desde security, sin plunge — con G41 y en estrategia),
+  triple con lado Right y triple con velocidad;
+- **estrategia sin multipaso** ≡ fresado plano (strat_single regenerado; el adapter la anula);
+- **multi-fresado en un programa**: lado C.N. (¡doble ?%ETK[7]=0 tras la salida compensada!),
+  estrategia y approach — el triple G0 de la transición apunta al punto de APROXIMACIÓN del op
+  entrante (el exterior del lead) y ancla en la última posición FÍSICA del saliente; un op con
+  leads C.N. también agrega el ?%ETK[7]=0 extra en su teardown no-último.
+
+GUARDAS RESTANTES:
+- **Pendientes de REGENERACIÓN en Maestro** (los fixtures N036 son ECO de nuestra trayectoria y
+  no prueban el comportamiento real): CAD+longitud (cad_long), CAD+invertir (inv_cad),
+  invertir+estrategia (inv_mp) — regenerar el recorrido y re-postprocesar para derivarlas.
+- **PERMANENTES por decisión de Maestro**: estrategia + cambios de recorrido ("No es posible
+  aplicar una estrategia a un trabajo con atributos asociados", N036 mp_vel).
+- **Sin fixture (residuales finas)**: cambios de recorrido + leads (agujero detectado en N036);
+  triple lado+estrategia+lead no Arco/En cota; alejamiento programable en multi-fresado;
+  CAD + lead fuera de la forma base (Arco/En cota/Automatic/sin velocidad).
+- **Permanentes estructurales**: caras laterales (sin herramental), degeneradas (corrector
+  negativo, recorrido ≤ ancho, terminación ≥ total, pa/pr≤0), enums desconocidos, topes de
+  Avanz./Rotación (Maestro clampa al guardar), Allowance≠0.
 
 Resto vigente:
 - Cambios de recorrido combinados con lado, corrección de longitud, multipasada o CAD; UPar ∉ (0,1).

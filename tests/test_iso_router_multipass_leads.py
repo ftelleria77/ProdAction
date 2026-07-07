@@ -46,7 +46,7 @@ def _strategy(cd: float, finish: float = 0.0):
 class MultipassTest(unittest.TestCase):
     def _depths(self, cd, finish=0.0, depth=12.0):
         spec = _line(strategy=_strategy(cd, finish), depth=depth)
-        lines = _multipass_cuts(spec, depth, 20.0, 5000.0)
+        lines, _end = _multipass_cuts(spec, depth, 20.0, 5000.0)
         return [float(l.split("Z")[1].split(" ")[0]) for l in lines if l.startswith("G1 Z")]
 
     def test_reparto_con_resto(self):
@@ -120,16 +120,21 @@ class FailLoudTest(unittest.TestCase):
                         approach=build_approach_spec(True, approach_type="Arc"))):
             _validate_line_milling(_line(strategy=_strategy(4.0), **kw))
 
-    def test_multipasada_con_leads_no_fixtured(self):
+    def test_multipasada_con_leads_variantes_n036_pasan(self):
         from pgmx.synthesis.common.leads import build_retract_spec
-        # Alejamiento Lineal / con velocidad; triple con lado Right — siguen sin fixture.
-        self._assert_rejects(strategy=_strategy(4.0),
-                             retract=build_retract_spec(True, retract_type="Line"))
-        self._assert_rejects(strategy=_strategy(4.0),
-                             retract=build_retract_spec(True, retract_type="Arc", speed=2.0))
-        self._assert_rejects(strategy=_strategy(4.0), side_of_feature="Right",
+        # N036: alejamiento Lineal (mp_ret_line), velocidad del alejamiento (mp_ret_sp — solo
+        # el lead-out) y triple con lado Right (mp_sider_leads) — byte-validados.
+        for kw in (dict(retract=build_retract_spec(True, retract_type="Line")),
+                   dict(retract=build_retract_spec(True, retract_type="Arc", speed=2.0)),
+                   dict(side_of_feature="Right", activate_cnc_correction=False,
+                        approach=build_approach_spec(True, approach_type="Arc"))):
+            _validate_line_milling(_line(strategy=_strategy(4.0), **kw))
+
+    def test_multipasada_con_leads_no_fixtured(self):
+        # Triple con lead no Arco/En cota — sigue sin fixture.
+        self._assert_rejects(strategy=_strategy(4.0), side_of_feature="Left",
                              activate_cnc_correction=False,
-                             approach=build_approach_spec(True, approach_type="Arc"))
+                             approach=build_approach_spec(True, approach_type="Line"))
 
 
 class EndToEndTest(unittest.TestCase):

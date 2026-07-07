@@ -123,45 +123,52 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
         _fail(spec, f"rebaba {spec.side_offset:g} deja el corrector de radio negativo "
                     f"(width/2 + rebaba < 0): sin fixture de referencia. [A3]")
     # Corrección de longitud (IsPrecise): acorta el recorrido width/2 en cada extremo. Validada
-    # (N023 _long) en líneas a eje, ambos sentidos, con y sin G41/G42, E004 y E001.
+    # (N023 _long) en líneas a eje, ambos sentidos, con y sin G41/G42, E004 y E001. Con cambios
+    # de recorrido (N036 long_vel): el UPar corre sobre el recorrido ACORTADO (X98.8 = 22+0.3·256).
     if spec.is_precise:
-        if spec.speed_changes or spec.depth_changes:
-            _fail(spec, "corrección de longitud + cambios en el recorrido: base del UPar "
-                        "ambigua. Sin fixture de referencia aún. [A3]")
         length = abs(spec.end_x - spec.start_x) + abs(spec.end_y - spec.start_y)
         if length <= spec.tool_width:
             _fail(spec, f"corrección de longitud: la línea ({length:g} mm) no supera el ancho "
                         f"de la fresa ({spec.tool_width:g} mm) — recorrido degenerado. [A3]")
-    # Corrección CAD (ActivateCNCCorrection=false) CON lado elegido: la trayectoria viene
-    # calculada al eje de la herramienta — EN INVESTIGACIÓN (todo lo validado es C.N.=true).
-    # Emitir estilo C.N. sería una trayectoria incorrecta → fail-loud hasta derivarla (N029).
-    # Con corrección CENTRADA el flag es irrelevante (no hay nada que compensar): el sintetizador
-    # escribe false con estrategia multipaso y esos fixtures están byte-validados.
-    # Corrección CAD (N023 _CAD, 6/6): coordenadas desplazadas radio×normal(lado), sin G41/leads,
-    # entrada/salida Z estilo security. Validada en líneas a eje, single-pass, ciega. Combos → fail.
+    # Corrección CAD (N023 _CAD + N036): coordenadas desplazadas radio×normal(lado) — el
+    # desplazamiento usa w/2, la rebaba solo suma al SVR (cad_reb2) —, sin G41, entrada/salida Z
+    # estilo security; cambios de recorrido (cad_vel/mp_vel: la retracción sale al feed vigente),
+    # pasante (cad_th) y leads estilo-estrategia (cad_leads, solo Arco/En cota/sin velocidad)
+    # validados. PENDIENTE DE REGENERACIÓN (los fixtures N036 son eco de nuestra trayectoria):
+    # CAD + corrección de longitud y CAD + invertir — hasta regenerar en Maestro, fail-loud.
     if not spec.activate_cnc_correction and spec.milling_strategy is None:
-        if spec.side_offset or spec.is_precise:
-            _fail(spec, "Corrección CAD + rebaba/corrección de longitud: sin fixture. [A3]")
-        if spec.approach.is_enabled or spec.retract.is_enabled:
-            _fail(spec, "Corrección CAD + acercamiento/alejamiento: sin fixture. [A3]")
-        if spec.speed_changes or spec.depth_changes:
-            _fail(spec, "Corrección CAD + cambios en el recorrido: sin fixture. [A3]")
-        if spec.depth_spec.is_through:
-            _fail(spec, "Corrección CAD + pasante: sin fixture. [A3]")
-    # Corrección de herramienta (side Left/Right → G41/G42, radio del SVR): validada en N023 sobre
-    # líneas alineadas a eje, ambos sentidos, sin combinar con cambios de recorrido.
+        if spec.is_precise:
+            _fail(spec, "Corrección CAD + corrección de longitud: fixture N036 es eco (¿el "
+                        "acorte aplica al toolpath de Maestro?) — regenerar cad_long. [A3]")
+        if spec.invert_work:
+            _fail(spec, "Corrección CAD + invertir trabajo: fixture N036 es eco (¿el swap "
+                        "aplica al toolpath de Maestro?) — regenerar inv_cad. [A3]")
+        for label, lead in (("acercamiento", spec.approach), ("alejamiento", spec.retract)):
+            if not lead.is_enabled:
+                continue
+            lead_type = getattr(lead, "approach_type", None) or getattr(lead, "retract_type", None)
+            if lead_type != "Arc" or lead.mode != "Quote" or lead.speed > 0 \
+                    or lead.arc_side != "Automatic":
+                _fail(spec, f"Corrección CAD + {label} no Arco/En cota/Automatic/sin velocidad: "
+                            "sin fixture (N036 valida la forma base). [A3]")
+    # Corrección de herramienta (side Left/Right → G41/G42, radio del SVR): validada en N023;
+    # con cambios de recorrido (N036 side_vel): la retracción y el 1mm del G40 salen al feed
+    # VIGENTE tras el cambio.
     if spec.side_of_feature not in ("Center", "Left", "Right"):
         _fail(spec, f"side_of_feature={spec.side_of_feature!r} desconocido. [A3]")
-    if spec.side_of_feature != "Center":
-        if spec.speed_changes or spec.depth_changes:
-            _fail(spec, "corrección de herramienta combinada con cambios de velocidad/profundidad "
-                        "en el recorrido: sin fixture de referencia aún. [A3]")
-    # Invertir trabajo (N023 _invert): validado en Center y lados C.N. (incl. E001/Y/xrev).
-    if spec.invert_work and (
-            spec.speed_changes or spec.depth_changes or spec.milling_strategy is not None
-            or spec.is_precise or spec.side_offset or not spec.activate_cnc_correction):
-        _fail(spec, "Invertir trabajo combinado con cambios/estrategia/leads/longitud/rebaba/CAD: "
-                    "sin fixture de referencia. [A3]")
+    # Cambios de recorrido + leads programables: interacción de feeds sin fixture (agujero
+    # detectado en N036; ninguna combinación la cubre).
+    if (spec.speed_changes or spec.depth_changes) and (
+            spec.approach.is_enabled or spec.retract.is_enabled):
+        _fail(spec, "cambios en el recorrido + acercamiento/alejamiento: sin fixture de "
+                    "referencia. [A3]")
+    # Invertir trabajo (N023 _invert + N036): validado con cambios de recorrido (inv_vel: el
+    # UPar corre sobre el recorrido invertido), longitud (inv_long: acorta y después invierte)
+    # y rebaba (inv_reb2). PENDIENTE DE REGENERACIÓN (eco): invertir + estrategia (inv_mp) e
+    # invertir + CAD (arriba).
+    if spec.invert_work and spec.milling_strategy is not None:
+        _fail(spec, "Invertir trabajo + estrategia: fixture N036 es eco (¿Maestro invierte las "
+                    "pasadas del toolpath?) — regenerar inv_mp. [A3]")
     # Avanz./Rotación por operación (N028 F3_S12K): F=Avanz×1000 en el corte; S{Rotación}M3.
     # El comportamiento en el TOPE (clamp tipo taladro) no está validado → fail-loud si excede.
     if spec.feedrate > 0 or spec.spindle > 0:
@@ -192,66 +199,36 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     # PISA el feed de todo el cuerpo. Formas sin fixture → fail-loud.
     if spec.milling_strategy is not None and (
             spec.approach.is_enabled or spec.retract.is_enabled):
-        is_zz = type(spec.milling_strategy).__name__.startswith("ZigZag")
+        # Reglas UNIFORMES Bi/Uni/ZigZag (N034 + N035 + N036: los 5 casos zz_* calzan las
+        # fórmulas de multipasada exactas): Lineal en app/ret (w/2×RM), En bajada (rampa o
+        # línea descendente), En subida (rampa), velocidad del app (pisa el cuerpo) y del ret
+        # (solo lead-out). Triple con lado: Bi + Left/Right, Arco/En cota, velocidad OK.
         if spec.side_of_feature != "Center":
-            # Triple fixtured (N035 mp_side_leads): Bi + Left + Arco/En cota/sin velocidad.
-            if is_zz or not type(spec.milling_strategy).__name__.startswith("Bidirectional"):
+            if not type(spec.milling_strategy).__name__.startswith("Bidirectional"):
                 _fail(spec, "estrategia no-Bi + lado + leads: sin fixture de referencia. [A3]")
-            if spec.side_of_feature != "Left":
-                _fail(spec, "lado Right + leads + multipasada: sin fixture (N035 valida "
-                            "Left). [A3]")
-        for label, lead in (("acercamiento", spec.approach), ("alejamiento", spec.retract)):
-            if not lead.is_enabled:
-                continue
-            lead_type = getattr(lead, "approach_type", None) or getattr(lead, "retract_type", None)
-            if is_zz and (lead_type != "Arc" or lead.mode != "Quote" or lead.speed > 0):
-                _fail(spec, "ZigZag + lead Lineal/En bajada/subida/velocidad: sin fixture "
-                            "(N035 valida Arco/En cota). [A3]")
-            if lead_type == "Line":
-                if label == "alejamiento":
-                    _fail(spec, "multipasada + alejamiento Lineal: sin fixture "
-                                "(N035 valida approach). [A3]")
-                if lead.mode != "Quote":
-                    _fail(spec, "multipasada + lead Lineal En bajada: sin fixture. [A3]")
-            if lead.speed > 0:
-                if label == "alejamiento":
-                    _fail(spec, "multipasada + velocidad del alejamiento: sin fixture "
-                                "(N035 valida approach → pisa el feed del cuerpo). [A3]")
-                if spec.side_of_feature != "Center":
-                    _fail(spec, "triple lado+leads+multipasada con velocidad: sin fixture. [A3]")
-            if spec.side_of_feature != "Center" and (
-                    lead_type != "Arc" or lead.mode != "Quote" or lead.arc_side != "Automatic"):
-                _fail(spec, "triple lado+leads+multipasada: solo Arco/En cota/Automatic "
-                            "(N035 mp_side_leads). [A3]")
-    # LADO C.N. + LEADS (N029 + N035): Arco En cota/En bajada(app)/En subida(ret), Lineal en el
-    # approach, velocidad propia (semántica N026) — el lado explícito del arco se IGNORA con
-    # compensación (N035 arcleft: siempre el lado libre).
-    if spec.side_of_feature != "Center" and spec.activate_cnc_correction:
-        for label, lead in (("acercamiento", spec.approach), ("alejamiento", spec.retract)):
-            if not lead.is_enabled:
-                continue
-            lead_type = getattr(lead, "approach_type", None) or getattr(lead, "retract_type", None)
-            if lead_type == "Line":
-                if label == "alejamiento":
-                    _fail(spec, "lado C.N. + alejamiento Lineal: sin fixture "
-                                "(N035 valida approach Lineal). [A3]")
-                if lead.mode != "Quote":
-                    _fail(spec, "lado C.N. + lead Lineal En bajada: sin fixture. [A3]")
-    # Estrategia MULTIPASADA en Z (N025): Uni/Bidireccional con allow_multiple_passes. Lo no
-    # validado → fail-loud.
+            for lead in (spec.approach, spec.retract):
+                if lead.is_enabled and (
+                        (getattr(lead, "approach_type", None)
+                         or getattr(lead, "retract_type", None)) != "Arc"
+                        or lead.mode != "Quote" or lead.arc_side != "Automatic"):
+                    _fail(spec, "triple lado+leads+estrategia: solo Arco/En cota/Automatic "
+                                "(N035/N036). [A3]")
+    # LADO C.N. + LEADS (N029/N035/N036): Arco o Lineal, En cota/En bajada(app)/En subida(ret),
+    # velocidad propia (semántica N026) — el lado explícito del arco se IGNORA con compensación
+    # (N035 arcleft: siempre el lado libre). El alejamiento Lineal (side_ret_line) y el Lineal
+    # En bajada (side_app_line_down) quedaron validados en N036 — sin guardas residuales acá.
+    # Estrategia MULTIPASADA en Z (N025): Uni/Bidireccional con allow_multiple_passes (con el
+    # multipaso DESHABILITADO la op equivale a un fresado plano — N036 strat_single, el adapter
+    # la anula). Lo no validado → fail-loud.
     strategy = spec.milling_strategy
     if strategy is not None:
-        if not getattr(strategy, "allow_multiple_passes", False):
-            _fail(spec, "estrategia sin allow_multiple_passes (modo 'pre-cast' de una pasada): "
-                        "sin fixture de referencia. [A3]")
         is_zigzag = type(strategy).__name__.startswith("ZigZag")
         if is_zigzag:
-            # ZigZag (N025): validado con pa/pr/uh > 0 sobre línea a eje.
+            # ZigZag (N025 + N036): pa/pr > 0; último hueco = 0 validado (zz_uh0, regenerado:
+            # UNA sola pasada plana final); diagonal validada (zz_diag, regenerado).
             if (getattr(strategy, "feed_cutting_depth", 0.0) <= 0.0
                     or getattr(strategy, "return_cutting_depth", 0.0) <= 0.0):
                 _fail(spec, "ZigZag sin pasada avance/retorno > 0. [A3]")
-            if getattr(strategy, "axial_finish_cutting_depth", 0.0) <= 0.0:
-                _fail(spec, "ZigZag con último hueco = 0: sin fixture de referencia. [A3]")
         elif getattr(strategy, "axial_cutting_depth", 0.0) <= 0.0:
             _fail(spec, "estrategia multipasada sin axial_cutting_depth > 0. [A3]")
         finish = 0.0 if is_zigzag else getattr(strategy, "axial_finish_cutting_depth", 0.0)
@@ -259,21 +236,16 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
             # Terminación (N027 bi_cd4_f2): desbaste hasta total−finish + una pasada final.
             if finish >= (spec.depth_spec.target_depth or 0.0):
                 _fail(spec, f"terminación ({finish:g}) ≥ profundidad total: sin sentido. [A3]")
-        if is_zigzag and spec.start_x != spec.end_x and spec.start_y != spec.end_y:
-            _fail(spec, "ZigZag sobre línea DIAGONAL: sin fixture de referencia. [A3]")
         if spec.speed_changes or spec.depth_changes:
             # PERMANENTE: Maestro lo prohíbe en la UI ("No es posible aplicar una estrategia a
             # un trabajo con atributos asociados", N036 mp_vel) — un pgmx real nunca lo trae.
             _fail(spec, "estrategia + cambios en el recorrido: Maestro no permite la "
                         "combinación (N036). [A3]")
-        if spec.depth_spec.is_through:
-            _fail(spec, "multipasada + pasante: sin fixture de referencia. [A3]")
+        # Pasante con estrategia: validado (N036 mp_th, pasos de cd hasta espesor+extra).
     # Approach/Retract programables (N026/N027): lead = (width/2)×radius_multiplier; arco
     # tangente (Automatic≡Right→G3, Left→G2); overlap INERTE en líneas (ov 0/0.25/5 idénticos).
-    # Lo no validado → fail-loud.
+    # Pasante + leads: validado (N036 leads_th). Lo no validado → fail-loud.
     if spec.approach.is_enabled or spec.retract.is_enabled:
-        if spec.depth_spec.is_through:
-            _fail(spec, "approach/retract + pasante: sin fixture de referencia. [A3]")
         for lead in (spec.approach, spec.retract):
             if lead.is_enabled and lead.mode not in ("Quote", "Down", "Up"):
                 _fail(spec, f"lead con mode={lead.mode!r} desconocido. [A3]")

@@ -45,9 +45,10 @@ class FailLoudTest(unittest.TestCase):
         # Validado en N030 dg_side_l (lead de 1 mm sobre la dirección, fórmula genérica).
         _validate_line_milling(_line(side="Left", start_y=20.0, end_y=180.0))
 
-    def test_side_con_cambios_de_recorrido(self):
-        self._assert_rejects(side="Left", speed_changes=((0.3, 1.0),))
-        self._assert_rejects(side="Right", depth_changes=((0.25, 5.0),))
+    def test_side_con_cambios_de_recorrido_pasa(self):
+        # N036 side_vel: la retracción y el 1mm del G40 salen al feed VIGENTE tras el cambio.
+        _validate_line_milling(_line(side="Left", speed_changes=((0.3, 1.0),)))
+        _validate_line_milling(_line(side="Right", depth_changes=((0.25, 5.0),)))
 
 
 class EndToEndTest(unittest.TestCase):
