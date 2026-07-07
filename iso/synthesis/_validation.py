@@ -16,6 +16,7 @@ from typing import Iterable
 from pgmx.synthesis.drilling.pattern import DrillingPatternSpec
 from pgmx.synthesis.drilling.single import DrillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
+from pgmx.synthesis.milling.slot import SlotMillingSpec
 
 from ._machine import SIDE_FACE, TOP_TOOL, TOP_TOOL_CONICAL, top_tool_or_none
 from ._tool_catalog import tool_geometry
@@ -46,9 +47,11 @@ def validate_entries(entries: Iterable[object]) -> None:
             _validate_drilling_pattern(spec)
         elif isinstance(spec, LineMillingSpec):
             _validate_line_milling(spec)
+        elif isinstance(spec, SlotMillingSpec):
+            _validate_slot_milling(spec)
         else:
             _fail(spec, f"operación de tipo {type(spec).__name__!r} no soportada "
-                        f"(por ahora: taladro y fresado lineal). [Eje B del roadmap]")
+                        f"(por ahora: taladro, fresado lineal y canal). [Eje B del roadmap]")
 
 
 def _fail(spec: object, detail: str) -> None:
@@ -134,9 +137,7 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     # desplazamiento usa w/2, la rebaba solo suma al SVR (cad_reb2) —, sin G41, entrada/salida Z
     # estilo security; cambios de recorrido (cad_vel/mp_vel: la retracción sale al feed vigente),
     # pasante (cad_th) y leads estilo-estrategia (cad_leads, solo Arco/En cota/sin velocidad)
-    # validados. PENDIENTE DE REGENERACIÓN (los fixtures N036 son eco de nuestra trayectoria):
-    # CAD + corrección de longitud y CAD + invertir — hasta regenerar en Maestro, fail-loud.
-    # CAD + longitud y CAD + invertir: derivados de los fixtures REGENERADOS en Maestro
+    # validados. CAD + longitud y CAD + invertir: derivados de los fixtures REGENERADOS en Maestro
     # (2026-07-07): el acorte ±w/2 y el swap SÍ aplican sobre las coordenadas desplazadas
     # (cad_long: X22→278 en y102; inv_cad: 280→20 en y102) — los eco previos mentían.
     if not spec.activate_cnc_correction and spec.milling_strategy is None:
@@ -252,3 +253,42 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
     for upar, _val in (*spec.speed_changes, *spec.depth_changes):
         if not 0.0 < upar < 1.0:
             _fail(spec, f"cambio en el recorrido con UPar={upar} fuera de (0,1). [A3]")
+
+
+def _validate_slot_milling(spec: SlotMillingSpec) -> None:
+    """Canal con la Sierra Vertical X (082) — derivado de N037 (9/9 byte-idéntico).
+
+    Restricciones físicas (Fermín): cara superior, dirección X (Maestro NORMALIZA el sentido
+    a −x: xfwd salió byte-idéntico al base), no pasante, profundidad ≤ hundimiento (10 mm).
+    Lo no fixtureado → fail-loud."""
+    from ._tool_catalog import _catalog_by_name
+
+    if spec.plane_name != "Top":
+        _fail(spec, f"canal en cara {spec.plane_name!r} no soportado (solo Top). [B]")
+    row = _catalog_by_name().get(spec.tool_name)
+    if row is None:
+        _fail(spec, f"sierra {spec.tool_name!r} no está en el catálogo. [B]")
+    if (row.get("type") or "").strip() != "Sierra Vertical X":
+        _fail(spec, f"el canal requiere una Sierra Vertical X: {spec.tool_name!r} figura "
+                    f"como {(row.get('type') or 'sin tipo')!r}. [B]")
+    if spec.start_y != spec.end_y:
+        _fail(spec, "canal no horizontal (la 082 solo corta en dirección X). [B]")
+    if spec.depth_spec.is_through:
+        _fail(spec, "canal pasante: la 082 no atraviesa (hundimiento máx 10). [B]")
+    depth = spec.depth_spec.target_depth or 0.0
+    geom = tool_geometry(spec.tool_name)
+    if depth <= 0.0:
+        _fail(spec, "canal sin profundidad. [B]")
+    if depth > geom.sinking_length + 1e-9:
+        _fail(spec, f"profundidad {depth:g} supera el hundimiento de la sierra "
+                    f"({geom.sinking_length:g} mm). [B]")
+    if spec.approach.is_enabled or spec.retract.is_enabled:
+        _fail(spec, "canal + acercamiento/alejamiento: sin fixture de referencia. [B]")
+    if spec.side_offset:
+        _fail(spec, f"canal con rebaba {spec.side_offset:g}: sin fixture de referencia. [B]")
+    if spec.side_of_feature != "Center":
+        _fail(spec, f"canal con lado {spec.side_of_feature!r}: sin fixture de referencia. [B]")
+    if spec.material_position != "Left":
+        _fail(spec, f"canal con material_position={spec.material_position!r}: sin fixture. [B]")
+    if abs(spec.end_radius - 60.0) > 1e-6 or abs(spec.slot_angle - 1.5707963267948966) > 1e-9:
+        _fail(spec, "canal con end_radius/slot_angle no estándar: sin fixture de referencia. [B]")

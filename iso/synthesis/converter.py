@@ -12,6 +12,7 @@ from ._reader import ProgramOps, read_pgmx
 from ._validation import UnsupportedOperationError
 from ._router import render_router
 from ._tool_catalog import tool_geometry
+from ._saw import render_saw
 from ._side_drill import render_side_drill
 from ._top_drill import render_top_drill
 
@@ -27,6 +28,7 @@ def convert(pgmx_path: Path) -> str:
     has_router = bool(ops.routers)
     has_top = bool(ops.top_drills)
     has_side = bool(ops.side_drills)
+    has_saw = bool(ops.saw_channels)
 
     # Preamble face specialization: only when side is the first (and only) family
     side_only = has_side and not has_router and not has_top
@@ -50,11 +52,16 @@ def convert(pgmx_path: Path) -> str:
             "de referencia aún. [A3]")
 
     lines: list[str] = []
+    # La sierra maneja su propia entrada MLV (como el router): el preamble no emite el footer.
     lines += render_preamble(
-        ctx, first_side_face, has_router=has_router, router_compensated=router_compensated)
+        ctx, first_side_face, has_router=has_router or has_saw,
+        router_compensated=router_compensated)
 
     if has_router:
         lines += render_router(list(ops.routers), ctx)
+
+    if has_saw:
+        lines += render_saw(list(ops.saw_channels), ctx)
 
     if has_top:
         after_router_spindle = (
@@ -105,6 +112,7 @@ def convert(pgmx_path: Path) -> str:
         last_side_face=last_side_face,
         has_router=has_router,
         has_top=has_top,
+        has_saw=has_saw,
     )
 
     return "\n".join(lines) + "\n"

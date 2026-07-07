@@ -16,6 +16,7 @@ from pgmx.adapters import adapt_pgmx_path
 from pgmx.synthesis.drilling.pattern import DrillingPatternSpec
 from pgmx.synthesis.drilling.single import DrillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
+from pgmx.synthesis.milling.slot import SlotMillingSpec
 
 from ._machine import (
     FACE_PRIORITY, SIDE_MAX_DEPTH, SIDE_SUPPORTED_FIELDS, SUPPORTED_FIELDS, X_PARK, resolve_top_tool,
@@ -131,6 +132,7 @@ class ProgramOps:
     routers: tuple[LineMillingSpec, ...]
     top_drills: tuple[DrillingSpec, ...]
     side_drills: tuple[DrillingSpec, ...]
+    saw_channels: tuple[SlotMillingSpec, ...] = ()
 
 
 def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
@@ -180,6 +182,7 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
     routers: list[LineMillingSpec] = []
     top_drills: list[DrillingSpec] = []
     side_drills: list[DrillingSpec] = []
+    saw_channels: list[SlotMillingSpec] = []
 
     for entry in result.adapted_entries:
         spec = entry.spec
@@ -189,6 +192,9 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
             drills = [spec]
         elif isinstance(spec, LineMillingSpec):
             routers.append(spec)
+            continue
+        elif isinstance(spec, SlotMillingSpec):
+            saw_channels.append(spec)
             continue
         else:
             continue
@@ -241,6 +247,13 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
                 f"Fresado lineal {kind} con {milling.tool_name}: profundidad efectiva {eff:g} mm "
                 f"supera el hundimiento máximo de la fresa ({sink:g} mm, def.tlgx SinkingLength). [A3]")
 
+    # Fail-loud: canal de sierra MEZCLADO con otras familias — el orden/las transiciones
+    # entre el cabezal sierra y router/taladros no tienen fixture (N037 es sierra-only). [B]
+    if saw_channels and (routers or top_drills or side_drills):
+        raise UnsupportedOperationError(
+            "canal de sierra combinado con fresado/taladros en el mismo programa: "
+            "sin fixture de referencia aún (N037 valida programas solo-sierra). [B]")
+
     # Sort side drills by face priority then by original order within face
     side_drills.sort(key=lambda s: FACE_PRIORITY.get(s.plane_name, 99))
 
@@ -248,4 +261,5 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
         routers=tuple(routers),
         top_drills=tuple(top_drills),
         side_drills=tuple(side_drills),
+        saw_channels=tuple(saw_channels),
     )

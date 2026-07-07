@@ -52,9 +52,19 @@ class FailLoudTest(unittest.TestCase):
             convert(path)
 
     def test_unsupported_spec_type(self):
-        self._assert_rejected("slot", slot_millings=[build_slot_milling_spec(
-            start_x=20, start_y=100, end_x=280, end_y=100,
+        # El canal (slot) ya es familia soportada (N037); el CIRCULO sigue sin derivar.
+        from pgmx.synthesis import build_circle_milling_spec
+        self._assert_rejected("circle", circle_millings=[build_circle_milling_spec(
+            center_x=150, center_y=100, radius=30,
+            feature_name="Circulo", target_depth=5.0)])
+
+    def test_slot_soportado_convierte(self):
+        path = _make(self.tmp, "slot_ok", slot_millings=[build_slot_milling_spec(
+            start_x=280, start_y=100, end_x=20, end_y=100,
             feature_name="Canal", target_depth=8.0)])
+        iso = convert(path)
+        self.assertIn("?%ETK[6]=82", iso)
+        self.assertIn("G1 X20.000 Z-8.000 F5000.000", iso)
 
     def test_unsupported_top_diameter(self):
         # El toolset solo auto-resuelve las montadas (= TOP_TOOL), así que un Ø

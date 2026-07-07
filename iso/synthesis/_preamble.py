@@ -90,6 +90,7 @@ def render_epilogue(
     last_side_face: str | None = None,
     has_router: bool = False,
     has_top: bool = False,
+    has_saw: bool = False,
 ) -> list[str]:
     """Genera el epilogue ISO.
 
@@ -129,6 +130,23 @@ def render_epilogue(
         f"?%EDK[{edk_field(ctx)}].0=0",
         "M2",
     ]
+
+    # Sierra-only (N037): shutdown propio — limpia ?%ETK[1] (seteado a 16 en el header) y
+    # ?%ETK[17], con dwell G4F1.200 antes del M5 (como los taladros, que limpian ETK[0]).
+    if has_saw and not has_router and not has_top and not has_side_drill:
+        saw_shutdown = [
+            "G61",
+            "MLV=0",
+            "?%ETK[1]=0",
+            "?%ETK[17]=0",
+            "G4F1.200",
+            "M5",
+            "D0",
+            f"G0 G53 Z{Z_PARK:.3f}",
+            park_xy,
+            "G64",
+        ]
+        return saw_shutdown + syn_block
 
     # Router-only (no top drill, no side drill): different shutdown sequence
     if has_router and not has_top and not has_side_drill:
