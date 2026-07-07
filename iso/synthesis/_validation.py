@@ -262,7 +262,10 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
         if is_zigzag and spec.start_x != spec.end_x and spec.start_y != spec.end_y:
             _fail(spec, "ZigZag sobre línea DIAGONAL: sin fixture de referencia. [A3]")
         if spec.speed_changes or spec.depth_changes:
-            _fail(spec, "multipasada + cambios en el recorrido: sin fixture de referencia. [A3]")
+            # PERMANENTE: Maestro lo prohíbe en la UI ("No es posible aplicar una estrategia a
+            # un trabajo con atributos asociados", N036 mp_vel) — un pgmx real nunca lo trae.
+            _fail(spec, "estrategia + cambios en el recorrido: Maestro no permite la "
+                        "combinación (N036). [A3]")
         if spec.depth_spec.is_through:
             _fail(spec, "multipasada + pasante: sin fixture de referencia. [A3]")
     # Approach/Retract programables (N026/N027): lead = (width/2)×radius_multiplier; arco

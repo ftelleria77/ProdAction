@@ -66,7 +66,8 @@ CASES = [
     # --- Cambios de recorrido con precise / lado / estrategia ---
     ("long_vel",  _line(is_precise=True, speed_changes=VEL)),
     ("side_vel",  _line(side="Left", speed_changes=VEL)),
-    ("mp_vel",    _line(depth=12.0, strategy=BI, speed_changes=VEL)),          # [REGEN]
+    # mp_vel ELIMINADO: Maestro prohibe estrategia + atributos asociados (error de UI,
+    # 2026-07-07) -> guarda PERMANENTE en _validation, no fixtureable.
     # --- Pasante con estrategia / leads ---
     ("mp_th",     _line(strategy=BI, through=True)),
     ("leads_th",  _line(through=True, approach=_app(), retract=_ret())),
