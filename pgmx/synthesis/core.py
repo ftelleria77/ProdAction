@@ -24,6 +24,7 @@ from .milling.circle import *  # noqa: F401,F403
 from .milling.line import *  # noqa: F401,F403
 from .milling.pocket import *  # noqa: F401,F403
 from .milling.arc import *  # noqa: F401,F403
+from .milling.poly_profile import *  # noqa: F401,F403
 from .milling.profile import *  # noqa: F401,F403
 from .milling.slot import *  # noqa: F401,F403
 from .milling.squaring import *  # noqa: F401,F403
@@ -48,6 +49,8 @@ __all__ = [
     "LineMillingSpec",
     "SlotMillingSpec",
     "ArcMillingSpec",
+    "ArcPolylineMillingSpec",
+    "PolylineSegment",
     "PolylineMillingSpec",
     "CircleMillingSpec",
     "SquaringMillingSpec",
@@ -83,6 +86,7 @@ __all__ = [
     "build_line_milling_spec",
     "build_slot_milling_spec",
     "build_arc_milling_spec",
+    "build_arc_polyline_milling_spec",
     "build_polyline_milling_spec",
     "build_circle_milling_spec",
     "build_squaring_milling_spec",

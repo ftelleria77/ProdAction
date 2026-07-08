@@ -188,7 +188,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.synthesize_pgmx, common_program.synthesize_pgmx)
         self.assertEqual(
             common_program.DEFAULT_MACHINING_ORDER,
-            ("line", "slot", "polyline", "arc", "circle", "squaring", "pocket", "drilling", "drilling_pattern"),
+            ("line", "slot", "polyline", "arc", "arc_polyline", "circle", "squaring", "pocket", "drilling", "drilling_pattern"),
         )
         self.assertIs(core_sp.GeometryPrimitiveSpec, common_geometry.GeometryPrimitiveSpec)
         self.assertIs(core_sp.GeometryProfileSpec, common_geometry.GeometryProfileSpec)

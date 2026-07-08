@@ -43,6 +43,7 @@ SupportedSynthesisSpec = (
     sp.LineMillingSpec
     | sp.SlotMillingSpec
     | sp.ArcMillingSpec
+    | sp.ArcPolylineMillingSpec
     | sp.PolylineMillingSpec
     | sp.CircleMillingSpec
     | sp.SquaringMillingSpec
@@ -154,6 +155,14 @@ class PgmxAdaptationResult:
         )
 
     @property
+    def arc_polyline_millings(self) -> tuple[sp.ArcPolylineMillingSpec, ...]:
+        return tuple(
+            entry.spec
+            for entry in self.adapted_entries
+            if isinstance(entry.spec, sp.ArcPolylineMillingSpec)
+        )
+
+    @property
     def circle_millings(self) -> tuple[sp.CircleMillingSpec, ...]:
         return tuple(
             entry.spec
@@ -242,6 +251,7 @@ class PgmxAdaptationResult:
             slot_millings=self.slot_millings,
             polyline_millings=self.polyline_millings,
             arc_millings=self.arc_millings,
+            arc_polyline_millings=self.arc_polyline_millings,
             circle_millings=self.circle_millings,
             squaring_millings=self.squaring_millings,
             pocket_millings=self.pocket_millings,
@@ -1467,15 +1477,63 @@ def _adapt_milling(
                 warnings=warnings,
             )
         if profile.has_arcs:
-            return _unsupported_entry(
+            # POLILINEA de segmentos MIXTOS (Eje B etapa 3): composite con >=1 arco -> segmentos
+            # (recta = endpoint; arco = endpoint + centro + winding por signo de la normal Z).
+            try:
+                segments = []
+                for prim in profile.primitives:
+                    if prim.primitive_type == "Arc" and prim.center_point is not None:
+                        winding = ("CounterClockwise"
+                                   if (prim.normal_vector is None or prim.normal_vector[2] >= 0)
+                                   else "Clockwise")
+                        segments.append(((prim.end_point[0], prim.end_point[1]),
+                                         (prim.center_point[0], prim.center_point[1]), winding))
+                    else:
+                        segments.append(((prim.end_point[0], prim.end_point[1]),))
+                start = (profile.primitives[0].start_point[0], profile.primitives[0].start_point[1])
+                spec = sp.build_arc_polyline_milling_spec(
+                    start=start,
+                    segments=segments,
+                    feature_name=feature_name,
+                    tool_id=tool_key.id,
+                    tool_name=tool_key.name,
+                    tool_width=_effective_tool_width(feature.tool_width, 9.52),
+                    security_plane=float(operation.approach_security_plane),
+                    side_of_feature=feature.side_of_feature or "Center",
+                    is_through=bool(depth_kwargs["is_through"]),
+                    target_depth=depth_kwargs["target_depth"],
+                    extra_depth=depth_kwargs["extra_depth"],
+                    approach_enabled=approach.is_enabled,
+                    approach_type=approach.approach_type,
+                    approach_mode=approach.mode,
+                    approach_radius_multiplier=approach.radius_multiplier,
+                    approach_speed=approach.speed,
+                    approach_arc_side=approach.arc_side,
+                    retract_enabled=retract.is_enabled,
+                    retract_type=retract.retract_type,
+                    retract_mode=retract.mode,
+                    retract_radius_multiplier=retract.radius_multiplier,
+                    retract_speed=retract.speed,
+                    retract_arc_side=retract.arc_side,
+                    retract_overlap=retract.overlap,
+                    milling_strategy=operation.milling_strategy,
+                )
+            except Exception as exc:
+                return _unsupported_entry(
+                    feature,
+                    operation,
+                    step,
+                    order_index=order_index,
+                    reasons=[_builder_error("No se pudo construir el `ArcPolylineMillingSpec`", exc)],
+                    warnings=warnings,
+                )
+            return _adapted_entry(
                 feature,
                 operation,
                 step,
                 order_index=order_index,
-                reasons=[
-                    "La geometria contiene arcos en POLILINEA multi-segmento: pendiente "
-                    "(Eje B etapa 3; el arco SUELTO ya adapta)."
-                ],
+                spec_kind="arc_polyline_milling",
+                spec=spec,
                 warnings=warnings,
             )
         try:
