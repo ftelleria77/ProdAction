@@ -95,6 +95,12 @@ class ArcPolylineMillingSpec:
     retract: RetractSpec = field(default_factory=RetractSpec)
     milling_strategy: Optional[MillingStrategySpec] = None
     is_enabled_expr: Optional[str] = None
+    # ABIERTA vs CERRADA — Maestro NO usa flag: lo distingue por si la geometría cierra sobre
+    # su primer punto (los EndConditions son idénticos en ambas). `closed` es la clasificación
+    # EXPLÍCITA y resuelta en normalize: None ⇒ se infiere de la geometría; si se declara, se
+    # valida contra la geometría (mismatch = fail-loud). Gobierna la corrección (dentro/fuera de
+    # contorno cerrado vs izquierda/derecha de camino abierto) y la estrategia.
+    closed: Optional[bool] = None
 
     @property
     def points(self) -> tuple[tuple[float, float], ...]:
@@ -102,9 +108,17 @@ class ArcPolylineMillingSpec:
                 *((s.end_x, s.end_y) for s in self.segments))
 
     @property
-    def is_closed(self) -> bool:
+    def geometry_closes(self) -> bool:
+        """Hecho geométrico: el último endpoint coincide (tol sub-micrón, robusta contra el
+        ruido de arcos reconstruidos por ángulos) con el arranque."""
         return _points_close_2d((self.start_x, self.start_y),
-                                (self.segments[-1].end_x, self.segments[-1].end_y))
+                                (self.segments[-1].end_x, self.segments[-1].end_y),
+                                tolerance=1e-6)
+
+    @property
+    def is_closed(self) -> bool:
+        """Clasificación resuelta abierta/cerrada (explícita si se declaró; si no, geométrica)."""
+        return self.geometry_closes if self.closed is None else bool(self.closed)
 
 
 @dataclass(frozen=True)
@@ -149,11 +163,23 @@ def _normalize_arc_polyline_milling_spec(spec: ArcPolylineMillingSpec) -> ArcPol
         allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
         context="ArcPolylineMillingSpec",
     )
+    # ABIERTA vs CERRADA: resolver la clasificación explícita. El hecho es geométrico (¿cierra
+    # sobre el arranque?); si el usuario DECLARÓ `closed`, se valida contra la geometría.
+    geo_closes = _points_close_2d((float(spec.start_x), float(spec.start_y)),
+                                  (segments[-1].end_x, segments[-1].end_y), tolerance=1e-6)
+    if spec.closed is not None and bool(spec.closed) != geo_closes:
+        raise ValueError(
+            f"Polilínea declarada {'cerrada' if spec.closed else 'abierta'} pero la geometría "
+            f"{'cierra' if geo_closes else 'NO cierra'} sobre el punto de arranque: "
+            "Maestro clasifica por geometría, corregir los segmentos o el flag `closed`.")
+    if geo_closes and len(segments) < 2:
+        raise ValueError("Un contorno cerrado necesita al menos 2 segmentos.")
     return replace(
         spec,
         start_x=float(spec.start_x),
         start_y=float(spec.start_y),
         segments=segments,
+        closed=geo_closes,
         plane_name=_normalize_plane_name(spec.plane_name),
         side_of_feature=_normalize_side_of_feature(spec.side_of_feature),
         depth_spec=_normalize_milling_depth_spec(spec.depth_spec),
@@ -230,6 +256,7 @@ def build_arc_polyline_milling_spec(
     *,
     start: tuple[float, float],
     segments: Sequence,
+    closed: Optional[bool] = None,
     feature_name: Optional[str] = None,
     tool_id: Optional[str] = None,
     tool_name: Optional[str] = None,
@@ -274,6 +301,7 @@ def build_arc_polyline_milling_spec(
             start_x=float(start[0]),
             start_y=float(start[1]),
             segments=tuple(normalized_segments),
+            closed=closed,
             feature_name=(feature_name or "Fresado").strip() or "Fresado",
             side_of_feature=_normalize_side_of_feature(side_of_feature),
             tool_id=(tool_id or "1902").strip() or "1902",

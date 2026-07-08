@@ -59,5 +59,48 @@ class ArcAuthoringRoundtripTest(unittest.TestCase):
                 center_x=150.0, center_y=100.0, target_depth=5.0)
 
 
+class PolylineOpenClosedTest(unittest.TestCase):
+    """El sistema distingue polilíneas ABIERTAS y CERRADAS (directiva Fermín 2026-07-08).
+
+    Maestro no usa flag: la clasificación es geométrica (¿cierra sobre el arranque?). El
+    sistema la resuelve explícita (spec.is_closed) y valida un flag `closed` declarado."""
+
+    from pgmx.synthesis import build_arc_polyline_milling_spec as _bld
+
+    def _open(self, **kw):
+        from pgmx.synthesis import build_arc_polyline_milling_spec
+        return build_arc_polyline_milling_spec(
+            start=(20.0, 60.0),
+            segments=[((20.0, 120.0),),
+                      ((80.0, 180.0), (80.0, 120.0), "CounterClockwise"),
+                      ((240.0, 180.0),)],
+            target_depth=5.0, **kw)
+
+    def _closed(self, **kw):
+        from pgmx.synthesis import build_arc_polyline_milling_spec
+        return build_arc_polyline_milling_spec(
+            start=(60.0, 40.0),
+            segments=[((240.0, 40.0),), ((240.0, 140.0),),
+                      ((200.0, 180.0), (200.0, 140.0), "CounterClockwise"),
+                      ((100.0, 180.0),),
+                      ((60.0, 140.0), (100.0, 140.0), "CounterClockwise"),
+                      ((60.0, 40.0),)],
+            target_depth=5.0, **kw)
+
+    def test_clasificacion_geometrica(self):
+        self.assertFalse(self._open().is_closed)
+        self.assertTrue(self._closed().is_closed)
+
+    def test_flag_declarado_consistente(self):
+        self.assertFalse(self._open(closed=False).is_closed)
+        self.assertTrue(self._closed(closed=True).is_closed)
+
+    def test_flag_declarado_inconsistente_falla(self):
+        with self.assertRaises(ValueError):
+            self._open(closed=True)      # geometría abierta pero declara cerrada
+        with self.assertRaises(ValueError):
+            self._closed(closed=False)   # geometría cerrada pero declara abierta
+
+
 if __name__ == "__main__":
     unittest.main()
