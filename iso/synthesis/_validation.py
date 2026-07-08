@@ -299,10 +299,11 @@ def _validate_slot_milling(spec: SlotMillingSpec) -> None:
 
 
 def _validate_circle_milling(spec: CircleMillingSpec) -> None:
-    """Fresado CIRCULAR — derivado de N038 (10/10 byte-idéntico).
+    """Fresado CIRCULAR — derivado de N038 (10/10) + N039 combos (12/12).
 
-    Baseline Center: entrada por el este, dos semicírculos G3/G2 con I/J al centro, pasante
-    validado. Lo no fixtureado (corrección Interna/Externa, leads, estrategia) → fail-loud."""
+    Baseline: entrada por el este, dos semicírculos G3/G2 con I/J al centro, pasante ✓.
+    N039: corrección Interna/Externa C.N. (side L/R, con CW/pasante/leads), estrategias
+    Bi/Uni/HELICOIDAL sobre contorno cerrado, leads con û=tangente. Lo no fixtureado → fail."""
     if spec.plane_name != "Top":
         _fail(spec, f"fresado circular en cara {spec.plane_name!r} no soportado (solo Top). [B]")
     try:
@@ -315,10 +316,48 @@ def _validate_circle_milling(spec: CircleMillingSpec) -> None:
         _fail(spec, f"círculo con radio {spec.radius:g}: degenerado. [B]")
     if spec.winding not in ("Clockwise", "CounterClockwise"):
         _fail(spec, f"winding={spec.winding!r} desconocido. [B]")
-    if spec.side_of_feature != "Center":
-        _fail(spec, f"círculo con corrección {spec.side_of_feature!r} (Interna/Externa): "
-                    "sin fixture de referencia aún. [B]")
-    if spec.approach.is_enabled or spec.retract.is_enabled:
-        _fail(spec, "círculo + acercamiento/alejamiento: sin fixture de referencia. [B]")
-    if spec.milling_strategy is not None:
-        _fail(spec, "círculo + estrategia multipasada: sin fixture de referencia. [B]")
+    if spec.side_of_feature not in ("Center", "Left", "Right"):
+        _fail(spec, f"side_of_feature={spec.side_of_feature!r} desconocido. [B]")
+    strategy = spec.milling_strategy
+    has_leads = spec.approach.is_enabled or spec.retract.is_enabled
+    if spec.side_of_feature != "Center" and strategy is not None:
+        _fail(spec, "círculo con corrección + estrategia: sin fixture de referencia. [B]")
+    for label, lead in (("acercamiento", spec.approach), ("alejamiento", spec.retract)):
+        if not lead.is_enabled:
+            continue
+        lead_type = getattr(lead, "approach_type", None) or getattr(lead, "retract_type", None)
+        if lead.mode != "Quote":
+            _fail(spec, f"círculo + {label} En bajada/subida: sin fixture de referencia. [B]")
+        if lead.speed > 0:
+            _fail(spec, f"círculo + velocidad propia del {label}: sin fixture. [B]")
+        if lead.arc_side != "Automatic":
+            _fail(spec, f"círculo + lado explícito del arco del {label}: sin fixture "
+                        "(N039 valida Automatic). [B]")
+        if lead_type == "Line" and label == "alejamiento":
+            _fail(spec, "círculo + alejamiento Lineal: sin fixture (N039 valida approach). [B]")
+        if lead_type == "Line" and (spec.side_of_feature != "Center" or strategy is not None):
+            _fail(spec, "círculo + lead Lineal con corrección/estrategia: sin fixture. [B]")
+    if strategy is not None:
+        name = type(strategy).__name__
+        if name.startswith("Helical"):
+            # HELICOIDAL (N039 heli): validada CCW, cd por vuelta, cierre con vuelta plana.
+            if spec.winding != "CounterClockwise":
+                _fail(spec, "helicoidal en sentido horario: sin fixture de referencia. [B]")
+            if getattr(strategy, "axial_cutting_depth", 0.0) <= 0.0:
+                _fail(spec, "helicoidal sin profundidad de pasada > 0. [B]")
+            if getattr(strategy, "axial_finish_cutting_depth", 0.0) > 0.0:
+                _fail(spec, "helicoidal con terminación: sin fixture de referencia. [B]")
+            if has_leads:
+                _fail(spec, "helicoidal + leads: sin fixture de referencia. [B]")
+        elif name.startswith(("Bidirectional", "Unidirectional")):
+            if getattr(strategy, "axial_cutting_depth", 0.0) <= 0.0:
+                _fail(spec, "estrategia multipasada sin axial_cutting_depth > 0. [B]")
+            if getattr(strategy, "axial_finish_cutting_depth", 0.0) > 0.0:
+                _fail(spec, "círculo + terminación de estrategia: sin fixture de "
+                            "referencia. [B]")
+            if has_leads and name.startswith("Unidirectional"):
+                _fail(spec, "círculo Uni + leads: sin fixture (N039 valida Bi). [B]")
+        else:
+            _fail(spec, f"estrategia {name} en círculo: sin fixture de referencia. [B]")
+        if spec.depth_spec.is_through:
+            _fail(spec, "círculo con estrategia + pasante: sin fixture de referencia. [B]")

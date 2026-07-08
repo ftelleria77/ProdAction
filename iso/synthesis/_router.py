@@ -404,12 +404,15 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         lead_app = spec.tool_width / 2.0 * spec.approach.radius_multiplier
         lead_ret = spec.tool_width / 2.0 * spec.retract.radius_multiplier
 
+        # CÍRCULO (N038/N039): dispatch propio más abajo; los bloques de línea no lo tocan.
+        is_circle = isinstance(spec, CircleMillingSpec)
+
         # Lead programable + compensación (N029 side_l_leads / N035): el lead se emite en
         # coordenadas de CONTORNO con G41/G42 activo; el 1 mm de la corrección se ancla al punto
         # EXTERIOR del lead, sobre su TANGENTE de entrada (arco) o sobre û (línea). El lado
         # explícito del arco se IGNORA con compensación (N035 arcleft): siempre el lado libre.
         # La velocidad propia aplica a plunge+lead (semántica N026); la activación va a plunge.
-        comp_app = compensated and has_app
+        comp_app = compensated and has_app and not is_circle
         if comp_app:
             comp_app_feed = ((spec.approach.speed * 1000.0) if spec.approach.speed > 0
                              else plunge_feed)
@@ -425,10 +428,10 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
 
         # Punto de APROXIMACIÓN de la pasada (el G0 inicial y el destino del triple G0 de las
         # transiciones — N036 two_leads: apunta al punto exterior del lead, no al start).
-        # CÍRCULO (N038): entra por el ESTE del círculo (cx + r, cy).
-        is_circle = isinstance(spec, CircleMillingSpec)
+        # CÍRCULO (N038/N039): entra por el ESTE (cx+r, cy); con leads/compensación, las mismas
+        # reglas de línea con û = TANGENTE de entrada ((0,±1) según el sentido de giro).
         if is_circle:
-            entry_xy = (spec.center_x + spec.radius, spec.center_y)
+            entry_xy = _circle_entry_xy(spec, compensated, has_app, lead_app)
         elif comp_app:
             entry_xy = (capx - _COMP_LEAD * catx, capy - _COMP_LEAD * caty)
         elif compensated:
@@ -519,7 +522,7 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         ]
         if svr != 0.0:
             lines += [f"SVR {svr:.3f}", f"VL7={svr:.3f}"]
-        if spec.milling_strategy is not None:
+        if spec.milling_strategy is not None and not is_circle:
             # MULTIPASADA en Z (N025): bajada inicial a security en G1 a feed de PLUNGE; después
             # todo (descensos incluidos) a feed de CORTE. Pasadas z_i = -min(i·cd, total): pasos
             # de axial_cutting_depth, la última lleva el resto.
@@ -538,17 +541,24 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             # SIEMPRE presentes — N034 ret_only); no suprimen el G0 Z como el retract single-pass.
             ret_suppresses_g0 = False
         elif is_circle:
-            # CÍRCULO (N038, 10/10): plunge estilo línea plana y el 360° emitido como DOS
-            # SEMICÍRCULOS G3 (CCW) / G2 (CW) con I/J ABSOLUTOS al centro: este→oeste→este.
-            lines += [
-                f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
-                "?%ETK[7]=4",
-            ]
-            circle_g = "G3" if spec.winding == "CounterClockwise" else "G2"
-            for tx in (spec.center_x - spec.radius, spec.center_x + spec.radius):
-                lines.append(f"{circle_g} X{tx:.3f} Y{spec.center_y:.3f} "
-                             f"I{spec.center_x:.3f} J{spec.center_y:.3f} F{cut_feed:.3f}")
-            ret_suppresses_g0 = False
+            body, ret_suppresses_g0, circle_out = _circle_body(
+                spec, depth, security, plunge_feed, cut_feed, compensated, has_app, has_ret,
+                lead_app, lead_ret)
+            lines += body
+            if compensated:
+                # Salida compensada del círculo (mismo patrón que la línea): el cuerpo ya emitió
+                # G40 y el 1 mm de salida; teardown propio + reset extra si no es la última.
+                lines += [
+                    "D0",
+                    "SVL 0.000",
+                    "VL6=0.000",
+                    *(("SVR 0.000", "VL7=0.000") if svr != 0.0 else ()),
+                    "?%ETK[7]=0",
+                ]
+                if not is_last:
+                    lines.append("?%ETK[7]=0")
+                prev_end = circle_out
+                continue
         else:
             if compensated:
                 # ETK[7]=4 va ANTES de activar la corrección; el lead-in engancha G41/G42
@@ -761,12 +771,200 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         # final de la última pasada en estrategia (N036 two_mp), el end en single-pass; el
         # CÍRCULO cierra donde empezó (N038 two: prev = su punto de entrada).
         if is_circle:
-            prev_end = entry_xy
+            prev_end = circle_out
         else:
             prev_end = (strategy_end if spec.milling_strategy is not None
                         else (spec.end_x, spec.end_y))
 
     return lines
+
+
+def _circle_frame(spec) -> tuple[tuple[float, float], tuple[float, float], str]:
+    """Marco del círculo (N038/N039): entra por el ESTE (cx+r, cy); la TANGENTE de entrada es
+    (0,+1) en antihorario y (0,−1) en horario; el 360° se emite G3/G2 según el sentido."""
+    ccw = spec.winding == "CounterClockwise"
+    east = (spec.center_x + spec.radius, spec.center_y)
+    t_in = (0.0, 1.0) if ccw else (0.0, -1.0)
+    return east, t_in, ("G3" if ccw else "G2")
+
+
+def _circle_lead_arc(spec, anchor, u, at_start):
+    """Lead en arco single-pass sobre círculo (N039 app_arc / side_l_leads): la regla de LÍNEA
+    con û = tangente — Automatic ≡ Right → rot90ccw(û)/G3; con compensación, el lado LIBRE
+    (side Right → rot90cw/G2)."""
+    lead = spec.tool_width / 2.0 * (spec.approach if at_start else spec.retract).radius_multiplier
+    if spec.side_of_feature == "Right":
+        nx, ny, g = u[1], -u[0], "G2"
+    else:
+        nx, ny, g = -u[1], u[0], "G3"
+    cx, cy = anchor[0] + lead * nx, anchor[1] + lead * ny
+    if at_start:
+        px, py = cx - lead * u[0], cy - lead * u[1]
+    else:
+        px, py = cx + lead * u[0], cy + lead * u[1]
+    return (px, py), (cx, cy), g
+
+
+def _circle_halves(spec, g, cut_feed, z_mid=None, z_end=None, j_off=0.0) -> list[str]:
+    """Dos semicírculos este→oeste→este con I/J ABSOLUTOS al centro. Con z (helicoidal): la Z
+    va antes de I/J y el centro J se descentra ±(radio3D − r) (N039 heli: J100.017/J99.983)."""
+    east_x = spec.center_x + spec.radius
+    west_x = spec.center_x - spec.radius
+    if z_mid is None:
+        return [
+            f"{g} X{west_x:.3f} Y{spec.center_y:.3f} "
+            f"I{spec.center_x:.3f} J{spec.center_y:.3f} F{cut_feed:.3f}",
+            f"{g} X{east_x:.3f} Y{spec.center_y:.3f} "
+            f"I{spec.center_x:.3f} J{spec.center_y:.3f} F{cut_feed:.3f}",
+        ]
+    return [
+        f"{g} X{west_x:.3f} Y{spec.center_y:.3f} Z{z_mid:.3f} "
+        f"I{spec.center_x:.3f} J{spec.center_y + j_off:.3f} F{cut_feed:.3f}",
+        f"{g} X{east_x:.3f} Y{spec.center_y:.3f} Z{z_end:.3f} "
+        f"I{spec.center_x:.3f} J{spec.center_y - j_off:.3f} F{cut_feed:.3f}",
+    ]
+
+
+def _circle_entry_xy(spec, compensated: bool, has_app: bool, lead_app: float):
+    east, t_in, _g = _circle_frame(spec)
+    if compensated and has_app:
+        (apx, apy), (acx, acy), ag = _circle_lead_arc(spec, east, t_in, True)
+        tx, ty = _arc_tangent(apx, apy, acx, acy, ag)
+        return (apx - _COMP_LEAD * tx, apy - _COMP_LEAD * ty)
+    if compensated:
+        return (east[0] - _COMP_LEAD * t_in[0], east[1] - _COMP_LEAD * t_in[1])
+    if has_app and spec.milling_strategy is not None:
+        mp_lead = _mp_lead(spec, spec.approach)
+        if mp_lead <= 1e-9:
+            return east
+        exterior, _c, _g2 = _mp_lead_arc(east, t_in, mp_lead, "Automatic", True)
+        return exterior
+    if has_app:
+        if spec.approach.approach_type == "Arc":
+            exterior, _c, _g2 = _circle_lead_arc(spec, east, t_in, True)
+            return exterior
+        return (east[0] - lead_app * t_in[0], east[1] - lead_app * t_in[1])
+    return east
+
+
+def _circle_body(spec, depth, security, plunge_feed, cut_feed,
+                 compensated, has_app, has_ret, lead_app, lead_ret):
+    """Cuerpo del fresado circular (N038/N039). Devuelve (líneas, ret_suprime_G0, salida_xy)."""
+    east, t_in, g_wind = _circle_frame(spec)
+    strategy = spec.milling_strategy
+    lines: list[str] = []
+
+    if compensated:
+        # Corrección Interna/Externa C.N. (side_l/side_r): G41/G42 con las MISMAS coordenadas
+        # (compensa el control); activación de 1 mm sobre la tangente; retracción G1 + G40 +
+        # 1 mm de salida. Con leads (side_l_leads): anclado al arco del lead, como la línea.
+        lines += ["?%ETK[7]=4", "G41" if spec.side_of_feature == "Left" else "G42"]
+        if has_app:
+            (apx, apy), (acx, acy), ag = _circle_lead_arc(spec, east, t_in, True)
+            lines += [
+                f"G1 X{apx:.3f} Y{apy:.3f} Z{security:.3f} F{plunge_feed:.3f}",
+                f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
+                f"{ag} X{east[0]:.3f} Y{east[1]:.3f} I{acx:.3f} J{acy:.3f} F{plunge_feed:.3f}",
+            ]
+        else:
+            lines += [
+                f"G1 X{east[0]:.3f} Y{east[1]:.3f} Z{security:.3f} F{plunge_feed:.3f}",
+                f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
+            ]
+        lines += _circle_halves(spec, g_wind, cut_feed)
+        if has_ret:
+            (rpx, rpy), (rcx, rcy), rg = _circle_lead_arc(spec, east, t_in, False)
+            lines.append(f"{rg} X{rpx:.3f} Y{rpy:.3f} I{rcx:.3f} J{rcy:.3f} F{cut_feed:.3f}")
+            tx, ty = _arc_tangent(rpx, rpy, rcx, rcy, rg)
+            out = (rpx + _COMP_LEAD * tx, rpy + _COMP_LEAD * ty)
+        else:
+            out = (east[0] + _COMP_LEAD * t_in[0], east[1] + _COMP_LEAD * t_in[1])
+        lines += [
+            f"G1 Z{security:.3f} F{cut_feed:.3f}",
+            "G40",
+            f"G1 X{out[0]:.3f} Y{out[1]:.3f} Z{security:.3f} F{cut_feed:.3f}",
+        ]
+        return lines, False, out
+
+    if strategy is not None:
+        is_heli = type(strategy).__name__.startswith("Helical")
+        cd = strategy.axial_cutting_depth
+        lines += [f"G1 Z{security:.3f} F{plunge_feed:.3f}", "?%ETK[7]=4"]
+        if is_heli:
+            # HELICOIDAL (N039 heli — falló en líneas, el círculo es su caso natural): baja a la
+            # SUPERFICIE y desciende cd por vuelta en medias vueltas con Z; el centro J se
+            # descentra ±(hypot(r, dz/2) − r) (el radio 3D del arco inclinado); cierra con una
+            # vuelta PLANA a profundidad total.
+            lines.append(f"G1 Z0.000 F{cut_feed:.3f}")
+            n_revs = max(1, math.ceil(depth / cd - 1e-9))
+            levels = [-min(i * cd, depth) for i in range(1, n_revs + 1)]
+            current = 0.0
+            for level in levels:
+                mid = (current + level) / 2.0
+                dz_half = (current - level) / 2.0
+                j_off = math.hypot(spec.radius, dz_half / 2.0) - spec.radius
+                lines += _circle_halves(spec, g_wind, cut_feed, z_mid=mid, z_end=level,
+                                        j_off=j_off)
+                current = level
+            lines += _circle_halves(spec, g_wind, cut_feed)
+        else:
+            # Bi/Uni sobre contorno CERRADO (N039): sin conexiones — el círculo termina donde
+            # empieza y la pasada siguiente baja directo. El Bi ALTERNA el sentido de giro por
+            # pasada (G3/G2/G3); el Uni repite el sentido.
+            is_bi = type(strategy).__name__.startswith("Bidirectional")
+            g_flip = "G2" if g_wind == "G3" else "G3"
+            n_passes = max(1, math.ceil(depth / cd - 1e-9))
+            depths = [-min(i * cd, depth) for i in range(1, n_passes + 1)]
+            last_reversed = False
+            for idx, z in enumerate(depths):
+                lines.append(f"G1 Z{z:.3f} F{cut_feed:.3f}")
+                if idx == 0 and has_app:
+                    mp_lead = _mp_lead(spec, spec.approach)
+                    if mp_lead > 1e-9:
+                        _p, (acx, acy), ag = _mp_lead_arc(east, t_in, mp_lead, "Automatic", True)
+                        lines.append(f"{ag} X{east[0]:.3f} Y{east[1]:.3f} "
+                                     f"I{acx:.3f} J{acy:.3f} F{cut_feed:.3f}")
+                reversed_pass = is_bi and idx % 2 == 1
+                lines += _circle_halves(spec, g_flip if reversed_pass else g_wind, cut_feed)
+                last_reversed = reversed_pass
+            if has_ret:
+                mp_lead = _mp_lead(spec, spec.retract)
+                if mp_lead > 1e-9:
+                    u_out = (-t_in[0], -t_in[1]) if last_reversed else t_in
+                    (rpx, rpy), (rcx, rcy), rg = _mp_lead_arc(east, u_out, mp_lead,
+                                                              "Automatic", False)
+                    lines.append(f"{rg} X{rpx:.3f} Y{rpy:.3f} "
+                                 f"I{rcx:.3f} J{rcy:.3f} F{cut_feed:.3f}")
+        lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
+        return lines, False, east
+
+    if has_app or has_ret:
+        # Leads single-pass (N039 app_arc/app_ret_arc/app_line): regla de línea con û=tangente;
+        # plunge en el punto exterior a feed de plunge, lead a feed de plunge, círculo a corte;
+        # el retract en arco retrae en G1 (suprime el G0 Z), como la línea.
+        lines.append("?%ETK[7]=4")
+        lines.append(f"G1 Z{-depth:.3f} F{plunge_feed:.3f}")
+        if has_app:
+            if spec.approach.approach_type == "Arc":
+                _p, (acx, acy), ag = _circle_lead_arc(spec, east, t_in, True)
+                lines.append(f"{ag} X{east[0]:.3f} Y{east[1]:.3f} "
+                             f"I{acx:.3f} J{acy:.3f} F{plunge_feed:.3f}")
+            else:
+                exterior = (east[0] - lead_app * t_in[0], east[1] - lead_app * t_in[1])
+                lines.append(_g1_cut(exterior[0], exterior[1], east[0], east[1], -depth,
+                                     plunge_feed, prev_z=-depth))
+        lines += _circle_halves(spec, g_wind, cut_feed)
+        if has_ret:
+            (rpx, rpy), (rcx, rcy), rg = _circle_lead_arc(spec, east, t_in, False)
+            lines.append(f"{rg} X{rpx:.3f} Y{rpy:.3f} I{rcx:.3f} J{rcy:.3f} F{cut_feed:.3f}")
+            lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
+            return lines, True, east
+        return lines, False, east
+
+    # Círculo pelado (N038): plunge estilo línea y las dos mitades.
+    lines += [f"G1 Z{-depth:.3f} F{plunge_feed:.3f}", "?%ETK[7]=4"]
+    lines += _circle_halves(spec, g_wind, cut_feed)
+    return lines, False, east
 
 
 def _atc_header(spec: LineMillingSpec) -> list[str]:

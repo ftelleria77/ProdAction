@@ -39,12 +39,43 @@ class FailLoudTest(unittest.TestCase):
         _validate_circle_milling(_circ())
         _validate_circle_milling(_circ(winding="Clockwise"))
 
+    def test_combos_n039_pasan(self):
+        # N039 (12/12): corrección Int/Ext, leads con û=tangente, estrategias Bi/Uni/Helicoidal.
+        from pgmx.synthesis.common.leads import build_retract_spec
+        from pgmx.synthesis.common.strategy import (
+            build_helical_milling_strategy_spec,
+            build_unidirectional_milling_strategy_spec,
+        )
+        bi = build_bidirectional_milling_strategy_spec(
+            allow_multiple_passes=True, axial_cutting_depth=4.0)
+        for kw in (dict(side_of_feature="Left"),
+                   dict(side_of_feature="Right"),
+                   dict(approach=build_approach_spec(True, approach_type="Arc")),
+                   dict(approach=build_approach_spec(True, approach_type="Line")),
+                   dict(milling_strategy=bi),
+                   dict(milling_strategy=build_unidirectional_milling_strategy_spec(
+                       allow_multiple_passes=True, axial_cutting_depth=4.0)),
+                   dict(milling_strategy=build_helical_milling_strategy_spec(
+                       axial_cutting_depth=4.0)),
+                   dict(milling_strategy=bi,
+                        approach=build_approach_spec(True, approach_type="Arc"),
+                        retract=build_retract_spec(True, retract_type="Arc"))):
+            _validate_circle_milling(_circ(**kw))
+
     def test_combos_sin_fixture(self):
-        # Corrección Interna/Externa, leads y estrategia: el lote siguiente.
-        self._assert_rejects(side_of_feature="Left")
-        self._assert_rejects(approach=build_approach_spec(True, approach_type="Arc"))
-        self._assert_rejects(milling_strategy=build_bidirectional_milling_strategy_spec(
-            allow_multiple_passes=True, axial_cutting_depth=4.0))
+        from pgmx.synthesis.common.strategy import build_helical_milling_strategy_spec
+        heli = build_helical_milling_strategy_spec(axial_cutting_depth=4.0)
+        # Corrección+estrategia, helicoidal CW/leads, modos/velocidades de lead — sin fixture.
+        self._assert_rejects(side_of_feature="Left",
+                             milling_strategy=build_bidirectional_milling_strategy_spec(
+                                 allow_multiple_passes=True, axial_cutting_depth=4.0))
+        self._assert_rejects(winding="Clockwise", milling_strategy=heli)
+        self._assert_rejects(milling_strategy=heli,
+                             approach=build_approach_spec(True, approach_type="Arc"))
+        self._assert_rejects(approach=build_approach_spec(True, approach_type="Arc",
+                                                          mode="Down"))
+        self._assert_rejects(approach=build_approach_spec(True, approach_type="Arc",
+                                                          speed=2.0))
 
     def test_degenerado(self):
         self._assert_rejects(radius=0.0)
@@ -55,6 +86,25 @@ class EndToEndTest(unittest.TestCase):
 
     STEMS = ("N_O_base", "N_O_cw", "N_O_r10", "N_O_r60", "N_O_prof10",
              "N_O_th", "N_O_e001", "N_O_pos", "N_O_sec10", "N_O_two")
+
+    N039_DIR = Path(r"S:\Maestro\Projects\ProdAction\N039_circle_combos")
+    N039_REFS = Path(r"P:\USBMIX\ProdAction\N039_circle_combos")
+    N039_STEMS = ("N_P_side_l", "N_P_side_r", "N_P_side_l_cw", "N_P_side_l_th",
+                  "N_P_mp_bi", "N_P_mp_uni", "N_P_heli", "N_P_app_arc",
+                  "N_P_app_ret_arc", "N_P_app_line", "N_P_mp_leads", "N_P_side_l_leads")
+
+    def test_n039_combos_byte_identico(self):
+        for stem in self.N039_STEMS:
+            with self.subTest(stem):
+                pgmx = self.N039_DIR / f"{stem}.pgmx"
+                ref = self.N039_REFS / f"{stem.lower()}.iso"
+                if not pgmx.exists() or not ref.exists():
+                    self.skipTest("fixtures S:/P: no disponibles")
+                gen = [ln.rstrip() for ln in convert(pgmx).splitlines()]
+                exp = [ln.rstrip() for ln in
+                       ref.read_text(encoding="utf-8", errors="replace")
+                       .replace("\r\n", "\n").splitlines()]
+                self.assertEqual(gen, exp)
 
     def test_byte_identico(self):
         for stem in self.STEMS:

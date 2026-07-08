@@ -39,8 +39,9 @@ def convert(pgmx_path: Path) -> str:
     # En MULTIPASADA el ETK[7]=4 conserva su posición (tras el descenso a security) aunque
     # haya leads -> SIN reset (N034: ETK[8]=1 pelado en el tercer bloque).
     router_compensated = any(
-        (m.side_of_feature != "Center" and m.activate_cnc_correction)
-        or (m.approach.is_enabled and m.milling_strategy is None and m.activate_cnc_correction)
+        (m.side_of_feature != "Center" and getattr(m, "activate_cnc_correction", True))
+        or (m.approach.is_enabled and m.milling_strategy is None
+            and getattr(m, "activate_cnc_correction", True))
         for m in ops.routers)
     # Programas MULTI-fresado (N036 two_side/two_mp/two_leads, byte-validados): compensación,
     # estrategia y approach conviven con las transiciones (triple G0 al punto de aproximación;
