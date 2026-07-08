@@ -16,8 +16,10 @@ from pgmx.adapters import adapt_pgmx_path
 from pgmx.synthesis.drilling.pattern import DrillingPatternSpec
 from pgmx.synthesis.drilling.single import DrillingSpec
 from pgmx.synthesis.milling.arc import ArcMillingSpec
+from pgmx.synthesis.milling.poly_profile import ArcPolylineMillingSpec
 from pgmx.synthesis.milling.circle import CircleMillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
+from pgmx.synthesis.milling.profile import PolylineMillingSpec
 from pgmx.synthesis.milling.slot import SlotMillingSpec
 
 from ._machine import (
@@ -192,9 +194,10 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
             drills = expand_drilling_pattern(spec)
         elif isinstance(spec, DrillingSpec):
             drills = [spec]
-        elif isinstance(spec, (LineMillingSpec, CircleMillingSpec, ArcMillingSpec)):
-            # Círculo (N038) y arco suelto (N040) son ops de la familia ROUTER: mismo
-            # header/transición/teardown que las líneas.
+        elif isinstance(spec, (LineMillingSpec, CircleMillingSpec, ArcMillingSpec,
+                               ArcPolylineMillingSpec, PolylineMillingSpec)):
+            # Círculo (N038), arco suelto (N040) y polilínea mixta (N041) son ops de
+            # la familia ROUTER: mismo header/transición/teardown que las líneas.
             routers.append(spec)
             continue
         elif isinstance(spec, SlotMillingSpec):
@@ -251,14 +254,19 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
                 f"Fresado lineal {kind} con {milling.tool_name}: profundidad efectiva {eff:g} mm "
                 f"supera el hundimiento máximo de la fresa ({sink:g} mm, def.tlgx SinkingLength). [A3]")
 
-    # Fail-loud: familias del router (línea / círculo / arco) MEZCLADAS en un programa — las
-    # transiciones mixtas no tienen fixture (cada lote two-* es de un solo tipo: N028/N036
-    # líneas, N038 círculos, N040 arcos). [B]
-    router_types = {type(m).__name__ for m in routers}
-    if len(router_types) > 1:
+    # Fail-loud: familias del router (línea / círculo / arco / polilínea) MEZCLADAS en un
+    # programa — las transiciones mixtas no tienen fixture (cada lote two-* es de una sola
+    # familia: N028/N036 líneas, N038 círculos, N040 arcos, N041 polilíneas). La polilínea
+    # RECTA (PolylineMillingSpec) y la MIXTA (ArcPolylineMillingSpec) son la MISMA familia
+    # "poly" (N041 two las combina byte-idéntico: el adapter degrada la recta-pura a Polyline).
+    def _router_family(m) -> str:
+        n = type(m).__name__
+        return "poly" if n in ("PolylineMillingSpec", "ArcPolylineMillingSpec") else n
+    router_families = {_router_family(m) for m in routers}
+    if len(router_families) > 1:
         raise UnsupportedOperationError(
-            "fresado de familias mezcladas (línea/círculo/arco) en el mismo programa: "
-            f"sin fixture de referencia aún ({sorted(router_types)}). [B]")
+            "fresado de familias mezcladas (línea/círculo/arco/polilínea) en el mismo "
+            f"programa: sin fixture de referencia aún ({sorted(router_families)}). [B]")
 
     # Fail-loud: canal de sierra MEZCLADO con otras familias — el orden/las transiciones
     # entre el cabezal sierra y router/taladros no tienen fixture (N037 es sierra-only). [B]

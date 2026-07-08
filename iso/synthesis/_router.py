@@ -14,8 +14,10 @@ from __future__ import annotations
 from dataclasses import replace as _dc_replace
 
 from pgmx.synthesis.milling.arc import ArcMillingSpec
+from pgmx.synthesis.milling.poly_profile import ArcPolylineMillingSpec
 from pgmx.synthesis.milling.circle import CircleMillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
+from pgmx.synthesis.milling.profile import PolylineMillingSpec
 
 import math
 
@@ -288,12 +290,15 @@ def _g1_cut(prev_x: float, prev_y: float, x: float, y: float, z: float, feed: fl
     """G1 de corte de un tramo. Emite los ejes X/Y que se mueven; agrega Z cuando CAMBIA
     (rampa — incluso en diagonal: G1 X Y Z, N028 diag_prof10) o cuando se mueve UN solo eje
     del plano (ahí se repite aunque no cambie; la diagonal plana omite Z — N022 dir_diag)."""
+    # Comparación con tolerancia sub-micrón: colapsa el ruido de punto flotante (p.ej. el
+    # endpoint de un arco reconstruido por ángulos que alimenta una recta a eje — N041 lar_cw)
+    # sin afectar geometría real (todo mm significativo difiere ≥0.001).
     parts: list[str] = []
-    if x != prev_x:
+    if abs(x - prev_x) > 1e-6:
         parts.append(f"X{x:.3f}")
-    if y != prev_y:
+    if abs(y - prev_y) > 1e-6:
         parts.append(f"Y{y:.3f}")
-    if (prev_z is not None and z != prev_z) or len(parts) == 1:
+    if (prev_z is not None and abs(z - prev_z) > 1e-6) or len(parts) == 1:
         parts.append(f"Z{z:.3f}")
     return "G1 " + " ".join(parts) + f" F{feed:.3f}"
 
@@ -409,13 +414,14 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         # línea no los tocan. El arco baseline (Center, sin leads/estrategia) es un G3/G2 único.
         is_circle = isinstance(spec, CircleMillingSpec)
         is_arc = isinstance(spec, ArcMillingSpec)
+        is_poly = isinstance(spec, (ArcPolylineMillingSpec, PolylineMillingSpec))
 
         # Lead programable + compensación (N029 side_l_leads / N035): el lead se emite en
         # coordenadas de CONTORNO con G41/G42 activo; el 1 mm de la corrección se ancla al punto
         # EXTERIOR del lead, sobre su TANGENTE de entrada (arco) o sobre û (línea). El lado
         # explícito del arco se IGNORA con compensación (N035 arcleft): siempre el lado libre.
         # La velocidad propia aplica a plunge+lead (semántica N026); la activación va a plunge.
-        comp_app = compensated and has_app and not is_circle and not is_arc
+        comp_app = compensated and has_app and not is_circle and not is_arc and not is_poly
         if comp_app:
             comp_app_feed = ((spec.approach.speed * 1000.0) if spec.approach.speed > 0
                              else plunge_feed)
@@ -436,6 +442,9 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         if is_arc:
             # ARCO SUELTO (N040): entra por el START real del arco (baseline; combos → guarda).
             entry_xy = (spec.start_x, spec.start_y)
+        elif is_poly:
+            # POLILÍNEA (N041): entra por el primer punto del recorrido.
+            entry_xy, _poly_segs = _poly_start_and_segments(spec)
         elif is_circle:
             entry_xy = _circle_entry_xy(spec, compensated, has_app, lead_app)
         elif comp_app:
@@ -538,6 +547,23 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 f"{arc_g} X{spec.end_x:.3f} Y{spec.end_y:.3f} "
                 f"I{spec.center_x:.3f} J{spec.center_y:.3f} F{cut_feed:.3f}",
             ]
+            ret_suppresses_g0 = False
+        elif is_poly:
+            # POLILÍNEA (N041, 10/10): plunge estilo línea y UN G-code por segmento en orden —
+            # recta = G1 (regla _g1_cut de siempre), arco = G3/G2 con I/J ABSOLUTOS al centro
+            # (sentido = winding). Cubre recta-pura (PolylineMillingSpec) y mixta
+            # (ArcPolylineMillingSpec). Abierto o cerrado; pasante = -(espesor+extra).
+            lines += [f"G1 Z{-depth:.3f} F{plunge_feed:.3f}", "?%ETK[7]=4"]
+            px, py = entry_xy
+            for end_x, end_y, seg_is_arc, seg_cx, seg_cy, seg_wind in _poly_segs:
+                if seg_is_arc:
+                    seg_g = "G3" if seg_wind == "CounterClockwise" else "G2"
+                    lines.append(f"{seg_g} X{end_x:.3f} Y{end_y:.3f} "
+                                 f"I{seg_cx:.3f} J{seg_cy:.3f} F{cut_feed:.3f}")
+                else:
+                    lines.append(_g1_cut(px, py, end_x, end_y, -depth, cut_feed, prev_z=-depth))
+                px, py = end_x, end_y
+            poly_end = (px, py)
             ret_suppresses_g0 = False
         elif spec.milling_strategy is not None and not is_circle:
             # MULTIPASADA en Z (N025): bajada inicial a security en G1 a feed de PLUNGE; después
@@ -791,6 +817,8 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             prev_end = circle_out
         elif is_arc:
             prev_end = (spec.end_x, spec.end_y)
+        elif is_poly:
+            prev_end = poly_end
         else:
             prev_end = (strategy_end if spec.milling_strategy is not None
                         else (spec.end_x, spec.end_y))
@@ -984,6 +1012,21 @@ def _circle_body(spec, depth, security, plunge_feed, cut_feed,
     lines += [f"G1 Z{-depth:.3f} F{plunge_feed:.3f}", "?%ETK[7]=4"]
     lines += _circle_halves(spec, g_wind, cut_feed)
     return lines, False, east
+
+
+def _poly_start_and_segments(spec):
+    """Devuelve (start_xy, [(end_x, end_y, is_arc, cx, cy, winding), ...]) para una polilínea,
+    unificando ArcPolylineMillingSpec (segmentos recta/arco) y PolylineMillingSpec (puntos =
+    solo rectas)."""
+    if isinstance(spec, ArcPolylineMillingSpec):
+        start = (spec.start_x, spec.start_y)
+        segs = [(s.end_x, s.end_y, s.is_arc, s.center_x, s.center_y, s.winding)
+                for s in spec.segments]
+        return start, segs
+    pts = spec.points
+    start = pts[0]
+    segs = [(px, py, False, None, None, None) for (px, py) in pts[1:]]
+    return start, segs
 
 
 def _atc_header(spec: LineMillingSpec) -> list[str]:
