@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import replace as _dc_replace
 
+from pgmx.synthesis.milling.arc import ArcMillingSpec
 from pgmx.synthesis.milling.circle import CircleMillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
 
@@ -404,15 +405,17 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         lead_app = spec.tool_width / 2.0 * spec.approach.radius_multiplier
         lead_ret = spec.tool_width / 2.0 * spec.retract.radius_multiplier
 
-        # CÍRCULO (N038/N039): dispatch propio más abajo; los bloques de línea no lo tocan.
+        # CÍRCULO (N038/N039) y ARCO SUELTO (N040): dispatch propio más abajo; los bloques de
+        # línea no los tocan. El arco baseline (Center, sin leads/estrategia) es un G3/G2 único.
         is_circle = isinstance(spec, CircleMillingSpec)
+        is_arc = isinstance(spec, ArcMillingSpec)
 
         # Lead programable + compensación (N029 side_l_leads / N035): el lead se emite en
         # coordenadas de CONTORNO con G41/G42 activo; el 1 mm de la corrección se ancla al punto
         # EXTERIOR del lead, sobre su TANGENTE de entrada (arco) o sobre û (línea). El lado
         # explícito del arco se IGNORA con compensación (N035 arcleft): siempre el lado libre.
         # La velocidad propia aplica a plunge+lead (semántica N026); la activación va a plunge.
-        comp_app = compensated and has_app and not is_circle
+        comp_app = compensated and has_app and not is_circle and not is_arc
         if comp_app:
             comp_app_feed = ((spec.approach.speed * 1000.0) if spec.approach.speed > 0
                              else plunge_feed)
@@ -430,7 +433,10 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         # transiciones — N036 two_leads: apunta al punto exterior del lead, no al start).
         # CÍRCULO (N038/N039): entra por el ESTE (cx+r, cy); con leads/compensación, las mismas
         # reglas de línea con û = TANGENTE de entrada ((0,±1) según el sentido de giro).
-        if is_circle:
+        if is_arc:
+            # ARCO SUELTO (N040): entra por el START real del arco (baseline; combos → guarda).
+            entry_xy = (spec.start_x, spec.start_y)
+        elif is_circle:
             entry_xy = _circle_entry_xy(spec, compensated, has_app, lead_app)
         elif comp_app:
             entry_xy = (capx - _COMP_LEAD * catx, capy - _COMP_LEAD * caty)
@@ -522,7 +528,18 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         ]
         if svr != 0.0:
             lines += [f"SVR {svr:.3f}", f"VL7={svr:.3f}"]
-        if spec.milling_strategy is not None and not is_circle:
+        if is_arc:
+            # ARCO SUELTO (N040, 10/10): plunge estilo línea y UN G3 (CCW) / G2 (CW) desde el
+            # start al end con I/J ABSOLUTOS al centro. Pasante = -(espesor+extra).
+            arc_g = "G3" if spec.winding == "CounterClockwise" else "G2"
+            lines += [
+                f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
+                "?%ETK[7]=4",
+                f"{arc_g} X{spec.end_x:.3f} Y{spec.end_y:.3f} "
+                f"I{spec.center_x:.3f} J{spec.center_y:.3f} F{cut_feed:.3f}",
+            ]
+            ret_suppresses_g0 = False
+        elif spec.milling_strategy is not None and not is_circle:
             # MULTIPASADA en Z (N025): bajada inicial a security en G1 a feed de PLUNGE; después
             # todo (descensos incluidos) a feed de CORTE. Pasadas z_i = -min(i·cd, total): pasos
             # de axial_cutting_depth, la última lleva el resto.
@@ -772,6 +789,8 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         # CÍRCULO cierra donde empezó (N038 two: prev = su punto de entrada).
         if is_circle:
             prev_end = circle_out
+        elif is_arc:
+            prev_end = (spec.end_x, spec.end_y)
         else:
             prev_end = (strategy_end if spec.milling_strategy is not None
                         else (spec.end_x, spec.end_y))

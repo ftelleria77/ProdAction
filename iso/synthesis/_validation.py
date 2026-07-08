@@ -15,6 +15,7 @@ from typing import Iterable
 
 from pgmx.synthesis.drilling.pattern import DrillingPatternSpec
 from pgmx.synthesis.drilling.single import DrillingSpec
+from pgmx.synthesis.milling.arc import ArcMillingSpec
 from pgmx.synthesis.milling.circle import CircleMillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
 from pgmx.synthesis.milling.slot import SlotMillingSpec
@@ -52,6 +53,8 @@ def validate_entries(entries: Iterable[object]) -> None:
             _validate_slot_milling(spec)
         elif isinstance(spec, CircleMillingSpec):
             _validate_circle_milling(spec)
+        elif isinstance(spec, ArcMillingSpec):
+            _validate_arc_milling(spec)
         else:
             _fail(spec, f"operación de tipo {type(spec).__name__!r} no soportada "
                         f"(por ahora: taladro, fresado lineal/circular y canal). "
@@ -361,3 +364,33 @@ def _validate_circle_milling(spec: CircleMillingSpec) -> None:
             _fail(spec, f"estrategia {name} en círculo: sin fixture de referencia. [B]")
         if spec.depth_spec.is_through:
             _fail(spec, "círculo con estrategia + pasante: sin fixture de referencia. [B]")
+
+
+def _validate_arc_milling(spec: ArcMillingSpec) -> None:
+    """Fresado de ARCO SUELTO — derivado de N040 (10/10 byte-idéntico).
+
+    Baseline: op de familia ROUTER; entrada por el start real, UN G3 (CCW) / G2 (CW) al end
+    con I/J al centro, pasante ✓. Corrección Int/Ext, leads y estrategia → lote de combos."""
+    if spec.plane_name != "Top":
+        _fail(spec, f"fresado de arco en cara {spec.plane_name!r} no soportado (solo Top). [B]")
+    try:
+        tool_geometry(spec.tool_name)
+        int(spec.tool_name.lstrip("E"))
+    except (KeyError, ValueError):
+        _fail(spec, f"fresa {spec.tool_name!r} no está en el catálogo o su nombre no es "
+                    f"E00N. [B]")
+    import math
+    start_r = math.dist((spec.start_x, spec.start_y), (spec.center_x, spec.center_y))
+    end_r = math.dist((spec.end_x, spec.end_y), (spec.center_x, spec.center_y))
+    if start_r <= 1e-9 or not math.isclose(start_r, end_r, abs_tol=1e-6):
+        _fail(spec, f"arco con radios inconsistentes (r_ini={start_r:g}, r_fin={end_r:g}) "
+                    "o degenerado. [B]")
+    if spec.winding not in ("Clockwise", "CounterClockwise"):
+        _fail(spec, f"winding={spec.winding!r} desconocido. [B]")
+    if spec.side_of_feature != "Center":
+        _fail(spec, f"arco con corrección {spec.side_of_feature!r} (Interna/Externa): "
+                    "sin fixture de referencia aún (lote de combos). [B]")
+    if spec.approach.is_enabled or spec.retract.is_enabled:
+        _fail(spec, "arco + acercamiento/alejamiento: sin fixture de referencia. [B]")
+    if spec.milling_strategy is not None:
+        _fail(spec, "arco + estrategia multipasada: sin fixture de referencia. [B]")

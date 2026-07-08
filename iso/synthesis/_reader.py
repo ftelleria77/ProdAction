@@ -15,6 +15,7 @@ from typing import Union
 from pgmx.adapters import adapt_pgmx_path
 from pgmx.synthesis.drilling.pattern import DrillingPatternSpec
 from pgmx.synthesis.drilling.single import DrillingSpec
+from pgmx.synthesis.milling.arc import ArcMillingSpec
 from pgmx.synthesis.milling.circle import CircleMillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
 from pgmx.synthesis.milling.slot import SlotMillingSpec
@@ -191,8 +192,9 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
             drills = expand_drilling_pattern(spec)
         elif isinstance(spec, DrillingSpec):
             drills = [spec]
-        elif isinstance(spec, (LineMillingSpec, CircleMillingSpec)):
-            # El círculo es una op de la familia ROUTER (N038: mismo header/transición/teardown).
+        elif isinstance(spec, (LineMillingSpec, CircleMillingSpec, ArcMillingSpec)):
+            # Círculo (N038) y arco suelto (N040) son ops de la familia ROUTER: mismo
+            # header/transición/teardown que las líneas.
             routers.append(spec)
             continue
         elif isinstance(spec, SlotMillingSpec):
@@ -249,13 +251,14 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
                 f"Fresado lineal {kind} con {milling.tool_name}: profundidad efectiva {eff:g} mm "
                 f"supera el hundimiento máximo de la fresa ({sink:g} mm, def.tlgx SinkingLength). [A3]")
 
-    # Fail-loud: LÍNEAS y CÍRCULOS mezclados en un programa — las transiciones mixtas no
-    # tienen fixture (N038 two es círculos-only; N028/N036 son líneas-only). [B]
-    if (any(isinstance(m, LineMillingSpec) for m in routers)
-            and any(isinstance(m, CircleMillingSpec) for m in routers)):
+    # Fail-loud: familias del router (línea / círculo / arco) MEZCLADAS en un programa — las
+    # transiciones mixtas no tienen fixture (cada lote two-* es de un solo tipo: N028/N036
+    # líneas, N038 círculos, N040 arcos). [B]
+    router_types = {type(m).__name__ for m in routers}
+    if len(router_types) > 1:
         raise UnsupportedOperationError(
-            "fresado de líneas y círculos mezclados en el mismo programa: sin fixture "
-            "de referencia aún. [B]")
+            "fresado de familias mezcladas (línea/círculo/arco) en el mismo programa: "
+            f"sin fixture de referencia aún ({sorted(router_types)}). [B]")
 
     # Fail-loud: canal de sierra MEZCLADO con otras familias — el orden/las transiciones
     # entre el cabezal sierra y router/taladros no tienen fixture (N037 es sierra-only). [B]
