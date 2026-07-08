@@ -15,6 +15,7 @@ from typing import Iterable
 
 from pgmx.synthesis.drilling.pattern import DrillingPatternSpec
 from pgmx.synthesis.drilling.single import DrillingSpec
+from pgmx.synthesis.milling.circle import CircleMillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
 from pgmx.synthesis.milling.slot import SlotMillingSpec
 
@@ -49,9 +50,12 @@ def validate_entries(entries: Iterable[object]) -> None:
             _validate_line_milling(spec)
         elif isinstance(spec, SlotMillingSpec):
             _validate_slot_milling(spec)
+        elif isinstance(spec, CircleMillingSpec):
+            _validate_circle_milling(spec)
         else:
             _fail(spec, f"operación de tipo {type(spec).__name__!r} no soportada "
-                        f"(por ahora: taladro, fresado lineal y canal). [Eje B del roadmap]")
+                        f"(por ahora: taladro, fresado lineal/circular y canal). "
+                        f"[Eje B del roadmap]")
 
 
 def _fail(spec: object, detail: str) -> None:
@@ -292,3 +296,29 @@ def _validate_slot_milling(spec: SlotMillingSpec) -> None:
         _fail(spec, f"canal con material_position={spec.material_position!r}: sin fixture. [B]")
     if abs(spec.end_radius - 60.0) > 1e-6 or abs(spec.slot_angle - 1.5707963267948966) > 1e-9:
         _fail(spec, "canal con end_radius/slot_angle no estándar: sin fixture de referencia. [B]")
+
+
+def _validate_circle_milling(spec: CircleMillingSpec) -> None:
+    """Fresado CIRCULAR — derivado de N038 (10/10 byte-idéntico).
+
+    Baseline Center: entrada por el este, dos semicírculos G3/G2 con I/J al centro, pasante
+    validado. Lo no fixtureado (corrección Interna/Externa, leads, estrategia) → fail-loud."""
+    if spec.plane_name != "Top":
+        _fail(spec, f"fresado circular en cara {spec.plane_name!r} no soportado (solo Top). [B]")
+    try:
+        tool_geometry(spec.tool_name)
+        int(spec.tool_name.lstrip("E"))
+    except (KeyError, ValueError):
+        _fail(spec, f"fresa {spec.tool_name!r} no está en el catálogo o su nombre no es "
+                    f"E00N. [B]")
+    if spec.radius <= 0.0:
+        _fail(spec, f"círculo con radio {spec.radius:g}: degenerado. [B]")
+    if spec.winding not in ("Clockwise", "CounterClockwise"):
+        _fail(spec, f"winding={spec.winding!r} desconocido. [B]")
+    if spec.side_of_feature != "Center":
+        _fail(spec, f"círculo con corrección {spec.side_of_feature!r} (Interna/Externa): "
+                    "sin fixture de referencia aún. [B]")
+    if spec.approach.is_enabled or spec.retract.is_enabled:
+        _fail(spec, "círculo + acercamiento/alejamiento: sin fixture de referencia. [B]")
+    if spec.milling_strategy is not None:
+        _fail(spec, "círculo + estrategia multipasada: sin fixture de referencia. [B]")

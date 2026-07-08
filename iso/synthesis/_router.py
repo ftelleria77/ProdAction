@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import replace as _dc_replace
 
+from pgmx.synthesis.milling.circle import CircleMillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
 
 import math
@@ -342,12 +343,12 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         svl = z_router_approach - security   # = tool_offset_length (TLC)
         # Rebaba (SideOffset del feature) suma al corrector de radio; si da 0 las líneas SVR se
         # OMITEN (setup y teardown) — Maestro no emite un corrector nulo (N024 rebm2).
-        svr = spec.tool_width / 2.0 + spec.side_offset
+        svr = spec.tool_width / 2.0 + getattr(spec, "side_offset", 0.0)
         # Corrección de longitud (IsPrecise): acorta el recorrido el RADIO de la fresa en ambos
         # extremos (centro en [start+r·dir, end−r·dir] → el filo cubre justo el segmento). N023
         # _long: E004 ±2, E001 ±9.18. El resto del render usa los extremos ya corregidos (approach,
         # lead-in/out de la compensación y corte).
-        if spec.is_precise:
+        if getattr(spec, "is_precise", False):
             r = spec.tool_width / 2.0
             ux, uy = _unit_dir(spec)
             spec = _dc_replace(
@@ -357,7 +358,8 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             )
         plunge_feed = geom.feed_default       # bajada G1 Z (el override NO la cambia — N028)
         # Avanz./Rotación por operación (N028 F3_S12K): corte a F=Avanz×1000; S{Rotación}M3.
-        cut_feed = spec.feedrate * 1000.0 if spec.feedrate > 0 else geom.feed_std
+        _feedrate = getattr(spec, "feedrate", 0.0)
+        cut_feed = _feedrate * 1000.0 if _feedrate > 0 else geom.feed_std
         # Velocidad del approach en ESTRATEGIA (N035 mp_app_sp + N036 zz_app_sp): pisa el feed
         # de TODO el cuerpo — pasadas, descensos e INCLUSO la bajada inicial a security (el
         # zz_app_sp con speed=3≠default lo discrimina: G1 Z20 F3000). La del retract NO (solo
@@ -366,7 +368,8 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 and spec.approach.speed > 0):
             cut_feed = spec.approach.speed * 1000.0
             plunge_feed = cut_feed
-        spindle_eff = int(spec.spindle) if spec.spindle > 0 else geom.spindle_std
+        _spindle = getattr(spec, "spindle", 0.0)
+        spindle_eff = int(_spindle) if _spindle > 0 else geom.spindle_std
         is_last = (i == n - 1)
         # Corrección de herramienta (side_of_feature Left/Right): el control compensa el radio
         # (SVR) vía G41/G42; las coordenadas del corte NO cambian (N023). El lado es relativo
@@ -375,8 +378,9 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         # DESPLAZADAS radio×normal(lado) — izquierda=rot90ccw(û) — sin G41/G42 ni leads (N023 _CAD).
         # El MISMO desplazamiento aplica a la multipasada con lado (N029 mp_side_l: la estrategia
         # fuerza ACC=false y las pasadas corren en las coordenadas desplazadas, sin G41).
-        cad = (not spec.activate_cnc_correction) and spec.milling_strategy is None
-        if (not spec.activate_cnc_correction) and spec.side_of_feature != "Center":
+        _acc = getattr(spec, "activate_cnc_correction", True)
+        cad = (not _acc) and spec.milling_strategy is None
+        if (not _acc) and spec.side_of_feature != "Center":
             r_off = spec.tool_width / 2.0
             ux, uy = _unit_dir(spec)
             nx, ny = (-uy, ux) if spec.side_of_feature == "Left" else (uy, -ux)
@@ -385,13 +389,13 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
                 start_x=spec.start_x + r_off * nx, start_y=spec.start_y + r_off * ny,
                 end_x=spec.end_x + r_off * nx, end_y=spec.end_y + r_off * ny,
             )
-        compensated = spec.side_of_feature != "Center" and spec.activate_cnc_correction
+        compensated = spec.side_of_feature != "Center" and _acc
         # Leads programables (N026/N027): entrada/salida en línea o arco tangente.
         has_app = spec.approach.is_enabled
         has_ret = spec.retract.is_enabled
         # Invertir trabajo (N023 _invert): swap start↔end y FLIP del lado (el lado es físico,
         # relativo a la pieza: Left con avance invertido emite G42).
-        if spec.invert_work:
+        if getattr(spec, "invert_work", False):
             flip = {"Left": "Right", "Right": "Left"}.get(spec.side_of_feature, "Center")
             spec = _dc_replace(
                 spec, start_x=spec.end_x, start_y=spec.end_y,
@@ -421,7 +425,11 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
 
         # Punto de APROXIMACIÓN de la pasada (el G0 inicial y el destino del triple G0 de las
         # transiciones — N036 two_leads: apunta al punto exterior del lead, no al start).
-        if comp_app:
+        # CÍRCULO (N038): entra por el ESTE del círculo (cx + r, cy).
+        is_circle = isinstance(spec, CircleMillingSpec)
+        if is_circle:
+            entry_xy = (spec.center_x + spec.radius, spec.center_y)
+        elif comp_app:
             entry_xy = (capx - _COMP_LEAD * catx, capy - _COMP_LEAD * caty)
         elif compensated:
             ux, uy = _unit_dir(spec)
@@ -486,8 +494,8 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             # cambia (override Rotación), va S{rpm}M3 ANTES del G17 (N028 F3_S12K).
             assert prev_end is not None
             prev_geom = tool_geometry(millings[i - 1].tool_name)
-            prev_spindle = (int(millings[i - 1].spindle) if millings[i - 1].spindle > 0
-                            else prev_geom.spindle_std)
+            _prev_sp = getattr(millings[i - 1], "spindle", 0.0)
+            prev_spindle = int(_prev_sp) if _prev_sp > 0 else prev_geom.spindle_std
             if spindle_eff != prev_spindle:
                 lines.append(f"S{spindle_eff}M3")
             lines += [
@@ -528,6 +536,18 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             lines.append(f"G1 Z{security:.3f} F{_strategy_ret_feed(spec, cut_feed):.3f}")
             # Los leads de multipasada retraen dentro del patrón (G1 Z + G0 Z del teardown
             # SIEMPRE presentes — N034 ret_only); no suprimen el G0 Z como el retract single-pass.
+            ret_suppresses_g0 = False
+        elif is_circle:
+            # CÍRCULO (N038, 10/10): plunge estilo línea plana y el 360° emitido como DOS
+            # SEMICÍRCULOS G3 (CCW) / G2 (CW) con I/J ABSOLUTOS al centro: este→oeste→este.
+            lines += [
+                f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
+                "?%ETK[7]=4",
+            ]
+            circle_g = "G3" if spec.winding == "CounterClockwise" else "G2"
+            for tx in (spec.center_x - spec.radius, spec.center_x + spec.radius):
+                lines.append(f"{circle_g} X{tx:.3f} Y{spec.center_y:.3f} "
+                             f"I{spec.center_x:.3f} J{spec.center_y:.3f} F{cut_feed:.3f}")
             ret_suppresses_g0 = False
         else:
             if compensated:
@@ -710,12 +730,12 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             # ETK-último ⇔ la op ENTRANTE tiene override de Avanz./Rotación (8 transiciones de
             # N028 consistentes; la hipótesis previa por-atributos cayó con _coment).
             etk_last = (nxt.tool_name != spec.tool_name
-                        and (nxt.feedrate > 0 or nxt.spindle > 0))
+                        and (getattr(nxt, "feedrate", 0) > 0 or getattr(nxt, "spindle", 0) > 0))
             # Op con leads C.N. (ETK[7]=4 movido antes del plunge): el teardown lleva ADEMÁS un
             # ?%ETK[7]=0 extra al final, antes de la transición (N036 two_leads — doble reset,
             # como la salida compensada de two_side).
             leads_style = (has_app and spec.milling_strategy is None
-                           and spec.activate_cnc_correction)
+                           and _acc)
             lines += [
                 *(() if etk_last else ("?%ETK[7]=0",)),
                 f"G0 Z{security:.3f}",
@@ -738,9 +758,13 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             ]
 
         # Ancla del triple G0 de la transición siguiente: la última posición FÍSICA — el extremo
-        # final de la última pasada en estrategia (N036 two_mp), el end en single-pass.
-        prev_end = (strategy_end if spec.milling_strategy is not None
-                    else (spec.end_x, spec.end_y))
+        # final de la última pasada en estrategia (N036 two_mp), el end en single-pass; el
+        # CÍRCULO cierra donde empezó (N038 two: prev = su punto de entrada).
+        if is_circle:
+            prev_end = entry_xy
+        else:
+            prev_end = (strategy_end if spec.milling_strategy is not None
+                        else (spec.end_x, spec.end_y))
 
     return lines
 
@@ -748,7 +772,8 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
 def _atc_header(spec: LineMillingSpec) -> list[str]:
     n = _cutter_number(spec)
     g = tool_geometry(spec.tool_name)
-    spindle = int(spec.spindle) if spec.spindle > 0 else g.spindle_std
+    _sp = getattr(spec, "spindle", 0.0)
+    spindle = int(_sp) if _sp > 0 else g.spindle_std
     return [
         "MLV=0",
         f"T{n}",

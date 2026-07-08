@@ -52,11 +52,20 @@ class FailLoudTest(unittest.TestCase):
             convert(path)
 
     def test_unsupported_spec_type(self):
-        # El canal (slot) ya es familia soportada (N037); el CIRCULO sigue sin derivar.
+        # Canal (N037) y circulo (N038) ya son familias soportadas; la POLILINEA sigue
+        # sin derivar (etapa 3 del Eje B).
+        from pgmx.synthesis import build_polyline_milling_spec
+        self._assert_rejected("poly", polyline_millings=[build_polyline_milling_spec(
+            points=[(20, 100), (150, 100), (150, 180)],
+            feature_name="Poli", target_depth=5.0)])
+
+    def test_circle_soportado_convierte(self):
         from pgmx.synthesis import build_circle_milling_spec
-        self._assert_rejected("circle", circle_millings=[build_circle_milling_spec(
+        path = _make(self.tmp, "circ_ok", circle_millings=[build_circle_milling_spec(
             center_x=150, center_y=100, radius=30,
             feature_name="Circulo", target_depth=5.0)])
+        iso = convert(path)
+        self.assertIn("G3 X120.000 Y100.000 I150.000 J100.000 F18000.000", iso)  # E003 default
 
     def test_slot_soportado_convierte(self):
         path = _make(self.tmp, "slot_ok", slot_millings=[build_slot_milling_spec(
