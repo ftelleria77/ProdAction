@@ -42,6 +42,7 @@ from pgmx.snapshot import (
 SupportedSynthesisSpec = (
     sp.LineMillingSpec
     | sp.SlotMillingSpec
+    | sp.ArcMillingSpec
     | sp.PolylineMillingSpec
     | sp.CircleMillingSpec
     | sp.SquaringMillingSpec
@@ -145,6 +146,14 @@ class PgmxAdaptationResult:
         )
 
     @property
+    def arc_millings(self) -> tuple[sp.ArcMillingSpec, ...]:
+        return tuple(
+            entry.spec
+            for entry in self.adapted_entries
+            if isinstance(entry.spec, sp.ArcMillingSpec)
+        )
+
+    @property
     def circle_millings(self) -> tuple[sp.CircleMillingSpec, ...]:
         return tuple(
             entry.spec
@@ -232,6 +241,7 @@ class PgmxAdaptationResult:
             line_millings=self.line_millings,
             slot_millings=self.slot_millings,
             polyline_millings=self.polyline_millings,
+            arc_millings=self.arc_millings,
             circle_millings=self.circle_millings,
             squaring_millings=self.squaring_millings,
             pocket_millings=self.pocket_millings,
@@ -1399,6 +1409,63 @@ def _adapt_milling(
         )
 
     if profile.geometry_type == "GeomCompositeCurve":
+        # ARCO SUELTO (Eje B etapa 2): composite de UN miembro-arco -> ArcMillingSpec. El
+        # winding sale del signo de la normal Z (build_arc_geometry_primitive: +1 CCW / -1 CW).
+        if (len(profile.primitives) == 1
+                and profile.primitives[0].primitive_type == "Arc"
+                and profile.primitives[0].center_point is not None):
+            arc = profile.primitives[0]
+            winding = ("CounterClockwise"
+                       if (arc.normal_vector is None or arc.normal_vector[2] >= 0)
+                       else "Clockwise")
+            try:
+                spec = sp.build_arc_milling_spec(
+                    start_x=arc.start_point[0], start_y=arc.start_point[1],
+                    end_x=arc.end_point[0], end_y=arc.end_point[1],
+                    center_x=arc.center_point[0], center_y=arc.center_point[1],
+                    winding=winding,
+                    feature_name=feature_name,
+                    tool_id=tool_key.id,
+                    tool_name=tool_key.name,
+                    tool_width=_effective_tool_width(feature.tool_width, 9.52),
+                    security_plane=float(operation.approach_security_plane),
+                    side_of_feature=feature.side_of_feature or "Center",
+                    is_through=bool(depth_kwargs["is_through"]),
+                    target_depth=depth_kwargs["target_depth"],
+                    extra_depth=depth_kwargs["extra_depth"],
+                    approach_enabled=approach.is_enabled,
+                    approach_type=approach.approach_type,
+                    approach_mode=approach.mode,
+                    approach_radius_multiplier=approach.radius_multiplier,
+                    approach_speed=approach.speed,
+                    approach_arc_side=approach.arc_side,
+                    retract_enabled=retract.is_enabled,
+                    retract_type=retract.retract_type,
+                    retract_mode=retract.mode,
+                    retract_radius_multiplier=retract.radius_multiplier,
+                    retract_speed=retract.speed,
+                    retract_arc_side=retract.arc_side,
+                    retract_overlap=retract.overlap,
+                    milling_strategy=operation.milling_strategy,
+                )
+            except Exception as exc:
+                return _unsupported_entry(
+                    feature,
+                    operation,
+                    step,
+                    order_index=order_index,
+                    reasons=[_builder_error("No se pudo construir el `ArcMillingSpec`", exc)],
+                    warnings=warnings,
+                )
+            return _adapted_entry(
+                feature,
+                operation,
+                step,
+                order_index=order_index,
+                spec_kind="arc_milling",
+                spec=spec,
+                warnings=warnings,
+            )
         if profile.has_arcs:
             return _unsupported_entry(
                 feature,
@@ -1406,8 +1473,8 @@ def _adapt_milling(
                 step,
                 order_index=order_index,
                 reasons=[
-                    "La geometria contiene arcos y hoy no existe un spec "
-                    "publico equivalente en el sintetizador."
+                    "La geometria contiene arcos en POLILINEA multi-segmento: pendiente "
+                    "(Eje B etapa 3; el arco SUELTO ya adapta)."
                 ],
                 warnings=warnings,
             )
