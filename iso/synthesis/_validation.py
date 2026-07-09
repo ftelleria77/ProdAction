@@ -418,10 +418,6 @@ def _validate_arc_polyline_milling(spec: ArcPolylineMillingSpec) -> None:
                     f"E00N. [B]")
     if len(spec.segments) < 2:
         _fail(spec, "polilínea con menos de 2 segmentos. [B]")
-    # ABIERTA vs CERRADA (clasificación explícita, geométrica): ambas byte-validadas en N041
-    # (lar/aa/ar_l abiertas; closed cerrada). El converter las trata como tipos distintos —
-    # base para la corrección futura (dentro/fuera de contorno vs izquierda/derecha de camino).
-    _ = spec.is_closed  # clasificación resuelta (fail-loud en normalize si declara mal el cierre)
     if spec.side_of_feature != "Center":
         _fail(spec, f"polilínea con corrección {spec.side_of_feature!r}: sin fixture de "
                     "referencia aún (lote de combos). [B]")
@@ -444,10 +440,6 @@ def _validate_polyline_milling(spec: PolylineMillingSpec) -> None:
                     f"E00N. [B]")
     if len(spec.points) < 3:
         _fail(spec, "polilínea recta de menos de 2 segmentos: usar fresado lineal. [B]")
-    # ABIERTA vs CERRADA: clasificación geométrica (último punto == primero). N041 ll = abierta,
-    # y una recta-pura cerrada (p.ej. un rectángulo) usa el mismo render en orden de segmentos.
-    from pgmx.synthesis.common.geometry import _is_closed_polyline_points as _poly_closed
-    _ = _poly_closed(spec.points)  # clasificación (no bloquea; ambas soportadas)
     if spec.side_of_feature != "Center":
         _fail(spec, f"polilínea con corrección {spec.side_of_feature!r}: sin fixture de "
                     "referencia aún (lote de combos). [B]")
