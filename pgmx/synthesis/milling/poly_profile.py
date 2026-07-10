@@ -185,13 +185,12 @@ def _build_arc_polyline_toolpath_profile(
 ) -> GeometryProfileSpec:
     cut_z = float(final_level)
     nominal_profile = _build_arc_polyline_geometry_profile(spec, cut_z)
-    # CAMINO 1 (Fermín 2026-07-09): con corrección, la traza compensada de una polilínea con
-    # esquinas VIVAS lleva arcos de empalme en los vértices convexos — que Maestro GENERA al
-    # postprocesar (la corrección se ve correrse en pantalla → regenera desde el feature/
-    # SideOfFeature, como en las líneas N031). La autoría no sabe hacer ese offset con inglete y
-    # NO hace falta: guardamos la traza NOMINAL como placeholder y Maestro la regenera.
-    # PENDIENTE (camino 2): compensación con inglete/arcos en la autoría — revisar si algún
-    # caso lo necesita (p.ej. si Maestro NO regenerara para algún perfil).
+    # Con corrección, la traza compensada de una polilínea con esquinas VIVAS lleva arcos de
+    # empalme en los vértices convexos — que Maestro GENERA al postprocesar (regenera desde el
+    # feature/SideOfFeature, como en las líneas N031; validado byte a byte en N042 11/11: el ISO
+    # sale compensado desde nuestra traza NOMINAL). La autoría no necesita compensar: guardamos
+    # la traza nominal como placeholder y Maestro la regenera. (La compensación con inglete en la
+    # autoría quedó descartada — Fermín 2026-07-10 — porque Maestro siempre regenera.)
     try:
         base_profile = build_compensated_toolpath_profile(
             nominal_profile,
