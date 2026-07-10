@@ -443,8 +443,9 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             # ARCO SUELTO (N040): entra por el START real del arco (baseline; combos → guarda).
             entry_xy = (spec.start_x, spec.start_y)
         elif is_poly:
-            # POLILÍNEA (N041): entra por el primer punto del recorrido.
-            entry_xy, _poly_segs = _poly_start_and_segments(spec)
+            # POLILÍNEA (N041 baseline / N042 corrección+entrada): el punto de aproximación sale
+            # de _poly_entry_xy (arranque, o 1 mm antes con corrección, o exterior del arco).
+            entry_xy = _poly_entry_xy(spec, compensated, has_app, lead_app)
         elif is_circle:
             entry_xy = _circle_entry_xy(spec, compensated, has_app, lead_app)
         elif comp_app:
@@ -549,22 +550,24 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
             ]
             ret_suppresses_g0 = False
         elif is_poly:
-            # POLILÍNEA (N041, 10/10): plunge estilo línea y UN G-code por segmento en orden —
-            # recta = G1 (regla _g1_cut de siempre), arco = G3/G2 con I/J ABSOLUTOS al centro
-            # (sentido = winding). Cubre recta-pura (PolylineMillingSpec) y mixta
-            # (ArcPolylineMillingSpec). Abierto o cerrado; pasante = -(espesor+extra).
-            lines += [f"G1 Z{-depth:.3f} F{plunge_feed:.3f}", "?%ETK[7]=4"]
-            px, py = entry_xy
-            for end_x, end_y, seg_is_arc, seg_cx, seg_cy, seg_wind in _poly_segs:
-                if seg_is_arc:
-                    seg_g = "G3" if seg_wind == "CounterClockwise" else "G2"
-                    lines.append(f"{seg_g} X{end_x:.3f} Y{end_y:.3f} "
-                                 f"I{seg_cx:.3f} J{seg_cy:.3f} F{cut_feed:.3f}")
-                else:
-                    lines.append(_g1_cut(px, py, end_x, end_y, -depth, cut_feed, prev_z=-depth))
-                px, py = end_x, end_y
-            poly_end = (px, py)
-            ret_suppresses_g0 = False
+            # POLILÍNEA (N041 baseline / N042 corrección+entrada): cuerpo estilo línea con la
+            # cadena de segmentos. Corrección = G41/G42 + lead-in sobre el 1er segmento y
+            # lead-out sobre el último; segmentos NOMINALES (el control empalma las esquinas).
+            body, ret_suppresses_g0, poly_end = _poly_body(
+                spec, depth, security, plunge_feed, cut_feed, compensated, has_app, lead_app)
+            lines += body
+            if compensated:
+                lines += [
+                    "D0",
+                    "SVL 0.000",
+                    "VL6=0.000",
+                    *(("SVR 0.000", "VL7=0.000") if svr != 0.0 else ()),
+                    "?%ETK[7]=0",
+                ]
+                if not is_last:
+                    lines.append("?%ETK[7]=0")
+                prev_end = poly_end
+                continue
         elif spec.milling_strategy is not None and not is_circle:
             # MULTIPASADA en Z (N025): bajada inicial a security en G1 a feed de PLUNGE; después
             # todo (descensos incluidos) a feed de CORTE. Pasadas z_i = -min(i·cd, total): pasos
@@ -1027,6 +1030,143 @@ def _poly_start_and_segments(spec):
     start = pts[0]
     segs = [(px, py, False, None, None, None) for (px, py) in pts[1:]]
     return start, segs
+
+
+def _lead_geometry_at(anchor, u, lead, arc_side, at_start):
+    """`_lead_geometry` con ancla y dirección EXPLÍCITAS (para polilíneas: la dirección es la
+    del primer/último segmento, no start→end). Convención single-pass: Left→G2, Automatic/
+    Right→G3; centro a `lead` perpendicular al avance; punto exterior ∓ lead·û."""
+    ux, uy = u
+    if arc_side == "Left":
+        nx, ny, g = uy, -ux, "G2"
+    else:  # Automatic o Right
+        nx, ny, g = -uy, ux, "G3"
+    cx, cy = anchor[0] + lead * nx, anchor[1] + lead * ny
+    if at_start:
+        px, py = cx - lead * ux, cy - lead * uy
+    else:
+        px, py = cx + lead * ux, cy + lead * uy
+    return (px, py), (cx, cy), g
+
+
+def _seg_dir_from(anchor, seg):
+    """Dirección unitaria de salida desde `anchor` a lo largo del segmento (tangente en el
+    arranque si es arco; dir. de la recta si no)."""
+    ex, ey, is_arc, cxx, cyy, wind = seg
+    if is_arc:
+        rx, ry = anchor[0] - cxx, anchor[1] - cyy
+        r = math.hypot(rx, ry)
+        return (-ry / r, rx / r) if wind == "CounterClockwise" else (ry / r, -rx / r)
+    dx, dy = ex - anchor[0], ey - anchor[1]
+    length = math.hypot(dx, dy)
+    return (dx / length, dy / length)
+
+
+def _seg_dir_to(prev, seg):
+    """Dirección unitaria de llegada al END del segmento (tangente en el fin si es arco)."""
+    ex, ey, is_arc, cxx, cyy, wind = seg
+    if is_arc:
+        rx, ry = ex - cxx, ey - cyy
+        r = math.hypot(rx, ry)
+        return (-ry / r, rx / r) if wind == "CounterClockwise" else (ry / r, -rx / r)
+    dx, dy = ex - prev[0], ey - prev[1]
+    length = math.hypot(dx, dy)
+    return (dx / length, dy / length)
+
+
+def _poly_first_last(start, segs):
+    """(first_dir, last_end, last_dir) de la cadena de segmentos."""
+    first_dir = _seg_dir_from(start, segs[0])
+    prev = start
+    for seg in segs[:-1]:
+        prev = (seg[0], seg[1])
+    last_dir = _seg_dir_to(prev, segs[-1])
+    last_end = (segs[-1][0], segs[-1][1])
+    return first_dir, last_end, last_dir
+
+
+def _poly_cut_lines(start, segs, depth, cut_feed):
+    """La cadena de segmentos como G-code: recta = _g1_cut, arco = G3/G2 con I/J al centro."""
+    lines = []
+    px, py = start
+    for end_x, end_y, seg_is_arc, seg_cx, seg_cy, seg_wind in segs:
+        if seg_is_arc:
+            seg_g = "G3" if seg_wind == "CounterClockwise" else "G2"
+            lines.append(f"{seg_g} X{end_x:.3f} Y{end_y:.3f} "
+                         f"I{seg_cx:.3f} J{seg_cy:.3f} F{cut_feed:.3f}")
+        else:
+            lines.append(_g1_cut(px, py, end_x, end_y, -depth, cut_feed, prev_z=-depth))
+        px, py = end_x, end_y
+    return lines, (px, py)
+
+
+def _poly_entry_xy(spec, compensated, has_app, lead_app):
+    """Punto de APROXIMACIÓN (G0) de una polilínea (N042). Con corrección: 1 mm antes del
+    arranque sobre la dir. del primer segmento (o sobre la tangente del arco de acercamiento).
+    Con acercamiento sin corrección: el punto exterior del arco. Baseline: el arranque."""
+    start, segs = _poly_start_and_segments(spec)
+    first_dir = _seg_dir_from(start, segs[0])
+    if compensated and has_app:
+        (apx, apy), (acx, acy), ag = _lead_geometry_at(
+            start, first_dir, lead_app, _comp_auto_arc_side(spec), True)
+        tx, ty = _arc_tangent(apx, apy, acx, acy, ag)
+        return (apx - _COMP_LEAD * tx, apy - _COMP_LEAD * ty)
+    if compensated:
+        return (start[0] - _COMP_LEAD * first_dir[0], start[1] - _COMP_LEAD * first_dir[1])
+    if has_app:
+        (apx, apy), _c, _g = _lead_geometry_at(start, first_dir, lead_app,
+                                               spec.approach.arc_side, True)
+        return (apx, apy)
+    return start
+
+
+def _poly_body(spec, depth, security, plunge_feed, cut_feed, compensated, has_app, lead_app):
+    """Cuerpo de una polilínea (N041 baseline + N042 corrección/acercamiento). Devuelve
+    (líneas, ret_suprime_G0, salida_xy). Corrección = modelo de la LÍNEA con lead-in sobre el
+    primer segmento y lead-out sobre el último; los segmentos van NOMINALES (G41/G42 delega el
+    empalme de esquinas al control)."""
+    start, segs = _poly_start_and_segments(spec)
+    first_dir, last_end, last_dir = _poly_first_last(start, segs)
+    cut, cut_end = _poly_cut_lines(start, segs, depth, cut_feed)
+
+    if compensated:
+        lines = ["?%ETK[7]=4", "G41" if spec.side_of_feature == "Left" else "G42"]
+        if has_app:
+            (apx, apy), (acx, acy), ag = _lead_geometry_at(
+                start, first_dir, lead_app, _comp_auto_arc_side(spec), True)
+            lines += [
+                f"G1 X{apx:.3f} Y{apy:.3f} Z{security:.3f} F{plunge_feed:.3f}",
+                f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
+                f"{ag} X{start[0]:.3f} Y{start[1]:.3f} I{acx:.3f} J{acy:.3f} F{plunge_feed:.3f}",
+            ]
+        else:
+            lines += [
+                f"G1 X{start[0]:.3f} Y{start[1]:.3f} Z{security:.3f} F{plunge_feed:.3f}",
+                f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
+            ]
+        lines += cut
+        out = (last_end[0] + _COMP_LEAD * last_dir[0], last_end[1] + _COMP_LEAD * last_dir[1])
+        lines += [
+            f"G1 Z{security:.3f} F{cut_feed:.3f}",
+            "G40",
+            f"G1 X{out[0]:.3f} Y{out[1]:.3f} Z{security:.3f} F{cut_feed:.3f}",
+        ]
+        return lines, False, out
+
+    if has_app:
+        # Acercamiento sin corrección (Center): plunge y arco tangente anclado al 1er vértice.
+        (apx, apy), (acx, acy), ag = _lead_geometry_at(
+            start, first_dir, lead_app, spec.approach.arc_side, True)
+        lines = [
+            "?%ETK[7]=4",
+            f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
+            f"{ag} X{start[0]:.3f} Y{start[1]:.3f} I{acx:.3f} J{acy:.3f} F{plunge_feed:.3f}",
+        ]
+        lines += cut
+        return lines, False, cut_end
+
+    lines = [f"G1 Z{-depth:.3f} F{plunge_feed:.3f}", "?%ETK[7]=4"] + cut
+    return lines, False, cut_end
 
 
 def _atc_header(spec: LineMillingSpec) -> list[str]:

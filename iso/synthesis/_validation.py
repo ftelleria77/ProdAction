@@ -403,11 +403,14 @@ def _validate_arc_milling(spec: ArcMillingSpec) -> None:
 
 
 def _validate_arc_polyline_milling(spec: ArcPolylineMillingSpec) -> None:
-    """Polilínea de segmentos mixtos (rectas + arcos) — derivado de N041 (10/10 byte-idéntico).
+    """Polilínea de segmentos mixtos (rectas + arcos) — derivado de N041 (baseline) + N042
+    (corrección + acercamiento, abiertas y cerradas, 11/11 byte-idéntico).
 
-    Baseline: op de familia ROUTER; un G-code por segmento en orden (recta = G1 estilo línea,
-    arco = G3/G2 con I/J al centro), plunge/teardown como el resto; pasante ✓; abierto y cerrado.
-    Corrección/leads/estrategia → lote de combos futuro."""
+    Baseline: un G-code por segmento en orden. Corrección izq/der (N042): G41/G42 + coordenadas
+    NOMINALES + lead-in 1 mm sobre el 1er segmento, lead-out sobre el último (el control empalma
+    las esquinas). Acercamiento: arco tangente anclado al 1er vértice. Abierta y cerrada = mismo
+    mecanismo; el punto inicial (esquina o medio de segmento) y el sentido salen del orden de los
+    segmentos. Lo NO fixtureado → fail-loud."""
     if spec.plane_name != "Top":
         _fail(spec, f"polilínea en cara {spec.plane_name!r} no soportada (solo Top). [B]")
     try:
@@ -418,11 +421,24 @@ def _validate_arc_polyline_milling(spec: ArcPolylineMillingSpec) -> None:
                     f"E00N. [B]")
     if len(spec.segments) < 2:
         _fail(spec, "polilínea con menos de 2 segmentos. [B]")
-    if spec.side_of_feature != "Center":
-        _fail(spec, f"polilínea con corrección {spec.side_of_feature!r}: sin fixture de "
-                    "referencia aún (lote de combos). [B]")
-    if spec.approach.is_enabled or spec.retract.is_enabled:
-        _fail(spec, "polilínea + acercamiento/alejamiento: sin fixture de referencia. [B]")
+    if spec.side_of_feature not in ("Center", "Left", "Right"):
+        _fail(spec, f"polilínea con side_of_feature={spec.side_of_feature!r} desconocido. [B]")
+    # Corrección/acercamiento sobre el PRIMER o ÚLTIMO segmento cuando es ARCO: sin fixture (en
+    # N042 los extremos son siempre rectas; el lead ancla en la tangente del arco, sin derivar).
+    if spec.side_of_feature != "Center" or spec.approach.is_enabled:
+        if spec.segments[0].is_arc or spec.segments[-1].is_arc:
+            _fail(spec, "corrección/acercamiento con primer o último segmento en ARCO: sin "
+                        "fixture de referencia. [B]")
+    # Acercamiento: N042 solo validó Arco / En cota / Automatic / sin velocidad. Alejamiento y
+    # las demás formas → guarda.
+    if spec.retract.is_enabled:
+        _fail(spec, "polilínea + alejamiento: sin fixture de referencia (N042 valida "
+                    "solo acercamiento). [B]")
+    if spec.approach.is_enabled:
+        if spec.approach.approach_type != "Arc" or spec.approach.mode != "Quote" \
+                or spec.approach.speed > 0 or spec.approach.arc_side != "Automatic":
+            _fail(spec, "polilínea + acercamiento no Arco/En cota/Automatic/sin velocidad: "
+                        "sin fixture de referencia. [B]")
     if spec.milling_strategy is not None:
         _fail(spec, "polilínea + estrategia multipasada: sin fixture de referencia. [B]")
 
