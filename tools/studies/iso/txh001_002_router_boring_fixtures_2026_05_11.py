@@ -56,21 +56,21 @@ class Fixture:
 def _line_e004(fixture: Fixture) -> object:
     offset = (fixture.index - 1) * 8.0
     return build_line_spec(
-        line_x1=80.0 + offset,
-        line_y1=70.0,
-        line_x2=220.0 + offset,
-        line_y2=70.0,
-        line_feature_name=f"{fixture.transition_id}_{fixture.index:02d}_LINE_E004",
-        line_tool_id="1903",
-        line_tool_name="E004",
-        line_tool_width=4.0,
-        line_security_plane=20.0,
-        line_side_of_feature="Center",
-        line_is_through=False,
-        line_target_depth=10.0,
-        line_extra_depth=0.0,
-        line_approach_enabled=False,
-        line_retract_enabled=False,
+        start_x=80.0 + offset,
+        start_y=70.0,
+        end_x=220.0 + offset,
+        end_y=70.0,
+        feature_name=f"{fixture.transition_id}_{fixture.index:02d}_LINE_E004",
+        tool_id="1903",
+        tool_name="E004",
+        tool_width=4.0,
+        security_plane=20.0,
+        side_of_feature="Center",
+        is_through=False,
+        target_depth=10.0,
+        extra_depth=0.0,
+        approach_enabled=False,
+        retract_enabled=False,
     )
 
 

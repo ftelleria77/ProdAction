@@ -39,32 +39,32 @@ from pgmx.synthesis.common.strategy import (  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N030_router_pendientes"
 
-LINE_X = dict(line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0)
-DIAG = dict(line_x1=20.0, line_y1=20.0, line_x2=280.0, line_y2=180.0)
+LINE_X = dict(start_x=20.0, start_y=100.0, end_x=280.0, end_y=100.0)
+DIAG = dict(start_x=20.0, start_y=20.0, end_x=280.0, end_y=180.0)
 
 CASES = [
-    ("ld_app_line_baja", LINE_X, dict(line_target_depth=5.0, line_approach_enabled=True,
-                                      line_approach_type="Line", line_approach_mode="Down")),
-    ("ld_app_arc_baja",  LINE_X, dict(line_target_depth=5.0, line_approach_enabled=True,
-                                      line_approach_type="Arc", line_approach_mode="Down")),
-    ("ld_ret_line_sube", LINE_X, dict(line_target_depth=5.0, line_retract_enabled=True,
-                                      line_retract_type="Line", line_retract_mode="Up")),
-    ("ld_ret_arc_sube",  LINE_X, dict(line_target_depth=5.0, line_retract_enabled=True,
-                                      line_retract_type="Arc", line_retract_mode="Up")),
-    ("ld_ret_arc_sp",    LINE_X, dict(line_target_depth=5.0, line_retract_enabled=True,
-                                      line_retract_type="Arc", line_retract_speed=10.0)),
-    ("mp_uni_cd4_f2",    LINE_X, dict(line_target_depth=12.0,
-                                      line_milling_strategy=build_unidirectional_milling_strategy_spec(
+    ("ld_app_line_baja", LINE_X, dict(target_depth=5.0, approach_enabled=True,
+                                      approach_type="Line", approach_mode="Down")),
+    ("ld_app_arc_baja",  LINE_X, dict(target_depth=5.0, approach_enabled=True,
+                                      approach_type="Arc", approach_mode="Down")),
+    ("ld_ret_line_sube", LINE_X, dict(target_depth=5.0, retract_enabled=True,
+                                      retract_type="Line", retract_mode="Up")),
+    ("ld_ret_arc_sube",  LINE_X, dict(target_depth=5.0, retract_enabled=True,
+                                      retract_type="Arc", retract_mode="Up")),
+    ("ld_ret_arc_sp",    LINE_X, dict(target_depth=5.0, retract_enabled=True,
+                                      retract_type="Arc", retract_speed=10.0)),
+    ("mp_uni_cd4_f2",    LINE_X, dict(target_depth=12.0,
+                                      milling_strategy=build_unidirectional_milling_strategy_spec(
                                           connection_mode="SafetyHeight", allow_multiple_passes=True,
                                           axial_cutting_depth=4.0, axial_finish_cutting_depth=2.0))),
-    ("dg_side_l",        DIAG,   dict(line_target_depth=5.0, line_side_of_feature="Left")),
-    ("dg_long",          DIAG,   dict(line_target_depth=5.0)),   # + IsPrecise: NO autorable → ver nota
-    ("dg_mp_bi_cd4",     DIAG,   dict(line_target_depth=12.0,
-                                      line_milling_strategy=build_bidirectional_milling_strategy_spec(
+    ("dg_side_l",        DIAG,   dict(target_depth=5.0, side_of_feature="Left")),
+    ("dg_long",          DIAG,   dict(target_depth=5.0)),   # + IsPrecise: NO autorable → ver nota
+    ("dg_mp_bi_cd4",     DIAG,   dict(target_depth=12.0,
+                                      milling_strategy=build_bidirectional_milling_strategy_spec(
                                           allow_multiple_passes=True, axial_cutting_depth=4.0))),
-    ("dg_app_ret_arc",   DIAG,   dict(line_target_depth=5.0,
-                                      line_approach_enabled=True, line_approach_type="Arc",
-                                      line_retract_enabled=True, line_retract_type="Arc")),
+    ("dg_app_ret_arc",   DIAG,   dict(target_depth=5.0,
+                                      approach_enabled=True, approach_type="Arc",
+                                      retract_enabled=True, retract_type="Arc")),
 ]
 
 
@@ -83,10 +83,10 @@ def main(argv: list[str] | None = None) -> int:
             output_path=path, piece_name=name,
             length=300.0, width=200.0, depth=18.0,
             origin_x=5.0, origin_y=5.0, origin_z=25.0,
-            line_millings=[build_line_spec(
-                line_feature_name="Fresado",
-                line_tool_id="1903", line_tool_name="E004", line_tool_width=4.0,
-                line_security_plane=20.0, line_is_through=False,
+            lines=[build_line_spec(
+                feature_name="Fresado",
+                tool_id="1903", tool_name="E004", tool_width=4.0,
+                security_plane=20.0, is_through=False,
                 **geom, **extra,
             )],
         )

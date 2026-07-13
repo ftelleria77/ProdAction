@@ -31,19 +31,19 @@ DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N028_router_multitool"
 
 def _e004(y: float):
     return build_line_spec(
-        line_x1=20.0, line_y1=y, line_x2=280.0, line_y2=y,
-        line_feature_name="Fresado",
-        line_tool_id="1903", line_tool_name="E004", line_tool_width=4.0,
-        line_security_plane=20.0, line_is_through=False, line_target_depth=5.0,
+        start_x=20.0, start_y=y, end_x=280.0, end_y=y,
+        feature_name="Fresado",
+        tool_id="1903", tool_name="E004", tool_width=4.0,
+        security_plane=20.0, is_through=False, target_depth=5.0,
     )
 
 
 def _e001(y: float):
     return build_line_spec(
-        line_x1=20.0, line_y1=y, line_x2=280.0, line_y2=y,
-        line_feature_name="Fresado",
-        line_tool_id="1900", line_tool_name="E001", line_tool_width=18.36,
-        line_security_plane=20.0, line_is_through=False, line_target_depth=3.0,
+        start_x=20.0, start_y=y, end_x=280.0, end_y=y,
+        feature_name="Fresado",
+        tool_id="1900", tool_name="E001", tool_width=18.36,
+        security_plane=20.0, is_through=False, target_depth=3.0,
     )
 
 
@@ -69,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
             output_path=path, piece_name=name,
             length=300.0, width=200.0, depth=18.0,
             origin_x=5.0, origin_y=5.0, origin_z=25.0,
-            line_millings=millings,
+            lines=millings,
         )
         synthesize_request(req)
         print(f"  {path.name}  ({' -> '.join(m.tool_name for m in millings)})")

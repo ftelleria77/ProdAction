@@ -26,7 +26,7 @@ def _authored(tmp: Path, name: str, **kw) -> Path:
     path = tmp / f"{name}.pgmx"
     synthesize_request(build_synthesis_request(
         output_path=path, piece_name=name, length=300.0, width=200.0, depth=18.0,
-        origin_x=5.0, origin_y=5.0, origin_z=25.0, arc_millings=[arc]))
+        origin_x=5.0, origin_y=5.0, origin_z=25.0, arcs=[arc]))
     return path
 
 
@@ -35,7 +35,7 @@ class ArcAuthoringRoundtripTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             result = adapt_pgmx_path(_authored(Path(tmp), "a180"))
             self.assertFalse(result.unsupported_entries)
-            (spec,) = result.arc_millings
+            (spec,) = result.arcs
             for got, expected in ((spec.start_x, 210.0), (spec.start_y, 100.0),
                                   (spec.end_x, 90.0), (spec.end_y, 100.0),
                                   (spec.center_x, 150.0), (spec.center_y, 100.0)):
@@ -48,7 +48,7 @@ class ArcAuthoringRoundtripTest(unittest.TestCase):
             result = adapt_pgmx_path(_authored(
                 Path(tmp), "a90cw", start_x=150.0, start_y=160.0,
                 end_x=210.0, end_y=100.0, winding="Clockwise"))
-            (spec,) = result.arc_millings
+            (spec,) = result.arcs
             self.assertEqual(spec.winding, "Clockwise")
             self.assertEqual((spec.start_x, spec.start_y), (150.0, 160.0))
 

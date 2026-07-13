@@ -58,12 +58,12 @@ def main(argv: list[str] | None = None) -> int:
             output_path=path, piece_name=name,
             length=300.0, width=200.0, depth=18.0,
             origin_x=5.0, origin_y=5.0, origin_z=25.0,
-            line_millings=[build_line_spec(
-                line_x1=x1, line_y1=y1, line_x2=x2, line_y2=y2,
-                line_feature_name="Fresado",
-                line_tool_id=tid, line_tool_name=tname, line_tool_width=w,
-                line_security_plane=20.0, line_side_of_feature=side,
-                line_is_through=False, line_target_depth=5.0,
+            lines=[build_line_spec(
+                start_x=x1, start_y=y1, end_x=x2, end_y=y2,
+                feature_name="Fresado",
+                tool_id=tid, tool_name=tname, tool_width=w,
+                security_plane=20.0, side_of_feature=side,
+                is_through=False, target_depth=5.0,
             )],
         )
         synthesize_request(req)

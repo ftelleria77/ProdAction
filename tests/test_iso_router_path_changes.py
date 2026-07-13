@@ -28,10 +28,10 @@ _REF_DIR = Path(r"P:\USBMIX\ProdAction\N022_router_expand")
 def _line(**kw) -> LineSpec:
     """Línea E001 estándar de N022: (20,100)->(280,100), prof. 3."""
     base = build_line_spec(
-        line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0,
-        line_feature_name="Fresado",
-        line_tool_id="1900", line_tool_name="E001", line_tool_width=18.36,
-        line_security_plane=20.0, line_is_through=False, line_target_depth=3.0,
+        start_x=20.0, start_y=100.0, end_x=280.0, end_y=100.0,
+        feature_name="Fresado",
+        tool_id="1900", tool_name="E001", tool_width=18.36,
+        security_plane=20.0, is_through=False, target_depth=3.0,
     )
     return replace(base, **kw) if kw else base
 

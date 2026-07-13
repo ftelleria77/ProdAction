@@ -139,7 +139,7 @@ def generate(output_dir: Path, *, force: bool = False) -> list[dict[str, str]]:
             origin_y=fixture.origin_y,
             origin_z=fixture.origin_z,
             execution_fields=fixture.execution_fields,
-            drillings=(
+            drills=(
                 _top_drill(fixture.top_diameter),
                 _side_drill(fixture.side_plane, fixture.side_center_x, fixture.side_center_y),
             ),

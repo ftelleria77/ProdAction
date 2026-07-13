@@ -45,7 +45,7 @@ class ConvertOverrideTest(unittest.TestCase):
         req = build_synthesis_request(
             output_path=path, piece_name="fs",
             length=300, width=200, depth=18, origin_x=5, origin_y=5, origin_z=25,
-            drillings=[build_drill_spec(
+            drills=[build_drill_spec(
                 center_x=150.0, center_y=100.0, diameter=8.0, plane_name="Top",
                 target_depth=10.0, tool_resolution="Auto", **drill_kw)],
         )

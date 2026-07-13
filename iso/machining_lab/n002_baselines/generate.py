@@ -79,7 +79,7 @@ def _side(plane: str, along: float, height: float = 9.0,
     )
 
 
-def _write(output_dir: Path, name: str, drillings: list[DrillSpec], *,
+def _write(output_dir: Path, name: str, drills: list[DrillSpec], *,
            length: float = BASE_L, width: float = BASE_W, depth: float = BASE_D,
            origin_x: float = BASE_OX, origin_y: float = BASE_OY,
            origin_z: float = BASE_OZ) -> None:
@@ -93,7 +93,7 @@ def _write(output_dir: Path, name: str, drillings: list[DrillSpec], *,
         origin_x=origin_x,
         origin_y=origin_y,
         origin_z=origin_z,
-        drillings=drillings,
+        drills=drills,
     )
     synthesize_request(req)
     print(f"  {path.name}")

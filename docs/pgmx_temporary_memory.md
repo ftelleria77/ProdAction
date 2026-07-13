@@ -389,7 +389,7 @@ Reconstruir paso a paso:
   - se agrego la spec publica `ContourSpec`
   - se agrego el builder `build_contour_spec(...)`
   - `build_synthesis_request(...)`, `synthesize_request(...)` y
-    `synthesize_pgmx(...)` ya aceptan `squaring_millings`
+    `synthesize_pgmx(...)` ya aceptan `contours`
   - la geometria nominal del escuadrado se sintetiza desde:
     - `length`
     - `width`
@@ -921,7 +921,7 @@ Reconstruir paso a paso:
   - se agrego la spec publica `DrillSpec`
   - se agrego la helper publica `build_drill_spec(...)`
   - `build_synthesis_request(...)`, `synthesize_request(...)` y
-    `synthesize_pgmx(...)` ya aceptan `drillings`
+    `synthesize_pgmx(...)` ya aceptan `drills`
   - el sintetizador ya escribe:
     - `GeomCartesianPoint`
     - `RoundHole`
@@ -1577,7 +1577,7 @@ Reconstruir paso a paso:
   - se agrego `ChannelSpec`
   - se agrego `build_channel_spec(...)`
   - `PgmxSynthesisRequest` y `PgmxSynthesisResult` ahora aceptan
-    `slot_millings`
+    `channels`
   - `synthesize_request(...)` hidrata, valida y aplica ranuras `SlotSide`
   - `machining_order` incorpora la familia `slot`
   - la feature generada es `a:SlotSide`, con:
@@ -1597,7 +1597,7 @@ Reconstruir paso a paso:
   - `SlotSide` vertical queda `unsupported`
   - `CanalCentral` adapta como:
     - `adapted = 1`
-    - `slot_millings = 1`
+    - `channels = 1`
   - `CanalErroneo` queda:
     - `unsupported = 1`
     - razon: `SlotSide` con `Sierra Vertical X` requiere una recta horizontal
@@ -1750,18 +1750,18 @@ Reconstruir paso a paso:
     - `adapted = 9`
     - `unsupported = 1`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `drillings = 8`
-    - `slot_millings = 0`
+    - `contours = 1`
+    - `drills = 8`
+    - `channels = 0`
     - no soportado: `LAV_2`, porque `SlotSide` con `Sierra Vertical X`
       requiere una recta horizontal sobre `Top`
   - `Fondo_Girado`:
     - `adapted = 10`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `drillings = 8`
-    - `slot_millings = 1`
+    - `contours = 1`
+    - `drills = 8`
+    - `channels = 1`
 - Hallazgo para sintesis:
   - para esta pieza, el giro correcto no debe tratarse como rotacion de
     `WorkpieceSetup/Placement`
@@ -1798,7 +1798,7 @@ Reconstruir paso a paso:
   - deteccion: `Fondo_Original.pgmx -> 1`, `Fondo_Girado.pgmx -> 0`
   - reparacion sobre copia temporal de `Fondo_Original.pgmx`
   - resultado validado: `349.1 x 580 x 18`, `unsupported = 0`,
-    `slot_millings = 1`, ranura horizontal `y = 570`
+    `channels = 1`, ranura horizontal `y = 570`
 
 ### Ronda 31 - Patrones rectangulares de huecos con `ReplicateFeature`
 
@@ -1856,7 +1856,7 @@ Reconstruir paso a paso:
   - version publica del sintetizador: `v1.4`
   - `DrillPatternSpec`
   - `build_drill_pattern_spec(...)`
-  - argumento `drilling_patterns` en `build_synthesis_request(...)`
+  - argumento `drill_patterns` en `build_synthesis_request(...)`
   - soporte en `ordered_machinings` y `machining_order`
   - serializacion de `ReplicateFeature` + `BaseFeature RoundHole` +
     `RectangularPattern`
@@ -1939,7 +1939,7 @@ Reconstruir paso a paso:
     - `adapted = 4`
     - `unsupported = 0`
     - `ignored = 1`
-    - `drilling_patterns = 4`
+    - `drill_patterns = 4`
   - `sha256 =
     b4a71ed3bb52a050a87b313d6e3abb92ca54902486c438d04ded921fecc0a177`
 - Pendiente:
@@ -1983,7 +1983,7 @@ Reconstruir paso a paso:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `slot_millings = 1`
+    - `channels = 1`
   - `sha256 =
     6c505688db5c83b9488710b32508dfb64b58b213ac4ff32cf78f093e62b171be`
 - Postprocesado recibido:
@@ -2038,7 +2038,7 @@ Reconstruir paso a paso:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `slot_millings = 1`
+    - `channels = 1`
     - el spec adaptado conserva `start = (350, 125)` y `end = (50, 125)`
   - `sha256 =
     cebb68e0da68d862369bf149e925f55904381da7f91083fded9f02ab6392850d`
@@ -2102,7 +2102,7 @@ Reconstruir paso a paso:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `slot_millings = 1`
+    - `channels = 1`
     - el spec adaptado conserva recorrido y correccion pedidos.
 - Hashes:
   - `Pieza_008.pgmx`:
@@ -2298,7 +2298,7 @@ Reconstruir paso a paso:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `line_millings = 1`
+    - `lines = 1`
     - el spec adaptado conserva `start = (200, 50)`, `end = (200, 200)`,
       `SideOfFeature = Center`, herramienta `E004` y `target_depth = 15`.
   - `sha256 =
@@ -2389,7 +2389,7 @@ Reconstruir paso a paso:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `polyline_millings = 1`
+    - `polylines = 1`
 - Toolpath compensado:
   - `Pieza_016` / `Left`:
     - `Approach = 8 0 35 | 1 148 50 38 0 0 -1`
@@ -2484,7 +2484,7 @@ Reconstruir paso a paso:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
+    - `contours = 1`
 - Toolpath resumido:
   - ambas variantes generan `TrajectoryPath` cerrado compuesto por `9`
     miembros: `5` lineas y `4` arcos en las esquinas.
@@ -2565,7 +2565,7 @@ Reconstruir paso a paso:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
+    - `contours = 1`
     - el adaptador preserva `approach_enabled = False` y
       `retract_enabled = False`.
   - hashes actuales:
@@ -2673,7 +2673,7 @@ Reconstruir paso a paso:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
+    - `contours = 1`
     - el adaptador preserva `Approach = Arc + Quote / 2.0` y
       `Retract = Arc + Quote / 2.0`.
 - Toolpath resumido:

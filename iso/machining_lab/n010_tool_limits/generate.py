@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
             output_path=path, piece_name=name,
             length=300.0, width=200.0, depth=18.0,
             origin_x=5.0, origin_y=5.0, origin_z=25.0,
-            drillings=[build_drill_spec(
+            drills=[build_drill_spec(
                 center_x=150.0, center_y=100.0, diameter=dia,
                 plane_name="Top", drill_family=family, tool_resolution="Auto",
                 feedrate=BIG_FEED, **kw,

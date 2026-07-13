@@ -48,8 +48,8 @@ class Fixture:
     origin_y: float = 5.0
     origin_z: float = 25.0
     execution_fields: str = "HG"
-    drillings: Sequence[object] = ()
-    line_millings: Sequence[object] = ()
+    drills: Sequence[object] = ()
+    lines: Sequence[object] = ()
 
 
 def _top_drill(x: float, y: float) -> object:
@@ -86,19 +86,19 @@ def _line_e004(y: float, *, ph5: bool = False) -> object:
         )
 
     return build_line_spec(
-        line_x1=20.0,
-        line_y1=y,
-        line_x2=80.0,
-        line_y2=y,
-        line_feature_name="LINE_E004_CENTER",
-        line_tool_id="1903",
-        line_tool_name="E004",
-        line_tool_width=4.0,
-        line_security_plane=20.0,
-        line_side_of_feature="Center",
-        line_is_through=True,
-        line_extra_depth=1.0,
-        line_milling_strategy=strategy,
+        start_x=20.0,
+        start_y=y,
+        end_x=80.0,
+        end_y=y,
+        feature_name="LINE_E004_CENTER",
+        tool_id="1903",
+        tool_name="E004",
+        tool_width=4.0,
+        security_plane=20.0,
+        side_of_feature="Center",
+        is_through=True,
+        extra_depth=1.0,
+        milling_strategy=strategy,
     )
 
 
@@ -107,76 +107,76 @@ def build_fixtures() -> list[Fixture]:
         Fixture(
             name="ISO_MIN_001_TopDrill_Base",
             purpose="Base: 100x100x18, origin 5/5/25, HG, one top D5 drill at 50/50.",
-            drillings=(_top_drill(50.0, 50.0),),
+            drills=(_top_drill(50.0, 50.0),),
         ),
         Fixture(
             name="ISO_MIN_002_TopDrill_Y60",
             purpose="Only the top drilling Y moves from 50 to 60.",
-            drillings=(_top_drill(50.0, 60.0),),
+            drills=(_top_drill(50.0, 60.0),),
         ),
         Fixture(
             name="ISO_MIN_003_TopDrill_X60",
             purpose="Only the top drilling X moves from 50 to 60.",
-            drillings=(_top_drill(60.0, 50.0),),
+            drills=(_top_drill(60.0, 50.0),),
         ),
         Fixture(
             name="ISO_MIN_004_TopDrill_DY200",
             purpose="Only panel width changes from 100 to 200; drill stays centered.",
             width=200.0,
-            drillings=(_top_drill(50.0, 100.0),),
+            drills=(_top_drill(50.0, 100.0),),
         ),
         Fixture(
             name="ISO_MIN_005_TopDrill_DX200",
             purpose="Only panel length changes from 100 to 200; drill stays centered.",
             length=200.0,
-            drillings=(_top_drill(100.0, 50.0),),
+            drills=(_top_drill(100.0, 50.0),),
         ),
         Fixture(
             name="ISO_MIN_006_TopDrill_OriginY10",
             purpose="Only workpiece origin Y changes from 5 to 10.",
             origin_y=10.0,
-            drillings=(_top_drill(50.0, 50.0),),
+            drills=(_top_drill(50.0, 50.0),),
         ),
         Fixture(
             name="ISO_MIN_010_LeftDrill_Base",
             purpose="One lateral D8 drill on Left.",
-            drillings=(_side_drill("Left"),),
+            drills=(_side_drill("Left"),),
         ),
         Fixture(
             name="ISO_MIN_011_RightDrill_Base",
             purpose="One lateral D8 drill on Right.",
-            drillings=(_side_drill("Right"),),
+            drills=(_side_drill("Right"),),
         ),
         Fixture(
             name="ISO_MIN_012_FrontDrill_Base",
             purpose="One lateral D8 drill on Front.",
-            drillings=(_side_drill("Front"),),
+            drills=(_side_drill("Front"),),
         ),
         Fixture(
             name="ISO_MIN_013_BackDrill_Base",
             purpose="One lateral D8 drill on Back.",
-            drillings=(_side_drill("Back"),),
+            drills=(_side_drill("Back"),),
         ),
         Fixture(
             name="ISO_MIN_020_LineE004_Base",
             purpose="One through E004 center line at Y50.",
-            line_millings=(_line_e004(50.0),),
+            lines=(_line_e004(50.0),),
         ),
         Fixture(
             name="ISO_MIN_021_LineE004_Y60",
             purpose="Only E004 line Y moves from 50 to 60.",
-            line_millings=(_line_e004(60.0),),
+            lines=(_line_e004(60.0),),
         ),
         Fixture(
             name="ISO_MIN_022_LineE004_PH5",
             purpose="Same as base E004 line, but with unidirectional PH=5 strategy.",
-            line_millings=(_line_e004(50.0, ph5=True),),
+            lines=(_line_e004(50.0, ph5=True),),
         ),
         Fixture(
             name="ISO_MIN_023_LineE004_OriginY10",
             purpose="Same as base E004 line, but workpiece origin Y changes from 5 to 10.",
             origin_y=10.0,
-            line_millings=(_line_e004(50.0),),
+            lines=(_line_e004(50.0),),
         ),
     ]
 
@@ -197,8 +197,8 @@ def generate(output_dir: Path) -> list[dict[str, str]]:
             origin_y=fixture.origin_y,
             origin_z=fixture.origin_z,
             execution_fields=fixture.execution_fields,
-            drillings=fixture.drillings,
-            line_millings=fixture.line_millings,
+            drills=fixture.drills,
+            lines=fixture.lines,
         )
         result = synthesize_request(request)
         rows.append(

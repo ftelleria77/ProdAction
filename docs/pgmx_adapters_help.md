@@ -24,13 +24,13 @@ Ademas, `PgmxAdaptationResult` expone:
 - `ignored_entries`
 - `working_step_entries`
 - `orphan_feature_entries`
-- `line_millings`
-- `slot_millings`
-- `polyline_millings`
-- `circle_millings`
-- `squaring_millings`
-- `drillings`
-- `drilling_patterns`
+- `lines`
+- `channels`
+- `polylines`
+- `circles`
+- `contours`
+- `drills`
+- `drill_patterns`
 - `build_synthesis_request(output_path, baseline_path=None, source_pgmx_path=None, strict=False)`
 
 ## Que representa cada entrada
@@ -130,13 +130,13 @@ subset publico.
 `entries` conserva el orden del workplan, pero `build_synthesis_request(...)`
 arma el request en las familias publicas del sintetizador:
 
-- `line_millings`
-- `slot_millings`
-- `polyline_millings`
-- `circle_millings`
-- `squaring_millings`
-- `drillings`
-- `drilling_patterns`
+- `lines`
+- `channels`
+- `polylines`
+- `circles`
+- `contours`
+- `drills`
+- `drill_patterns`
 
 Eso significa que hoy el adaptador sirve para:
 

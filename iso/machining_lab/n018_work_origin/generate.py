@@ -59,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
             output_path=path, piece_name=name,
             length=length, width=width, depth=18.0,
             origin_x=ox, origin_y=oy, origin_z=25.0,
-            drillings=[build_drill_spec(
+            drills=[build_drill_spec(
                 center_x=length / 2, center_y=width / 2, diameter=8.0,
                 plane_name="Top", is_through=True, drill_family="Flat",
                 tool_resolution="Auto",

@@ -179,7 +179,7 @@ __all__ = [
 ]
 
 
-DEFAULT_MACHINING_ORDER = ("line", "slot", "polyline", "arc", "circle", "squaring", "pocket", "drilling", "drilling_pattern")
+DEFAULT_MACHINING_ORDER = ("line", "channel", "polyline", "arc", "circle", "contour", "pocket", "drill", "drill_pattern")
 
 
 register_pgmx_namespaces()
@@ -302,15 +302,15 @@ class PieceSpec:
     origin_x: float = 0.0
     origin_y: float = 0.0
     origin_z: float = 0.0
-    line_millings: tuple[LineSpec, ...] = ()
-    slot_millings: tuple[ChannelSpec, ...] = ()
-    polyline_millings: tuple[PolylineSpec, ...] = ()
-    arc_millings: tuple[ArcSpec, ...] = ()
-    circle_millings: tuple[CircleSpec, ...] = ()
-    squaring_millings: tuple[ContourSpec, ...] = ()
-    pocket_millings: tuple[PocketSpec, ...] = ()
-    drillings: tuple[DrillSpec, ...] = ()
-    drilling_patterns: tuple[DrillPatternSpec, ...] = ()
+    lines: tuple[LineSpec, ...] = ()
+    channels: tuple[ChannelSpec, ...] = ()
+    polylines: tuple[PolylineSpec, ...] = ()
+    arcs: tuple[ArcSpec, ...] = ()
+    circles: tuple[CircleSpec, ...] = ()
+    contours: tuple[ContourSpec, ...] = ()
+    pockets: tuple[PocketSpec, ...] = ()
+    drills: tuple[DrillSpec, ...] = ()
+    drill_patterns: tuple[DrillPatternSpec, ...] = ()
     ordered_machinings: tuple[MachiningSpec, ...] = ()
     machine_operations: tuple[MachineOperationSpec, ...] = ()
     parametric_variables: tuple[ParametricVariableSpec, ...] = ()
@@ -486,15 +486,15 @@ def build_piece_spec(
     origin_x: float = 0.0,
     origin_y: float = 0.0,
     origin_z: float = 0.0,
-    line_millings: Optional[Sequence[LineSpec]] = None,
-    slot_millings: Optional[Sequence[ChannelSpec]] = None,
-    polyline_millings: Optional[Sequence[PolylineSpec]] = None,
-    arc_millings: Optional[Sequence[ArcSpec]] = None,
-    circle_millings: Optional[Sequence[CircleSpec]] = None,
-    squaring_millings: Optional[Sequence[ContourSpec]] = None,
-    pocket_millings: Optional[Sequence[PocketSpec]] = None,
-    drillings: Optional[Sequence[DrillSpec]] = None,
-    drilling_patterns: Optional[Sequence[DrillPatternSpec]] = None,
+    lines: Optional[Sequence[LineSpec]] = None,
+    channels: Optional[Sequence[ChannelSpec]] = None,
+    polylines: Optional[Sequence[PolylineSpec]] = None,
+    arcs: Optional[Sequence[ArcSpec]] = None,
+    circles: Optional[Sequence[CircleSpec]] = None,
+    contours: Optional[Sequence[ContourSpec]] = None,
+    pockets: Optional[Sequence[PocketSpec]] = None,
+    drills: Optional[Sequence[DrillSpec]] = None,
+    drill_patterns: Optional[Sequence[DrillPatternSpec]] = None,
     ordered_machinings: Optional[Sequence[MachiningSpec]] = None,
     machine_operations: Optional[Sequence[MachineOperationSpec]] = None,
     parametric_variables: Optional[Sequence[ParametricVariableSpec]] = None,
@@ -512,15 +512,15 @@ def build_piece_spec(
         origin_x=float(origin_x),
         origin_y=float(origin_y),
         origin_z=float(origin_z),
-        line_millings=tuple(line_millings or ()),
-        slot_millings=tuple(slot_millings or ()),
-        polyline_millings=tuple(polyline_millings or ()),
-        arc_millings=tuple(arc_millings or ()),
-        circle_millings=tuple(circle_millings or ()),
-        squaring_millings=tuple(squaring_millings or ()),
-        pocket_millings=tuple(pocket_millings or ()),
-        drillings=tuple(drillings or ()),
-        drilling_patterns=tuple(drilling_patterns or ()),
+        lines=tuple(lines or ()),
+        channels=tuple(channels or ()),
+        polylines=tuple(polylines or ()),
+        arcs=tuple(arcs or ()),
+        circles=tuple(circles or ()),
+        contours=tuple(contours or ()),
+        pockets=tuple(pockets or ()),
+        drills=tuple(drills or ()),
+        drill_patterns=tuple(drill_patterns or ()),
         ordered_machinings=tuple(ordered_machinings or ()),
         machine_operations=_normalize_machine_operations(machine_operations or ()),
         parametric_variables=tuple(parametric_variables or ()),
@@ -1151,15 +1151,15 @@ class PgmxSynthesisRequest:
     output_path: Path
     piece: PgmxState
     source_pgmx_path: Optional[Path] = None
-    line_millings: tuple[LineSpec, ...] = ()
-    slot_millings: tuple[ChannelSpec, ...] = ()
-    polyline_millings: tuple[PolylineSpec, ...] = ()
-    arc_millings: tuple[ArcSpec, ...] = ()
-    circle_millings: tuple[CircleSpec, ...] = ()
-    squaring_millings: tuple[ContourSpec, ...] = ()
-    pocket_millings: tuple[PocketSpec, ...] = ()
-    drillings: tuple[DrillSpec, ...] = ()
-    drilling_patterns: tuple[DrillPatternSpec, ...] = ()
+    lines: tuple[LineSpec, ...] = ()
+    channels: tuple[ChannelSpec, ...] = ()
+    polylines: tuple[PolylineSpec, ...] = ()
+    arcs: tuple[ArcSpec, ...] = ()
+    circles: tuple[CircleSpec, ...] = ()
+    contours: tuple[ContourSpec, ...] = ()
+    pockets: tuple[PocketSpec, ...] = ()
+    drills: tuple[DrillSpec, ...] = ()
+    drill_patterns: tuple[DrillPatternSpec, ...] = ()
     ordered_machinings: tuple[MachiningSpec, ...] = ()
     machining_order: tuple[str, ...] = DEFAULT_MACHINING_ORDER
     xn: XnSpec = field(default_factory=XnSpec)
@@ -1176,15 +1176,15 @@ class PgmxSynthesisResult:
     output_path: Path
     piece: PgmxState
     sha256: str
-    line_millings: tuple[LineSpec, ...] = ()
-    slot_millings: tuple[ChannelSpec, ...] = ()
-    polyline_millings: tuple[PolylineSpec, ...] = ()
-    arc_millings: tuple[ArcSpec, ...] = ()
-    circle_millings: tuple[CircleSpec, ...] = ()
-    squaring_millings: tuple[ContourSpec, ...] = ()
-    pocket_millings: tuple[PocketSpec, ...] = ()
-    drillings: tuple[DrillSpec, ...] = ()
-    drilling_patterns: tuple[DrillPatternSpec, ...] = ()
+    lines: tuple[LineSpec, ...] = ()
+    channels: tuple[ChannelSpec, ...] = ()
+    polylines: tuple[PolylineSpec, ...] = ()
+    arcs: tuple[ArcSpec, ...] = ()
+    circles: tuple[CircleSpec, ...] = ()
+    contours: tuple[ContourSpec, ...] = ()
+    pockets: tuple[PocketSpec, ...] = ()
+    drills: tuple[DrillSpec, ...] = ()
+    drill_patterns: tuple[DrillPatternSpec, ...] = ()
     ordered_machinings: tuple[MachiningSpec, ...] = ()
     machining_order: tuple[str, ...] = DEFAULT_MACHINING_ORDER
     xn: Optional[XnSpec] = None
@@ -1289,84 +1289,114 @@ def _split_hydrated_machinings(
     list[_HydratedDrillSpec],
     list[_HydratedDrillPatternSpec],
 ]:
-    line_millings: list[_HydratedLineSpec] = []
-    slot_millings: list[_HydratedChannelSpec] = []
-    polyline_millings: list[_HydratedPolylineSpec] = []
-    circle_millings: list[_HydratedCircleSpec] = []
-    squaring_millings: list[_HydratedContourSpec] = []
-    pocket_millings: list[_HydratedPocketSpec] = []
-    drillings: list[_HydratedDrillSpec] = []
-    drilling_patterns: list[_HydratedDrillPatternSpec] = []
+    lines: list[_HydratedLineSpec] = []
+    channels: list[_HydratedChannelSpec] = []
+    polylines: list[_HydratedPolylineSpec] = []
+    circles: list[_HydratedCircleSpec] = []
+    contours: list[_HydratedContourSpec] = []
+    pockets: list[_HydratedPocketSpec] = []
+    drills: list[_HydratedDrillSpec] = []
+    drill_patterns: list[_HydratedDrillPatternSpec] = []
     for spec in specs:
         if isinstance(spec, _HydratedLineSpec):
-            line_millings.append(spec)
+            lines.append(spec)
         elif isinstance(spec, _HydratedChannelSpec):
-            slot_millings.append(spec)
+            channels.append(spec)
         elif isinstance(spec, _HydratedPolylineSpec):
-            polyline_millings.append(spec)
+            polylines.append(spec)
         elif isinstance(spec, _HydratedCircleSpec):
-            circle_millings.append(spec)
+            circles.append(spec)
         elif isinstance(spec, _HydratedContourSpec):
-            squaring_millings.append(spec)
+            contours.append(spec)
         elif isinstance(spec, _HydratedPocketSpec):
-            pocket_millings.append(spec)
+            pockets.append(spec)
         elif isinstance(spec, _HydratedDrillSpec):
-            drillings.append(spec)
+            drills.append(spec)
         elif isinstance(spec, _HydratedDrillPatternSpec):
-            drilling_patterns.append(spec)
+            drill_patterns.append(spec)
     return (
-        line_millings,
-        slot_millings,
-        polyline_millings,
-        circle_millings,
-        squaring_millings,
-        pocket_millings,
-        drillings,
-        drilling_patterns,
+        lines,
+        channels,
+        polylines,
+        circles,
+        contours,
+        pockets,
+        drills,
+        drill_patterns,
     )
 
 
 def _normalize_machining_order(value: Optional[Sequence[str]]) -> tuple[str, ...]:
     default_order = DEFAULT_MACHINING_ORDER
+    # Capa de TOLERANCIA de cara al usuario: acá los alias no son deuda del refactor, son la API
+    # (el orden se pide por nombre, y aceptamos plural, castellano y los nombres previos).
+    # Los valores son las claves CANÓNICAS de DEFAULT_MACHINING_ORDER: un alias que apunte a una
+    # clave inexistente se DESCARTA EN SILENCIO más abajo (`normalized not in default_order`).
     aliases = {
         "lines": "line",
         "line_milling": "line",
         "line_millings": "line",
-        "slots": "slot",
-        "slot_milling": "slot",
-        "slot_millings": "slot",
-        "canal": "slot",
-        "canales": "slot",
-        "ranura": "slot",
-        "ranuras": "slot",
+        "fresado": "line",
+        # canal — antes la clave canónica era "slot"
+        "slot": "channel",
+        "slots": "channel",
+        "slot_milling": "channel",
+        "slot_millings": "channel",
+        "channels": "channel",
+        "canal": "channel",
+        "canales": "channel",
+        "ranura": "channel",
+        "ranuras": "channel",
+        "polylines": "polyline",
         "polyline_milling": "polyline",
         "polyline_millings": "polyline",
         "division": "polyline",
         "divisions": "polyline",
         "cutting": "polyline",
+        "polilinea": "polyline",
+        "polilineas": "polyline",
+        "arcs": "arc",
+        "arc_milling": "arc",
+        "arc_millings": "arc",
+        "arco": "arc",
+        "arcos": "arc",
+        "circles": "circle",
         "circle_milling": "circle",
         "circle_millings": "circle",
-        "squaring_milling": "squaring",
-        "squaring_millings": "squaring",
-        "square": "squaring",
-        "pocket": "pocket",
+        "circulo": "circle",
+        "circulos": "circle",
+        # galceado/perfilado/escuadrado — antes la clave canónica era "squaring"
+        "squaring": "contour",
+        "squaring_milling": "contour",
+        "squaring_millings": "contour",
+        "square": "contour",
+        "contours": "contour",
+        "galceado": "contour",
+        "perfilado": "contour",
+        "escuadrado": "contour",
         "pockets": "pocket",
         "pocket_milling": "pocket",
         "pocket_millings": "pocket",
         "vaciado": "pocket",
         "vaciados": "pocket",
-        "drilling": "drilling",
-        "drilling_millings": "drilling",
-        "drilling_pattern": "drilling_pattern",
-        "drilling_patterns": "drilling_pattern",
-        "hole_pattern": "drilling_pattern",
-        "hole_patterns": "drilling_pattern",
-        "pattern": "drilling_pattern",
-        "patterns": "drilling_pattern",
-        "patron": "drilling_pattern",
-        "patrones": "drilling_pattern",
-        "repeticion": "drilling_pattern",
-        "repeticiones": "drilling_pattern",
+        # perforado — antes la clave canónica era "drilling"
+        "drilling": "drill",
+        "drillings": "drill",
+        "drills": "drill",
+        "drilling_millings": "drill",
+        "taladro": "drill",
+        "taladros": "drill",
+        "drill_patterns": "drill_pattern",
+        "drilling_pattern": "drill_pattern",
+        "drilling_patterns": "drill_pattern",
+        "hole_pattern": "drill_pattern",
+        "hole_patterns": "drill_pattern",
+        "pattern": "drill_pattern",
+        "patterns": "drill_pattern",
+        "patron": "drill_pattern",
+        "patrones": "drill_pattern",
+        "repeticion": "drill_pattern",
+        "repeticiones": "drill_pattern",
     }
     ordered: list[str] = []
     for raw_item in value or default_order:
@@ -1395,39 +1425,39 @@ def _normalize_execution_fields(value: Optional[str]) -> str:
 
 def _validate_tool_sinking_lengths(
     state: PgmxState,
-    line_millings: Sequence[_HydratedLineSpec],
-    slot_millings: Sequence[_HydratedChannelSpec],
-    polyline_millings: Sequence[_HydratedPolylineSpec],
-    circle_millings: Sequence[_HydratedCircleSpec],
-    squaring_millings: Sequence[_HydratedContourSpec],
-    pocket_millings: Sequence[_HydratedPocketSpec],
-    drillings: Sequence[_HydratedDrillSpec],
-    drilling_patterns: Sequence[_HydratedDrillPatternSpec] = (),
+    lines: Sequence[_HydratedLineSpec],
+    channels: Sequence[_HydratedChannelSpec],
+    polylines: Sequence[_HydratedPolylineSpec],
+    circles: Sequence[_HydratedCircleSpec],
+    contours: Sequence[_HydratedContourSpec],
+    pockets: Sequence[_HydratedPocketSpec],
+    drills: Sequence[_HydratedDrillSpec],
+    drill_patterns: Sequence[_HydratedDrillPatternSpec] = (),
 ) -> None:
     """Aplica la validacion de `sinking_length` a todos los mecanizados del request."""
 
     tool_catalog = _load_tool_catalog()
-    for spec in line_millings:
+    for spec in lines:
         _validate_tool_type_for_milling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
-    for spec in slot_millings:
+    for spec in channels:
         _validate_tool_type_for_milling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
-    for spec in polyline_millings:
+    for spec in polylines:
         _validate_tool_type_for_milling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
-    for spec in circle_millings:
+    for spec in circles:
         _validate_tool_type_for_milling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
-    for spec in squaring_millings:
+    for spec in contours:
         _validate_tool_type_for_milling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
-    for spec in pocket_millings:
+    for spec in pockets:
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
-    for spec in drillings:
+    for spec in drills:
         _validate_tool_type_for_drilling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_drill_spec(state, spec, tool_catalog)
-    for spec in drilling_patterns:
+    for spec in drill_patterns:
         _validate_tool_type_for_drilling_spec(spec, tool_catalog)
         _validate_tool_sinking_length_for_drill_spec(state, spec, tool_catalog)
 
@@ -1585,61 +1615,61 @@ def _apply_piece_state(root: ET.Element, state: PgmxState) -> None:
 def _apply_lines(
     root: ET.Element,
     state: PgmxState,
-    line_millings: Sequence[_HydratedLineSpec],
+    lines: Sequence[_HydratedLineSpec],
 ) -> None:
-    for line_milling in line_millings:
+    for line_milling in lines:
         _append_line(root, state, line_milling)
 
 
 def _apply_channels(
     root: ET.Element,
     state: PgmxState,
-    slot_millings: Sequence[_HydratedChannelSpec],
+    channels: Sequence[_HydratedChannelSpec],
 ) -> None:
-    for slot_milling in slot_millings:
+    for slot_milling in channels:
         _append_channel(root, state, slot_milling)
 
 
 def _apply_arcs(
     root: ET.Element,
     state: PgmxState,
-    arc_millings,
+    arcs,
 ) -> None:
-    for arc_milling in arc_millings:
+    for arc_milling in arcs:
         _append_arc(root, state, arc_milling)
 
 
 def _apply_polylines(
     root: ET.Element,
     state: PgmxState,
-    polyline_millings: Sequence[_HydratedPolylineSpec],
+    polylines: Sequence[_HydratedPolylineSpec],
 ) -> None:
-    for polyline_milling in polyline_millings:
+    for polyline_milling in polylines:
         _append_polyline(root, state, polyline_milling)
 
 
 def _apply_circles(
     root: ET.Element,
     state: PgmxState,
-    circle_millings: Sequence[_HydratedCircleSpec],
+    circles: Sequence[_HydratedCircleSpec],
 ) -> None:
-    for circle_milling in circle_millings:
+    for circle_milling in circles:
         _append_circle(root, state, circle_milling)
 
 
 def _apply_contours(
     root: ET.Element,
     state: PgmxState,
-    squaring_millings: Sequence[_HydratedContourSpec],
+    contours: Sequence[_HydratedContourSpec],
 ) -> None:
-    for squaring_milling in squaring_millings:
+    for squaring_milling in contours:
         _append_contour(root, state, squaring_milling)
 
 
 def _apply_drills(
     root: ET.Element,
     state: PgmxState,
-    drillings: Sequence[_HydratedDrillSpec],
+    drills: Sequence[_HydratedDrillSpec],
 ) -> None:
     # Maestro guarda consistentemente los taladros multicara agrupados por
     # plano. Mantener ese orden reduce diferencias contra los ejemplos manuales
@@ -1652,7 +1682,7 @@ def _apply_drills(
         "Right": 4,
     }
     ordered_drillings = sorted(
-        enumerate(drillings),
+        enumerate(drills),
         key=lambda item: (plane_priority.get(item[1].plane_name, 99), item[0]),
     )
     for _, drilling in ordered_drillings:
@@ -1673,10 +1703,10 @@ def _drilling_plane_priority(plane_name: str) -> int:
 def _apply_drill_patterns(
     root: ET.Element,
     state: PgmxState,
-    drilling_patterns: Sequence[_HydratedDrillPatternSpec],
+    drill_patterns: Sequence[_HydratedDrillPatternSpec],
 ) -> None:
     ordered_drilling_patterns = sorted(
-        enumerate(drilling_patterns),
+        enumerate(drill_patterns),
         key=lambda item: (_drilling_plane_priority(item[1].plane_name), item[0]),
     )
     for _, drilling_pattern in ordered_drilling_patterns:
@@ -1686,9 +1716,9 @@ def _apply_drill_patterns(
 def _apply_pockets(
     root: ET.Element,
     state: PgmxState,
-    pocket_millings: Sequence[_HydratedPocketSpec],
+    pockets: Sequence[_HydratedPocketSpec],
 ) -> None:
-    for pocket_milling in pocket_millings:
+    for pocket_milling in pockets:
         _append_pocket(root, state, pocket_milling)
 
 
@@ -1721,32 +1751,32 @@ def _synthesize_piece_machinings(
     """Hidratan, validan y aplican todos los mecanizados de una PieceSpec."""
     state = _piece_to_state(piece, execution_fields)
 
-    hydrated_line_millings = [
-        _hydrate_line_spec(s, source_pgmx_path) for s in piece.line_millings
+    hydrated_lines = [
+        _hydrate_line_spec(s, source_pgmx_path) for s in piece.lines
     ]
-    hydrated_slot_millings = [
-        _hydrate_channel_spec(s, source_pgmx_path) for s in piece.slot_millings
+    hydrated_channels = [
+        _hydrate_channel_spec(s, source_pgmx_path) for s in piece.channels
     ]
-    hydrated_polyline_millings = [
-        _hydrate_polyline_spec(s, source_pgmx_path) for s in piece.polyline_millings
+    hydrated_polylines = [
+        _hydrate_polyline_spec(s, source_pgmx_path) for s in piece.polylines
     ]
-    hydrated_arc_millings = [
-        _hydrate_arc_spec(s, source_pgmx_path) for s in piece.arc_millings
+    hydrated_arcs = [
+        _hydrate_arc_spec(s, source_pgmx_path) for s in piece.arcs
     ]
-    hydrated_circle_millings = [
-        _hydrate_circle_spec(s, source_pgmx_path) for s in piece.circle_millings
+    hydrated_circles = [
+        _hydrate_circle_spec(s, source_pgmx_path) for s in piece.circles
     ]
-    hydrated_squaring_millings = [
-        _hydrate_contour_spec(s, source_pgmx_path) for s in piece.squaring_millings
+    hydrated_contours = [
+        _hydrate_contour_spec(s, source_pgmx_path) for s in piece.contours
     ]
-    hydrated_pocket_millings = [
-        _hydrate_pocket_spec(s, source_pgmx_path) for s in piece.pocket_millings
+    hydrated_pockets = [
+        _hydrate_pocket_spec(s, source_pgmx_path) for s in piece.pockets
     ]
-    hydrated_drillings = [
-        _hydrate_drill_spec(s, source_pgmx_path) for s in piece.drillings
+    hydrated_drills = [
+        _hydrate_drill_spec(s, source_pgmx_path) for s in piece.drills
     ]
-    hydrated_drilling_patterns = [
-        _hydrate_drill_pattern_spec(s, source_pgmx_path) for s in piece.drilling_patterns
+    hydrated_drill_patterns = [
+        _hydrate_drill_pattern_spec(s, source_pgmx_path) for s in piece.drill_patterns
     ]
     hydrated_ordered = [
         _hydrate_machining_spec(s, source_pgmx_path) for s in piece.ordered_machinings
@@ -1758,26 +1788,26 @@ def _synthesize_piece_machinings(
 
     _validate_tool_sinking_lengths(
         state,
-        hydrated_line_millings + ordered_line,
-        hydrated_slot_millings + ordered_slot,
-        hydrated_polyline_millings + ordered_polyline,
-        hydrated_circle_millings + ordered_circle,
-        hydrated_squaring_millings + ordered_squaring,
-        hydrated_pocket_millings + ordered_pocket,
-        hydrated_drillings + ordered_drilling,
-        hydrated_drilling_patterns + ordered_pattern,
+        hydrated_lines + ordered_line,
+        hydrated_channels + ordered_slot,
+        hydrated_polylines + ordered_polyline,
+        hydrated_circles + ordered_circle,
+        hydrated_contours + ordered_squaring,
+        hydrated_pockets + ordered_pocket,
+        hydrated_drills + ordered_drilling,
+        hydrated_drill_patterns + ordered_pattern,
     )
 
     apply_group = {
-        "line":             lambda: _apply_lines(root, state, hydrated_line_millings),
-        "slot":             lambda: _apply_channels(root, state, hydrated_slot_millings),
-        "polyline":         lambda: _apply_polylines(root, state, hydrated_polyline_millings),
-        "arc":              lambda: _apply_arcs(root, state, hydrated_arc_millings),
-        "circle":           lambda: _apply_circles(root, state, hydrated_circle_millings),
-        "squaring":         lambda: _apply_contours(root, state, hydrated_squaring_millings),
-        "pocket":           lambda: _apply_pockets(root, state, hydrated_pocket_millings),
-        "drilling":         lambda: _apply_drills(root, state, hydrated_drillings),
-        "drilling_pattern": lambda: _apply_drill_patterns(root, state, hydrated_drilling_patterns),
+        "line":             lambda: _apply_lines(root, state, hydrated_lines),
+        "channel":             lambda: _apply_channels(root, state, hydrated_channels),
+        "polyline":         lambda: _apply_polylines(root, state, hydrated_polylines),
+        "arc":              lambda: _apply_arcs(root, state, hydrated_arcs),
+        "circle":           lambda: _apply_circles(root, state, hydrated_circles),
+        "contour":         lambda: _apply_contours(root, state, hydrated_contours),
+        "pocket":           lambda: _apply_pockets(root, state, hydrated_pockets),
+        "drill":         lambda: _apply_drills(root, state, hydrated_drills),
+        "drill_pattern": lambda: _apply_drill_patterns(root, state, hydrated_drill_patterns),
     }
 
     with _active_workpiece_ctx(root, workpiece_id):
@@ -1813,15 +1843,15 @@ def build_synthesis_request(
     origin_y: Optional[float] = None,
     origin_z: Optional[float] = None,
     execution_fields: Optional[str] = None,
-    line_millings: Optional[Sequence[LineSpec]] = None,
-    slot_millings: Optional[Sequence[ChannelSpec]] = None,
-    polyline_millings: Optional[Sequence[PolylineSpec]] = None,
-    arc_millings: Optional[Sequence[ArcSpec]] = None,
-    circle_millings: Optional[Sequence[CircleSpec]] = None,
-    squaring_millings: Optional[Sequence[ContourSpec]] = None,
-    pocket_millings: Optional[Sequence[PocketSpec]] = None,
-    drillings: Optional[Sequence[DrillSpec]] = None,
-    drilling_patterns: Optional[Sequence[DrillPatternSpec]] = None,
+    lines: Optional[Sequence[LineSpec]] = None,
+    channels: Optional[Sequence[ChannelSpec]] = None,
+    polylines: Optional[Sequence[PolylineSpec]] = None,
+    arcs: Optional[Sequence[ArcSpec]] = None,
+    circles: Optional[Sequence[CircleSpec]] = None,
+    contours: Optional[Sequence[ContourSpec]] = None,
+    pockets: Optional[Sequence[PocketSpec]] = None,
+    drills: Optional[Sequence[DrillSpec]] = None,
+    drill_patterns: Optional[Sequence[DrillPatternSpec]] = None,
     ordered_machinings: Optional[Sequence[MachiningSpec]] = None,
     machining_order: Optional[Sequence[str]] = None,
     xn: Optional[XnSpec] = None,
@@ -1875,15 +1905,15 @@ def build_synthesis_request(
         output_path=effective_output_path,
         piece=target_piece,
         source_pgmx_path=source_pgmx_path,
-        line_millings=tuple(line_millings or ()),
-        slot_millings=tuple(slot_millings or ()),
-        polyline_millings=tuple(polyline_millings or ()),
-        arc_millings=tuple(arc_millings or ()),
-        circle_millings=tuple(circle_millings or ()),
-        squaring_millings=tuple(squaring_millings or ()),
-        pocket_millings=tuple(pocket_millings or ()),
-        drillings=tuple(drillings or ()),
-        drilling_patterns=tuple(drilling_patterns or ()),
+        lines=tuple(lines or ()),
+        channels=tuple(channels or ()),
+        polylines=tuple(polylines or ()),
+        arcs=tuple(arcs or ()),
+        circles=tuple(circles or ()),
+        contours=tuple(contours or ()),
+        pockets=tuple(pockets or ()),
+        drills=tuple(drills or ()),
+        drill_patterns=tuple(drill_patterns or ()),
         ordered_machinings=tuple(ordered_machinings or ()),
         machining_order=_normalize_machining_order(machining_order),
         xn=_normalize_xn_spec(xn),
@@ -1979,41 +2009,41 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         return _synthesize_multi_piece(request)
 
     baseline_root, baseline_entries, _ = _load_pgmx_container(request.baseline_path)
-    hydrated_line_millings = [
+    hydrated_lines = [
         _hydrate_line_spec(line_milling, request.source_pgmx_path)
-        for line_milling in request.line_millings
+        for line_milling in request.lines
     ]
-    hydrated_slot_millings = [
+    hydrated_channels = [
         _hydrate_channel_spec(slot_milling, request.source_pgmx_path)
-        for slot_milling in request.slot_millings
+        for slot_milling in request.channels
     ]
-    hydrated_polyline_millings = [
+    hydrated_polylines = [
         _hydrate_polyline_spec(polyline_milling, request.source_pgmx_path)
-        for polyline_milling in request.polyline_millings
+        for polyline_milling in request.polylines
     ]
-    hydrated_arc_millings = [
+    hydrated_arcs = [
         _hydrate_arc_spec(arc_milling, request.source_pgmx_path)
-        for arc_milling in request.arc_millings
+        for arc_milling in request.arcs
     ]
-    hydrated_circle_millings = [
+    hydrated_circles = [
         _hydrate_circle_spec(circle_milling, request.source_pgmx_path)
-        for circle_milling in request.circle_millings
+        for circle_milling in request.circles
     ]
-    hydrated_squaring_millings = [
+    hydrated_contours = [
         _hydrate_contour_spec(squaring_milling, request.source_pgmx_path)
-        for squaring_milling in request.squaring_millings
+        for squaring_milling in request.contours
     ]
-    hydrated_pocket_millings = [
+    hydrated_pockets = [
         _hydrate_pocket_spec(pocket_milling, request.source_pgmx_path)
-        for pocket_milling in request.pocket_millings
+        for pocket_milling in request.pockets
     ]
-    hydrated_drillings = [
+    hydrated_drills = [
         _hydrate_drill_spec(drilling, request.source_pgmx_path)
-        for drilling in request.drillings
+        for drilling in request.drills
     ]
-    hydrated_drilling_patterns = [
+    hydrated_drill_patterns = [
         _hydrate_drill_pattern_spec(drilling_pattern, request.source_pgmx_path)
-        for drilling_pattern in request.drilling_patterns
+        for drilling_pattern in request.drill_patterns
     ]
     hydrated_ordered_machinings = [
         _hydrate_machining_spec(spec, request.source_pgmx_path)
@@ -2052,14 +2082,14 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
     ) = _split_hydrated_machinings(flattened_workplan_machinings)
     _validate_tool_sinking_lengths(
         request.piece,
-        hydrated_line_millings + ordered_line_millings + workplan_line_millings,
-        hydrated_slot_millings + ordered_slot_millings + workplan_slot_millings,
-        hydrated_polyline_millings + ordered_polyline_millings + workplan_polyline_millings,
-        hydrated_circle_millings + ordered_circle_millings + workplan_circle_millings,
-        hydrated_squaring_millings + ordered_squaring_millings + workplan_squaring_millings,
-        hydrated_pocket_millings + ordered_pocket_millings + workplan_pocket_millings,
-        hydrated_drillings + ordered_drillings + workplan_drillings,
-        hydrated_drilling_patterns + ordered_drilling_patterns + workplan_drilling_patterns,
+        hydrated_lines + ordered_line_millings + workplan_line_millings,
+        hydrated_channels + ordered_slot_millings + workplan_slot_millings,
+        hydrated_polylines + ordered_polyline_millings + workplan_polyline_millings,
+        hydrated_circles + ordered_circle_millings + workplan_circle_millings,
+        hydrated_contours + ordered_squaring_millings + workplan_squaring_millings,
+        hydrated_pockets + ordered_pocket_millings + workplan_pocket_millings,
+        hydrated_drills + ordered_drillings + workplan_drillings,
+        hydrated_drill_patterns + ordered_drilling_patterns + workplan_drilling_patterns,
     )
 
     _apply_piece_state(baseline_root, request.piece)
@@ -2078,47 +2108,47 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         "line": lambda: _apply_lines(
             baseline_root,
             request.piece,
-            hydrated_line_millings,
+            hydrated_lines,
         ),
-        "slot": lambda: _apply_channels(
+        "channel": lambda: _apply_channels(
             baseline_root,
             request.piece,
-            hydrated_slot_millings,
+            hydrated_channels,
         ),
         "arc": lambda: _apply_arcs(
             baseline_root,
             request.piece,
-            hydrated_arc_millings,
+            hydrated_arcs,
         ),
         "polyline": lambda: _apply_polylines(
             baseline_root,
             request.piece,
-            hydrated_polyline_millings,
+            hydrated_polylines,
         ),
         "circle": lambda: _apply_circles(
             baseline_root,
             request.piece,
-            hydrated_circle_millings,
+            hydrated_circles,
         ),
-        "squaring": lambda: _apply_contours(
+        "contour": lambda: _apply_contours(
             baseline_root,
             request.piece,
-            hydrated_squaring_millings,
+            hydrated_contours,
         ),
         "pocket": lambda: _apply_pockets(
             baseline_root,
             request.piece,
-            hydrated_pocket_millings,
+            hydrated_pockets,
         ),
-        "drilling": lambda: _apply_drills(
+        "drill": lambda: _apply_drills(
             baseline_root,
             request.piece,
-            hydrated_drillings,
+            hydrated_drills,
         ),
-        "drilling_pattern": lambda: _apply_drill_patterns(
+        "drill_pattern": lambda: _apply_drill_patterns(
             baseline_root,
             request.piece,
-            hydrated_drilling_patterns,
+            hydrated_drill_patterns,
         ),
     }
     for group_name in _normalize_machining_order(request.machining_order):
@@ -2151,14 +2181,14 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         output_path=request.output_path,
         piece=request.piece,
         sha256=hashlib.sha256(request.output_path.read_bytes()).hexdigest(),
-        line_millings=request.line_millings,
-        slot_millings=request.slot_millings,
-        polyline_millings=request.polyline_millings,
-        circle_millings=request.circle_millings,
-        squaring_millings=request.squaring_millings,
-        pocket_millings=request.pocket_millings,
-        drillings=request.drillings,
-        drilling_patterns=request.drilling_patterns,
+        lines=request.lines,
+        channels=request.channels,
+        polylines=request.polylines,
+        circles=request.circles,
+        contours=request.contours,
+        pockets=request.pockets,
+        drills=request.drills,
+        drill_patterns=request.drill_patterns,
         ordered_machinings=request.ordered_machinings,
         machining_order=_normalize_machining_order(request.machining_order),
         xn=normalized_xn if not normalized_workplans else None,
@@ -2212,13 +2242,13 @@ def synthesize_pgmx(
         origin_y=origin_y,
         origin_z=origin_z,
         execution_fields=execution_fields,
-        line_millings=[line_milling] if line_milling is not None else (),
-        slot_millings=[slot_milling] if slot_milling is not None else (),
-        polyline_millings=[polyline_milling] if polyline_milling is not None else (),
-        circle_millings=[circle_milling] if circle_milling is not None else (),
-        squaring_millings=[squaring_milling] if squaring_milling is not None else (),
-        drillings=[drilling] if drilling is not None else (),
-        drilling_patterns=[drilling_pattern] if drilling_pattern is not None else (),
+        lines=[line_milling] if line_milling is not None else (),
+        channels=[slot_milling] if slot_milling is not None else (),
+        polylines=[polyline_milling] if polyline_milling is not None else (),
+        circles=[circle_milling] if circle_milling is not None else (),
+        contours=[squaring_milling] if squaring_milling is not None else (),
+        drills=[drilling] if drilling is not None else (),
+        drill_patterns=[drilling_pattern] if drilling_pattern is not None else (),
         xn=xn,
         workplans=workplans,
         current_workplan_index=current_workplan_index,

@@ -146,7 +146,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                                 "E001",
                                 18.36,
                                 20,
-                                line_target_depth=8,
+                                target_depth=8,
                             ),
                         ),
                         machine_operations=(
@@ -510,7 +510,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_x=5,
                 origin_y=5,
                 origin_z=25,
-                drillings=(
+                drills=(
                     sp.build_drill_spec(
                         center_x=100,
                         center_y=100,
@@ -540,7 +540,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_x=5,
                 origin_y=5,
                 origin_z=25,
-                drillings=(
+                drills=(
                     sp.build_drill_spec(
                         center_x=100,
                         center_y=100,
@@ -569,7 +569,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_x=5,
                 origin_y=5,
                 origin_z=25,
-                drillings=(
+                drills=(
                     sp.build_drill_spec(
                         center_x=100,
                         center_y=100,
@@ -598,7 +598,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_x=5,
                 origin_y=5,
                 origin_z=25,
-                drillings=(
+                drills=(
                     sp.build_drill_spec(
                         center_x=100,
                         center_y=100,
@@ -683,7 +683,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_x=5,
                 origin_y=5,
                 origin_z=25,
-                drillings=(
+                drills=(
                     sp.build_drill_spec(
                         center_x=100,
                         center_y=100,
@@ -711,7 +711,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_x=5,
                 origin_y=5,
                 origin_z=25,
-                drillings=(
+                drills=(
                     sp.build_drill_spec(
                         center_x=100,
                         center_y=100,
@@ -742,7 +742,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_x=5,
                 origin_y=5,
                 origin_z=25,
-                slot_millings=(
+                channels=(
                     sp.build_channel_spec(
                         start_x=10,
                         start_y=100,
@@ -771,7 +771,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_x=5,
                 origin_y=5,
                 origin_z=25,
-                pocket_millings=(
+                pockets=(
                     sp.build_pocket_spec(
                         contour_points=contour,
                         target_depth=10,
@@ -796,7 +796,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_x=5,
                 origin_y=5,
                 origin_z=25,
-                drilling_patterns=(
+                drill_patterns=(
                     sp.build_drill_pattern_spec(
                         center_x=50,
                         center_y=50,

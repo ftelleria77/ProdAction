@@ -74,12 +74,12 @@ def main(argv: list[str] | None = None) -> int:
             output_path=path, piece_name=name,
             length=300.0, width=200.0, depth=18.0,
             origin_x=5.0, origin_y=5.0, origin_z=25.0,
-            line_millings=[build_line_spec(
-                line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0,
-                line_feature_name="Fresado",
-                line_tool_id="1903", line_tool_name="E004", line_tool_width=4.0,
-                line_security_plane=20.0, line_is_through=False, line_target_depth=12.0,
-                line_milling_strategy=strategy,
+            lines=[build_line_spec(
+                start_x=20.0, start_y=100.0, end_x=280.0, end_y=100.0,
+                feature_name="Fresado",
+                tool_id="1903", tool_name="E004", tool_width=4.0,
+                security_plane=20.0, is_through=False, target_depth=12.0,
+                milling_strategy=strategy,
             )],
         )
         synthesize_request(req)

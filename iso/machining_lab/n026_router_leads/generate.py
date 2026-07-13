@@ -37,17 +37,17 @@ DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N026_router_leads"
 
 # (tag, kwargs de build_line_spec para leads)
 CASES = [
-    ("app_line",    dict(line_approach_enabled=True, line_approach_type="Line")),
-    ("app_arc",     dict(line_approach_enabled=True, line_approach_type="Arc")),
-    ("app_arc_rm2", dict(line_approach_enabled=True, line_approach_type="Arc",
-                         line_approach_radius_multiplier=2.0)),
-    ("app_arc_sp",  dict(line_approach_enabled=True, line_approach_type="Arc",
-                         line_approach_speed=10.0)),
-    ("ret_arc",     dict(line_retract_enabled=True, line_retract_type="Arc")),
-    ("ret_arc_ov",  dict(line_retract_enabled=True, line_retract_type="Arc",
-                         line_retract_overlap=0.25)),
-    ("app_ret_arc", dict(line_approach_enabled=True, line_approach_type="Arc",
-                         line_retract_enabled=True, line_retract_type="Arc")),
+    ("app_line",    dict(approach_enabled=True, approach_type="Line")),
+    ("app_arc",     dict(approach_enabled=True, approach_type="Arc")),
+    ("app_arc_rm2", dict(approach_enabled=True, approach_type="Arc",
+                         approach_radius_multiplier=2.0)),
+    ("app_arc_sp",  dict(approach_enabled=True, approach_type="Arc",
+                         approach_speed=10.0)),
+    ("ret_arc",     dict(retract_enabled=True, retract_type="Arc")),
+    ("ret_arc_ov",  dict(retract_enabled=True, retract_type="Arc",
+                         retract_overlap=0.25)),
+    ("app_ret_arc", dict(approach_enabled=True, approach_type="Arc",
+                         retract_enabled=True, retract_type="Arc")),
 ]
 
 
@@ -66,11 +66,11 @@ def main(argv: list[str] | None = None) -> int:
             output_path=path, piece_name=name,
             length=300.0, width=200.0, depth=18.0,
             origin_x=5.0, origin_y=5.0, origin_z=25.0,
-            line_millings=[build_line_spec(
-                line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0,
-                line_feature_name="Fresado",
-                line_tool_id="1903", line_tool_name="E004", line_tool_width=4.0,
-                line_security_plane=20.0, line_is_through=False, line_target_depth=5.0,
+            lines=[build_line_spec(
+                start_x=20.0, start_y=100.0, end_x=280.0, end_y=100.0,
+                feature_name="Fresado",
+                tool_id="1903", tool_name="E004", tool_width=4.0,
+                security_plane=20.0, is_through=False, target_depth=5.0,
                 **lead_kwargs,
             )],
         )

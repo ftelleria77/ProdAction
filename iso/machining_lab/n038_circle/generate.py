@@ -45,7 +45,7 @@ def main(argv=None):
         path = out / f"N_O_{tag}.pgmx"
         synthesize_request(build_synthesis_request(
             output_path=path, piece_name=f"N_O_{tag}", length=300.0, width=200.0, depth=18.0,
-            origin_x=5.0, origin_y=5.0, origin_z=25.0, circle_millings=list(circles)))
+            origin_x=5.0, origin_y=5.0, origin_z=25.0, circles=list(circles)))
         print(f"  {path.name}")
     return 0
 

@@ -65,7 +65,7 @@ class ConvertPatternTest(unittest.TestCase):
         req = build_synthesis_request(
             output_path=path, piece_name="pat",
             length=300, width=200, depth=18, origin_x=5, origin_y=5, origin_z=25,
-            drilling_patterns=[_pattern(columns=3, rows=2)],
+            drill_patterns=[_pattern(columns=3, rows=2)],
         )
         synthesize_request(req)
         iso = convert(path)

@@ -55,17 +55,17 @@ def _line(out: Path, name: str, tool_id: str, tool_name: str, width: float,
           x1: float, y1: float, x2: float, y2: float, depth: float) -> None:
     path = out / f"{name}.pgmx"
     spec = build_line_spec(
-        line_x1=x1, line_y1=y1, line_x2=x2, line_y2=y2,
-        line_feature_name="Fresado",
-        line_tool_id=tool_id, line_tool_name=tool_name, line_tool_width=width,
-        line_security_plane=20.0, line_side_of_feature="Center",
-        line_is_through=False, line_target_depth=depth,
+        start_x=x1, start_y=y1, end_x=x2, end_y=y2,
+        feature_name="Fresado",
+        tool_id=tool_id, tool_name=tool_name, tool_width=width,
+        security_plane=20.0, side_of_feature="Center",
+        is_through=False, target_depth=depth,
     )
     req = build_synthesis_request(
         output_path=path, piece_name=name,
         length=300.0, width=200.0, depth=18.0,
         origin_x=5.0, origin_y=5.0, origin_z=25.0,
-        line_millings=[spec],
+        lines=[spec],
     )
     synthesize_request(req)
     print(f"  {path.name}  ({tool_name}, ({x1:g},{y1:g})->({x2:g},{y2:g}), d={depth:g})")

@@ -37,12 +37,12 @@ ZZ_UH0 = ZigZagMillingStrategySpec(allow_multiple_passes=True, feed_cutting_dept
 
 def _line(depth=5.0, strategy=None, side="Center", through=False, y=100.0, x2=280.0, y2=None, **kw):
     base = build_line_spec(
-        line_x1=20.0, line_y1=y, line_x2=x2, line_y2=(y if y2 is None else y2),
-        line_feature_name="Fresado", line_tool_id="1903", line_tool_name="E004",
-        line_tool_width=4.0, line_security_plane=20.0,
-        line_is_through=through, line_target_depth=(None if through else depth),
-        line_extra_depth=(2.0 if through else 0.0),
-        line_milling_strategy=strategy, line_side_of_feature=side)
+        start_x=20.0, start_y=y, end_x=x2, end_y=(y if y2 is None else y2),
+        feature_name="Fresado", tool_id="1903", tool_name="E004",
+        tool_width=4.0, security_plane=20.0,
+        is_through=through, target_depth=(None if through else depth),
+        extra_depth=(2.0 if through else 0.0),
+        milling_strategy=strategy, side_of_feature=side)
     return replace(base, **kw) if kw else base
 
 def _app(**kw): return build_approach_spec(True, approach_type=kw.pop("type", "Arc"), **kw)
@@ -107,13 +107,13 @@ def main(argv=None):
         path = out / f"N_H_{tag}.pgmx"
         synthesize_request(build_synthesis_request(
             output_path=path, piece_name=f"N_H_{tag}", length=300.0, width=200.0, depth=18.0,
-            origin_x=5.0, origin_y=5.0, origin_z=25.0, line_millings=[spec]))
+            origin_x=5.0, origin_y=5.0, origin_z=25.0, lines=[spec]))
         print(f"  {path.name}")
     for tag, specs in MULTI:
         path = out / f"N_H_{tag}.pgmx"
         synthesize_request(build_synthesis_request(
             output_path=path, piece_name=f"N_H_{tag}", length=300.0, width=200.0, depth=18.0,
-            origin_x=5.0, origin_y=5.0, origin_z=25.0, line_millings=list(specs)))
+            origin_x=5.0, origin_y=5.0, origin_z=25.0, lines=list(specs)))
         print(f"  {path.name}")
     return 0
 

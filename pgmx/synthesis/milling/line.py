@@ -839,39 +839,39 @@ def _hydrate_line_spec(
 
 
 def build_line_spec(
-    line_x1: Optional[float],
-    line_y1: Optional[float],
-    line_x2: Optional[float],
-    line_y2: Optional[float],
-    line_feature_name: Optional[str],
-    line_tool_id: Optional[str],
-    line_tool_name: Optional[str],
-    line_tool_width: Optional[float],
-    line_security_plane: Optional[float],
-    line_feedrate: Optional[float] = None,      # Avanz. m/min (0/None = default de la fresa)
-    line_spindle: Optional[float] = None,       # Rotación rpm
-    line_side_offset: Optional[float] = None,   # Rebaba (SideOffset)
-    line_is_precise: Optional[bool] = None,     # Corrección en longitud
-    line_invert_work: Optional[bool] = None,    # Invertir trabajo
-    line_cnc_correction: Optional[bool] = None, # True=C.N. (default) / False=CAD
-    line_side_of_feature: Optional[str] = None,
-    line_is_through: Optional[bool] = None,
-    line_target_depth: Optional[float] = None,
-    line_extra_depth: Optional[float] = None,
-    line_approach_enabled: Optional[bool] = None,
-    line_approach_type: Optional[str] = None,
-    line_approach_mode: Optional[str] = None,
-    line_approach_radius_multiplier: Optional[float] = None,
-    line_approach_speed: Optional[float] = None,
-    line_approach_arc_side: Optional[str] = None,
-    line_retract_enabled: Optional[bool] = None,
-    line_retract_type: Optional[str] = None,
-    line_retract_mode: Optional[str] = None,
-    line_retract_radius_multiplier: Optional[float] = None,
-    line_retract_speed: Optional[float] = None,
-    line_retract_arc_side: Optional[str] = None,
-    line_retract_overlap: Optional[float] = None,
-    line_milling_strategy: Optional[MillingStrategySpec] = None,
+    start_x: Optional[float],
+    start_y: Optional[float],
+    end_x: Optional[float],
+    end_y: Optional[float],
+    feature_name: Optional[str],
+    tool_id: Optional[str],
+    tool_name: Optional[str],
+    tool_width: Optional[float],
+    security_plane: Optional[float],
+    feedrate: Optional[float] = None,      # Avanz. m/min (0/None = default de la fresa)
+    spindle: Optional[float] = None,       # Rotación rpm
+    side_offset: Optional[float] = None,   # Rebaba (SideOffset)
+    is_precise: Optional[bool] = None,     # Corrección en longitud
+    invert_work: Optional[bool] = None,    # Invertir trabajo
+    activate_cnc_correction: Optional[bool] = None, # True=C.N. (default) / False=CAD
+    side_of_feature: Optional[str] = None,
+    is_through: Optional[bool] = None,
+    target_depth: Optional[float] = None,
+    extra_depth: Optional[float] = None,
+    approach_enabled: Optional[bool] = None,
+    approach_type: Optional[str] = None,
+    approach_mode: Optional[str] = None,
+    approach_radius_multiplier: Optional[float] = None,
+    approach_speed: Optional[float] = None,
+    approach_arc_side: Optional[str] = None,
+    retract_enabled: Optional[bool] = None,
+    retract_type: Optional[str] = None,
+    retract_mode: Optional[str] = None,
+    retract_radius_multiplier: Optional[float] = None,
+    retract_speed: Optional[float] = None,
+    retract_arc_side: Optional[str] = None,
+    retract_overlap: Optional[float] = None,
+    milling_strategy: Optional[MillingStrategySpec] = None,
     is_enabled_expr: Optional[str] = None,
 ) -> Optional[LineSpec]:
     """Construye un `LineSpec` reusable para un fresado lineal.
@@ -881,55 +881,55 @@ def build_line_spec(
     opcional.
     """
 
-    values = [line_x1, line_y1, line_x2, line_y2]
+    values = [start_x, start_y, end_x, end_y]
     if all(value is None for value in values):
         return None
     if any(value is None for value in values):
         raise ValueError("Para sintetizar el fresado lineal hay que indicar x1, y1, x2 e y2.")
     normalized_strategy = _ensure_milling_strategy_allowed(
-        _normalize_milling_strategy_spec(line_milling_strategy),
+        _normalize_milling_strategy_spec(milling_strategy),
         allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec,
                        ZigZagMillingStrategySpec),
         context="LineSpec",
     )
     return LineSpec(
-        start_x=float(line_x1),
-        start_y=float(line_y1),
-        end_x=float(line_x2),
-        end_y=float(line_y2),
-        feature_name=(line_feature_name or "Fresado").strip() or "Fresado",
-        side_of_feature=_normalize_side_of_feature(line_side_of_feature),
-        tool_id=(line_tool_id or "1902").strip() or "1902",
-        tool_name=(line_tool_name or "E003").strip() or "E003",
-        tool_width=9.52 if line_tool_width is None else float(line_tool_width),
-        security_plane=20.0 if line_security_plane is None else float(line_security_plane),
-        feedrate=0.0 if line_feedrate is None else float(line_feedrate),
-        spindle=0.0 if line_spindle is None else float(line_spindle),
-        side_offset=0.0 if line_side_offset is None else float(line_side_offset),
-        is_precise=bool(line_is_precise),
-        invert_work=bool(line_invert_work),
-        activate_cnc_correction=True if line_cnc_correction is None else bool(line_cnc_correction),
+        start_x=float(start_x),
+        start_y=float(start_y),
+        end_x=float(end_x),
+        end_y=float(end_y),
+        feature_name=(feature_name or "Fresado").strip() or "Fresado",
+        side_of_feature=_normalize_side_of_feature(side_of_feature),
+        tool_id=(tool_id or "1902").strip() or "1902",
+        tool_name=(tool_name or "E003").strip() or "E003",
+        tool_width=9.52 if tool_width is None else float(tool_width),
+        security_plane=20.0 if security_plane is None else float(security_plane),
+        feedrate=0.0 if feedrate is None else float(feedrate),
+        spindle=0.0 if spindle is None else float(spindle),
+        side_offset=0.0 if side_offset is None else float(side_offset),
+        is_precise=bool(is_precise),
+        invert_work=bool(invert_work),
+        activate_cnc_correction=True if activate_cnc_correction is None else bool(activate_cnc_correction),
         depth_spec=build_milling_depth_spec(
-            is_through=line_is_through,
-            target_depth=line_target_depth,
-            extra_depth=line_extra_depth,
+            is_through=is_through,
+            target_depth=target_depth,
+            extra_depth=extra_depth,
         ),
         approach=build_approach_spec(
-            enabled=line_approach_enabled,
-            approach_type=line_approach_type,
-            mode=line_approach_mode,
-            radius_multiplier=line_approach_radius_multiplier,
-            speed=line_approach_speed,
-            arc_side=line_approach_arc_side,
+            enabled=approach_enabled,
+            approach_type=approach_type,
+            mode=approach_mode,
+            radius_multiplier=approach_radius_multiplier,
+            speed=approach_speed,
+            arc_side=approach_arc_side,
         ),
         retract=build_retract_spec(
-            enabled=line_retract_enabled,
-            retract_type=line_retract_type,
-            mode=line_retract_mode,
-            radius_multiplier=line_retract_radius_multiplier,
-            speed=line_retract_speed,
-            arc_side=line_retract_arc_side,
-            overlap=line_retract_overlap,
+            enabled=retract_enabled,
+            retract_type=retract_type,
+            mode=retract_mode,
+            radius_multiplier=retract_radius_multiplier,
+            speed=retract_speed,
+            arc_side=retract_arc_side,
+            overlap=retract_overlap,
         ),
         milling_strategy=normalized_strategy,
         is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,

@@ -165,7 +165,7 @@ class VaciadoV2Tests(unittest.TestCase):
     @unittest.skipUnless(_external_corpus_available(), f"Corpus externo no disponible en {MANUAL_ROOT}")
     def test_adapts_manual_rectangular_pocket_to_v2_contract(self) -> None:
         adaptation = adapt_pgmx_path(MANUAL_ROOT / "Vaciado_008.pgmx")
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         geometry, strategy, depth = from_pocket_spec(spec)
         plan = plan_rectangular_no_islands(geometry, strategy, depth)
@@ -181,7 +181,7 @@ class VaciadoV2Tests(unittest.TestCase):
         for index in STABLE_RECTANGULAR_CASES:
             with self.subTest(case=f"Vaciado_{index:03d}"):
                 adaptation = adapt_pgmx_path(MANUAL_ROOT / f"Vaciado_{index:03d}.pgmx")
-                spec = adaptation.pocket_millings[0]
+                spec = adaptation.pockets[0]
                 geometry, strategy, depth = from_pocket_spec(spec)
                 plan = plan_rectangular_no_islands(geometry, strategy, depth)
                 outermost = plan.offset_family.bboxes[0]

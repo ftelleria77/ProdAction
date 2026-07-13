@@ -228,9 +228,9 @@ def _compare_one(path: Path, root: Path) -> ContourParallelComparisonRow:
     relative_path = _relative_path(path, root)
     try:
         result = adapt_pgmx_path(path)
-        if not result.pocket_millings:
+        if not result.pockets:
             return ContourParallelComparisonRow(relative_path, "no_pocket")
-        spec = result.pocket_millings[0]
+        spec = result.pockets[0]
         actual_xyz = _actual_trajectory_xyz(result.snapshot.operations[0])
         actual = tuple((x, y) for x, y, _z in actual_xyz)
         strategy = spec.milling_strategy

@@ -79,24 +79,24 @@ def _drill_side(plane: str, x: float, y: float = 9.0, diameter: float = 8.0, dep
 
 def _line_mill(y: float = 100.0) -> object:
     return build_line_spec(
-        line_x1=20.0,
-        line_y1=y,
-        line_x2=PIECE_L - 20.0,
-        line_y2=y,
-        line_feature_name=f"LINE_Y{y:g}",
-        line_tool_id="1903",
-        line_tool_name="E004",
-        line_tool_width=4.0,
-        line_security_plane=20.0,
-        line_side_of_feature="Center",
-        line_is_through=False,
-        line_target_depth=5.0,
+        start_x=20.0,
+        start_y=y,
+        end_x=PIECE_L - 20.0,
+        end_y=y,
+        feature_name=f"LINE_Y{y:g}",
+        tool_id="1903",
+        tool_name="E004",
+        tool_width=4.0,
+        security_plane=20.0,
+        side_of_feature="Center",
+        is_through=False,
+        target_depth=5.0,
     )
 
 
 def _write(output_dir: Path, name: str, *operations: object) -> None:
-    drillings = [op for op in operations if isinstance(op, DrillSpec)]
-    line_millings = [op for op in operations if isinstance(op, LineSpec)]
+    drills = [op for op in operations if isinstance(op, DrillSpec)]
+    lines = [op for op in operations if isinstance(op, LineSpec)]
     path = output_dir / f"{name}.pgmx"
     req = build_synthesis_request(
         output_path=path,
@@ -107,8 +107,8 @@ def _write(output_dir: Path, name: str, *operations: object) -> None:
         origin_x=ORIGIN_X,
         origin_y=ORIGIN_Y,
         origin_z=ORIGIN_Z,
-        drillings=drillings or None,
-        line_millings=line_millings or None,
+        drills=drills or None,
+        lines=lines or None,
     )
     synthesize_request(req)
     print(f"  {path.name}")

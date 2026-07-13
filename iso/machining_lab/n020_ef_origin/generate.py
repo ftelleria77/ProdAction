@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
             length=length, width=width, depth=18.0,
             origin_x=ox, origin_y=oy, origin_z=25.0,
             execution_fields="EF",
-            drillings=[build_drill_spec(
+            drills=[build_drill_spec(
                 center_x=cx, center_y=cy, diameter=8.0,
                 plane_name=plane, target_depth=depth, tool_resolution="Auto",
             )],

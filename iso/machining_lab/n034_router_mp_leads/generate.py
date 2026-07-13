@@ -33,11 +33,11 @@ def _uni(cd=4.0):
 def _line(tool="E004", width=4.0, strategy=None, app=None, ret=None):
     tid = {"E004": "1903", "E001": "1900"}[tool]
     base = build_line_spec(
-        line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0,
-        line_feature_name="Fresado", line_tool_id=tid, line_tool_name=tool,
-        line_tool_width=width, line_security_plane=20.0,
-        line_is_through=False, line_target_depth=12.0,
-        line_milling_strategy=strategy)
+        start_x=20.0, start_y=100.0, end_x=280.0, end_y=100.0,
+        feature_name="Fresado", tool_id=tid, tool_name=tool,
+        tool_width=width, security_plane=20.0,
+        is_through=False, target_depth=12.0,
+        milling_strategy=strategy)
     kw = {}
     if app is not None: kw["approach"] = app
     if ret is not None: kw["retract"] = ret
@@ -73,7 +73,7 @@ def main(argv=None):
         path = out / f"N_ML_{tag}.pgmx"
         synthesize_request(build_synthesis_request(
             output_path=path, piece_name=f"N_ML_{tag}", length=300.0, width=200.0, depth=18.0,
-            origin_x=5.0, origin_y=5.0, origin_z=25.0, line_millings=[spec]))
+            origin_x=5.0, origin_y=5.0, origin_z=25.0, lines=[spec]))
         print(f"  {path.name}")
     return 0
 

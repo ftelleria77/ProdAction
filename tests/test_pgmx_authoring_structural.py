@@ -31,10 +31,10 @@ _REAL_FIXTURES = {
 def _line_spec(tool: str, width: float, depth: float, **kwargs):
     tool_id = {"E004": "1903", "E001": "1900"}[tool]
     return build_line_spec(
-        line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0,
-        line_feature_name="Fresado", line_tool_id=tool_id, line_tool_name=tool,
-        line_tool_width=width, line_security_plane=20.0,
-        line_is_through=False, line_target_depth=depth, **kwargs)
+        start_x=20.0, start_y=100.0, end_x=280.0, end_y=100.0,
+        feature_name="Fresado", tool_id=tool_id, tool_name=tool,
+        tool_width=width, security_plane=20.0,
+        is_through=False, target_depth=depth, **kwargs)
 
 
 def _inner_xml(path: Path) -> bytes:
@@ -87,14 +87,14 @@ class AuthoringStructuralTest(unittest.TestCase):
             synthesize_request(build_synthesis_request(
                 output_path=authored_path, piece_name=f"aut_{fixture_name}",
                 length=300.0, width=200.0, depth=18.0,
-                origin_x=5.0, origin_y=5.0, origin_z=25.0, line_millings=[spec]))
+                origin_x=5.0, origin_y=5.0, origin_z=25.0, lines=[spec]))
             authored = _operation_lines(_inner_xml(authored_path))
         real = _operation_lines(_inner_xml(real_path))
         self.assertEqual(authored, real)
 
     def test_zigzag_strokes_en_toolpath(self):
         # Maestro postprocesa el toolpath ALMACENADO: los strokes en rampa van en la curva.
-        self._check("zigzag", _line_spec("E004", 4.0, 12.0, line_milling_strategy=ZigZagMillingStrategySpec(
+        self._check("zigzag", _line_spec("E004", 4.0, 12.0, milling_strategy=ZigZagMillingStrategySpec(
             allow_multiple_passes=True, feed_cutting_depth=2.0,
             return_cutting_depth=3.0, axial_finish_cutting_depth=1.0)))
 

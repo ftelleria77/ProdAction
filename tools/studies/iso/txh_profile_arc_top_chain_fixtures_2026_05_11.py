@@ -98,21 +98,21 @@ def _profile_milling(fixture: Fixture) -> object:
 
 def _line_milling(fixture: Fixture) -> object:
     return build_line_spec(
-        line_x1=80.0,
-        line_y1=130.0,
-        line_x2=240.0,
-        line_y2=130.0,
-        line_feature_name=f"TXH_ARC_{fixture.name}_SECOND_E001_LINE",
-        line_tool_id="1900",
-        line_tool_name="E001",
-        line_tool_width=18.36,
-        line_security_plane=20.0,
-        line_side_of_feature="Center",
-        line_is_through=False,
-        line_target_depth=10.0,
-        line_extra_depth=0.0,
-        line_approach_enabled=False,
-        line_retract_enabled=False,
+        start_x=80.0,
+        start_y=130.0,
+        end_x=240.0,
+        end_y=130.0,
+        feature_name=f"TXH_ARC_{fixture.name}_SECOND_E001_LINE",
+        tool_id="1900",
+        tool_name="E001",
+        tool_width=18.36,
+        security_plane=20.0,
+        side_of_feature="Center",
+        is_through=False,
+        target_depth=10.0,
+        extra_depth=0.0,
+        approach_enabled=False,
+        retract_enabled=False,
     )
 
 

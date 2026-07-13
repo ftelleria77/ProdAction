@@ -1019,14 +1019,14 @@ build_synthesis_request(
     origin_y=None,
     origin_z=None,
     execution_fields=None,
-    line_millings=None,
-    slot_millings=None,
-    polyline_millings=None,
-    circle_millings=None,
-    squaring_millings=None,
-    pocket_millings=None,
-    drillings=None,
-    drilling_patterns=None,
+    lines=None,
+    channels=None,
+    polylines=None,
+    circles=None,
+    contours=None,
+    pockets=None,
+    drills=None,
+    drill_patterns=None,
     ordered_machinings=None,
     machining_order=None,
     xn=None,
@@ -1337,7 +1337,7 @@ request = build_synthesis_request(
     origin_x=5.0,
     origin_y=5.0,
     origin_z=25.0,
-    line_millings=[line],
+    lines=[line],
 )
 
 result = synthesize_request(request)
@@ -1373,7 +1373,7 @@ request = build_synthesis_request(
     origin_x=5.0,
     origin_y=5.0,
     origin_z=25.0,
-    slot_millings=[slot],
+    channels=[slot],
 )
 
 result = synthesize_request(request)
@@ -1421,7 +1421,7 @@ request = build_synthesis_request(
     origin_x=5.0,
     origin_y=5.0,
     origin_z=9.0,
-    line_millings=[line],
+    lines=[line],
 )
 
 result = synthesize_request(request)
@@ -1463,7 +1463,7 @@ request = build_synthesis_request(
     origin_x=5.0,
     origin_y=5.0,
     origin_z=9.0,
-    polyline_millings=[polyline],
+    polylines=[polyline],
 )
 
 result = synthesize_request(request)
@@ -1514,7 +1514,7 @@ request = build_synthesis_request(
     origin_x=5.0,
     origin_y=5.0,
     origin_z=25.0,
-    polyline_millings=[closed_polyline],
+    polylines=[closed_polyline],
 )
 
 result = synthesize_request(request)
@@ -1544,12 +1544,12 @@ request = build_synthesis_request(
     origin_x=5,
     origin_y=5,
     origin_z=25,
-    squaring_millings=(
+    contours=(
         build_contour_spec(
             winding="Antihorario",
         ),
     ),
-    drillings=(
+    drills=(
         build_drill_spec(
             feature_name="Camlock Superior Izquierdo Delantero",
             plane_name="Top",
@@ -1658,7 +1658,7 @@ request = build_synthesis_request(
     origin_x=5,
     origin_y=5,
     origin_z=25,
-    drilling_patterns=(
+    drill_patterns=(
         build_drill_pattern_spec(
             80,
             80,

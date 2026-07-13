@@ -55,16 +55,16 @@ class FailLoudTest(unittest.TestCase):
         # Programa sierra + router: transiciones entre cabezales sin fixture (N037 solo-sierra).
         from pgmx.synthesis import build_line_spec
         line = build_line_spec(
-            line_x1=20.0, line_y1=50.0, line_x2=280.0, line_y2=50.0,
-            line_feature_name="Fresado", line_tool_id="1903", line_tool_name="E004",
-            line_tool_width=4.0, line_security_plane=20.0,
-            line_is_through=False, line_target_depth=5.0)
+            start_x=20.0, start_y=50.0, end_x=280.0, end_y=50.0,
+            feature_name="Fresado", tool_id="1903", tool_name="E004",
+            tool_width=4.0, security_plane=20.0,
+            is_through=False, target_depth=5.0)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "mix.pgmx"
             synthesize_request(build_synthesis_request(
                 output_path=path, piece_name="mix", length=300.0, width=200.0, depth=18.0,
                 origin_x=5.0, origin_y=5.0, origin_z=25.0,
-                line_millings=[line], slot_millings=[_slot()]))
+                lines=[line], channels=[_slot()]))
             with self.assertRaises(UnsupportedOperationError):
                 convert(path)
 

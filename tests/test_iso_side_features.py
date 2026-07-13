@@ -24,7 +24,7 @@ def _convert(width=200.0, **drill_kw):
     req = build_synthesis_request(
         output_path=path, piece_name="side",
         length=300.0, width=width, depth=18.0, origin_x=5.0, origin_y=5.0, origin_z=25.0,
-        drillings=[build_drill_spec(**base)],
+        drills=[build_drill_spec(**base)],
     )
     synthesize_request(req)
     return convert(path)

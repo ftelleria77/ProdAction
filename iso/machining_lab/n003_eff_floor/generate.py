@@ -62,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
             piece_name=name,
             length=300.0, width=200.0, depth=18.0,
             origin_x=5.0, origin_y=5.0, origin_z=25.0,
-            drillings=[_side("Front", 100.0, sp), _side("Right", 100.0, sp)],
+            drills=[_side("Front", 100.0, sp), _side("Right", 100.0, sp)],
         )
         synthesize_request(req)
         print(f"  {path.name}  (sp={sp}, G53 esperado si eff=max(sp,5): {43+20+max(sp,5)+66.5:.3f})")

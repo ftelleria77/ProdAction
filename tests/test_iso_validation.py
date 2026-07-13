@@ -55,12 +55,12 @@ class FailLoudTest(unittest.TestCase):
         # Canal (N037), circulo (N038), arco (N040) y polilinea (N041) ya son familias
         # soportadas; el ESCUADRADO sigue sin derivar (etapa 4 del Eje B).
         from pgmx.synthesis import build_contour_spec
-        self._assert_rejected("squaring", squaring_millings=[build_contour_spec(
+        self._assert_rejected("squaring", contours=[build_contour_spec(
             target_depth=5.0, feature_name="Escuadrado")])
 
     def test_polyline_recta_soportada_convierte(self):
         from pgmx.synthesis import build_polyline_spec
-        path = _make(self.tmp, "poly_ok", polyline_millings=[build_polyline_spec(
+        path = _make(self.tmp, "poly_ok", polylines=[build_polyline_spec(
             points=[(20, 100), (20, 180), (160, 180)],
             feature_name="Poli", tool_id="1903", tool_name="E004", tool_width=4.0,
             target_depth=5.0)])
@@ -70,14 +70,14 @@ class FailLoudTest(unittest.TestCase):
 
     def test_circle_soportado_convierte(self):
         from pgmx.synthesis import build_circle_spec
-        path = _make(self.tmp, "circ_ok", circle_millings=[build_circle_spec(
+        path = _make(self.tmp, "circ_ok", circles=[build_circle_spec(
             center_x=150, center_y=100, radius=30,
             feature_name="Circulo", target_depth=5.0)])
         iso = convert(path)
         self.assertIn("G3 X120.000 Y100.000 I150.000 J100.000 F18000.000", iso)  # E003 default
 
     def test_slot_soportado_convierte(self):
-        path = _make(self.tmp, "slot_ok", slot_millings=[build_channel_spec(
+        path = _make(self.tmp, "slot_ok", channels=[build_channel_spec(
             start_x=280, start_y=100, end_x=20, end_y=100,
             feature_name="Canal", target_depth=8.0)])
         iso = convert(path)
@@ -95,18 +95,18 @@ class FailLoudTest(unittest.TestCase):
             validate_entries([spec])
 
     def test_side_through_drill_rejected(self):
-        self._assert_rejected("side_through", drillings=[_drill(
+        self._assert_rejected("side_through", drills=[_drill(
             plane_name="Front", center_y=0.0, is_through=True)])
 
     def test_top_through_drill_passes(self):
         # Top-pasante soportado desde N005: z_cut = cara inferior (tlc).
-        path = _make(self.tmp, "top_through", drillings=[_drill(is_through=True)])
+        path = _make(self.tmp, "top_through", drills=[_drill(is_through=True)])
         iso = convert(path)
         self.assertIn("G1 G9 Z77.000", iso)
 
     def test_conical_d5_through_passes(self):
         # D5 + pasante → tool 007 (cónica) auto-seleccionada (N007).
-        path = _make(self.tmp, "conic", drillings=[_drill(
+        path = _make(self.tmp, "conic", drills=[_drill(
             diameter=5.0, is_through=True)])
         iso = convert(path)
         self.assertIn("?%ETK[6]=7", iso)   # tool 007
@@ -114,32 +114,32 @@ class FailLoudTest(unittest.TestCase):
 
     def test_flat_d5_through_passes(self):
         # D5 pasante forzado a punta plana → tool 005 (no la cónica).
-        path = _make(self.tmp, "flatd5", drillings=[_drill(
+        path = _make(self.tmp, "flatd5", drills=[_drill(
             diameter=5.0, is_through=True, drill_family="Flat")])
         iso = convert(path)
         self.assertIn("?%ETK[6]=5", iso)   # tool 005
 
     def test_side_multistep_ignored_single_cut(self):
         # El husillo lateral no hace peck → un solo corte (N011), no se rechaza.
-        path = _make(self.tmp, "side_peck", drillings=[_drill(
+        path = _make(self.tmp, "side_peck", drills=[_drill(
             plane_name="Front", center_y=9.0, target_depth=28.0, step_number=3)])
         iso = convert(path)
         self.assertEqual(iso.count("G1 G9 Y"), 1)
 
     def test_top_multistep_by_number_passes(self):
-        path = _make(self.tmp, "peck_n", drillings=[_drill(target_depth=14.0, step_number=3)])
+        path = _make(self.tmp, "peck_n", drills=[_drill(target_depth=14.0, step_number=3)])
         iso = convert(path)
         self.assertEqual(iso.count("G1 G9 Z"), 3)  # 3 pasadas
 
     def test_top_multistep_by_depth_passes(self):
-        path = _make(self.tmp, "peck_d", drillings=[_drill(target_depth=14.0, step_depth=5.0)])
+        path = _make(self.tmp, "peck_d", drills=[_drill(target_depth=14.0, step_depth=5.0)])
         iso = convert(path)
         self.assertEqual(iso.count("G1 G9 Z"), 3)  # ceil(14/5)=3 pasadas
 
     def test_side_feed_applied_spindle_ignored(self):
         # Lateral (N011): feed = feedrate×1000 clampado; husillo lateral fijo 6000
         # (override de spindle ignorado).
-        path = _make(self.tmp, "side_fs", drillings=[_drill(
+        path = _make(self.tmp, "side_fs", drills=[_drill(
             plane_name="Front", center_y=9.0, target_depth=28.0,
             feedrate=1.5, spindle=4500.0)])
         iso = convert(path)
@@ -148,7 +148,7 @@ class FailLoudTest(unittest.TestCase):
         self.assertNotIn("S4500M3", iso)
 
     def test_supported_drill_passes(self):
-        path = _make(self.tmp, "ok", drillings=[_drill(target_depth=10.0)])
+        path = _make(self.tmp, "ok", drills=[_drill(target_depth=10.0)])
         iso = convert(path)  # no debe levantar
         self.assertIn("G1 G9 Z", iso)
 
@@ -160,7 +160,7 @@ class AdapterFidelityTest(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
 
     def _read_drill(self, **kw):
-        path = _make(self.tmp, "rt", drillings=[_drill(**kw)])
+        path = _make(self.tmp, "rt", drills=[_drill(**kw)])
         specs = [e.spec for e in adapt_pgmx_path(path).adapted_entries]
         return specs[0]
 

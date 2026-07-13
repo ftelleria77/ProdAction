@@ -23,15 +23,15 @@ DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N032_authoring_b"
 def _line(tool, width, depth, **kw):
     tid = {"E004": "1903", "E001": "1900"}[tool]
     return build_line_spec(
-        line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0,
-        line_feature_name="Fresado", line_tool_id=tid, line_tool_name=tool,
-        line_tool_width=width, line_security_plane=20.0,
-        line_is_through=False, line_target_depth=depth, **kw)
+        start_x=20.0, start_y=100.0, end_x=280.0, end_y=100.0,
+        feature_name="Fresado", tool_id=tid, tool_name=tool,
+        tool_width=width, security_plane=20.0,
+        is_through=False, target_depth=depth, **kw)
 
 ZZ = ZigZagMillingStrategySpec(allow_multiple_passes=True, feed_cutting_depth=2.0,
                                return_cutting_depth=3.0, axial_finish_cutting_depth=1.0)
 CASES = [
-    ("aut_zz",    _line("E004", 4.0, 12.0, line_milling_strategy=ZZ)),
+    ("aut_zz",    _line("E004", 4.0, 12.0, milling_strategy=ZZ)),
     ("aut_vel",   replace(_line("E001", 18.36, 3.0), speed_changes=((0.3, 1.0),))),
     ("aut_prof",  replace(_line("E001", 18.36, 3.0), depth_changes=((0.25, 5.0),))),
     ("aut_multi", replace(_line("E001", 18.36, 3.0),
@@ -47,7 +47,7 @@ def main(argv=None):
         path = out / f"N_B_{tag}.pgmx"
         synthesize_request(build_synthesis_request(
             output_path=path, piece_name=f"N_B_{tag}", length=300.0, width=200.0, depth=18.0,
-            origin_x=5.0, origin_y=5.0, origin_z=25.0, line_millings=[spec]))
+            origin_x=5.0, origin_y=5.0, origin_z=25.0, lines=[spec]))
         print(f"  {path.name}")
     return 0
 

@@ -221,7 +221,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     )
     def test_trace_engine_skeleton_extracts_vaciado_027_e005_offset_families(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(27, 5))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -275,7 +275,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     )
     def test_trace_engine_resolves_vaciado_027_e002_single_partial_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(27, 2))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -302,7 +302,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     )
     def test_trace_engine_resolves_vaciado_022_e002_large_single_partial_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(22, 2))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -332,7 +332,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     )
     def test_trace_engine_resolves_vaciado_022_e004_large_dense_bridge_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(22, 4))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -365,7 +365,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     )
     def test_trace_engine_resolves_vaciado_028_e002_unbalanced_left_partial_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(28, 2))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -395,7 +395,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     )
     def test_trace_engine_resolves_vaciado_028_e002_left_shifted_seed_like_maestro(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(28, 2))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
         outer_bbox = _xy_bbox(spec.contour_points)
         mirrored_seed_contour = _mirror_xy_contour_x(
             spec.boss_route_seeds[0].contour_points,
@@ -435,7 +435,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     )
     def test_trace_engine_resolves_vaciado_028_left_manual_terminal_partial_topology(self) -> None:
         adaptation = adapt_pgmx_path(MANUAL_ROOT / "Vaciado_028_left_manual.pgmx")
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -484,7 +484,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
                 path = EXTERNAL_ROOT / "generated" / f"Vaciado_028_E{tool_index:03d}_left_manual.pgmx"
                 adaptation = adapt_pgmx_path(path)
                 plan = generate_contour_parallel_pocket_trace(
-                    adaptation.pocket_millings[0],
+                    adaptation.pockets[0],
                     surface_z=adaptation.snapshot.state.depth,
                 )
 
@@ -515,7 +515,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     )
     def test_trace_engine_resolves_vaciado_028_e006_terminal_partial_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(28, 6))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -545,7 +545,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     )
     def test_trace_engine_resolves_vaciado_028_e005_repeated_partial_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(28, 5))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -575,7 +575,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     )
     def test_trace_engine_resolves_vaciado_028_e007_dense_partial_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(28, 7))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -608,7 +608,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     )
     def test_trace_engine_resolves_vaciado_028_e001_early_dense_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(28, 1))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -641,7 +641,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     )
     def test_trace_engine_resolves_vaciado_028_e003_extended_dense_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(28, 3))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -674,7 +674,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     )
     def test_trace_engine_resolves_vaciado_028_e004_extended_dense_bridge_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(28, 4))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -707,7 +707,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
     )
     def test_trace_engine_resolves_vaciado_027_e006_complete_loop_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(27, 6))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -768,7 +768,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
         for tool_index, expected in expectations.items():
             with self.subTest(tool_index=tool_index):
                 adaptation = adapt_pgmx_path(_variant_path(27, tool_index))
-                spec = adaptation.pocket_millings[0]
+                spec = adaptation.pockets[0]
 
                 plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -827,7 +827,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
         for tool_index, expected in expectations.items():
             with self.subTest(tool_index=tool_index):
                 adaptation = adapt_pgmx_path(_variant_path(27, tool_index))
-                spec = adaptation.pocket_millings[0]
+                spec = adaptation.pockets[0]
 
                 plan = generate_contour_parallel_pocket_trace(spec, surface_z=adaptation.snapshot.state.depth)
 
@@ -897,10 +897,10 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                     self.assertTrue(manual.exists(), manual)
 
                     manual_adaptation = adapt_pgmx_path(manual)
-                    self.assertEqual(len(manual_adaptation.pocket_millings), 1)
+                    self.assertEqual(len(manual_adaptation.pockets), 1)
                     self.assertEqual(len(manual_adaptation.unsupported_entries), 0)
 
-                    spec = manual_adaptation.pocket_millings[0]
+                    spec = manual_adaptation.pockets[0]
                     manual_operation = manual_adaptation.snapshot.operations[0]
                     manual_xyz = _actual_trajectory_xyz(manual_operation)
                     output = temp_root / f"Vaciado_{index:03d}_synth.pgmx"
@@ -912,7 +912,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                     sp.synthesize_request(request)
 
                     generated_adaptation = adapt_pgmx_path(output)
-                    self.assertEqual(len(generated_adaptation.pocket_millings), 1)
+                    self.assertEqual(len(generated_adaptation.pockets), 1)
                     self.assertEqual(len(generated_adaptation.unsupported_entries), 0)
 
                     generated_operation = generated_adaptation.snapshot.operations[0]
@@ -950,10 +950,10 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                     self.assertTrue(manual.exists(), manual)
 
                     adaptation = adapt_pgmx_path(manual)
-                    self.assertEqual(len(adaptation.pocket_millings), 1)
+                    self.assertEqual(len(adaptation.pockets), 1)
                     self.assertEqual(len(adaptation.unsupported_entries), 0)
 
-                    spec = adaptation.pocket_millings[0]
+                    spec = adaptation.pockets[0]
                     self.assertTrue(spec.has_bosses)
                     self.assertEqual(
                         tuple(_xy_bbox(boss) for boss in spec.boss_contours),
@@ -979,7 +979,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
                     if index in {22, 27, 28, 29, 30}:
                         sp.synthesize_request(request)
                         generated_adaptation = adapt_pgmx_path(request.output_path)
-                        generated_spec = generated_adaptation.pocket_millings[0]
+                        generated_spec = generated_adaptation.pockets[0]
                         self.assertEqual(
                             tuple(_xy_bbox(boss) for boss in generated_spec.boss_contours),
                             expected_boss_bboxes,
@@ -1007,7 +1007,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
 
     def test_trace_engine_resolves_vaciado_029_e006_two_seed_bridge_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(29, 6))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
 
@@ -1028,7 +1028,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
 
     def test_trace_engine_resolves_vaciado_029_e005_segmented_bridge_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(29, 5))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
 
@@ -1048,7 +1048,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
 
     def test_trace_engine_resolves_vaciado_029_e002_large_bridge_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(29, 2))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
 
@@ -1069,7 +1069,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
 
     def test_trace_engine_resolves_vaciado_029_e001_separate_dense_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(29, 1))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
 
@@ -1090,7 +1090,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
 
     def test_trace_engine_resolves_vaciado_029_e007_dense_bridge_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(29, 7))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
 
@@ -1111,7 +1111,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
 
     def test_trace_engine_resolves_vaciado_029_e003_progressive_dense_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(29, 3))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
 
@@ -1132,7 +1132,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
 
     def test_trace_engine_resolves_vaciado_029_e004_progressive_dense_topology(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(29, 4))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
 
         plan = generate_contour_parallel_pocket_trace(spec, surface_z=60.0)
 
@@ -1185,7 +1185,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
         for index, expected in expected_ref_bboxes.items():
             with self.subTest(index=index):
                 adaptation = adapt_pgmx_path(_manual_path(index))
-                spec = adaptation.pocket_millings[0]
+                spec = adaptation.pockets[0]
                 actual = tuple(
                     (ref_id, _xy_bbox(contour) if contour else None)
                     for ref_id, contour in resolved_boss_ref_xy_contours(adaptation)
@@ -1212,7 +1212,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
             for tool_index in range(1, 8):
                 with self.subTest(index=index, tool_index=tool_index):
                     adaptation = adapt_pgmx_path(_variant_path(index, tool_index))
-                    spec = adaptation.pocket_millings[0]
+                    spec = adaptation.pockets[0]
                     self.assertEqual((_xy_bbox(spec.boss_contours[0]),), (expected_bbox,))
                     self.assertEqual(
                         tuple(
@@ -1251,7 +1251,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
 
     def test_vaciado_030_e004_extra_centers_are_step_sized_transition_arcs(self) -> None:
         adaptation = adapt_pgmx_path(_variant_path(30, 4))
-        spec = adaptation.pocket_millings[0]
+        spec = adaptation.pockets[0]
         strategy = spec.milling_strategy
         radial_step = spec.tool_width * (1.0 - strategy.overlap)
         self.assertTrue(math.isclose(radial_step, 2.0, abs_tol=1e-6))
@@ -1327,7 +1327,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
             with self.subTest(label=label):
                 adaptation = adapt_pgmx_path(expected["path"])
                 plan = generate_contour_parallel_pocket_trace(
-                    adaptation.pocket_millings[0],
+                    adaptation.pockets[0],
                     surface_z=adaptation.snapshot.state.depth,
                 )
                 manual_sequences = _actual_trajectory_xyz_sequences(adaptation.snapshot.operations[0])
@@ -1396,8 +1396,8 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
 
                     generated_adaptation = adapt_pgmx_path(output)
                     self.assertEqual(
-                        tuple(_xy_bbox(boss) for boss in generated_adaptation.pocket_millings[0].boss_contours),
-                        tuple(_xy_bbox(boss) for boss in manual_adaptation.pocket_millings[0].boss_contours),
+                        tuple(_xy_bbox(boss) for boss in generated_adaptation.pockets[0].boss_contours),
+                        tuple(_xy_bbox(boss) for boss in manual_adaptation.pockets[0].boss_contours),
                     )
                     generated_sequences = _actual_trajectory_xyz_sequences(
                         generated_adaptation.snapshot.operations[0]
@@ -1428,8 +1428,8 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
             sp.synthesize_request(request)
 
             generated_adaptation = adapt_pgmx_path(output)
-            self.assertEqual(len(generated_adaptation.pocket_millings), 1)
-            generated_spec = generated_adaptation.pocket_millings[0]
+            self.assertEqual(len(generated_adaptation.pockets), 1)
+            generated_spec = generated_adaptation.pockets[0]
             self.assertEqual(
                 tuple(_xy_bbox(boss) for boss in generated_spec.boss_contours),
                 ((175.0, 225.0, 125.0, 175.0),),
@@ -2246,7 +2246,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
     def test_pocket_template_trace_hydration_requires_full_trace_contract(self) -> None:
         manual = _variant_path(27, 1)
         manual_adaptation = adapt_pgmx_path(manual)
-        spec = manual_adaptation.pocket_millings[0]
+        spec = manual_adaptation.pockets[0]
         template = sp._extract_pocket_template(manual)
 
         self.assertTrue(sp._can_hydrate_pocket_template_trace(template, spec))
@@ -2292,7 +2292,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
         self.assertTrue(manual.exists(), manual)
 
         adaptation = adapt_pgmx_path(manual)
-        self.assertEqual(len(adaptation.pocket_millings), 0)
+        self.assertEqual(len(adaptation.pockets), 0)
         self.assertEqual(len(adaptation.unsupported_entries), 1)
 
         feature = adaptation.snapshot.features[0]

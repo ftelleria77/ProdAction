@@ -122,7 +122,7 @@ def generate(output_dir: Path, *, force: bool = False) -> list[dict[str, str]]:
         if output_path.exists() and not force:
             raise FileExistsError(f"Refusing to overwrite existing fixture: {output_path}")
 
-        drillings = tuple(
+        drills = tuple(
             _top_drill(fixture, hole, ordinal)
             for ordinal, hole in enumerate(fixture.holes, start=1)
         )
@@ -136,7 +136,7 @@ def generate(output_dir: Path, *, force: bool = False) -> list[dict[str, str]]:
             origin_y=fixture.origin_y,
             origin_z=fixture.origin_z,
             execution_fields=fixture.execution_fields,
-            ordered_machinings=drillings,
+            ordered_machinings=drills,
         )
         result = synthesize_request(request)
         expected_iso_path = EXPECTED_ISO_DIR / f"{fixture.name.lower()}.iso"

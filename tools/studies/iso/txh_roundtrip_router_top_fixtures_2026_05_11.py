@@ -83,21 +83,21 @@ def _router_line(fixture: Fixture, *, which: str, tool_name: str) -> object:
     tool = ROUTER_TOOLS[tool_name]
     y = 60.0 if which == "first" else 130.0
     return build_line_spec(
-        line_x1=80.0,
-        line_y1=y,
-        line_x2=240.0,
-        line_y2=y,
-        line_feature_name=f"TXH_RT_{fixture.name}_{which.upper()}_{tool.name}",
-        line_tool_id=tool.tool_id,
-        line_tool_name=tool.name,
-        line_tool_width=tool.width,
-        line_security_plane=20.0,
-        line_side_of_feature="Center",
-        line_is_through=False,
-        line_target_depth=10.0,
-        line_extra_depth=0.0,
-        line_approach_enabled=False,
-        line_retract_enabled=False,
+        start_x=80.0,
+        start_y=y,
+        end_x=240.0,
+        end_y=y,
+        feature_name=f"TXH_RT_{fixture.name}_{which.upper()}_{tool.name}",
+        tool_id=tool.tool_id,
+        tool_name=tool.name,
+        tool_width=tool.width,
+        security_plane=20.0,
+        side_of_feature="Center",
+        is_through=False,
+        target_depth=10.0,
+        extra_depth=0.0,
+        approach_enabled=False,
+        retract_enabled=False,
     )
 
 

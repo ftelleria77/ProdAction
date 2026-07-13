@@ -33,7 +33,7 @@ def _build_two_piece_pgmx(output_path: Path) -> sp.PgmxSynthesisResult:
                     length=600,
                     width=300,
                     depth=18,
-                    drillings=[
+                    drills=[
                         sp.build_drill_spec(diameter=5, center_x=50, center_y=50, target_depth=15),
                         sp.build_drill_spec(diameter=5, center_x=100, center_y=50, target_depth=15),
                     ],
@@ -43,7 +43,7 @@ def _build_two_piece_pgmx(output_path: Path) -> sp.PgmxSynthesisResult:
                     length=400,
                     width=250,
                     depth=12,
-                    drillings=[
+                    drills=[
                         sp.build_drill_spec(diameter=8, center_x=80, center_y=80, target_depth=10),
                     ],
                 ),

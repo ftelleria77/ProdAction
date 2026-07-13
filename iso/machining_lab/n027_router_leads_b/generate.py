@@ -39,38 +39,38 @@ from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N027_router_leads_b"
 
-E004 = dict(line_tool_id="1903", line_tool_name="E004", line_tool_width=4.0)
-E001 = dict(line_tool_id="1900", line_tool_name="E001", line_tool_width=18.36)
-LINE_X = dict(line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0)
-LINE_Y = dict(line_x1=150.0, line_y1=20.0, line_x2=150.0, line_y2=180.0)
-LINE_XREV = dict(line_x1=280.0, line_y1=100.0, line_x2=20.0, line_y2=100.0)
+E004 = dict(tool_id="1903", tool_name="E004", tool_width=4.0)
+E001 = dict(tool_id="1900", tool_name="E001", tool_width=18.36)
+LINE_X = dict(start_x=20.0, start_y=100.0, end_x=280.0, end_y=100.0)
+LINE_Y = dict(start_x=150.0, start_y=20.0, end_x=150.0, end_y=180.0)
+LINE_XREV = dict(start_x=280.0, start_y=100.0, end_x=20.0, end_y=100.0)
 
 # (tag, geom, tool, extra kwargs)
 CASES = [
-    ("ld_app_line_e001", LINE_X, E001, dict(line_approach_enabled=True, line_approach_type="Line",
-                                            line_target_depth=3.0)),
-    ("ld_app_arc_e001",  LINE_X, E001, dict(line_approach_enabled=True, line_approach_type="Arc",
-                                            line_target_depth=3.0)),
-    ("ld_app_arc_y",     LINE_Y, E004, dict(line_approach_enabled=True, line_approach_type="Arc",
-                                            line_target_depth=5.0)),
-    ("ld_app_arc_xrev",  LINE_XREV, E004, dict(line_approach_enabled=True, line_approach_type="Arc",
-                                               line_target_depth=5.0)),
-    ("ld_app_arc_left",  LINE_X, E004, dict(line_approach_enabled=True, line_approach_type="Arc",
-                                            line_approach_arc_side="Left", line_target_depth=5.0)),
-    ("ld_app_arc_right", LINE_X, E004, dict(line_approach_enabled=True, line_approach_type="Arc",
-                                            line_approach_arc_side="Right", line_target_depth=5.0)),
-    ("ld_ret_line",      LINE_X, E004, dict(line_retract_enabled=True, line_retract_type="Line",
-                                            line_target_depth=5.0)),
+    ("ld_app_line_e001", LINE_X, E001, dict(approach_enabled=True, approach_type="Line",
+                                            target_depth=3.0)),
+    ("ld_app_arc_e001",  LINE_X, E001, dict(approach_enabled=True, approach_type="Arc",
+                                            target_depth=3.0)),
+    ("ld_app_arc_y",     LINE_Y, E004, dict(approach_enabled=True, approach_type="Arc",
+                                            target_depth=5.0)),
+    ("ld_app_arc_xrev",  LINE_XREV, E004, dict(approach_enabled=True, approach_type="Arc",
+                                               target_depth=5.0)),
+    ("ld_app_arc_left",  LINE_X, E004, dict(approach_enabled=True, approach_type="Arc",
+                                            approach_arc_side="Left", target_depth=5.0)),
+    ("ld_app_arc_right", LINE_X, E004, dict(approach_enabled=True, approach_type="Arc",
+                                            approach_arc_side="Right", target_depth=5.0)),
+    ("ld_ret_line",      LINE_X, E004, dict(retract_enabled=True, retract_type="Line",
+                                            target_depth=5.0)),
     # OJO: el default de radius_multiplier con lead HABILITADO es 2.0 (no 1.2) — el "rm2" de N026
     # no varió nada. Hipótesis: lead = (width/2)×RM → rm3 con E004 daría 6.
-    ("ld_app_arc_rm3",   LINE_X, E004, dict(line_approach_enabled=True, line_approach_type="Arc",
-                                            line_approach_radius_multiplier=3.0,
-                                            line_target_depth=5.0)),
+    ("ld_app_arc_rm3",   LINE_X, E004, dict(approach_enabled=True, approach_type="Arc",
+                                            approach_radius_multiplier=3.0,
+                                            target_depth=5.0)),
     # Overlap 0.25 dio ISO idéntico: ¿solo aplica a contornos cerrados, o 0.25 era muy chico?
-    ("ld_ret_arc_ov5",   LINE_X, E004, dict(line_retract_enabled=True, line_retract_type="Arc",
-                                            line_retract_overlap=5.0, line_target_depth=5.0)),
-    ("mp_bi_cd4_f2",     LINE_X, E004, dict(line_target_depth=12.0,
-                                            line_milling_strategy=build_bidirectional_milling_strategy_spec(
+    ("ld_ret_arc_ov5",   LINE_X, E004, dict(retract_enabled=True, retract_type="Arc",
+                                            retract_overlap=5.0, target_depth=5.0)),
+    ("mp_bi_cd4_f2",     LINE_X, E004, dict(target_depth=12.0,
+                                            milling_strategy=build_bidirectional_milling_strategy_spec(
                                                 allow_multiple_passes=True, axial_cutting_depth=4.0,
                                                 axial_finish_cutting_depth=2.0))),
 ]
@@ -91,8 +91,8 @@ def main(argv: list[str] | None = None) -> int:
             output_path=path, piece_name=name,
             length=300.0, width=200.0, depth=18.0,
             origin_x=5.0, origin_y=5.0, origin_z=25.0,
-            line_millings=[build_line_spec(
-                line_feature_name="Fresado", line_security_plane=20.0, line_is_through=False,
+            lines=[build_line_spec(
+                feature_name="Fresado", security_plane=20.0, is_through=False,
                 **geom, **tool, **extra,
             )],
         )

@@ -53,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
             output_path=path, piece_name=name,
             length=300.0, width=200.0, depth=18.0,
             origin_x=5.0, origin_y=5.0, origin_z=25.0,
-            drilling_patterns=[build_drill_pattern_spec(
+            drill_patterns=[build_drill_pattern_spec(
                 CENTER_X, CENTER_Y, 8.0,
                 columns=cols, rows=rows,
                 spacing=SPACING, row_spacing=ROW_SPACING,

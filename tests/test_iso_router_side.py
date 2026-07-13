@@ -23,11 +23,11 @@ _REF_DIR = Path(r"P:\USBMIX\ProdAction\N023_router_side")
 
 def _line(**kw) -> LineSpec:
     base = build_line_spec(
-        line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0,
-        line_feature_name="Fresado",
-        line_tool_id="1903", line_tool_name="E004", line_tool_width=4.0,
-        line_security_plane=20.0, line_is_through=False, line_target_depth=5.0,
-        line_side_of_feature=kw.pop("side", "Center"),
+        start_x=20.0, start_y=100.0, end_x=280.0, end_y=100.0,
+        feature_name="Fresado",
+        tool_id="1903", tool_name="E004", tool_width=4.0,
+        security_plane=20.0, is_through=False, target_depth=5.0,
+        side_of_feature=kw.pop("side", "Center"),
     )
     return replace(base, **kw) if kw else base
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -189,7 +190,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.synthesize_pgmx, common_program.synthesize_pgmx)
         self.assertEqual(
             common_program.DEFAULT_MACHINING_ORDER,
-            ("line", "slot", "polyline", "arc", "circle", "squaring", "pocket", "drilling", "drilling_pattern"),
+            ("line", "channel", "polyline", "arc", "circle", "contour", "pocket", "drill", "drill_pattern"),
         )
         self.assertIs(core_sp.GeometryPrimitiveSpec, common_geometry.GeometryPrimitiveSpec)
         self.assertIs(core_sp.GeometryProfileSpec, common_geometry.GeometryProfileSpec)
@@ -533,8 +534,8 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             None,
             None,
             None,
-            line_side_of_feature="derecha",
-            line_milling_strategy=common_strategy.build_unidirectional_milling_strategy_spec(),
+            side_of_feature="derecha",
+            milling_strategy=common_strategy.build_unidirectional_milling_strategy_spec(),
         )
         self.assertIsInstance(line, milling_line.LineSpec)
         self.assertEqual(line.side_of_feature, "Right")
@@ -763,3 +764,29 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MachiningOrderAliasesTest(unittest.TestCase):
+    """La tabla de alias del orden de mecanizado es API de cara al usuario (acepta plural,
+    castellano y los nombres previos al refactor de nomenclatura). Un alias que apunte a una
+    clave canónica inexistente NO explota: `_normalize_machining_order` lo descarta EN SILENCIO
+    y el usuario cree que pidió un orden que nunca se aplicó. Esta guarda lo hace fallar ruidoso
+    (el refactor de nomenclatura dejó los 38 alias apuntando a claves muertas durante un rato)."""
+
+    def test_todos_los_alias_apuntan_a_una_clave_canonica(self):
+        import inspect
+        source = inspect.getsource(common_program._normalize_machining_order)
+        targets = set(re.findall(r'"[a-z_]+":\s*"([a-z_]+)"', source))
+        self.assertTrue(targets, "no se pudo leer la tabla de alias")
+        huerfanos = sorted(targets - set(common_program.DEFAULT_MACHINING_ORDER))
+        self.assertEqual(huerfanos, [], f"alias apuntando a claves inexistentes: {huerfanos}")
+
+    def test_los_nombres_previos_al_refactor_siguen_valiendo(self):
+        # Nadie tiene que reescribir sus scripts porque nosotros renombramos.
+        orden = common_program._normalize_machining_order(
+            ["slot", "squaring", "drilling", "drilling_pattern"])
+        self.assertEqual(orden[:4], ("channel", "contour", "drill", "drill_pattern"))
+
+    def test_los_nombres_de_maestro_en_castellano_valen(self):
+        orden = common_program._normalize_machining_order(["canal", "galceado", "vaciado", "taladro"])
+        self.assertEqual(orden[:4], ("channel", "contour", "pocket", "drill"))

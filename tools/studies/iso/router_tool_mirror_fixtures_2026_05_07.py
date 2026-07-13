@@ -69,21 +69,21 @@ def _load_tools() -> dict[str, ToolInfo]:
 
 def _line_vertical(tool: ToolInfo, feature_name: str) -> object:
     return build_line_spec(
-        line_x1=200.0,
-        line_y1=50.0,
-        line_x2=200.0,
-        line_y2=200.0,
-        line_feature_name=feature_name,
-        line_tool_id=tool.tool_id,
-        line_tool_name=tool.name,
-        line_tool_width=tool.width,
-        line_security_plane=20.0,
-        line_side_of_feature="Center",
-        line_is_through=False,
-        line_target_depth=15.0,
-        line_extra_depth=0.0,
-        line_approach_enabled=False,
-        line_retract_enabled=False,
+        start_x=200.0,
+        start_y=50.0,
+        end_x=200.0,
+        end_y=200.0,
+        feature_name=feature_name,
+        tool_id=tool.tool_id,
+        tool_name=tool.name,
+        tool_width=tool.width,
+        security_plane=20.0,
+        side_of_feature="Center",
+        is_through=False,
+        target_depth=15.0,
+        extra_depth=0.0,
+        approach_enabled=False,
+        retract_enabled=False,
     )
 
 

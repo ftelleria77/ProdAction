@@ -195,7 +195,7 @@ informacion que ya produce o puede producir el sistema:
   - operation: `a:DrillingOperation`
   - herramienta resuelta: `1888 / 001`
   - `security_plane = 20`
-  - adaptador: `adapted = 1`, `unsupported = 0`, `drillings = 1`
+  - adaptador: `adapted = 1`, `unsupported = 0`, `drills = 1`
   - `sha256 = 32e9bb70284079a5718b4c6a0b464ada1cc89158252c45a42ff282def3154a56`
 - Proximo paso externo:
   - abrir `Pieza_Hueco8.pgmx` en la PC del CNC
@@ -307,7 +307,7 @@ informacion que ya produce o puede producir el sistema:
   - `working_steps = 2` (`Drilling` + `XN`)
   - operation: `a:DrillingOperation`
   - herramienta resuelta: `1888 / 001`
-  - adaptador: `adapted = 1`, `unsupported = 0`, `drillings = 1`
+  - adaptador: `adapted = 1`, `unsupported = 0`, `drills = 1`
   - `sha256 = 890dd3fe16ba0ad06e8f82ae2618344d682eeeef36805d81c4fc86eb507dade8`
 - Hallazgo esperado a confirmar con ISO:
   - el origen no deberia trasladar la geometria local del taladro dentro del
@@ -417,7 +417,7 @@ informacion que ya produce o puede producir el sistema:
     `bottom_condition = a:ThroughHoleBottom`
   - feature `Hueco_D5`: `a:RoundHole`, `diameter = 5`,
     `bottom_condition = a:ThroughHoleBottom`
-  - adaptador: `adapted = 2`, `unsupported = 0`, `drillings = 2`
+  - adaptador: `adapted = 2`, `unsupported = 0`, `drills = 2`
   - `sha256 = 216c42b563a2538fb78afb6e72101bdbd1484efb8828d3c56777a36b8ad59e2f`
 - Proximo paso externo:
   - postprocesar `Pieza_DosHuecos.pgmx`
@@ -456,7 +456,7 @@ informacion que ya produce o puede producir el sistema:
   - `features = 2`
   - `operations = 2`
   - `working_steps = 3` (`Hueco_D8`, `Hueco_D5`, `XN`)
-  - adaptador: `adapted = 2`, `unsupported = 0`, `drillings = 2`
+  - adaptador: `adapted = 2`, `unsupported = 0`, `drills = 2`
   - `sha256 = d33b5c74e2167c0765b1f7e7c99a1aa8be5b7d7f2d1fd0a6b26940cb31dddf28`
 - Hallazgo esperado a confirmar con ISO:
   - comparar contra `Pieza_DosHuecos.pgmx` postprocesada para ver si el origen
@@ -610,7 +610,7 @@ informacion que ya produce o puede producir el sistema:
   - `features = 7`
   - `operations = 7`
   - `working_steps = 8` (`7` taladros + `XN`)
-  - adaptador: `adapted = 7`, `unsupported = 0`, `drillings = 7`
+  - adaptador: `adapted = 7`, `unsupported = 0`, `drills = 7`
   - `sha256 = 1ac49e1040e3ed991a047d0eb8e504c7f486a47184fee153599fee40336d8153`
 - Nota:
   - la feature de la broca `005` queda con herramienta `1892 / 005`, pero el
@@ -1108,7 +1108,7 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 4`
     - `unsupported = 0`
     - `ignored = 1`
-    - `drilling_patterns = 4`
+    - `drill_patterns = 4`
 - Postprocesado recibido:
   - `P:\USBMIX\ProdAction\ISO\pieza_005.iso`
 - Propiedades del ISO:
@@ -1198,7 +1198,7 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `slot_millings = 1`
+    - `channels = 1`
 - Postprocesado recibido:
   - `P:\USBMIX\ProdAction\ISO\pieza_006.iso`
 - Propiedades del ISO:
@@ -1300,7 +1300,7 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `slot_millings = 1`
+    - `channels = 1`
   - el spec adaptado conserva el sentido inverso:
     - `start = (350, 125)`
     - `end = (50, 125)`
@@ -1385,7 +1385,7 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `slot_millings = 1`
+    - `channels = 1`
   - el spec adaptado conserva el recorrido y `SideOfFeature` solicitado.
 - Postprocesados recibidos:
   - `P:\USBMIX\ProdAction\ISO\pieza_008.iso`
@@ -1594,7 +1594,7 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `line_millings = 1`
+    - `lines = 1`
 - Postprocesado recibido:
   - `P:\USBMIX\ProdAction\ISO\pieza_015.iso`
 - Propiedades del ISO:
@@ -1715,7 +1715,7 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `polyline_millings = 1`
+    - `polylines = 1`
 - Toolpath compensado observado en PGMX:
   - `Pieza_016` / `Left`:
     - `Approach = 8 0 35 | 1 148 50 38 0 0 -1`
@@ -1847,7 +1847,7 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
+    - `contours = 1`
 - Lectura geometrica:
   - el punto inicial nominal queda en mitad del borde inferior:
     `(200, 0, 0)`.
@@ -1954,7 +1954,7 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
+    - `contours = 1`
     - `Approach` y `Lift` existen como registros de toolpath, pero sin miembros
       de curva; la bajada/subida queda directa sobre `(200, -9.18)`.
   - el usuario volvio a postprocesar `Pieza_018.pgmx` y `Pieza_019.pgmx`.
@@ -2088,7 +2088,7 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
+    - `contours = 1`
 - Toolpath resumido:
   - ambas variantes generan `TrajectoryPath` compuesto de `9` miembros:
     `5` lineas y `4` arcos de esquina.
@@ -2204,8 +2204,8 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `polyline_millings = 1`
+    - `contours = 1`
+    - `polylines = 1`
   - SHA256 PGMX:
     `B8CB7B3E66642733323992DD1E92DF9BB2CD38131D997EC818367CC4E3409E03`
 - Archivo ISO analizado:
@@ -2329,8 +2329,8 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `polyline_millings = 1`
+    - `contours = 1`
+    - `polylines = 1`
 - Toolpath PGMX de la polilinea:
   - `Pieza_023` / `Left`:
     - inicia compensada en `(148.102633, -0.632456, -0.5)`
@@ -2453,8 +2453,8 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `circle_millings = 1`
+    - `contours = 1`
+    - `circles = 1`
 - Toolpath PGMX del circulo:
   - ambos empiezan en `(250, 125)`, que es el extremo derecho del circulo.
   - el `TrajectoryPath` se serializa como dos arcos de `180 grados`:
@@ -2568,8 +2568,8 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `circle_millings = 1`
+    - `contours = 1`
+    - `circles = 1`
 - Toolpath PGMX del circulo:
   - el PGMX compensa geometricamente el radio efectivo:
     - `CounterClockwise + Left -> radio 48`
@@ -2707,8 +2707,8 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `circle_millings = 1`
+    - `contours = 1`
+    - `circles = 1`
 - Toolpath PGMX:
   - `PH = 0`:
     - el toolpath helicoidal tiene una vuelta completa de bajada, serializada
@@ -2853,8 +2853,8 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `polyline_millings = 1`
+    - `contours = 1`
+    - `polylines = 1`
 - Toolpath PGMX:
   - ambos empiezan con aproximacion vertical:
     - `(150, 0, 38) -> (150, 0, 13)`
@@ -2999,8 +2999,8 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `polyline_millings = 1`
+    - `contours = 1`
+    - `polylines = 1`
 - Toolpath PGMX:
   - el corte queda en `Z = 3` porque la pieza tiene espesor `18` y la
     profundidad es `15`.
@@ -3135,8 +3135,8 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `polyline_millings = 1`
+    - `contours = 1`
+    - `polylines = 1`
 - Toolpath PGMX:
   - niveles de corte:
     - `Z = 13`
@@ -3276,8 +3276,8 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `polyline_millings = 1`
+    - `contours = 1`
+    - `polylines = 1`
   - la operacion E003 queda con:
     - `activate_cnc_correction = False`
     - estrategia:
@@ -3436,8 +3436,8 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `polyline_millings = 1`
+    - `contours = 1`
+    - `polylines = 1`
   - la operacion E003 queda con:
     - `activate_cnc_correction = False`
     - estrategia bidireccional `PH = 5`.
@@ -3576,8 +3576,8 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `circle_millings = 1`
+    - `contours = 1`
+    - `circles = 1`
   - la operacion E004 queda con:
     - `activate_cnc_correction = False`
     - estrategia unidireccional o bidireccional segun archivo.
@@ -3730,8 +3730,8 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `circle_millings = 1`
+    - `contours = 1`
+    - `circles = 1`
   - la operacion E004 queda con:
     - `activate_cnc_correction = False`
     - `approach.is_enabled = False`
@@ -3873,7 +3873,7 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
+    - `contours = 1`
   - la operacion E001 queda con:
     - `activate_cnc_correction = False`
     - estrategia unidireccional o bidireccional segun archivo.
@@ -4048,8 +4048,8 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `line_millings = 1`
+    - `contours = 1`
+    - `lines = 1`
   - en la operacion E004:
     - `Pieza_063` a `Pieza_065`: `activate_cnc_correction = True`
     - `Pieza_066` a `Pieza_071`: `activate_cnc_correction = False`
@@ -4443,7 +4443,7 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `slot_millings = 1`
+    - `channels = 1`
   - el adaptador recupera:
     - recorrido pedido
     - `SideOfFeature` pedido
@@ -4557,8 +4557,8 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `polyline_millings = 1`
+    - `contours = 1`
+    - `polylines = 1`
   - el adaptador recupera:
     - `SideOfFeature` pedido
     - herramienta `1903 / E004`
@@ -5574,7 +5574,7 @@ Fixtures generados:
   - `manifest.csv` escrito.
   - hashes del manifest contra disco: OK.
   - adaptacion de cada `.pgmx`: `adapted=1`, `unsupported=0`, `ignored=1`,
-    `line_millings=1`.
+    `lines=1`.
 - Pendiente inmediato:
   - postprocesar los tres `.pgmx` con Maestro.
   - copiar los `.iso` resultantes a

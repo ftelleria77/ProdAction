@@ -192,7 +192,7 @@ class MultiPieceSynthesisTests(unittest.TestCase):
                         length=600,
                         width=250,
                         depth=18,
-                        drillings=[
+                        drills=[
                             sp.build_drill_spec(
                                 diameter=5,
                                 center_x=100,

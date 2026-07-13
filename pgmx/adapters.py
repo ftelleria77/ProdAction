@@ -122,7 +122,7 @@ class PgmxAdaptationResult:
         return tuple(entry for entry in self.entries if entry.entry_source == "feature")
 
     @property
-    def line_millings(self) -> tuple[sp.LineSpec, ...]:
+    def lines(self) -> tuple[sp.LineSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
@@ -130,7 +130,7 @@ class PgmxAdaptationResult:
         )
 
     @property
-    def slot_millings(self) -> tuple[sp.ChannelSpec, ...]:
+    def channels(self) -> tuple[sp.ChannelSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
@@ -138,7 +138,7 @@ class PgmxAdaptationResult:
         )
 
     @property
-    def polyline_millings(self) -> tuple[sp.PolylineSpec, ...]:
+    def polylines(self) -> tuple[sp.PolylineSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
@@ -146,7 +146,7 @@ class PgmxAdaptationResult:
         )
 
     @property
-    def arc_millings(self) -> tuple[sp.ArcSpec, ...]:
+    def arcs(self) -> tuple[sp.ArcSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
@@ -154,7 +154,7 @@ class PgmxAdaptationResult:
         )
 
     @property
-    def circle_millings(self) -> tuple[sp.CircleSpec, ...]:
+    def circles(self) -> tuple[sp.CircleSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
@@ -162,7 +162,7 @@ class PgmxAdaptationResult:
         )
 
     @property
-    def squaring_millings(self) -> tuple[sp.ContourSpec, ...]:
+    def contours(self) -> tuple[sp.ContourSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
@@ -170,7 +170,7 @@ class PgmxAdaptationResult:
         )
 
     @property
-    def pocket_millings(self) -> tuple[sp.PocketSpec, ...]:
+    def pockets(self) -> tuple[sp.PocketSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
@@ -178,7 +178,7 @@ class PgmxAdaptationResult:
         )
 
     @property
-    def drillings(self) -> tuple[sp.DrillSpec, ...]:
+    def drills(self) -> tuple[sp.DrillSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
@@ -186,7 +186,7 @@ class PgmxAdaptationResult:
         )
 
     @property
-    def drilling_patterns(self) -> tuple[sp.DrillPatternSpec, ...]:
+    def drill_patterns(self) -> tuple[sp.DrillPatternSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
@@ -238,15 +238,15 @@ class PgmxAdaptationResult:
             output_path=Path(output_path),
             source_pgmx_path=source_pgmx_path or self.snapshot.source_path,
             piece=self.snapshot.state,
-            line_millings=self.line_millings,
-            slot_millings=self.slot_millings,
-            polyline_millings=self.polyline_millings,
-            arc_millings=self.arc_millings,
-            circle_millings=self.circle_millings,
-            squaring_millings=self.squaring_millings,
-            pocket_millings=self.pocket_millings,
-            drillings=self.drillings,
-            drilling_patterns=self.drilling_patterns,
+            lines=self.lines,
+            channels=self.channels,
+            polylines=self.polylines,
+            arcs=self.arcs,
+            circles=self.circles,
+            contours=self.contours,
+            pockets=self.pockets,
+            drills=self.drills,
+            drill_patterns=self.drill_patterns,
             xn=self.xn,
         )
 
@@ -790,7 +790,7 @@ def _adapt_drilling(
         operation,
         step,
         order_index=order_index,
-        spec_kind="drilling",
+        spec_kind="drill",
         spec=spec,
         warnings=warnings,
     )
@@ -939,7 +939,7 @@ def _adapt_drilling_pattern(
         operation,
         step,
         order_index=order_index,
-        spec_kind="drilling_pattern",
+        spec_kind="drill_pattern",
         spec=spec,
         warnings=warnings,
     )
@@ -1078,7 +1078,7 @@ def _adapt_pocket_milling(
         operation,
         step,
         order_index=order_index,
-        spec_kind="pocket_milling",
+        spec_kind="pocket",
         spec=spec,
         warnings=warnings,
     )
@@ -1251,7 +1251,7 @@ def _adapt_milling(
             operation,
             step,
             order_index=order_index,
-            spec_kind="slot_milling",
+            spec_kind="channel",
             spec=spec,
             warnings=warnings,
         )
@@ -1301,7 +1301,7 @@ def _adapt_milling(
             operation,
             step,
             order_index=order_index,
-            spec_kind="squaring_milling",
+            spec_kind="contour",
             spec=spec,
             warnings=warnings,
         )
@@ -1328,24 +1328,24 @@ def _adapt_milling(
                 tool_key.name,
                 _effective_tool_width(feature.tool_width, 9.52),
                 float(operation.approach_security_plane),
-                line_side_of_feature=feature.side_of_feature or "Center",
-                line_is_through=bool(depth_kwargs["is_through"]),
-                line_target_depth=depth_kwargs["target_depth"],
-                line_extra_depth=depth_kwargs["extra_depth"],
-                line_approach_enabled=approach.is_enabled,
-                line_approach_type=approach.approach_type,
-                line_approach_mode=approach.mode,
-                line_approach_radius_multiplier=approach.radius_multiplier,
-                line_approach_speed=approach.speed,
-                line_approach_arc_side=approach.arc_side,
-                line_retract_enabled=retract.is_enabled,
-                line_retract_type=retract.retract_type,
-                line_retract_mode=retract.mode,
-                line_retract_radius_multiplier=retract.radius_multiplier,
-                line_retract_speed=retract.speed,
-                line_retract_arc_side=retract.arc_side,
-                line_retract_overlap=retract.overlap,
-                line_milling_strategy=operation.milling_strategy,
+                side_of_feature=feature.side_of_feature or "Center",
+                is_through=bool(depth_kwargs["is_through"]),
+                target_depth=depth_kwargs["target_depth"],
+                extra_depth=depth_kwargs["extra_depth"],
+                approach_enabled=approach.is_enabled,
+                approach_type=approach.approach_type,
+                approach_mode=approach.mode,
+                approach_radius_multiplier=approach.radius_multiplier,
+                approach_speed=approach.speed,
+                approach_arc_side=approach.arc_side,
+                retract_enabled=retract.is_enabled,
+                retract_type=retract.retract_type,
+                retract_mode=retract.mode,
+                retract_radius_multiplier=retract.radius_multiplier,
+                retract_speed=retract.speed,
+                retract_arc_side=retract.arc_side,
+                retract_overlap=retract.overlap,
+                milling_strategy=operation.milling_strategy,
             )
             # Estrategia con "Habilitar multipaso" APAGADO ≡ SIN estrategia (N036 strat_single:
             # regenerada en Maestro, el cuerpo es idéntico al fresado plano) → se anula acá para
@@ -1403,7 +1403,7 @@ def _adapt_milling(
             operation,
             step,
             order_index=order_index,
-            spec_kind="line_milling",
+            spec_kind="line",
             spec=spec,
             warnings=warnings,
         )
@@ -1462,7 +1462,7 @@ def _adapt_milling(
                 operation,
                 step,
                 order_index=order_index,
-                spec_kind="arc_milling",
+                spec_kind="arc",
                 spec=spec,
                 warnings=warnings,
             )
@@ -1522,7 +1522,7 @@ def _adapt_milling(
                 operation,
                 step,
                 order_index=order_index,
-                spec_kind="polyline_milling",
+                spec_kind="polyline",
                 spec=spec,
                 warnings=warnings,
             )
@@ -1581,7 +1581,7 @@ def _adapt_milling(
             operation,
             step,
             order_index=order_index,
-            spec_kind="circle_milling",
+            spec_kind="circle",
             spec=spec,
             warnings=warnings,
         )
@@ -1774,14 +1774,14 @@ def adaptation_to_dict(result: PgmxAdaptationResult) -> dict[str, Any]:
             "ignored": len(result.ignored_entries),
             "working_step_entries": len(result.working_step_entries),
             "orphan_feature_entries": len(result.orphan_feature_entries),
-            "line_millings": len(result.line_millings),
-            "slot_millings": len(result.slot_millings),
-            "polyline_millings": len(result.polyline_millings),
-            "circle_millings": len(result.circle_millings),
-            "squaring_millings": len(result.squaring_millings),
-            "pocket_millings": len(result.pocket_millings),
-            "drillings": len(result.drillings),
-            "drilling_patterns": len(result.drilling_patterns),
+            "lines": len(result.lines),
+            "channels": len(result.channels),
+            "polylines": len(result.polylines),
+            "circles": len(result.circles),
+            "contours": len(result.contours),
+            "pockets": len(result.pockets),
+            "drills": len(result.drills),
+            "drill_patterns": len(result.drill_patterns),
             "has_xn": result.xn is not None,
         },
         "xn": convert(result.xn),

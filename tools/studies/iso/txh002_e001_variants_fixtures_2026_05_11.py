@@ -70,21 +70,21 @@ def _router_line(fixture: Fixture) -> object:
         raise ValueError(f"Unsupported router tool: {fixture.router_tool}")
 
     return build_line_spec(
-        line_x1=80.0,
-        line_y1=70.0,
-        line_x2=240.0,
-        line_y2=70.0,
-        line_feature_name=f"TXH002_{fixture.name}_{fixture.router_tool}_LINE",
-        line_tool_id=tool_id,
-        line_tool_name=fixture.router_tool,
-        line_tool_width=tool_width,
-        line_security_plane=20.0,
-        line_side_of_feature="Center",
-        line_is_through=False,
-        line_target_depth=10.0,
-        line_extra_depth=0.0,
-        line_approach_enabled=False,
-        line_retract_enabled=False,
+        start_x=80.0,
+        start_y=70.0,
+        end_x=240.0,
+        end_y=70.0,
+        feature_name=f"TXH002_{fixture.name}_{fixture.router_tool}_LINE",
+        tool_id=tool_id,
+        tool_name=fixture.router_tool,
+        tool_width=tool_width,
+        security_plane=20.0,
+        side_of_feature="Center",
+        is_through=False,
+        target_depth=10.0,
+        extra_depth=0.0,
+        approach_enabled=False,
+        retract_enabled=False,
     )
 
 
