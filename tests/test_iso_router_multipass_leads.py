@@ -22,7 +22,7 @@ from pgmx.synthesis.milling.line import LineSpec, build_line_spec
 
 from iso.synthesis import convert
 from iso.synthesis._router import _lead_geometry, _multipass_cuts
-from iso.synthesis._validation import UnsupportedOperationError, _validate_line_milling
+from iso.synthesis._validation import UnsupportedOperationError, _validate_line
 
 
 def _line(**kw) -> LineSpec:
@@ -81,22 +81,22 @@ class LeadGeometryTest(unittest.TestCase):
 class FailLoudTest(unittest.TestCase):
     def _assert_rejects(self, **kw):
         with self.assertRaises(UnsupportedOperationError):
-            _validate_line_milling(_line(**kw))
+            _validate_line(_line(**kw))
 
     def test_casos_validados_pasan(self):
-        _validate_line_milling(_line(strategy=_strategy(4.0)))
-        _validate_line_milling(_line(strategy=_strategy(4.0, 2.0)))
+        _validate_line(_line(strategy=_strategy(4.0)))
+        _validate_line(_line(strategy=_strategy(4.0, 2.0)))
 
     def test_terminacion_mayor_que_total(self):
         self._assert_rejects(strategy=_strategy(4.0, 15.0))
 
     def test_multipasada_diagonal_pasa(self):
         # Validado en N030 dg_mp_bi_cd4 (los tramos planos de la diagonal omiten Z).
-        _validate_line_milling(_line(strategy=_strategy(4.0), start_y=20.0, end_y=180.0))
+        _validate_line(_line(strategy=_strategy(4.0), start_y=20.0, end_y=180.0))
 
     def test_multipasada_bi_con_correccion_pasa(self):
         # Derivado de N029 mp_side_l: la estrategia fuerza ACC=false → coords desplazadas sin G41.
-        _validate_line_milling(_line(strategy=_strategy(4.0), side_of_feature="Left",
+        _validate_line(_line(strategy=_strategy(4.0), side_of_feature="Left",
                                      activate_cnc_correction=False))
 
     def test_multipasada_con_correccion_acc_true(self):
@@ -105,7 +105,7 @@ class FailLoudTest(unittest.TestCase):
 
     def test_multipasada_con_leads_pasa(self):
         # Derivado de N034 (9/9): radio (w/2)×(RM−1), lados espejados, feed de corte.
-        _validate_line_milling(_line(strategy=_strategy(4.0),
+        _validate_line(_line(strategy=_strategy(4.0),
                                      approach=build_approach_spec(True, approach_type="Arc")))
 
     def test_multipasada_con_leads_variantes_pasan(self):
@@ -118,7 +118,7 @@ class FailLoudTest(unittest.TestCase):
                                                      radius_multiplier=0.5)),
                    dict(side_of_feature="Left", activate_cnc_correction=False,
                         approach=build_approach_spec(True, approach_type="Arc"))):
-            _validate_line_milling(_line(strategy=_strategy(4.0), **kw))
+            _validate_line(_line(strategy=_strategy(4.0), **kw))
 
     def test_multipasada_con_leads_variantes_n036_pasan(self):
         from pgmx.synthesis.common.leads import build_retract_spec
@@ -128,7 +128,7 @@ class FailLoudTest(unittest.TestCase):
                    dict(retract=build_retract_spec(True, retract_type="Arc", speed=2.0)),
                    dict(side_of_feature="Right", activate_cnc_correction=False,
                         approach=build_approach_spec(True, approach_type="Arc"))):
-            _validate_line_milling(_line(strategy=_strategy(4.0), **kw))
+            _validate_line(_line(strategy=_strategy(4.0), **kw))
 
     def test_multipasada_con_leads_no_fixtured(self):
         # Triple con lead no Arco/En cota — sigue sin fixture.

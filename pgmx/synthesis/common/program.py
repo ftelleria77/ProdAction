@@ -21,7 +21,7 @@ from ..drilling.single import (
     _HydratedDrillSpec,
     _append_drilling,
     _hydrate_drill_spec,
-    _validate_tool_sinking_length_for_drilling_spec,
+    _validate_tool_sinking_length_for_drill_spec,
 )
 from ..milling._common import (
     _validate_tool_sinking_length_for_spec,
@@ -1426,10 +1426,10 @@ def _validate_tool_sinking_lengths(
         _validate_tool_sinking_length_for_spec(state, spec, tool_catalog)
     for spec in drillings:
         _validate_tool_type_for_drilling_spec(spec, tool_catalog)
-        _validate_tool_sinking_length_for_drilling_spec(state, spec, tool_catalog)
+        _validate_tool_sinking_length_for_drill_spec(state, spec, tool_catalog)
     for spec in drilling_patterns:
         _validate_tool_type_for_drilling_spec(spec, tool_catalog)
-        _validate_tool_sinking_length_for_drilling_spec(state, spec, tool_catalog)
+        _validate_tool_sinking_length_for_drill_spec(state, spec, tool_catalog)
 
 
 # ============================================================================

@@ -22,7 +22,7 @@ from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_
 from pgmx.synthesis.milling.line import LineSpec, build_line_spec
 
 from iso.synthesis import convert
-from iso.synthesis._validation import UnsupportedOperationError, _validate_line_milling
+from iso.synthesis._validation import UnsupportedOperationError, _validate_line
 
 _FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N029_router_combos")
 _REF_DIR = Path(r"P:\USBMIX\ProdAction\N029_router_combos")
@@ -49,15 +49,15 @@ def _bi(cd: float = 4.0):
 class FailLoudTest(unittest.TestCase):
     def _assert_rejects(self, **kw):
         with self.assertRaises(UnsupportedOperationError):
-            _validate_line_milling(_line(**kw))
+            _validate_line(_line(**kw))
 
     def test_formas_fixtured_pasan(self):
-        _validate_line_milling(_line(strategy=_bi(), depth=12.0, side_of_feature="Left",
+        _validate_line(_line(strategy=_bi(), depth=12.0, side_of_feature="Left",
                                      activate_cnc_correction=False))
-        _validate_line_milling(_line(side_of_feature="Left",
+        _validate_line(_line(side_of_feature="Left",
                                      approach=build_approach_spec(True, approach_type="Arc"),
                                      retract=build_retract_spec(True, retract_type="Arc")))
-        _validate_line_milling(_line(side_of_feature="Left", invert_work=True,
+        _validate_line(_line(side_of_feature="Left", invert_work=True,
                                      approach=build_approach_spec(True, approach_type="Arc")))
 
     def test_lado_con_estrategia_no_bi_pasa(self):
@@ -65,7 +65,7 @@ class FailLoudTest(unittest.TestCase):
         from pgmx.synthesis.common.strategy import build_unidirectional_milling_strategy_spec
         uni = build_unidirectional_milling_strategy_spec(
             allow_multiple_passes=True, axial_cutting_depth=4.0)
-        _validate_line_milling(_line(strategy=uni, depth=12.0, side_of_feature="Left",
+        _validate_line(_line(strategy=uni, depth=12.0, side_of_feature="Left",
                                      activate_cnc_correction=False))
 
     def test_lado_con_lead_variantes_pasan(self):
@@ -75,11 +75,11 @@ class FailLoudTest(unittest.TestCase):
                    dict(approach=build_approach_spec(True, approach_type="Arc", speed=2.0)),
                    dict(approach=build_approach_spec(True, approach_type="Arc", arc_side="Left")),
                    dict(retract=build_retract_spec(True, retract_type="Arc", mode="Up"))):
-            _validate_line_milling(_line(side_of_feature="Left", **kw))
+            _validate_line(_line(side_of_feature="Left", **kw))
 
     def test_lado_con_ret_line_pasa(self):
         # N036 side_ret_line: línea a profundidad más allá del end; el 1mm del G40 sigue û.
-        _validate_line_milling(_line(side_of_feature="Left",
+        _validate_line(_line(side_of_feature="Left",
                                      retract=build_retract_spec(True, retract_type="Line")))
 
     def test_cambios_con_leads_guardado(self):

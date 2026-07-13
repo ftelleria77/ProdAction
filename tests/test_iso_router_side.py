@@ -15,7 +15,7 @@ from pathlib import Path
 from pgmx.synthesis.milling.line import LineSpec, build_line_spec
 
 from iso.synthesis import convert
-from iso.synthesis._validation import UnsupportedOperationError, _validate_line_milling
+from iso.synthesis._validation import UnsupportedOperationError, _validate_line
 
 _FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N023_router_side")
 _REF_DIR = Path(r"P:\USBMIX\ProdAction\N023_router_side")
@@ -35,20 +35,20 @@ def _line(**kw) -> LineSpec:
 class FailLoudTest(unittest.TestCase):
     def _assert_rejects(self, **kw):
         with self.assertRaises(UnsupportedOperationError):
-            _validate_line_milling(_line(**kw))
+            _validate_line(_line(**kw))
 
     def test_side_left_right_pasan(self):
-        _validate_line_milling(_line(side="Left"))
-        _validate_line_milling(_line(side="Right"))
+        _validate_line(_line(side="Left"))
+        _validate_line(_line(side="Right"))
 
     def test_side_sobre_diagonal_pasa(self):
         # Validado en N030 dg_side_l (lead de 1 mm sobre la dirección, fórmula genérica).
-        _validate_line_milling(_line(side="Left", start_y=20.0, end_y=180.0))
+        _validate_line(_line(side="Left", start_y=20.0, end_y=180.0))
 
     def test_side_con_cambios_de_recorrido_pasa(self):
         # N036 side_vel: la retracción y el 1mm del G40 salen al feed VIGENTE tras el cambio.
-        _validate_line_milling(_line(side="Left", speed_changes=((0.3, 1.0),)))
-        _validate_line_milling(_line(side="Right", depth_changes=((0.25, 5.0),)))
+        _validate_line(_line(side="Left", speed_changes=((0.3, 1.0),)))
+        _validate_line(_line(side="Right", depth_changes=((0.25, 5.0),)))
 
 
 class EndToEndTest(unittest.TestCase):

@@ -17,7 +17,7 @@ from pgmx.synthesis.common.leads import build_approach_spec
 from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_spec
 
 from iso.synthesis import convert
-from iso.synthesis._validation import UnsupportedOperationError, _validate_arc_milling
+from iso.synthesis._validation import UnsupportedOperationError, _validate_arc
 
 _FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N040_arc")
 _REF_DIR = Path(r"P:\USBMIX\ProdAction\N040_arc")
@@ -34,11 +34,11 @@ def _arc(**kw):
 class FailLoudTest(unittest.TestCase):
     def _assert_rejects(self, **kw):
         with self.assertRaises(UnsupportedOperationError):
-            _validate_arc_milling(_arc(**kw))
+            _validate_arc(_arc(**kw))
 
     def test_baseline_pasa(self):
-        _validate_arc_milling(_arc())
-        _validate_arc_milling(_arc(winding="Clockwise"))
+        _validate_arc(_arc())
+        _validate_arc(_arc(winding="Clockwise"))
 
     def test_combos_sin_fixture(self):
         self._assert_rejects(side_of_feature="Left")

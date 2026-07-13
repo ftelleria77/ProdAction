@@ -19,7 +19,7 @@ from pgmx.synthesis.milling.line import LineSpec, build_line_spec
 
 from iso.synthesis import convert
 from iso.synthesis._router import _cut_segments, _g1_cut
-from iso.synthesis._validation import UnsupportedOperationError, _validate_line_milling
+from iso.synthesis._validation import UnsupportedOperationError, _validate_line
 
 _FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N022_router_expand")
 _REF_DIR = Path(r"P:\USBMIX\ProdAction\N022_router_expand")
@@ -82,16 +82,16 @@ class G1EmissionTest(unittest.TestCase):
 class FailLoudTest(unittest.TestCase):
     def _assert_rejects(self, **kw):
         with self.assertRaises(UnsupportedOperationError):
-            _validate_line_milling(_line(**kw))
+            _validate_line(_line(**kw))
 
     def test_caso_validado_pasa(self):
-        _validate_line_milling(_line(speed_changes=((0.3, 1.0),)))
-        _validate_line_milling(_line(depth_changes=((0.25, 5.0),)))
+        _validate_line(_line(speed_changes=((0.3, 1.0),)))
+        _validate_line(_line(depth_changes=((0.25, 5.0),)))
 
     def test_multiples_cambios_y_combinados_pasan(self):
         # Validado en N028 _coment: 2 rampas + 2 cambios de velocidad en una línea.
-        _validate_line_milling(_line(speed_changes=((0.3, 1.0), (0.6, 2.0))))
-        _validate_line_milling(_line(speed_changes=((0.25, 1.0),), depth_changes=((0.2, 13.0),)))
+        _validate_line(_line(speed_changes=((0.3, 1.0), (0.6, 2.0))))
+        _validate_line(_line(speed_changes=((0.25, 1.0),), depth_changes=((0.2, 13.0),)))
 
     def test_upar_fuera_de_rango(self):
         self._assert_rejects(speed_changes=((0.0, 1.0),))
@@ -99,7 +99,7 @@ class FailLoudTest(unittest.TestCase):
 
     def test_profundidad_sobre_diagonal_pasa(self):
         # Validado en N028 diag_prof10: la rampa en diagonal emite G1 X Y Z.
-        _validate_line_milling(_line(start_y=20.0, end_y=180.0, depth_changes=((0.25, 5.0),)))
+        _validate_line(_line(start_y=20.0, end_y=180.0, depth_changes=((0.25, 5.0),)))
 
 
 class EndToEndTest(unittest.TestCase):

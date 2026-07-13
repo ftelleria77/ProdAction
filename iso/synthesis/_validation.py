@@ -45,19 +45,19 @@ def validate_entries(entries: Iterable[object]) -> None:
     for entry in entries:
         spec = getattr(entry, "spec", entry)
         if isinstance(spec, DrillSpec):
-            _validate_drilling(spec)
+            _validate_drill(spec)
         elif isinstance(spec, DrillPatternSpec):
-            _validate_drilling_pattern(spec)
+            _validate_drill_pattern(spec)
         elif isinstance(spec, LineSpec):
-            _validate_line_milling(spec)
+            _validate_line(spec)
         elif isinstance(spec, ChannelSpec):
-            _validate_slot_milling(spec)
+            _validate_channel(spec)
         elif isinstance(spec, CircleSpec):
-            _validate_circle_milling(spec)
+            _validate_circle(spec)
         elif isinstance(spec, ArcSpec):
-            _validate_arc_milling(spec)
+            _validate_arc(spec)
         elif isinstance(spec, PolylineSpec):
-            _validate_arc_polyline_milling(spec)
+            _validate_polyline(spec)
         else:
             _fail(spec, f"operación de tipo {type(spec).__name__!r} no soportada "
                         f"(por ahora: taladro, fresado lineal/circular y canal). "
@@ -69,7 +69,7 @@ def _fail(spec: object, detail: str) -> None:
     raise UnsupportedOperationError(f"Feature '{feat}': {detail}")
 
 
-def _validate_drilling(spec: DrillSpec) -> None:
+def _validate_drill(spec: DrillSpec) -> None:
     if spec.plane_name not in _SUPPORTED_DRILL_FACES:
         _fail(spec, f"cara de taladro {spec.plane_name!r} no soportada "
                     f"(soportadas: {sorted(_SUPPORTED_DRILL_FACES)}).")
@@ -95,7 +95,7 @@ def _validate_drilling(spec: DrillSpec) -> None:
         _fail(spec, "posiciones/habilitación paramétricas (expr) no soportadas aún. [Eje C]")
 
 
-def _validate_drilling_pattern(spec: DrillPatternSpec) -> None:
+def _validate_drill_pattern(spec: DrillPatternSpec) -> None:
     """Un patrón se expande a taladros individuales idénticos al base (N008): validamos
     el agujero base con las mismas reglas. El adapter ya garantiza rectangular/0/90."""
     base = DrillSpec(
@@ -112,10 +112,10 @@ def _validate_drilling_pattern(spec: DrillPatternSpec) -> None:
         tool_name=spec.tool_name,
         is_enabled_expr=spec.is_enabled_expr,
     )
-    _validate_drilling(base)
+    _validate_drill(base)
 
 
-def _validate_line_milling(spec: LineSpec) -> None:
+def _validate_line(spec: LineSpec) -> None:
     if spec.plane_name != "Top":
         _fail(spec, f"fresado lineal en cara {spec.plane_name!r} no soportado "
                     f"(solo Top). [A3]")
@@ -265,7 +265,7 @@ def _validate_line_milling(spec: LineSpec) -> None:
             _fail(spec, f"cambio en el recorrido con UPar={upar} fuera de (0,1). [A3]")
 
 
-def _validate_slot_milling(spec: ChannelSpec) -> None:
+def _validate_channel(spec: ChannelSpec) -> None:
     """Canal con la Sierra Vertical X (082) — derivado de N037 (9/9 byte-idéntico).
 
     Restricciones físicas (Fermín): cara superior, dirección X (Maestro NORMALIZA el sentido
@@ -304,7 +304,7 @@ def _validate_slot_milling(spec: ChannelSpec) -> None:
         _fail(spec, "canal con end_radius/slot_angle no estándar: sin fixture de referencia. [B]")
 
 
-def _validate_circle_milling(spec: CircleSpec) -> None:
+def _validate_circle(spec: CircleSpec) -> None:
     """Fresado CIRCULAR — derivado de N038 (10/10) + N039 combos (12/12).
 
     Baseline: entrada por el este, dos semicírculos G3/G2 con I/J al centro, pasante ✓.
@@ -369,7 +369,7 @@ def _validate_circle_milling(spec: CircleSpec) -> None:
             _fail(spec, "círculo con estrategia + pasante: sin fixture de referencia. [B]")
 
 
-def _validate_arc_milling(spec: ArcSpec) -> None:
+def _validate_arc(spec: ArcSpec) -> None:
     """Fresado de ARCO SUELTO — derivado de N040 (10/10 byte-idéntico).
 
     Baseline: op de familia ROUTER; entrada por el start real, UN G3 (CCW) / G2 (CW) al end
@@ -399,7 +399,7 @@ def _validate_arc_milling(spec: ArcSpec) -> None:
         _fail(spec, "arco + estrategia multipasada: sin fixture de referencia. [B]")
 
 
-def _validate_arc_polyline_milling(spec: PolylineSpec) -> None:
+def _validate_polyline(spec: PolylineSpec) -> None:
     """Polilínea de segmentos mixtos (rectas + arcos) — derivado de N041 (baseline) + N042
     (corrección + acercamiento, abiertas y cerradas, 11/11 byte-idéntico).
 

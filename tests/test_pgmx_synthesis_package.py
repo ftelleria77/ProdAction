@@ -311,8 +311,8 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._append_drilling, drilling_single._append_drilling)
         self.assertIs(core_sp._validate_drilling_center, drilling_single._validate_drilling_center)
         self.assertIs(
-            core_sp._validate_tool_sinking_length_for_drilling_spec,
-            drilling_single._validate_tool_sinking_length_for_drilling_spec,
+            core_sp._validate_tool_sinking_length_for_drill_spec,
+            drilling_single._validate_tool_sinking_length_for_drill_spec,
         )
         top_drill = drilling_single.build_drill_spec(center_x=40, center_y=60, diameter=5.0)
         self.assertIsInstance(top_drill, drilling_single.DrillSpec)

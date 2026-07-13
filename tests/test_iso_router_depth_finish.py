@@ -17,7 +17,7 @@ from pathlib import Path
 from pgmx.synthesis.milling.line import LineSpec, build_line_spec
 
 from iso.synthesis import convert
-from iso.synthesis._validation import UnsupportedOperationError, _validate_line_milling
+from iso.synthesis._validation import UnsupportedOperationError, _validate_line
 
 _FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N024_router_through")
 _REF_DIR = Path(r"P:\USBMIX\ProdAction\N024_router_through")
@@ -35,20 +35,20 @@ def _line(**kw) -> LineSpec:
 
 class FailLoudTest(unittest.TestCase):
     def test_rebaba_valida_pasa(self):
-        _validate_line_milling(_line(side_offset=2.0))
-        _validate_line_milling(_line(side_offset=-2.0))   # SVR = 0: se omiten las líneas
+        _validate_line(_line(side_offset=2.0))
+        _validate_line(_line(side_offset=-2.0))   # SVR = 0: se omiten las líneas
 
     def test_rebaba_corrector_negativo(self):
         # width/2 + rebaba < 0 → sin fixture de referencia.
         with self.assertRaises(UnsupportedOperationError):
-            _validate_line_milling(_line(side_offset=-3.0))
+            _validate_line(_line(side_offset=-3.0))
 
     def test_allowance_desconocido(self):
         # La rebaba de línea es SideOffset; Allowance* ≠ 0 no tiene uso conocido.
         with self.assertRaises(UnsupportedOperationError):
-            _validate_line_milling(_line(allowance_side=2.0))
+            _validate_line(_line(allowance_side=2.0))
         with self.assertRaises(UnsupportedOperationError):
-            _validate_line_milling(_line(allowance_bottom=1.0))
+            _validate_line(_line(allowance_bottom=1.0))
 
 
 class EndToEndTest(unittest.TestCase):

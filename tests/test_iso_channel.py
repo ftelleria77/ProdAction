@@ -18,7 +18,7 @@ from pgmx.synthesis.milling.channel import ChannelSpec, build_channel_spec
 from pgmx.synthesis.common.leads import build_approach_spec
 
 from iso.synthesis import convert
-from iso.synthesis._validation import UnsupportedOperationError, _validate_slot_milling
+from iso.synthesis._validation import UnsupportedOperationError, _validate_channel
 
 _FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N037_saw_channel")
 _REF_DIR = Path(r"P:\USBMIX\ProdAction\N037_saw_channel")
@@ -33,10 +33,10 @@ def _slot(**kw) -> ChannelSpec:
 class FailLoudTest(unittest.TestCase):
     def _assert_rejects(self, **kw):
         with self.assertRaises(UnsupportedOperationError):
-            _validate_slot_milling(_slot(**kw))
+            _validate_channel(_slot(**kw))
 
     def test_baseline_pasa(self):
-        _validate_slot_milling(_slot())
+        _validate_channel(_slot())
 
     def test_no_horizontal(self):
         self._assert_rejects(end_y=150.0)

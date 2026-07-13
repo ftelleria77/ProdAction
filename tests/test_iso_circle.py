@@ -17,7 +17,7 @@ from pgmx.synthesis.common.leads import build_approach_spec
 from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_spec
 
 from iso.synthesis import convert
-from iso.synthesis._validation import UnsupportedOperationError, _validate_circle_milling
+from iso.synthesis._validation import UnsupportedOperationError, _validate_circle
 
 _FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N038_circle")
 _REF_DIR = Path(r"P:\USBMIX\ProdAction\N038_circle")
@@ -33,11 +33,11 @@ def _circ(**kw):
 class FailLoudTest(unittest.TestCase):
     def _assert_rejects(self, **kw):
         with self.assertRaises(UnsupportedOperationError):
-            _validate_circle_milling(_circ(**kw))
+            _validate_circle(_circ(**kw))
 
     def test_baseline_pasa(self):
-        _validate_circle_milling(_circ())
-        _validate_circle_milling(_circ(winding="Clockwise"))
+        _validate_circle(_circ())
+        _validate_circle(_circ(winding="Clockwise"))
 
     def test_combos_n039_pasan(self):
         # N039 (12/12): corrección Int/Ext, leads con û=tangente, estrategias Bi/Uni/Helicoidal.
@@ -60,7 +60,7 @@ class FailLoudTest(unittest.TestCase):
                    dict(milling_strategy=bi,
                         approach=build_approach_spec(True, approach_type="Arc"),
                         retract=build_retract_spec(True, retract_type="Arc"))):
-            _validate_circle_milling(_circ(**kw))
+            _validate_circle(_circ(**kw))
 
     def test_combos_sin_fixture(self):
         from pgmx.synthesis.common.strategy import build_helical_milling_strategy_spec

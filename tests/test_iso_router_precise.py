@@ -15,7 +15,7 @@ from pathlib import Path
 from pgmx.synthesis.milling.line import LineSpec, build_line_spec
 
 from iso.synthesis import convert
-from iso.synthesis._validation import UnsupportedOperationError, _validate_line_milling
+from iso.synthesis._validation import UnsupportedOperationError, _validate_line
 
 _FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N023_router_side")
 _REF_DIR = Path(r"P:\USBMIX\ProdAction\N023_router_side")
@@ -34,23 +34,23 @@ def _line(**kw) -> LineSpec:
 class FailLoudTest(unittest.TestCase):
     def _assert_rejects(self, **kw):
         with self.assertRaises(UnsupportedOperationError):
-            _validate_line_milling(_line(**kw))
+            _validate_line(_line(**kw))
 
     def test_precise_pasa(self):
-        _validate_line_milling(_line(is_precise=True))
+        _validate_line(_line(is_precise=True))
 
     def test_precise_sobre_diagonal_pasa(self):
         # Validado en N030 dg_long re-postprocesado: acorte ±r·û genérico (21.703/21.048 exactos).
-        _validate_line_milling(_line(is_precise=True, start_y=20.0, end_y=180.0))
+        _validate_line(_line(is_precise=True, start_y=20.0, end_y=180.0))
 
     def test_precise_con_rebaba_pasa(self):
         # Resuelto en N029 reb2_long: el acorte usa width/2 (NO el SVR).
-        _validate_line_milling(_line(is_precise=True, side_offset=2.0))
+        _validate_line(_line(is_precise=True, side_offset=2.0))
 
     def test_precise_con_cambios_de_recorrido_pasa(self):
         # N036 long_vel: el UPar corre sobre el recorrido ACORTADO (X98.8 = 22 + 0.3·256).
-        _validate_line_milling(_line(is_precise=True, speed_changes=((0.3, 1.0),)))
-        _validate_line_milling(_line(is_precise=True, depth_changes=((0.25, 5.0),)))
+        _validate_line(_line(is_precise=True, speed_changes=((0.3, 1.0),)))
+        _validate_line(_line(is_precise=True, depth_changes=((0.25, 5.0),)))
 
     def test_precise_recorrido_degenerado(self):
         # Línea que no supera el ancho de la fresa: el acorte la invierte.

@@ -71,7 +71,7 @@ __all__ = [
     "_normalize_drill_spec",
     "_uses_drilling_depth_expressions",
     "_validate_drilling_center",
-    "_validate_tool_sinking_length_for_drilling_spec",
+    "_validate_tool_sinking_length_for_drill_spec",
 ]
 
 
@@ -747,7 +747,7 @@ def _validate_drilling_center(state, spec: _HydratedDrillSpec) -> None:
             )
 
 
-def _validate_tool_sinking_length_for_drilling_spec(
+def _validate_tool_sinking_length_for_drill_spec(
     state,
     spec,
     tool_catalog: dict[str, dict[str, str]],

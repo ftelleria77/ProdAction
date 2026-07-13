@@ -6,7 +6,7 @@
     drilling = la herramienta baja y sube en un PUNTO
 
 El CANAL es la prueba de que el criterio no es el cabezal: lo hace la Sierra Vertical X, que vive
-fija en el mandril 82 del cabezal PERFORADOR (ver `iso/synthesis/_channel.py`) — y aun así es un
+fija en el mandril 82 del cabezal PERFORADOR (ver `iso/synthesis/_saw.py`) — y aun así es un
 fresado, porque recorre. En el ISO su cuerpo es estilo router (G0 → D1/SVL/SVR → plunge → corte
 lineal); lo único propio del perforador es el header (`?%ETK[6]=82`) y el epílogo.
 

@@ -18,7 +18,7 @@ from pgmx.synthesis.common.leads import build_approach_spec
 from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_spec
 
 from iso.synthesis import convert
-from iso.synthesis._validation import UnsupportedOperationError, _validate_arc_polyline_milling
+from iso.synthesis._validation import UnsupportedOperationError, _validate_polyline
 
 _FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N041_poly_profile")
 _REF_DIR = Path(r"P:\USBMIX\ProdAction\N041_poly_profile")
@@ -37,17 +37,17 @@ def _poly(**kw):
 class FailLoudTest(unittest.TestCase):
     def _assert_rejects(self, **kw):
         with self.assertRaises(UnsupportedOperationError):
-            _validate_arc_polyline_milling(_poly(**kw))
+            _validate_polyline(_poly(**kw))
 
     def test_baseline_pasa(self):
-        _validate_arc_polyline_milling(_poly())
+        _validate_polyline(_poly())
 
     def test_correccion_y_acercamiento_pasan(self):
         # N042: corrección izq/der y acercamiento (Arco/En cota/Automatic) — byte-validados.
-        _validate_arc_polyline_milling(_poly(side_of_feature="Left"))
-        _validate_arc_polyline_milling(_poly(side_of_feature="Right"))
-        _validate_arc_polyline_milling(_poly(approach=build_approach_spec(True, approach_type="Arc")))
-        _validate_arc_polyline_milling(_poly(side_of_feature="Left",
+        _validate_polyline(_poly(side_of_feature="Left"))
+        _validate_polyline(_poly(side_of_feature="Right"))
+        _validate_polyline(_poly(approach=build_approach_spec(True, approach_type="Arc")))
+        _validate_polyline(_poly(side_of_feature="Left",
                                              approach=build_approach_spec(True, approach_type="Arc")))
 
     def test_combos_sin_fixture(self):

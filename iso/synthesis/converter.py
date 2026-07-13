@@ -12,7 +12,7 @@ from ._reader import ProgramOps, read_pgmx
 from ._validation import UnsupportedOperationError
 from ._router import render_router
 from ._tool_catalog import tool_geometry
-from ._channel import render_channel
+from ._saw import render_saw
 from ._side_drill import render_side_drill
 from ._top_drill import render_top_drill
 
@@ -62,7 +62,7 @@ def convert(pgmx_path: Path) -> str:
         lines += render_router(list(ops.routers), ctx)
 
     if has_saw:
-        lines += render_channel(list(ops.saw_channels), ctx)
+        lines += render_saw(list(ops.saw_channels), ctx)
 
     if has_top:
         after_router_spindle = (
