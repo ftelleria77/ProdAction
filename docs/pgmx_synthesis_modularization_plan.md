@@ -90,9 +90,9 @@ fueron retiradas.
 | Familia | Contrato actual | Produccion objetivo | Laboratorio objetivo |
 | --- | --- | --- | --- |
 | Linea | `LineSpec` | `pgmx.synthesis.milling.line` | `pgmx.machining_lab.line_milling` |
-| Ranura | `ChannelSpec` | `pgmx.synthesis.milling.slot` | `pgmx.machining_lab.slot_milling` |
-| Perfil | `PolylineSpec`, `CircleSpec` | `pgmx.synthesis.milling.profile`, `circle` | `pgmx.machining_lab.profile_milling` |
-| Escuadrado | `ContourSpec` | `pgmx.synthesis.milling.squaring` | `pgmx.machining_lab.squaring` |
+| Ranura | `ChannelSpec` | `pgmx.synthesis.milling.channel` | `pgmx.machining_lab.slot_milling` |
+| Perfil | `PolylineSpec`, `CircleSpec` | `pgmx.synthesis.milling._curve_profile`, `circle` | `pgmx.machining_lab.profile_milling` |
+| Escuadrado | `ContourSpec` | `pgmx.synthesis.milling.contour` | `pgmx.machining_lab.squaring` |
 | Pocket / ClosedPocket | `PocketSpec`, contrato promovido `pgmx.synthesis.milling.pocket_contract` | `pgmx.synthesis.milling.pocket` | `pgmx.machining_lab.pocket_milling` |
 | Taladro | `DrillSpec` | `pgmx.synthesis.drilling.single` | `pgmx.machining_lab.drilling` |
 | Patron de taladros | `DrillPatternSpec` | `pgmx.synthesis.drilling.pattern` | `pgmx.machining_lab.drilling` |

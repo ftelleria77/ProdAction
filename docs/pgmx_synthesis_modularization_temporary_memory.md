@@ -321,8 +321,8 @@ Relacion con `common.xml`:
 
 Relacion con modulos de familia:
 
-- `milling.line`, `milling.slot`, `milling.profile`, `milling.circle` y
-  `milling.squaring` consumen este modulo para construir su geometria nominal y
+- `milling.line`, `milling.channel`, `milling._curve_profile`, `milling.circle` y
+  `milling.contour` consumen este modulo para construir su geometria nominal y
   su toolpath efectivo.
 - `milling.pocket` puede consumir utilidades basicas de perfiles cerrados, pero
   las reglas complejas de offset/puentes de pocket milling no deben entrar aqui
@@ -549,7 +549,7 @@ Relaciones:
   `common.piece`.
 - `drilling.single` y `drilling.pattern` deben usarlo para coordenadas y
   direcciones multicara.
-- `milling.line`, `milling.profile`, `milling.circle`, `milling.squaring` y
+- `milling.line`, `milling._curve_profile`, `milling.circle`, `milling.contour` y
   `milling.pocket` pueden usarlo para validar bounds y tomar dimensiones de
   pieza.
 - `common.program` puede usarlo para actualizar dimensiones/origen del baseline
@@ -670,9 +670,9 @@ Relaciones:
 - `iso_state_synthesis`, todavia en desarrollo, debera consumir el estado
   editable no resuelto y decidir herramienta final cuando sintetice ISO sin
   pasar por Maestro/postproceso.
-- `milling.slot` usa este modulo para clasificar herramientas tipo sierra; las
+- `milling.channel` usa este modulo para clasificar herramientas tipo sierra; las
   restricciones geometricas especificas de ranura deberian quedar en
-  `milling.slot`.
+  `milling.channel`.
 - `common.program` y los modulos de familia usan el resultado normalizado para
   serializar la herramienta, pero la escritura XML queda fuera de
   `common.tools`.
@@ -690,7 +690,7 @@ Criterio de migracion:
    `common.depth`, para que `tools` consuma profundidades ya calculadas.
 6. Separar al final las restricciones especificas de `Sierra Vertical X`:
    clasificacion generica en `common.tools`, reglas de ranura en
-   `milling.slot`.
+   `milling.channel`.
 
 Puntos abiertos:
 
@@ -789,7 +789,7 @@ Responsabilidades excluidas:
 
 Relaciones:
 
-- `milling.line`, `milling.profile`, `milling.circle` y `milling.squaring`
+- `milling.line`, `milling._curve_profile`, `milling.circle` y `milling.contour`
   pueden consumir estrategias compartidas `Unidirectional/Bidirectional` cuando
   Maestro las admite para esa familia.
 - `milling.circle` consume `HelicalMillingStrategySpec` como estrategia
@@ -908,7 +908,7 @@ Relaciones:
 
 - `common.program` coordina la decision de hidratar cada spec usando
   `source_pgmx_path`, pero la compatibilidad fina debe vivir en cada familia.
-- Los modulos de familia (`milling.line`, `milling.profile`,
+- Los modulos de familia (`milling.line`, `milling._curve_profile`,
   `milling.circle`, `milling.pocket`, `drilling.single`, etc.) usan helpers de
   `common.hydration` para leer material fuente y deciden si pueden reutilizarlo.
 - `common.xml` aporta lectura/escritura nodal basica y normalizacion XML.
@@ -1012,7 +1012,7 @@ Responsabilidades excluidas:
 
 Relaciones:
 
-- `milling.line`, `milling.profile`, `milling.circle`, `milling.squaring` y
+- `milling.line`, `milling._curve_profile`, `milling.circle`, `milling.contour` y
   `milling.pocket` consumen `common.leads` cuando sus operaciones Maestro
   exponen `Approach` y `Retract`.
 - `common.hydration` usa `common.leads` para normalizar y comparar leads
@@ -1106,9 +1106,9 @@ Responsabilidades incluidas:
 
 Responsabilidades excluidas:
 
-- No debe manejar `SlotSide`; eso pertenece a `milling.slot`.
+- No debe manejar `SlotSide`; eso pertenece a `milling.channel`.
 - No debe absorber polilineas de multiples segmentos ni perfiles con arcos; eso
-  pertenece a `milling.profile`.
+  pertenece a `milling._curve_profile`.
 - No debe manejar circulos; eso pertenece a `milling.circle`.
 - No debe decidir reglas generales de estrategia; debe consumir
   `common.strategy`.
@@ -1160,13 +1160,13 @@ Puntos abiertos:
   `common.geometry` o si `milling.line` conserva la politica de uso para este
   mecanizado.
 
-## Item 13 - Alcance Propuesto Para `pgmx.synthesis.milling.slot`
+## Item 13 - Alcance Propuesto Para `pgmx.synthesis.milling.channel`
 
 Fecha: 2026-06-03
 
 Modulo objetivo:
 
-- `pgmx/synthesis/milling/slot.py`
+- `pgmx/synthesis/milling/channel.py`
 
 Rol propuesto:
 
@@ -1242,7 +1242,7 @@ Responsabilidades excluidas:
 - No debe manejar fresado lineal `GeneralProfileFeature`; eso pertenece a
   `milling.line`.
 - No debe absorber polilineas, perfiles con arcos ni contornos compuestos; eso
-  pertenece a `milling.profile`.
+  pertenece a `milling._curve_profile`.
 - No debe manejar circulos, escuadrados ni pocket milling.
 - No debe generalizar ranuras curvas o de multiples segmentos sin evidencia
   Maestro y validacion productiva.
@@ -1263,7 +1263,7 @@ Relaciones:
 - `common.program` orquesta IDs, aplicacion del mecanizado y escritura final.
 - `common.hydration` queda como dependencia potencial para futuros templates.
 - `pgmx.adapters` conserva la lectura de snapshots, pero puede delegar
-  predicados de dominio en `milling.slot`.
+  predicados de dominio en `milling.channel`.
 
 Criterio de migracion:
 
@@ -1291,13 +1291,13 @@ Puntos abiertos:
 - Definir si se necesitara hidratacion exacta para ranuras o si la generacion
   pura actual es suficiente.
 
-## Item 14 - Alcance Propuesto Para `pgmx.synthesis.milling.profile`
+## Item 14 - Alcance Propuesto Para `pgmx.synthesis.milling._curve_profile`
 
 Fecha: 2026-06-03
 
 Modulo objetivo:
 
-- `pgmx/synthesis/milling/profile.py`
+- `pgmx/synthesis/milling/_curve_profile.py`
 
 Rol propuesto:
 
@@ -1338,10 +1338,10 @@ Responsabilidades incluidas:
 Responsabilidades excluidas:
 
 - No debe manejar una linea simple cuando corresponda `milling.line`.
-- No debe manejar `SlotSide`; eso pertenece a `milling.slot`.
+- No debe manejar `SlotSide`; eso pertenece a `milling.channel`.
 - No debe absorber circulos puros mientras `milling.circle` exista como modulo.
 - No debe manejar contornos de escuadrado exterior detectables como
-  `milling.squaring`.
+  `milling.contour`.
 - No debe manejar `ClosedPocket`; eso pertenece a `milling.pocket`.
 
 Relaciones:
@@ -1426,7 +1426,7 @@ Relaciones:
 - `common.strategy` distingue estrategias compartidas y helicoidal.
 - `common.leads`, `common.depth`, `common.tools`, `common.piece` y
   `common.hydration` aportan las reglas transversales.
-- `milling.profile` puede compartir helpers, pero no debe depender
+- `milling._curve_profile` puede compartir helpers, pero no debe depender
   circularmente de `circle`.
 
 Criterio de migracion:
@@ -1443,13 +1443,13 @@ Puntos abiertos:
 - Definir si `circle.py` queda como familia permanente o como wrapper
   especializado sobre `profile.py`.
 
-## Item 16 - Alcance Propuesto Para `pgmx.synthesis.milling.squaring`
+## Item 16 - Alcance Propuesto Para `pgmx.synthesis.milling.contour`
 
 Fecha: 2026-06-03
 
 Modulo objetivo:
 
-- `pgmx/synthesis/milling/squaring.py`
+- `pgmx/synthesis/milling/contour.py`
 
 Rol propuesto:
 
@@ -1493,7 +1493,7 @@ Relaciones:
 - `common.geometry` construye el contorno.
 - `common.strategy`, `common.leads`, `common.depth` y `common.tools` aportan
   reglas transversales.
-- `milling.profile` puede compartir la escritura de operacion, pero el
+- `milling._curve_profile` puede compartir la escritura de operacion, pero el
   significado de escuadrado queda en este modulo.
 
 Criterio de migracion:
@@ -1851,10 +1851,10 @@ Con los items anteriores, el mapa objetivo queda registrado para:
 - `pgmx.synthesis.common.hydration`;
 - `pgmx.synthesis.common.leads`;
 - `pgmx.synthesis.milling.line`;
-- `pgmx.synthesis.milling.slot`;
-- `pgmx.synthesis.milling.profile`;
+- `pgmx.synthesis.milling.channel`;
+- `pgmx.synthesis.milling._curve_profile`;
 - `pgmx.synthesis.milling.circle`;
-- `pgmx.synthesis.milling.squaring`;
+- `pgmx.synthesis.milling.contour`;
 - `pgmx.synthesis.milling.pocket`;
 - `pgmx.synthesis.drilling.single`;
 - `pgmx.synthesis.drilling.pattern`;

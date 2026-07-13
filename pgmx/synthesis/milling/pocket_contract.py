@@ -24,7 +24,7 @@ __all__ = [
     "VaciadoDepth",
     "VaciadoGeometry",
     "VaciadoStrategy",
-    "from_pocket_milling_spec",
+    "from_pocket_spec",
     "plan_rectangular_no_islands",
     "rectangular_loop_sequence",
 ]
@@ -232,7 +232,7 @@ class RectangularNoIslandTracePlan:
     primitive_sequences: tuple[TracePrimitiveSequence2D, ...]
 
 
-def from_pocket_milling_spec(
+def from_pocket_spec(
     spec: PocketSpec,
 ) -> tuple[VaciadoGeometry, VaciadoStrategy, VaciadoDepth]:
     strategy_spec = spec.milling_strategy

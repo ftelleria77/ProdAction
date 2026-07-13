@@ -83,10 +83,10 @@ Mapa interno vigente:
 | `pgmx.synthesis.common.hydration` | Lectura de templates y contenedores `.pgmx`/`Pieza.xml`. |
 | `pgmx.synthesis.common.leads` | Acercamientos y alejamientos Maestro. |
 | `pgmx.synthesis.milling.line` | Fresados lineales. |
-| `pgmx.synthesis.milling.slot` | Ranuras `SlotSide`. |
-| `pgmx.synthesis.milling.profile` | Fresados sobre perfiles/polilineas. |
+| `pgmx.synthesis.milling.channel` | Ranuras `SlotSide`. |
+| `pgmx.synthesis.milling._curve_profile` | Fresados sobre perfiles/polilineas. |
 | `pgmx.synthesis.milling.circle` | Fresados circulares. |
-| `pgmx.synthesis.milling.squaring` | Escuadrado exterior. |
+| `pgmx.synthesis.milling.contour` | Escuadrado exterior. |
 | `pgmx.synthesis.milling.pocket` | Produccion `ClosedPocket` / pocket milling. |
 | `pgmx.synthesis.milling.pocket_contract` | Contrato promovido desde el V2 historico de Vaciado. |
 | `pgmx.synthesis.milling.pocket_trace` y `pocket_rectangular` | Reglas productivas cerradas de trazas/rectangulares para pocket milling. |

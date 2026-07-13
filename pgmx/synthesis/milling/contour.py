@@ -40,7 +40,7 @@ from ..common.strategy import (
     _normalize_milling_strategy_spec,
 )
 from ._common import _normalize_geometry_winding, _toolpath_cut_z
-from .profile import _append_curve_profile_milling
+from ._curve_profile import _append_curve_profile_milling
 
 if TYPE_CHECKING:
     from ..common.program import PgmxState

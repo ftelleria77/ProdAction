@@ -8,7 +8,7 @@ from pgmx.machining_lab.pocket_milling import scan_samples as pocket_milling_sca
 from pgmx.machining_lab.pocket_milling import trace_engine as pocket_milling_trace_engine
 from pgmx.synthesis import cli as synthesis_cli
 from pgmx.synthesis import core as synthesis_core
-from pgmx.synthesis import vaciado as synthesis_vaciado
+from pgmx.synthesis import pocket_support as synthesis_pocket_support
 from pgmx.synthesis.milling import pocket_contract as milling_pocket_contract
 from pgmx.synthesis.milling import pocket_trace as milling_pocket_trace
 
@@ -48,7 +48,7 @@ class PgmxPublicBoundaryTests(unittest.TestCase):
         self.assertIn("VaciadoGeometry", milling_pocket_contract.__all__)
         self.assertIn("VaciadoDepth", milling_pocket_contract.__all__)
 
-        status = synthesis_vaciado.vaciado_support_status()
+        status = synthesis_pocket_support.pocket_support_status()
         self.assertTrue(status.enabled)
         self.assertEqual(status.model_package, "pgmx.synthesis.milling.pocket")
         self.assertFalse(status.legacy_engine_allowed)

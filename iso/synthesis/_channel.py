@@ -32,7 +32,7 @@ def _saw_mandrel(tool_name: str) -> int:
     return int(tool_name.lstrip("0") or "0")
 
 
-def render_saw(channels, ctx: PieceCtx) -> list[str]:
+def render_channel(channels, ctx: PieceCtx) -> list[str]:
     lines: list[str] = []
     prev_end: tuple[float, float] | None = None
 

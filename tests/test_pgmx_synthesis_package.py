@@ -29,10 +29,10 @@ from pgmx.synthesis.milling import line as milling_line
 from pgmx.synthesis.milling import pocket as milling_pocket
 from pgmx.synthesis.milling import pocket_rectangular as milling_pocket_rectangular
 from pgmx.synthesis.milling import pocket_trace as milling_pocket_trace
-from pgmx.synthesis.milling import poly_profile as milling_polyline
-from pgmx.synthesis.milling import profile as milling_profile
-from pgmx.synthesis.milling import slot as milling_slot
-from pgmx.synthesis.milling import squaring as milling_squaring
+from pgmx.synthesis.milling import polyline as milling_polyline
+from pgmx.synthesis.milling import _curve_profile as milling_curve_profile
+from pgmx.synthesis.milling import channel as milling_channel
+from pgmx.synthesis.milling import contour as milling_contour
 
 
 class PgmxSynthesisPackageTests(unittest.TestCase):
@@ -85,7 +85,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertEqual(pgmx_synthesis.TOOL_CATALOG_PATH.parent.name, "data")
 
     def test_vaciado_boundary_adapts_public_pocket_spec_to_v2_contract(self) -> None:
-        status = pgmx_synthesis.vaciado_support_status()
+        status = pgmx_synthesis.pocket_support_status()
         self.assertTrue(status.enabled)
         self.assertEqual(status.model_package, "pgmx.synthesis.milling.pocket")
         self.assertFalse(status.legacy_engine_allowed)
@@ -96,7 +96,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             target_depth=10.0,
         )
 
-        geometry, strategy, depth = pgmx_synthesis.adapt_pocket_milling_to_vaciado_contract(pocket)
+        geometry, strategy, depth = pgmx_synthesis.adapt_pocket_to_contract(pocket)
 
         self.assertEqual(geometry.outer.bbox.width, 400.0)
         self.assertEqual(geometry.outer.bbox.height, 300.0)
@@ -543,36 +543,36 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             milling_line.LineSpec(0, 0, 100, 0, side_of_feature="izquierda")
         )
         self.assertEqual(normalized_line.side_of_feature, "Left")
-        self.assertIs(core_sp.ChannelSpec, milling_slot.ChannelSpec)
-        self.assertIs(core_sp._HydratedChannelSpec, milling_slot._HydratedChannelSpec)
-        self.assertIs(core_sp.build_channel_spec, milling_slot.build_channel_spec)
-        self.assertIs(core_sp._append_channel, milling_slot._append_channel)
-        self.assertIs(core_sp._build_slot_side_feature, milling_slot._build_slot_side_feature)
-        self.assertIs(core_sp._normalize_channel_spec, milling_slot._normalize_channel_spec)
-        self.assertIs(core_sp._hydrate_channel_spec, milling_slot._hydrate_channel_spec)
-        slot = milling_slot.build_channel_spec(
+        self.assertIs(core_sp.ChannelSpec, milling_channel.ChannelSpec)
+        self.assertIs(core_sp._HydratedChannelSpec, milling_channel._HydratedChannelSpec)
+        self.assertIs(core_sp.build_channel_spec, milling_channel.build_channel_spec)
+        self.assertIs(core_sp._append_channel, milling_channel._append_channel)
+        self.assertIs(core_sp._build_slot_side_feature, milling_channel._build_slot_side_feature)
+        self.assertIs(core_sp._normalize_channel_spec, milling_channel._normalize_channel_spec)
+        self.assertIs(core_sp._hydrate_channel_spec, milling_channel._hydrate_channel_spec)
+        slot = milling_channel.build_channel_spec(
             start_x=0,
             start_y=0,
             end_x=120,
             end_y=0,
             side_of_feature="derecha",
         )
-        self.assertIsInstance(slot, milling_slot.ChannelSpec)
+        self.assertIsInstance(slot, milling_channel.ChannelSpec)
         self.assertEqual(slot.feature_name, "Canal")
         self.assertEqual(slot.side_of_feature, "Right")
         self.assertEqual(slot.tool_id, "1899")
         self.assertEqual(slot.depth_spec.target_depth, 10.0)
         self.assertIsNone(slot.milling_strategy)
         with self.assertRaisesRegex(ValueError, "longitud cero"):
-            milling_slot.build_channel_spec(start_x=0, start_y=0, end_x=0, end_y=0)
+            milling_channel.build_channel_spec(start_x=0, start_y=0, end_x=0, end_y=0)
         # POLILÍNEA UNIFICADA (una sola spec: rectas y/o arcos; `points=` es el atajo recto).
         self.assertIs(core_sp.PolylineSpec, milling_polyline.PolylineSpec)
         self.assertIs(core_sp.build_polyline_spec, milling_polyline.build_polyline_spec)
         self.assertIs(core_sp.PolylineSegment, milling_polyline.PolylineSegment)
         # `profile.py` queda como MOTOR compartido de autoría de perfiles curvos (interno del
         # paquete milling: lo usan arc/circle/poly_profile/squaring, no es API pública del core).
-        self.assertTrue(callable(milling_profile._append_curve_profile_milling))
-        self.assertEqual(milling_profile.__all__, ["_append_curve_profile_milling"])
+        self.assertTrue(callable(milling_curve_profile._append_curve_profile_milling))
+        self.assertEqual(milling_curve_profile.__all__, ["_append_curve_profile_milling"])
 
         polyline = milling_polyline.build_polyline_spec(
             points=((0, 0), (100, 0), (100, 50), (0, 0)),
@@ -630,21 +630,21 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIsInstance(circle.milling_strategy, common_strategy.HelicalMillingStrategySpec)
         with self.assertRaisesRegex(ValueError, "radio"):
             milling_circle.build_circle_spec(center_x=0, center_y=0, radius=0)
-        self.assertIs(core_sp.ContourSpec, milling_squaring.ContourSpec)
-        self.assertIs(core_sp._HydratedContourSpec, milling_squaring._HydratedContourSpec)
-        self.assertIs(core_sp.build_contour_spec, milling_squaring.build_contour_spec)
-        self.assertIs(core_sp._append_contour, milling_squaring._append_contour)
-        self.assertIs(core_sp._normalize_contour_spec, milling_squaring._normalize_contour_spec)
-        self.assertIs(core_sp._hydrate_contour_spec, milling_squaring._hydrate_contour_spec)
-        self.assertIs(core_sp._build_squaring_outline_points, milling_squaring._build_squaring_outline_points)
-        self.assertIs(core_sp._build_squaring_geometry_profile, milling_squaring._build_squaring_geometry_profile)
-        self.assertIs(core_sp._build_squaring_toolpath_profile, milling_squaring._build_squaring_toolpath_profile)
+        self.assertIs(core_sp.ContourSpec, milling_contour.ContourSpec)
+        self.assertIs(core_sp._HydratedContourSpec, milling_contour._HydratedContourSpec)
+        self.assertIs(core_sp.build_contour_spec, milling_contour.build_contour_spec)
+        self.assertIs(core_sp._append_contour, milling_contour._append_contour)
+        self.assertIs(core_sp._normalize_contour_spec, milling_contour._normalize_contour_spec)
+        self.assertIs(core_sp._hydrate_contour_spec, milling_contour._hydrate_contour_spec)
+        self.assertIs(core_sp._build_squaring_outline_points, milling_contour._build_squaring_outline_points)
+        self.assertIs(core_sp._build_squaring_geometry_profile, milling_contour._build_squaring_geometry_profile)
+        self.assertIs(core_sp._build_squaring_toolpath_profile, milling_contour._build_squaring_toolpath_profile)
         self.assertIs(
             core_sp._reparameterize_squaring_toolpath_profile,
-            milling_squaring._reparameterize_squaring_toolpath_profile,
+            milling_contour._reparameterize_squaring_toolpath_profile,
         )
-        squaring = milling_squaring.build_contour_spec(start_edge="borde-derecho", winding="horario")
-        self.assertIsInstance(squaring, milling_squaring.ContourSpec)
+        squaring = milling_contour.build_contour_spec(start_edge="borde-derecho", winding="horario")
+        self.assertIsInstance(squaring, milling_contour.ContourSpec)
         self.assertEqual(squaring.start_edge, "Right")
         self.assertEqual(squaring.winding, "Clockwise")
         self.assertEqual(squaring.side_of_feature, "Left")

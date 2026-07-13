@@ -16,10 +16,10 @@ from typing import Iterable
 from pgmx.synthesis.drilling.pattern import DrillPatternSpec
 from pgmx.synthesis.drilling.single import DrillSpec
 from pgmx.synthesis.milling.arc import ArcSpec
-from pgmx.synthesis.milling.poly_profile import PolylineSpec
+from pgmx.synthesis.milling.polyline import PolylineSpec
 from pgmx.synthesis.milling.circle import CircleSpec
 from pgmx.synthesis.milling.line import LineSpec
-from pgmx.synthesis.milling.slot import ChannelSpec
+from pgmx.synthesis.milling.channel import ChannelSpec
 
 from ._machine import SIDE_FACE, TOP_TOOL, TOP_TOOL_CONICAL, top_tool_or_none
 from ._tool_catalog import tool_geometry

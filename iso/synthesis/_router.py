@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import replace as _dc_replace
 
 from pgmx.synthesis.milling.arc import ArcSpec
-from pgmx.synthesis.milling.poly_profile import PolylineSpec
+from pgmx.synthesis.milling.polyline import PolylineSpec
 from pgmx.synthesis.milling.circle import CircleSpec
 from pgmx.synthesis.milling.line import LineSpec
 

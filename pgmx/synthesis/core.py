@@ -24,9 +24,9 @@ from .milling.circle import *  # noqa: F401,F403
 from .milling.line import *  # noqa: F401,F403
 from .milling.pocket import *  # noqa: F401,F403
 from .milling.arc import *  # noqa: F401,F403
-from .milling.poly_profile import *  # noqa: F401,F403
-from .milling.slot import *  # noqa: F401,F403
-from .milling.squaring import *  # noqa: F401,F403
+from .milling.polyline import *  # noqa: F401,F403
+from .milling.channel import *  # noqa: F401,F403
+from .milling.contour import *  # noqa: F401,F403
 
 register_pgmx_namespaces()
 

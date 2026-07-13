@@ -4,7 +4,7 @@ Primera operación del **Eje B**. La 082 vive FIJA en el **mandril 82 del cabeza
 (sin ATC): Ø120, hoja 3.8/4 mm, hundimiento máx 10 mm, TLC 60, feed 5 m/min, S4000.
 Restricción física: cara superior, dirección X, **sentido −x**.
 
-Implementación: `iso/synthesis/_saw.py` (render), `_validation._validate_slot_milling`,
+Implementación: `iso/synthesis/_channel.py` (render), `_validation._validate_slot_milling`,
 familia `saw_channels` en `_reader.ProgramOps`. Tests: `test_iso_saw_channel.py`.
 
 ## Header (sin ATC)

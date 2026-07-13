@@ -7,7 +7,7 @@ from pgmx.synthesis.milling.pocket_contract import (
     VaciadoDepth,
     VaciadoGeometry,
     VaciadoStrategy,
-    from_pocket_milling_spec,
+    from_pocket_spec,
     plan_rectangular_no_islands,
 )
 from pgmx.adapters import adapt_pgmx_path
@@ -167,7 +167,7 @@ class VaciadoV2Tests(unittest.TestCase):
         adaptation = adapt_pgmx_path(MANUAL_ROOT / "Vaciado_008.pgmx")
         spec = adaptation.pocket_millings[0]
 
-        geometry, strategy, depth = from_pocket_milling_spec(spec)
+        geometry, strategy, depth = from_pocket_spec(spec)
         plan = plan_rectangular_no_islands(geometry, strategy, depth)
 
         self.assertEqual(strategy.tool_width, 80.0)
@@ -182,7 +182,7 @@ class VaciadoV2Tests(unittest.TestCase):
             with self.subTest(case=f"Vaciado_{index:03d}"):
                 adaptation = adapt_pgmx_path(MANUAL_ROOT / f"Vaciado_{index:03d}.pgmx")
                 spec = adaptation.pocket_millings[0]
-                geometry, strategy, depth = from_pocket_milling_spec(spec)
+                geometry, strategy, depth = from_pocket_spec(spec)
                 plan = plan_rectangular_no_islands(geometry, strategy, depth)
                 outermost = plan.offset_family.bboxes[0]
                 actual = _trajectory_xy_bbox(adaptation)

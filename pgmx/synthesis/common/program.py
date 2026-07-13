@@ -52,19 +52,19 @@ from ..milling.arc import (
 )
 # POLILÍNEA UNIFICADA: una sola spec (rectas y/o arcos). El builder acepta `points=` (atajo
 # recto) o `start=`+`segments=` (general). Los alias conservan los nombres canónicos del sistema.
-from ..milling.poly_profile import (
+from ..milling.polyline import (
     PolylineSpec as PolylineSpec,
     _HydratedPolylineSpec as _HydratedPolylineSpec,
     _append_polyline as _append_polyline,
     _hydrate_polyline_spec as _hydrate_polyline_spec,
 )
-from ..milling.slot import (
+from ..milling.channel import (
     ChannelSpec,
     _HydratedChannelSpec,
     _append_channel,
     _hydrate_channel_spec,
 )
-from ..milling.squaring import (
+from ..milling.contour import (
     ContourSpec,
     _HydratedContourSpec,
     _append_contour,

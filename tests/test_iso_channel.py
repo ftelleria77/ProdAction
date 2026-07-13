@@ -14,7 +14,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from pgmx.synthesis import build_synthesis_request, synthesize_request
-from pgmx.synthesis.milling.slot import ChannelSpec, build_channel_spec
+from pgmx.synthesis.milling.channel import ChannelSpec, build_channel_spec
 from pgmx.synthesis.common.leads import build_approach_spec
 
 from iso.synthesis import convert

@@ -168,7 +168,7 @@ def _hydrate_arc_spec(
 
 
 def _append_arc(root, state, spec: _HydratedArcSpec) -> None:
-    from .profile import _append_curve_profile_milling
+    from ._curve_profile import _append_curve_profile_milling
 
     geometry_curve = spec.geometry_curve or _curve_spec_from_profile_geometry(
         _build_arc_geometry_profile(spec.spec, 0.0))

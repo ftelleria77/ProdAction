@@ -50,7 +50,7 @@ from ..common.strategy import (
 from ..common.piece import _workpiece_depth_name
 from ..common.xml import _raw_text, _text, _xsi_type
 from ._common import _normalize_geometry_winding, _normalize_side_of_feature, _toolpath_cut_z
-from .profile import _append_curve_profile_milling
+from ._curve_profile import _append_curve_profile_milling
 
 __all__ = [
     "CircleSpec",

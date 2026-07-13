@@ -16,10 +16,10 @@ from pgmx.adapters import adapt_pgmx_path
 from pgmx.synthesis.drilling.pattern import DrillPatternSpec
 from pgmx.synthesis.drilling.single import DrillSpec
 from pgmx.synthesis.milling.arc import ArcSpec
-from pgmx.synthesis.milling.poly_profile import PolylineSpec
+from pgmx.synthesis.milling.polyline import PolylineSpec
 from pgmx.synthesis.milling.circle import CircleSpec
 from pgmx.synthesis.milling.line import LineSpec
-from pgmx.synthesis.milling.slot import ChannelSpec
+from pgmx.synthesis.milling.channel import ChannelSpec
 
 from ._machine import (
     FACE_PRIORITY, SIDE_MAX_DEPTH, SIDE_SUPPORTED_FIELDS, SUPPORTED_FIELDS, X_PARK, resolve_top_tool,

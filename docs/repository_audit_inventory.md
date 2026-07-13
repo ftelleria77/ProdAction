@@ -147,7 +147,7 @@ necesidad funcional.
 | `pgmx.synthesis.__main__` | Entrada CLI. | `py -3 -m pgmx.synthesis`. |
 | `pgmx.synthesis.cli` | CLI de sintesis. | `main`. |
 | `pgmx.synthesis.core` | Fachada interna historica del sintetizador. | Reexports de `common`, `milling`, `drilling`. No debe recibir logica nueva. |
-| `pgmx.synthesis.vaciado` | Estado de integracion pocket/vaciado. | `vaciado_support_status`, `adapt_pocket_milling_to_vaciado_contract`. |
+| `pgmx.synthesis.pocket_support` | Estado de integracion pocket/vaciado. | `pocket_support_status`, `adapt_pocket_to_contract`. |
 | `pgmx.synthesis.common.program` | Orquestacion de programa PGMX. | `PgmxState`, `PgmxSynthesisRequest`, `build_synthesis_request`, `synthesize_request`, `synthesize_pgmx`. |
 | `pgmx.synthesis.common.xml` | Helpers XML, IDs, namespaces y referencias. | `register_pgmx_namespaces` y helpers internos. |
 | `pgmx.synthesis.common.output` | Finalizacion XML y escritura `.pgmx`. | Helpers internos `_write_pgmx_zip`, `_finalize_*`. |
@@ -159,10 +159,10 @@ necesidad funcional.
 | `pgmx.synthesis.common.hydration` | Carga de templates `.pgmx`/`Pieza.xml`. | `PgmxTemplateDocument`, `load_pgmx_template_document`. |
 | `pgmx.synthesis.common.leads` | Acercamientos/alejamientos. | `ApproachSpec`, `RetractSpec`, `build_approach_spec`, `build_retract_spec`. |
 | `pgmx.synthesis.milling.line` | Fresado lineal. | `LineSpec`, `build_line_spec`. |
-| `pgmx.synthesis.milling.slot` | Ranura `SlotSide`. | `ChannelSpec`, `build_channel_spec`. |
-| `pgmx.synthesis.milling.profile` | Fresado de polilinea/perfil. | `PolylineSpec`, `build_polyline_spec`. |
+| `pgmx.synthesis.milling.channel` | Ranura `SlotSide`. | `ChannelSpec`, `build_channel_spec`. |
+| `pgmx.synthesis.milling._curve_profile` | Fresado de polilinea/perfil. | `PolylineSpec`, `build_polyline_spec`. |
 | `pgmx.synthesis.milling.circle` | Fresado circular. | `CircleSpec`, `build_circle_spec`. |
-| `pgmx.synthesis.milling.squaring` | Escuadrado exterior. | `ContourSpec`, `build_contour_spec`. |
+| `pgmx.synthesis.milling.contour` | Escuadrado exterior. | `ContourSpec`, `build_contour_spec`. |
 | `pgmx.synthesis.milling.pocket` | Produccion `ClosedPocket`/pocket milling. | `PocketSpec`, `PocketBossRouteSeedSpec`, builders. |
 | `pgmx.synthesis.milling.pocket_contract` | Contrato promovido desde Vaciado V2. | `VaciadoGeometry`, `VaciadoStrategy`, `VaciadoDepth`, `plan_rectangular_no_islands`. |
 | `pgmx.synthesis.milling.pocket_rectangular` | Reglas rectangulares cerradas. | `generate_rectangular_contour_parallel_path`, `generate_rectangular_contour_parallel_xyz_path`. |

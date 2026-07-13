@@ -1841,7 +1841,7 @@ productivo de pocket milling:
 - `pgmx.vaciado.*` reexporta ese contrato como fachada historica.
 - `tools.pgmx_vaciado_v2.*` tambien reexporta
   `pgmx.synthesis.milling.pocket_contract`.
-- `pgmx.synthesis.vaciado.vaciado_support_status()` informa como frontera
+- `pgmx.synthesis.pocket_support.pocket_support_status()` informa como frontera
   productiva `pgmx.synthesis.milling.pocket`.
 - Las pruebas de fachadas publicas verifican que `pgmx.vaciado` y
   `tools.pgmx_vaciado_v2` apunten a `pocket_contract`.

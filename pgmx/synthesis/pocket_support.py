@@ -8,7 +8,7 @@ from .core import PocketSpec
 
 
 @dataclass(frozen=True)
-class VaciadoSynthesisSupport:
+class PocketSynthesisSupport:
     """Current production boundary for Vaciado synthesis."""
 
     enabled: bool
@@ -17,10 +17,10 @@ class VaciadoSynthesisSupport:
     notes: tuple[str, ...] = ()
 
 
-def vaciado_support_status() -> VaciadoSynthesisSupport:
+def pocket_support_status() -> PocketSynthesisSupport:
     """Return the current Vaciado integration status for the PGMX subsystem."""
 
-    return VaciadoSynthesisSupport(
+    return PocketSynthesisSupport(
         enabled=True,
         model_package="pgmx.synthesis.milling.pocket",
         legacy_engine_allowed=False,
@@ -32,13 +32,13 @@ def vaciado_support_status() -> VaciadoSynthesisSupport:
     )
 
 
-def adapt_pocket_milling_to_vaciado_contract(spec: PocketSpec):
+def adapt_pocket_to_contract(spec: PocketSpec):
     """Adapt a public `PocketSpec` to the Vaciado V2 contract.
 
     The import is intentionally lazy to avoid making the public synthesizer
     package depend on laboratory modules at import time.
     """
 
-    from pgmx.synthesis.milling.pocket_contract import from_pocket_milling_spec
+    from pgmx.synthesis.milling.pocket_contract import from_pocket_spec
 
-    return from_pocket_milling_spec(spec)
+    return from_pocket_spec(spec)
