@@ -52,7 +52,9 @@ from ._common import _toolpath_cut_z
 __all__ = [
     "PolylineSegment",
     "ArcPolylineMillingSpec",
+    "PolylineMillingSpec",
     "build_arc_polyline_milling_spec",
+    "build_polyline_milling_spec",
     "_HydratedArcPolylineMillingSpec",
     "_append_arc_polyline_milling",
     "_build_arc_polyline_toolpath_profile",
@@ -149,7 +151,7 @@ def _normalize_arc_polyline_milling_spec(spec: ArcPolylineMillingSpec) -> ArcPol
         allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
         context="ArcPolylineMillingSpec",
     )
-    return replace(
+    normalized = replace(
         spec,
         start_x=float(spec.start_x),
         start_y=float(spec.start_y),
@@ -161,6 +163,28 @@ def _normalize_arc_polyline_milling_spec(spec: ArcPolylineMillingSpec) -> ArcPol
         retract=_normalize_retract_spec(spec.retract),
         milling_strategy=normalized_strategy,
     )
+    _validate_postprocessable_by_maestro(normalized)
+    return normalized
+
+
+def _validate_postprocessable_by_maestro(spec: ArcPolylineMillingSpec) -> None:
+    """Bloquea una combinación que Maestro NO logra postprocesar a ISO (heredada de la polilínea
+    recta): perfil ABIERTO multi-segmento + estrategia multipasada + Alejamiento Arco «En subida».
+    Usar Alejamiento Lineal+Up o Arco+En cota."""
+    strategy = spec.milling_strategy
+    retract = spec.retract
+    if (not spec.is_closed
+            and len(spec.segments) > 1
+            and strategy is not None
+            and getattr(strategy, "allow_multiple_passes", False)
+            and retract.is_enabled
+            and retract.retract_type == "Arc"
+            and retract.mode == "Up"):
+        raise ValueError(
+            "Maestro no postprocesa polilineas abiertas de varios segmentos con "
+            "estrategia multipasada PH y Retract Arc + Up. Usar Retract Line + Up "
+            "o Arc + Quote para obtener ISO postprocesable."
+        )
 
 
 def _build_arc_polyline_geometry_profile(spec: ArcPolylineMillingSpec, z_value: float) -> GeometryProfileSpec:
@@ -237,8 +261,9 @@ def _segment(end, center=None, winding=None) -> PolylineSegment:
 
 def build_arc_polyline_milling_spec(
     *,
-    start: tuple[float, float],
-    segments: Sequence,
+    start: Optional[tuple[float, float]] = None,
+    segments: Optional[Sequence] = None,
+    points: Optional[Sequence[tuple[float, float]]] = None,
     feature_name: Optional[str] = None,
     tool_id: Optional[str] = None,
     tool_name: Optional[str] = None,
@@ -270,6 +295,19 @@ def build_arc_polyline_milling_spec(
     o ``(end, center, winding)`` para arco (``end``/``center`` = pares ``(x, y)``).
     """
 
+    # Dos formas de entrada equivalentes (una sola polilínea):
+    #   points=[(x,y), ...]            → atajo RECTO (todos los segmentos son rectas)
+    #   start=(x,y), segments=[...]    → forma general (rectas y/o arcos)
+    if points is not None:
+        if start is not None or segments is not None:
+            raise ValueError("Usar `points` O (`start` + `segments`), no ambos.")
+        pts = tuple((float(px), float(py)) for px, py in points)
+        if len(pts) < 3:
+            raise ValueError("Una polilínea necesita al menos 3 puntos (2 segmentos).")
+        start = pts[0]
+        segments = [(pt,) for pt in pts[1:]]
+    if start is None or segments is None:
+        raise ValueError("Falta la geometría: pasar `points` o (`start` + `segments`).")
     normalized_segments = []
     for seg in segments:
         if isinstance(seg, PolylineSegment):
@@ -315,3 +353,9 @@ def build_arc_polyline_milling_spec(
             is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,
         )
     )
+
+
+# Nombre histórico de la polilínea RECTA: ahora es la MISMA polilínea unificada, con el atajo
+# `points=`. Se conserva como alias hasta el rename global (etapa 2).
+build_polyline_milling_spec = build_arc_polyline_milling_spec
+PolylineMillingSpec = ArcPolylineMillingSpec

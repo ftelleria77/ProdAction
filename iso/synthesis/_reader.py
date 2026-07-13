@@ -19,7 +19,6 @@ from pgmx.synthesis.milling.arc import ArcMillingSpec
 from pgmx.synthesis.milling.poly_profile import ArcPolylineMillingSpec
 from pgmx.synthesis.milling.circle import CircleMillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
-from pgmx.synthesis.milling.profile import PolylineMillingSpec
 from pgmx.synthesis.milling.slot import SlotMillingSpec
 
 from ._machine import (
@@ -195,7 +194,7 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
         elif isinstance(spec, DrillingSpec):
             drills = [spec]
         elif isinstance(spec, (LineMillingSpec, CircleMillingSpec, ArcMillingSpec,
-                               ArcPolylineMillingSpec, PolylineMillingSpec)):
+                               ArcPolylineMillingSpec)):
             # Círculo (N038), arco suelto (N040) y polilínea mixta (N041) son ops de
             # la familia ROUTER: mismo header/transición/teardown que las líneas.
             routers.append(spec)
@@ -256,13 +255,8 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
 
     # Fail-loud: familias del router (línea / círculo / arco / polilínea) MEZCLADAS en un
     # programa — las transiciones mixtas no tienen fixture (cada lote two-* es de una sola
-    # familia: N028/N036 líneas, N038 círculos, N040 arcos, N041 polilíneas). La polilínea
-    # RECTA (PolylineMillingSpec) y la MIXTA (ArcPolylineMillingSpec) son la MISMA familia
-    # "poly" (N041 two las combina byte-idéntico: el adapter degrada la recta-pura a Polyline).
-    def _router_family(m) -> str:
-        n = type(m).__name__
-        return "poly" if n in ("PolylineMillingSpec", "ArcPolylineMillingSpec") else n
-    router_families = {_router_family(m) for m in routers}
+    # familia: N028/N036 líneas, N038 círculos, N040 arcos, N041 polilíneas).
+    router_families = {type(m).__name__ for m in routers}
     if len(router_families) > 1:
         raise UnsupportedOperationError(
             "fresado de familias mezcladas (línea/círculo/arco/polilínea) en el mismo "

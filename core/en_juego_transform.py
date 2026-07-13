@@ -77,9 +77,23 @@ def transform_polyline_milling_spec(
     *,
     feature_name_prefix: str = "",
 ) -> sp.PolylineMillingSpec:
+    # Polilínea unificada: `points` es una property → se transforma el arranque y CADA segmento
+    # (extremo y, si es arco, su centro).
+    start_x, start_y = transform.point(spec.start_x, spec.start_y)
+    segments = []
+    for segment in spec.segments:
+        end_x, end_y = transform.point(segment.end_x, segment.end_y)
+        if segment.is_arc:
+            center_x, center_y = transform.point(segment.center_x, segment.center_y)
+            segments.append(replace(
+                segment, end_x=end_x, end_y=end_y, center_x=center_x, center_y=center_y))
+        else:
+            segments.append(replace(segment, end_x=end_x, end_y=end_y))
     return replace(
         spec,
-        points=tuple(transform.point(point_x, point_y) for point_x, point_y in spec.points),
+        start_x=start_x,
+        start_y=start_y,
+        segments=tuple(segments),
         feature_name=prefixed_feature_name(spec.feature_name, feature_name_prefix),
     )
 

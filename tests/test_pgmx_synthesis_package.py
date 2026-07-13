@@ -29,6 +29,7 @@ from pgmx.synthesis.milling import line as milling_line
 from pgmx.synthesis.milling import pocket as milling_pocket
 from pgmx.synthesis.milling import pocket_rectangular as milling_pocket_rectangular
 from pgmx.synthesis.milling import pocket_trace as milling_pocket_trace
+from pgmx.synthesis.milling import poly_profile as milling_polyline
 from pgmx.synthesis.milling import profile as milling_profile
 from pgmx.synthesis.milling import slot as milling_slot
 from pgmx.synthesis.milling import squaring as milling_squaring
@@ -188,7 +189,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.synthesize_pgmx, common_program.synthesize_pgmx)
         self.assertEqual(
             common_program.DEFAULT_MACHINING_ORDER,
-            ("line", "slot", "polyline", "arc", "arc_polyline", "circle", "squaring", "pocket", "drilling", "drilling_pattern"),
+            ("line", "slot", "polyline", "arc", "circle", "squaring", "pocket", "drilling", "drilling_pattern"),
         )
         self.assertIs(core_sp.GeometryPrimitiveSpec, common_geometry.GeometryPrimitiveSpec)
         self.assertIs(core_sp.GeometryProfileSpec, common_geometry.GeometryProfileSpec)
@@ -564,32 +565,36 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIsNone(slot.milling_strategy)
         with self.assertRaisesRegex(ValueError, "longitud cero"):
             milling_slot.build_slot_milling_spec(start_x=0, start_y=0, end_x=0, end_y=0)
-        self.assertIs(core_sp.PolylineMillingSpec, milling_profile.PolylineMillingSpec)
-        self.assertIs(core_sp._HydratedPolylineMillingSpec, milling_profile._HydratedPolylineMillingSpec)
-        self.assertIs(core_sp.build_polyline_milling_spec, milling_profile.build_polyline_milling_spec)
-        self.assertIs(core_sp._append_curve_profile_milling, milling_profile._append_curve_profile_milling)
-        self.assertIs(core_sp._append_polyline_milling, milling_profile._append_polyline_milling)
-        self.assertIs(core_sp._normalize_polyline_milling_spec, milling_profile._normalize_polyline_milling_spec)
-        self.assertIs(core_sp._build_polyline_toolpath_profile, milling_profile._build_polyline_toolpath_profile)
-        self.assertIs(core_sp._matches_polyline_geometry, milling_profile._matches_polyline_geometry)
-        self.assertIs(
-            core_sp._can_hydrate_exact_polyline_serialization,
-            milling_profile._can_hydrate_exact_polyline_serialization,
-        )
-        self.assertIs(core_sp._extract_polyline_milling_template, milling_profile._extract_polyline_milling_template)
-        self.assertIs(core_sp._hydrate_polyline_milling_spec, milling_profile._hydrate_polyline_milling_spec)
-        self.assertIs(milling_profile._normalize_polyline_points, common_geometry._normalize_polyline_points)
-        self.assertIs(milling_profile._is_closed_polyline_points, common_geometry._is_closed_polyline_points)
-        polyline = milling_profile.build_polyline_milling_spec(
-            ((0, 0), (100, 0), (100, 50), (0, 0)),
+        # POLILÍNEA UNIFICADA (una sola spec: rectas y/o arcos; `points=` es el atajo recto).
+        self.assertIs(core_sp.PolylineMillingSpec, milling_polyline.ArcPolylineMillingSpec)
+        self.assertIs(core_sp.build_polyline_milling_spec, milling_polyline.build_arc_polyline_milling_spec)
+        self.assertIs(core_sp.PolylineSegment, milling_polyline.PolylineSegment)
+        # `profile.py` queda como MOTOR compartido de autoría de perfiles curvos (interno del
+        # paquete milling: lo usan arc/circle/poly_profile/squaring, no es API pública del core).
+        self.assertTrue(callable(milling_profile._append_curve_profile_milling))
+        self.assertEqual(milling_profile.__all__, ["_append_curve_profile_milling"])
+
+        polyline = milling_polyline.build_polyline_milling_spec(
+            points=((0, 0), (100, 0), (100, 50), (0, 0)),
             side_of_feature="izquierda",
         )
-        self.assertIsInstance(polyline, milling_profile.PolylineMillingSpec)
+        self.assertIsInstance(polyline, milling_polyline.ArcPolylineMillingSpec)
         self.assertEqual(polyline.side_of_feature, "Left")
-        self.assertTrue(milling_profile._is_closed_polyline_points(polyline.points))
+        self.assertTrue(polyline.is_closed)
+        self.assertTrue(common_geometry._is_closed_polyline_points(polyline.points))
+        self.assertTrue(all(not segment.is_arc for segment in polyline.segments))
+
+        # La misma spec acepta arcos mezclados con rectas.
+        mixed = milling_polyline.build_polyline_milling_spec(
+            start=(0, 0),
+            segments=[((0, 50),), ((50, 100), (50, 50), "CounterClockwise"), ((150, 100),)],
+        )
+        self.assertTrue(mixed.segments[1].is_arc)
+        self.assertFalse(mixed.is_closed)
+
         with self.assertRaisesRegex(ValueError, "Maestro no postprocesa"):
-            milling_profile.build_polyline_milling_spec(
-                ((0, 0), (100, 0), (100, 50)),
+            milling_polyline.build_polyline_milling_spec(
+                points=((0, 0), (100, 0), (100, 50)),
                 milling_strategy=common_strategy.build_unidirectional_milling_strategy_spec(
                     allow_multiple_passes=True,
                     axial_cutting_depth=5.0,

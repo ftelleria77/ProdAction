@@ -50,16 +50,13 @@ from ..milling.arc import (
     _append_arc_milling,
     _hydrate_arc_milling_spec,
 )
+# POLILÍNEA UNIFICADA: una sola spec (rectas y/o arcos). El builder acepta `points=` (atajo
+# recto) o `start=`+`segments=` (general). Los alias conservan los nombres canónicos del sistema.
 from ..milling.poly_profile import (
-    ArcPolylineMillingSpec,
-    _append_arc_polyline_milling,
-    _hydrate_arc_polyline_milling_spec,
-)
-from ..milling.profile import (
-    PolylineMillingSpec,
-    _HydratedPolylineMillingSpec,
-    _append_polyline_milling,
-    _hydrate_polyline_milling_spec,
+    ArcPolylineMillingSpec as PolylineMillingSpec,
+    _HydratedArcPolylineMillingSpec as _HydratedPolylineMillingSpec,
+    _append_arc_polyline_milling as _append_polyline_milling,
+    _hydrate_arc_polyline_milling_spec as _hydrate_polyline_milling_spec,
 )
 from ..milling.slot import (
     SlotMillingSpec,
@@ -182,7 +179,7 @@ __all__ = [
 ]
 
 
-DEFAULT_MACHINING_ORDER = ("line", "slot", "polyline", "arc", "arc_polyline", "circle", "squaring", "pocket", "drilling", "drilling_pattern")
+DEFAULT_MACHINING_ORDER = ("line", "slot", "polyline", "arc", "circle", "squaring", "pocket", "drilling", "drilling_pattern")
 
 
 register_pgmx_namespaces()
@@ -309,7 +306,6 @@ class PieceSpec:
     slot_millings: tuple[SlotMillingSpec, ...] = ()
     polyline_millings: tuple[PolylineMillingSpec, ...] = ()
     arc_millings: tuple[ArcMillingSpec, ...] = ()
-    arc_polyline_millings: tuple[ArcPolylineMillingSpec, ...] = ()
     circle_millings: tuple[CircleMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
     pocket_millings: tuple[PocketMillingSpec, ...] = ()
@@ -494,7 +490,6 @@ def build_piece_spec(
     slot_millings: Optional[Sequence[SlotMillingSpec]] = None,
     polyline_millings: Optional[Sequence[PolylineMillingSpec]] = None,
     arc_millings: Optional[Sequence[ArcMillingSpec]] = None,
-    arc_polyline_millings: Optional[Sequence[ArcPolylineMillingSpec]] = None,
     circle_millings: Optional[Sequence[CircleMillingSpec]] = None,
     squaring_millings: Optional[Sequence[SquaringMillingSpec]] = None,
     pocket_millings: Optional[Sequence[PocketMillingSpec]] = None,
@@ -521,7 +516,6 @@ def build_piece_spec(
         slot_millings=tuple(slot_millings or ()),
         polyline_millings=tuple(polyline_millings or ()),
         arc_millings=tuple(arc_millings or ()),
-        arc_polyline_millings=tuple(arc_polyline_millings or ()),
         circle_millings=tuple(circle_millings or ()),
         squaring_millings=tuple(squaring_millings or ()),
         pocket_millings=tuple(pocket_millings or ()),
@@ -1161,7 +1155,6 @@ class PgmxSynthesisRequest:
     slot_millings: tuple[SlotMillingSpec, ...] = ()
     polyline_millings: tuple[PolylineMillingSpec, ...] = ()
     arc_millings: tuple[ArcMillingSpec, ...] = ()
-    arc_polyline_millings: tuple[ArcPolylineMillingSpec, ...] = ()
     circle_millings: tuple[CircleMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
     pocket_millings: tuple[PocketMillingSpec, ...] = ()
@@ -1187,7 +1180,6 @@ class PgmxSynthesisResult:
     slot_millings: tuple[SlotMillingSpec, ...] = ()
     polyline_millings: tuple[PolylineMillingSpec, ...] = ()
     arc_millings: tuple[ArcMillingSpec, ...] = ()
-    arc_polyline_millings: tuple[ArcPolylineMillingSpec, ...] = ()
     circle_millings: tuple[CircleMillingSpec, ...] = ()
     squaring_millings: tuple[SquaringMillingSpec, ...] = ()
     pocket_millings: tuple[PocketMillingSpec, ...] = ()
@@ -1213,8 +1205,6 @@ def _hydrate_machining_spec(
         return _hydrate_polyline_milling_spec(spec, source_pgmx_path)
     if isinstance(spec, ArcMillingSpec):
         return _hydrate_arc_milling_spec(spec, source_pgmx_path)
-    if isinstance(spec, ArcPolylineMillingSpec):
-        return _hydrate_arc_polyline_milling_spec(spec, source_pgmx_path)
     if isinstance(spec, CircleMillingSpec):
         return _hydrate_circle_milling_spec(spec, source_pgmx_path)
     if isinstance(spec, SquaringMillingSpec):
@@ -1619,15 +1609,6 @@ def _apply_arc_millings(
         _append_arc_milling(root, state, arc_milling)
 
 
-def _apply_arc_polyline_millings(
-    root: ET.Element,
-    state: PgmxState,
-    arc_polyline_millings,
-) -> None:
-    for arc_polyline_milling in arc_polyline_millings:
-        _append_arc_polyline_milling(root, state, arc_polyline_milling)
-
-
 def _apply_polyline_millings(
     root: ET.Element,
     state: PgmxState,
@@ -1752,9 +1733,6 @@ def _synthesize_piece_machinings(
     hydrated_arc_millings = [
         _hydrate_arc_milling_spec(s, source_pgmx_path) for s in piece.arc_millings
     ]
-    hydrated_arc_polyline_millings = [
-        _hydrate_arc_polyline_milling_spec(s, source_pgmx_path) for s in piece.arc_polyline_millings
-    ]
     hydrated_circle_millings = [
         _hydrate_circle_milling_spec(s, source_pgmx_path) for s in piece.circle_millings
     ]
@@ -1795,7 +1773,6 @@ def _synthesize_piece_machinings(
         "slot":             lambda: _apply_slot_millings(root, state, hydrated_slot_millings),
         "polyline":         lambda: _apply_polyline_millings(root, state, hydrated_polyline_millings),
         "arc":              lambda: _apply_arc_millings(root, state, hydrated_arc_millings),
-        "arc_polyline":     lambda: _apply_arc_polyline_millings(root, state, hydrated_arc_polyline_millings),
         "circle":           lambda: _apply_circle_millings(root, state, hydrated_circle_millings),
         "squaring":         lambda: _apply_squaring_millings(root, state, hydrated_squaring_millings),
         "pocket":           lambda: _apply_pocket_millings(root, state, hydrated_pocket_millings),
@@ -1840,7 +1817,6 @@ def build_synthesis_request(
     slot_millings: Optional[Sequence[SlotMillingSpec]] = None,
     polyline_millings: Optional[Sequence[PolylineMillingSpec]] = None,
     arc_millings: Optional[Sequence[ArcMillingSpec]] = None,
-    arc_polyline_millings: Optional[Sequence[ArcPolylineMillingSpec]] = None,
     circle_millings: Optional[Sequence[CircleMillingSpec]] = None,
     squaring_millings: Optional[Sequence[SquaringMillingSpec]] = None,
     pocket_millings: Optional[Sequence[PocketMillingSpec]] = None,
@@ -1903,7 +1879,6 @@ def build_synthesis_request(
         slot_millings=tuple(slot_millings or ()),
         polyline_millings=tuple(polyline_millings or ()),
         arc_millings=tuple(arc_millings or ()),
-        arc_polyline_millings=tuple(arc_polyline_millings or ()),
         circle_millings=tuple(circle_millings or ()),
         squaring_millings=tuple(squaring_millings or ()),
         pocket_millings=tuple(pocket_millings or ()),
@@ -2020,10 +1995,6 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         _hydrate_arc_milling_spec(arc_milling, request.source_pgmx_path)
         for arc_milling in request.arc_millings
     ]
-    hydrated_arc_polyline_millings = [
-        _hydrate_arc_polyline_milling_spec(arc_polyline_milling, request.source_pgmx_path)
-        for arc_polyline_milling in request.arc_polyline_millings
-    ]
     hydrated_circle_millings = [
         _hydrate_circle_milling_spec(circle_milling, request.source_pgmx_path)
         for circle_milling in request.circle_millings
@@ -2118,11 +2089,6 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
             baseline_root,
             request.piece,
             hydrated_arc_millings,
-        ),
-        "arc_polyline": lambda: _apply_arc_polyline_millings(
-            baseline_root,
-            request.piece,
-            hydrated_arc_polyline_millings,
         ),
         "polyline": lambda: _apply_polyline_millings(
             baseline_root,

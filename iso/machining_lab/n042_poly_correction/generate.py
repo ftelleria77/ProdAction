@@ -80,7 +80,7 @@ def main(argv=None):
         path = out / f"N_T_{tag}.pgmx"
         synthesize_request(build_synthesis_request(
             output_path=path, piece_name=f"N_T_{tag}", length=300.0, width=250.0, depth=18.0,
-            origin_x=5.0, origin_y=5.0, origin_z=25.0, arc_polyline_millings=[spec]))
+            origin_x=5.0, origin_y=5.0, origin_z=25.0, polyline_millings=[spec]))
         print(f"  {path.name}  (cerrada={spec.is_closed})")
     return 0
 

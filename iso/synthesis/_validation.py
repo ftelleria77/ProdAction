@@ -19,7 +19,6 @@ from pgmx.synthesis.milling.arc import ArcMillingSpec
 from pgmx.synthesis.milling.poly_profile import ArcPolylineMillingSpec
 from pgmx.synthesis.milling.circle import CircleMillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
-from pgmx.synthesis.milling.profile import PolylineMillingSpec
 from pgmx.synthesis.milling.slot import SlotMillingSpec
 
 from ._machine import SIDE_FACE, TOP_TOOL, TOP_TOOL_CONICAL, top_tool_or_none
@@ -59,8 +58,6 @@ def validate_entries(entries: Iterable[object]) -> None:
             _validate_arc_milling(spec)
         elif isinstance(spec, ArcPolylineMillingSpec):
             _validate_arc_polyline_milling(spec)
-        elif isinstance(spec, PolylineMillingSpec):
-            _validate_polyline_milling(spec)
         else:
             _fail(spec, f"operación de tipo {type(spec).__name__!r} no soportada "
                         f"(por ahora: taladro, fresado lineal/circular y canal). "
@@ -443,23 +440,3 @@ def _validate_arc_polyline_milling(spec: ArcPolylineMillingSpec) -> None:
         _fail(spec, "polilínea + estrategia multipasada: sin fixture de referencia. [B]")
 
 
-def _validate_polyline_milling(spec: PolylineMillingSpec) -> None:
-    """Polilínea RECTA pura (PolylineMillingSpec) — el mismo render que la mixta pero con solo
-    rectas (N041 ll/two). Baseline Center; corrección/leads/estrategia → guarda."""
-    if spec.plane_name != "Top":
-        _fail(spec, f"polilínea en cara {spec.plane_name!r} no soportada (solo Top). [B]")
-    try:
-        tool_geometry(spec.tool_name)
-        int(spec.tool_name.lstrip("E"))
-    except (KeyError, ValueError):
-        _fail(spec, f"fresa {spec.tool_name!r} no está en el catálogo o su nombre no es "
-                    f"E00N. [B]")
-    if len(spec.points) < 3:
-        _fail(spec, "polilínea recta de menos de 2 segmentos: usar fresado lineal. [B]")
-    if spec.side_of_feature != "Center":
-        _fail(spec, f"polilínea con corrección {spec.side_of_feature!r}: sin fixture de "
-                    "referencia aún (lote de combos). [B]")
-    if spec.approach.is_enabled or spec.retract.is_enabled:
-        _fail(spec, "polilínea + acercamiento/alejamiento: sin fixture de referencia. [B]")
-    if spec.milling_strategy is not None:
-        _fail(spec, "polilínea + estrategia multipasada: sin fixture de referencia. [B]")

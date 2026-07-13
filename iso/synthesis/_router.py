@@ -17,7 +17,6 @@ from pgmx.synthesis.milling.arc import ArcMillingSpec
 from pgmx.synthesis.milling.poly_profile import ArcPolylineMillingSpec
 from pgmx.synthesis.milling.circle import CircleMillingSpec
 from pgmx.synthesis.milling.line import LineMillingSpec
-from pgmx.synthesis.milling.profile import PolylineMillingSpec
 
 import math
 
@@ -414,7 +413,7 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
         # línea no los tocan. El arco baseline (Center, sin leads/estrategia) es un G3/G2 único.
         is_circle = isinstance(spec, CircleMillingSpec)
         is_arc = isinstance(spec, ArcMillingSpec)
-        is_poly = isinstance(spec, (ArcPolylineMillingSpec, PolylineMillingSpec))
+        is_poly = isinstance(spec, ArcPolylineMillingSpec)
 
         # Lead programable + compensación (N029 side_l_leads / N035): el lead se emite en
         # coordenadas de CONTORNO con G41/G42 activo; el 1 mm de la corrección se ancla al punto
@@ -1018,17 +1017,11 @@ def _circle_body(spec, depth, security, plunge_feed, cut_feed,
 
 
 def _poly_start_and_segments(spec):
-    """Devuelve (start_xy, [(end_x, end_y, is_arc, cx, cy, winding), ...]) para una polilínea,
-    unificando ArcPolylineMillingSpec (segmentos recta/arco) y PolylineMillingSpec (puntos =
-    solo rectas)."""
-    if isinstance(spec, ArcPolylineMillingSpec):
-        start = (spec.start_x, spec.start_y)
-        segs = [(s.end_x, s.end_y, s.is_arc, s.center_x, s.center_y, s.winding)
-                for s in spec.segments]
-        return start, segs
-    pts = spec.points
-    start = pts[0]
-    segs = [(px, py, False, None, None, None) for (px, py) in pts[1:]]
+    """(start_xy, [(end_x, end_y, is_arc, cx, cy, winding), ...]) de una polilínea (una sola
+    spec unificada: los segmentos son rectas y/o arcos)."""
+    start = (spec.start_x, spec.start_y)
+    segs = [(s.end_x, s.end_y, s.is_arc, s.center_x, s.center_y, s.winding)
+            for s in spec.segments]
     return start, segs
 
 

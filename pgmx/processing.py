@@ -966,10 +966,20 @@ def _rotate_machining_spec_90_ccw(spec, original_width: float):
         end_x, end_y = _rotate_point_90_ccw(original_width, spec.end_x, spec.end_y)
         return replace(spec, start_x=start_x, start_y=start_y, end_x=end_x, end_y=end_y)
     if isinstance(spec, sp.PolylineMillingSpec):
-        return replace(
-            spec,
-            points=tuple(_rotate_point_90_ccw(original_width, x_value, y_value) for x_value, y_value in spec.points),
-        )
+        # Polilínea unificada: `points` es una property → se rota el arranque y CADA segmento
+        # (extremo y, si es arco, también su centro; el sentido de giro no cambia con un giro).
+        start_x, start_y = _rotate_point_90_ccw(original_width, spec.start_x, spec.start_y)
+        rotated_segments = []
+        for segment in spec.segments:
+            end_x, end_y = _rotate_point_90_ccw(original_width, segment.end_x, segment.end_y)
+            if segment.is_arc:
+                center_x, center_y = _rotate_point_90_ccw(
+                    original_width, segment.center_x, segment.center_y)
+                rotated_segments.append(replace(
+                    segment, end_x=end_x, end_y=end_y, center_x=center_x, center_y=center_y))
+            else:
+                rotated_segments.append(replace(segment, end_x=end_x, end_y=end_y))
+        return replace(spec, start_x=start_x, start_y=start_y, segments=tuple(rotated_segments))
     if isinstance(spec, sp.CircleMillingSpec):
         center_x, center_y = _rotate_point_90_ccw(original_width, spec.center_x, spec.center_y)
         return replace(spec, center_x=center_x, center_y=center_y)

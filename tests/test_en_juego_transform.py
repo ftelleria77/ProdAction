@@ -32,7 +32,8 @@ class EnJuegoTransformTests(unittest.TestCase):
             feature_name_prefix="P1",
         )
         polyline = transform_supported_spec(
-            sp.PolylineMillingSpec(((0, 0), (5, 5)), feature_name="Perfil"),
+            sp.build_polyline_milling_spec(
+                points=((0, 0), (5, 5), (10, 5)), feature_name="Perfil"),
             transform,
             feature_name_prefix="P1",
         )
@@ -48,7 +49,7 @@ class EnJuegoTransformTests(unittest.TestCase):
         )
 
         self.assertEqual((line.start_x, line.start_y, line.end_x, line.end_y), (100, 200, 110, 205))
-        self.assertEqual(polyline.points, ((100, 200), (105, 205)))
+        self.assertEqual(polyline.points, ((100, 200), (105, 205), (110, 205)))
         self.assertEqual((circle.center_x, circle.center_y), (102, 203))
         self.assertEqual((drilling.center_x, drilling.center_y), (107, 208))
         self.assertEqual(line.feature_name, "P1 - Linea")
