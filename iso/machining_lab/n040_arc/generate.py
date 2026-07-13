@@ -1,6 +1,6 @@
 r"""N040 - Eje B etapa 2: ARCOS SUELTOS — baseline + validacion de la autoria nueva.
 
-Primer lote de ArcMillingSpec (autoria estrenada 2026-07-08: composite de UN miembro-arco,
+Primer lote de ArcSpec (autoria estrenada 2026-07-08: composite de UN miembro-arco,
 forma de las piezas de produccion FrenteCurvo/Modulo Curvo). Doble proposito, patron N031:
 (1) si Maestro ACEPTA y postprocesa nuestra autoria, la extension queda validada;
 (2) los ISO ensenan el modelo de render del arco suelto (entrada, G2/G3, leads futuros).
@@ -14,12 +14,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_arc_milling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_arc_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N040_arc"
 
 def _arc(x1=210.0, y1=100.0, x2=90.0, y2=100.0, cx=150.0, cy=100.0, **kw):
-    return build_arc_milling_spec(
+    return build_arc_spec(
         start_x=x1, start_y=y1, end_x=x2, end_y=y2, center_x=cx, center_y=cy,
         tool_id=kw.pop("tool_id", "1903"), tool_name=kw.pop("tool_name", "E004"),
         tool_width=kw.pop("tool_width", 4.0),

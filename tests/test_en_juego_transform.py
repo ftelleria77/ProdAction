@@ -27,23 +27,23 @@ class EnJuegoTransformTests(unittest.TestCase):
         transform = EnJuegoTransform(origin_x_mm=100, origin_y_mm=200, rotation_deg=0)
 
         line = transform_supported_spec(
-            sp.LineMillingSpec(0, 0, 10, 5, feature_name="Linea"),
+            sp.LineSpec(0, 0, 10, 5, feature_name="Linea"),
             transform,
             feature_name_prefix="P1",
         )
         polyline = transform_supported_spec(
-            sp.build_polyline_milling_spec(
+            sp.build_polyline_spec(
                 points=((0, 0), (5, 5), (10, 5)), feature_name="Perfil"),
             transform,
             feature_name_prefix="P1",
         )
         circle = transform_supported_spec(
-            sp.CircleMillingSpec(2, 3, 4, feature_name="Circulo"),
+            sp.CircleSpec(2, 3, 4, feature_name="Circulo"),
             transform,
             feature_name_prefix="P1",
         )
         drilling = transform_supported_spec(
-            sp.DrillingSpec(7, 8, 5, feature_name="Taladro"),
+            sp.DrillSpec(7, 8, 5, feature_name="Taladro"),
             transform,
             feature_name_prefix="P1",
         )

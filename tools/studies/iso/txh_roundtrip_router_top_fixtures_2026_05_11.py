@@ -18,9 +18,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    DrillingSpec,
-    build_drilling_spec,
-    build_line_milling_spec,
+    DrillSpec,
+    build_drill_spec,
+    build_line_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -82,7 +82,7 @@ class Fixture:
 def _router_line(fixture: Fixture, *, which: str, tool_name: str) -> object:
     tool = ROUTER_TOOLS[tool_name]
     y = 60.0 if which == "first" else 130.0
-    return build_line_milling_spec(
+    return build_line_spec(
         line_x1=80.0,
         line_y1=y,
         line_x2=240.0,
@@ -101,8 +101,8 @@ def _router_line(fixture: Fixture, *, which: str, tool_name: str) -> object:
     )
 
 
-def _top_drill(fixture: Fixture) -> DrillingSpec:
-    return build_drilling_spec(
+def _top_drill(fixture: Fixture) -> DrillSpec:
+    return build_drill_spec(
         feature_name=f"TXH_RT_{fixture.name}_TOP_D{fixture.top_diameter:g}",
         plane_name="Top",
         center_x=280.0,

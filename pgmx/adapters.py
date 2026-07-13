@@ -6,9 +6,9 @@ sintetizador actual.
 
 Objetivos:
 
-- refactorizar casos manuales hacia `LineMillingSpec`, `SlotMillingSpec`,
-  `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec` y
-  `DrillingSpec`/`DrillingPatternSpec`
+- refactorizar casos manuales hacia `LineSpec`, `ChannelSpec`,
+  `PolylineSpec`, `CircleSpec`, `ContourSpec` y
+  `DrillSpec`/`DrillPatternSpec`
 - informar con claridad cuando una feature o working step no puede adaptarse
 - construir rapido un `PgmxSynthesisRequest` con el material soportado
 
@@ -40,15 +40,15 @@ from pgmx.snapshot import (
 )
 
 SupportedSynthesisSpec = (
-    sp.LineMillingSpec
-    | sp.SlotMillingSpec
-    | sp.ArcMillingSpec
-    | sp.PolylineMillingSpec
-    | sp.CircleMillingSpec
-    | sp.SquaringMillingSpec
-    | sp.PocketMillingSpec
-    | sp.DrillingSpec
-    | sp.DrillingPatternSpec
+    sp.LineSpec
+    | sp.ChannelSpec
+    | sp.ArcSpec
+    | sp.PolylineSpec
+    | sp.CircleSpec
+    | sp.ContourSpec
+    | sp.PocketSpec
+    | sp.DrillSpec
+    | sp.DrillPatternSpec
 )
 
 __all__ = [
@@ -122,75 +122,75 @@ class PgmxAdaptationResult:
         return tuple(entry for entry in self.entries if entry.entry_source == "feature")
 
     @property
-    def line_millings(self) -> tuple[sp.LineMillingSpec, ...]:
+    def line_millings(self) -> tuple[sp.LineSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.LineMillingSpec)
+            if isinstance(entry.spec, sp.LineSpec)
         )
 
     @property
-    def slot_millings(self) -> tuple[sp.SlotMillingSpec, ...]:
+    def slot_millings(self) -> tuple[sp.ChannelSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.SlotMillingSpec)
+            if isinstance(entry.spec, sp.ChannelSpec)
         )
 
     @property
-    def polyline_millings(self) -> tuple[sp.PolylineMillingSpec, ...]:
+    def polyline_millings(self) -> tuple[sp.PolylineSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.PolylineMillingSpec)
+            if isinstance(entry.spec, sp.PolylineSpec)
         )
 
     @property
-    def arc_millings(self) -> tuple[sp.ArcMillingSpec, ...]:
+    def arc_millings(self) -> tuple[sp.ArcSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.ArcMillingSpec)
+            if isinstance(entry.spec, sp.ArcSpec)
         )
 
     @property
-    def circle_millings(self) -> tuple[sp.CircleMillingSpec, ...]:
+    def circle_millings(self) -> tuple[sp.CircleSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.CircleMillingSpec)
+            if isinstance(entry.spec, sp.CircleSpec)
         )
 
     @property
-    def squaring_millings(self) -> tuple[sp.SquaringMillingSpec, ...]:
+    def squaring_millings(self) -> tuple[sp.ContourSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.SquaringMillingSpec)
+            if isinstance(entry.spec, sp.ContourSpec)
         )
 
     @property
-    def pocket_millings(self) -> tuple[sp.PocketMillingSpec, ...]:
+    def pocket_millings(self) -> tuple[sp.PocketSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.PocketMillingSpec)
+            if isinstance(entry.spec, sp.PocketSpec)
         )
 
     @property
-    def drillings(self) -> tuple[sp.DrillingSpec, ...]:
+    def drillings(self) -> tuple[sp.DrillSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.DrillingSpec)
+            if isinstance(entry.spec, sp.DrillSpec)
         )
 
     @property
-    def drilling_patterns(self) -> tuple[sp.DrillingPatternSpec, ...]:
+    def drilling_patterns(self) -> tuple[sp.DrillPatternSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.DrillingPatternSpec)
+            if isinstance(entry.spec, sp.DrillPatternSpec)
         )
 
     @property
@@ -755,7 +755,7 @@ def _adapt_drilling(
 
     try:
         depth_kwargs = _depth_kwargs(feature.depth_spec)
-        spec = sp.build_drilling_spec(
+        spec = sp.build_drill_spec(
             center_x=geometry.point[0],
             center_y=geometry.point[1],
             diameter=float(feature.diameter),
@@ -781,7 +781,7 @@ def _adapt_drilling(
             operation,
             step,
             order_index=order_index,
-            reasons=[_builder_error("No se pudo construir el `DrillingSpec`", exc)],
+            reasons=[_builder_error("No se pudo construir el `DrillSpec`", exc)],
             warnings=warnings,
         )
 
@@ -905,7 +905,7 @@ def _adapt_drilling_pattern(
         tool_name = tool_key.name
 
     try:
-        spec = sp.build_drilling_pattern_spec(
+        spec = sp.build_drill_pattern_spec(
             geometry.point[0],
             geometry.point[1],
             float(base_feature.diameter),
@@ -930,7 +930,7 @@ def _adapt_drilling_pattern(
             operation,
             step,
             order_index=order_index,
-            reasons=[_builder_error("No se pudo construir el `DrillingPatternSpec`", exc)],
+            reasons=[_builder_error("No se pudo construir el `DrillPatternSpec`", exc)],
             warnings=warnings,
         )
 
@@ -1013,7 +1013,7 @@ def _adapt_pocket_milling(
         reasons.append("La operacion no tiene una herramienta resuelta compatible.")
 
     warnings = _tool_warning(operation) + (
-        "`PocketMillingSpec` se adapta para lectura; la serializacion productiva con islas "
+        "`PocketSpec` se adapta para lectura; la serializacion productiva con islas "
         "todavia no esta implementada.",
     )
     if reasons:
@@ -1031,7 +1031,7 @@ def _adapt_pocket_milling(
     approach = operation.approach or sp.build_approach_spec()
     retract = operation.retract or sp.build_retract_spec()
     try:
-        spec = sp.build_pocket_milling_spec(
+        spec = sp.build_pocket_spec(
             contour_points=_polyline_points_from_profile(profile),
             feature_name=_default_name(feature, step, "Vaciado"),
             plane_name=_plane_name_or_default(feature),
@@ -1070,7 +1070,7 @@ def _adapt_pocket_milling(
             operation,
             step,
             order_index=order_index,
-            reasons=[_builder_error("No se pudo construir el `PocketMillingSpec`", exc)],
+            reasons=[_builder_error("No se pudo construir el `PocketSpec`", exc)],
             warnings=warnings,
         )
     return _adapted_entry(
@@ -1204,7 +1204,7 @@ def _adapt_milling(
                 warnings=warnings,
             )
         try:
-            spec = sp.build_slot_milling_spec(
+            spec = sp.build_channel_spec(
                 start_x=primitive.start_point[0],
                 start_y=primitive.start_point[1],
                 end_x=primitive.end_point[0],
@@ -1243,7 +1243,7 @@ def _adapt_milling(
                 operation,
                 step,
                 order_index=order_index,
-                reasons=[_builder_error("No se pudo construir el `SlotMillingSpec`", exc)],
+                reasons=[_builder_error("No se pudo construir el `ChannelSpec`", exc)],
                 warnings=warnings,
             )
         return _adapted_entry(
@@ -1260,7 +1260,7 @@ def _adapt_milling(
     if squaring_signature is not None:
         start_edge, winding, start_coordinate = squaring_signature
         try:
-            spec = sp.build_squaring_milling_spec(
+            spec = sp.build_contour_spec(
                 start_edge=start_edge,
                 winding=winding,
                 start_coordinate=start_coordinate,
@@ -1293,7 +1293,7 @@ def _adapt_milling(
                 operation,
                 step,
                 order_index=order_index,
-                reasons=[_builder_error("No se pudo construir el `SquaringMillingSpec`", exc)],
+                reasons=[_builder_error("No se pudo construir el `ContourSpec`", exc)],
                 warnings=warnings,
             )
         return _adapted_entry(
@@ -1318,7 +1318,7 @@ def _adapt_milling(
                 warnings=warnings,
             )
         try:
-            spec = sp.build_line_milling_spec(
+            spec = sp.build_line_spec(
                 primitive.start_point[0],
                 primitive.start_point[1],
                 primitive.end_point[0],
@@ -1386,7 +1386,7 @@ def _adapt_milling(
                 operation,
                 step,
                 order_index=order_index,
-                reasons=[_builder_error("No se pudo construir el `LineMillingSpec`", exc)],
+                reasons=[_builder_error("No se pudo construir el `LineSpec`", exc)],
                 warnings=warnings,
             )
         if spec is None:
@@ -1395,7 +1395,7 @@ def _adapt_milling(
                 operation,
                 step,
                 order_index=order_index,
-                reasons=["No se pudo construir el `LineMillingSpec`."],
+                reasons=["No se pudo construir el `LineSpec`."],
                 warnings=warnings,
             )
         return _adapted_entry(
@@ -1409,7 +1409,7 @@ def _adapt_milling(
         )
 
     if profile.geometry_type == "GeomCompositeCurve":
-        # ARCO SUELTO (Eje B etapa 2): composite de UN miembro-arco -> ArcMillingSpec. El
+        # ARCO SUELTO (Eje B etapa 2): composite de UN miembro-arco -> ArcSpec. El
         # winding sale del signo de la normal Z (build_arc_geometry_primitive: +1 CCW / -1 CW).
         if (len(profile.primitives) == 1
                 and profile.primitives[0].primitive_type == "Arc"
@@ -1419,7 +1419,7 @@ def _adapt_milling(
                        if (arc.normal_vector is None or arc.normal_vector[2] >= 0)
                        else "Clockwise")
             try:
-                spec = sp.build_arc_milling_spec(
+                spec = sp.build_arc_spec(
                     start_x=arc.start_point[0], start_y=arc.start_point[1],
                     end_x=arc.end_point[0], end_y=arc.end_point[1],
                     center_x=arc.center_point[0], center_y=arc.center_point[1],
@@ -1454,7 +1454,7 @@ def _adapt_milling(
                     operation,
                     step,
                     order_index=order_index,
-                    reasons=[_builder_error("No se pudo construir el `ArcMillingSpec`", exc)],
+                    reasons=[_builder_error("No se pudo construir el `ArcSpec`", exc)],
                     warnings=warnings,
                 )
             return _adapted_entry(
@@ -1481,7 +1481,7 @@ def _adapt_milling(
                     else:
                         segments.append(((prim.end_point[0], prim.end_point[1]),))
                 start = (profile.primitives[0].start_point[0], profile.primitives[0].start_point[1])
-                spec = sp.build_arc_polyline_milling_spec(
+                spec = sp.build_polyline_spec(
                     start=start,
                     segments=segments,
                     feature_name=feature_name,
@@ -1514,7 +1514,7 @@ def _adapt_milling(
                     operation,
                     step,
                     order_index=order_index,
-                    reasons=[_builder_error("No se pudo construir el `ArcPolylineMillingSpec`", exc)],
+                    reasons=[_builder_error("No se pudo construir el `PolylineSpec`", exc)],
                     warnings=warnings,
                 )
             return _adapted_entry(
@@ -1538,7 +1538,7 @@ def _adapt_milling(
                 warnings=warnings,
             )
         try:
-            spec = sp.build_circle_milling_spec(
+            spec = sp.build_circle_spec(
                 center_x=profile.center_point[0],
                 center_y=profile.center_point[1],
                 radius=profile.radius,
@@ -1573,7 +1573,7 @@ def _adapt_milling(
                 operation,
                 step,
                 order_index=order_index,
-                reasons=[_builder_error("No se pudo construir el `CircleMillingSpec`", exc)],
+                reasons=[_builder_error("No se pudo construir el `CircleSpec`", exc)],
                 warnings=warnings,
             )
         return _adapted_entry(

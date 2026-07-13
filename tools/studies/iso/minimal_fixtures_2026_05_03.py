@@ -26,8 +26,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    build_drilling_spec,
-    build_line_milling_spec,
+    build_drill_spec,
+    build_line_spec,
     build_synthesis_request,
     build_unidirectional_milling_strategy_spec,
     synthesize_request,
@@ -53,7 +53,7 @@ class Fixture:
 
 
 def _top_drill(x: float, y: float) -> object:
-    return build_drilling_spec(
+    return build_drill_spec(
         feature_name="TOP_D5_DEPTH10",
         plane_name="Top",
         center_x=x,
@@ -65,7 +65,7 @@ def _top_drill(x: float, y: float) -> object:
 
 
 def _side_drill(plane_name: str) -> object:
-    return build_drilling_spec(
+    return build_drill_spec(
         feature_name=f"{plane_name.upper()}_D8_DEPTH28",
         plane_name=plane_name,
         center_x=50.0,
@@ -85,7 +85,7 @@ def _line_e004(y: float, *, ph5: bool = False) -> object:
             axial_finish_cutting_depth=0.0,
         )
 
-    return build_line_milling_spec(
+    return build_line_spec(
         line_x1=20.0,
         line_y1=y,
         line_x2=80.0,

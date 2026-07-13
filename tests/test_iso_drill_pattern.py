@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 
 from pgmx.synthesis import (
-    build_drilling_pattern_spec,
+    build_drill_pattern_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -27,7 +27,7 @@ def _pattern(**kw):
         is_through=False, target_depth=10.0, tool_resolution="Auto",
     )
     base.update(kw)
-    return build_drilling_pattern_spec(
+    return build_drill_pattern_spec(
         base.pop("center_x"), base.pop("center_y"), base.pop("diameter"),
         base.pop("columns"), base.pop("rows"), base.pop("spacing"), **base)
 

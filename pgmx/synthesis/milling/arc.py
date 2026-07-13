@@ -47,18 +47,18 @@ from ..common.strategy import (
 from ._common import _toolpath_cut_z
 
 __all__ = [
-    "ArcMillingSpec",
-    "build_arc_milling_spec",
-    "_HydratedArcMillingSpec",
-    "_append_arc_milling",
+    "ArcSpec",
+    "build_arc_spec",
+    "_HydratedArcSpec",
+    "_append_arc",
     "_build_arc_toolpath_profile",
-    "_hydrate_arc_milling_spec",
-    "_normalize_arc_milling_spec",
+    "_hydrate_arc_spec",
+    "_normalize_arc_spec",
 ]
 
 
 @dataclass(frozen=True)
-class ArcMillingSpec:
+class ArcSpec:
     """Fresado sobre un arco suelto (start → end alrededor de center, según winding)."""
 
     start_x: float
@@ -83,10 +83,10 @@ class ArcMillingSpec:
 
 
 @dataclass(frozen=True)
-class _HydratedArcMillingSpec:
-    """Datos internos de serialización que complementan un `ArcMillingSpec`."""
+class _HydratedArcSpec:
+    """Datos internos de serialización que complementan un `ArcSpec`."""
 
-    spec: ArcMillingSpec
+    spec: ArcSpec
     preferred_id_start: Optional[int] = None
     geometry_curve: Optional[_CurveSpec] = None
     approach_curve: Optional[_CurveSpec] = None
@@ -97,11 +97,11 @@ class _HydratedArcMillingSpec:
         return getattr(object.__getattribute__(self, "spec"), name)
 
 
-def _normalize_arc_milling_spec(arc_milling: ArcMillingSpec) -> ArcMillingSpec:
+def _normalize_arc_spec(arc_milling: ArcSpec) -> ArcSpec:
     normalized_strategy = _ensure_milling_strategy_allowed(
         _normalize_milling_strategy_spec(arc_milling.milling_strategy),
         allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
-        context="ArcMillingSpec",
+        context="ArcSpec",
     )
     start_r = math.dist((arc_milling.start_x, arc_milling.start_y),
                         (arc_milling.center_x, arc_milling.center_y))
@@ -124,7 +124,7 @@ def _normalize_arc_milling_spec(arc_milling: ArcMillingSpec) -> ArcMillingSpec:
     )
 
 
-def _build_arc_geometry_profile(spec: ArcMillingSpec, z_value: float) -> GeometryProfileSpec:
+def _build_arc_geometry_profile(spec: ArcSpec, z_value: float) -> GeometryProfileSpec:
     primitive = build_arc_geometry_primitive(
         spec.start_x, spec.start_y, spec.end_x, spec.end_y,
         spec.center_x, spec.center_y,
@@ -136,7 +136,7 @@ def _build_arc_geometry_profile(spec: ArcMillingSpec, z_value: float) -> Geometr
 def _build_arc_toolpath_profile(
     top_level: float,
     final_level: float,
-    spec: ArcMillingSpec,
+    spec: ArcSpec,
 ) -> GeometryProfileSpec:
     """Trayectoria del arco: el perfil compensado a la cota de corte; con estrategia, las
     pasadas de perfil ABIERTO (Uni/Bi) sobre el arco."""
@@ -159,15 +159,15 @@ def _build_arc_toolpath_profile(
         float(top_level), cut_z, base_profile, strategy)
 
 
-def _hydrate_arc_milling_spec(
-    arc_milling: ArcMillingSpec,
+def _hydrate_arc_spec(
+    arc_milling: ArcSpec,
     source_pgmx_path: Optional[Path],
-) -> _HydratedArcMillingSpec:
+) -> _HydratedArcSpec:
     # Sin reutilización de plantillas (no hay corpus de arcos sueltos): siempre autoría fresca.
-    return _HydratedArcMillingSpec(spec=_normalize_arc_milling_spec(arc_milling))
+    return _HydratedArcSpec(spec=_normalize_arc_spec(arc_milling))
 
 
-def _append_arc_milling(root, state, spec: _HydratedArcMillingSpec) -> None:
+def _append_arc(root, state, spec: _HydratedArcSpec) -> None:
     from .profile import _append_curve_profile_milling
 
     geometry_curve = spec.geometry_curve or _curve_spec_from_profile_geometry(
@@ -177,7 +177,7 @@ def _append_arc_milling(root, state, spec: _HydratedArcMillingSpec) -> None:
     _append_curve_profile_milling(root, state, spec, geometry_curve, generated_toolpath_profile)
 
 
-def build_arc_milling_spec(
+def build_arc_spec(
     *,
     start_x: float,
     start_y: float,
@@ -210,11 +210,11 @@ def build_arc_milling_spec(
     retract_overlap: Optional[float] = None,
     milling_strategy: Optional[MillingStrategySpec] = None,
     is_enabled_expr: Optional[str] = None,
-) -> ArcMillingSpec:
-    """Construye un `ArcMillingSpec` reusable para un fresado de arco suelto."""
+) -> ArcSpec:
+    """Construye un `ArcSpec` reusable para un fresado de arco suelto."""
 
-    return _normalize_arc_milling_spec(
-        ArcMillingSpec(
+    return _normalize_arc_spec(
+        ArcSpec(
             start_x=float(start_x),
             start_y=float(start_y),
             end_x=float(end_x),

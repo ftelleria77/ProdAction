@@ -15,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_line_milling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request  # noqa: E402
 from pgmx.synthesis.common.leads import build_approach_spec, build_retract_spec  # noqa: E402
 from pgmx.synthesis.common.strategy import (  # noqa: E402
     build_bidirectional_milling_strategy_spec,
@@ -32,7 +32,7 @@ def _uni(cd=4.0):
 
 def _line(tool="E004", width=4.0, strategy=None, app=None, ret=None):
     tid = {"E004": "1903", "E001": "1900"}[tool]
-    base = build_line_milling_spec(
+    base = build_line_spec(
         line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0,
         line_feature_name="Fresado", line_tool_id=tid, line_tool_name=tool,
         line_tool_width=width, line_security_plane=20.0,

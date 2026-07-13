@@ -188,7 +188,7 @@ class VaciadoTraceEngineSkeletonTests(unittest.TestCase):
             axial_cutting_depth=4.0,
             axial_finish_cutting_depth=1.0,
         )
-        spec = sp.PocketMillingSpec(
+        spec = sp.PocketSpec(
             contour_points=((0.0, 0.0), (100.0, 0.0), (100.0, 60.0), (0.0, 60.0)),
             tool_width=20.0,
             allowance_side=5.0,
@@ -2247,7 +2247,7 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
         manual = _variant_path(27, 1)
         manual_adaptation = adapt_pgmx_path(manual)
         spec = manual_adaptation.pocket_millings[0]
-        template = sp._extract_pocket_milling_template(manual)
+        template = sp._extract_pocket_template(manual)
 
         self.assertTrue(sp._can_hydrate_pocket_template_trace(template, spec))
 

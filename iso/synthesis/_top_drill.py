@@ -5,7 +5,7 @@ from __future__ import annotations
 import dataclasses
 import math
 from dataclasses import dataclass
-from pgmx.synthesis.drilling.single import DrillingSpec
+from pgmx.synthesis.drilling.single import DrillSpec
 
 from ._machine import (
     Z_PARK, effective_top_feed_spindle, or_ofx, or_ofy, resolve_top_tool, shf_x, shf_y,
@@ -68,7 +68,7 @@ class _TopDrillState:
 
 
 def render_top_drill(
-    drills: list[DrillingSpec],
+    drills: list[DrillSpec],
     ctx: PieceCtx,
     after_router: bool,
     router_spindle: int,
@@ -121,7 +121,7 @@ def render_top_drill(
 # ---------------------------------------------------------------------------
 
 def _first_hole_no_prior(
-    drill: DrillingSpec, ctx: PieceCtx, tool, state: _TopDrillState, depths: list[float],
+    drill: DrillSpec, ctx: PieceCtx, tool, state: _TopDrillState, depths: list[float],
     z_top_security: float,
 ) -> list[str]:
     lines = [
@@ -151,7 +151,7 @@ def _first_hole_no_prior(
 # ---------------------------------------------------------------------------
 
 def _first_hole_after_router(
-    drill: DrillingSpec, ctx: PieceCtx, tool, state: _TopDrillState, depths: list[float],
+    drill: DrillSpec, ctx: PieceCtx, tool, state: _TopDrillState, depths: list[float],
     z_top_security: float,
 ) -> list[str]:
     """Transition from router to top drill + first hole."""
@@ -187,7 +187,7 @@ def _first_hole_after_router(
 # ---------------------------------------------------------------------------
 
 def _same_tool_hole(
-    drill: DrillingSpec, ctx: PieceCtx, tool, state: _TopDrillState, depths: list[float],
+    drill: DrillSpec, ctx: PieceCtx, tool, state: _TopDrillState, depths: list[float],
     z_top_security: float,
 ) -> list[str]:
     lines = [
@@ -211,7 +211,7 @@ def _same_tool_hole(
 # ---------------------------------------------------------------------------
 
 def _tool_change_hole(
-    drill: DrillingSpec, ctx: PieceCtx, tool, state: _TopDrillState, depths: list[float],
+    drill: DrillSpec, ctx: PieceCtx, tool, state: _TopDrillState, depths: list[float],
     z_top_security: float,
 ) -> list[str]:
     lines = [
@@ -246,7 +246,7 @@ def _tool_change_hole(
 # ---------------------------------------------------------------------------
 
 def _cut_block(
-    drill: DrillingSpec, ctx: PieceCtx, tool, depths: list[float], z_top_security: float,
+    drill: DrillSpec, ctx: PieceCtx, tool, depths: list[float], z_top_security: float,
 ) -> list[str]:
     """First cut when top drill is first family (needs MLV=2 before G1 G9)."""
     return [
@@ -262,7 +262,7 @@ def _cut_block(
 
 
 def _cut_block_no_mlv2(
-    drill: DrillingSpec, ctx: PieceCtx, tool, depths: list[float], z_top_security: float,
+    drill: DrillSpec, ctx: PieceCtx, tool, depths: list[float], z_top_security: float,
 ) -> list[str]:
     """First cut after router→top transition (no MLV=2 before G1 G9)."""
     return [

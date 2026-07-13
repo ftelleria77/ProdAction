@@ -12,7 +12,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from pgmx.synthesis import build_arc_milling_spec
+from pgmx.synthesis import build_arc_spec
 from pgmx.synthesis.common.leads import build_approach_spec
 from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_spec
 
@@ -24,7 +24,7 @@ _REF_DIR = Path(r"P:\USBMIX\ProdAction\N040_arc")
 
 
 def _arc(**kw):
-    base = build_arc_milling_spec(
+    base = build_arc_spec(
         start_x=210.0, start_y=100.0, end_x=90.0, end_y=100.0,
         center_x=150.0, center_y=100.0,
         tool_id="1903", tool_name="E004", tool_width=4.0, target_depth=5.0)

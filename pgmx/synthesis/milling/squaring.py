@@ -46,12 +46,12 @@ if TYPE_CHECKING:
     from ..common.program import PgmxState
 
 __all__ = [
-    "SquaringMillingSpec",
-    "build_squaring_milling_spec",
-    "_HydratedSquaringMillingSpec",
-    "_append_squaring_milling",
-    "_hydrate_squaring_milling_spec",
-    "_normalize_squaring_milling_spec",
+    "ContourSpec",
+    "build_contour_spec",
+    "_HydratedContourSpec",
+    "_append_contour",
+    "_hydrate_contour_spec",
+    "_normalize_contour_spec",
     "_normalize_squaring_start_edge",
     "_with_line_direction_hint",
     "_reparameterize_squaring_toolpath_profile",
@@ -63,7 +63,7 @@ __all__ = [
 
 
 @dataclass(frozen=True)
-class SquaringMillingSpec:
+class ContourSpec:
     """Escuadrado exterior del contorno de la pieza sobre el plano `Top`."""
 
     start_edge: str = "Bottom"
@@ -107,10 +107,10 @@ class SquaringMillingSpec:
 
 
 @dataclass(frozen=True)
-class _HydratedSquaringMillingSpec:
-    """Datos internos de serializacion para un `SquaringMillingSpec`."""
+class _HydratedContourSpec:
+    """Datos internos de serializacion para un `ContourSpec`."""
 
-    spec: SquaringMillingSpec
+    spec: ContourSpec
     preferred_id_start: Optional[int] = None
     geometry_curve: Optional[_CurveSpec] = None
     approach_curve: Optional[_CurveSpec] = None
@@ -216,7 +216,7 @@ def _build_squaring_outline_points(
 
 def _build_squaring_geometry_profile(
     state: PgmxState,
-    spec: _HydratedSquaringMillingSpec,
+    spec: _HydratedContourSpec,
     *,
     z_value: float = 0.0,
 ) -> GeometryProfileSpec:
@@ -356,7 +356,7 @@ def _reparameterize_squaring_toolpath_profile(profile: GeometryProfileSpec) -> G
 def _build_squaring_toolpath_profile(
     state: "PgmxState",
     final_level: float,
-    spec: SquaringMillingSpec,
+    spec: ContourSpec,
 ) -> GeometryProfileSpec:
     """Construye la trayectoria compensada para un escuadrado exterior."""
 
@@ -375,7 +375,7 @@ def _build_squaring_toolpath_profile(
     return _build_closed_profile_strategy_toolpath(float(state.depth), cut_z, toolpath_profile, strategy)
 
 
-def _append_squaring_milling(root: ET.Element, state, spec: _HydratedSquaringMillingSpec) -> None:
+def _append_contour(root: ET.Element, state, spec: _HydratedContourSpec) -> None:
     generated_geometry_profile = _build_squaring_geometry_profile(state, spec, z_value=0.0)
     generated_toolpath_profile = _build_squaring_toolpath_profile(state, _toolpath_cut_z(state, spec), spec)
     _append_curve_profile_milling(
@@ -387,12 +387,12 @@ def _append_squaring_milling(root: ET.Element, state, spec: _HydratedSquaringMil
     )
 
 
-def _hydrate_squaring_milling_spec(
-    squaring_milling: SquaringMillingSpec,
+def _hydrate_contour_spec(
+    squaring_milling: ContourSpec,
     source_pgmx_path: Optional[Path],
-) -> _HydratedSquaringMillingSpec:
+) -> _HydratedContourSpec:
     del source_pgmx_path
-    return _HydratedSquaringMillingSpec(spec=_normalize_squaring_milling_spec(squaring_milling))
+    return _HydratedContourSpec(spec=_normalize_contour_spec(squaring_milling))
 
 
 def _normalize_squaring_start_edge(value: Optional[str]) -> str:
@@ -416,11 +416,11 @@ def _normalize_squaring_start_edge(value: Optional[str]) -> str:
     return mapping[raw]
 
 
-def _normalize_squaring_milling_spec(squaring_milling: SquaringMillingSpec) -> SquaringMillingSpec:
+def _normalize_contour_spec(squaring_milling: ContourSpec) -> ContourSpec:
     normalized_strategy = _ensure_milling_strategy_allowed(
         _normalize_milling_strategy_spec(squaring_milling.milling_strategy),
         allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
-        context="SquaringMillingSpec",
+        context="ContourSpec",
     )
     return replace(
         squaring_milling,
@@ -433,7 +433,7 @@ def _normalize_squaring_milling_spec(squaring_milling: SquaringMillingSpec) -> S
     )
 
 
-def build_squaring_milling_spec(
+def build_contour_spec(
     *,
     start_edge: Optional[str] = None,
     winding: Optional[str] = None,
@@ -461,8 +461,8 @@ def build_squaring_milling_spec(
     retract_overlap: Optional[float] = None,
     milling_strategy: Optional[MillingStrategySpec] = None,
     is_enabled_expr: Optional[str] = None,
-) -> SquaringMillingSpec:
-    """Construye un `SquaringMillingSpec` reusable para escuadrar la pieza."""
+) -> ContourSpec:
+    """Construye un `ContourSpec` reusable para escuadrar la pieza."""
 
     has_explicit_depth = any(value is not None for value in (is_through, target_depth, extra_depth))
     depth_spec = (
@@ -543,9 +543,9 @@ def build_squaring_milling_spec(
     normalized_strategy = _ensure_milling_strategy_allowed(
         _normalize_milling_strategy_spec(milling_strategy),
         allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
-        context="SquaringMillingSpec",
+        context="ContourSpec",
     )
-    return SquaringMillingSpec(
+    return ContourSpec(
         start_edge=_normalize_squaring_start_edge(start_edge),
         winding=_normalize_geometry_winding(winding),
         start_coordinate=None if start_coordinate is None else float(start_coordinate),

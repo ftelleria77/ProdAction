@@ -16,7 +16,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from pgmx.synthesis import build_line_milling_spec, build_synthesis_request, synthesize_request
+from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request
 from pgmx.synthesis.common.strategy import ZigZagMillingStrategySpec
 
 _XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
@@ -30,7 +30,7 @@ _REAL_FIXTURES = {
 
 def _line_spec(tool: str, width: float, depth: float, **kwargs):
     tool_id = {"E004": "1903", "E001": "1900"}[tool]
-    return build_line_milling_spec(
+    return build_line_spec(
         line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0,
         line_feature_name="Fresado", line_tool_id=tool_id, line_tool_name=tool,
         line_tool_width=width, line_security_plane=20.0,

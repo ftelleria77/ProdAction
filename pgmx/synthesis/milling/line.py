@@ -95,24 +95,24 @@ from ._common import (
 )
 
 __all__ = [
-    "LineMillingSpec",
-    "build_line_milling_spec",
-    "_HydratedLineMillingSpec",
-    "_append_line_milling",
+    "LineSpec",
+    "build_line_spec",
+    "_HydratedLineSpec",
+    "_append_line",
     "_build_line_geometry",
     "_build_line_operation",
     "_build_line_toolpath_profile",
     "_can_hydrate_exact_serialization",
-    "_extract_line_milling_template",
-    "_hydrate_line_milling_spec",
+    "_extract_line_template",
+    "_hydrate_line_spec",
     "_matches_line_geometry",
-    "_normalize_line_milling_spec",
+    "_normalize_line_spec",
     "_offset_line_for_toolpath",
 ]
 
 
 @dataclass(frozen=True)
-class LineMillingSpec:
+class LineSpec:
     """Descripcion reutilizable de un fresado lineal sobre un plano."""
 
     start_x: float
@@ -166,10 +166,10 @@ class LineMillingSpec:
 
 
 @dataclass(frozen=True)
-class _HydratedLineMillingSpec:
-    """Datos internos de serializacion que complementan un `LineMillingSpec`."""
+class _HydratedLineSpec:
+    """Datos internos de serializacion que complementan un `LineSpec`."""
 
-    spec: LineMillingSpec
+    spec: LineSpec
     preferred_id_start: Optional[int] = None
     geometry_serialization: Optional[str] = None
     approach_curve: Optional[_CurveSpec] = None
@@ -273,12 +273,12 @@ class _HydratedLineMillingSpec:
         return self.spec.spindle
 
 
-def _normalize_line_milling_spec(line_milling: LineMillingSpec) -> LineMillingSpec:
+def _normalize_line_spec(line_milling: LineSpec) -> LineSpec:
     normalized_strategy = _ensure_milling_strategy_allowed(
         _normalize_milling_strategy_spec(line_milling.milling_strategy),
         allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec,
                        ZigZagMillingStrategySpec),
-        context="LineMillingSpec",
+        context="LineSpec",
     )
     return replace(
         line_milling,
@@ -290,7 +290,7 @@ def _normalize_line_milling_spec(line_milling: LineMillingSpec) -> LineMillingSp
     )
 
 
-def _line_change_boundaries(spec: LineMillingSpec) -> tuple[float, ...]:
+def _line_change_boundaries(spec: LineSpec) -> tuple[float, ...]:
     """UPars (ordenados, sin duplicados) donde la curva del toolpath se PARTE por un cambio
     on-route de velocidad o profundidad (forma Maestro, N022 Vel/Prof y N028 _coment)."""
 
@@ -303,7 +303,7 @@ def _build_changes_line_profile(
     top_level: float,
     final_level: float,
     base_profile: GeometryProfileSpec,
-    spec: LineMillingSpec,
+    spec: LineSpec,
 ) -> GeometryProfileSpec:
     """Toolpath con cambios on-route (forma Maestro, N028 _coment): la Z interpola LINEALMENTE
     entre eventos de profundidad consecutivos — desde (0, prof. base) hasta el primero, y plana
@@ -345,7 +345,7 @@ def _build_changes_line_profile(
 def _build_line_toolpath_profile(
     top_level: float,
     final_level: float,
-    spec: LineMillingSpec,
+    spec: LineSpec,
 ) -> GeometryProfileSpec:
     """Construye el perfil de trayectoria efectivo para un fresado lineal."""
 
@@ -386,7 +386,7 @@ def _build_line_toolpath_profile(
     return base_profile
 
 
-def _offset_line_for_toolpath(spec: LineMillingSpec) -> tuple[tuple[float, float], tuple[float, float]]:
+def _offset_line_for_toolpath(spec: LineSpec) -> tuple[tuple[float, float], tuple[float, float]]:
     toolpath_profile = build_compensated_toolpath_profile(
         build_line_geometry_profile(spec.start_x, spec.start_y, spec.end_x, spec.end_y),
         side_of_feature=spec.side_of_feature,
@@ -399,7 +399,7 @@ def _build_line_geometry(
     geometry_id: str,
     plane_id: str,
     plane_object_type: str,
-    spec: _HydratedLineMillingSpec,
+    spec: _HydratedLineSpec,
 ):
     return _build_geometry_from_curve_spec(
         geometry_id,
@@ -573,7 +573,7 @@ def _build_line_operation(
     return operation
 
 
-def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec) -> None:
+def _append_line(root: ET.Element, state, spec: _HydratedLineSpec) -> None:
     geometries = root.find("./{*}Geometries")
     features = root.find("./{*}Features")
     operations = root.find("./{*}Operations")
@@ -689,7 +689,7 @@ def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec
         )
 
 
-def _matches_line_geometry(template: dict[str, object], spec: LineMillingSpec, tolerance: float = 1e-6) -> bool:
+def _matches_line_geometry(template: dict[str, object], spec: LineSpec, tolerance: float = 1e-6) -> bool:
     parsed = _parse_line_serialization(str(template.get("geometry_serialization") or ""))
     if parsed is None:
         return False
@@ -704,7 +704,7 @@ def _matches_line_geometry(template: dict[str, object], spec: LineMillingSpec, t
     return close(direct, expected) or close(reverse, expected)
 
 
-def _can_hydrate_exact_serialization(template: dict[str, object], spec: LineMillingSpec) -> bool:
+def _can_hydrate_exact_serialization(template: dict[str, object], spec: LineSpec) -> bool:
     source_depth_spec = template.get("depth_spec") if isinstance(template.get("depth_spec"), MillingDepthSpec) else None
     requested_depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
     if source_depth_spec is None or _normalize_milling_depth_spec(source_depth_spec) != requested_depth_spec:
@@ -750,7 +750,7 @@ def _can_hydrate_exact_serialization(template: dict[str, object], spec: LineMill
     )
 
 
-def _extract_line_milling_template(source_pgmx_path: Path) -> dict[str, object]:
+def _extract_line_template(source_pgmx_path: Path) -> dict[str, object]:
     root, _, _ = _load_pgmx_container(source_pgmx_path)
 
     geometry = next(
@@ -818,17 +818,17 @@ def _extract_line_milling_template(source_pgmx_path: Path) -> dict[str, object]:
     }
 
 
-def _hydrate_line_milling_spec(
-    line_milling: LineMillingSpec,
+def _hydrate_line_spec(
+    line_milling: LineSpec,
     source_pgmx_path: Optional[Path],
-) -> _HydratedLineMillingSpec:
-    normalized_line_milling = _normalize_line_milling_spec(line_milling)
+) -> _HydratedLineSpec:
+    normalized_line_milling = _normalize_line_spec(line_milling)
     if source_pgmx_path is None:
-        return _HydratedLineMillingSpec(spec=normalized_line_milling)
-    template = _extract_line_milling_template(source_pgmx_path)
+        return _HydratedLineSpec(spec=normalized_line_milling)
+    template = _extract_line_template(source_pgmx_path)
     if not _can_hydrate_exact_serialization(template, normalized_line_milling):
-        return _HydratedLineMillingSpec(spec=normalized_line_milling)
-    return _HydratedLineMillingSpec(
+        return _HydratedLineSpec(spec=normalized_line_milling)
+    return _HydratedLineSpec(
         spec=normalized_line_milling,
         preferred_id_start=int(template["preferred_id_start"]),
         geometry_serialization=str(template["geometry_serialization"]),
@@ -838,7 +838,7 @@ def _hydrate_line_milling_spec(
     )
 
 
-def build_line_milling_spec(
+def build_line_spec(
     line_x1: Optional[float],
     line_y1: Optional[float],
     line_x2: Optional[float],
@@ -873,8 +873,8 @@ def build_line_milling_spec(
     line_retract_overlap: Optional[float] = None,
     line_milling_strategy: Optional[MillingStrategySpec] = None,
     is_enabled_expr: Optional[str] = None,
-) -> Optional[LineMillingSpec]:
-    """Construye un `LineMillingSpec` reusable para un fresado lineal.
+) -> Optional[LineSpec]:
+    """Construye un `LineSpec` reusable para un fresado lineal.
 
     Devuelve `None` si la linea no viene informada, lo que simplifica el uso
     desde CLI y desde capas superiores que quieren tratar este mecanizado como
@@ -890,9 +890,9 @@ def build_line_milling_spec(
         _normalize_milling_strategy_spec(line_milling_strategy),
         allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec,
                        ZigZagMillingStrategySpec),
-        context="LineMillingSpec",
+        context="LineSpec",
     )
-    return LineMillingSpec(
+    return LineSpec(
         start_x=float(line_x1),
         start_y=float(line_y1),
         end_x=float(line_x2),

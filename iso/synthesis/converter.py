@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pgmx.synthesis.drilling.single import DrillingSpec
+from pgmx.synthesis.drilling.single import DrillSpec
 
 from ._machine import effective_top_feed_spindle, resolve_top_tool
 from ._preamble import render_epilogue, render_preamble
@@ -119,7 +119,7 @@ def convert(pgmx_path: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _sort_side_drills(drills: list[DrillingSpec]) -> list[DrillingSpec]:
+def _sort_side_drills(drills: list[DrillSpec]) -> list[DrillSpec]:
     """Sort side drills in Maestro execution order.
 
     Face priority: Front > Left > Right > Back.
@@ -129,7 +129,7 @@ def _sort_side_drills(drills: list[DrillingSpec]) -> list[DrillingSpec]:
     """
     from ._machine import FACE_PRIORITY
 
-    def sort_key(d: DrillingSpec) -> tuple[int, float]:
+    def sort_key(d: DrillSpec) -> tuple[int, float]:
         fp = FACE_PRIORITY.get(d.plane_name, 99)
         # Faces where Y_pos = -center_x: higher center_x drilled first (descending)
         if d.plane_name in ("Left", "Back"):

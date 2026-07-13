@@ -13,11 +13,11 @@ import unittest
 from pathlib import Path
 
 from pgmx.adapters import adapt_pgmx_path
-from pgmx.synthesis import build_arc_milling_spec, build_synthesis_request, synthesize_request
+from pgmx.synthesis import build_arc_spec, build_synthesis_request, synthesize_request
 
 
 def _authored(tmp: Path, name: str, **kw) -> Path:
-    arc = build_arc_milling_spec(
+    arc = build_arc_spec(
         start_x=kw.pop("start_x", 210.0), start_y=kw.pop("start_y", 100.0),
         end_x=kw.pop("end_x", 90.0), end_y=kw.pop("end_y", 100.0),
         center_x=kw.pop("center_x", 150.0), center_y=kw.pop("center_y", 100.0),
@@ -54,7 +54,7 @@ class ArcAuthoringRoundtripTest(unittest.TestCase):
 
     def test_radio_inconsistente_rechazado(self):
         with self.assertRaises(ValueError):
-            build_arc_milling_spec(
+            build_arc_spec(
                 start_x=210.0, start_y=100.0, end_x=90.0, end_y=110.0,
                 center_x=150.0, center_y=100.0, target_depth=5.0)
 

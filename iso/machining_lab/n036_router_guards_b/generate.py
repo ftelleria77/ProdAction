@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_line_milling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request  # noqa: E402
 from pgmx.synthesis.common.leads import build_approach_spec, build_retract_spec  # noqa: E402
 from pgmx.synthesis.common.strategy import (  # noqa: E402
     ZigZagMillingStrategySpec,
@@ -36,7 +36,7 @@ ZZ_UH0 = ZigZagMillingStrategySpec(allow_multiple_passes=True, feed_cutting_dept
                                    return_cutting_depth=3.0, axial_finish_cutting_depth=0.0)
 
 def _line(depth=5.0, strategy=None, side="Center", through=False, y=100.0, x2=280.0, y2=None, **kw):
-    base = build_line_milling_spec(
+    base = build_line_spec(
         line_x1=20.0, line_y1=y, line_x2=x2, line_y2=(y if y2 is None else y2),
         line_feature_name="Fresado", line_tool_id="1903", line_tool_name="E004",
         line_tool_width=4.0, line_security_plane=20.0,

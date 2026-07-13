@@ -110,7 +110,7 @@ Topologias:
 | `Vaciado_030`, `Vaciado_030_E001..E007` | `right_wall_seed` | semilla de ruta contra pared derecha; base con islas fisicas separadas de semilla resuelta; `InsideToOutSide=True` | `legacy_exact` | `single_seed_right_wall_inside_out_offsets` | tercera meta V2; contacto con pared como evento, no como caso |
 | `Vaciado_031_E001..E007` | `single_seed_balanced` con corredor central | semilla central `175..225 x 125..175`; vueltas completas, vuelta de borde, lobulos parciales, micro-puente | `legacy_exact` para variantes | helpers single-seed/multiloop y artefactos con arcos Maestro | usar como evidencia para eventos reutilizables |
 | `Vaciado_031` base | `multi_seed_hybrid` | dos islas fisicas y semilla/corredor central de ruta; dos trayectorias `5+10` en base | `pending_v2` | parcialmente explicado por variantes `031_E00x` | cuarta meta V2; cerrar sin parche por nombre de caso |
-| `Vaciado_035` | `non_polyline_outer` | `GeomCircle`, `AllowanceSide=20`, `InsideToOutSide=false`, `IsHelicStrategy=true`, trayectoria circular a Z constante | `snapshot_only` | analizador de primitivas; fuera de `PocketMillingSpec` polilineal | quinta meta V2; decidir curvas nativas o polilinizacion |
+| `Vaciado_035` | `non_polyline_outer` | `GeomCircle`, `AllowanceSide=20`, `InsideToOutSide=false`, `IsHelicStrategy=true`, trayectoria circular a Z constante | `snapshot_only` | analizador de primitivas; fuera de `PocketSpec` polilineal | quinta meta V2; decidir curvas nativas o polilinizacion |
 
 ## Ejes De Estrategia A Cruzar
 

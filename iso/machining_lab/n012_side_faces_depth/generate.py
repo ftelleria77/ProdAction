@@ -18,7 +18,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_drilling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_drill_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N012_side_faces_depth"
 
@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
             output_path=path, piece_name=name,
             length=300.0, width=200.0, depth=18.0,
             origin_x=5.0, origin_y=5.0, origin_z=25.0,
-            drillings=[build_drilling_spec(
+            drillings=[build_drill_spec(
                 center_x=along, center_y=9.0, diameter=8.0,
                 plane_name=face, target_depth=depth, tool_resolution="Auto",
             )],

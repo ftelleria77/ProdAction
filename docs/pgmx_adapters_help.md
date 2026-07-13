@@ -57,24 +57,24 @@ describen un mecanizado publico reutilizable. No bloquean
 
 ## Mapeos soportados hoy
 
-- `RoundHole` + `DrillingOperation` -> `DrillingSpec`
+- `RoundHole` + `DrillingOperation` -> `DrillSpec`
   - en taladros pasantes, `extra_depth` se recupera desde el `TrajectoryPath`
     cuando `OvercutLength` no lo informa
 - `ReplicateFeature` + `DrillingOperation` + `RectangularPattern` ->
-  `DrillingPatternSpec`
-- `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `LineMillingSpec`
+  `DrillPatternSpec`
+- `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `LineSpec`
   cuando la geometria es una recta simple
-- `SlotSide` + `BottomAndSideFinishMilling` -> `SlotMillingSpec`
+- `SlotSide` + `BottomAndSideFinishMilling` -> `ChannelSpec`
   cuando la geometria es una recta horizontal sobre `Top`
   - las ranuras verticales quedan como `unsupported`: la `Sierra Vertical X`
     no puede ejecutar ese recorrido y no hay herramienta alternativa validada
-- `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `PolylineMillingSpec`
+- `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `PolylineSpec`
   cuando la geometria es una curva compuesta sin arcos
-- `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `CircleMillingSpec`
+- `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `CircleSpec`
   cuando la geometria es un `GeomCircle`
   - hoy preserva `SideOfFeature = Center|Right|Left`
   - y tambien la estrategia `Helicoidal` cuando aparece en el `.pgmx`
-- `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `SquaringMillingSpec`
+- `GeneralProfileFeature` + `BottomAndSideFinishMilling` -> `ContourSpec`
   cuando el contorno coincide con el perimetro completo de la pieza sobre `Top`
 
 ## Limitaciones actuales

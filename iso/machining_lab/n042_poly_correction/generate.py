@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_arc_polyline_milling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_polyline_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N042_poly_correction"
 
@@ -50,7 +50,7 @@ CLOSED_MID = dict(start=(150.0, 40.0),
                             ((60.0, 40.0),), ((150.0, 40.0),)])
 
 def _poly(geom, **kw):
-    return build_arc_polyline_milling_spec(
+    return build_polyline_spec(
         **geom, tool_id="1903", tool_name="E004", tool_width=4.0,
         target_depth=5.0, **kw)
 

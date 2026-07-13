@@ -1021,7 +1021,7 @@ informacion que ya produce o puede producir el sistema:
   - ese archivo contiene `2` features `ReplicateFeature`:
     - patron horizontal `3 x 1`, base `(80, 80)`, separacion `32`
     - patron vertical `1 x 3`, base `(280, 80)`, separacion `32`
-  - el sintetizador `.pgmx` fue corregido con `DrillingPatternSpec` para
+  - el sintetizador `.pgmx` fue corregido con `DrillPatternSpec` para
     generar la misma semantica Maestro.
 - Postprocesado recibido:
   - `P:\USBMIX\ProdAction\ISO\pieza_004.iso`
@@ -1044,7 +1044,7 @@ informacion que ya produce o puede producir el sistema:
     este caso.
   - El ISO final queda expandido como seis ciclos/bloques equivalentes de
     taladrado con broca `001`.
-  - Para sintesis `.pgmx` conviene seguir usando `DrillingPatternSpec` cuando
+  - Para sintesis `.pgmx` conviene seguir usando `DrillPatternSpec` cuando
     el usuario pida patrones, porque conserva la intencion editable en Maestro;
     para el ISO final, por ahora no cambia el programa ejecutado.
 - Bloques de taladrado ISO observados:
@@ -1103,7 +1103,7 @@ informacion que ya produce o puede producir el sistema:
   - `sha256 = b4a71ed3bb52a050a87b313d6e3abb92ca54902486c438d04ded921fecc0a177`
 - Validacion interna adicional:
   - `tools.pgmx_adapters.adapt_pgmx_path(...)` ahora reconoce estos
-    `ReplicateFeature` como `DrillingPatternSpec`.
+    `ReplicateFeature` como `DrillPatternSpec`.
   - resultado sobre `Pieza_005.pgmx`:
     - `adapted = 4`
     - `unsupported = 0`
@@ -1193,7 +1193,7 @@ informacion que ya produce o puede producir el sistema:
   - `sha256 = 6c505688db5c83b9488710b32508dfb64b58b213ac4ff32cf78f093e62b171be`
 - Validacion interna adicional:
   - `tools.pgmx_adapters.adapt_pgmx_path(...)` reconoce la ranura como
-    `SlotMillingSpec`.
+    `ChannelSpec`.
   - resultado sobre `Pieza_006.pgmx`:
     - `adapted = 1`
     - `unsupported = 0`
@@ -1295,7 +1295,7 @@ informacion que ya produce o puede producir el sistema:
   - `sha256 = cebb68e0da68d862369bf149e925f55904381da7f91083fded9f02ab6392850d`
 - Validacion interna adicional:
   - `tools.pgmx_adapters.adapt_pgmx_path(...)` reconoce la ranura como
-    `SlotMillingSpec`.
+    `ChannelSpec`.
   - resultado sobre `Pieza_007.pgmx`:
     - `adapted = 1`
     - `unsupported = 0`
@@ -1380,7 +1380,7 @@ informacion que ya produce o puede producir el sistema:
     - bounding box `(50, 125, 350, 125)`
 - Validacion interna adicional:
   - `tools.pgmx_adapters.adapt_pgmx_path(...)` reconoce cada archivo como
-    `SlotMillingSpec`.
+    `ChannelSpec`.
   - en los cuatro casos:
     - `adapted = 1`
     - `unsupported = 0`
@@ -1561,7 +1561,7 @@ informacion que ya produce o puede producir el sistema:
   - `origin = (5, 5, 25)`
   - `execution_fields = HG`
 - Fresado:
-  - spec publica: `LineMillingSpec`
+  - spec publica: `LineSpec`
   - feature `Fresado_Linea_Vertical_E004_Central_P15`
   - feature type `a:GeneralProfileFeature`
   - operation type `a:BottomAndSideFinishMilling`
@@ -1589,7 +1589,7 @@ informacion que ya produce o puede producir el sistema:
   - `sha256 = d96e8edd99fafff80d5eb1588df8408467fd80de4314393b7cb383a0902b41ef`
 - Validacion interna adicional:
   - `tools.pgmx_adapters.adapt_pgmx_path(...)` reconoce el caso como
-    `LineMillingSpec`.
+    `LineSpec`.
   - resultado sobre `Pieza_015.pgmx`:
     - `adapted = 1`
     - `unsupported = 0`
@@ -1685,7 +1685,7 @@ informacion que ya produce o puede producir el sistema:
 - Parametros comunes:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
-  - spec publica `PolylineMillingSpec`
+  - spec publica `PolylineSpec`
   - feature type `a:GeneralProfileFeature`
   - operation type `a:BottomAndSideFinishMilling`
   - plano `Top`
@@ -1710,7 +1710,7 @@ informacion que ya produce o puede producir el sistema:
     - familia geometrica `OpenPolyline`
     - bounding box nominal `(150, 50, 250, 125)`
   - `tools.pgmx_adapters.adapt_pgmx_path(...)` reconoce ambos como
-    `PolylineMillingSpec`.
+    `PolylineSpec`.
   - en ambos casos:
     - `adapted = 1`
     - `unsupported = 0`
@@ -1813,7 +1813,7 @@ informacion que ya produce o puede producir el sistema:
 - Parametros comunes:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
-  - spec publica `SquaringMillingSpec`
+  - spec publica `ContourSpec`
   - `start_edge = Bottom`
   - plano `Top`
   - geometria nominal `ClosedPolylineMidEdgeStart`
@@ -1842,7 +1842,7 @@ informacion que ya produce o puede producir el sistema:
     - herramienta `1900 / E001`
     - `security_plane = 20`
   - `tools.pgmx_adapters.adapt_pgmx_path(...)` reconoce ambos como
-    `SquaringMillingSpec`.
+    `ContourSpec`.
   - en ambos casos:
     - `adapted = 1`
     - `unsupported = 0`
@@ -2044,7 +2044,7 @@ informacion que ya produce o puede producir el sistema:
 - Parametros comunes:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
-  - spec publica `SquaringMillingSpec`
+  - spec publica `ContourSpec`
   - `start_edge = Bottom`
   - plano `Top`
   - geometria nominal `ClosedPolylineMidEdgeStart`
@@ -2083,7 +2083,7 @@ informacion que ya produce o puede producir el sistema:
     - operacion `a:BottomAndSideFinishMilling`
     - herramienta `1900 / E001`
   - `tools.pgmx_adapters.adapt_pgmx_path(...)` reconoce ambos como
-    `SquaringMillingSpec`.
+    `ContourSpec`.
   - en ambos casos:
     - `adapted = 1`
     - `unsupported = 0`
@@ -2164,8 +2164,8 @@ informacion que ya produce o puede producir el sistema:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `ordered_machinings` para conservar el orden:
-    1. `SquaringMillingSpec`
-    2. `PolylineMillingSpec`
+    1. `ContourSpec`
+    2. `PolylineSpec`
 - Escuadrado:
   - feature `Escuadrado_Antihorario_E001_Estandar`
   - `start_edge = Bottom`
@@ -2294,8 +2294,8 @@ informacion que ya produce o puede producir el sistema:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `ordered_machinings`:
-    1. `SquaringMillingSpec`
-    2. `PolylineMillingSpec`
+    1. `ContourSpec`
+    2. `PolylineSpec`
   - escuadrado antihorario estandar:
     - `start_edge = Bottom`
     - `winding = CounterClockwise`
@@ -2417,8 +2417,8 @@ informacion que ya produce o puede producir el sistema:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `ordered_machinings`:
-    1. `SquaringMillingSpec`
-    2. `CircleMillingSpec`
+    1. `ContourSpec`
+    2. `CircleSpec`
   - escuadrado antihorario estandar:
     - `start_edge = Bottom`
     - `winding = CounterClockwise`
@@ -2531,8 +2531,8 @@ informacion que ya produce o puede producir el sistema:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `ordered_machinings`:
-    1. `SquaringMillingSpec`
-    2. `CircleMillingSpec`
+    1. `ContourSpec`
+    2. `CircleSpec`
   - escuadrado antihorario estandar:
     - `start_edge = Bottom`
     - `winding = CounterClockwise`
@@ -2667,8 +2667,8 @@ informacion que ya produce o puede producir el sistema:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `ordered_machinings`:
-    1. `SquaringMillingSpec`
-    2. `CircleMillingSpec`
+    1. `ContourSpec`
+    2. `CircleSpec`
   - escuadrado antihorario estandar:
     - `start_edge = Bottom`
     - `winding = CounterClockwise`
@@ -2818,8 +2818,8 @@ informacion que ya produce o puede producir el sistema:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `ordered_machinings`:
-    1. `SquaringMillingSpec`
-    2. `PolylineMillingSpec`
+    1. `ContourSpec`
+    2. `PolylineSpec`
   - escuadrado antihorario estandar:
     - `start_edge = Bottom`
     - `winding = CounterClockwise`
@@ -2963,8 +2963,8 @@ informacion que ya produce o puede producir el sistema:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `ordered_machinings`:
-    1. `SquaringMillingSpec`
-    2. `PolylineMillingSpec`
+    1. `ContourSpec`
+    2. `PolylineSpec`
   - escuadrado antihorario estandar:
     - `start_edge = Bottom`
     - `winding = CounterClockwise`
@@ -3097,8 +3097,8 @@ informacion que ya produce o puede producir el sistema:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `ordered_machinings`:
-    1. `SquaringMillingSpec`
-    2. `PolylineMillingSpec`
+    1. `ContourSpec`
+    2. `PolylineSpec`
   - escuadrado antihorario estandar:
     - `start_edge = Bottom`
     - `winding = CounterClockwise`
@@ -3237,8 +3237,8 @@ informacion que ya produce o puede producir el sistema:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `ordered_machinings`:
-    1. `SquaringMillingSpec`
-    2. `PolylineMillingSpec`
+    1. `ContourSpec`
+    2. `PolylineSpec`
   - escuadrado antihorario estandar:
     - `start_edge = Bottom`
     - `winding = CounterClockwise`
@@ -3394,8 +3394,8 @@ informacion que ya produce o puede producir el sistema:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `ordered_machinings`:
-    1. `SquaringMillingSpec`
-    2. `PolylineMillingSpec`
+    1. `ContourSpec`
+    2. `PolylineSpec`
   - escuadrado antihorario estandar:
     - `start_edge = Bottom`
     - `winding = CounterClockwise`
@@ -3537,8 +3537,8 @@ informacion que ya produce o puede producir el sistema:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `ordered_machinings`:
-    1. `SquaringMillingSpec`
-    2. `CircleMillingSpec`
+    1. `ContourSpec`
+    2. `CircleSpec`
   - escuadrado antihorario estandar:
     - `start_edge = Bottom`
     - `winding = CounterClockwise`
@@ -3688,8 +3688,8 @@ informacion que ya produce o puede producir el sistema:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `ordered_machinings`:
-    1. `SquaringMillingSpec`
-    2. `CircleMillingSpec`
+    1. `ContourSpec`
+    2. `CircleSpec`
   - escuadrado antihorario estandar:
     - `start_edge = Bottom`
     - `winding = CounterClockwise`
@@ -3844,7 +3844,7 @@ informacion que ya produce o puede producir el sistema:
 - Parametros comunes:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
-  - un solo `SquaringMillingSpec` seguido de `Xn`
+  - un solo `ContourSpec` seguido de `Xn`
   - herramienta `1900 / E001`
   - `tool_width = 18.36`
   - pasante `Extra = 1`
@@ -3996,8 +3996,8 @@ informacion que ya produce o puede producir el sistema:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `ordered_machinings`:
-    1. `SquaringMillingSpec`
-    2. `LineMillingSpec`
+    1. `ContourSpec`
+    2. `LineSpec`
   - escuadrado antihorario estandar:
     - `start_edge = Bottom`
     - `winding = CounterClockwise`
@@ -4236,7 +4236,7 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 2`
     - `unsupported = 0`
     - `ignored = 1`
-    - siempre incluye `SquaringMillingSpec` estandar + mecanizado E004.
+    - siempre incluye `ContourSpec` estandar + mecanizado E004.
   - `Pieza_084` a `Pieza_086`:
     - `features = 1`
     - `operations = 1`
@@ -4244,7 +4244,7 @@ informacion que ya produce o puede producir el sistema:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - solo incluye `SquaringMillingSpec`.
+    - solo incluye `ContourSpec`.
   - todos los adaptadores recuperan el `approach` y `retract` con:
     - `is_enabled = True`
     - `radius_multiplier = 2.0`
@@ -5109,7 +5109,7 @@ Reglas firmes hasta ahora:
 Reglas implementadas en codigo:
 - `tools/synthesize_pgmx.py` conserva `ToolKey` vacio para
   `tool_resolution="Auto"` en `Front`, `Back`, `Left` y `Right`.
-- `DrillingPatternSpec` puede sintetizar `ReplicateFeature` rectangular en
+- `DrillPatternSpec` puede sintetizar `ReplicateFeature` rectangular en
   `Top`, `Front`, `Back`, `Left` y `Right`.
 - `tool_resolution="Explicit"` queda disponible para forzar una herramienta
   lateral solo cuando exista un caso que lo justifique.
@@ -5556,7 +5556,7 @@ Lectura:
   - `Approach Line + Down` y `Retract Line + Up`.
 - `E002` no se genero:
   - el catalogo la clasifica como `Sierra Horizontal`.
-  - `LineMillingSpec` la rechaza correctamente con validacion fuerte porque el
+  - `LineSpec` la rechaza correctamente con validacion fuerte porque el
     fresado lineal publico requiere herramienta de tipo fresa, o Sierra Vertical
     X en ranurado horizontal no pasante.
   - para estudiar `E002` hace falta modelar la familia correcta de sierra

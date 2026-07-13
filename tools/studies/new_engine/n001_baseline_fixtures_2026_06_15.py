@@ -25,13 +25,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    build_drilling_spec,
-    build_line_milling_spec,
+    build_drill_spec,
+    build_line_spec,
     build_synthesis_request,
     synthesize_request,
 )
-from pgmx.synthesis.drilling.single import DrillingSpec
-from pgmx.synthesis.milling.line import LineMillingSpec
+from pgmx.synthesis.drilling.single import DrillSpec
+from pgmx.synthesis.milling.line import LineSpec
 
 DEFAULT_OUTPUT_DIR = Path(r"S:\Maestro\Projects\ProdAction\ISO\N_new_engine_2026_06_15")
 
@@ -49,7 +49,7 @@ ORIGIN_Z = 25.0
 
 
 def _drill_top(x: float, y: float, diameter: float = 5.0, depth: float = 10.0) -> object:
-    return build_drilling_spec(
+    return build_drill_spec(
         feature_name=f"TOP_D{diameter:g}_X{x:g}_Y{y:g}",
         plane_name="Top",
         center_x=x,
@@ -61,7 +61,7 @@ def _drill_top(x: float, y: float, diameter: float = 5.0, depth: float = 10.0) -
 
 
 def _drill_side(plane: str, x: float, y: float = 9.0, diameter: float = 8.0, depth: float = 28.0) -> object:
-    return build_drilling_spec(
+    return build_drill_spec(
         feature_name=f"{plane.upper()}_D{diameter:g}_X{x:g}",
         plane_name=plane,
         center_x=x,
@@ -73,7 +73,7 @@ def _drill_side(plane: str, x: float, y: float = 9.0, diameter: float = 8.0, dep
 
 
 def _line_mill(y: float = 100.0) -> object:
-    return build_line_milling_spec(
+    return build_line_spec(
         line_x1=20.0,
         line_y1=y,
         line_x2=PIECE_L - 20.0,
@@ -90,8 +90,8 @@ def _line_mill(y: float = 100.0) -> object:
 
 
 def _write(output_dir: Path, name: str, *operations: object) -> None:
-    drillings = [op for op in operations if isinstance(op, DrillingSpec)]
-    line_millings = [op for op in operations if isinstance(op, LineMillingSpec)]
+    drillings = [op for op in operations if isinstance(op, DrillSpec)]
+    line_millings = [op for op in operations if isinstance(op, LineSpec)]
     path = output_dir / f"{name}.pgmx"
     req = build_synthesis_request(
         output_path=path,

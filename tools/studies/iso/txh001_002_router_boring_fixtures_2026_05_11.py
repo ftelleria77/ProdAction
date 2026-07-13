@@ -17,11 +17,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    DrillingSpec,
-    SlotMillingSpec,
-    build_drilling_spec,
-    build_line_milling_spec,
-    build_slot_milling_spec,
+    DrillSpec,
+    ChannelSpec,
+    build_drill_spec,
+    build_line_spec,
+    build_channel_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -55,7 +55,7 @@ class Fixture:
 
 def _line_e004(fixture: Fixture) -> object:
     offset = (fixture.index - 1) * 8.0
-    return build_line_milling_spec(
+    return build_line_spec(
         line_x1=80.0 + offset,
         line_y1=70.0,
         line_x2=220.0 + offset,
@@ -74,8 +74,8 @@ def _line_e004(fixture: Fixture) -> object:
     )
 
 
-def _top_drill(fixture: Fixture) -> DrillingSpec:
-    return build_drilling_spec(
+def _top_drill(fixture: Fixture) -> DrillSpec:
+    return build_drill_spec(
         feature_name=f"{fixture.transition_id}_{fixture.index:02d}_TOP_D8",
         plane_name="Top",
         center_x=260.0,
@@ -86,8 +86,8 @@ def _top_drill(fixture: Fixture) -> DrillingSpec:
     )
 
 
-def _side_drill(fixture: Fixture) -> DrillingSpec:
-    return build_drilling_spec(
+def _side_drill(fixture: Fixture) -> DrillSpec:
+    return build_drill_spec(
         feature_name=f"{fixture.transition_id}_{fixture.index:02d}_FRONT_D8",
         plane_name="Front",
         center_x=fixture.length * 0.5,
@@ -98,8 +98,8 @@ def _side_drill(fixture: Fixture) -> DrillingSpec:
     )
 
 
-def _top_slot(fixture: Fixture) -> SlotMillingSpec:
-    return build_slot_milling_spec(
+def _top_slot(fixture: Fixture) -> ChannelSpec:
+    return build_channel_spec(
         feature_name=f"{fixture.transition_id}_{fixture.index:02d}_TOP_SLOT_082",
         start_x=120.0,
         start_y=140.0,

@@ -182,15 +182,15 @@ def _build_profile_feature(
 
 
 def _is_hydrated_line_or_slot_milling_spec(spec) -> bool:
-    return type(spec).__name__ in {"_HydratedLineMillingSpec", "_HydratedSlotMillingSpec"}
+    return type(spec).__name__ in {"_HydratedLineSpec", "_HydratedChannelSpec"}
 
 
 def _is_hydrated_slot_milling_spec(spec) -> bool:
-    return type(spec).__name__ == "_HydratedSlotMillingSpec"
+    return type(spec).__name__ == "_HydratedChannelSpec"
 
 
 def _is_hydrated_line_milling_spec(spec) -> bool:
-    return type(spec).__name__ == "_HydratedLineMillingSpec"
+    return type(spec).__name__ == "_HydratedLineSpec"
 
 
 def _validate_tool_sinking_length_for_spec(

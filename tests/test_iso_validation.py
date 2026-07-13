@@ -16,8 +16,8 @@ from pathlib import Path
 
 from pgmx.adapters import adapt_pgmx_path
 from pgmx.synthesis import (
-    build_drilling_spec,
-    build_slot_milling_spec,
+    build_drill_spec,
+    build_channel_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -39,7 +39,7 @@ def _make(tmp: Path, name: str, **kwargs) -> Path:
 def _drill(**kw):
     base = dict(center_x=150.0, center_y=100.0, diameter=8.0, plane_name="Top")
     base.update(kw)
-    return build_drilling_spec(**base)
+    return build_drill_spec(**base)
 
 
 class FailLoudTest(unittest.TestCase):
@@ -54,13 +54,13 @@ class FailLoudTest(unittest.TestCase):
     def test_unsupported_spec_type(self):
         # Canal (N037), circulo (N038), arco (N040) y polilinea (N041) ya son familias
         # soportadas; el ESCUADRADO sigue sin derivar (etapa 4 del Eje B).
-        from pgmx.synthesis import build_squaring_milling_spec
-        self._assert_rejected("squaring", squaring_millings=[build_squaring_milling_spec(
+        from pgmx.synthesis import build_contour_spec
+        self._assert_rejected("squaring", squaring_millings=[build_contour_spec(
             target_depth=5.0, feature_name="Escuadrado")])
 
     def test_polyline_recta_soportada_convierte(self):
-        from pgmx.synthesis import build_polyline_milling_spec
-        path = _make(self.tmp, "poly_ok", polyline_millings=[build_polyline_milling_spec(
+        from pgmx.synthesis import build_polyline_spec
+        path = _make(self.tmp, "poly_ok", polyline_millings=[build_polyline_spec(
             points=[(20, 100), (20, 180), (160, 180)],
             feature_name="Poli", tool_id="1903", tool_name="E004", tool_width=4.0,
             target_depth=5.0)])
@@ -69,15 +69,15 @@ class FailLoudTest(unittest.TestCase):
         self.assertIn("G1 X160.000 Z-5.000 F5000.000", iso)
 
     def test_circle_soportado_convierte(self):
-        from pgmx.synthesis import build_circle_milling_spec
-        path = _make(self.tmp, "circ_ok", circle_millings=[build_circle_milling_spec(
+        from pgmx.synthesis import build_circle_spec
+        path = _make(self.tmp, "circ_ok", circle_millings=[build_circle_spec(
             center_x=150, center_y=100, radius=30,
             feature_name="Circulo", target_depth=5.0)])
         iso = convert(path)
         self.assertIn("G3 X120.000 Y100.000 I150.000 J100.000 F18000.000", iso)  # E003 default
 
     def test_slot_soportado_convierte(self):
-        path = _make(self.tmp, "slot_ok", slot_millings=[build_slot_milling_spec(
+        path = _make(self.tmp, "slot_ok", slot_millings=[build_channel_spec(
             start_x=280, start_y=100, end_x=20, end_y=100,
             feature_name="Canal", target_depth=8.0)])
         iso = convert(path)

@@ -40,11 +40,11 @@ if str(ROOT) not in sys.path:
 
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import (  # noqa: E402
-    build_drilling_spec,
+    build_drill_spec,
     build_synthesis_request,
     synthesize_request,
 )
-from pgmx.synthesis.drilling.single import DrillingSpec
+from pgmx.synthesis.drilling.single import DrillSpec
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N002_baselines"
 
@@ -62,13 +62,13 @@ BASE_OZ = 25.0
 # ---------------------------------------------------------------------------
 
 def _side(plane: str, along: float, height: float = 9.0,
-          diameter: float = 8.0, depth: float = 28.0) -> DrillingSpec:
+          diameter: float = 8.0, depth: float = 28.0) -> DrillSpec:
     """Taladro lateral.
 
     `along`  = posición a lo largo del canto (Front/Back→eje X; Left/Right→eje Y).
     `height` = altura del agujero dentro del espesor (mapea a Z de máquina).
     """
-    return build_drilling_spec(
+    return build_drill_spec(
         feature_name=f"{plane.upper()}_A{along:g}_H{height:g}",
         plane_name=plane,
         center_x=along,
@@ -79,7 +79,7 @@ def _side(plane: str, along: float, height: float = 9.0,
     )
 
 
-def _write(output_dir: Path, name: str, drillings: list[DrillingSpec], *,
+def _write(output_dir: Path, name: str, drillings: list[DrillSpec], *,
            length: float = BASE_L, width: float = BASE_W, depth: float = BASE_D,
            origin_x: float = BASE_OX, origin_y: float = BASE_OY,
            origin_z: float = BASE_OZ) -> None:

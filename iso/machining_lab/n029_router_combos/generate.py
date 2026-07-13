@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_line_milling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request  # noqa: E402
 from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_spec  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N029_router_combos"
@@ -58,7 +58,7 @@ def main(argv=None):
         synthesize_request(build_synthesis_request(
             output_path=path, piece_name=f"N_C_{tag}", length=300.0, width=200.0, depth=18.0,
             origin_x=5.0, origin_y=5.0, origin_z=25.0,
-            line_millings=[build_line_milling_spec(**geom, **kw, **extra)]))
+            line_millings=[build_line_spec(**geom, **kw, **extra)]))
         print(f"  {path.name}")
     print("OJO: inv_*/reb2_long/cad_diag/f9_tope requieren tocar la opcion en Maestro (docstring).")
     return 0

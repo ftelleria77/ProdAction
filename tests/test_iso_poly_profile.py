@@ -3,7 +3,7 @@
 Modelo: op de la familia ROUTER; entrada por el START real; UN G-code por segmento en orden —
 recta = G1 (regla _g1_cut de siempre), arco = G3 (CCW) / G2 (CW) con I/J ABSOLUTOS al centro.
 Abierto o cerrado; pasante = −(espesor+extra); TLC/SVR/S del catálogo. Cubre polilínea recta
-(PolylineMillingSpec) y mixta (ArcPolylineMillingSpec); ambas son la MISMA familia "poly" y
+(PolylineSpec) y mixta (PolylineSpec); ambas son la MISMA familia "poly" y
 transicionan byte-idéntico (N041 two). Corrección/leads/estrategia → lote de combos futuro.
 """
 
@@ -13,7 +13,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from pgmx.synthesis import build_arc_polyline_milling_spec
+from pgmx.synthesis import build_polyline_spec
 from pgmx.synthesis.common.leads import build_approach_spec
 from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_spec
 
@@ -25,7 +25,7 @@ _REF_DIR = Path(r"P:\USBMIX\ProdAction\N041_poly_profile")
 
 
 def _poly(**kw):
-    base = build_arc_polyline_milling_spec(
+    base = build_polyline_spec(
         start=(20.0, 60.0),
         segments=[((20.0, 120.0),),
                   ((80.0, 180.0), (80.0, 120.0), "CounterClockwise"),

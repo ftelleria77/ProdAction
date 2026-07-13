@@ -294,7 +294,7 @@ def build_helical_milling_strategy_spec(
 ) -> HelicalMillingStrategySpec:
     """Construye una estrategia publica `Helicoidal`.
 
-    Por ahora esta familia queda validada solo para `CircleMillingSpec`.
+    Por ahora esta familia queda validada solo para `CircleSpec`.
     """
 
     normalized_axial_cutting_depth = _normalize_nonnegative_strategy_depth(
@@ -390,10 +390,10 @@ def _should_activate_cnc_correction(spec) -> bool:
 
 def _spec_uses_closed_profile(spec) -> bool:
     if type(spec).__name__ in {
-        "_HydratedCircleMillingSpec",
-        "CircleMillingSpec",
-        "_HydratedSquaringMillingSpec",
-        "SquaringMillingSpec",
+        "_HydratedCircleSpec",
+        "CircleSpec",
+        "_HydratedContourSpec",
+        "ContourSpec",
     }:
         return True
     points = getattr(spec, "points", None)

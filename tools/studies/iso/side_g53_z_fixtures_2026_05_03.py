@@ -24,8 +24,8 @@ if str(ROOT) not in sys.path:
 
 from pgmx.adapters import adapt_pgmx_path  # noqa: E402
 from pgmx.synthesis import (  # noqa: E402
-    DrillingSpec,
-    build_drilling_spec,
+    DrillSpec,
+    build_drill_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -51,7 +51,7 @@ class Fixture:
     profile: PieceProfile
     purpose: str
     focus: str
-    drillings: Sequence[DrillingSpec]
+    drillings: Sequence[DrillSpec]
 
 
 PROFILES = (
@@ -80,8 +80,8 @@ def _face_position(profile: PieceProfile, plane_name: str, position_code: str) -
     return positions[position_code]
 
 
-def _side_drill(profile: PieceProfile, plane_name: str, position_code: str) -> DrillingSpec:
-    return build_drilling_spec(
+def _side_drill(profile: PieceProfile, plane_name: str, position_code: str) -> DrillSpec:
+    return build_drill_spec(
         feature_name=f"{plane_name.upper()}_D8_{position_code.upper()}",
         plane_name=plane_name,
         center_x=_face_position(profile, plane_name, position_code),

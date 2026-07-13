@@ -55,20 +55,20 @@ from ..common.xml import (
 )
 
 __all__ = [
-    "DrillingSpec",
-    "build_drilling_spec",
-    "_HydratedDrillingSpec",
+    "DrillSpec",
+    "build_drill_spec",
+    "_HydratedDrillSpec",
     "_append_drilling",
     "_append_drilling_feature_payload",
-    "_build_drilling_feature",
-    "_build_drilling_operation",
+    "_build_drill_feature",
+    "_build_drill_operation",
     "_default_drill_family",
     "_drilling_bottom_condition_type",
     "_drilling_feature_depth_value",
     "_drilling_total_depth",
-    "_hydrate_drilling_spec",
+    "_hydrate_drill_spec",
     "_normalize_drill_family",
-    "_normalize_drilling_spec",
+    "_normalize_drill_spec",
     "_uses_drilling_depth_expressions",
     "_validate_drilling_center",
     "_validate_tool_sinking_length_for_drilling_spec",
@@ -76,7 +76,7 @@ __all__ = [
 
 
 @dataclass(frozen=True)
-class DrillingSpec:
+class DrillSpec:
     """Descripcion reutilizable de un taladro puntual sobre una cara de la pieza."""
 
     center_x: float
@@ -101,10 +101,10 @@ class DrillingSpec:
 
 
 @dataclass(frozen=True)
-class _HydratedDrillingSpec:
-    """Datos internos de serializacion y herramienta para `DrillingSpec`."""
+class _HydratedDrillSpec:
+    """Datos internos de serializacion y herramienta para `DrillSpec`."""
 
-    spec: DrillingSpec
+    spec: DrillSpec
     preferred_id_start: Optional[int] = None
     resolved_tool_id: str = "0"
     resolved_tool_name: str = ""
@@ -236,7 +236,7 @@ def _normalize_peck_drilling(step_number: int, step_depth: float) -> tuple[int, 
     return step_number, step_depth
 
 
-def _normalize_drilling_spec(drilling: DrillingSpec) -> DrillingSpec:
+def _normalize_drill_spec(drilling: DrillSpec) -> DrillSpec:
     normalized_plane_name = _normalize_plane_name(drilling.plane_name)
     normalized_depth_spec = _normalize_milling_depth_spec(drilling.depth_spec)
     normalized_drill_family = _normalize_drill_family(drilling.drill_family)
@@ -288,7 +288,7 @@ def _normalize_drilling_spec(drilling: DrillingSpec) -> DrillingSpec:
     )
 
 
-def build_drilling_spec(
+def build_drill_spec(
     *,
     center_x: float,
     center_y: float,
@@ -311,8 +311,8 @@ def build_drilling_spec(
     center_x_expr: Optional[str] = None,
     center_y_expr: Optional[str] = None,
     is_enabled_expr: Optional[str] = None,
-) -> DrillingSpec:
-    """Construye un `DrillingSpec` reusable para taladros puntuales."""
+) -> DrillSpec:
+    """Construye un `DrillSpec` reusable para taladros puntuales."""
 
     normalized_plane_name = _normalize_plane_name(plane_name)
     depth_spec = build_milling_depth_spec(
@@ -326,7 +326,7 @@ def build_drilling_spec(
         depth_spec,
         drill_family,
     )
-    return DrillingSpec(
+    return DrillSpec(
         center_x=float(center_x),
         center_y=float(center_y),
         diameter=float(diameter),
@@ -349,18 +349,18 @@ def build_drilling_spec(
     )
 
 
-def _hydrate_drilling_spec(
-    drilling: DrillingSpec,
+def _hydrate_drill_spec(
+    drilling: DrillSpec,
     source_pgmx_path: Optional[Path],
-) -> _HydratedDrillingSpec:
+) -> _HydratedDrillSpec:
     del source_pgmx_path
-    normalized_drilling = _normalize_drilling_spec(drilling)
+    normalized_drilling = _normalize_drill_spec(drilling)
     tool_catalog = _load_tool_catalog()
     resolved_tool_id, resolved_tool_name, resolved_tool_object_type = _resolve_drilling_tool(
         normalized_drilling,
         tool_catalog,
     )
-    return _HydratedDrillingSpec(
+    return _HydratedDrillSpec(
         spec=normalized_drilling,
         resolved_tool_id=resolved_tool_id,
         resolved_tool_name=resolved_tool_name,
@@ -368,7 +368,7 @@ def _hydrate_drilling_spec(
     )
 
 
-def _drilling_feature_depth_value(state, spec: _HydratedDrillingSpec) -> float:
+def _drilling_feature_depth_value(state, spec: _HydratedDrillSpec) -> float:
     depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
     plane_span = _drilling_axis_span(state, spec.plane_name)
     if depth_spec.is_through:
@@ -382,7 +382,7 @@ def _drilling_feature_depth_value(state, spec: _HydratedDrillingSpec) -> float:
     return depth_spec.target_depth
 
 
-def _drilling_total_depth(state, spec: _HydratedDrillingSpec) -> float:
+def _drilling_total_depth(state, spec: _HydratedDrillSpec) -> float:
     depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
     if depth_spec.is_through:
         return _drilling_axis_span(state, spec.plane_name) + depth_spec.extra_depth
@@ -391,7 +391,7 @@ def _drilling_total_depth(state, spec: _HydratedDrillingSpec) -> float:
     return depth_spec.target_depth
 
 
-def _drilling_bottom_condition_type(spec: _HydratedDrillingSpec) -> str:
+def _drilling_bottom_condition_type(spec: _HydratedDrillSpec) -> str:
     depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
     if depth_spec.is_through:
         return "a:ThroughHoleBottom"
@@ -400,13 +400,13 @@ def _drilling_bottom_condition_type(spec: _HydratedDrillingSpec) -> str:
     return "a:FlatHoleBottom"
 
 
-def _uses_drilling_depth_expressions(spec: _HydratedDrillingSpec) -> bool:
+def _uses_drilling_depth_expressions(spec: _HydratedDrillSpec) -> bool:
     return _normalize_milling_depth_spec(spec.depth_spec).is_through
 
 
-def _build_drilling_feature(
+def _build_drill_feature(
     state,
-    spec: _HydratedDrillingSpec,
+    spec: _HydratedDrillSpec,
     feature_id: str,
     geometry_id: str,
     operation_id: str,
@@ -456,7 +456,7 @@ def _build_drilling_feature(
 def _append_drilling_feature_payload(
     parent: ET.Element,
     state,
-    spec: _HydratedDrillingSpec,
+    spec: _HydratedDrillSpec,
     feature_id: str,
     geometry_id: str,
     operation_id: str,
@@ -505,9 +505,9 @@ def _append_drilling_feature_payload(
     _append_node(parent, DRILLING_NS, "TaperHeight", _compact_number(spec.taper_height))
 
 
-def _build_drilling_operation(
+def _build_drill_operation(
     state,
-    spec: _HydratedDrillingSpec,
+    spec: _HydratedDrillSpec,
     operation_id: str,
 ) -> ET.Element:
     operation = ET.Element(
@@ -605,7 +605,7 @@ def _build_drilling_operation(
     return operation
 
 
-def _append_drilling(root: ET.Element, state, spec: _HydratedDrillingSpec) -> None:
+def _append_drilling(root: ET.Element, state, spec: _HydratedDrillSpec) -> None:
     geometries = root.find("./{*}Geometries")
     features = root.find("./{*}Features")
     operations = root.find("./{*}Operations")
@@ -659,7 +659,7 @@ def _append_drilling(root: ET.Element, state, spec: _HydratedDrillingSpec) -> No
         )
     )
     features.append(
-        _build_drilling_feature(
+        _build_drill_feature(
             state,
             spec,
             feature_id,
@@ -669,7 +669,7 @@ def _append_drilling(root: ET.Element, state, spec: _HydratedDrillingSpec) -> No
             workpiece_object_type,
         )
     )
-    operations.append(_build_drilling_operation(state, spec, operation_id))
+    operations.append(_build_drill_operation(state, spec, operation_id))
     elements.append(
         _build_working_step(
             spec.feature_name,
@@ -731,7 +731,7 @@ def _append_drilling(root: ET.Element, state, spec: _HydratedDrillingSpec) -> No
         )
 
 
-def _validate_drilling_center(state, spec: _HydratedDrillingSpec) -> None:
+def _validate_drilling_center(state, spec: _HydratedDrillSpec) -> None:
     max_x, max_y = _plane_local_dimensions(state, spec.plane_name)
     if spec.center_x_expr is None:
         if spec.center_x < -1e-9 or spec.center_x > max_x + 1e-9:

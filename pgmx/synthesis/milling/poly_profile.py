@@ -1,6 +1,6 @@
 """Fresado de POLILÍNEA de segmentos mixtos (rectas + arcos) — Eje B etapa 3 (2026-07-08).
 
-Generaliza la polilínea recta (`PolylineMillingSpec`) y el arco suelto (`ArcMillingSpec`): un
+Generaliza la polilínea recta (`PolylineSpec`) y el arco suelto (`ArcSpec`): un
 punto de arranque + una lista de segmentos, cada uno una RECTA (solo endpoint) o un ARCO
 (endpoint + centro + winding). La geometría del feature es la `GeomCompositeCurve` de miembros
 mixtos observada en las piezas de producción reales (FrenteCurvo/Estante: rectángulo con dos
@@ -51,15 +51,15 @@ from ._common import _toolpath_cut_z
 
 __all__ = [
     "PolylineSegment",
-    "ArcPolylineMillingSpec",
-    "PolylineMillingSpec",
-    "build_arc_polyline_milling_spec",
-    "build_polyline_milling_spec",
-    "_HydratedArcPolylineMillingSpec",
-    "_append_arc_polyline_milling",
-    "_build_arc_polyline_toolpath_profile",
-    "_hydrate_arc_polyline_milling_spec",
-    "_normalize_arc_polyline_milling_spec",
+    "PolylineSpec",
+    "PolylineSpec",
+    "build_polyline_spec",
+    "build_polyline_spec",
+    "_HydratedPolylineSpec",
+    "_append_polyline",
+    "_build_polyline_toolpath_profile",
+    "_hydrate_polyline_spec",
+    "_normalize_polyline_spec",
 ]
 
 
@@ -79,7 +79,7 @@ class PolylineSegment:
 
 
 @dataclass(frozen=True)
-class ArcPolylineMillingSpec:
+class PolylineSpec:
     """Fresado sobre una polilínea de 2+ segmentos rectos y/o de arco."""
 
     start_x: float
@@ -110,8 +110,8 @@ class ArcPolylineMillingSpec:
 
 
 @dataclass(frozen=True)
-class _HydratedArcPolylineMillingSpec:
-    spec: ArcPolylineMillingSpec
+class _HydratedPolylineSpec:
+    spec: PolylineSpec
     preferred_id_start: Optional[int] = None
     geometry_curve: Optional[_CurveSpec] = None
     approach_curve: Optional[_CurveSpec] = None
@@ -132,7 +132,7 @@ def _normalize_segment(segment: PolylineSegment) -> PolylineSegment:
                    center_x=None, center_y=None, winding=None)
 
 
-def _normalize_arc_polyline_milling_spec(spec: ArcPolylineMillingSpec) -> ArcPolylineMillingSpec:
+def _normalize_polyline_spec(spec: PolylineSpec) -> PolylineSpec:
     if len(spec.segments) < 2:
         raise ValueError("Una polilínea de perfil necesita al menos 2 segmentos.")
     segments = tuple(_normalize_segment(s) for s in spec.segments)
@@ -149,7 +149,7 @@ def _normalize_arc_polyline_milling_spec(spec: ArcPolylineMillingSpec) -> ArcPol
     normalized_strategy = _ensure_milling_strategy_allowed(
         _normalize_milling_strategy_spec(spec.milling_strategy),
         allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
-        context="ArcPolylineMillingSpec",
+        context="PolylineSpec",
     )
     normalized = replace(
         spec,
@@ -167,7 +167,7 @@ def _normalize_arc_polyline_milling_spec(spec: ArcPolylineMillingSpec) -> ArcPol
     return normalized
 
 
-def _validate_postprocessable_by_maestro(spec: ArcPolylineMillingSpec) -> None:
+def _validate_postprocessable_by_maestro(spec: PolylineSpec) -> None:
     """Bloquea una combinación que Maestro NO logra postprocesar a ISO (heredada de la polilínea
     recta): perfil ABIERTO multi-segmento + estrategia multipasada + Alejamiento Arco «En subida».
     Usar Alejamiento Lineal+Up o Arco+En cota."""
@@ -187,7 +187,7 @@ def _validate_postprocessable_by_maestro(spec: ArcPolylineMillingSpec) -> None:
         )
 
 
-def _build_arc_polyline_geometry_profile(spec: ArcPolylineMillingSpec, z_value: float) -> GeometryProfileSpec:
+def _build_polyline_geometry_profile(spec: PolylineSpec, z_value: float) -> GeometryProfileSpec:
     primitives = []
     cx, cy = float(spec.start_x), float(spec.start_y)
     for seg in spec.segments:
@@ -202,13 +202,13 @@ def _build_arc_polyline_geometry_profile(spec: ArcPolylineMillingSpec, z_value: 
     return build_composite_geometry_profile(tuple(primitives))
 
 
-def _build_arc_polyline_toolpath_profile(
+def _build_polyline_toolpath_profile(
     top_level: float,
     final_level: float,
-    spec: ArcPolylineMillingSpec,
+    spec: PolylineSpec,
 ) -> GeometryProfileSpec:
     cut_z = float(final_level)
-    nominal_profile = _build_arc_polyline_geometry_profile(spec, cut_z)
+    nominal_profile = _build_polyline_geometry_profile(spec, cut_z)
     # Con corrección, la traza compensada de una polilínea con esquinas VIVAS lleva arcos de
     # empalme en los vértices convexos — que Maestro GENERA al postprocesar (regenera desde el
     # feature/SideOfFeature, como en las líneas N031; validado byte a byte en N042 11/11: el ISO
@@ -235,19 +235,19 @@ def _build_arc_polyline_toolpath_profile(
     return _build_bidirectional_open_profile_strategy_toolpath(float(top_level), cut_z, base_profile, strategy)
 
 
-def _hydrate_arc_polyline_milling_spec(
-    spec: ArcPolylineMillingSpec,
+def _hydrate_polyline_spec(
+    spec: PolylineSpec,
     source_pgmx_path: Optional[Path],
-) -> _HydratedArcPolylineMillingSpec:
-    return _HydratedArcPolylineMillingSpec(spec=_normalize_arc_polyline_milling_spec(spec))
+) -> _HydratedPolylineSpec:
+    return _HydratedPolylineSpec(spec=_normalize_polyline_spec(spec))
 
 
-def _append_arc_polyline_milling(root, state, spec: _HydratedArcPolylineMillingSpec) -> None:
+def _append_polyline(root, state, spec: _HydratedPolylineSpec) -> None:
     from .profile import _append_curve_profile_milling
 
     geometry_curve = spec.geometry_curve or _curve_spec_from_profile_geometry(
-        _build_arc_polyline_geometry_profile(spec.spec, 0.0))
-    generated_toolpath_profile = _build_arc_polyline_toolpath_profile(
+        _build_polyline_geometry_profile(spec.spec, 0.0))
+    generated_toolpath_profile = _build_polyline_toolpath_profile(
         float(state.depth), _toolpath_cut_z(state, spec), spec.spec)
     _append_curve_profile_milling(root, state, spec, geometry_curve, generated_toolpath_profile)
 
@@ -259,7 +259,7 @@ def _segment(end, center=None, winding=None) -> PolylineSegment:
                            center_x=float(center[0]), center_y=float(center[1]), winding=winding)
 
 
-def build_arc_polyline_milling_spec(
+def build_polyline_spec(
     *,
     start: Optional[tuple[float, float]] = None,
     segments: Optional[Sequence] = None,
@@ -288,7 +288,7 @@ def build_arc_polyline_milling_spec(
     retract_overlap: Optional[float] = None,
     milling_strategy: Optional[MillingStrategySpec] = None,
     is_enabled_expr: Optional[str] = None,
-) -> ArcPolylineMillingSpec:
+) -> PolylineSpec:
     """Construye una polilínea de perfil.
 
     ``segments``: cada elemento es un ``PolylineSegment``, o una tupla ``(end)`` para recta,
@@ -316,8 +316,8 @@ def build_arc_polyline_milling_spec(
             normalized_segments.append(_segment(seg[0]))
         else:
             normalized_segments.append(_segment(seg[0], seg[1], seg[2] if len(seg) > 2 else None))
-    return _normalize_arc_polyline_milling_spec(
-        ArcPolylineMillingSpec(
+    return _normalize_polyline_spec(
+        PolylineSpec(
             start_x=float(start[0]),
             start_y=float(start[1]),
             segments=tuple(normalized_segments),
@@ -357,5 +357,5 @@ def build_arc_polyline_milling_spec(
 
 # Nombre histórico de la polilínea RECTA: ahora es la MISMA polilínea unificada, con el atajo
 # `points=`. Se conserva como alias hasta el rename global (etapa 2).
-build_polyline_milling_spec = build_arc_polyline_milling_spec
-PolylineMillingSpec = ArcPolylineMillingSpec
+build_polyline_spec = build_polyline_spec
+PolylineSpec = PolylineSpec

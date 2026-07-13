@@ -26,7 +26,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_drilling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_drill_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N003_eff_floor"
 
@@ -34,7 +34,7 @@ SP_VALUES = [1, 3, 5, 6, 7, 10]
 
 
 def _side(plane: str, along: float, sp: float) -> object:
-    return build_drilling_spec(
+    return build_drill_spec(
         feature_name=f"{plane.upper()}_SP{sp:g}",
         plane_name=plane,
         center_x=along,

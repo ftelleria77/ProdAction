@@ -13,13 +13,13 @@ from pathlib import Path
 from typing import Union
 
 from pgmx.adapters import adapt_pgmx_path
-from pgmx.synthesis.drilling.pattern import DrillingPatternSpec
-from pgmx.synthesis.drilling.single import DrillingSpec
-from pgmx.synthesis.milling.arc import ArcMillingSpec
-from pgmx.synthesis.milling.poly_profile import ArcPolylineMillingSpec
-from pgmx.synthesis.milling.circle import CircleMillingSpec
-from pgmx.synthesis.milling.line import LineMillingSpec
-from pgmx.synthesis.milling.slot import SlotMillingSpec
+from pgmx.synthesis.drilling.pattern import DrillPatternSpec
+from pgmx.synthesis.drilling.single import DrillSpec
+from pgmx.synthesis.milling.arc import ArcSpec
+from pgmx.synthesis.milling.poly_profile import PolylineSpec
+from pgmx.synthesis.milling.circle import CircleSpec
+from pgmx.synthesis.milling.line import LineSpec
+from pgmx.synthesis.milling.slot import ChannelSpec
 
 from ._machine import (
     FACE_PRIORITY, SIDE_MAX_DEPTH, SIDE_SUPPORTED_FIELDS, SUPPORTED_FIELDS, X_PARK, resolve_top_tool,
@@ -42,10 +42,10 @@ def _execution_field(path: Path) -> str:
     m = _EXECUTION_FIELD_RE.search(xml)
     return m.group(1).strip() if m and m.group(1).strip() else "HG"
 
-Op = Union[DrillingSpec, LineMillingSpec]
+Op = Union[DrillSpec, LineSpec]
 
 
-def side_effective_depth(drill: DrillingSpec, ctx: "PieceCtx") -> float:
+def side_effective_depth(drill: DrillSpec, ctx: "PieceCtx") -> float:
     """Profundidad real de un taladro lateral. Pasante: la dimensión cruzada del panel
     (Left/Right atraviesan el largo; Front/Back, el ancho). Ciego: target_depth."""
     if drill.depth_spec.is_through:
@@ -53,7 +53,7 @@ def side_effective_depth(drill: DrillingSpec, ctx: "PieceCtx") -> float:
     return drill.depth_spec.target_depth or 0.0
 
 
-def top_effective_depth(drill: DrillingSpec, ctx: "PieceCtx") -> float:
+def top_effective_depth(drill: DrillSpec, ctx: "PieceCtx") -> float:
     """Profundidad real de un taladro vertical. Pasante: el espesor del panel (atraviesa de
     la cara superior a la mesa). Ciego: target_depth."""
     if drill.depth_spec.is_through:
@@ -61,7 +61,7 @@ def top_effective_depth(drill: DrillingSpec, ctx: "PieceCtx") -> float:
     return drill.depth_spec.target_depth or 0.0
 
 
-def expand_drilling_pattern(pattern: DrillingPatternSpec) -> list[DrillingSpec]:
+def expand_drilling_pattern(pattern: DrillPatternSpec) -> list[DrillSpec]:
     """Expande un patrón rectangular a taladros individuales (idénticos al base).
 
     Geometría (N008): center = esquina mínima (primer agujero); columnas en +X por
@@ -69,10 +69,10 @@ def expand_drilling_pattern(pattern: DrillingPatternSpec) -> list[DrillingSpec]:
     ascendente, columna X interior ascendente).
     """
     row_spacing = pattern.spacing if pattern.row_spacing is None else pattern.row_spacing
-    holes: list[DrillingSpec] = []
+    holes: list[DrillSpec] = []
     for r in range(int(pattern.rows)):
         for c in range(int(pattern.columns)):
-            holes.append(DrillingSpec(
+            holes.append(DrillSpec(
                 center_x=pattern.center_x + c * pattern.spacing,
                 center_y=pattern.center_y + r * row_spacing,
                 diameter=pattern.diameter,
@@ -132,10 +132,10 @@ def _xn_park(snapshot) -> tuple[float, float | None]:
 
 @dataclass(frozen=True)
 class ProgramOps:
-    routers: tuple[LineMillingSpec, ...]
-    top_drills: tuple[DrillingSpec, ...]
-    side_drills: tuple[DrillingSpec, ...]
-    saw_channels: tuple[SlotMillingSpec, ...] = ()
+    routers: tuple[LineSpec, ...]
+    top_drills: tuple[DrillSpec, ...]
+    side_drills: tuple[DrillSpec, ...]
+    saw_channels: tuple[ChannelSpec, ...] = ()
 
 
 def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
@@ -182,24 +182,24 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
         park_y=park_y,
     )
 
-    routers: list[LineMillingSpec] = []
-    top_drills: list[DrillingSpec] = []
-    side_drills: list[DrillingSpec] = []
-    saw_channels: list[SlotMillingSpec] = []
+    routers: list[LineSpec] = []
+    top_drills: list[DrillSpec] = []
+    side_drills: list[DrillSpec] = []
+    saw_channels: list[ChannelSpec] = []
 
     for entry in result.adapted_entries:
         spec = entry.spec
-        if isinstance(spec, DrillingPatternSpec):
+        if isinstance(spec, DrillPatternSpec):
             drills = expand_drilling_pattern(spec)
-        elif isinstance(spec, DrillingSpec):
+        elif isinstance(spec, DrillSpec):
             drills = [spec]
-        elif isinstance(spec, (LineMillingSpec, CircleMillingSpec, ArcMillingSpec,
-                               ArcPolylineMillingSpec)):
+        elif isinstance(spec, (LineSpec, CircleSpec, ArcSpec,
+                               PolylineSpec)):
             # Círculo (N038), arco suelto (N040) y polilínea mixta (N041) son ops de
             # la familia ROUTER: mismo header/transición/teardown que las líneas.
             routers.append(spec)
             continue
-        elif isinstance(spec, SlotMillingSpec):
+        elif isinstance(spec, ChannelSpec):
             saw_channels.append(spec)
             continue
         else:

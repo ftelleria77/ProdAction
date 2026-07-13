@@ -13,10 +13,10 @@ from __future__ import annotations
 
 from dataclasses import replace as _dc_replace
 
-from pgmx.synthesis.milling.arc import ArcMillingSpec
-from pgmx.synthesis.milling.poly_profile import ArcPolylineMillingSpec
-from pgmx.synthesis.milling.circle import CircleMillingSpec
-from pgmx.synthesis.milling.line import LineMillingSpec
+from pgmx.synthesis.milling.arc import ArcSpec
+from pgmx.synthesis.milling.poly_profile import PolylineSpec
+from pgmx.synthesis.milling.circle import CircleSpec
+from pgmx.synthesis.milling.line import LineSpec
 
 import math
 
@@ -31,13 +31,13 @@ from ._tool_catalog import tool_geometry
 from ._reader import PieceCtx
 
 
-def _cutter_number(spec: LineMillingSpec) -> int:
+def _cutter_number(spec: LineSpec) -> int:
     """Número de fresa: E00N → N (= slot ATC y ETK[9])."""
     return int(spec.tool_name.lstrip("E"))
 
 
 def _cut_segments(
-    spec: LineMillingSpec, depth: float, cut_feed: float,
+    spec: LineSpec, depth: float, cut_feed: float,
 ) -> list[tuple[float, float, float, float]]:
     """Tramos del corte: [(x_fin, y_fin, z_fin, feed), ...]. Sin cambios → un solo tramo al end.
 
@@ -70,7 +70,7 @@ def _cut_segments(
 
 
 def _lead_geometry(
-    spec: LineMillingSpec, lead: float, arc_side: str, at_start: bool,
+    spec: LineSpec, lead: float, arc_side: str, at_start: bool,
 ) -> tuple[tuple[float, float], tuple[float, float], str]:
     """Geometría del lead (N026/N027): devuelve (punto exterior, centro del arco, G2|G3).
 
@@ -93,14 +93,14 @@ def _lead_geometry(
     return (px, py), (cx, cy), g
 
 
-def _mp_lead(spec: LineMillingSpec, lead_spec) -> float:
+def _mp_lead(spec: LineSpec, lead_spec) -> float:
     """Radio del lead en ARCO en MULTIPASADA/ZigZag (N034/N035): (w/2)×(RM−1) — NO w/2×RM como
     en single-pass. Con RM≤1 da ≤0 y el arco se OMITE (rm1 y rm05: cuerpo pelado). OJO: el lead
     LINEAL sí usa la fórmula single-pass w/2×RM (N035 mp_app_line: 4 con RM=2)."""
     return spec.tool_width / 2.0 * (lead_spec.radius_multiplier - 1.0)
 
 
-def _mp_arc_side(spec: LineMillingSpec, lead_spec) -> str:
+def _mp_arc_side(spec: LineSpec, lead_spec) -> str:
     """Lado efectivo del arco del lead en estrategia: `Automatic` sigue el LADO de la corrección
     cuando hay lado (N035 mp_side_leads: Left→G3 sobre las coordenadas desplazadas); sin lado,
     espejado del single-pass (≡Right→G2, N034)."""
@@ -129,7 +129,7 @@ def _mp_lead_arc(
 
 
 def _multipass_cuts(
-    spec: LineMillingSpec, depth: float, security: float, cut_feed: float,
+    spec: LineSpec, depth: float, security: float, cut_feed: float,
 ) -> list[str]:
     """Pasadas de la estrategia multipasada (N025). Bidireccional: alterna el sentido y baja en
     el extremo donde quedó. Unidireccional: siempre start→end; entre pasadas retrae y vuelve en
@@ -174,7 +174,7 @@ def _multipass_cuts(
 
 
 def _strategy_lead_entry(
-    spec: LineMillingSpec,
+    spec: LineSpec,
     first_z: float,
     start: tuple[float, float],
     u: tuple[float, float],
@@ -214,7 +214,7 @@ def _strategy_lead_entry(
 
 
 def _strategy_lead_exit(
-    spec: LineMillingSpec,
+    spec: LineSpec,
     last_z: float,
     pos: tuple[float, float],
     u: tuple[float, float],
@@ -240,7 +240,7 @@ def _strategy_lead_exit(
     return [f"{rg} X{rpx:.3f} Y{rpy:.3f} I{rcx:.3f} J{rcy:.3f} F{ret_feed:.3f}"]
 
 
-def _strategy_ret_feed(spec: LineMillingSpec, cut_feed: float) -> float:
+def _strategy_ret_feed(spec: LineSpec, cut_feed: float) -> float:
     """Feed del lead-out y de la retracción final en estrategia: la velocidad propia del
     retract SOLO aplica ahí (no inunda el cuerpo como la del approach) — N036 mp_ret_sp."""
     if spec.retract.is_enabled and spec.retract.speed > 0:
@@ -248,7 +248,7 @@ def _strategy_ret_feed(spec: LineMillingSpec, cut_feed: float) -> float:
     return cut_feed
 
 
-def _zigzag_cuts(spec: LineMillingSpec, depth: float, cut_feed: float) -> list[str]:
+def _zigzag_cuts(spec: LineSpec, depth: float, cut_feed: float) -> list[str]:
     """ZigZag (N025 pa2/pr3/uh1): baja a Z0 (superficie) y corta EN RAMPA alternando el sentido —
     la ida baja `pasada avance`, la vuelta `pasada retorno` — clavado en (total − último hueco);
     luego la pasada del último hueco a −total y UNA pasada final plana."""
@@ -308,7 +308,7 @@ def _g1_cut(prev_x: float, prev_y: float, x: float, y: float, z: float, feed: fl
 _COMP_LEAD: float = 1.0
 
 
-def _unit_dir(spec: LineMillingSpec) -> tuple[float, float]:
+def _unit_dir(spec: LineSpec) -> tuple[float, float]:
     dx, dy = spec.end_x - spec.start_x, spec.end_y - spec.start_y
     length = (dx * dx + dy * dy) ** 0.5
     return (dx / length, dy / length)
@@ -323,14 +323,14 @@ def _arc_tangent(px: float, py: float, cx: float, cy: float, g: str) -> tuple[fl
     return (ry / r, -rx / r)
 
 
-def _comp_auto_arc_side(spec: LineMillingSpec) -> str:
+def _comp_auto_arc_side(spec: LineSpec) -> str:
     """Con corrección G41/G42, el lado `Automatic` del lead elige el arco del lado LIBRE (el
     opuesto al material/compensación): G41 (Left) → arco derecha/G3; G42 (Right) → arco
     izquierda/G2. (N029 side_l_leads: G41+G3; inv_side_l_app: G42+G2.)"""
     return "Right" if spec.side_of_feature == "Left" else "Left"
 
 
-def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
+def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
     lines: list[str] = []
     prev_end: tuple[float, float] | None = None
     n = len(millings)
@@ -411,9 +411,9 @@ def render_router(millings: list[LineMillingSpec], ctx: PieceCtx) -> list[str]:
 
         # CÍRCULO (N038/N039) y ARCO SUELTO (N040): dispatch propio más abajo; los bloques de
         # línea no los tocan. El arco baseline (Center, sin leads/estrategia) es un G3/G2 único.
-        is_circle = isinstance(spec, CircleMillingSpec)
-        is_arc = isinstance(spec, ArcMillingSpec)
-        is_poly = isinstance(spec, ArcPolylineMillingSpec)
+        is_circle = isinstance(spec, CircleSpec)
+        is_arc = isinstance(spec, ArcSpec)
+        is_poly = isinstance(spec, PolylineSpec)
 
         # Lead programable + compensación (N029 side_l_leads / N035): el lead se emite en
         # coordenadas de CONTORNO con G41/G42 activo; el 1 mm de la corrección se ancla al punto
@@ -1162,7 +1162,7 @@ def _poly_body(spec, depth, security, plunge_feed, cut_feed, compensated, has_ap
     return lines, False, cut_end
 
 
-def _atc_header(spec: LineMillingSpec) -> list[str]:
+def _atc_header(spec: LineSpec) -> list[str]:
     n = _cutter_number(spec)
     g = tool_geometry(spec.tool_name)
     _sp = getattr(spec, "spindle", 0.0)

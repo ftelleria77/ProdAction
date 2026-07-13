@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .core import PocketMillingSpec
+from .core import PocketSpec
 
 
 @dataclass(frozen=True)
@@ -25,15 +25,15 @@ def vaciado_support_status() -> VaciadoSynthesisSupport:
         model_package="pgmx.synthesis.milling.pocket",
         legacy_engine_allowed=False,
         notes=(
-            "PocketMillingSpec remains the public PGMX spec for ClosedPocket Vaciado.",
+            "PocketSpec remains the public PGMX spec for ClosedPocket Vaciado.",
             "The former V2 contract now lives in pgmx.synthesis.milling.pocket_contract.",
             "The pocket trace engine lives in pgmx.synthesis.milling.pocket_trace.",
         ),
     )
 
 
-def adapt_pocket_milling_to_vaciado_contract(spec: PocketMillingSpec):
-    """Adapt a public `PocketMillingSpec` to the Vaciado V2 contract.
+def adapt_pocket_milling_to_vaciado_contract(spec: PocketSpec):
+    """Adapt a public `PocketSpec` to the Vaciado V2 contract.
 
     The import is intentionally lazy to avoid making the public synthesizer
     package depend on laboratory modules at import time.

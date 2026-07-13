@@ -14,7 +14,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from pgmx.synthesis import build_synthesis_request, synthesize_request
-from pgmx.synthesis.milling.slot import SlotMillingSpec, build_slot_milling_spec
+from pgmx.synthesis.milling.slot import ChannelSpec, build_channel_spec
 from pgmx.synthesis.common.leads import build_approach_spec
 
 from iso.synthesis import convert
@@ -24,8 +24,8 @@ _FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N037_saw_channel")
 _REF_DIR = Path(r"P:\USBMIX\ProdAction\N037_saw_channel")
 
 
-def _slot(**kw) -> SlotMillingSpec:
-    base = build_slot_milling_spec(
+def _slot(**kw) -> ChannelSpec:
+    base = build_channel_spec(
         start_x=280.0, start_y=100.0, end_x=20.0, end_y=100.0, target_depth=5.0)
     return replace(base, **kw) if kw else base
 
@@ -53,8 +53,8 @@ class FailLoudTest(unittest.TestCase):
 
     def test_mezcla_con_fresado_guardada(self):
         # Programa sierra + router: transiciones entre cabezales sin fixture (N037 solo-sierra).
-        from pgmx.synthesis import build_line_milling_spec
-        line = build_line_milling_spec(
+        from pgmx.synthesis import build_line_spec
+        line = build_line_spec(
             line_x1=20.0, line_y1=50.0, line_x2=280.0, line_y2=50.0,
             line_feature_name="Fresado", line_tool_id="1903", line_tool_name="E004",
             line_tool_width=4.0, line_security_plane=20.0,

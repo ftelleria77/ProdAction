@@ -108,9 +108,9 @@ pueden separar. Un lote de exploración debe aislar: **Pieza+Interno**, **Geomet
 ## Pendiente para implementar (Eje B etapa 4)
 
 1. Adapter: leer `ContourFeature` (+ `ContourType`) → un spec (¿`ContourMillingSpec` nuevo, o
-   `ArcPolylineMillingSpec` + `contour_type`/`workpiece`?). Hoy el converter lo rechazaría
+   `PolylineSpec` + `contour_type`/`workpiece`?). Hoy el converter lo rechazaría
    (feature desconocida).
-2. Autoría: `build_squaring_milling_spec` ya existe en pgmx — revisar si autora `ContourFeature`
+2. Autoría: `build_contour_spec` ya existe en pgmx — revisar si autora `ContourFeature`
    o hay que extenderla; contorno = pieza (derivar de dims) o geometría.
 3. Render: dos estilos (offset explícito con arcos de esquina para Pieza/Externo; G42 nominal
    para Geometría/Interno) + estrategia/leads compartidos + transición multi-contorno.

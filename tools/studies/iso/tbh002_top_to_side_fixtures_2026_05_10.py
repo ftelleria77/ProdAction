@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    build_drilling_spec,
+    build_drill_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -47,7 +47,7 @@ class Fixture:
 
 
 def _top_drill(diameter: float):
-    return build_drilling_spec(
+    return build_drill_spec(
         feature_name=f"TBH002_TOP_D{diameter:g}",
         plane_name="Top",
         center_x=80.0,
@@ -59,7 +59,7 @@ def _top_drill(diameter: float):
 
 
 def _side_drill(plane_name: str, center_x: float, center_y: float):
-    return build_drilling_spec(
+    return build_drill_spec(
         feature_name=f"TBH002_{plane_name.upper()}_D8",
         plane_name=plane_name,
         center_x=center_x,

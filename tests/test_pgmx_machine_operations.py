@@ -136,7 +136,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                     sp.build_workplan_spec(
                         name="Cara_Superior",
                         machinings=(
-                            sp.build_line_milling_spec(
+                            sp.build_line_spec(
                                 20,
                                 30,
                                 380,
@@ -159,7 +159,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                         origin_y=0,
                         origin_z=25,
                         machinings=(
-                            sp.build_drilling_spec(
+                            sp.build_drill_spec(
                                 center_x=100,
                                 center_y=100,
                                 diameter=5,
@@ -511,7 +511,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_y=5,
                 origin_z=25,
                 drillings=(
-                    sp.build_drilling_spec(
+                    sp.build_drill_spec(
                         center_x=100,
                         center_y=100,
                         diameter=5,
@@ -541,7 +541,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_y=5,
                 origin_z=25,
                 drillings=(
-                    sp.build_drilling_spec(
+                    sp.build_drill_spec(
                         center_x=100,
                         center_y=100,
                         diameter=5,
@@ -570,7 +570,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_y=5,
                 origin_z=25,
                 drillings=(
-                    sp.build_drilling_spec(
+                    sp.build_drill_spec(
                         center_x=100,
                         center_y=100,
                         diameter=5,
@@ -599,7 +599,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_y=5,
                 origin_z=25,
                 drillings=(
-                    sp.build_drilling_spec(
+                    sp.build_drill_spec(
                         center_x=100,
                         center_y=100,
                         diameter=5,
@@ -684,7 +684,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_y=5,
                 origin_z=25,
                 drillings=(
-                    sp.build_drilling_spec(
+                    sp.build_drill_spec(
                         center_x=100,
                         center_y=100,
                         diameter=5,
@@ -712,7 +712,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_y=5,
                 origin_z=25,
                 drillings=(
-                    sp.build_drilling_spec(
+                    sp.build_drill_spec(
                         center_x=100,
                         center_y=100,
                         diameter=5,
@@ -743,7 +743,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_y=5,
                 origin_z=25,
                 slot_millings=(
-                    sp.build_slot_milling_spec(
+                    sp.build_channel_spec(
                         start_x=10,
                         start_y=100,
                         end_x=390,
@@ -772,7 +772,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_y=5,
                 origin_z=25,
                 pocket_millings=(
-                    sp.build_pocket_milling_spec(
+                    sp.build_pocket_spec(
                         contour_points=contour,
                         target_depth=10,
                         is_enabled_expr="HabilitarVaciado",
@@ -797,7 +797,7 @@ class PgmxMachineOperationsTests(unittest.TestCase):
                 origin_y=5,
                 origin_z=25,
                 drilling_patterns=(
-                    sp.build_drilling_pattern_spec(
+                    sp.build_drill_pattern_spec(
                         center_x=50,
                         center_y=50,
                         diameter=5,

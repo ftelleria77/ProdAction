@@ -50,7 +50,7 @@ py -3 main.py
 - Baseline principal versionado: `pgmx/data/maestro_baselines/Pieza.xml` junto con `Pieza.epl` y `def.tlgx`
 - `build_synthesis_request(...)` y la CLI usan `pgmx/data/maestro_baselines` como baseline por defecto si no se indica otro
 - Ejemplos y estudios manuales para ingeniería inversa: `archive/maestro_examples/`
-- API programática para sintesis: `build_approach_spec(...)`, `build_retract_spec(...)`, `build_milling_depth_spec(...)`, `build_unidirectional_milling_strategy_spec(...)`, `build_bidirectional_milling_strategy_spec(...)`, `build_xn_spec(...)`, `build_line_milling_spec(...)`, `build_slot_milling_spec(...)`, `build_polyline_milling_spec(...)`, `build_circle_milling_spec(...)`, `build_squaring_milling_spec(...)`, `build_pocket_milling_spec(...)`, `build_drilling_spec(...)`, `build_drilling_pattern_spec(...)`, `build_synthesis_request(...)` y `synthesize_request(...)` en `pgmx.synthesis`
+- API programática para sintesis: `build_approach_spec(...)`, `build_retract_spec(...)`, `build_milling_depth_spec(...)`, `build_unidirectional_milling_strategy_spec(...)`, `build_bidirectional_milling_strategy_spec(...)`, `build_xn_spec(...)`, `build_line_spec(...)`, `build_channel_spec(...)`, `build_polyline_spec(...)`, `build_circle_spec(...)`, `build_contour_spec(...)`, `build_pocket_spec(...)`, `build_drill_spec(...)`, `build_drill_pattern_spec(...)`, `build_synthesis_request(...)` y `synthesize_request(...)` en `pgmx.synthesis`
 - API programatica para inspeccion/construccion geometrica: `read_pgmx_geometries(...)`, `build_point_geometry_profile(...)`, `build_line_geometry_profile(...)`, `build_circle_geometry_profile(...)`, `build_composite_geometry_profile(...)` y `build_compensated_toolpath_profile(...)`
 - API programatica para snapshot integral de un `.pgmx`: `read_pgmx_snapshot(...)`, `snapshot_to_dict(...)` y `write_pgmx_snapshot_json(...)` en `pgmx.snapshot`
 - API programatica para adaptar `.pgmx` existentes al subset publico del sintetizador: `adapt_pgmx_snapshot(...)`, `adapt_pgmx_path(...)`, `adaptation_to_dict(...)` y `write_pgmx_adaptation_json(...)` en `pgmx.adapters`
@@ -59,20 +59,20 @@ py -3 main.py
 - La seguridad de profundidad usa `pgmx/data/tool_catalog.csv`: la profundidad total del fresado o del taladro no puede superar `sinking_length` de la herramienta cuando `ToolKey` queda resuelto.
 - Constante publica de version: `pgmx.synthesis.SYNTHESIZER_VERSION`
 - Nueva helper publica de estrategias: `build_helical_milling_strategy_spec(...)`
-- `Helicoidal` queda soportada por ahora para circulos cerrados via `CircleMillingSpec`
-- en `CircleMillingSpec`, `SideOfFeature` conserva el circulo nominal y desplaza el radio efectivo del toolpath segun winding + `tool_width / 2`
+- `Helicoidal` queda soportada por ahora para circulos cerrados via `CircleSpec`
+- en `CircleSpec`, `SideOfFeature` conserva el circulo nominal y desplaza el radio efectivo del toolpath segun winding + `tool_width / 2`
 - todo `.pgmx` sintetizado incluye un `Xn` final configurable via `XnSpec` / `build_xn_spec(...)`
 Estado validado hasta ahora en `pgmx.synthesis`:
 - fresados lineales y polilineas lineales abiertas/cerradas
 - ranuras lineales `SlotSide` horizontales con `Sierra Vertical X`
-- fresados circulares cerrados via `CircleMillingSpec`
-- escuadrado exterior del contorno de pieza via `SquaringMillingSpec`
-- pocket milling / `ClosedPocket` via `PocketMillingSpec`
-- taladros puntuales sobre `Top`, `Front`, `Back`, `Right` y `Left` via `DrillingSpec`
-- patrones rectangulares de taladros via `DrillingPatternSpec`
+- fresados circulares cerrados via `CircleSpec`
+- escuadrado exterior del contorno de pieza via `ContourSpec`
+- pocket milling / `ClosedPocket` via `PocketSpec`
+- taladros puntuales sobre `Top`, `Front`, `Back`, `Right` y `Left` via `DrillSpec`
+- patrones rectangulares de taladros via `DrillPatternSpec`
 - lectura y clasificacion de geometria base: puntos, lineas, circulos y curvas compuestas abiertas/cerradas
 - compensacion geometrica reusable para lineas, arcos, circulos y curvas compuestas abiertas/cerradas
-- la sintesis publica completa de mecanizado sigue expuesta hoy via `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec`, `PocketMillingSpec`, `DrillingSpec` y `DrillingPatternSpec`
+- la sintesis publica completa de mecanizado sigue expuesta hoy via `LineSpec`, `ChannelSpec`, `PolylineSpec`, `CircleSpec`, `ContourSpec`, `PocketSpec`, `DrillSpec` y `DrillPatternSpec`
 - `SideOfFeature` `Center|Right|Left`
 - fresados pasantes y no pasantes, con `Extra`/`OvercutLength`
 - taladros pasantes y no pasantes, con `Extra` aplicado sobre `TrajectoryPath`
@@ -86,10 +86,10 @@ Estado validado hasta ahora en `pgmx.synthesis`:
 - para `Retract Arc + Up` ya esta volcada la regla observada en Maestro: arco en plano vertical segun la direccion de salida, seguido de linea vertical, sin alterar `TrajectoryPath`
 - por limitacion de Maestro, `Retract Arc + Up` queda bloqueado en polilineas abiertas de varios segmentos con estrategia multipasada `PH`
 - esas reglas de entrada/salida ya quedaron unificadas sobre la tangente de entrada/salida del toolpath efectivo, no sobre una familia geometrica puntual
-- caso manual validado: escuadrado exterior con `E001`, pasante + `Extra=1`, `Approach Arc + Quote x2` y `Retract Arc + Quote x2`; hoy ya queda expuesto por `SquaringMillingSpec`, con 4 orientaciones validas de `MidEdgeStart`, ambas combinaciones exteriores `CounterClockwise + Right` / `Clockwise + Left`, y `origin_x/y/z` limitado a `WorkpieceSetup/Placement`
+- caso manual validado: escuadrado exterior con `E001`, pasante + `Extra=1`, `Approach Arc + Quote x2` y `Retract Arc + Quote x2`; hoy ya queda expuesto por `ContourSpec`, con 4 orientaciones validas de `MidEdgeStart`, ambas combinaciones exteriores `CounterClockwise + Right` / `Clockwise + Left`, y `origin_x/y/z` limitado a `WorkpieceSetup/Placement`
 
 Flujo recomendado de alto nivel:
-- describir cada mecanizado con specs (`LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec`, `PocketMillingSpec`, `DrillingSpec`, `DrillingPatternSpec`)
+- describir cada mecanizado con specs (`LineSpec`, `ChannelSpec`, `PolylineSpec`, `CircleSpec`, `ContourSpec`, `PocketSpec`, `DrillSpec`, `DrillPatternSpec`)
 - armar el request con `build_synthesis_request(...)`
 - ejecutar `synthesize_request(...)`
 - para una guia paso a paso con ejemplos completos, ver `docs/synthesize_pgmx_help.md`

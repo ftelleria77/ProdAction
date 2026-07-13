@@ -15,7 +15,7 @@ from pgmx.synthesis.milling import pocket_trace as milling_pocket_trace
 
 class PgmxPublicBoundaryTests(unittest.TestCase):
     def test_synthesis_public_api_uses_modular_package(self) -> None:
-        self.assertIs(synthesis.PocketMillingSpec, synthesis_core.PocketMillingSpec)
+        self.assertIs(synthesis.PocketSpec, synthesis_core.PocketSpec)
         self.assertIs(synthesis.main, synthesis_cli.main)
         self.assertIs(synthesis_core.main, synthesis_cli.main)
         self.assertIn("main", synthesis.__all__)

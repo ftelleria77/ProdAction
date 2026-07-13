@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_circle_milling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_circle_spec, build_synthesis_request, synthesize_request  # noqa: E402
 from pgmx.synthesis.common.leads import build_approach_spec, build_retract_spec  # noqa: E402
 from pgmx.synthesis.common.strategy import (  # noqa: E402
     build_bidirectional_milling_strategy_spec,
@@ -32,7 +32,7 @@ HELI = build_helical_milling_strategy_spec(axial_cutting_depth=4.0)
 
 def _circ(depth=5.0, **kw):
     strategy = kw.pop("strategy", None)
-    base = build_circle_milling_spec(
+    base = build_circle_spec(
         center_x=150.0, center_y=100.0, radius=30.0,
         tool_id="1903", tool_name="E004", tool_width=4.0,
         target_depth=kw.pop("target_depth", depth),

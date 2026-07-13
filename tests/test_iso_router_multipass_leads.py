@@ -18,16 +18,16 @@ from pathlib import Path
 
 from pgmx.synthesis.common.leads import build_approach_spec
 from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_spec
-from pgmx.synthesis.milling.line import LineMillingSpec, build_line_milling_spec
+from pgmx.synthesis.milling.line import LineSpec, build_line_spec
 
 from iso.synthesis import convert
 from iso.synthesis._router import _lead_geometry, _multipass_cuts
 from iso.synthesis._validation import UnsupportedOperationError, _validate_line_milling
 
 
-def _line(**kw) -> LineMillingSpec:
+def _line(**kw) -> LineSpec:
     strategy = kw.pop("strategy", None)
-    base = build_line_milling_spec(
+    base = build_line_spec(
         line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0,
         line_feature_name="Fresado",
         line_tool_id="1903", line_tool_name="E004", line_tool_width=4.0,

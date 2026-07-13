@@ -14,10 +14,10 @@ from pgmx import synthesis as sp
 
 
 TransformableSpec = Union[
-    sp.LineMillingSpec,
-    sp.PolylineMillingSpec,
-    sp.CircleMillingSpec,
-    sp.DrillingSpec,
+    sp.LineSpec,
+    sp.PolylineSpec,
+    sp.CircleSpec,
+    sp.DrillSpec,
 ]
 
 
@@ -54,11 +54,11 @@ def prefixed_feature_name(feature_name: str, prefix: str = "") -> str:
 
 
 def transform_line_milling_spec(
-    spec: sp.LineMillingSpec,
+    spec: sp.LineSpec,
     transform: EnJuegoTransform,
     *,
     feature_name_prefix: str = "",
-) -> sp.LineMillingSpec:
+) -> sp.LineSpec:
     start_x, start_y = transform.point(spec.start_x, spec.start_y)
     end_x, end_y = transform.point(spec.end_x, spec.end_y)
     return replace(
@@ -72,11 +72,11 @@ def transform_line_milling_spec(
 
 
 def transform_polyline_milling_spec(
-    spec: sp.PolylineMillingSpec,
+    spec: sp.PolylineSpec,
     transform: EnJuegoTransform,
     *,
     feature_name_prefix: str = "",
-) -> sp.PolylineMillingSpec:
+) -> sp.PolylineSpec:
     # Polilínea unificada: `points` es una property → se transforma el arranque y CADA segmento
     # (extremo y, si es arco, su centro).
     start_x, start_y = transform.point(spec.start_x, spec.start_y)
@@ -99,11 +99,11 @@ def transform_polyline_milling_spec(
 
 
 def transform_circle_milling_spec(
-    spec: sp.CircleMillingSpec,
+    spec: sp.CircleSpec,
     transform: EnJuegoTransform,
     *,
     feature_name_prefix: str = "",
-) -> sp.CircleMillingSpec:
+) -> sp.CircleSpec:
     center_x, center_y = transform.point(spec.center_x, spec.center_y)
     return replace(
         spec,
@@ -114,11 +114,11 @@ def transform_circle_milling_spec(
 
 
 def transform_drilling_spec(
-    spec: sp.DrillingSpec,
+    spec: sp.DrillSpec,
     transform: EnJuegoTransform,
     *,
     feature_name_prefix: str = "",
-) -> sp.DrillingSpec:
+) -> sp.DrillSpec:
     center_x, center_y = transform.point(spec.center_x, spec.center_y)
     return replace(
         spec,
@@ -134,25 +134,25 @@ def transform_supported_spec(
     *,
     feature_name_prefix: str = "",
 ) -> TransformableSpec:
-    if isinstance(spec, sp.LineMillingSpec):
+    if isinstance(spec, sp.LineSpec):
         return transform_line_milling_spec(
             spec,
             transform,
             feature_name_prefix=feature_name_prefix,
         )
-    if isinstance(spec, sp.PolylineMillingSpec):
+    if isinstance(spec, sp.PolylineSpec):
         return transform_polyline_milling_spec(
             spec,
             transform,
             feature_name_prefix=feature_name_prefix,
         )
-    if isinstance(spec, sp.CircleMillingSpec):
+    if isinstance(spec, sp.CircleSpec):
         return transform_circle_milling_spec(
             spec,
             transform,
             feature_name_prefix=feature_name_prefix,
         )
-    if isinstance(spec, sp.DrillingSpec):
+    if isinstance(spec, sp.DrillSpec):
         return transform_drilling_spec(
             spec,
             transform,

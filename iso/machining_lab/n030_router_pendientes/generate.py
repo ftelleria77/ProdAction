@@ -31,7 +31,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_line_milling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request  # noqa: E402
 from pgmx.synthesis.common.strategy import (  # noqa: E402
     build_bidirectional_milling_strategy_spec,
     build_unidirectional_milling_strategy_spec,
@@ -83,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
             output_path=path, piece_name=name,
             length=300.0, width=200.0, depth=18.0,
             origin_x=5.0, origin_y=5.0, origin_z=25.0,
-            line_millings=[build_line_milling_spec(
+            line_millings=[build_line_spec(
                 line_feature_name="Fresado",
                 line_tool_id="1903", line_tool_name="E004", line_tool_width=4.0,
                 line_security_plane=20.0, line_is_through=False,

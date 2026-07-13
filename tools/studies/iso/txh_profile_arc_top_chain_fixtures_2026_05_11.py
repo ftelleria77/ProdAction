@@ -18,10 +18,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    DrillingSpec,
-    build_drilling_spec,
-    build_line_milling_spec,
-    build_squaring_milling_spec,
+    DrillSpec,
+    build_drill_spec,
+    build_line_spec,
+    build_contour_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -70,7 +70,7 @@ def _top_tool_name(diameter: float) -> str:
 
 
 def _profile_milling(fixture: Fixture) -> object:
-    return build_squaring_milling_spec(
+    return build_contour_spec(
         winding=fixture.profile_winding,
         feature_name=f"TXH_ARC_{fixture.name}_PROFILE_E001_{fixture.profile_winding}",
         tool_id="1900",
@@ -97,7 +97,7 @@ def _profile_milling(fixture: Fixture) -> object:
 
 
 def _line_milling(fixture: Fixture) -> object:
-    return build_line_milling_spec(
+    return build_line_spec(
         line_x1=80.0,
         line_y1=130.0,
         line_x2=240.0,
@@ -116,8 +116,8 @@ def _line_milling(fixture: Fixture) -> object:
     )
 
 
-def _top_drill(fixture: Fixture, *, ordinal: int, diameter: float) -> DrillingSpec:
-    return build_drilling_spec(
+def _top_drill(fixture: Fixture, *, ordinal: int, diameter: float) -> DrillSpec:
+    return build_drill_spec(
         feature_name=f"TXH_ARC_{fixture.name}_TOP_{_top_tool_name(diameter)}_{ordinal}",
         plane_name="Top",
         center_x=220.0 + (ordinal * 28.0),
@@ -128,7 +128,7 @@ def _top_drill(fixture: Fixture, *, ordinal: int, diameter: float) -> DrillingSp
     )
 
 
-def _top_drills(fixture: Fixture) -> tuple[DrillingSpec, ...]:
+def _top_drills(fixture: Fixture) -> tuple[DrillSpec, ...]:
     return tuple(
         _top_drill(fixture, ordinal=ordinal, diameter=diameter)
         for ordinal, diameter in enumerate(fixture.top_diameters, start=1)

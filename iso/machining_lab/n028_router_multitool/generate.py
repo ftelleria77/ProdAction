@@ -24,13 +24,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_line_milling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N028_router_multitool"
 
 
 def _e004(y: float):
-    return build_line_milling_spec(
+    return build_line_spec(
         line_x1=20.0, line_y1=y, line_x2=280.0, line_y2=y,
         line_feature_name="Fresado",
         line_tool_id="1903", line_tool_name="E004", line_tool_width=4.0,
@@ -39,7 +39,7 @@ def _e004(y: float):
 
 
 def _e001(y: float):
-    return build_line_milling_spec(
+    return build_line_spec(
         line_x1=20.0, line_y1=y, line_x2=280.0, line_y2=y,
         line_feature_name="Fresado",
         line_tool_id="1900", line_tool_name="E001", line_tool_width=18.36,

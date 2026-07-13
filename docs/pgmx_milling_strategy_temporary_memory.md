@@ -1572,8 +1572,8 @@ Reconstruir paso a paso:
   - se agregaron las builders publicas:
     - `build_unidirectional_milling_strategy_spec(...)`
     - `build_bidirectional_milling_strategy_spec(...)`
-  - `LineMillingSpec`, `PolylineMillingSpec`, `CircleMillingSpec` y
-    `SquaringMillingSpec` ahora aceptan `milling_strategy`
+  - `LineSpec`, `PolylineSpec`, `CircleSpec` y
+    `ContourSpec` ahora aceptan `milling_strategy`
 - Alcance implementado:
   - linea simple:
     - `Unidireccional`

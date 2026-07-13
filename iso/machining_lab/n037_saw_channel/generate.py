@@ -15,13 +15,13 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_synthesis_request, synthesize_request  # noqa: E402
-from pgmx.synthesis.milling.slot import build_slot_milling_spec  # noqa: E402
+from pgmx.synthesis.milling.slot import build_channel_spec  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N037_saw_channel"
 
 def _slot(x1=280.0, y1=100.0, x2=20.0, y2=100.0, **kw):
     # sentido -x por defecto (280 -> 20), la restriccion fisica de la 082
-    return build_slot_milling_spec(start_x=x1, start_y=y1, end_x=x2, end_y=y2, **kw)
+    return build_channel_spec(start_x=x1, start_y=y1, end_x=x2, end_y=y2, **kw)
 
 CASES = [
     ("base",     [_slot(target_depth=5.0)]),

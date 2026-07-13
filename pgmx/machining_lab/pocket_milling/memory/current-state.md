@@ -261,8 +261,8 @@ Observacion de trayectoria materializada:
 
 Avance 2026-05-16:
 
-- `tools.synthesize_pgmx` ya expone `PocketMillingSpec` y
-  `build_pocket_milling_spec(...)` como spec publica de lectura/adaptacion para
+- `tools.synthesize_pgmx` ya expone `PocketSpec` y
+  `build_pocket_spec(...)` como spec publica de lectura/adaptacion para
   `Vaciado`.
 - La spec representa `ClosedPocket + BottomAndSideRoughMilling +
   ContourParallel`, con contorno, herramienta, profundidad, approach/retract,
@@ -270,7 +270,7 @@ Avance 2026-05-16:
   `radial_step`.
 - `tools.pgmx_adapters` ya adapta `ClosedPocket` en plano `Top` con operacion
   `BottomAndSideRoughMilling` y estrategia `ContourParallel` hacia
-  `PocketMillingSpec`.
+  `PocketSpec`.
 - Validacion real: `manual/Vaciado_001.pgmx` a `manual/Vaciado_019.pgmx`
   entran como `pocket_milling` con `1` entrada adaptada y `0` unsupported cada
   uno.
@@ -280,7 +280,7 @@ Avance 2026-05-16:
 - Se genero una muestra de adaptacion en
   `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_018_adaptation.json`.
 - La serializacion productiva sigue bloqueada explicitamente:
-  `synthesize_request(...)` con `PocketMillingSpec` levanta
+  `synthesize_request(...)` con `PocketSpec` levanta
   `NotImplementedError`. Esto es intencional hasta cerrar la generacion de
   geometria, operacion, estrategia y toolpaths.
 - Se agrego `tools.pgmx_vaciado.contour_parallel` como generador experimental
@@ -302,7 +302,7 @@ Avance 2026-05-16:
 - `tools.pgmx_snapshot.py` ya representa `b:ContourParallel` como
   `ContourParallelMillingStrategySpec`.
 - `ClosedPocket` ya se representa a nivel semantico mediante
-  `PocketMillingSpec`, pero la serializacion productiva de
+  `PocketSpec`, pero la serializacion productiva de
   `BottomAndSideRoughMilling` y sus toolpaths todavia no esta implementada.
 - Ya hay ejemplos manuales para confirmar los valores XML de `En la pieza`,
   `Desde afuera hacia adentro`, helicoidal y multipaso.
@@ -435,8 +435,8 @@ Estado actual:
 - El lector estable ya representa `b:ContourParallel` como
   `ContourParallelMillingStrategySpec`.
 - El adaptador estable ya representa `Vaciado/ClosedPocket` como
-  `PocketMillingSpec`.
-- La sintesis productiva ya emite el subset rectangular `PocketMillingSpec`
+  `PocketSpec`.
+- La sintesis productiva ya emite el subset rectangular `PocketSpec`
   sobre `Top`: feature `ClosedPocket`, operacion
   `BottomAndSideRoughMilling`, estrategia `ContourParallel`,
   `AllowanceSide/Bottom`, toolpaths y curvas internas.
@@ -469,7 +469,7 @@ Hipotesis de traza vigente:
 
 Siguiente paso recomendado:
 
-1. Diseniar la serializacion productiva de `PocketMillingSpec`: feature
+1. Diseniar la serializacion productiva de `PocketSpec`: feature
    `ClosedPocket`, operacion `BottomAndSideRoughMilling`, estrategia
    `ContourParallel`, `AllowanceSide/Bottom`, toolpaths y curvas internas.
 2. Generar una primera tanda en `S:\Maestro\Projects\ProdAction\PGMX\generated`
@@ -480,7 +480,7 @@ Siguiente paso recomendado:
 ## Tareas Pendientes Registradas
 
 - Cuando `Vaciado_018/019` esten exactos, diseniar la serializacion productiva
-  de `PocketMillingSpec`: feature `ClosedPocket`, operacion
+  de `PocketSpec`: feature `ClosedPocket`, operacion
   `BottomAndSideRoughMilling`, estrategia `ContourParallel`, toolpaths y
   curvas internas.
 - Mantener bloqueada la sintesis productiva con `NotImplementedError` hasta
@@ -499,13 +499,13 @@ Siguiente paso recomendado:
 
 ## Actualizacion 2026-05-17
 
-- Se implemento la serializacion productiva inicial de `PocketMillingSpec`
+- Se implemento la serializacion productiva inicial de `PocketSpec`
   para Vaciado rectangular sobre `Top`.
 - La tanda `generated/Vaciado_001_synth.pgmx` ..
   `generated/Vaciado_019_synth.pgmx` se genero desde `Vaciado_000.pgmx` y se
   readapto correctamente: `19/19` con un unico `pocket_milling`, `0`
   unsupported y trayectoria `X/Y/Z` exacta.
-- La validacion de herramienta de `PocketMillingSpec` conserva la validacion de
+- La validacion de herramienta de `PocketSpec` conserva la validacion de
   profundidad, pero no aplica el filtro estricto de fresado de perfil porque
   `Vaciado_004` usa `E002 (1901)` catalogada como `Sierra Horizontal` y Maestro
   la acepta para este caso.
@@ -550,10 +550,10 @@ Siguiente paso recomendado:
   borde no rectangular y vaciados con isla. Nuevos manuales para estudiar:
   `manual/Vaciado_020.pgmx`, `manual/Vaciado_021.pgmx` y
   `manual/Vaciado_022.pgmx`.
-- Correccion de modelo: `PocketMillingSpec` ahora conserva `boss_contours`
+- Correccion de modelo: `PocketSpec` ahora conserva `boss_contours`
   leidos desde `BossGeometryList`. `Vaciado_022` se adapta con una isla
   rectangular `150..250 x 100..200` y ya no se pierde esa informacion.
-- Guardrail productivo: la sintesis de `PocketMillingSpec` ahora falla
+- Guardrail productivo: la sintesis de `PocketSpec` ahora falla
   explicitamente si hay `boss_contours` o si el contorno no coincide con el
   rectangulo completo de la pieza. Esto evita generar PGMX incorrectos para
   `Vaciado_020`, `021` y `022` hasta resolver esos modelos. La serie estable
@@ -584,7 +584,7 @@ Siguiente paso recomendado:
   aplica el offset contra el bbox del contorno, no contra el tablero. La
   comparacion amplia `Vaciado_001..035` queda `29/35` exacta; los no exactos
   son `022` y `027..031`, todos asociados a islas o geometria especial.
-- La sintesis productiva de `PocketMillingSpec` ya acepta contornos
+- La sintesis productiva de `PocketSpec` ya acepta contornos
   rectangulares parciales sin islas. Casos cubiertos por test:
   `Vaciado_001..021`, `023..026` y `032..035`, comparando la traza generada
   contra la traza manual de Maestro. El guardrail que queda activo es
@@ -781,7 +781,7 @@ informacion de Maestro y sin generar PGMX incompletos.
 
 - La separacion `BossGeometryList` / `BossList.GeometryID` ya quedo en el
   modelo estable. `tools.synthesize_pgmx` expone `PocketBossRouteSeedSpec` y
-  `PocketMillingSpec.boss_route_seeds`; cada semilla conserva `geometry_id`,
+  `PocketSpec.boss_route_seeds`; cada semilla conserva `geometry_id`,
   `object_type`, `name` y `contour_points` cuando la geometria resuelve.
 - `tools.pgmx_adapters` ahora llena `boss_route_seeds` al adaptar
   `ClosedPocket + BottomAndSideRoughMilling + ContourParallel`. Los refs no
@@ -789,7 +789,7 @@ informacion de Maestro y sin generar PGMX incompletos.
   descartarse.
 - `tools.pgmx_vaciado.island_analysis.resolved_boss_ref_xy_contours(...)`
   quedo como wrapper del nuevo dato estable cuando la adaptacion produce
-  `PocketMillingSpec`.
+  `PocketSpec`.
 - La sintesis productiva sigue bloqueada para `BossGeometryList` o semillas
   `BossList.GeometryID`. El cambio de codigo actual es de modelo/lectura y
   guardrail: evita perder la semilla de ruteo antes de implementar la
@@ -802,7 +802,7 @@ informacion de Maestro y sin generar PGMX incompletos.
 ## Actualizacion 2026-05-21
 
 - Primer soporte controlado de sintesis con isla/semilla para `Vaciado`:
-  `Vaciado_031_E006` ya se genera desde `PocketMillingSpec` y reproduce
+  `Vaciado_031_E006` ya se genera desde `PocketSpec` y reproduce
   exactamente las dos `TrajectoryPath` de Maestro (`5 + 10` puntos).
 - La compuerta sigue siendo estricta: solo se permite una semilla resuelta de
   `BossList.GeometryID`, materializada tambien como unico `BossGeometryList`,
@@ -987,13 +987,13 @@ informacion de Maestro y sin generar PGMX incompletos.
   el primer modo validado, pero el modelo debe permitir luego otras estrategias
   de vaciado sin reescribir la representacion del mecanizado.
 - Antes de extender `Vaciado_027` mas alla de la plantilla validada, conviene
-  revisar `PocketMillingSpec` y el generador de trayectoria para asegurar que
+  revisar `PocketSpec` y el generador de trayectoria para asegurar que
   estos campos existan de forma explicita, o que se documente cual queda
   pendiente y por que.
 
 ## Actualizacion 2026-05-27 - Auditoria Del Contrato En Codigo
 
-- `PocketMillingSpec` ya conserva la polilinea exterior como
+- `PocketSpec` ya conserva la polilinea exterior como
   `contour_points`. El punto inicial queda preservado por el orden de la tupla.
 - Las polilineas internas existen en dos niveles:
   - `boss_contours` conserva las islas fisicas de `BossGeometryList`;
@@ -1033,7 +1033,7 @@ informacion de Maestro y sin generar PGMX incompletos.
 - Se reviso nuevamente el corpus completo
   `S:\Maestro\Projects\ProdAction\PGMX\manual`.
 - Archivos `Vaciado_*.pgmx` encontrados: `77`.
-- Adaptados como `PocketMillingSpec`: `76`.
+- Adaptados como `PocketSpec`: `76`.
 - Reportes generados:
   - `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_parameter_trace_contract_2026_05_27\vaciado_manual_parameter_trace_catalog.csv`;
   - `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_parameter_trace_contract_2026_05_27\vaciado_manual_parameter_trace_review.md`;
@@ -1066,7 +1066,7 @@ informacion de Maestro y sin generar PGMX incompletos.
 - Caso especial nuevo: `Vaciado_035.pgmx` es `ClosedPocket` con geometria
   circular `GeomCircle`, `AllowanceSide=20`, `InsideToOutSide=false` e
   `IsHelicStrategy=true`. El adaptador actual no lo convierte a
-  `PocketMillingSpec` porque el soporte inicial exige `GeomCompositeCurve`
+  `PocketSpec` porque el soporte inicial exige `GeomCompositeCurve`
   cerrado. La traza observada usa arcos circulares a Z constante y un enlace
   radial; aunque el flag helicoidal esta activo, no aparece una rampa Z
   helicoidal en `TrajectoryPath`.
@@ -1133,7 +1133,7 @@ informacion de Maestro y sin generar PGMX incompletos.
 
 - Se creo `tools/pgmx_vaciado/trace_engine.py` como punto de entrada general
   para el futuro motor de vaciado por contornos paralelos. El modulo no esta
-  nombrado ni acotado a `Vaciado_027`: acepta un `PocketMillingSpec` y
+  nombrado ni acotado a `Vaciado_027`: acepta un `PocketSpec` y
   devuelve un `ContourParallelTracePlan`.
 - El esqueleto ya separa capas:
   - normalizacion de contorno exterior, punto inicial, bbox, winding y forma
@@ -1231,7 +1231,7 @@ informacion de Maestro y sin generar PGMX incompletos.
 
 - El pipeline del motor general queda cerrado para la regla resuelta de
   bucles completos:
-  `PocketMillingSpec -> ContourParallelTracePlan -> primitive_sequences ->
+  `PocketSpec -> ContourParallelTracePlan -> primitive_sequences ->
   resolved_sequences -> trajectory_sequences -> CurveSpec PGMX`.
 - `generate_contour_parallel_pocket_trace(...)` ahora llena
   `trajectory_sequences` 3D cuando `resolved_sequences` esta completo. En el
@@ -1378,7 +1378,7 @@ Plan completo y estado:
    - Estado: ejecutado.
    - Se revisaron `77` archivos `Vaciado_*.pgmx` en
      `S:\Maestro\Projects\ProdAction\PGMX\manual`; `76` adaptan como
-     `PocketMillingSpec` y `Vaciado_035` quedo como caso circular especial.
+     `PocketSpec` y `Vaciado_035` quedo como caso circular especial.
    - Quedaron reportes en
      `S:\Maestro\Projects\ProdAction\PGMX\_analysis\vaciado_parameter_trace_contract_2026_05_27`.
    - Se reafirmo la regla general
@@ -1409,7 +1409,7 @@ Plan completo y estado:
 6. Resolver la topologia de bucles completos y emitir PGMX.
    - Estado: ejecutado.
    - El pipeline
-     `PocketMillingSpec -> TracePlan -> primitive_sequences ->
+     `PocketSpec -> TracePlan -> primitive_sequences ->
      resolved_sequences -> trajectory_sequences -> CurveSpec PGMX` ya cierra
      para bucles completos.
    - `Vaciado_027_E006` valida exacto contra Maestro con `12 + 20` puntos,

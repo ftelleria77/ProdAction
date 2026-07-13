@@ -18,10 +18,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    DrillingSpec,
-    SlotMillingSpec,
-    build_drilling_spec,
-    build_slot_milling_spec,
+    DrillSpec,
+    ChannelSpec,
+    build_drill_spec,
+    build_channel_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -77,8 +77,8 @@ def _side_span(fixture: Fixture) -> float:
     return fixture.width
 
 
-def _side_drill(fixture: Fixture) -> DrillingSpec:
-    return build_drilling_spec(
+def _side_drill(fixture: Fixture) -> DrillSpec:
+    return build_drill_spec(
         feature_name=f"{fixture.transition_id}_{fixture.index:02d}_{fixture.side_face.upper()}_D8",
         plane_name=fixture.side_face,
         center_x=round(_side_span(fixture) * 0.5, 3),
@@ -89,9 +89,9 @@ def _side_drill(fixture: Fixture) -> DrillingSpec:
     )
 
 
-def _top_slot(fixture: Fixture) -> SlotMillingSpec:
+def _top_slot(fixture: Fixture) -> ChannelSpec:
     offset = (fixture.index % 4) * 12.0
-    return build_slot_milling_spec(
+    return build_channel_spec(
         feature_name=f"{fixture.transition_id}_{fixture.index:02d}_TOP_SLOT_082",
         start_x=120.0 + offset,
         start_y=140.0,

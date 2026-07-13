@@ -35,8 +35,8 @@ field = re.search(r"<[^>]*ExecutionFields>([^<]*)</", xml).group(1)
 Inspección manual: `unzip -o -q archivo.pgmx -d /tmp/x && grep ... /tmp/x/*.xml`.
 
 ## Escribir / sintetizar
-- Specs en `pgmx/synthesis/` (`DrillingSpec`, `DrillingPatternSpec`, `LineMillingSpec`,
-  `SlotMillingSpec`, `ParkSpec`, …; API pública en `pgmx/synthesis/__init__.py`).
+- Specs en `pgmx/synthesis/` (`DrillSpec`, `DrillPatternSpec`, `LineSpec`,
+  `ChannelSpec`, `ParkSpec`, …; API pública en `pgmx/synthesis/__init__.py`).
 - `pgmx.synthesis.common.program.build_synthesis_request(...)` → `PgmxSynthesisRequest`.
 - `synthesize_request(request)` → `PgmxSynthesisResult` (hidrata specs → XML → ZIP `.pgmx`).
 - Ejemplos vivos: `iso/machining_lab/nNNN_*/generate.py` y `pgmx/machining_lab/`.

@@ -1,6 +1,6 @@
 r"""N038 - Eje B etapa 2: CIRCULOS (fresado circular completo) — lote baseline.
 
-Primer lote de CircleMillingSpec. Disciplina N001: una dimension por fixture, todo Center
+Primer lote de CircleSpec. Disciplina N001: una dimension por fixture, todo Center
 (la correccion Interna/Externa, leads y multipaso van en el lote siguiente, con el modelo
 base derivado). El ISO nos ensena el modelo de emision de arcos G2/G3 (I/J, arranque,
 cierre del circulo, sentido horario/antihorario) — la primitiva de la etapa 3 (polilineas).
@@ -13,12 +13,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_circle_milling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_circle_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N038_circle"
 
 def _circ(cx=150.0, cy=100.0, r=30.0, depth=5.0, **kw):
-    return build_circle_milling_spec(
+    return build_circle_spec(
         center_x=cx, center_y=cy, radius=r,
         tool_id=kw.pop("tool_id", "1903"), tool_name=kw.pop("tool_name", "E004"),
         tool_width=kw.pop("tool_width", 4.0),

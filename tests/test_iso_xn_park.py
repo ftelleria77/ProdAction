@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 
 from pgmx.synthesis import (
-    build_drilling_spec, build_synthesis_request, build_xn_spec, synthesize_request,
+    build_drill_spec, build_synthesis_request, build_xn_spec, synthesize_request,
 )
 from iso.synthesis import convert
 
@@ -23,7 +23,7 @@ def _convert(xn=None):
     req = build_synthesis_request(
         output_path=path, piece_name="xn",
         length=300.0, width=200.0, depth=18.0, origin_x=5.0, origin_y=5.0, origin_z=25.0,
-        drillings=[build_drilling_spec(center_x=150.0, center_y=100.0, diameter=8.0,
+        drillings=[build_drill_spec(center_x=150.0, center_y=100.0, diameter=8.0,
                                        plane_name="Top", target_depth=10.0, tool_resolution="Auto")],
         xn=xn,
     )

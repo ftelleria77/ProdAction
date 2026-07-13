@@ -32,7 +32,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_drilling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_drill_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N020_ef_origin"
 
@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
             length=length, width=width, depth=18.0,
             origin_x=ox, origin_y=oy, origin_z=25.0,
             execution_fields="EF",
-            drillings=[build_drilling_spec(
+            drillings=[build_drill_spec(
                 center_x=cx, center_y=cy, diameter=8.0,
                 plane_name=plane, target_depth=depth, tool_resolution="Auto",
             )],

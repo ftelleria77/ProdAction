@@ -59,18 +59,18 @@ from ._common import (
 from .line import _build_line_geometry, _build_line_operation, _build_line_toolpath_profile
 
 __all__ = [
-    "SlotMillingSpec",
-    "build_slot_milling_spec",
-    "_HydratedSlotMillingSpec",
-    "_append_slot_milling",
+    "ChannelSpec",
+    "build_channel_spec",
+    "_HydratedChannelSpec",
+    "_append_channel",
     "_build_slot_side_feature",
-    "_hydrate_slot_milling_spec",
-    "_normalize_slot_milling_spec",
+    "_hydrate_channel_spec",
+    "_normalize_channel_spec",
 ]
 
 
 @dataclass(frozen=True)
-class SlotMillingSpec:
+class ChannelSpec:
     """Ranura lineal `SlotSide` validada para Sierra Vertical X sobre `Top`."""
 
     start_x: float
@@ -105,10 +105,10 @@ class SlotMillingSpec:
 
 
 @dataclass(frozen=True)
-class _HydratedSlotMillingSpec:
-    """Datos internos de serializacion que complementan un `SlotMillingSpec`."""
+class _HydratedChannelSpec:
+    """Datos internos de serializacion que complementan un `ChannelSpec`."""
 
-    spec: SlotMillingSpec
+    spec: ChannelSpec
     preferred_id_start: Optional[int] = None
     geometry_serialization: Optional[str] = None
     approach_curve: Optional[_CurveSpec] = None
@@ -196,7 +196,7 @@ class _HydratedSlotMillingSpec:
         return self.spec.is_enabled_expr
 
 
-def _normalize_slot_milling_spec(slot_milling: SlotMillingSpec) -> SlotMillingSpec:
+def _normalize_channel_spec(slot_milling: ChannelSpec) -> ChannelSpec:
     if math.isclose(float(slot_milling.start_x), float(slot_milling.end_x), abs_tol=1e-9) and math.isclose(
         float(slot_milling.start_y),
         float(slot_milling.end_y),
@@ -228,17 +228,17 @@ def _normalize_slot_milling_spec(slot_milling: SlotMillingSpec) -> SlotMillingSp
     )
 
 
-def _hydrate_slot_milling_spec(
-    slot_milling: SlotMillingSpec,
+def _hydrate_channel_spec(
+    slot_milling: ChannelSpec,
     source_pgmx_path: Optional[Path],
-) -> _HydratedSlotMillingSpec:
+) -> _HydratedChannelSpec:
     del source_pgmx_path
-    return _HydratedSlotMillingSpec(spec=_normalize_slot_milling_spec(slot_milling))
+    return _HydratedChannelSpec(spec=_normalize_channel_spec(slot_milling))
 
 
 def _build_slot_side_feature(
     state,
-    spec: _HydratedSlotMillingSpec,
+    spec: _HydratedChannelSpec,
     feature_id: str,
     geometry_id: str,
     operation_id: str,
@@ -311,7 +311,7 @@ def _build_slot_side_feature(
     return feature
 
 
-def _append_slot_milling(root: ET.Element, state, spec: _HydratedSlotMillingSpec) -> None:
+def _append_channel(root: ET.Element, state, spec: _HydratedChannelSpec) -> None:
     geometries = root.find("./{*}Geometries")
     features = root.find("./{*}Features")
     operations = root.find("./{*}Operations")
@@ -395,7 +395,7 @@ def _append_slot_milling(root: ET.Element, state, spec: _HydratedSlotMillingSpec
         )
 
 
-def build_slot_milling_spec(
+def build_channel_spec(
     *,
     start_x: float,
     start_y: float,
@@ -429,7 +429,7 @@ def build_slot_milling_spec(
     end_radius: Optional[float] = None,
     slot_angle: Optional[float] = None,
     is_enabled_expr: Optional[str] = None,
-) -> SlotMillingSpec:
+) -> ChannelSpec:
     """Construye una ranura lineal `SlotSide` compatible con Sierra Vertical X."""
 
     depth_spec = build_milling_depth_spec(
@@ -437,8 +437,8 @@ def build_slot_milling_spec(
         target_depth=10.0 if is_through is None and target_depth is None and extra_depth is None else target_depth,
         extra_depth=extra_depth,
     )
-    return _normalize_slot_milling_spec(
-        SlotMillingSpec(
+    return _normalize_channel_spec(
+        ChannelSpec(
             start_x=float(start_x),
             start_y=float(start_y),
             end_x=float(end_x),

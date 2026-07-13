@@ -15,7 +15,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from pgmx.synthesis.milling.line import LineMillingSpec, build_line_milling_spec
+from pgmx.synthesis.milling.line import LineSpec, build_line_spec
 
 from iso.synthesis import convert
 from iso.synthesis._router import _cut_segments, _g1_cut
@@ -25,9 +25,9 @@ _FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N022_router_expand")
 _REF_DIR = Path(r"P:\USBMIX\ProdAction\N022_router_expand")
 
 
-def _line(**kw) -> LineMillingSpec:
+def _line(**kw) -> LineSpec:
     """Línea E001 estándar de N022: (20,100)->(280,100), prof. 3."""
-    base = build_line_milling_spec(
+    base = build_line_spec(
         line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0,
         line_feature_name="Fresado",
         line_tool_id="1900", line_tool_name="E001", line_tool_width=18.36,

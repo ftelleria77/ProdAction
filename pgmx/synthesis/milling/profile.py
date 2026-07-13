@@ -4,7 +4,7 @@
 cualquier fresado basado en una curva (línea, arco, círculo, polilínea, galceado). Lo usan
 `arc.py`, `circle.py`, `poly_profile.py` y `squaring.py`.
 
-(La antigua `PolylineMillingSpec` — polilínea RECTA — vivía acá; quedó unificada dentro de la
+(La antigua `PolylineSpec` — polilínea RECTA — vivía acá; quedó unificada dentro de la
 polilínea general de `poly_profile.py`, que acepta el atajo `points=`.)
 """
 

@@ -1,6 +1,6 @@
 r"""N041 - Eje B etapa 3: POLILINEAS de segmentos mixtos (rectos + arcos) — exploracion.
 
-Primer lote de ArcPolylineMillingSpec (autoria estrenada 2026-07-08: composite de miembros
+Primer lote de PolylineSpec (autoria estrenada 2026-07-08: composite de miembros
 mixtos recta/arco, forma de las piezas de produccion FrenteCurvo/Estante). Doble proposito
 (patron N031/N040): si Maestro postprocesa nuestra autoria TAL CUAL, la extension queda
 validada; y los ISO ensenan el render del encadenamiento recta<->arco (transiciones internas,
@@ -15,19 +15,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_arc_polyline_milling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_polyline_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N041_poly_profile"
 
 def _poly(start, segments, **kw):
-    return build_arc_polyline_milling_spec(
+    return build_polyline_spec(
         start=start, segments=segments,
         tool_id=kw.pop("tool_id", "1903"), tool_name=kw.pop("tool_name", "E004"),
         tool_width=kw.pop("tool_width", 4.0),
         target_depth=kw.pop("target_depth", 5.0), **kw)
 
 CASES = [
-    # recta + recta (2 segmentos, control: sin arcos — debe igualar a PolylineMillingSpec)
+    # recta + recta (2 segmentos, control: sin arcos — debe igualar a PolylineSpec)
     ("ll",      _poly((20.0, 60.0), [((20.0, 140.0),), ((160.0, 140.0),)])),
     # recta -> arco -> recta (una "L" con esquina redondeada), arco CCW
     ("lar",     _poly((20.0, 60.0), [((20.0, 120.0),),

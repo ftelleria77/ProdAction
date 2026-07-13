@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_line_milling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N031_authoring"
 CASES = [
@@ -38,7 +38,7 @@ def main(argv=None):
         synthesize_request(build_synthesis_request(
             output_path=path, piece_name=f"N_A_{tag}", length=300.0, width=200.0, depth=18.0,
             origin_x=5.0, origin_y=5.0, origin_z=25.0,
-            line_millings=[build_line_milling_spec(
+            line_millings=[build_line_spec(
                 line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0,
                 line_feature_name="Fresado", line_tool_id="1903", line_tool_name="E004",
                 line_tool_width=4.0, line_security_plane=20.0,

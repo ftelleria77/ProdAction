@@ -13,13 +13,13 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from pgmx.synthesis.drilling.pattern import DrillingPatternSpec
-from pgmx.synthesis.drilling.single import DrillingSpec
-from pgmx.synthesis.milling.arc import ArcMillingSpec
-from pgmx.synthesis.milling.poly_profile import ArcPolylineMillingSpec
-from pgmx.synthesis.milling.circle import CircleMillingSpec
-from pgmx.synthesis.milling.line import LineMillingSpec
-from pgmx.synthesis.milling.slot import SlotMillingSpec
+from pgmx.synthesis.drilling.pattern import DrillPatternSpec
+from pgmx.synthesis.drilling.single import DrillSpec
+from pgmx.synthesis.milling.arc import ArcSpec
+from pgmx.synthesis.milling.poly_profile import PolylineSpec
+from pgmx.synthesis.milling.circle import CircleSpec
+from pgmx.synthesis.milling.line import LineSpec
+from pgmx.synthesis.milling.slot import ChannelSpec
 
 from ._machine import SIDE_FACE, TOP_TOOL, TOP_TOOL_CONICAL, top_tool_or_none
 from ._tool_catalog import tool_geometry
@@ -34,7 +34,7 @@ class UnsupportedOperationError(ValueError):
 _SUPPORTED_DRILL_FACES = frozenset({"Top", *SIDE_FACE})
 
 
-def _top_tool_supported(spec: DrillingSpec) -> bool:
+def _top_tool_supported(spec: DrillSpec) -> bool:
     """Soportada si resuelve a una herramienta vertical conocida (por la herramienta
     seleccionada o por punta+diámetro). Mismo criterio que el render."""
     return top_tool_or_none(spec.diameter, spec.drill_family, spec.tool_name) is not None
@@ -44,19 +44,19 @@ def validate_entries(entries: Iterable[object]) -> None:
     """Valida todas las entries del programa. Lanza ``UnsupportedOperationError``."""
     for entry in entries:
         spec = getattr(entry, "spec", entry)
-        if isinstance(spec, DrillingSpec):
+        if isinstance(spec, DrillSpec):
             _validate_drilling(spec)
-        elif isinstance(spec, DrillingPatternSpec):
+        elif isinstance(spec, DrillPatternSpec):
             _validate_drilling_pattern(spec)
-        elif isinstance(spec, LineMillingSpec):
+        elif isinstance(spec, LineSpec):
             _validate_line_milling(spec)
-        elif isinstance(spec, SlotMillingSpec):
+        elif isinstance(spec, ChannelSpec):
             _validate_slot_milling(spec)
-        elif isinstance(spec, CircleMillingSpec):
+        elif isinstance(spec, CircleSpec):
             _validate_circle_milling(spec)
-        elif isinstance(spec, ArcMillingSpec):
+        elif isinstance(spec, ArcSpec):
             _validate_arc_milling(spec)
-        elif isinstance(spec, ArcPolylineMillingSpec):
+        elif isinstance(spec, PolylineSpec):
             _validate_arc_polyline_milling(spec)
         else:
             _fail(spec, f"operación de tipo {type(spec).__name__!r} no soportada "
@@ -69,7 +69,7 @@ def _fail(spec: object, detail: str) -> None:
     raise UnsupportedOperationError(f"Feature '{feat}': {detail}")
 
 
-def _validate_drilling(spec: DrillingSpec) -> None:
+def _validate_drilling(spec: DrillSpec) -> None:
     if spec.plane_name not in _SUPPORTED_DRILL_FACES:
         _fail(spec, f"cara de taladro {spec.plane_name!r} no soportada "
                     f"(soportadas: {sorted(_SUPPORTED_DRILL_FACES)}).")
@@ -95,10 +95,10 @@ def _validate_drilling(spec: DrillingSpec) -> None:
         _fail(spec, "posiciones/habilitación paramétricas (expr) no soportadas aún. [Eje C]")
 
 
-def _validate_drilling_pattern(spec: DrillingPatternSpec) -> None:
+def _validate_drilling_pattern(spec: DrillPatternSpec) -> None:
     """Un patrón se expande a taladros individuales idénticos al base (N008): validamos
     el agujero base con las mismas reglas. El adapter ya garantiza rectangular/0/90."""
-    base = DrillingSpec(
+    base = DrillSpec(
         center_x=spec.center_x,
         center_y=spec.center_y,
         diameter=spec.diameter,
@@ -115,7 +115,7 @@ def _validate_drilling_pattern(spec: DrillingPatternSpec) -> None:
     _validate_drilling(base)
 
 
-def _validate_line_milling(spec: LineMillingSpec) -> None:
+def _validate_line_milling(spec: LineSpec) -> None:
     if spec.plane_name != "Top":
         _fail(spec, f"fresado lineal en cara {spec.plane_name!r} no soportado "
                     f"(solo Top). [A3]")
@@ -265,7 +265,7 @@ def _validate_line_milling(spec: LineMillingSpec) -> None:
             _fail(spec, f"cambio en el recorrido con UPar={upar} fuera de (0,1). [A3]")
 
 
-def _validate_slot_milling(spec: SlotMillingSpec) -> None:
+def _validate_slot_milling(spec: ChannelSpec) -> None:
     """Canal con la Sierra Vertical X (082) — derivado de N037 (9/9 byte-idéntico).
 
     Restricciones físicas (Fermín): cara superior, dirección X (Maestro NORMALIZA el sentido
@@ -304,7 +304,7 @@ def _validate_slot_milling(spec: SlotMillingSpec) -> None:
         _fail(spec, "canal con end_radius/slot_angle no estándar: sin fixture de referencia. [B]")
 
 
-def _validate_circle_milling(spec: CircleMillingSpec) -> None:
+def _validate_circle_milling(spec: CircleSpec) -> None:
     """Fresado CIRCULAR — derivado de N038 (10/10) + N039 combos (12/12).
 
     Baseline: entrada por el este, dos semicírculos G3/G2 con I/J al centro, pasante ✓.
@@ -369,7 +369,7 @@ def _validate_circle_milling(spec: CircleMillingSpec) -> None:
             _fail(spec, "círculo con estrategia + pasante: sin fixture de referencia. [B]")
 
 
-def _validate_arc_milling(spec: ArcMillingSpec) -> None:
+def _validate_arc_milling(spec: ArcSpec) -> None:
     """Fresado de ARCO SUELTO — derivado de N040 (10/10 byte-idéntico).
 
     Baseline: op de familia ROUTER; entrada por el start real, UN G3 (CCW) / G2 (CW) al end
@@ -399,7 +399,7 @@ def _validate_arc_milling(spec: ArcMillingSpec) -> None:
         _fail(spec, "arco + estrategia multipasada: sin fixture de referencia. [B]")
 
 
-def _validate_arc_polyline_milling(spec: ArcPolylineMillingSpec) -> None:
+def _validate_arc_polyline_milling(spec: PolylineSpec) -> None:
     """Polilínea de segmentos mixtos (rectas + arcos) — derivado de N041 (baseline) + N042
     (corrección + acercamiento, abiertas y cerradas, 11/11 byte-idéntico).
 

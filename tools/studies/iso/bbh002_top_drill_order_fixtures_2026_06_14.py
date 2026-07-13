@@ -58,8 +58,8 @@ from pgmx.snapshot import (  # noqa: E402
     read_pgmx_snapshot,
 )
 from pgmx.synthesis import (  # noqa: E402
-    DrillingSpec,
-    build_drilling_spec,
+    DrillSpec,
+    build_drill_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -246,8 +246,8 @@ def build_fixtures() -> tuple[Fixture, ...]:
     )
 
 
-def _top_drill_spec(fixture: Fixture, hole: Hole, ordinal: int) -> DrillingSpec:
-    return build_drilling_spec(
+def _top_drill_spec(fixture: Fixture, hole: Hole, ordinal: int) -> DrillSpec:
+    return build_drill_spec(
         feature_name=(
             f"BBH002_ORDER_{fixture.name}_{ordinal:02d}_{hole.label}"
             f"_X{_coord_token(hole.x)}_Y{_coord_token(hole.y)}"

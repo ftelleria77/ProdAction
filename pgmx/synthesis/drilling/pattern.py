@@ -32,34 +32,34 @@ from ..common.xml import (
     _text,
 )
 from .single import (
-    DrillingSpec,
-    _HydratedDrillingSpec,
+    DrillSpec,
+    _HydratedDrillSpec,
     _append_drilling_feature_payload,
-    _build_drilling_operation,
+    _build_drill_operation,
     _default_drill_family,
     _drilling_bottom_condition_type,
     _drilling_feature_depth_value,
-    _hydrate_drilling_spec,
-    _normalize_drilling_spec,
+    _hydrate_drill_spec,
+    _normalize_drill_spec,
     _uses_drilling_depth_expressions,
 )
 
 __all__ = [
-    "DrillingPatternSpec",
-    "build_drilling_pattern_spec",
-    "_HydratedDrillingPatternSpec",
-    "_append_drilling_pattern",
-    "_build_drilling_pattern_feature",
-    "_build_drilling_pattern_depth_expression",
+    "DrillPatternSpec",
+    "build_drill_pattern_spec",
+    "_HydratedDrillPatternSpec",
+    "_append_drill_pattern",
+    "_build_drill_pattern_feature",
+    "_build_drill_pattern_depth_expression",
     "_drilling_pattern_bottom_condition_type",
-    "_hydrate_drilling_pattern_spec",
+    "_hydrate_drill_pattern_spec",
     "_normalize_drilling_pattern_spec",
     "_validate_drilling_pattern_center",
 ]
 
 
 @dataclass(frozen=True)
-class DrillingPatternSpec:
+class DrillPatternSpec:
     """Repeticion rectangular de taladros iguales usando `ReplicateFeature`."""
 
     center_x: float
@@ -81,11 +81,11 @@ class DrillingPatternSpec:
 
 
 @dataclass(frozen=True)
-class _HydratedDrillingPatternSpec:
+class _HydratedDrillPatternSpec:
     """Datos internos para serializar un `ReplicateFeature` de taladros."""
 
-    spec: DrillingPatternSpec
-    base_drilling: _HydratedDrillingSpec
+    spec: DrillPatternSpec
+    base_drilling: _HydratedDrillSpec
 
     @property
     def center_x(self) -> float:
@@ -156,9 +156,9 @@ class _HydratedDrillingPatternSpec:
         return self.spec.is_enabled_expr
 
 
-def _normalize_drilling_pattern_spec(pattern: DrillingPatternSpec) -> DrillingPatternSpec:
-    base_drilling = _normalize_drilling_spec(
-        DrillingSpec(
+def _normalize_drilling_pattern_spec(pattern: DrillPatternSpec) -> DrillPatternSpec:
+    base_drilling = _normalize_drill_spec(
+        DrillSpec(
             center_x=pattern.center_x,
             center_y=pattern.center_y,
             diameter=pattern.diameter,
@@ -175,14 +175,14 @@ def _normalize_drilling_pattern_spec(pattern: DrillingPatternSpec) -> DrillingPa
     columns = int(pattern.columns)
     rows = int(pattern.rows)
     if columns < 1 or rows < 1:
-        raise ValueError("`DrillingPatternSpec` requiere `columns` y `rows` mayores o iguales a 1.")
+        raise ValueError("`DrillPatternSpec` requiere `columns` y `rows` mayores o iguales a 1.")
     if columns * rows < 2:
-        raise ValueError("Para un unico taladro use `DrillingSpec`; el patron requiere al menos 2 huecos.")
+        raise ValueError("Para un unico taladro use `DrillSpec`; el patron requiere al menos 2 huecos.")
 
     spacing = float(pattern.spacing)
     row_spacing = spacing if pattern.row_spacing is None else float(pattern.row_spacing)
     if spacing < 0.0 or row_spacing < 0.0:
-        raise ValueError("Las separaciones de `DrillingPatternSpec` no pueden ser negativas.")
+        raise ValueError("Las separaciones de `DrillPatternSpec` no pueden ser negativas.")
     if columns > 1 and spacing <= 0.0:
         raise ValueError("Un patron con mas de una columna requiere `spacing` mayor que cero.")
     if rows > 1 and row_spacing <= 0.0:
@@ -208,14 +208,14 @@ def _normalize_drilling_pattern_spec(pattern: DrillingPatternSpec) -> DrillingPa
     )
 
 
-def _hydrate_drilling_pattern_spec(
-    pattern: DrillingPatternSpec,
+def _hydrate_drill_pattern_spec(
+    pattern: DrillPatternSpec,
     source_pgmx_path: Optional[Path],
-) -> _HydratedDrillingPatternSpec:
+) -> _HydratedDrillPatternSpec:
     del source_pgmx_path
     normalized_pattern = _normalize_drilling_pattern_spec(pattern)
-    base_drilling = _hydrate_drilling_spec(
-        DrillingSpec(
+    base_drilling = _hydrate_drill_spec(
+        DrillSpec(
             center_x=normalized_pattern.center_x,
             center_y=normalized_pattern.center_y,
             diameter=normalized_pattern.diameter,
@@ -230,10 +230,10 @@ def _hydrate_drilling_pattern_spec(
         ),
         None,
     )
-    return _HydratedDrillingPatternSpec(spec=normalized_pattern, base_drilling=base_drilling)
+    return _HydratedDrillPatternSpec(spec=normalized_pattern, base_drilling=base_drilling)
 
 
-def _validate_drilling_pattern_center(state, spec: _HydratedDrillingPatternSpec) -> None:
+def _validate_drilling_pattern_center(state, spec: _HydratedDrillPatternSpec) -> None:
     max_x, max_y = _plane_local_dimensions(state, spec.plane_name)
     last_x = spec.center_x + ((spec.columns - 1) * spec.spacing)
     last_y = spec.center_y + ((spec.rows - 1) * spec.row_spacing)
@@ -251,13 +251,13 @@ def _validate_drilling_pattern_center(state, spec: _HydratedDrillingPatternSpec)
         )
 
 
-def _drilling_pattern_bottom_condition_type(spec: _HydratedDrillingPatternSpec) -> str:
+def _drilling_pattern_bottom_condition_type(spec: _HydratedDrillPatternSpec) -> str:
     return _drilling_bottom_condition_type(spec.base_drilling).replace("a:", "b:", 1)
 
 
-def _build_drilling_pattern_feature(
+def _build_drill_pattern_feature(
     state,
-    spec: _HydratedDrillingPatternSpec,
+    spec: _HydratedDrillPatternSpec,
     feature_id: str,
     geometry_id: str,
     operation_id: str,
@@ -323,7 +323,7 @@ def _build_drilling_pattern_feature(
     return feature
 
 
-def _build_drilling_pattern_depth_expression(
+def _build_drill_pattern_depth_expression(
     expression_id: str,
     feature_id: str,
     inner_field_name: str,
@@ -370,7 +370,7 @@ def _build_drilling_pattern_depth_expression(
     return expression
 
 
-def _append_drilling_pattern(root: ET.Element, state, spec: _HydratedDrillingPatternSpec) -> None:
+def _append_drill_pattern(root: ET.Element, state, spec: _HydratedDrillPatternSpec) -> None:
     geometries = root.find("./{*}Geometries")
     features = root.find("./{*}Features")
     operations = root.find("./{*}Operations")
@@ -408,7 +408,7 @@ def _append_drilling_pattern(root: ET.Element, state, spec: _HydratedDrillingPat
         )
     )
     features.append(
-        _build_drilling_pattern_feature(
+        _build_drill_pattern_feature(
             state,
             spec,
             feature_id,
@@ -418,7 +418,7 @@ def _append_drilling_pattern(root: ET.Element, state, spec: _HydratedDrillingPat
             workpiece_object_type,
         )
     )
-    operations.append(_build_drilling_operation(state, spec.base_drilling, operation_id))
+    operations.append(_build_drill_operation(state, spec.base_drilling, operation_id))
     elements.append(
         _build_working_step(
             spec.feature_name,
@@ -431,7 +431,7 @@ def _append_drilling_pattern(root: ET.Element, state, spec: _HydratedDrillingPat
     )
     if uses_depth_expressions and start_expression_id is not None and end_expression_id is not None:
         expressions.append(
-            _build_drilling_pattern_depth_expression(
+            _build_drill_pattern_depth_expression(
                 start_expression_id,
                 feature_id,
                 "StartDepth",
@@ -439,7 +439,7 @@ def _append_drilling_pattern(root: ET.Element, state, spec: _HydratedDrillingPat
             )
         )
         expressions.append(
-            _build_drilling_pattern_depth_expression(
+            _build_drill_pattern_depth_expression(
                 end_expression_id,
                 feature_id,
                 "EndDepth",
@@ -458,7 +458,7 @@ def _append_drilling_pattern(root: ET.Element, state, spec: _HydratedDrillingPat
         )
 
 
-def build_drilling_pattern_spec(
+def build_drill_pattern_spec(
     center_x: float,
     center_y: float,
     diameter: float,
@@ -478,7 +478,7 @@ def build_drilling_pattern_spec(
     tool_id: Optional[str] = None,
     tool_name: Optional[str] = None,
     is_enabled_expr: Optional[str] = None,
-) -> DrillingPatternSpec:
+) -> DrillPatternSpec:
     """Construye una repeticion rectangular Maestro (`ReplicateFeature`)."""
 
     normalized_plane_name = _normalize_plane_name(plane_name)
@@ -494,7 +494,7 @@ def build_drilling_pattern_spec(
         drill_family,
     )
     return _normalize_drilling_pattern_spec(
-        DrillingPatternSpec(
+        DrillPatternSpec(
             center_x=float(center_x),
             center_y=float(center_y),
             diameter=float(diameter),

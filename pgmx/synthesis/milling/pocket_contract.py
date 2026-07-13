@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Sequence
 from ..common.strategy import ContourParallelMillingStrategySpec
 
 if TYPE_CHECKING:
-    from .pocket import PocketMillingSpec
+    from .pocket import PocketSpec
 
 Point2 = tuple[float, float]
 
@@ -233,7 +233,7 @@ class RectangularNoIslandTracePlan:
 
 
 def from_pocket_milling_spec(
-    spec: PocketMillingSpec,
+    spec: PocketSpec,
 ) -> tuple[VaciadoGeometry, VaciadoStrategy, VaciadoDepth]:
     strategy_spec = spec.milling_strategy
     if not isinstance(strategy_spec, ContourParallelMillingStrategySpec):

@@ -15,14 +15,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_line_milling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request  # noqa: E402
 from pgmx.synthesis.common.strategy import ZigZagMillingStrategySpec  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N032_authoring_b"
 
 def _line(tool, width, depth, **kw):
     tid = {"E004": "1903", "E001": "1900"}[tool]
-    return build_line_milling_spec(
+    return build_line_spec(
         line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0,
         line_feature_name="Fresado", line_tool_id=tid, line_tool_name=tool,
         line_tool_width=width, line_security_plane=20.0,

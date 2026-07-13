@@ -53,21 +53,21 @@ from ._common import _normalize_geometry_winding, _normalize_side_of_feature, _t
 from .profile import _append_curve_profile_milling
 
 __all__ = [
-    "CircleMillingSpec",
-    "build_circle_milling_spec",
-    "_HydratedCircleMillingSpec",
-    "_append_circle_milling",
+    "CircleSpec",
+    "build_circle_spec",
+    "_HydratedCircleSpec",
+    "_append_circle",
     "_build_circle_toolpath_profile",
     "_can_hydrate_exact_circle_serialization",
-    "_extract_circle_milling_template",
-    "_hydrate_circle_milling_spec",
+    "_extract_circle_template",
+    "_hydrate_circle_spec",
     "_matches_circle_geometry",
-    "_normalize_circle_milling_spec",
+    "_normalize_circle_spec",
 ]
 
 
 @dataclass(frozen=True)
-class CircleMillingSpec:
+class CircleSpec:
     """Descripcion reutilizable de un fresado circular sobre el plano `Top`."""
 
     center_x: float
@@ -89,10 +89,10 @@ class CircleMillingSpec:
 
 
 @dataclass(frozen=True)
-class _HydratedCircleMillingSpec:
-    """Datos internos de serializacion que complementan un `CircleMillingSpec`."""
+class _HydratedCircleSpec:
+    """Datos internos de serializacion que complementan un `CircleSpec`."""
 
-    spec: CircleMillingSpec
+    spec: CircleSpec
     preferred_id_start: Optional[int] = None
     geometry_curve: Optional[_CurveSpec] = None
     approach_curve: Optional[_CurveSpec] = None
@@ -164,7 +164,7 @@ class _HydratedCircleMillingSpec:
         return self.spec.is_enabled_expr
 
 
-def _normalize_circle_milling_spec(circle_milling: CircleMillingSpec) -> CircleMillingSpec:
+def _normalize_circle_spec(circle_milling: CircleSpec) -> CircleSpec:
     radius_value = float(circle_milling.radius)
     if radius_value <= 1e-9:
         raise ValueError("El radio del fresado circular debe ser mayor que cero.")
@@ -175,7 +175,7 @@ def _normalize_circle_milling_spec(circle_milling: CircleMillingSpec) -> CircleM
             BidirectionalMillingStrategySpec,
             HelicalMillingStrategySpec,
         ),
-        context="CircleMillingSpec",
+        context="CircleSpec",
     )
     return replace(
         circle_milling,
@@ -194,7 +194,7 @@ def _normalize_circle_milling_spec(circle_milling: CircleMillingSpec) -> CircleM
 def _build_circle_toolpath_profile(
     top_level: float,
     final_level: float,
-    spec: CircleMillingSpec,
+    spec: CircleSpec,
 ) -> GeometryProfileSpec:
     """Construye la trayectoria compensada para un fresado circular cerrado."""
 
@@ -220,7 +220,7 @@ def _build_circle_toolpath_profile(
     return _build_closed_profile_strategy_toolpath(float(top_level), cut_z, base_profile, strategy)
 
 
-def _append_circle_milling(root: ET.Element, state, spec: _HydratedCircleMillingSpec) -> None:
+def _append_circle(root: ET.Element, state, spec: _HydratedCircleSpec) -> None:
     generated_geometry_curve = spec.geometry_curve or _curve_spec_from_profile_geometry(
         build_circle_geometry_profile(
             spec.center_x,
@@ -240,7 +240,7 @@ def _append_circle_milling(root: ET.Element, state, spec: _HydratedCircleMilling
     )
 
 
-def _matches_circle_geometry(template: dict[str, object], spec: CircleMillingSpec, tolerance: float = 1e-6) -> bool:
+def _matches_circle_geometry(template: dict[str, object], spec: CircleSpec, tolerance: float = 1e-6) -> bool:
     geometry_curve = template.get("geometry_curve")
     if not isinstance(geometry_curve, _CurveSpec):
         return False
@@ -258,7 +258,7 @@ def _matches_circle_geometry(template: dict[str, object], spec: CircleMillingSpe
     )
 
 
-def _can_hydrate_exact_circle_serialization(template: dict[str, object], spec: CircleMillingSpec) -> bool:
+def _can_hydrate_exact_circle_serialization(template: dict[str, object], spec: CircleSpec) -> bool:
     source_depth_spec = template.get("depth_spec") if isinstance(template.get("depth_spec"), MillingDepthSpec) else None
     requested_depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
     if source_depth_spec is None or _normalize_milling_depth_spec(source_depth_spec) != requested_depth_spec:
@@ -303,7 +303,7 @@ def _can_hydrate_exact_circle_serialization(template: dict[str, object], spec: C
     )
 
 
-def _extract_circle_milling_template(source_pgmx_path: Path) -> dict[str, object]:
+def _extract_circle_template(source_pgmx_path: Path) -> dict[str, object]:
     root, _, _ = _load_pgmx_container(source_pgmx_path)
 
     geometry = next(
@@ -375,17 +375,17 @@ def _extract_circle_milling_template(source_pgmx_path: Path) -> dict[str, object
     }
 
 
-def _hydrate_circle_milling_spec(
-    circle_milling: CircleMillingSpec,
+def _hydrate_circle_spec(
+    circle_milling: CircleSpec,
     source_pgmx_path: Optional[Path],
-) -> _HydratedCircleMillingSpec:
-    normalized_circle_milling = _normalize_circle_milling_spec(circle_milling)
+) -> _HydratedCircleSpec:
+    normalized_circle_milling = _normalize_circle_spec(circle_milling)
     if source_pgmx_path is None:
-        return _HydratedCircleMillingSpec(spec=normalized_circle_milling)
-    template = _extract_circle_milling_template(source_pgmx_path)
+        return _HydratedCircleSpec(spec=normalized_circle_milling)
+    template = _extract_circle_template(source_pgmx_path)
     if not _can_hydrate_exact_circle_serialization(template, normalized_circle_milling):
-        return _HydratedCircleMillingSpec(spec=normalized_circle_milling)
-    return _HydratedCircleMillingSpec(
+        return _HydratedCircleSpec(spec=normalized_circle_milling)
+    return _HydratedCircleSpec(
         spec=normalized_circle_milling,
         preferred_id_start=int(template["preferred_id_start"]),
         geometry_curve=template.get("geometry_curve") if isinstance(template.get("geometry_curve"), _CurveSpec) else None,
@@ -395,7 +395,7 @@ def _hydrate_circle_milling_spec(
     )
 
 
-def build_circle_milling_spec(
+def build_circle_spec(
     *,
     center_x: float,
     center_y: float,
@@ -425,11 +425,11 @@ def build_circle_milling_spec(
     retract_overlap: Optional[float] = None,
     milling_strategy: Optional[MillingStrategySpec] = None,
     is_enabled_expr: Optional[str] = None,
-) -> CircleMillingSpec:
-    """Construye un `CircleMillingSpec` reusable para un fresado circular."""
+) -> CircleSpec:
+    """Construye un `CircleSpec` reusable para un fresado circular."""
 
-    return _normalize_circle_milling_spec(
-        CircleMillingSpec(
+    return _normalize_circle_spec(
+        CircleSpec(
             center_x=float(center_x),
             center_y=float(center_y),
             radius=float(radius),

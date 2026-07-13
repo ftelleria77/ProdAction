@@ -12,8 +12,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     from .core import (
         DEFAULT_BASELINE_DIR,
         _compact_number,
-        build_circle_milling_spec,
-        build_line_milling_spec,
+        build_circle_spec,
+        build_line_spec,
         build_synthesis_request,
         synthesize_request,
     )
@@ -229,7 +229,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     output_path = Path(args.output)
-    line_milling = build_line_milling_spec(
+    line_milling = build_line_spec(
         line_x1=args.line_x1,
         line_y1=args.line_y1,
         line_x2=args.line_x2,
@@ -265,7 +265,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             "Para sintetizar el fresado circular hay que indicar center_x, center_y y radius."
         )
     else:
-        circle_milling = build_circle_milling_spec(
+        circle_milling = build_circle_spec(
             center_x=float(args.circle_center_x),
             center_y=float(args.circle_center_y),
             radius=float(args.circle_radius),

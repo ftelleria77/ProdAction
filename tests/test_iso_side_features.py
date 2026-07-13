@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pgmx.synthesis import build_drilling_spec, build_synthesis_request, synthesize_request
+from pgmx.synthesis import build_drill_spec, build_synthesis_request, synthesize_request
 from iso.synthesis import convert
 from iso.synthesis._validation import UnsupportedOperationError
 
@@ -24,7 +24,7 @@ def _convert(width=200.0, **drill_kw):
     req = build_synthesis_request(
         output_path=path, piece_name="side",
         length=300.0, width=width, depth=18.0, origin_x=5.0, origin_y=5.0, origin_z=25.0,
-        drillings=[build_drilling_spec(**base)],
+        drillings=[build_drill_spec(**base)],
     )
     synthesize_request(req)
     return convert(path)

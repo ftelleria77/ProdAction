@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pgmx.synthesis.drilling.single import DrillingSpec
+from pgmx.synthesis.drilling.single import DrillSpec
 
 from ._machine import (
     SIDE_APPROACH_FLOOR, SIDE_FACE, SIDE_SPINDLE,
@@ -31,7 +31,7 @@ class _SideDrillState:
 # ---------------------------------------------------------------------------
 
 def render_side_drill(
-    drills: list[DrillingSpec],
+    drills: list[DrillSpec],
     ctx: PieceCtx,
     prev_family: str | None,  # None=side is first family, "top", "router"
     top_spindle: int,
@@ -99,7 +99,7 @@ def render_side_drill(
 # ---------------------------------------------------------------------------
 
 def _hole_coords(
-    drill: DrillingSpec, ctx: PieceCtx, depth: float,
+    drill: DrillSpec, ctx: PieceCtx, depth: float,
 ) -> tuple[float, float, float, float]:
     """(approach, perp, z_height, cut) — all in MLV2 frame.
 

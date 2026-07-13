@@ -26,7 +26,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from iso.paths import PGMX_ROOT  # noqa: E402
-from pgmx.synthesis import build_line_milling_spec, build_synthesis_request, synthesize_request  # noqa: E402
+from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N022_router_expand"
 
@@ -54,7 +54,7 @@ DIRECTIONS = [
 def _line(out: Path, name: str, tool_id: str, tool_name: str, width: float,
           x1: float, y1: float, x2: float, y2: float, depth: float) -> None:
     path = out / f"{name}.pgmx"
-    spec = build_line_milling_spec(
+    spec = build_line_spec(
         line_x1=x1, line_y1=y1, line_x2=x2, line_y2=y2,
         line_feature_name="Fresado",
         line_tool_id=tool_id, line_tool_name=tool_name, line_tool_width=width,

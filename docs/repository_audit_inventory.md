@@ -158,17 +158,17 @@ necesidad funcional.
 | `pgmx.synthesis.common.strategy` | Estrategias Maestro por familia. | `UnidirectionalMillingStrategySpec`, `BidirectionalMillingStrategySpec`, `HelicalMillingStrategySpec`, `ContourParallelMillingStrategySpec`. |
 | `pgmx.synthesis.common.hydration` | Carga de templates `.pgmx`/`Pieza.xml`. | `PgmxTemplateDocument`, `load_pgmx_template_document`. |
 | `pgmx.synthesis.common.leads` | Acercamientos/alejamientos. | `ApproachSpec`, `RetractSpec`, `build_approach_spec`, `build_retract_spec`. |
-| `pgmx.synthesis.milling.line` | Fresado lineal. | `LineMillingSpec`, `build_line_milling_spec`. |
-| `pgmx.synthesis.milling.slot` | Ranura `SlotSide`. | `SlotMillingSpec`, `build_slot_milling_spec`. |
-| `pgmx.synthesis.milling.profile` | Fresado de polilinea/perfil. | `PolylineMillingSpec`, `build_polyline_milling_spec`. |
-| `pgmx.synthesis.milling.circle` | Fresado circular. | `CircleMillingSpec`, `build_circle_milling_spec`. |
-| `pgmx.synthesis.milling.squaring` | Escuadrado exterior. | `SquaringMillingSpec`, `build_squaring_milling_spec`. |
-| `pgmx.synthesis.milling.pocket` | Produccion `ClosedPocket`/pocket milling. | `PocketMillingSpec`, `PocketBossRouteSeedSpec`, builders. |
+| `pgmx.synthesis.milling.line` | Fresado lineal. | `LineSpec`, `build_line_spec`. |
+| `pgmx.synthesis.milling.slot` | Ranura `SlotSide`. | `ChannelSpec`, `build_channel_spec`. |
+| `pgmx.synthesis.milling.profile` | Fresado de polilinea/perfil. | `PolylineSpec`, `build_polyline_spec`. |
+| `pgmx.synthesis.milling.circle` | Fresado circular. | `CircleSpec`, `build_circle_spec`. |
+| `pgmx.synthesis.milling.squaring` | Escuadrado exterior. | `ContourSpec`, `build_contour_spec`. |
+| `pgmx.synthesis.milling.pocket` | Produccion `ClosedPocket`/pocket milling. | `PocketSpec`, `PocketBossRouteSeedSpec`, builders. |
 | `pgmx.synthesis.milling.pocket_contract` | Contrato promovido desde Vaciado V2. | `VaciadoGeometry`, `VaciadoStrategy`, `VaciadoDepth`, `plan_rectangular_no_islands`. |
 | `pgmx.synthesis.milling.pocket_rectangular` | Reglas rectangulares cerradas. | `generate_rectangular_contour_parallel_path`, `generate_rectangular_contour_parallel_xyz_path`. |
 | `pgmx.synthesis.milling.pocket_trace` | Motor productivo general de trazas pocket. | `generate_contour_parallel_pocket_trace`, `ContourParallelTracePlan`, `Trace*` dataclasses. |
-| `pgmx.synthesis.drilling.single` | Taladro individual. | `DrillingSpec`, `build_drilling_spec`. |
-| `pgmx.synthesis.drilling.pattern` | Patron rectangular de taladros. | `DrillingPatternSpec`, `build_drilling_pattern_spec`. |
+| `pgmx.synthesis.drilling.single` | Taladro individual. | `DrillSpec`, `build_drill_spec`. |
+| `pgmx.synthesis.drilling.pattern` | Patron rectangular de taladros. | `DrillPatternSpec`, `build_drill_pattern_spec`. |
 | `pgmx.machining_lab.pocket_milling` | Laboratorio de evidencia pocket/vaciado. | `scan_samples`, `contour_parallel`, `island_analysis`, `trace_primitives`, `trace_engine`. |
 | `pgmx.machining_lab.machine_operations` | Laboratorio de operaciones de maquina y flujo multifase PGMX. | `scan_samples`, memoria de `Xn`/`Xmsg`/`MainWorkplan`. |
 

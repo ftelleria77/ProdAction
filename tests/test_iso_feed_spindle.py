@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pgmx.synthesis import build_drilling_spec, build_synthesis_request, synthesize_request
+from pgmx.synthesis import build_drill_spec, build_synthesis_request, synthesize_request
 from iso.synthesis import convert
 from iso.synthesis._machine import TOP_TOOL, effective_top_feed_spindle
 
@@ -45,7 +45,7 @@ class ConvertOverrideTest(unittest.TestCase):
         req = build_synthesis_request(
             output_path=path, piece_name="fs",
             length=300, width=200, depth=18, origin_x=5, origin_y=5, origin_z=25,
-            drillings=[build_drilling_spec(
+            drillings=[build_drill_spec(
                 center_x=150.0, center_y=100.0, diameter=8.0, plane_name="Top",
                 target_depth=10.0, tool_resolution="Auto", **drill_kw)],
         )

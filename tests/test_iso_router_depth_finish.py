@@ -14,7 +14,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from pgmx.synthesis.milling.line import LineMillingSpec, build_line_milling_spec
+from pgmx.synthesis.milling.line import LineSpec, build_line_spec
 
 from iso.synthesis import convert
 from iso.synthesis._validation import UnsupportedOperationError, _validate_line_milling
@@ -23,8 +23,8 @@ _FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N024_router_through")
 _REF_DIR = Path(r"P:\USBMIX\ProdAction\N024_router_through")
 
 
-def _line(**kw) -> LineMillingSpec:
-    base = build_line_milling_spec(
+def _line(**kw) -> LineSpec:
+    base = build_line_spec(
         line_x1=20.0, line_y1=100.0, line_x2=280.0, line_y2=100.0,
         line_feature_name="Fresado",
         line_tool_id="1903", line_tool_name="E004", line_tool_width=4.0,

@@ -65,10 +65,10 @@ class MaxSinkTest(unittest.TestCase):
 
 
 def _spec(**kw):
-    from pgmx.synthesis import build_drilling_spec
+    from pgmx.synthesis import build_drill_spec
     base = dict(center_x=150.0, center_y=100.0, diameter=8.0, plane_name="Top")
     base.update(kw)
-    return build_drilling_spec(**base)
+    return build_drill_spec(**base)
 
 
 class ConicalToolTest(unittest.TestCase):
