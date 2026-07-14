@@ -85,18 +85,36 @@ G1 X250.000 Y129.960 Z30.000
 **Modelo Geometría/Interno**: coordenadas NOMINALES + G41/G42 + lead-in/out de 1mm — IDÉNTICO
 al fresado de polilínea cerrada (N042). El control empalma las esquinas.
 
-## Síntesis del modelo (hipótesis a confirmar con lote propio)
+## Síntesis del modelo — CORREGIDA (2026-07-14)
 
-| Perfil | Lado | Render ISO |
-|---|---|---|
-| **Pieza** (Workpiece) | Externo | OFFSET EXPLÍCITO (coords corridas r afuera) + arcos de esquina (r), SIN G41 |
-| **Geometría** | Interno | NOMINAL + G42 + lead 1mm (= polilínea N042) |
+⚠️ **La primera versión de este análisis se equivocó de variable.** Yo había escrito que el
+estilo de render lo decidía el `ContourType` (Pieza→offset / Geometría→G42) o el Lado. Al leer
+el XML apareció la variable que ya conocíamos y que no había mirado:
 
-**Hipótesis principal**: el estilo de render lo decide el **ContourType** (Pieza→offset
-explícito con arcos; Geometría→G41/G42 nominal), o bien **Externo→offset / Interno→G42**. En
-este único archivo las dos variables van juntas (Pieza+Externo vs Geometría+Interno) — NO se
-pueden separar. Un lote de exploración debe aislar: **Pieza+Interno**, **Geometría+Externo**,
-**Geometría+Externo con esquinas vivas** (¿G41 o offset explícito?).
+| Operación | Perfil | Lado | **ActivateCNCCorrection** | Estilo ISO |
+|---|---|---|---|---|
+| Perfilado pieza | Workpiece | Externo | **false** (Corrección CAD) | offset explícito + arcos de esquina, SIN G41 |
+| Perfilado interno | Geometry | Interno | **true** (Corrección C.N.) | NOMINAL + G42 + lead 1mm |
+
+**Hipótesis principal (nueva)**: los "dos estilos de render del galceado" NO son propios del
+galceado — son la **misma dicotomía CAD vs C.N.** ya derivada para el fresado LINEAL (N023 `_CAD`,
+N036 `cad_*`): con `ActivateCNCCorrection=false` Maestro calcula la trayectoria al eje de la
+herramienta y la hornea en coordenadas (estilo CAD); con `true` emite nominal + G41/G42 y deja
+que el control compense. Acá está aplicada a un LAZO CERRADO.
+
+Si se confirma, el galceado es en su mayor parte **REUSO**:
+- C.N. (ACC=true) ⇒ es exactamente la **polilínea cerrada de N042**, que ya emitimos byte-idéntica.
+- CAD (ACC=false) ⇒ es el estilo CAD del lineal, MÁS lo único genuinamente nuevo: el **arco de
+  esquina** (radio = radio de fresa, centro en la esquina nominal) que aparece en cada vértice
+  convexo de un lazo cerrado — una recta sola no tiene esquinas, por eso nunca lo vimos.
+
+Y confirma la trayectoria almacenada: con ACC=false el `TrajectoryPath` YA trae el offset con
+arcos (se ve el `309.18` = 300 + r(E001) en el XML). Con ACC=true trae la traza NOMINAL.
+
+**El confound es de TRES variables**, no de dos: en el único archivo real, `ContourType`, `Lado`
+y `ACC` van todas juntas (Workpiece+Externo+CAD vs Geometry+Interno+C.N.). El lote de exploración
+tiene que romper las tres — y la primera que hay que romper es ACC, porque si decide ella, las
+otras dos no tocan el estilo.
 
 ## Otros datos del archivo
 
@@ -104,6 +122,47 @@ pueden separar. Un lote de exploración debe aislar: **Pieza+Interno**, **Geomet
   entre dos operaciones de contorno (shutdown + doble park Z + header ATC), a derivar.
 - Pasante op1: `z = −(espesor + 1)` (−19 con espesor 18). Extra 1mm.
 - Ambas familia ROUTER (T{n}, S18000, mismo header/teardown que fresado).
+
+## Lote de exploración N043_contour — diseño
+
+**Los hace Fermín en Maestro**, no el sintetizador. Motivo: con `ACC=false` la trayectoria
+almacenada YA trae el offset — o sea, la traza guardada ES la incógnita. Si yo autorara esos
+fixtures tendría que inventar el offset hacia adentro (¿arcos cóncavos? ¿esquinas vivas?) y
+Maestro postprocesaría MI hipótesis: derivaría de mí mismo. Circular. En cambio, tocar
+Lado/Corrección en la UI son dos clics y la traza la calcula Maestro.
+
+Base: pieza 300×300×18 (la de `Galceado.pgmx`). **Un contorno por archivo.** Para que las
+diferencias sean atribuibles SOLO a las tres variables, todos con la MISMA fresa y profundidad:
+**E003 Ø9.52, ciego −9, sin estrategia (una pasada), sin acercamiento/alejamiento.**
+
+### Grupo A — romper el confound de ACC (lo primero: si decide ella, B y C no tocan el estilo)
+
+| archivo | Perfil | Lado | Corrección | qué contesta |
+|---|---|---|---|---|
+| `N_GC_piece_ext_cad` | Pieza | Externo | CAD | baseline (= op1 del manual, aislada) |
+| `N_GC_piece_ext_cnc` | Pieza | Externo | **C.N.** | ¿pasa a NOMINAL + G41? |
+| `N_GC_geom_int_cnc` | Geometría | Interno | C.N. | baseline (= op2 del manual, aislada) |
+| `N_GC_geom_int_cad` | Geometría | Interno | **CAD** | ¿pasa a OFFSET explícito? |
+
+Si `_cnc` y `_cad` invierten el estilo ⇒ **ACC decide**, y ContourType/Lado no tienen nada que
+ver con él. Hipótesis confirmada y el galceado pasa a ser casi todo reuso.
+
+### Grupo B — el Lado (Externo/Interno), ya con el estilo fijado
+
+| archivo | Perfil | Lado | Corrección | qué contesta |
+|---|---|---|---|---|
+| `N_GC_piece_int_cnc` | Pieza | Interno | C.N. | ¿G41 en vez de G42? ¿o invierte el winding? |
+| `N_GC_geom_ext_cnc` | Geometría | Externo | C.N. | idem, del otro lado |
+| `N_GC_piece_int_cad` | Pieza | Interno | CAD | offset hacia ADENTRO: ¿arcos cóncavos o esquinas vivas? |
+
+### Grupo C — la curva
+
+| archivo | Perfil | Lado | Corrección | qué contesta |
+|---|---|---|---|---|
+| `N_GC_geom_arc_cnc` | Geometría con un ARCO | Interno | C.N. | cómo trata un contorno no poligonal |
+
+`Galceado.pgmx` (dos contornos + cambio de herramienta) queda como el caso de TRANSICIÓN, a
+derivar después de fijar el render de un contorno solo.
 
 ## Pendiente para implementar (Eje B etapa 4)
 
