@@ -1,176 +1,140 @@
-# Galceado / Perfilado / Escuadrado — análisis previo (Eje B etapa 4)
+# Galceado / Perfilado / Escuadrado — RESUELTO (Eje B etapa 4)
 
 Operación de la UI: botón **Galceado**, panel **Perfilado**. Fresado de un CONTORNO CERRADO
-(el borde de la pieza o una geometría dibujada). Estado: **EN INVESTIGACIÓN** — analizado el
-programa manual real `S:\Maestro\Projects\ProdAction\Programas Manuales\Galceado.pgmx` + su ISO
-`P:\...\Programas Manuales\galceado.iso`. Aún NO implementado en el converter.
+(el borde de la pieza o una geometría dibujada).
 
-## La UI (capturas Fermín 2026-07-10)
+**Conclusión: el Galceado NO es una feature nueva del ISO. Es una RUTA DE AUTORÍA distinta hacia
+el mismo mecanizado que ya emitimos.** Derivado del lote N043_contour (4 archivos hechos por
+Fermín en `S:\Maestro\Projects\ProdAction\Programas Manuales\Lote N043_contour - *.pgmx`).
 
-Panel "Perfilado", casi igual al de Fresado, con DOS cosas propias:
-- **Perfil: Pieza / Geometría** — origen del contorno. Con **Pieza**, Maestro toma el borde de
-  la propia pieza (sin dibujar). Con **Geometría**, una geometría cerrada dibujada.
-- **Lado: Externo / Interno** — vocabulario de corrección propio del contorno cerrado.
+## El experimento (N043): cuatro rutas, el mismo resultado
 
-Resto compartido con el fresado: Profundidad / Pasante / Rebaba / Anchura; Datos tecnológicos
-(Avanz./Rotación); **Estrategia** (Unidireccional / Bidireccional / ZigZag — IDÉNTICAS a las
-ya derivadas, mismo vocabulario: Profundidad hueco / Último hueco / Pasada avance-retorno /
-Conexión entre huecos Salida-a-cota / En-la-pieza); Acercamiento/Alejamiento; Datos avanzados/
-máquina. ⇒ el Perfilado REUSA toda la maquinaria compartida; lo nuevo es Perfil + Lado.
+Fermín generó el MISMO mecanizado (rectángulo 300×300 del perímetro, E003 Ø9.52, ciego −9)
+por cuatro caminos distintos de la UI:
 
-## Representación en el .pgmx (Galceado.pgmx — pieza 300×300×18, DOS operaciones)
+| archivo | feature en el .pgmx | ContourType | ACC | ISO |
+|---|---|---|---|---|
+| `Galceado-Perfilado - Pieza` | `ContourFeature` | `Workpiece` | true | **A** |
+| `Galceado-Perfilado - Geometría` | `ContourFeature` | `Geometry` | true | **A** |
+| `Fresado-Escuadrado - CN` | `GeneralProfileFeature` | — | true | **A** |
+| `Fresado-Escuadrado - CAD` | `GeneralProfileFeature` | — | false | **B** |
 
-Feature type NUEVO: **`ContourFeature`** (no `GeneralProfileFeature`). Campo distintivo
-**`ContourType`**:
-- `ContourType=Workpiece` ⟺ Perfil: **Pieza**.
-- `ContourType=Geometry` ⟺ Perfil: **Geometría**.
+**Los tres primeros son BYTE-IDÉNTICOS entre sí** (única diferencia: el comentario `% archivo.pgm`).
 
-**Externo/Interno NO es un campo**: ambos features tienen `SideOfFeature=Right`. La distinción
-sale de `SideOfFeature` + el SENTIDO (winding) del contorno:
-- op1 pieza = contorno CCW (150,0→300,0→300,300→0,300→0,0→150,0) + Right ⇒ el offset cae AFUERA.
-- op2 interna = contorno CW (250,150→250,50→50,50→50,250→250,250→250,150) + Right ⇒ ADENTRO.
-Confirma lo que dijo Fermín: por debajo es izquierda/derecha; Externo/Interno es la etiqueta
-amigable para un lazo cerrado.
+De ahí salen dos hechos duros:
 
-La geometría de la pieza (ContourType=Workpiece) es el rectángulo del panel, cerrado, arrancando
-en el MEDIO del borde inferior (150,0) — derivable de las dimensiones (dx1,dy1).
+1. **`ContourType` es INVISIBLE en el ISO.** Pieza y Geometría dan el mismo byte. Es una
+   comodidad de AUTORÍA (de dónde sale el contorno: del perímetro o de una geometría dibujada);
+   para cuando el .pgmx está escrito, la geometría ya está resuelta y el postprocesador no
+   vuelve a mirar el `ContourType`.
+2. **El TIPO DE FEATURE es INVISIBLE.** `ContourFeature` y `GeneralProfileFeature` con la misma
+   geometría y el mismo ACC dan el mismo byte. El Galceado es una ruta de UI, no un mecanizado.
 
-## El ISO — DOS estilos de render distintos (¡clave!)
+Lo ÚNICO que cambia el ISO es **`ActivateCNCCorrection`** — la dicotomía CAD/C.N. que ya
+teníamos derivada del fresado LINEAL (N023 `_CAD`, N036 `cad_*`).
 
-### op1 "Perfilado pieza" (Pieza / Externo / PASANTE, E001 Ø18.36 r=9.18) — OFFSET EXPLÍCITO
+## Dos errores míos que este lote corrigió
 
-```
-G0 X150.000 Y-9.180            ← arranque = medio del borde inf, YA offseteado afuera (−r)
-G0 Z155.400                    ← TLC(125.4)+sec(30)
-D1 / SVL 125.400 / SVR 9.180
-G1 Z30.000 F2000.000           ← baja a security a feed de PLUNGE (patrón CAD/estrategia)
-?%ETK[7]=4
-G1 Z-19.000 F5000.000          ← plunge a −(18+1)=−19 (pasante+1) a feed de CORTE
-G1 X300.000 Z-19.000 F5000     ← borde inferior offseteado (Y=−9.18)
-G3 X309.180 Y0.000 I300 J0     ← ARCO de esquina, radio = r (9.18), centro en la esquina (300,0)
-G1 Y300.000 Z-19.000           ← lado derecho offseteado (X=309.18)
-G3 X300.000 Y309.180 I300 J300 ← arco esquina (300,300)
-G1 X0.000 Z-19.000             ← borde superior (Y=309.18)
-G3 X-9.180 Y300.000 I0 J300    ← arco esquina (0,300)
-G1 Y0.000 Z-19.000             ← lado izquierdo (X=−9.18)
-G3 X0.000 Y-9.180 I0 J0        ← arco esquina (0,0)
-G1 X150.000 Z-19.000           ← vuelve al arranque por el borde inferior
-G1 Z30.000 F5000               ← retrae a security
-?%ETK[7]=0
-G0 Z30.000
-```
-**Modelo Pieza/Externo**: coordenadas de OFFSET EXPLÍCITO (centro de fresa corrido r hacia
-AFUERA), con un CUARTO DE ARCO en cada esquina convexa (radio = radio de fresa, centrado en la
-esquina nominal, sentido G3), SIN G41/G42. Es el estilo CAD (N023 CAD) generalizado a un
-rectángulo cerrado. Sin acercamiento (plunge recto en el arranque ya offseteado). Z estilo
-estrategia (security a plunge feed, corte a cut feed). La traza almacenada (TrajectoryPath) YA
-trae ese offset con arcos.
+**Error 1** (análisis inicial): dije que el estilo lo decidía el `ContourType`.
+**Error 2** (análisis "corregido"): dije que lo decidía el ACC, y que el ACC salía del `ContourType`.
 
-### op2 "Perfilado interno" (Geometría / Interno / ciego −9, E003 Ø9.52 r=4.76) — G42 NOMINAL
+Los dos venían del mismo pecado: comparar las dos ops de `Galceado.pgmx` como si solo
+difirieran en `ContourType`, cuando en realidad **op1 tenía una estrategia ZigZag y op2 no**.
+Y "la estrategia fuerza ACC=false (CAD)" es una regla que **ya habíamos derivado** en N029/N035
+para el fresado lineal. El `ContourType` nunca tuvo nada que ver.
+
+El panel de Perfilado **no expone Corrección** (confirmado por Fermín: Datos avanzados solo tiene
+Invertir trabajo / Condición / Comentario / Cota de seguridad) y **siempre emite ACC=true**. Por
+eso hizo falta la ruta `Fresado-Escuadrado`, que sí la expone: es la única forma de fabricar el
+caso CAD de un contorno cerrado.
+
+## Estilo A — ACC=true (C.N.): YA LO EMITIMOS
+
+Es EXACTAMENTE la polilínea cerrada de N042: nominal + G42 + lead de 1 mm.
 
 ```
-G0 X250.000 Y170.040           ← arranque (250,150) + lead-in 1mm sobre el 1er segmento (−y ⇒ +y? Y170)
-G0 Z141.500
+G0 X-1.000 Y0.000                     ← lead-in 1mm antes del arranque (0,0), sobre −û del 1er seg
 D1 / SVL 111.500 / SVR 4.760
 ?%ETK[7]=4
-G42                            ← corrección C.N. (¡NO offset explícito!)
-G1 X250.000 Y169.040 Z30.000 F3000   ← engancha G42 al arranque en security
-G1 Y150.000 Z-9.000 F3000            ← plunge + 1er segmento
-G1 Y50.000 Z-9.000 F18000
-G1 X50.000 / G1 Y250.000 / G1 X250.000 / G1 Y150.000   ← cuadrado NOMINAL 50..250
-G1 Y130.960 Z30.000            ← lead-out (1mm sobre el último segmento)
+G42
+G1 X0.000 Y0.000 Z30.000 F3000.000    ← engancha G42 en el arranque, a security
+G1 Z-9.000 F3000.000                  ← plunge a feed de PLUNGE
+G1 X300.000 Z-9.000 F18000.000        ← contorno NOMINAL (0,0)→(300,0)→(300,300)→(0,300)→(0,0)
+G1 Y300.000 / G1 X0.000 / G1 Y0.000
+G1 Z30.000 F18000.000
 G40
-G1 X250.000 Y129.960 Z30.000
+G1 X0.000 Y-1.000 Z30.000 F18000.000  ← lead-out 1mm sobre +û del último seg
 ```
-**Modelo Geometría/Interno**: coordenadas NOMINALES + G41/G42 + lead-in/out de 1mm — IDÉNTICO
-al fresado de polilínea cerrada (N042). El control empalma las esquinas.
 
-## Síntesis del modelo — CORREGIDA (2026-07-14)
+**Verificado empíricamente**: desactivando `_detect_squaring_signature` en el adapter (para que
+el escuadrado caiga a la rama polilínea), nuestro converter emite este CUERPO **byte-idéntico**,
+sin tocar una sola línea del render. Contorno CCW + `SideOfFeature=Right` ⇒ el offset cae AFUERA
+⇒ "Externo". Confirma lo que dijo Fermín: por debajo es izquierda/derecha; Externo/Interno es la
+etiqueta amigable del lazo cerrado.
 
-⚠️ **La primera versión de este análisis se equivocó de variable.** Yo había escrito que el
-estilo de render lo decidía el `ContourType` (Pieza→offset / Geometría→G42) o el Lado. Al leer
-el XML apareció la variable que ya conocíamos y que no había mirado:
+## Estilo B — ACC=false (CAD): lo único nuevo son los ARCOS DE ESQUINA
 
-| Operación | Perfil | Lado | **ActivateCNCCorrection** | Estilo ISO |
-|---|---|---|---|---|
-| Perfilado pieza | Workpiece | Externo | **false** (Corrección CAD) | offset explícito + arcos de esquina, SIN G41 |
-| Perfilado interno | Geometry | Interno | **true** (Corrección C.N.) | NOMINAL + G42 + lead 1mm |
+```
+G0 X-4.760 Y0.000                                ← arranque YA offseteado (r=4.76), sin lead
+G1 Z30.000 F3000.000                             ← baja a security a feed de PLUNGE
+?%ETK[7]=4
+G1 Z-9.000 F18000.000                            ← plunge a feed de CORTE (¡no de plunge!)
+G3 X0.000 Y-4.760 I0.000 J0.000 F18000.000       ← ARCO en la esquina (0,0)
+G1 X300.000 Z-9.000 F18000.000                   ← borde inferior offseteado (Y=−4.76)
+G3 X304.760 Y0.000 I300.000 J0.000               ← arco esquina (300,0)
+G1 Y300.000 Z-9.000                              ← derecha (X=304.76)
+G3 X300.000 Y304.760 I300.000 J300.000           ← arco esquina (300,300)
+G1 X0.000 Z-9.000                                ← arriba (Y=304.76)
+G3 X-4.760 Y300.000 I0.000 J300.000              ← arco esquina (0,300)
+G1 Y0.000 Z-9.000                                ← izquierda (X=−4.76), cierra
+G1 Z30.000 F18000.000
+G0 Z30.000
+```
 
-**Hipótesis principal (nueva)**: los "dos estilos de render del galceado" NO son propios del
-galceado — son la **misma dicotomía CAD vs C.N.** ya derivada para el fresado LINEAL (N023 `_CAD`,
-N036 `cad_*`): con `ActivateCNCCorrection=false` Maestro calcula la trayectoria al eje de la
-herramienta y la hornea en coordenadas (estilo CAD); con `true` emite nominal + G41/G42 y deja
-que el control compense. Acá está aplicada a un LAZO CERRADO.
+**Modelo**: polígono OFFSETEADO r hacia el lado de la corrección, con un CUARTO DE ARCO en cada
+vértice convexo (**radio = radio de fresa, centro = el vértice NOMINAL**, sentido G3 para este
+caso), SIN G41/G42 ni leads. Es el estilo CAD del lineal (N023/N036) + la esquina — que en una
+recta sola no existe, por eso nunca la vimos.
 
-Si se confirma, el galceado es en su mayor parte **REUSO**:
-- C.N. (ACC=true) ⇒ es exactamente la **polilínea cerrada de N042**, que ya emitimos byte-idéntica.
-- CAD (ACC=false) ⇒ es el estilo CAD del lineal, MÁS lo único genuinamente nuevo: el **arco de
-  esquina** (radio = radio de fresa, centro en la esquina nominal) que aparece en cada vértice
-  convexo de un lazo cerrado — una recta sola no tiene esquinas, por eso nunca lo vimos.
+El arranque `(-4.76, 0)` NO es arbitrario: el arranque nominal `(0,0)` es un VÉRTICE, y el offset
+de un vértice es un ARCO. El path empieza donde TERMINA el borde izquierdo offseteado (el
+segmento previo, dirección −y, Right ⇒ −x ⇒ X=−4.76) y el primer G3 recorre el arco de esa
+esquina hasta el inicio del borde inferior offseteado (dirección +x, Right ⇒ −y ⇒ Y=−4.76).
 
-Y confirma la trayectoria almacenada: con ACC=false el `TrajectoryPath` YA trae el offset con
-arcos (se ve el `309.18` = 300 + r(E001) en el XML). Con ACC=true trae la traza NOMINAL.
+Detalles del estilo CAD a fijar con más fixtures:
+- El plunge a profundidad va a feed de **corte**, no de plunge (el descenso a security sí va a
+  feed de plunge). Coincide con lo visto en la op1 de `Galceado.pgmx`.
+- El preámbulo CAD **omite** el `?%ETK[7]=0` que sí aparece en el de C.N.
+- Falta ver la esquina CÓNCAVA (offset hacia adentro): ¿arco cóncavo, o esquina viva?
 
-**El confound es de TRES variables**, no de dos: en el único archivo real, `ContourType`, `Lado`
-y `ACC` van todas juntas (Workpiece+Externo+CAD vs Geometry+Interno+C.N.). El lote de exploración
-tiene que romper las tres — y la primera que hay que romper es ACC, porque si decide ella, las
-otras dos no tocan el estilo.
+## ⚠️ Hallazgo ORTOGONAL: el footer sin `Xn` (bug real de producción)
 
-## Otros datos del archivo
+Al comparar aparecieron 2 líneas de diferencia que NO son del contorno:
 
-- Programa con DOS contornos y CAMBIO DE HERRAMIENTA (T1 E001 → T3 E003): trae la transición
-  entre dos operaciones de contorno (shutdown + doble park Z + header ATC), a derivar.
-- Pasante op1: `z = −(espesor + 1)` (−19 con espesor 18). Extra 1mm.
-- Ambas familia ROUTER (T{n}, S18000, mismo header/teardown que fresado).
+| | `Xn` en el .pgmx | footer `M5` | footer `G0 G53 X{park}` |
+|---|---|---|---|
+| Fixtures N001–N042 (346) | **SÍ** (todos) | sí | sí |
+| N043 + `Galceado.pgmx` (hechos a mano) | **NO** | **no** | **no** |
 
-## Lote de exploración N043_contour — diseño
+**Los 346 fixtures tienen `Xn` porque los generé yo con nuestro sintetizador, que siempre lo
+escribe.** Un .pgmx hecho a mano en Maestro no lo tiene — y sin `Xn`, Maestro NO emite ni `M5`
+ni el park X en el footer. Nuestro converter los emite SIEMPRE.
 
-**Los hace Fermín en Maestro**, no el sintetizador. Motivo: con `ACC=false` la trayectoria
-almacenada YA trae el offset — o sea, la traza guardada ES la incógnita. Si yo autorara esos
-fixtures tendría que inventar el offset hacia adentro (¿arcos cóncavos? ¿esquinas vivas?) y
-Maestro postprocesaría MI hipótesis: derivaría de mí mismo. Circular. En cambio, tocar
-Lado/Corrección en la UI son dos clics y la traza la calcula Maestro.
+O sea: **el footer está mal para todo archivo hecho a mano**, que son justamente los de
+producción real. El corpus nunca lo pudo ver porque está enteramente auto-generado. (El `M5` de
+`galceado.iso` es el del CAMBIO DE HERRAMIENTA, no el del footer; su footer tampoco lo tiene.)
 
-Base: pieza 300×300×18 (la de `Galceado.pgmx`). **Un contorno por archivo.** Para que las
-diferencias sean atribuibles SOLO a las tres variables, todos con la MISMA fresa y profundidad:
-**E003 Ø9.52, ciego −9, sin estrategia (una pasada), sin acercamiento/alejamiento.**
+Matiza N015: "sin Xn, el default de Maestro" se derivó sin ningún fixture sin `Xn`.
 
-### Grupo A — romper el confound de ACC (lo primero: si decide ella, B y C no tocan el estilo)
+## Implementación (Eje B etapa 4)
 
-| archivo | Perfil | Lado | Corrección | qué contesta |
-|---|---|---|---|---|
-| `N_GC_piece_ext_cad` | Pieza | Externo | CAD | baseline (= op1 del manual, aislada) |
-| `N_GC_piece_ext_cnc` | Pieza | Externo | **C.N.** | ¿pasa a NOMINAL + G41? |
-| `N_GC_geom_int_cnc` | Geometría | Interno | C.N. | baseline (= op2 del manual, aislada) |
-| `N_GC_geom_int_cad` | Geometría | Interno | **CAD** | ¿pasa a OFFSET explícito? |
-
-Si `_cnc` y `_cad` invierten el estilo ⇒ **ACC decide**, y ContourType/Lado no tienen nada que
-ver con él. Hipótesis confirmada y el galceado pasa a ser casi todo reuso.
-
-### Grupo B — el Lado (Externo/Interno), ya con el estilo fijado
-
-| archivo | Perfil | Lado | Corrección | qué contesta |
-|---|---|---|---|---|
-| `N_GC_piece_int_cnc` | Pieza | Interno | C.N. | ¿G41 en vez de G42? ¿o invierte el winding? |
-| `N_GC_geom_ext_cnc` | Geometría | Externo | C.N. | idem, del otro lado |
-| `N_GC_piece_int_cad` | Pieza | Interno | CAD | offset hacia ADENTRO: ¿arcos cóncavos o esquinas vivas? |
-
-### Grupo C — la curva
-
-| archivo | Perfil | Lado | Corrección | qué contesta |
-|---|---|---|---|---|
-| `N_GC_geom_arc_cnc` | Geometría con un ARCO | Interno | C.N. | cómo trata un contorno no poligonal |
-
-`Galceado.pgmx` (dos contornos + cambio de herramienta) queda como el caso de TRANSICIÓN, a
-derivar después de fijar el render de un contorno solo.
-
-## Pendiente para implementar (Eje B etapa 4)
-
-1. Adapter: leer `ContourFeature` (+ `ContourType`) → un spec (¿`ContourMillingSpec` nuevo, o
-   `PolylineSpec` + `contour_type`/`workpiece`?). Hoy el converter lo rechazaría
-   (feature desconocida).
-2. Autoría: `build_contour_spec` ya existe en pgmx — revisar si autora `ContourFeature`
-   o hay que extenderla; contorno = pieza (derivar de dims) o geometría.
-3. Render: dos estilos (offset explícito con arcos de esquina para Pieza/Externo; G42 nominal
-   para Geometría/Interno) + estrategia/leads compartidos + transición multi-contorno.
-4. Lote de exploración que AÍSLE ContourType × Lado × esquinas para fijar la regla del render.
+1. **Adapter**: `ContourFeature` → `PolylineSpec` (resolviendo el contorno: `Workpiece` = el
+   rectángulo del panel derivado de dx1/dy1; `Geometry` = la geometría dibujada, ya en el XML).
+   El `ContourType` NO va a la spec: no lo necesita el render.
+2. **Escuadrado**: revisar `_detect_squaring_signature` + `ContourSpec`. La evidencia dice que un
+   galceado es UNA POLILÍNEA CERRADA y nada más; el `ContourSpec` sintético
+   (start_edge/winding/start_coordinate) parece deuda evitable — habría que mandarlo a
+   `PolylineSpec` y borrar el intercept.
+3. **Render**: A (ACC=true) ya sale byte-idéntico. Falta B (ACC=false): offset + arcos de esquina.
+4. **Footer sin Xn**: derivar y corregir (ortogonal, pero afecta a TODO el converter).
+5. `Galceado.pgmx` (2 contornos + cambio de herramienta) queda como caso de TRANSICIÓN.
