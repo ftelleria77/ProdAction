@@ -1163,6 +1163,13 @@ class PgmxSynthesisRequest:
     ordered_machinings: tuple[MachiningSpec, ...] = ()
     machining_order: tuple[str, ...] = DEFAULT_MACHINING_ORDER
     xn: XnSpec = field(default_factory=XnSpec)
+    # Xn (Operación Nula): desplaza el cabezal para que la cabina de seguridad libere la zona de
+    # trabajo y el operario pueda acceder a la pieza (misma función que el Park). En Maestro se
+    # agregan UNO, VARIOS o NINGUNO, y por defecto el archivo NO trae ninguno.
+    # Nosotros lo escribimos por decisión de diseño (`include_xn=True`); `include_xn=False` sintetiza
+    # SIN Xn — la forma nativa de Maestro. Sin Xn el ISO no lleva `M5` ni park X (N043).
+    # `xn=None` significa "el Xn por defecto", NO "ninguno": para ninguno va `include_xn=False`.
+    include_xn: bool = True
     workplans: tuple[WorkplanSpec, ...] = ()
     current_workplan_index: int = 0
     parametric_variables: tuple[ParametricVariableSpec, ...] = ()
@@ -1855,6 +1862,7 @@ def build_synthesis_request(
     ordered_machinings: Optional[Sequence[MachiningSpec]] = None,
     machining_order: Optional[Sequence[str]] = None,
     xn: Optional[XnSpec] = None,
+    include_xn: bool = True,
     workplans: Optional[Sequence[WorkplanSpec]] = None,
     current_workplan_index: int = 0,
     parametric_variables: Optional[Sequence[ParametricVariableSpec]] = None,
@@ -1917,6 +1925,7 @@ def build_synthesis_request(
         ordered_machinings=tuple(ordered_machinings or ()),
         machining_order=_normalize_machining_order(machining_order),
         xn=_normalize_xn_spec(xn),
+        include_xn=bool(include_xn),
         workplans=_normalize_workplan_specs(tuple(workplans or ()), target_piece),
         current_workplan_index=max(0, int(current_workplan_index)),
         parametric_variables=tuple(parametric_variables or ()),
@@ -2161,7 +2170,9 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
             hydrated_workplan_machinings,
         )
         _append_workplan_machine_operations(baseline_root, workplan_nodes, normalized_workplans)
-    else:
+    elif request.include_xn:
+        # Sin `include_xn` el .pgmx sale SIN Xn — la forma NATIVA de Maestro (por defecto no lo
+        # trae). Sin Xn nadie pide retirar la cabina, y el ISO no lleva `M5` ni park X (N043).
         _ensure_xn_step(baseline_root, normalized_xn)
 
     xml_bytes = _finalize_synthesized_pgmx_xml_bytes(

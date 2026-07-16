@@ -103,8 +103,13 @@ def render_epilogue(
     dz = ctx.DZ
     # Park del footer: X (y opcional Y) de la operación nula Xn del .pgmx (N015). El Z es
     # machine config (Z_PARK). Maestro pone X e Y en el MISMO bloque G53 cuando hay Y.
-    park_xy = f"G0 G53 X{ctx.park_x:.3f}" + (
-        f" Y{ctx.park_y:.3f}" if ctx.park_y is not None else "")
+    # El Xn (Operación Nula) se RENDERIZA como `M5` + `G0 G53 X{park}`: pide retirar la cabina de
+    # seguridad para que el operario acceda a la pieza. Sin Xn (`park_x is None`) NO se emite
+    # ninguno de los dos — nadie lo pidió (N043, .pgmx hechos a mano en Maestro).
+    has_xn = ctx.park_x is not None
+    park_lines = [f"G0 G53 X{ctx.park_x:.3f}" + (
+        f" Y{ctx.park_y:.3f}" if ctx.park_y is not None else "")] if has_xn else []
+    m5_lines = ["M5"] if has_xn else []
 
     syn_block = [
         "SYN",
@@ -140,10 +145,10 @@ def render_epilogue(
             "?%ETK[1]=0",
             "?%ETK[17]=0",
             "G4F1.200",
-            "M5",
+            *m5_lines,
             "D0",
             f"G0 G53 Z{Z_PARK:.3f}",
-            park_xy,
+            *park_lines,
             "G64",
         ]
         return saw_shutdown + syn_block
@@ -155,10 +160,10 @@ def render_epilogue(
             "MLV=0",
             "?%ETK[13]=0",
             "?%ETK[18]=0",
-            "M5",
+            *m5_lines,
             "D0",
             f"G0 G53 Z{Z_PARK:.3f}",
-            park_xy,
+            *park_lines,
             "G64",
         ]
         return router_shutdown + syn_block
@@ -169,10 +174,10 @@ def render_epilogue(
         "?%ETK[0]=0",
         "?%ETK[17]=0",
         "G4F1.200",
-        "M5",
+        *m5_lines,
         "D0",
         f"G0 G53 Z{Z_PARK:.3f}",
-        park_xy,
+        *park_lines,
         "G64",
     ]
 

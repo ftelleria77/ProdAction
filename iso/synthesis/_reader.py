@@ -102,8 +102,9 @@ class PieceCtx:
     # el origen (field_origin) y el espejado de direcciones del 2×2. Hoy solo HG está validado.
     field: str = "HG"
     # Park del footer (G53, coord. de máquina): X (y opcional Y) salen de la operación nula Xn
-    # del .pgmx; sin Xn, el default de Maestro. El Z del park es machine config (Z_PARK). (N015)
-    park_x: float = X_PARK
+    # del .pgmx. El Z del park es machine config (Z_PARK). (N015)
+    # `park_x = None` ⟺ el programa NO tiene Xn ⟺ el footer NO lleva `M5` ni park X (N043).
+    park_x: float | None = None
     park_y: float | None = None
 
     @property
@@ -119,13 +120,30 @@ class PieceCtx:
         return self.origin_z + self.depth
 
 
-def _xn_park(snapshot) -> tuple[float, float | None]:
-    """(park_x, park_y) del footer a partir del Xn del programa. park_x = Xn.x; park_y = -Xn.y
-    (la cama va 0..-1500 en pgmx → 0..+1500 en máquina); sin Xn → default. (N015)"""
+def _xn_park(snapshot) -> tuple[float, float | None] | None:
+    """(park_x, park_y) del footer a partir del Xn del programa, o None si NO hay Xn.
+
+    El Xn (Operación Nula) desplaza el cabezal para que la cabina de seguridad libere la zona de
+    trabajo y el operario pueda acceder a la pieza — la misma función que el Park. En el ISO se
+    RENDERIZA como `M5` + `G0 G53 X{park}` en el footer: si nadie pide retirar la cabina, esas
+    líneas NO se emiten (N043: los .pgmx hechos a mano en Maestro no traen Xn y su ISO no las
+    tiene). ⚠️ Esto MATIZA N015 ("sin Xn → el default de Maestro"): los 346 fixtures de N001–N042
+    tienen Xn porque los generó NUESTRO sintetizador, que siempre lo escribía — el corpus nunca
+    pudo ver el caso sin Xn. Hoy se sintetiza sin Xn con `include_xn=False`.
+
+    park_x = Xn.x; park_y = -Xn.y (la cama va 0..-1500 en pgmx → 0..+1500 en máquina). Maestro
+    admite VARIOS Xn; acá se usa el ÚLTIMO (el único caso con fixture es de uno solo — un
+    programa con varios Xn se rechaza en `validate_program`).
+    """
     xns = [op for op in getattr(snapshot, "machine_operations", ())
            if getattr(op, "runtime_type", "") == "Xn" or "Xn" in getattr(op, "object_type", "")]
     if not xns:
-        return X_PARK, None
+        return None
+    if len(xns) > 1:
+        raise UnsupportedOperationError(
+            f"El programa tiene {len(xns)} operaciones Xn. Maestro admite varias (cada una retira "
+            f"la cabina en un punto del programa), pero el único caso con fixture es de UNA sola, "
+            f"renderizada en el footer: sin evidencia de dónde se emiten las intermedias.")
     xn = xns[-1]
     return float(xn.x), (None if xn.y is None else -float(xn.y))
 
@@ -165,7 +183,8 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
         raise UnsupportedOperationError(
             f"Campo de trabajo '{field}' no soportado (conocidos: {SUPPORTED_FIELDS}).")
 
-    park_x, park_y = _xn_park(result.snapshot)
+    park = _xn_park(result.snapshot)
+    park_x, park_y = park if park is not None else (None, None)
     ctx = PieceCtx(
         # Maestro usa el nombre del ARCHIVO .pgmx para el comentario "% x.pgm" del ISO, no el
         # piece_name interno (evidencia: N007 _not_selected renombrados y N_RT_E001_Vel/_Prof,
@@ -209,6 +228,16 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
                 top_drills.append(drill)
             else:
                 side_drills.append(drill)
+
+    # Fail-loud: sin Xn, el footer omite `M5` y el park X — derivado del lote N043, cuyos 5
+    # archivos (hechos a mano en Maestro) son todos ROUTER-ONLY. Para los demás cabezales no hay
+    # fixture sin Xn: los 346 de N001–N042 tienen Xn porque los generó nuestro sintetizador, que
+    # siempre lo escribía. Antes que aproximar en silencio, se rechaza. (Hoy ya se puede generar
+    # el lote que lo cierre: `build_synthesis_request(..., include_xn=False)`.)
+    if park_x is None and (top_drills or side_drills or saw_channels):
+        raise UnsupportedOperationError(
+            "Programa SIN operación Xn que no es solo-router: el footer sin Xn (sin `M5` ni park X) "
+            "solo está derivado para router (N043). Falta fixture para taladro/sierra sin Xn.")
 
     # Fail-loud: taladros laterales solo en HG por ahora. El SHF por-cara espejado (Left/Right/
     # Front/Back) para EF/AB/DC todavía no está derivado; el modelo actual solo cubre origen/SHF de
