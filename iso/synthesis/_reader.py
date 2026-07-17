@@ -132,8 +132,10 @@ def _xn_park(snapshot) -> tuple[float, float | None] | None:
     pudo ver el caso sin Xn. Hoy se sintetiza sin Xn con `xn=None`.
 
     park_x = Xn.x; park_y = -Xn.y (la cama va 0..-1500 en pgmx → 0..+1500 en máquina). Maestro
-    admite VARIOS Xn; acá se usa el ÚLTIMO (el único caso con fixture es de uno solo — un
-    programa con varios Xn se rechaza en `validate_program`).
+    admite VARIOS Xn y el flujo real los usa (cara A → Xn+Xmsg para girar la pieza → cara B → Xn
+    para retirarla): el Xn es POSICIONAL, no una propiedad de la pieza. Este modelo de
+    "park del footer" solo es válido mientras haya UNO SOLO al final — que es lo único que hay en
+    los fixtures. Un programa con varios se rechaza. Ver iso/docs/experiments/xn_operacion_nula.md
     """
     xns = [op for op in getattr(snapshot, "machine_operations", ())
            if getattr(op, "runtime_type", "") == "Xn" or "Xn" in getattr(op, "object_type", "")]
@@ -141,9 +143,13 @@ def _xn_park(snapshot) -> tuple[float, float | None] | None:
         return None
     if len(xns) > 1:
         raise UnsupportedOperationError(
-            f"El programa tiene {len(xns)} operaciones Xn. Maestro admite varias (cada una retira "
-            f"la cabina en un punto del programa), pero el único caso con fixture es de UNA sola, "
-            f"renderizada en el footer: sin evidencia de dónde se emiten las intermedias.")
+            f"El programa tiene {len(xns)} operaciones Xn y solo está derivado el caso de UNA. "
+            f"El Xn es POSICIONAL: ocurre en un punto del programa (flujo real: mecanizar la cara "
+            f"A → Xn+Xmsg para que el operario GIRE la pieza → mecanizar la cara B → Xn para "
+            f"retirarla). Nuestro modelo lo trata como propiedad de la pieza emitida en el footer "
+            f"— indistinguible mientras hay uno solo al final, que es lo único que hay en los "
+            f"fixtures. Falta derivar dónde se emiten los intermedios. "
+            f"Ver iso/docs/experiments/xn_operacion_nula.md [Eje C].")
     xn = xns[-1]
     return float(xn.x), (None if xn.y is None else -float(xn.y))
 
