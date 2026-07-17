@@ -136,6 +136,7 @@ __all__ = [
     "_build_xmsg_step",
     "_build_xn_step",
     "_drilling_plane_priority",
+    "DEFAULT_XN",
     "_ensure_xn_step",
     "_append_hydrated_machining_to_workplan",
     "_append_workplan_machinings",
@@ -714,6 +715,36 @@ def build_workplan_spec(
     )
 
 
+class _DefaultXn:
+    """Centinela para distinguir «no me pasaron nada» de «me pasaron None».
+
+    Sin él, `xn=None` es ambiguo y hay que inventar un segundo interruptor al lado de `xn`.
+    Con él, cada valor dice UNA cosa:
+
+        build_synthesis_request(...)                 -> el Xn por defecto (nuestra decisión de diseño)
+        build_synthesis_request(..., xn=None)        -> NINGÚN Xn (la forma nativa de Maestro)
+        build_synthesis_request(..., xn=XnSpec(...)) -> ESE Xn
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "DEFAULT_XN"
+
+
+#: Valor por defecto de `xn`: escribe el Xn por defecto. `xn=None` NO escribe ninguno.
+DEFAULT_XN = _DefaultXn()
+
+
+def _resolve_xn(xn: "Optional[XnSpec] | _DefaultXn") -> Optional[XnSpec]:
+    """`DEFAULT_XN` -> el Xn por defecto; `None` -> ninguno; un XnSpec -> ese, normalizado."""
+    if isinstance(xn, _DefaultXn):
+        return _normalize_xn_spec(None)
+    if xn is None:
+        return None
+    return _normalize_xn_spec(xn)
+
+
 def _normalize_xn_spec(xn: Optional[XnSpec]) -> XnSpec:
     if xn is None:
         return build_xn_spec()
@@ -1162,14 +1193,13 @@ class PgmxSynthesisRequest:
     drill_patterns: tuple[DrillPatternSpec, ...] = ()
     ordered_machinings: tuple[MachiningSpec, ...] = ()
     machining_order: tuple[str, ...] = DEFAULT_MACHINING_ORDER
-    xn: XnSpec = field(default_factory=XnSpec)
     # Xn (Operación Nula): desplaza el cabezal para que la cabina de seguridad libere la zona de
     # trabajo y el operario pueda acceder a la pieza (misma función que el Park). En Maestro se
-    # agregan UNO, VARIOS o NINGUNO, y por defecto el archivo NO trae ninguno.
-    # Nosotros lo escribimos por decisión de diseño (`include_xn=True`); `include_xn=False` sintetiza
-    # SIN Xn — la forma nativa de Maestro. Sin Xn el ISO no lleva `M5` ni park X (N043).
-    # `xn=None` significa "el Xn por defecto", NO "ninguno": para ninguno va `include_xn=False`.
-    include_xn: bool = True
+    # agregan UNO, VARIOS o NINGUNO, y por defecto el archivo NO trae ninguno; nosotros escribimos
+    # uno por decisión de diseño. En el ISO se renderiza como `M5` + park X (N043).
+    # Acá el request ya viene RESUELTO: `None` == ningún Xn. Quien elige es `build_synthesis_request`
+    # (`xn=DEFAULT_XN` por defecto -> el Xn por defecto; `xn=None` -> ninguno).
+    xn: Optional[XnSpec] = field(default_factory=XnSpec)
     workplans: tuple[WorkplanSpec, ...] = ()
     current_workplan_index: int = 0
     parametric_variables: tuple[ParametricVariableSpec, ...] = ()
@@ -1861,8 +1891,7 @@ def build_synthesis_request(
     drill_patterns: Optional[Sequence[DrillPatternSpec]] = None,
     ordered_machinings: Optional[Sequence[MachiningSpec]] = None,
     machining_order: Optional[Sequence[str]] = None,
-    xn: Optional[XnSpec] = None,
-    include_xn: bool = True,
+    xn: "Optional[XnSpec] | _DefaultXn" = DEFAULT_XN,
     workplans: Optional[Sequence[WorkplanSpec]] = None,
     current_workplan_index: int = 0,
     parametric_variables: Optional[Sequence[ParametricVariableSpec]] = None,
@@ -1924,8 +1953,7 @@ def build_synthesis_request(
         drill_patterns=tuple(drill_patterns or ()),
         ordered_machinings=tuple(ordered_machinings or ()),
         machining_order=_normalize_machining_order(machining_order),
-        xn=_normalize_xn_spec(xn),
-        include_xn=bool(include_xn),
+        xn=_resolve_xn(xn),
         workplans=_normalize_workplan_specs(tuple(workplans or ()), target_piece),
         current_workplan_index=max(0, int(current_workplan_index)),
         parametric_variables=tuple(parametric_variables or ()),
@@ -2068,7 +2096,8 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
         ordered_drillings,
         ordered_drilling_patterns,
     ) = _split_hydrated_machinings(hydrated_ordered_machinings)
-    normalized_xn = _normalize_xn_spec(request.xn)
+    # `request.xn is None` == ningún Xn (ya resuelto por el builder): no se normaliza a un default.
+    normalized_xn = None if request.xn is None else _normalize_xn_spec(request.xn)
     normalized_workplans = _normalize_workplan_specs(request.workplans, request.piece)
     hydrated_workplan_machinings = tuple(
         tuple(_hydrate_machining_spec(spec, request.source_pgmx_path) for spec in workplan.machinings)
@@ -2170,9 +2199,9 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
             hydrated_workplan_machinings,
         )
         _append_workplan_machine_operations(baseline_root, workplan_nodes, normalized_workplans)
-    elif request.include_xn:
-        # Sin `include_xn` el .pgmx sale SIN Xn — la forma NATIVA de Maestro (por defecto no lo
-        # trae). Sin Xn nadie pide retirar la cabina, y el ISO no lleva `M5` ni park X (N043).
+    elif normalized_xn is not None:
+        # Con `xn=None` el .pgmx sale SIN Xn — la forma NATIVA de Maestro (por defecto no lo trae).
+        # Sin Xn nadie pide retirar la cabina, y el ISO no lleva `M5` ni park X (N043).
         _ensure_xn_step(baseline_root, normalized_xn)
 
     xml_bytes = _finalize_synthesized_pgmx_xml_bytes(
@@ -2230,7 +2259,7 @@ def synthesize_pgmx(
     squaring_milling: Optional[ContourSpec] = None,
     drilling: Optional[DrillSpec] = None,
     drilling_pattern: Optional[DrillPatternSpec] = None,
-    xn: Optional[XnSpec] = None,
+    xn: "Optional[XnSpec] | _DefaultXn" = DEFAULT_XN,
     workplans: Optional[Sequence[WorkplanSpec]] = None,
     current_workplan_index: int = 0,
     execution_fields: Optional[str] = None,

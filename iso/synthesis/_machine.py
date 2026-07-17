@@ -132,7 +132,6 @@ MILLING_RETRACT: float = maestro_setting_float("MillingRetractDistance")
 # Park Z de máquina ← Params.cfg [ax2] (eje Z) AP_PARKQTA / 1000 (= 201). Es machine config:
 # el Xn no tiene Z. (En [ax0]=X, AP_PARKQTA=0 → el X park NO sale de acá, sale del Xn; N015.)
 Z_PARK: float = param_float("Params.cfg", "ax2", "AP_PARKQTA") / 1000.0
-X_PARK: float = -3700.0           # Default del park X cuando el .pgmx no trae Xn (= default del Xn)
 
 # Or[0].ofX (origen de trabajo X, en µm) NO es constante: depende de la pieza. Derivado con N018
 # (geometría variada): preamble = -DX×1000; bloque de operación = -(DX + origin_x)×1000. El viejo

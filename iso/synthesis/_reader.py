@@ -22,7 +22,7 @@ from pgmx.synthesis.milling.line import LineSpec
 from pgmx.synthesis.milling.channel import ChannelSpec
 
 from ._machine import (
-    FACE_PRIORITY, SIDE_MAX_DEPTH, SIDE_SUPPORTED_FIELDS, SUPPORTED_FIELDS, X_PARK, resolve_top_tool,
+    FACE_PRIORITY, SIDE_MAX_DEPTH, SIDE_SUPPORTED_FIELDS, SUPPORTED_FIELDS, resolve_top_tool,
 )
 from ._validation import UnsupportedOperationError, validate_entries
 
@@ -129,7 +129,7 @@ def _xn_park(snapshot) -> tuple[float, float | None] | None:
     líneas NO se emiten (N043: los .pgmx hechos a mano en Maestro no traen Xn y su ISO no las
     tiene). ⚠️ Esto MATIZA N015 ("sin Xn → el default de Maestro"): los 346 fixtures de N001–N042
     tienen Xn porque los generó NUESTRO sintetizador, que siempre lo escribía — el corpus nunca
-    pudo ver el caso sin Xn. Hoy se sintetiza sin Xn con `include_xn=False`.
+    pudo ver el caso sin Xn. Hoy se sintetiza sin Xn con `xn=None`.
 
     park_x = Xn.x; park_y = -Xn.y (la cama va 0..-1500 en pgmx → 0..+1500 en máquina). Maestro
     admite VARIOS Xn; acá se usa el ÚLTIMO (el único caso con fixture es de uno solo — un
@@ -233,7 +233,7 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
     # archivos (hechos a mano en Maestro) son todos ROUTER-ONLY. Para los demás cabezales no hay
     # fixture sin Xn: los 346 de N001–N042 tienen Xn porque los generó nuestro sintetizador, que
     # siempre lo escribía. Antes que aproximar en silencio, se rechaza. (Hoy ya se puede generar
-    # el lote que lo cierre: `build_synthesis_request(..., include_xn=False)`.)
+    # el lote que lo cierre: `build_synthesis_request(..., xn=None)`.)
     if park_x is None and (top_drills or side_drills or saw_channels):
         raise UnsupportedOperationError(
             "Programa SIN operación Xn que no es solo-router: el footer sin Xn (sin `M5` ni park X) "
