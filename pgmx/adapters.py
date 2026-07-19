@@ -6,9 +6,9 @@ sintetizador actual.
 
 Objetivos:
 
-- refactorizar casos manuales hacia `LineMillingSpec`, `SlotMillingSpec`,
-  `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec` y
-  `DrillingSpec`/`DrillingPatternSpec`
+- refactorizar casos manuales hacia `LineSpec`, `ChannelSpec`,
+  `PolylineSpec`, `CircleSpec`, `ContourSpec` y
+  `DrillSpec`/`DrillPatternSpec`
 - informar con claridad cuando una feature o working step no puede adaptarse
 - construir rapido un `PgmxSynthesisRequest` con el material soportado
 
@@ -26,7 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass, replace as _dc_replace
 from pathlib import Path
 from typing import Any, Optional
 
@@ -40,14 +40,15 @@ from pgmx.snapshot import (
 )
 
 SupportedSynthesisSpec = (
-    sp.LineMillingSpec
-    | sp.SlotMillingSpec
-    | sp.PolylineMillingSpec
-    | sp.CircleMillingSpec
-    | sp.SquaringMillingSpec
-    | sp.PocketMillingSpec
-    | sp.DrillingSpec
-    | sp.DrillingPatternSpec
+    sp.LineSpec
+    | sp.ChannelSpec
+    | sp.ArcSpec
+    | sp.PolylineSpec
+    | sp.CircleSpec
+    | sp.ContourSpec
+    | sp.PocketSpec
+    | sp.DrillSpec
+    | sp.DrillPatternSpec
 )
 
 __all__ = [
@@ -121,67 +122,75 @@ class PgmxAdaptationResult:
         return tuple(entry for entry in self.entries if entry.entry_source == "feature")
 
     @property
-    def line_millings(self) -> tuple[sp.LineMillingSpec, ...]:
+    def lines(self) -> tuple[sp.LineSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.LineMillingSpec)
+            if isinstance(entry.spec, sp.LineSpec)
         )
 
     @property
-    def slot_millings(self) -> tuple[sp.SlotMillingSpec, ...]:
+    def channels(self) -> tuple[sp.ChannelSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.SlotMillingSpec)
+            if isinstance(entry.spec, sp.ChannelSpec)
         )
 
     @property
-    def polyline_millings(self) -> tuple[sp.PolylineMillingSpec, ...]:
+    def polylines(self) -> tuple[sp.PolylineSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.PolylineMillingSpec)
+            if isinstance(entry.spec, sp.PolylineSpec)
         )
 
     @property
-    def circle_millings(self) -> tuple[sp.CircleMillingSpec, ...]:
+    def arcs(self) -> tuple[sp.ArcSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.CircleMillingSpec)
+            if isinstance(entry.spec, sp.ArcSpec)
         )
 
     @property
-    def squaring_millings(self) -> tuple[sp.SquaringMillingSpec, ...]:
+    def circles(self) -> tuple[sp.CircleSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.SquaringMillingSpec)
+            if isinstance(entry.spec, sp.CircleSpec)
         )
 
     @property
-    def pocket_millings(self) -> tuple[sp.PocketMillingSpec, ...]:
+    def contours(self) -> tuple[sp.ContourSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.PocketMillingSpec)
+            if isinstance(entry.spec, sp.ContourSpec)
         )
 
     @property
-    def drillings(self) -> tuple[sp.DrillingSpec, ...]:
+    def pockets(self) -> tuple[sp.PocketSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.DrillingSpec)
+            if isinstance(entry.spec, sp.PocketSpec)
         )
 
     @property
-    def drilling_patterns(self) -> tuple[sp.DrillingPatternSpec, ...]:
+    def drills(self) -> tuple[sp.DrillSpec, ...]:
         return tuple(
             entry.spec
             for entry in self.adapted_entries
-            if isinstance(entry.spec, sp.DrillingPatternSpec)
+            if isinstance(entry.spec, sp.DrillSpec)
+        )
+
+    @property
+    def drill_patterns(self) -> tuple[sp.DrillPatternSpec, ...]:
+        return tuple(
+            entry.spec
+            for entry in self.adapted_entries
+            if isinstance(entry.spec, sp.DrillPatternSpec)
         )
 
     @property
@@ -229,14 +238,15 @@ class PgmxAdaptationResult:
             output_path=Path(output_path),
             source_pgmx_path=source_pgmx_path or self.snapshot.source_path,
             piece=self.snapshot.state,
-            line_millings=self.line_millings,
-            slot_millings=self.slot_millings,
-            polyline_millings=self.polyline_millings,
-            circle_millings=self.circle_millings,
-            squaring_millings=self.squaring_millings,
-            pocket_millings=self.pocket_millings,
-            drillings=self.drillings,
-            drilling_patterns=self.drilling_patterns,
+            lines=self.lines,
+            channels=self.channels,
+            polylines=self.polylines,
+            arcs=self.arcs,
+            circles=self.circles,
+            contours=self.contours,
+            pockets=self.pockets,
+            drills=self.drills,
+            drill_patterns=self.drill_patterns,
             xn=self.xn,
         )
 
@@ -647,6 +657,23 @@ def _detect_squaring_signature(
     return (start_edge, winding, float(start_coordinate))
 
 
+def _drill_family_from_bottom(bottom_condition_type: str,
+                              bottom_is_flat: Optional[bool]) -> Optional[str]:
+    """Familia de punta del taladro a partir del BottomCondition.
+
+    En agujeros ciegos el tipo lo da el xsi:type (Conical/FlatHoleBottom). En pasantes
+    el tipo es 'ThroughHoleBottom' y la punta está en IsFlat (true=plana, false=cónica);
+    sin IsFlat se devuelve None y el default del builder decide.
+    """
+    if "ConicalHoleBottom" in bottom_condition_type:
+        return "Conical"
+    if "FlatHoleBottom" in bottom_condition_type:
+        return "Flat"
+    if "ThroughHoleBottom" in bottom_condition_type and bottom_is_flat is not None:
+        return "Flat" if bottom_is_flat else "Conical"
+    return None
+
+
 def _adapt_drilling(
     snapshot: PgmxSnapshot,
     feature: PgmxFeatureSnapshot,
@@ -709,12 +736,8 @@ def _adapt_drilling(
         )
 
     plane_name = _plane_name_or_default(feature)
-    bottom_condition_type = feature.bottom_condition_type
-    drill_family = None
-    if "ConicalHoleBottom" in bottom_condition_type:
-        drill_family = "Conical"
-    elif "FlatHoleBottom" in bottom_condition_type:
-        drill_family = "Flat"
+    drill_family = _drill_family_from_bottom(
+        feature.bottom_condition_type, feature.bottom_is_flat)
 
     tool_key = operation.tool_key
     tool_resolution = "None"
@@ -725,9 +748,14 @@ def _adapt_drilling(
         tool_id = tool_key.id
         tool_name = tool_key.name
 
+    technology = operation.technology
+    feedrate = float(technology.feedrate) if technology is not None else 0.0
+    spindle = float(technology.spindle) if technology is not None else 0.0
+    taper_height = float(feature.taper_height) if feature.taper_height is not None else 0.0
+
     try:
         depth_kwargs = _depth_kwargs(feature.depth_spec)
-        spec = sp.build_drilling_spec(
+        spec = sp.build_drill_spec(
             center_x=geometry.point[0],
             center_y=geometry.point[1],
             diameter=float(feature.diameter),
@@ -741,6 +769,11 @@ def _adapt_drilling(
             tool_resolution=tool_resolution,
             tool_id=tool_id,
             tool_name=tool_name,
+            feedrate=feedrate,
+            spindle=spindle,
+            taper_height=taper_height,
+            step_number=operation.step_number,
+            step_depth=operation.step_depth,
         )
     except Exception as exc:
         return _unsupported_entry(
@@ -748,7 +781,7 @@ def _adapt_drilling(
             operation,
             step,
             order_index=order_index,
-            reasons=[_builder_error("No se pudo construir el `DrillingSpec`", exc)],
+            reasons=[_builder_error("No se pudo construir el `DrillSpec`", exc)],
             warnings=warnings,
         )
 
@@ -757,7 +790,7 @@ def _adapt_drilling(
         operation,
         step,
         order_index=order_index,
-        spec_kind="drilling",
+        spec_kind="drill",
         spec=spec,
         warnings=warnings,
     )
@@ -859,11 +892,8 @@ def _adapt_drilling_pattern(
     assert base_feature is not None
     assert geometry is not None
     assert depth_kwargs is not None
-    drill_family = None
-    if "ConicalHoleBottom" in base_feature.bottom_condition_type:
-        drill_family = "Conical"
-    elif "FlatHoleBottom" in base_feature.bottom_condition_type:
-        drill_family = "Flat"
+    drill_family = _drill_family_from_bottom(
+        base_feature.bottom_condition_type, base_feature.bottom_is_flat)
 
     tool_key = operation.tool_key
     tool_resolution = "None"
@@ -875,7 +905,7 @@ def _adapt_drilling_pattern(
         tool_name = tool_key.name
 
     try:
-        spec = sp.build_drilling_pattern_spec(
+        spec = sp.build_drill_pattern_spec(
             geometry.point[0],
             geometry.point[1],
             float(base_feature.diameter),
@@ -900,7 +930,7 @@ def _adapt_drilling_pattern(
             operation,
             step,
             order_index=order_index,
-            reasons=[_builder_error("No se pudo construir el `DrillingPatternSpec`", exc)],
+            reasons=[_builder_error("No se pudo construir el `DrillPatternSpec`", exc)],
             warnings=warnings,
         )
 
@@ -909,7 +939,7 @@ def _adapt_drilling_pattern(
         operation,
         step,
         order_index=order_index,
-        spec_kind="drilling_pattern",
+        spec_kind="drill_pattern",
         spec=spec,
         warnings=warnings,
     )
@@ -983,7 +1013,7 @@ def _adapt_pocket_milling(
         reasons.append("La operacion no tiene una herramienta resuelta compatible.")
 
     warnings = _tool_warning(operation) + (
-        "`PocketMillingSpec` se adapta para lectura; la serializacion productiva con islas "
+        "`PocketSpec` se adapta para lectura; la serializacion productiva con islas "
         "todavia no esta implementada.",
     )
     if reasons:
@@ -1001,7 +1031,7 @@ def _adapt_pocket_milling(
     approach = operation.approach or sp.build_approach_spec()
     retract = operation.retract or sp.build_retract_spec()
     try:
-        spec = sp.build_pocket_milling_spec(
+        spec = sp.build_pocket_spec(
             contour_points=_polyline_points_from_profile(profile),
             feature_name=_default_name(feature, step, "Vaciado"),
             plane_name=_plane_name_or_default(feature),
@@ -1040,7 +1070,7 @@ def _adapt_pocket_milling(
             operation,
             step,
             order_index=order_index,
-            reasons=[_builder_error("No se pudo construir el `PocketMillingSpec`", exc)],
+            reasons=[_builder_error("No se pudo construir el `PocketSpec`", exc)],
             warnings=warnings,
         )
     return _adapted_entry(
@@ -1048,7 +1078,7 @@ def _adapt_pocket_milling(
         operation,
         step,
         order_index=order_index,
-        spec_kind="pocket_milling",
+        spec_kind="pocket",
         spec=spec,
         warnings=warnings,
     )
@@ -1174,7 +1204,7 @@ def _adapt_milling(
                 warnings=warnings,
             )
         try:
-            spec = sp.build_slot_milling_spec(
+            spec = sp.build_channel_spec(
                 start_x=primitive.start_point[0],
                 start_y=primitive.start_point[1],
                 end_x=primitive.end_point[0],
@@ -1213,7 +1243,7 @@ def _adapt_milling(
                 operation,
                 step,
                 order_index=order_index,
-                reasons=[_builder_error("No se pudo construir el `SlotMillingSpec`", exc)],
+                reasons=[_builder_error("No se pudo construir el `ChannelSpec`", exc)],
                 warnings=warnings,
             )
         return _adapted_entry(
@@ -1221,7 +1251,7 @@ def _adapt_milling(
             operation,
             step,
             order_index=order_index,
-            spec_kind="slot_milling",
+            spec_kind="channel",
             spec=spec,
             warnings=warnings,
         )
@@ -1230,7 +1260,7 @@ def _adapt_milling(
     if squaring_signature is not None:
         start_edge, winding, start_coordinate = squaring_signature
         try:
-            spec = sp.build_squaring_milling_spec(
+            spec = sp.build_contour_spec(
                 start_edge=start_edge,
                 winding=winding,
                 start_coordinate=start_coordinate,
@@ -1263,7 +1293,7 @@ def _adapt_milling(
                 operation,
                 step,
                 order_index=order_index,
-                reasons=[_builder_error("No se pudo construir el `SquaringMillingSpec`", exc)],
+                reasons=[_builder_error("No se pudo construir el `ContourSpec`", exc)],
                 warnings=warnings,
             )
         return _adapted_entry(
@@ -1271,7 +1301,7 @@ def _adapt_milling(
             operation,
             step,
             order_index=order_index,
-            spec_kind="squaring_milling",
+            spec_kind="contour",
             spec=spec,
             warnings=warnings,
         )
@@ -1288,7 +1318,7 @@ def _adapt_milling(
                 warnings=warnings,
             )
         try:
-            spec = sp.build_line_milling_spec(
+            spec = sp.build_line_spec(
                 primitive.start_point[0],
                 primitive.start_point[1],
                 primitive.end_point[0],
@@ -1298,75 +1328,6 @@ def _adapt_milling(
                 tool_key.name,
                 _effective_tool_width(feature.tool_width, 9.52),
                 float(operation.approach_security_plane),
-                line_side_of_feature=feature.side_of_feature or "Center",
-                line_is_through=bool(depth_kwargs["is_through"]),
-                line_target_depth=depth_kwargs["target_depth"],
-                line_extra_depth=depth_kwargs["extra_depth"],
-                line_approach_enabled=approach.is_enabled,
-                line_approach_type=approach.approach_type,
-                line_approach_mode=approach.mode,
-                line_approach_radius_multiplier=approach.radius_multiplier,
-                line_approach_speed=approach.speed,
-                line_approach_arc_side=approach.arc_side,
-                line_retract_enabled=retract.is_enabled,
-                line_retract_type=retract.retract_type,
-                line_retract_mode=retract.mode,
-                line_retract_radius_multiplier=retract.radius_multiplier,
-                line_retract_speed=retract.speed,
-                line_retract_arc_side=retract.arc_side,
-                line_retract_overlap=retract.overlap,
-                line_milling_strategy=operation.milling_strategy,
-            )
-        except Exception as exc:
-            return _unsupported_entry(
-                feature,
-                operation,
-                step,
-                order_index=order_index,
-                reasons=[_builder_error("No se pudo construir el `LineMillingSpec`", exc)],
-                warnings=warnings,
-            )
-        if spec is None:
-            return _unsupported_entry(
-                feature,
-                operation,
-                step,
-                order_index=order_index,
-                reasons=["No se pudo construir el `LineMillingSpec`."],
-                warnings=warnings,
-            )
-        return _adapted_entry(
-            feature,
-            operation,
-            step,
-            order_index=order_index,
-            spec_kind="line_milling",
-            spec=spec,
-            warnings=warnings,
-        )
-
-    if profile.geometry_type == "GeomCompositeCurve":
-        if profile.has_arcs:
-            return _unsupported_entry(
-                feature,
-                operation,
-                step,
-                order_index=order_index,
-                reasons=[
-                    "La geometria contiene arcos y hoy no existe un spec "
-                    "publico equivalente en el sintetizador."
-                ],
-                warnings=warnings,
-            )
-        try:
-            points = _polyline_points_from_profile(profile)
-            spec = sp.build_polyline_milling_spec(
-                points=points,
-                feature_name=feature_name,
-                tool_id=tool_key.id,
-                tool_name=tool_key.name,
-                tool_width=_effective_tool_width(feature.tool_width, 9.52),
-                security_plane=float(operation.approach_security_plane),
                 side_of_feature=feature.side_of_feature or "Center",
                 is_through=bool(depth_kwargs["is_through"]),
                 target_depth=depth_kwargs["target_depth"],
@@ -1386,13 +1347,55 @@ def _adapt_milling(
                 retract_overlap=retract.overlap,
                 milling_strategy=operation.milling_strategy,
             )
+            # Estrategia con "Habilitar multipaso" APAGADO ≡ SIN estrategia (N036 strat_single:
+            # regenerada en Maestro, el cuerpo es idéntico al fresado plano) → se anula acá para
+            # que el converter la trate igual que None.
+            _strategy = operation.milling_strategy
+            if (spec is not None and _strategy is not None
+                    and not getattr(_strategy, "allow_multiple_passes", True)):
+                spec = _dc_replace(spec, milling_strategy=None)
+            # Cambios durante el recorrido (SpeedAttribute/DepthAttribute del snapshot): el builder
+            # no los recibe (solo lectura); se cablean por replace sobre el spec construido.
+            _tech = operation.technology
+            _line_feed = float(_tech.feedrate) if _tech is not None else 0.0
+            _line_spindle = float(_tech.spindle) if _tech is not None else 0.0
+            if spec is not None and (
+                operation.speed_changes or operation.depth_changes
+                or feature.side_offset or feature.is_precise
+                or operation.allowance_side or operation.allowance_bottom
+                or not operation.activate_cnc_correction
+                or _line_feed or _line_spindle
+                or feature.is_geom_same_direction is False
+            ):
+                spec = _dc_replace(
+                    spec,
+                    speed_changes=operation.speed_changes,
+                    depth_changes=operation.depth_changes,
+                    side_offset=feature.side_offset or 0.0,
+                    allowance_side=operation.allowance_side or 0.0,
+                    allowance_bottom=operation.allowance_bottom or 0.0,
+                    is_precise=bool(feature.is_precise),
+                    activate_cnc_correction=bool(operation.activate_cnc_correction),
+                    feedrate=_line_feed,
+                    spindle=_line_spindle,
+                    invert_work=feature.is_geom_same_direction is False,
+                )
         except Exception as exc:
             return _unsupported_entry(
                 feature,
                 operation,
                 step,
                 order_index=order_index,
-                reasons=[_builder_error("No se pudo construir el `PolylineMillingSpec`", exc)],
+                reasons=[_builder_error("No se pudo construir el `LineSpec`", exc)],
+                warnings=warnings,
+            )
+        if spec is None:
+            return _unsupported_entry(
+                feature,
+                operation,
+                step,
+                order_index=order_index,
+                reasons=["No se pudo construir el `LineSpec`."],
                 warnings=warnings,
             )
         return _adapted_entry(
@@ -1400,10 +1403,129 @@ def _adapt_milling(
             operation,
             step,
             order_index=order_index,
-            spec_kind="polyline_milling",
+            spec_kind="line",
             spec=spec,
             warnings=warnings,
         )
+
+    if profile.geometry_type == "GeomCompositeCurve":
+        # ARCO SUELTO (Eje B etapa 2): composite de UN miembro-arco -> ArcSpec. El
+        # winding sale del signo de la normal Z (build_arc_geometry_primitive: +1 CCW / -1 CW).
+        if (len(profile.primitives) == 1
+                and profile.primitives[0].primitive_type == "Arc"
+                and profile.primitives[0].center_point is not None):
+            arc = profile.primitives[0]
+            winding = ("CounterClockwise"
+                       if (arc.normal_vector is None or arc.normal_vector[2] >= 0)
+                       else "Clockwise")
+            try:
+                spec = sp.build_arc_spec(
+                    start_x=arc.start_point[0], start_y=arc.start_point[1],
+                    end_x=arc.end_point[0], end_y=arc.end_point[1],
+                    center_x=arc.center_point[0], center_y=arc.center_point[1],
+                    winding=winding,
+                    feature_name=feature_name,
+                    tool_id=tool_key.id,
+                    tool_name=tool_key.name,
+                    tool_width=_effective_tool_width(feature.tool_width, 9.52),
+                    security_plane=float(operation.approach_security_plane),
+                    side_of_feature=feature.side_of_feature or "Center",
+                    is_through=bool(depth_kwargs["is_through"]),
+                    target_depth=depth_kwargs["target_depth"],
+                    extra_depth=depth_kwargs["extra_depth"],
+                    approach_enabled=approach.is_enabled,
+                    approach_type=approach.approach_type,
+                    approach_mode=approach.mode,
+                    approach_radius_multiplier=approach.radius_multiplier,
+                    approach_speed=approach.speed,
+                    approach_arc_side=approach.arc_side,
+                    retract_enabled=retract.is_enabled,
+                    retract_type=retract.retract_type,
+                    retract_mode=retract.mode,
+                    retract_radius_multiplier=retract.radius_multiplier,
+                    retract_speed=retract.speed,
+                    retract_arc_side=retract.arc_side,
+                    retract_overlap=retract.overlap,
+                    milling_strategy=operation.milling_strategy,
+                )
+            except Exception as exc:
+                return _unsupported_entry(
+                    feature,
+                    operation,
+                    step,
+                    order_index=order_index,
+                    reasons=[_builder_error("No se pudo construir el `ArcSpec`", exc)],
+                    warnings=warnings,
+                )
+            return _adapted_entry(
+                feature,
+                operation,
+                step,
+                order_index=order_index,
+                spec_kind="arc",
+                spec=spec,
+                warnings=warnings,
+            )
+        # POLILINEA UNIFICADA: todo composite (con o sin arcos) -> una sola spec de segmentos
+        # (recta = endpoint; arco = endpoint + centro + winding por signo de la normal Z).
+        if True:
+            try:
+                segments = []
+                for prim in profile.primitives:
+                    if prim.primitive_type == "Arc" and prim.center_point is not None:
+                        winding = ("CounterClockwise"
+                                   if (prim.normal_vector is None or prim.normal_vector[2] >= 0)
+                                   else "Clockwise")
+                        segments.append(((prim.end_point[0], prim.end_point[1]),
+                                         (prim.center_point[0], prim.center_point[1]), winding))
+                    else:
+                        segments.append(((prim.end_point[0], prim.end_point[1]),))
+                start = (profile.primitives[0].start_point[0], profile.primitives[0].start_point[1])
+                spec = sp.build_polyline_spec(
+                    start=start,
+                    segments=segments,
+                    feature_name=feature_name,
+                    tool_id=tool_key.id,
+                    tool_name=tool_key.name,
+                    tool_width=_effective_tool_width(feature.tool_width, 9.52),
+                    security_plane=float(operation.approach_security_plane),
+                    side_of_feature=feature.side_of_feature or "Center",
+                    is_through=bool(depth_kwargs["is_through"]),
+                    target_depth=depth_kwargs["target_depth"],
+                    extra_depth=depth_kwargs["extra_depth"],
+                    approach_enabled=approach.is_enabled,
+                    approach_type=approach.approach_type,
+                    approach_mode=approach.mode,
+                    approach_radius_multiplier=approach.radius_multiplier,
+                    approach_speed=approach.speed,
+                    approach_arc_side=approach.arc_side,
+                    retract_enabled=retract.is_enabled,
+                    retract_type=retract.retract_type,
+                    retract_mode=retract.mode,
+                    retract_radius_multiplier=retract.radius_multiplier,
+                    retract_speed=retract.speed,
+                    retract_arc_side=retract.arc_side,
+                    retract_overlap=retract.overlap,
+                    milling_strategy=operation.milling_strategy,
+                )
+            except Exception as exc:
+                return _unsupported_entry(
+                    feature,
+                    operation,
+                    step,
+                    order_index=order_index,
+                    reasons=[_builder_error("No se pudo construir el `PolylineSpec`", exc)],
+                    warnings=warnings,
+                )
+            return _adapted_entry(
+                feature,
+                operation,
+                step,
+                order_index=order_index,
+                spec_kind="polyline",
+                spec=spec,
+                warnings=warnings,
+            )
 
     if profile.geometry_type == "GeomCircle":
         if profile.center_point is None or profile.radius is None:
@@ -1416,7 +1538,7 @@ def _adapt_milling(
                 warnings=warnings,
             )
         try:
-            spec = sp.build_circle_milling_spec(
+            spec = sp.build_circle_spec(
                 center_x=profile.center_point[0],
                 center_y=profile.center_point[1],
                 radius=profile.radius,
@@ -1451,7 +1573,7 @@ def _adapt_milling(
                 operation,
                 step,
                 order_index=order_index,
-                reasons=[_builder_error("No se pudo construir el `CircleMillingSpec`", exc)],
+                reasons=[_builder_error("No se pudo construir el `CircleSpec`", exc)],
                 warnings=warnings,
             )
         return _adapted_entry(
@@ -1459,7 +1581,7 @@ def _adapt_milling(
             operation,
             step,
             order_index=order_index,
-            spec_kind="circle_milling",
+            spec_kind="circle",
             spec=spec,
             warnings=warnings,
         )
@@ -1652,14 +1774,14 @@ def adaptation_to_dict(result: PgmxAdaptationResult) -> dict[str, Any]:
             "ignored": len(result.ignored_entries),
             "working_step_entries": len(result.working_step_entries),
             "orphan_feature_entries": len(result.orphan_feature_entries),
-            "line_millings": len(result.line_millings),
-            "slot_millings": len(result.slot_millings),
-            "polyline_millings": len(result.polyline_millings),
-            "circle_millings": len(result.circle_millings),
-            "squaring_millings": len(result.squaring_millings),
-            "pocket_millings": len(result.pocket_millings),
-            "drillings": len(result.drillings),
-            "drilling_patterns": len(result.drilling_patterns),
+            "lines": len(result.lines),
+            "channels": len(result.channels),
+            "polylines": len(result.polylines),
+            "circles": len(result.circles),
+            "contours": len(result.contours),
+            "pockets": len(result.pockets),
+            "drills": len(result.drills),
+            "drill_patterns": len(result.drill_patterns),
             "has_xn": result.xn is not None,
         },
         "xn": convert(result.xn),

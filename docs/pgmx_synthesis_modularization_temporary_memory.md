@@ -321,8 +321,8 @@ Relacion con `common.xml`:
 
 Relacion con modulos de familia:
 
-- `milling.line`, `milling.slot`, `milling.profile`, `milling.circle` y
-  `milling.squaring` consumen este modulo para construir su geometria nominal y
+- `milling.line`, `milling.channel`, `milling._curve_profile`, `milling.circle` y
+  `milling.contour` consumen este modulo para construir su geometria nominal y
   su toolpath efectivo.
 - `milling.pocket` puede consumir utilidades basicas de perfiles cerrados, pero
   las reglas complejas de offset/puentes de pocket milling no deben entrar aqui
@@ -373,11 +373,11 @@ Clasificacion preliminar de specs geometricas:
   - `PocketBossRouteSeedSpec`, porque representa una semilla `BossList`
     especifica de `ClosedPocket`/pocket milling;
   - `VaciadoGeometry`, porque es contrato de familia y debe integrarse en
-    `milling.pocket` o desaparecer si `PocketMillingSpec` absorbe su rol;
+    `milling.pocket` o desaparecer si `PocketSpec` absorbe su rol;
   - `OffsetFamily` y `RectangularNoIslandTracePlan`, porque son planificacion
     de trazas de pocket milling, no geometria comun;
-  - specs de mecanizado completas como `LineMillingSpec`, `PocketMillingSpec`,
-    `DrillingSpec`, etc.
+  - specs de mecanizado completas como `LineSpec`, `PocketSpec`,
+    `DrillSpec`, etc.
 
 ## Item 6 - Alcance Propuesto Para `pgmx.synthesis.common.depth`
 
@@ -549,7 +549,7 @@ Relaciones:
   `common.piece`.
 - `drilling.single` y `drilling.pattern` deben usarlo para coordenadas y
   direcciones multicara.
-- `milling.line`, `milling.profile`, `milling.circle`, `milling.squaring` y
+- `milling.line`, `milling._curve_profile`, `milling.circle`, `milling.contour` y
   `milling.pocket` pueden usarlo para validar bounds y tomar dimensiones de
   pieza.
 - `common.program` puede usarlo para actualizar dimensiones/origen del baseline
@@ -653,8 +653,8 @@ Responsabilidades excluidas:
   `common.piece`.
 - No debe decidir trayectorias, offsets, leads ni geometria de herramienta; eso
   pertenece a `common.geometry`, `common.strategy` o al modulo de familia.
-- No debe construir specs completos como `LineMillingSpec`, `PocketMillingSpec`
-  o `DrillingSpec`.
+- No debe construir specs completos como `LineSpec`, `PocketSpec`
+  o `DrillSpec`.
 
 Relaciones:
 
@@ -670,9 +670,9 @@ Relaciones:
 - `iso_state_synthesis`, todavia en desarrollo, debera consumir el estado
   editable no resuelto y decidir herramienta final cuando sintetice ISO sin
   pasar por Maestro/postproceso.
-- `milling.slot` usa este modulo para clasificar herramientas tipo sierra; las
+- `milling.channel` usa este modulo para clasificar herramientas tipo sierra; las
   restricciones geometricas especificas de ranura deberian quedar en
-  `milling.slot`.
+  `milling.channel`.
 - `common.program` y los modulos de familia usan el resultado normalizado para
   serializar la herramienta, pero la escritura XML queda fuera de
   `common.tools`.
@@ -690,7 +690,7 @@ Criterio de migracion:
    `common.depth`, para que `tools` consuma profundidades ya calculadas.
 6. Separar al final las restricciones especificas de `Sierra Vertical X`:
    clasificacion generica en `common.tools`, reglas de ranura en
-   `milling.slot`.
+   `milling.channel`.
 
 Puntos abiertos:
 
@@ -789,7 +789,7 @@ Responsabilidades excluidas:
 
 Relaciones:
 
-- `milling.line`, `milling.profile`, `milling.circle` y `milling.squaring`
+- `milling.line`, `milling._curve_profile`, `milling.circle` y `milling.contour`
   pueden consumir estrategias compartidas `Unidirectional/Bidirectional` cuando
   Maestro las admite para esa familia.
 - `milling.circle` consume `HelicalMillingStrategySpec` como estrategia
@@ -908,7 +908,7 @@ Relaciones:
 
 - `common.program` coordina la decision de hidratar cada spec usando
   `source_pgmx_path`, pero la compatibilidad fina debe vivir en cada familia.
-- Los modulos de familia (`milling.line`, `milling.profile`,
+- Los modulos de familia (`milling.line`, `milling._curve_profile`,
   `milling.circle`, `milling.pocket`, `drilling.single`, etc.) usan helpers de
   `common.hydration` para leer material fuente y deciden si pueden reutilizarlo.
 - `common.xml` aporta lectura/escritura nodal basica y normalizacion XML.
@@ -1012,7 +1012,7 @@ Responsabilidades excluidas:
 
 Relaciones:
 
-- `milling.line`, `milling.profile`, `milling.circle`, `milling.squaring` y
+- `milling.line`, `milling._curve_profile`, `milling.circle`, `milling.contour` y
   `milling.pocket` consumen `common.leads` cuando sus operaciones Maestro
   exponen `Approach` y `Retract`.
 - `common.hydration` usa `common.leads` para normalizar y comparar leads
@@ -1066,8 +1066,8 @@ Rol propuesto:
 Responsabilidades incluidas:
 
 - Contrato publico actual:
-  - `LineMillingSpec`;
-  - `build_line_milling_spec(...)`;
+  - `LineSpec`;
+  - `build_line_spec(...)`;
   - wrappers de compatibilidad exportados por `pgmx.synthesis`.
 - Normalizacion de spec:
   - coordenadas inicial/final;
@@ -1102,13 +1102,13 @@ Responsabilidades incluidas:
     estrategia, leads o lado de feature.
 - Adaptacion:
   - recibir desde `pgmx.adapters` geometria `GeomTrimmedCurve` con una sola
-    primitiva `Line` y convertirla a `LineMillingSpec`.
+    primitiva `Line` y convertirla a `LineSpec`.
 
 Responsabilidades excluidas:
 
-- No debe manejar `SlotSide`; eso pertenece a `milling.slot`.
+- No debe manejar `SlotSide`; eso pertenece a `milling.channel`.
 - No debe absorber polilineas de multiples segmentos ni perfiles con arcos; eso
-  pertenece a `milling.profile`.
+  pertenece a `milling._curve_profile`.
 - No debe manejar circulos; eso pertenece a `milling.circle`.
 - No debe decidir reglas generales de estrategia; debe consumir
   `common.strategy`.
@@ -1134,7 +1134,7 @@ Relaciones:
 
 Criterio de migracion:
 
-1. Extraer `LineMillingSpec`, `build_line_milling_spec(...)` y
+1. Extraer `LineSpec`, `build_line_spec(...)` y
    `_normalize_line_milling_spec(...)` desde `pgmx.synthesis.core`.
 2. Mover la construccion de geometria/toolpath lineal, manteniendo helpers
    compartidos en `common.geometry`.
@@ -1160,13 +1160,13 @@ Puntos abiertos:
   `common.geometry` o si `milling.line` conserva la politica de uso para este
   mecanizado.
 
-## Item 13 - Alcance Propuesto Para `pgmx.synthesis.milling.slot`
+## Item 13 - Alcance Propuesto Para `pgmx.synthesis.milling.channel`
 
 Fecha: 2026-06-03
 
 Modulo objetivo:
 
-- `pgmx/synthesis/milling/slot.py`
+- `pgmx/synthesis/milling/channel.py`
 
 Rol propuesto:
 
@@ -1184,8 +1184,8 @@ Rol propuesto:
 Responsabilidades incluidas:
 
 - Contrato publico actual:
-  - `SlotMillingSpec`;
-  - `build_slot_milling_spec(...)`;
+  - `ChannelSpec`;
+  - `build_channel_spec(...)`;
   - wrappers de compatibilidad exportados por `pgmx.synthesis`.
 - Normalizacion de spec:
   - coordenadas inicial/final;
@@ -1242,7 +1242,7 @@ Responsabilidades excluidas:
 - No debe manejar fresado lineal `GeneralProfileFeature`; eso pertenece a
   `milling.line`.
 - No debe absorber polilineas, perfiles con arcos ni contornos compuestos; eso
-  pertenece a `milling.profile`.
+  pertenece a `milling._curve_profile`.
 - No debe manejar circulos, escuadrados ni pocket milling.
 - No debe generalizar ranuras curvas o de multiples segmentos sin evidencia
   Maestro y validacion productiva.
@@ -1263,11 +1263,11 @@ Relaciones:
 - `common.program` orquesta IDs, aplicacion del mecanizado y escritura final.
 - `common.hydration` queda como dependencia potencial para futuros templates.
 - `pgmx.adapters` conserva la lectura de snapshots, pero puede delegar
-  predicados de dominio en `milling.slot`.
+  predicados de dominio en `milling.channel`.
 
 Criterio de migracion:
 
-1. Extraer `SlotMillingSpec`, `build_slot_milling_spec(...)` y
+1. Extraer `ChannelSpec`, `build_channel_spec(...)` y
    `_normalize_slot_milling_spec(...)` desde `pgmx.synthesis.core`.
 2. Mover la construccion de feature `SlotSide` y `_append_slot_milling(...)`.
 3. Revisar si `_build_line_operation(...)` queda como helper compartido para
@@ -1291,27 +1291,27 @@ Puntos abiertos:
 - Definir si se necesitara hidratacion exacta para ranuras o si la generacion
   pura actual es suficiente.
 
-## Item 14 - Alcance Propuesto Para `pgmx.synthesis.milling.profile`
+## Item 14 - Alcance Propuesto Para `pgmx.synthesis.milling._curve_profile`
 
 Fecha: 2026-06-03
 
 Modulo objetivo:
 
-- `pgmx/synthesis/milling/profile.py`
+- `pgmx/synthesis/milling/_curve_profile.py`
 
 Rol propuesto:
 
 - Ser el modulo productivo para fresados sobre perfiles abiertos o cerrados que
   no son una linea simple, una ranura, un circulo puro, un escuadrado ni un
   `ClosedPocket`.
-- Cubrir el contrato actual de `PolylineMillingSpec` y preparar el lugar para
+- Cubrir el contrato actual de `PolylineSpec` y preparar el lugar para
   perfiles compuestos con arcos cuando exista evidencia Maestro suficiente.
 
 Responsabilidades incluidas:
 
 - Contrato publico actual:
-  - `PolylineMillingSpec`;
-  - `build_polyline_milling_spec(...)`;
+  - `PolylineSpec`;
+  - `build_polyline_spec(...)`;
   - normalizacion de puntos y cierre de perfil.
 - Soporte actual:
   - polilineas lineales abiertas;
@@ -1332,16 +1332,16 @@ Responsabilidades incluidas:
   - rechazar reuse si difieren geometria, profundidad, herramienta, estrategia
     o leads.
 - Adaptacion:
-  - convertir snapshots `GeomCompositeCurve` lineales en `PolylineMillingSpec`;
+  - convertir snapshots `GeomCompositeCurve` lineales en `PolylineSpec`;
   - mantener arcos como no soportados hasta que exista spec de perfil compuesto.
 
 Responsabilidades excluidas:
 
 - No debe manejar una linea simple cuando corresponda `milling.line`.
-- No debe manejar `SlotSide`; eso pertenece a `milling.slot`.
+- No debe manejar `SlotSide`; eso pertenece a `milling.channel`.
 - No debe absorber circulos puros mientras `milling.circle` exista como modulo.
 - No debe manejar contornos de escuadrado exterior detectables como
-  `milling.squaring`.
+  `milling.contour`.
 - No debe manejar `ClosedPocket`; eso pertenece a `milling.pocket`.
 
 Relaciones:
@@ -1356,7 +1356,7 @@ Relaciones:
 
 Criterio de migracion:
 
-1. Extraer `PolylineMillingSpec`, builder y normalizador.
+1. Extraer `PolylineSpec`, builder y normalizador.
 2. Extraer reglas de postprocesabilidad Maestro.
 3. Mover construccion de geometria compuesta lineal y `_append_polyline_milling`.
 4. Mover hidratacion exacta de polilineas.
@@ -1366,7 +1366,7 @@ Criterio de migracion:
 Puntos abiertos:
 
 - Definir una spec general para perfiles con arcos o ampliar
-  `PolylineMillingSpec`.
+  `PolylineSpec`.
 - Definir si `circle.py` permanece separado o si en una etapa futura se integra
   como caso particular de perfil.
 
@@ -1388,8 +1388,8 @@ Rol propuesto:
 Responsabilidades incluidas:
 
 - Contrato publico actual:
-  - `CircleMillingSpec`;
-  - `build_circle_milling_spec(...)`;
+  - `CircleSpec`;
+  - `build_circle_spec(...)`;
   - normalizacion de centro, radio, winding y lado de feature.
 - Validaciones:
   - radio mayor que cero;
@@ -1426,12 +1426,12 @@ Relaciones:
 - `common.strategy` distingue estrategias compartidas y helicoidal.
 - `common.leads`, `common.depth`, `common.tools`, `common.piece` y
   `common.hydration` aportan las reglas transversales.
-- `milling.profile` puede compartir helpers, pero no debe depender
+- `milling._curve_profile` puede compartir helpers, pero no debe depender
   circularmente de `circle`.
 
 Criterio de migracion:
 
-1. Extraer `CircleMillingSpec`, builder y normalizador.
+1. Extraer `CircleSpec`, builder y normalizador.
 2. Extraer construccion de geometria circular, operacion y working step.
 3. Mover hidratacion exacta circular.
 4. Mantener reexports publicos.
@@ -1443,13 +1443,13 @@ Puntos abiertos:
 - Definir si `circle.py` queda como familia permanente o como wrapper
   especializado sobre `profile.py`.
 
-## Item 16 - Alcance Propuesto Para `pgmx.synthesis.milling.squaring`
+## Item 16 - Alcance Propuesto Para `pgmx.synthesis.milling.contour`
 
 Fecha: 2026-06-03
 
 Modulo objetivo:
 
-- `pgmx/synthesis/milling/squaring.py`
+- `pgmx/synthesis/milling/contour.py`
 
 Rol propuesto:
 
@@ -1460,8 +1460,8 @@ Rol propuesto:
 Responsabilidades incluidas:
 
 - Contrato publico actual:
-  - `SquaringMillingSpec`;
-  - `build_squaring_milling_spec(...)`;
+  - `ContourSpec`;
+  - `build_contour_spec(...)`;
   - normalizacion de `start_edge`, `winding` y `start_coordinate`.
 - Defaults productivos actuales:
   - herramienta `1900` / `E001`;
@@ -1493,15 +1493,15 @@ Relaciones:
 - `common.geometry` construye el contorno.
 - `common.strategy`, `common.leads`, `common.depth` y `common.tools` aportan
   reglas transversales.
-- `milling.profile` puede compartir la escritura de operacion, pero el
+- `milling._curve_profile` puede compartir la escritura de operacion, pero el
   significado de escuadrado queda en este modulo.
 
 Criterio de migracion:
 
-1. Extraer `SquaringMillingSpec`, builder y normalizador.
+1. Extraer `ContourSpec`, builder y normalizador.
 2. Extraer deteccion/construccion del contorno exterior.
 3. Mover `_append_squaring_milling(...)` y helpers asociados.
-4. Mantener deteccion de adapter antes de `PolylineMillingSpec`.
+4. Mantener deteccion de adapter antes de `PolylineSpec`.
 5. Validar con tests de escuadrado y combinaciones con taladros/fresados.
 
 Puntos abiertos:
@@ -1527,9 +1527,9 @@ Rol propuesto:
 Responsabilidades incluidas:
 
 - Contratos actuales y futuros:
-  - `PocketMillingSpec`;
+  - `PocketSpec`;
   - `PocketBossRouteSeedSpec`;
-  - `build_pocket_milling_spec(...)`;
+  - `build_pocket_spec(...)`;
   - `build_pocket_boss_route_seed_spec(...)`;
   - wrappers historicos necesarios mientras migra `pgmx.vaciado`.
 - Alcance productivo actual:
@@ -1550,7 +1550,7 @@ Responsabilidades incluidas:
   - rechazar reuse si difieren contorno, islas, profundidad, herramienta,
     estrategia, allowances o leads.
 - Adaptacion:
-  - convertir snapshots `ClosedPocket` a `PocketMillingSpec` para lectura;
+  - convertir snapshots `ClosedPocket` a `PocketSpec` para lectura;
   - reportar claramente cuando la serializacion productiva de un caso aun no
     esta implementada.
 - Integracion historica:
@@ -1581,7 +1581,7 @@ Relaciones:
 
 Criterio de migracion:
 
-1. Extraer `PocketMillingSpec`, `PocketBossRouteSeedSpec` y builders.
+1. Extraer `PocketSpec`, `PocketBossRouteSeedSpec` y builders.
 2. Mover normalizacion y validacion de contornos/islas.
 3. Mover generacion `ClosedPocket`, estrategias, boss lists y working steps.
 4. Migrar reglas cerradas desde `pgmx.vaciado_lab` sin arrastrar el laboratorio.
@@ -1590,7 +1590,7 @@ Criterio de migracion:
 
 Puntos abiertos:
 
-- Definir si `PocketMillingSpec` queda como contrato publico final o si se crea
+- Definir si `PocketSpec` queda como contrato publico final o si se crea
   una spec nueva con nombre de familia Maestro.
 - Definir la frontera exacta entre regla productiva y laboratorio cuando una
   familia de islas queda parcialmente cerrada.
@@ -1614,8 +1614,8 @@ Rol propuesto:
 Responsabilidades incluidas:
 
 - Contrato publico actual:
-  - `DrillingSpec`;
-  - `build_drilling_spec(...)`;
+  - `DrillSpec`;
+  - `build_drill_spec(...)`;
   - normalizacion de punto, diametro, cara, profundidad y familia de broca.
 - Caras soportadas:
   - `Top`;
@@ -1638,7 +1638,7 @@ Responsabilidades incluidas:
   - working step;
   - entrada/direccion segun cara de pieza.
 - Adaptacion:
-  - convertir snapshots `RoundHole` puntuales en `DrillingSpec`;
+  - convertir snapshots `RoundHole` puntuales en `DrillSpec`;
   - conservar herramienta explicita solo si el snapshot la trae resuelta.
 
 Responsabilidades excluidas:
@@ -1659,7 +1659,7 @@ Relaciones:
 
 Criterio de migracion:
 
-1. Extraer `DrillingSpec`, builder, normalizador y helpers de eje/cara.
+1. Extraer `DrillSpec`, builder, normalizador y helpers de eje/cara.
 2. Mover construccion de feature/operacion/working step de taladro.
 3. Mover reglas de profundidad y ToolKey no resuelto hacia helpers comunes
    cuando sean reutilizables.
@@ -1688,8 +1688,8 @@ Rol propuesto:
 Responsabilidades incluidas:
 
 - Contrato publico actual:
-  - `DrillingPatternSpec`;
-  - `build_drilling_pattern_spec(...)`;
+  - `DrillPatternSpec`;
+  - `build_drill_pattern_spec(...)`;
   - normalizacion de punto base, diametro, columnas, filas, separaciones y
     profundidad.
 - Alcance actual:
@@ -1711,13 +1711,13 @@ Responsabilidades incluidas:
   - expresiones de profundidad de patron cuando correspondan.
 - Adaptacion:
   - convertir snapshots `ReplicateFeature` compatibles en
-    `DrillingPatternSpec`;
+    `DrillPatternSpec`;
   - marcar como no soportados patrones rotados, no rectangulares o con
     profundidad/herramienta no representable.
 
 Responsabilidades excluidas:
 
-- No debe modelar un unico taladro; para eso se usa `DrillingSpec`.
+- No debe modelar un unico taladro; para eso se usa `DrillSpec`.
 - No debe manejar patrones circulares o arbitrarios sin evidencia Maestro.
 - No debe resolver herramienta final.
 - No debe duplicar toda la logica de `drilling.single`; debe reutilizarla.
@@ -1731,7 +1731,7 @@ Relaciones:
 
 Criterio de migracion:
 
-1. Extraer `DrillingPatternSpec`, builder y normalizador.
+1. Extraer `DrillPatternSpec`, builder y normalizador.
 2. Extraer helpers de `ReplicateFeature` y expresiones de profundidad.
 3. Reutilizar la hidratacion/normalizacion de `drilling.single` para el taladro
    base.
@@ -1851,10 +1851,10 @@ Con los items anteriores, el mapa objetivo queda registrado para:
 - `pgmx.synthesis.common.hydration`;
 - `pgmx.synthesis.common.leads`;
 - `pgmx.synthesis.milling.line`;
-- `pgmx.synthesis.milling.slot`;
-- `pgmx.synthesis.milling.profile`;
+- `pgmx.synthesis.milling.channel`;
+- `pgmx.synthesis.milling._curve_profile`;
 - `pgmx.synthesis.milling.circle`;
-- `pgmx.synthesis.milling.squaring`;
+- `pgmx.synthesis.milling.contour`;
 - `pgmx.synthesis.milling.pocket`;
 - `pgmx.synthesis.drilling.single`;
 - `pgmx.synthesis.drilling.pattern`;

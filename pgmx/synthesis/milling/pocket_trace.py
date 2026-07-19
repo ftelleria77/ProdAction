@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Sequence
 from ..common.strategy import ContourParallelMillingStrategySpec
 
 if TYPE_CHECKING:
-    from .pocket import PocketMillingSpec
+    from .pocket import PocketSpec
 
 __all__ = [
     "BBox",
@@ -193,7 +193,7 @@ class ContourParallelTracePlan:
 
 
 def generate_contour_parallel_pocket_trace(
-    spec: PocketMillingSpec,
+    spec: PocketSpec,
     *,
     surface_z: float = 0.0,
 ) -> ContourParallelTracePlan:
@@ -243,7 +243,7 @@ def generate_contour_parallel_pocket_trace(
 
 
 def _trace_parameters(
-    spec: PocketMillingSpec,
+    spec: PocketSpec,
     strategy: ContourParallelMillingStrategySpec,
 ) -> TraceParameters:
     tool_width = float(spec.tool_width)
@@ -266,7 +266,7 @@ def _trace_parameters(
     )
 
 
-def _trace_internal_contours(spec: PocketMillingSpec) -> tuple[TraceInternalContour, ...]:
+def _trace_internal_contours(spec: PocketSpec) -> tuple[TraceInternalContour, ...]:
     if spec.boss_route_seeds:
         route_seed_contours: list[TraceInternalContour] = []
         for route_seed in spec.boss_route_seeds:
@@ -5558,7 +5558,7 @@ def _is_axis_aligned_rectangle(points: Sequence[Point2]) -> bool:
 
 
 def _pending_stages(
-    spec: PocketMillingSpec,
+    spec: PocketSpec,
     outer: TraceContour,
     internal_contours: Sequence[TraceInternalContour],
     resolved_sequences: Sequence[TraceResolvedSequence2D],

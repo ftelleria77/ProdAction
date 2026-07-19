@@ -39,6 +39,7 @@ __all__ = [
     "HelicalMillingStrategySpec",
     "MillingStrategySpec",
     "UnidirectionalMillingStrategySpec",
+    "ZigZagMillingStrategySpec",
     "build_bidirectional_milling_strategy_spec",
     "build_contour_parallel_milling_strategy_spec",
     "build_helical_milling_strategy_spec",
@@ -95,6 +96,22 @@ class HelicalMillingStrategySpec:
 
 
 @dataclass(frozen=True)
+class ZigZagMillingStrategySpec:
+    """Estrategia `ZigZag` de Maestro (fresado lineal): corta EN RAMPA alternando el sentido.
+
+    UI: pasada avance (FeedCuttingDepth) / pasada retorno (ReturnCuttingDepth) / último hueco
+    (AxialFinishCuttingDepth). Solo LECTURA: la autoría no la escribe (los .pgmx salen de Maestro).
+    """
+
+    allow_multiple_passes: bool = True
+    feed_cutting_depth: float = 0.0
+    return_cutting_depth: float = 0.0
+    axial_finish_cutting_depth: float = 0.0
+    overlap: float = 0.0
+    cutmode: str = "Climb"
+
+
+@dataclass(frozen=True)
 class ContourParallelMillingStrategySpec:
     """Estrategia `Paralela al perfil/contorno` observada para vaciados."""
 
@@ -118,6 +135,7 @@ MillingStrategySpec = (
     UnidirectionalMillingStrategySpec
     | BidirectionalMillingStrategySpec
     | HelicalMillingStrategySpec
+    | ZigZagMillingStrategySpec
     | ContourParallelMillingStrategySpec
 )
 
@@ -276,7 +294,7 @@ def build_helical_milling_strategy_spec(
 ) -> HelicalMillingStrategySpec:
     """Construye una estrategia publica `Helicoidal`.
 
-    Por ahora esta familia queda validada solo para `CircleMillingSpec`.
+    Por ahora esta familia queda validada solo para `CircleSpec`.
     """
 
     normalized_axial_cutting_depth = _normalize_nonnegative_strategy_depth(
@@ -354,6 +372,10 @@ def _strategy_is_multilevel(strategy: Optional[MillingStrategySpec]) -> bool:
         return False
     if isinstance(normalized_strategy, HelicalMillingStrategySpec):
         return True
+    if isinstance(normalized_strategy, ZigZagMillingStrategySpec):
+        return normalized_strategy.allow_multiple_passes and (
+            normalized_strategy.feed_cutting_depth > 0.0
+            or normalized_strategy.return_cutting_depth > 0.0)
     if not normalized_strategy.allow_multiple_passes:
         return False
     return (
@@ -368,10 +390,10 @@ def _should_activate_cnc_correction(spec) -> bool:
 
 def _spec_uses_closed_profile(spec) -> bool:
     if type(spec).__name__ in {
-        "_HydratedCircleMillingSpec",
-        "CircleMillingSpec",
-        "_HydratedSquaringMillingSpec",
-        "SquaringMillingSpec",
+        "_HydratedCircleSpec",
+        "CircleSpec",
+        "_HydratedContourSpec",
+        "ContourSpec",
     }:
         return True
     points = getattr(spec, "points", None)
@@ -436,6 +458,9 @@ def _build_milling_strategy_node(spec) -> ET.Element:
     elif isinstance(strategy, BidirectionalMillingStrategySpec):
         strategy_type = "b:BidirectionalMilling"
         stroke_connection_strategy = "Straghtline"
+    elif isinstance(strategy, ZigZagMillingStrategySpec):
+        strategy_type = "b:ZigZagMilling"
+        stroke_connection_strategy = "Straghtline"
     else:
         strategy_type = "b:HelicMilling"
         stroke_connection_strategy = "Straghtline"
@@ -445,6 +470,17 @@ def _build_milling_strategy_node(spec) -> ET.Element:
         {f"{{{XSI_NS}}}type": strategy_type},
     )
     _set_xmlns(node, "b", STRATEGY_NS)
+    if isinstance(strategy, ZigZagMillingStrategySpec):
+        # Forma observada en el XML de Maestro (N025 zigzag).
+        _append_node(node, PGMX_NS, "AllowMultiplePasses",
+                     "true" if strategy.allow_multiple_passes else "false")
+        _append_node(node, PGMX_NS, "Overlap", _compact_number(strategy.overlap))
+        _append_node(node, STRATEGY_NS, "AxialFinishCuttingDepth",
+                     _compact_number(strategy.axial_finish_cutting_depth))
+        _append_node(node, STRATEGY_NS, "Cutmode", strategy.cutmode)
+        _append_node(node, STRATEGY_NS, "FeedCuttingDepth", _compact_number(strategy.feed_cutting_depth))
+        _append_node(node, STRATEGY_NS, "ReturnCuttingDepth", _compact_number(strategy.return_cutting_depth))
+        return node
     if isinstance(strategy, HelicalMillingStrategySpec):
         _append_node(node, PGMX_NS, "AllowMultiplePasses", "false")
     else:
@@ -545,6 +581,15 @@ def _extract_milling_strategy_spec_from_operation(
             radial_finish_cutting_depth=_safe_float(_text(strategy_node, "./{*}RadialFinishCuttingDepth"), 0.0),
             allows_bidirectional=_safe_bool(_text(strategy_node, "./{*}AllowsBidirectional"), False),
             allows_finish_cutting=_safe_bool(_text(strategy_node, "./{*}AllowsFinishCutting"), False),
+        )
+    if "ZigZagMilling" in strategy_type:
+        return ZigZagMillingStrategySpec(
+            allow_multiple_passes=allow_multiple_passes,
+            feed_cutting_depth=_safe_float(_text(strategy_node, "./{*}FeedCuttingDepth"), 0.0),
+            return_cutting_depth=_safe_float(_text(strategy_node, "./{*}ReturnCuttingDepth"), 0.0),
+            axial_finish_cutting_depth=axial_finish_cutting_depth,
+            overlap=_safe_float(_text(strategy_node, "./{*}Overlap"), 0.0),
+            cutmode=_text(strategy_node, "./{*}Cutmode", "Climb"),
         )
     if "UnidirectionalMilling" in strategy_type:
         return build_unidirectional_milling_strategy_spec(
@@ -664,6 +709,42 @@ def _build_unidirectional_line_strategy_profile(
         )
         primitives.append(_vertical_transition_primitive(start_xy, reconnect_level, pass_levels[index + 1]))
 
+    return build_composite_geometry_profile(tuple(primitives))
+
+
+def _build_zigzag_line_strategy_profile(
+    top_level: float,
+    final_level: float,
+    base_profile: GeometryProfileSpec,
+    strategy: "ZigZagMillingStrategySpec",
+) -> GeometryProfileSpec:
+    """Toolpath ZigZag (forma Maestro, N025 zigzag): corta EN RAMPA alternando el sentido desde
+    la superficie — la ida baja `feed_cutting_depth`, la vuelta `return_cutting_depth` — clavado
+    en (fondo + último hueco); luego la pasada del último hueco y UNA pasada final plana.
+    Maestro postprocesa el toolpath ALMACENADO (N032): estos strokes deben ir en la curva."""
+
+    start_xy, end_xy = _profile_endpoint_points(base_profile)
+    top_value = float(top_level)
+    final_value = float(final_level)
+    feed_step = float(strategy.feed_cutting_depth)
+    return_step = float(strategy.return_cutting_depth)
+    rough_level = final_value + float(strategy.axial_finish_cutting_depth)
+    primitives: list[GeometryPrimitiveSpec] = []
+    position, level, forward = start_xy, top_value, True
+    while level > rough_level + 1e-9:
+        step = feed_step if forward else return_step
+        next_level = max(level - step, rough_level)
+        target = end_xy if forward else start_xy
+        primitives.append(
+            _line_primitive_3d((position[0], position[1], level), (target[0], target[1], next_level))
+        )
+        position, level, forward = target, next_level, not forward
+    for next_level in (final_value, final_value):  # pasada del último hueco + pasada final plana
+        target = end_xy if forward else start_xy
+        primitives.append(
+            _line_primitive_3d((position[0], position[1], level), (target[0], target[1], next_level))
+        )
+        position, level, forward = target, next_level, not forward
     return build_composite_geometry_profile(tuple(primitives))
 
 
@@ -975,6 +1056,8 @@ def _normalize_milling_strategy_spec(
             allows_bidirectional=strategy.allows_bidirectional,
             allows_finish_cutting=strategy.allows_finish_cutting,
         )
+    if isinstance(strategy, ZigZagMillingStrategySpec):
+        return strategy
     raise ValueError(f"Tipo de estrategia de fresado no soportado: {type(strategy)!r}")
 
 

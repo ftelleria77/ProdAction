@@ -79,12 +79,12 @@ if TYPE_CHECKING:
 
 __all__ = [
     "PocketBossRouteSeedSpec",
-    "PocketMillingSpec",
+    "PocketSpec",
     "build_pocket_boss_route_seed_spec",
-    "build_pocket_milling_spec",
-    "_HydratedPocketMillingSpec",
+    "build_pocket_spec",
+    "_HydratedPocketSpec",
     "_SingleSeedMultiloopRoute",
-    "_append_pocket_milling",
+    "_append_pocket",
     "_build_closed_pocket_boss",
     "_build_closed_pocket_feature",
     "_build_contour_parallel_xyz_path",
@@ -112,8 +112,8 @@ __all__ = [
     "_supported_single_seed_route_seed",
     "_xy_bbox_minmax",
     "_can_hydrate_pocket_template_trace",
-    "_extract_pocket_milling_template",
-    "_hydrate_pocket_milling_spec",
+    "_extract_pocket_template",
+    "_hydrate_pocket_spec",
     "_same_xy_contours",
     "_same_xy_points",
 ]
@@ -124,7 +124,7 @@ class PocketBossRouteSeedSpec:
     """Referencia de `BossList.GeometryID` usada por Maestro como semilla de ruta.
 
     `contour_points` queda vacio cuando el `GeometryID` no se pudo resolver en
-    el archivo. La isla fisica sigue viviendo en `PocketMillingSpec.boss_contours`.
+    el archivo. La isla fisica sigue viviendo en `PocketSpec.boss_contours`.
     """
 
     geometry_id: str
@@ -138,7 +138,7 @@ class PocketBossRouteSeedSpec:
 
 
 @dataclass(frozen=True)
-class PocketMillingSpec:
+class PocketSpec:
     """Vaciado superior observado como `ClosedPocket` + `ContourParallel`.
 
     El subset productivo validado cubre contornos rectangulares lineales sobre
@@ -186,10 +186,10 @@ class PocketMillingSpec:
 
 
 @dataclass(frozen=True)
-class _HydratedPocketMillingSpec:
-    """Datos internos de serializacion para un `PocketMillingSpec` rectangular."""
+class _HydratedPocketSpec:
+    """Datos internos de serializacion para un `PocketSpec` rectangular."""
 
-    spec: PocketMillingSpec
+    spec: PocketSpec
     preferred_id_start: Optional[int] = None
     geometry_curve: Optional[_CurveSpec] = None
     trajectory_curves: tuple[_CurveSpec, ...] = ()
@@ -268,7 +268,7 @@ class _HydratedPocketMillingSpec:
         return self.spec.is_enabled_expr
 
 
-def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPocketMillingSpec) -> None:
+def _append_pocket(root: ET.Element, state: PgmxState, spec: _HydratedPocketSpec) -> None:
     geometries = root.find("./{*}Geometries")
     features = root.find("./{*}Features")
     operations = root.find("./{*}Operations")
@@ -279,7 +279,7 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
         raise ValueError("La plantilla no contiene todas las colecciones requeridas para sintetizar el Vaciado.")
 
     if not _is_closed_polyline_points(spec.contour_points):
-        raise ValueError("PocketMillingSpec requiere un contorno cerrado.")
+        raise ValueError("PocketSpec requiere un contorno cerrado.")
 
     workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
     workpiece_object_type = _text(workpiece, "./{*}Key/{*}ObjectType")
@@ -434,7 +434,7 @@ def _append_pocket_milling(root: ET.Element, state: PgmxState, spec: _HydratedPo
 
 def _build_closed_pocket_feature(
     state,
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
     feature_id: str,
     geometry_id: str,
     operation_id: str,
@@ -517,7 +517,7 @@ def _build_closed_pocket_boss(
 
 def _build_pocket_operation(
     state,
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
     operation_id: str,
     trajectory_curves: Sequence[_CurveSpec],
     trajectory_curve_member_keys: Sequence[Sequence[str]],
@@ -639,7 +639,7 @@ def _build_pocket_operation(
 
 def _build_contour_parallel_xyz_path(
     state,
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
 ) -> tuple[tuple[float, float, float], ...]:
     strategy = spec.milling_strategy
     return generate_rectangular_contour_parallel_xyz_path(
@@ -664,7 +664,7 @@ def _build_contour_parallel_xyz_path(
 
 def _build_trace_engine_pocket_xyz_sequences(
     state,
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
 ) -> Optional[tuple[tuple[tuple[float, float, float], ...], ...]]:
     plan = _build_trace_engine_pocket_plan(spec, surface_z=state.depth)
     if plan is None or not plan.trajectory_sequences:
@@ -673,7 +673,7 @@ def _build_trace_engine_pocket_xyz_sequences(
 
 
 def _build_trace_engine_pocket_curve_specs(
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
     trajectory_sequences: Sequence[Sequence[tuple[float, float, float]]],
 ) -> Optional[tuple[_CurveSpec, ...]]:
     if not trajectory_sequences:
@@ -694,7 +694,7 @@ def _build_trace_engine_pocket_curve_specs(
 
 
 def _build_trace_engine_pocket_plan(
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
     *,
     surface_z: float,
 ):
@@ -737,7 +737,7 @@ def _curve_spec_from_trace_resolved_sequence(resolved_sequence, z_value: float) 
 
 def _build_single_seed_base_loop_xyz_sequences(
     state,
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
 ) -> Optional[tuple[tuple[tuple[float, float, float], ...], ...]]:
     seed = _supported_single_seed_base_loop_route_seed(spec)
     if seed is None:
@@ -853,7 +853,7 @@ def _single_seed_exterior_rectangle_loops_xyz(
 
 
 def _supported_single_seed_base_loop_route_seed(
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
 ) -> Optional[PocketBossRouteSeedSpec]:
     seed = _supported_single_seed_base_loop_seed(spec)
     if seed is None:
@@ -864,7 +864,7 @@ def _supported_single_seed_base_loop_route_seed(
 
 
 def _supported_single_seed_base_loop_seed(
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
 ) -> Optional[PocketBossRouteSeedSpec]:
     if len(spec.boss_contours) != 1 or len(spec.boss_route_seeds) != 1:
         return None
@@ -884,7 +884,7 @@ def _supported_single_seed_base_loop_seed(
 
 
 def _single_seed_base_loop_radii(
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
     seed: PocketBossRouteSeedSpec,
 ) -> tuple[float, ...]:
     contour_min_x, contour_max_x, contour_min_y, contour_max_y = _xy_bbox_minmax(spec.contour_points)
@@ -971,7 +971,7 @@ class _SingleSeedMultiloopRoute:
 
 
 def _build_single_seed_multiloop_curve_and_sequence(
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
     cut_z: float,
 ) -> Optional[tuple[_CurveSpec, tuple[tuple[float, float, float], ...]]]:
     route = _supported_single_seed_multiloop_route(spec)
@@ -1435,7 +1435,7 @@ def _build_single_seed_bridge_only_curve_and_sequence(
 
 
 def _supported_single_seed_multiloop_route(
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
 ) -> Optional[_SingleSeedMultiloopRoute]:
     seed = _supported_single_seed_route_seed(spec)
     if seed is None:
@@ -1487,7 +1487,7 @@ def _supported_single_seed_multiloop_route(
 
 
 def _supported_single_seed_route_seed(
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
 ) -> Optional[PocketBossRouteSeedSpec]:
     if len(spec.boss_contours) != 1 or len(spec.boss_route_seeds) != 1:
         return None
@@ -1535,7 +1535,7 @@ def _points_are_close_3d(
 
 def _build_pocket_trajectory_xyz_sequences(
     state,
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
 ) -> tuple[tuple[tuple[float, float, float], ...], ...]:
     if spec.trajectory_sequences:
         return spec.trajectory_sequences
@@ -1558,14 +1558,14 @@ def _build_pocket_trajectory_xyz_sequences(
         return (sequence,)
 
     raise NotImplementedError(
-        "PocketMillingSpec con islas/BossGeometryList o semillas BossList.GeometryID "
+        "PocketSpec con islas/BossGeometryList o semillas BossList.GeometryID "
         "se adapta para lectura, pero la serializacion productiva de Vaciado con islas "
         "todavia no esta implementada para esta configuracion."
     )
 
 
 def _build_pocket_trajectory_curve_specs(
-    spec: _HydratedPocketMillingSpec,
+    spec: _HydratedPocketSpec,
     trajectory_sequences: Sequence[Sequence[tuple[float, float, float]]],
 ) -> tuple[_CurveSpec, ...]:
     if spec.trajectory_curves and len(spec.trajectory_curves) == len(trajectory_sequences):
@@ -1659,7 +1659,7 @@ def build_pocket_boss_route_seed_spec(
     )
 
 
-def build_pocket_milling_spec(
+def build_pocket_spec(
     *,
     contour_points: Sequence[tuple[float, float]],
     feature_name: Optional[str] = None,
@@ -1690,17 +1690,17 @@ def build_pocket_milling_spec(
     boss_contours: Optional[Sequence[Sequence[tuple[float, float]]]] = None,
     boss_route_seeds: Optional[Sequence[PocketBossRouteSeedSpec]] = None,
     is_enabled_expr: Optional[str] = None,
-) -> PocketMillingSpec:
+) -> PocketSpec:
     """Construye la spec publica de `Vaciado` para lectura/adaptacion."""
 
     normalized_points = _normalize_closed_contour(
         contour_points,
-        label="PocketMillingSpec",
+        label="PocketSpec",
     )
     normalized_boss_contours = [
         _normalize_closed_contour(
             boss_contour,
-            label="Cada isla de PocketMillingSpec",
+            label="Cada isla de PocketSpec",
         )
         for boss_contour in boss_contours or ()
     ]
@@ -1744,7 +1744,7 @@ def build_pocket_milling_spec(
             extra_depth=extra_depth,
         )
     )
-    return PocketMillingSpec(
+    return PocketSpec(
         contour_points=normalized_points,
         feature_name=(feature_name or "Vaciado").strip() or "Vaciado",
         plane_name=_normalize_plane_name(plane_name),
@@ -1779,7 +1779,7 @@ def build_pocket_milling_spec(
     )
 
 
-def _extract_pocket_milling_template(source_pgmx_path: Path) -> dict[str, object]:
+def _extract_pocket_template(source_pgmx_path: Path) -> dict[str, object]:
     root, _, _ = _load_pgmx_container(source_pgmx_path)
 
     def extract_curve_xy_points(node) -> tuple[tuple[float, float], ...]:
@@ -1898,7 +1898,7 @@ def _same_xy_contours(
 
 def _can_hydrate_pocket_template_trace(
     template: dict[str, object],
-    spec: PocketMillingSpec,
+    spec: PocketSpec,
     *,
     tolerance: float = 1e-6,
 ) -> bool:
@@ -1963,18 +1963,18 @@ def _can_hydrate_pocket_template_trace(
     )
 
 
-def _hydrate_pocket_milling_spec(
-    spec: PocketMillingSpec,
+def _hydrate_pocket_spec(
+    spec: PocketSpec,
     source_pgmx_path: Optional[Path],
-) -> _HydratedPocketMillingSpec:
+) -> _HydratedPocketSpec:
     if source_pgmx_path is None:
-        return _HydratedPocketMillingSpec(spec)
+        return _HydratedPocketSpec(spec)
     try:
-        template = _extract_pocket_milling_template(source_pgmx_path)
+        template = _extract_pocket_template(source_pgmx_path)
     except ValueError:
-        return _HydratedPocketMillingSpec(spec)
+        return _HydratedPocketSpec(spec)
     can_hydrate_trace = _can_hydrate_pocket_template_trace(template, spec)
-    return _HydratedPocketMillingSpec(
+    return _HydratedPocketSpec(
         spec,
         preferred_id_start=int(template["preferred_id_start"]),
         geometry_curve=template.get("geometry_curve") if isinstance(template.get("geometry_curve"), _CurveSpec) else None,

@@ -155,7 +155,7 @@ Eventos geometricos:
 - Se creo el paquete experimental `tools/pgmx_vaciado_v2/`, sin importar
   `tools.pgmx_vaciado.trace_engine`.
 - Primer contrato V2 implementado:
-  - `adapters.py`: adaptador desde `PocketMillingSpec` estable hacia contrato
+  - `adapters.py`: adaptador desde `PocketSpec` estable hacia contrato
     V2;
   - `geometry.py`: `BBox`, `PolylineContour`, `VaciadoGeometry`;
   - `strategy.py`: `VaciadoStrategy`, con `effective_offset` y `radial_step`;
@@ -167,7 +167,7 @@ Eventos geometricos:
   - `InsideToOutSide` como reordenamiento de recorrido;
   - `AllowanceSide` y `Overlap` como ejes de estrategia;
   - rechazo explicito de geometria interna en la meta 1.
-  - adaptacion de `manual/Vaciado_008.pgmx` real desde `PocketMillingSpec`.
+  - adaptacion de `manual/Vaciado_008.pgmx` real desde `PocketSpec`.
 - Validacion:
   - `python3 -B -m unittest tests.test_pgmx_vaciado_v2`: `5` tests `OK`;
   - `python3 -B -m unittest tests.test_pgmx_vaciado`: `57` tests `OK`.
@@ -179,7 +179,7 @@ Eventos geometricos:
 
 - Se amplio la validacion V2 al subconjunto rectangular estable completo:
   `Vaciado_001..021`, `Vaciado_023..026` y `Vaciado_032..034`.
-- La prueba adapta cada `.pgmx` real desde `PocketMillingSpec`, construye el
+- La prueba adapta cada `.pgmx` real desde `PocketSpec`, construye el
   contrato V2 y verifica que el bbox real de `TrajectoryPath` Maestro coincida
   con el primer offset calculado por `plan_rectangular_no_islands`.
 - Hallazgos de normalizacion:

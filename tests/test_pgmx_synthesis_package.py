@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -29,9 +30,10 @@ from pgmx.synthesis.milling import line as milling_line
 from pgmx.synthesis.milling import pocket as milling_pocket
 from pgmx.synthesis.milling import pocket_rectangular as milling_pocket_rectangular
 from pgmx.synthesis.milling import pocket_trace as milling_pocket_trace
-from pgmx.synthesis.milling import profile as milling_profile
-from pgmx.synthesis.milling import slot as milling_slot
-from pgmx.synthesis.milling import squaring as milling_squaring
+from pgmx.synthesis.milling import polyline as milling_polyline
+from pgmx.synthesis.milling import _curve_profile as milling_curve_profile
+from pgmx.synthesis.milling import channel as milling_channel
+from pgmx.synthesis.milling import contour as milling_contour
 
 
 class PgmxSynthesisPackageTests(unittest.TestCase):
@@ -73,8 +75,8 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
                 self.assertEqual(common_tools._module_data_dir(), bundled_data)
 
     def test_public_facade_reexports_core_api_and_keeps_data_paths(self) -> None:
-        self.assertIs(pgmx_synthesis.PocketMillingSpec, core_sp.PocketMillingSpec)
-        self.assertIs(pgmx_synthesis.build_pocket_milling_spec, core_sp.build_pocket_milling_spec)
+        self.assertIs(pgmx_synthesis.PocketSpec, core_sp.PocketSpec)
+        self.assertIs(pgmx_synthesis.build_pocket_spec, core_sp.build_pocket_spec)
         self.assertIs(pgmx_synthesis.main, synthesis_cli.main)
         self.assertIs(core_sp.main, synthesis_cli.main)
         self.assertTrue(pgmx_synthesis.DEFAULT_BASELINE_XML_PATH.name.endswith("Pieza.xml"))
@@ -84,18 +86,18 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertEqual(pgmx_synthesis.TOOL_CATALOG_PATH.parent.name, "data")
 
     def test_vaciado_boundary_adapts_public_pocket_spec_to_v2_contract(self) -> None:
-        status = pgmx_synthesis.vaciado_support_status()
+        status = pgmx_synthesis.pocket_support_status()
         self.assertTrue(status.enabled)
         self.assertEqual(status.model_package, "pgmx.synthesis.milling.pocket")
         self.assertFalse(status.legacy_engine_allowed)
 
-        pocket = pgmx_synthesis.build_pocket_milling_spec(
+        pocket = pgmx_synthesis.build_pocket_spec(
             contour_points=((0, 0), (400, 0), (400, 300), (0, 300), (0, 0)),
             tool_width=80.0,
             target_depth=10.0,
         )
 
-        geometry, strategy, depth = pgmx_synthesis.adapt_pocket_milling_to_vaciado_contract(pocket)
+        geometry, strategy, depth = pgmx_synthesis.adapt_pocket_to_contract(pocket)
 
         self.assertEqual(geometry.outer.bbox.width, 400.0)
         self.assertEqual(geometry.outer.bbox.height, 300.0)
@@ -174,21 +176,21 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp.read_pgmx_state, common_program.read_pgmx_state)
         self.assertIs(core_sp._merge_state, common_program._merge_state)
         self.assertIs(core_sp._apply_piece_state, common_program._apply_piece_state)
-        self.assertIs(core_sp._apply_line_millings, common_program._apply_line_millings)
-        self.assertIs(core_sp._apply_slot_millings, common_program._apply_slot_millings)
-        self.assertIs(core_sp._apply_polyline_millings, common_program._apply_polyline_millings)
-        self.assertIs(core_sp._apply_circle_millings, common_program._apply_circle_millings)
-        self.assertIs(core_sp._apply_squaring_millings, common_program._apply_squaring_millings)
-        self.assertIs(core_sp._apply_pocket_millings, common_program._apply_pocket_millings)
-        self.assertIs(core_sp._apply_drillings, common_program._apply_drillings)
+        self.assertIs(core_sp._apply_lines, common_program._apply_lines)
+        self.assertIs(core_sp._apply_channels, common_program._apply_channels)
+        self.assertIs(core_sp._apply_polylines, common_program._apply_polylines)
+        self.assertIs(core_sp._apply_circles, common_program._apply_circles)
+        self.assertIs(core_sp._apply_contours, common_program._apply_contours)
+        self.assertIs(core_sp._apply_pockets, common_program._apply_pockets)
+        self.assertIs(core_sp._apply_drills, common_program._apply_drills)
         self.assertIs(core_sp._drilling_plane_priority, common_program._drilling_plane_priority)
-        self.assertIs(core_sp._apply_drilling_patterns, common_program._apply_drilling_patterns)
+        self.assertIs(core_sp._apply_drill_patterns, common_program._apply_drill_patterns)
         self.assertIs(core_sp.build_synthesis_request, common_program.build_synthesis_request)
         self.assertIs(core_sp.synthesize_request, common_program.synthesize_request)
         self.assertIs(core_sp.synthesize_pgmx, common_program.synthesize_pgmx)
         self.assertEqual(
             common_program.DEFAULT_MACHINING_ORDER,
-            ("line", "slot", "polyline", "circle", "squaring", "pocket", "drilling", "drilling_pattern"),
+            ("line", "channel", "polyline", "arc", "circle", "contour", "pocket", "drill", "drill_pattern"),
         )
         self.assertIs(core_sp.GeometryPrimitiveSpec, common_geometry.GeometryPrimitiveSpec)
         self.assertIs(core_sp.GeometryProfileSpec, common_geometry.GeometryProfileSpec)
@@ -276,7 +278,7 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIs(core_sp._drilling_axis_span, common_piece._drilling_axis_span)
         self.assertEqual(common_piece._normalize_plane_name("cara-derecha"), "Right")
         piece = common_piece.PieceGeometry(length=500.0, width=300.0, depth=18.0)
-        drill = core_sp.build_drilling_spec(
+        drill = core_sp.build_drill_spec(
             center_x=40.0,
             center_y=9.0,
             diameter=5.0,
@@ -295,30 +297,30 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertEqual(common_tools._normalize_tool_usage_group("Fresa Helicoidal"), "milling")
         self.assertTrue(common_tools._is_vertical_x_saw("Sierra Vertical X"))
         self.assertIn("1900", common_tools._load_tool_catalog())
-        self.assertIs(core_sp.DrillingSpec, drilling_single.DrillingSpec)
-        self.assertIs(core_sp._HydratedDrillingSpec, drilling_single._HydratedDrillingSpec)
-        self.assertIs(core_sp.build_drilling_spec, drilling_single.build_drilling_spec)
-        self.assertIs(core_sp._normalize_drilling_spec, drilling_single._normalize_drilling_spec)
-        self.assertIs(core_sp._hydrate_drilling_spec, drilling_single._hydrate_drilling_spec)
+        self.assertIs(core_sp.DrillSpec, drilling_single.DrillSpec)
+        self.assertIs(core_sp._HydratedDrillSpec, drilling_single._HydratedDrillSpec)
+        self.assertIs(core_sp.build_drill_spec, drilling_single.build_drill_spec)
+        self.assertIs(core_sp._normalize_drill_spec, drilling_single._normalize_drill_spec)
+        self.assertIs(core_sp._hydrate_drill_spec, drilling_single._hydrate_drill_spec)
         self.assertIs(core_sp._drilling_feature_depth_value, drilling_single._drilling_feature_depth_value)
         self.assertIs(core_sp._drilling_total_depth, drilling_single._drilling_total_depth)
         self.assertIs(core_sp._drilling_bottom_condition_type, drilling_single._drilling_bottom_condition_type)
         self.assertIs(core_sp._uses_drilling_depth_expressions, drilling_single._uses_drilling_depth_expressions)
-        self.assertIs(core_sp._build_drilling_feature, drilling_single._build_drilling_feature)
+        self.assertIs(core_sp._build_drill_feature, drilling_single._build_drill_feature)
         self.assertIs(core_sp._append_drilling_feature_payload, drilling_single._append_drilling_feature_payload)
-        self.assertIs(core_sp._build_drilling_operation, drilling_single._build_drilling_operation)
+        self.assertIs(core_sp._build_drill_operation, drilling_single._build_drill_operation)
         self.assertIs(core_sp._append_drilling, drilling_single._append_drilling)
         self.assertIs(core_sp._validate_drilling_center, drilling_single._validate_drilling_center)
         self.assertIs(
-            core_sp._validate_tool_sinking_length_for_drilling_spec,
-            drilling_single._validate_tool_sinking_length_for_drilling_spec,
+            core_sp._validate_tool_sinking_length_for_drill_spec,
+            drilling_single._validate_tool_sinking_length_for_drill_spec,
         )
-        top_drill = drilling_single.build_drilling_spec(center_x=40, center_y=60, diameter=5.0)
-        self.assertIsInstance(top_drill, drilling_single.DrillingSpec)
+        top_drill = drilling_single.build_drill_spec(center_x=40, center_y=60, diameter=5.0)
+        self.assertIsInstance(top_drill, drilling_single.DrillSpec)
         self.assertEqual(top_drill.drill_family, "Conical")
         self.assertEqual(top_drill.tool_id, "0")
-        side_drill = drilling_single._normalize_drilling_spec(
-            drilling_single.DrillingSpec(
+        side_drill = drilling_single._normalize_drill_spec(
+            drilling_single.DrillSpec(
                 center_x=40,
                 center_y=9,
                 diameter=8,
@@ -333,26 +335,26 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertEqual(side_drill.tool_resolution, "Explicit")
         self.assertEqual(side_drill.tool_id, "123")
         with self.assertRaisesRegex(ValueError, "D5"):
-            drilling_single._normalize_drilling_spec(
-                drilling_single.DrillingSpec(center_x=0, center_y=0, diameter=8, drill_family="lanza")
+            drilling_single._normalize_drill_spec(
+                drilling_single.DrillSpec(center_x=0, center_y=0, diameter=8, drill_family="lanza")
             )
-        self.assertIs(core_sp.DrillingPatternSpec, drilling_pattern.DrillingPatternSpec)
-        self.assertIs(core_sp.build_drilling_pattern_spec, drilling_pattern.build_drilling_pattern_spec)
-        self.assertIs(core_sp._HydratedDrillingPatternSpec, drilling_pattern._HydratedDrillingPatternSpec)
-        self.assertIs(core_sp._hydrate_drilling_pattern_spec, drilling_pattern._hydrate_drilling_pattern_spec)
+        self.assertIs(core_sp.DrillPatternSpec, drilling_pattern.DrillPatternSpec)
+        self.assertIs(core_sp.build_drill_pattern_spec, drilling_pattern.build_drill_pattern_spec)
+        self.assertIs(core_sp._HydratedDrillPatternSpec, drilling_pattern._HydratedDrillPatternSpec)
+        self.assertIs(core_sp._hydrate_drill_pattern_spec, drilling_pattern._hydrate_drill_pattern_spec)
         self.assertIs(core_sp._normalize_drilling_pattern_spec, drilling_pattern._normalize_drilling_pattern_spec)
         self.assertIs(core_sp._validate_drilling_pattern_center, drilling_pattern._validate_drilling_pattern_center)
-        self.assertIs(core_sp._build_drilling_pattern_feature, drilling_pattern._build_drilling_pattern_feature)
+        self.assertIs(core_sp._build_drill_pattern_feature, drilling_pattern._build_drill_pattern_feature)
         self.assertIs(
-            core_sp._build_drilling_pattern_depth_expression,
-            drilling_pattern._build_drilling_pattern_depth_expression,
+            core_sp._build_drill_pattern_depth_expression,
+            drilling_pattern._build_drill_pattern_depth_expression,
         )
-        self.assertIs(core_sp._append_drilling_pattern, drilling_pattern._append_drilling_pattern)
+        self.assertIs(core_sp._append_drill_pattern, drilling_pattern._append_drill_pattern)
         self.assertIs(
             core_sp._drilling_pattern_bottom_condition_type,
             drilling_pattern._drilling_pattern_bottom_condition_type,
         )
-        drill_pattern = drilling_pattern.build_drilling_pattern_spec(
+        drill_pattern = drilling_pattern.build_drill_pattern_spec(
             20,
             30,
             5.0,
@@ -361,14 +363,14 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             32.0,
             row_spacing=45.0,
         )
-        self.assertIsInstance(drill_pattern, drilling_pattern.DrillingPatternSpec)
+        self.assertIsInstance(drill_pattern, drilling_pattern.DrillPatternSpec)
         self.assertEqual(drill_pattern.drill_family, "Conical")
         self.assertEqual(drill_pattern.columns, 2)
         self.assertEqual(drill_pattern.rows, 3)
         self.assertEqual(drill_pattern.row_spacing, 45.0)
         self.assertEqual(drill_pattern.tool_id, "0")
         with self.assertRaisesRegex(ValueError, "unico taladro"):
-            drilling_pattern.build_drilling_pattern_spec(0, 0, 5, 1, 1, 0)
+            drilling_pattern.build_drill_pattern_spec(0, 0, 5, 1, 1, 0)
         self.assertIs(core_sp.UnidirectionalMillingStrategySpec, common_strategy.UnidirectionalMillingStrategySpec)
         self.assertIs(core_sp.BidirectionalMillingStrategySpec, common_strategy.BidirectionalMillingStrategySpec)
         self.assertIs(core_sp.HelicalMillingStrategySpec, common_strategy.HelicalMillingStrategySpec)
@@ -509,20 +511,20 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertTrue(retract.is_enabled)
         self.assertEqual(retract.retract_type, "Arc")
         self.assertEqual(retract.overlap, 0.25)
-        self.assertIs(core_sp.LineMillingSpec, milling_line.LineMillingSpec)
-        self.assertIs(core_sp._HydratedLineMillingSpec, milling_line._HydratedLineMillingSpec)
-        self.assertIs(core_sp.build_line_milling_spec, milling_line.build_line_milling_spec)
-        self.assertIs(core_sp._normalize_line_milling_spec, milling_line._normalize_line_milling_spec)
-        self.assertIs(core_sp._append_line_milling, milling_line._append_line_milling)
+        self.assertIs(core_sp.LineSpec, milling_line.LineSpec)
+        self.assertIs(core_sp._HydratedLineSpec, milling_line._HydratedLineSpec)
+        self.assertIs(core_sp.build_line_spec, milling_line.build_line_spec)
+        self.assertIs(core_sp._normalize_line_spec, milling_line._normalize_line_spec)
+        self.assertIs(core_sp._append_line, milling_line._append_line)
         self.assertIs(core_sp._build_line_geometry, milling_line._build_line_geometry)
         self.assertIs(core_sp._build_line_operation, milling_line._build_line_operation)
         self.assertIs(core_sp._build_line_toolpath_profile, milling_line._build_line_toolpath_profile)
         self.assertIs(core_sp._offset_line_for_toolpath, milling_line._offset_line_for_toolpath)
         self.assertIs(core_sp._matches_line_geometry, milling_line._matches_line_geometry)
         self.assertIs(core_sp._can_hydrate_exact_serialization, milling_line._can_hydrate_exact_serialization)
-        self.assertIs(core_sp._extract_line_milling_template, milling_line._extract_line_milling_template)
-        self.assertIs(core_sp._hydrate_line_milling_spec, milling_line._hydrate_line_milling_spec)
-        line = milling_line.build_line_milling_spec(
+        self.assertIs(core_sp._extract_line_template, milling_line._extract_line_template)
+        self.assertIs(core_sp._hydrate_line_spec, milling_line._hydrate_line_spec)
+        line = milling_line.build_line_spec(
             0,
             0,
             100,
@@ -532,64 +534,68 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             None,
             None,
             None,
-            line_side_of_feature="derecha",
-            line_milling_strategy=common_strategy.build_unidirectional_milling_strategy_spec(),
+            side_of_feature="derecha",
+            milling_strategy=common_strategy.build_unidirectional_milling_strategy_spec(),
         )
-        self.assertIsInstance(line, milling_line.LineMillingSpec)
+        self.assertIsInstance(line, milling_line.LineSpec)
         self.assertEqual(line.side_of_feature, "Right")
         self.assertEqual(line.tool_width, 9.52)
-        normalized_line = milling_line._normalize_line_milling_spec(
-            milling_line.LineMillingSpec(0, 0, 100, 0, side_of_feature="izquierda")
+        normalized_line = milling_line._normalize_line_spec(
+            milling_line.LineSpec(0, 0, 100, 0, side_of_feature="izquierda")
         )
         self.assertEqual(normalized_line.side_of_feature, "Left")
-        self.assertIs(core_sp.SlotMillingSpec, milling_slot.SlotMillingSpec)
-        self.assertIs(core_sp._HydratedSlotMillingSpec, milling_slot._HydratedSlotMillingSpec)
-        self.assertIs(core_sp.build_slot_milling_spec, milling_slot.build_slot_milling_spec)
-        self.assertIs(core_sp._append_slot_milling, milling_slot._append_slot_milling)
-        self.assertIs(core_sp._build_slot_side_feature, milling_slot._build_slot_side_feature)
-        self.assertIs(core_sp._normalize_slot_milling_spec, milling_slot._normalize_slot_milling_spec)
-        self.assertIs(core_sp._hydrate_slot_milling_spec, milling_slot._hydrate_slot_milling_spec)
-        slot = milling_slot.build_slot_milling_spec(
+        self.assertIs(core_sp.ChannelSpec, milling_channel.ChannelSpec)
+        self.assertIs(core_sp._HydratedChannelSpec, milling_channel._HydratedChannelSpec)
+        self.assertIs(core_sp.build_channel_spec, milling_channel.build_channel_spec)
+        self.assertIs(core_sp._append_channel, milling_channel._append_channel)
+        self.assertIs(core_sp._build_slot_side_feature, milling_channel._build_slot_side_feature)
+        self.assertIs(core_sp._normalize_channel_spec, milling_channel._normalize_channel_spec)
+        self.assertIs(core_sp._hydrate_channel_spec, milling_channel._hydrate_channel_spec)
+        slot = milling_channel.build_channel_spec(
             start_x=0,
             start_y=0,
             end_x=120,
             end_y=0,
             side_of_feature="derecha",
         )
-        self.assertIsInstance(slot, milling_slot.SlotMillingSpec)
+        self.assertIsInstance(slot, milling_channel.ChannelSpec)
         self.assertEqual(slot.feature_name, "Canal")
         self.assertEqual(slot.side_of_feature, "Right")
         self.assertEqual(slot.tool_id, "1899")
         self.assertEqual(slot.depth_spec.target_depth, 10.0)
         self.assertIsNone(slot.milling_strategy)
         with self.assertRaisesRegex(ValueError, "longitud cero"):
-            milling_slot.build_slot_milling_spec(start_x=0, start_y=0, end_x=0, end_y=0)
-        self.assertIs(core_sp.PolylineMillingSpec, milling_profile.PolylineMillingSpec)
-        self.assertIs(core_sp._HydratedPolylineMillingSpec, milling_profile._HydratedPolylineMillingSpec)
-        self.assertIs(core_sp.build_polyline_milling_spec, milling_profile.build_polyline_milling_spec)
-        self.assertIs(core_sp._append_curve_profile_milling, milling_profile._append_curve_profile_milling)
-        self.assertIs(core_sp._append_polyline_milling, milling_profile._append_polyline_milling)
-        self.assertIs(core_sp._normalize_polyline_milling_spec, milling_profile._normalize_polyline_milling_spec)
-        self.assertIs(core_sp._build_polyline_toolpath_profile, milling_profile._build_polyline_toolpath_profile)
-        self.assertIs(core_sp._matches_polyline_geometry, milling_profile._matches_polyline_geometry)
-        self.assertIs(
-            core_sp._can_hydrate_exact_polyline_serialization,
-            milling_profile._can_hydrate_exact_polyline_serialization,
-        )
-        self.assertIs(core_sp._extract_polyline_milling_template, milling_profile._extract_polyline_milling_template)
-        self.assertIs(core_sp._hydrate_polyline_milling_spec, milling_profile._hydrate_polyline_milling_spec)
-        self.assertIs(milling_profile._normalize_polyline_points, common_geometry._normalize_polyline_points)
-        self.assertIs(milling_profile._is_closed_polyline_points, common_geometry._is_closed_polyline_points)
-        polyline = milling_profile.build_polyline_milling_spec(
-            ((0, 0), (100, 0), (100, 50), (0, 0)),
+            milling_channel.build_channel_spec(start_x=0, start_y=0, end_x=0, end_y=0)
+        # POLILÍNEA UNIFICADA (una sola spec: rectas y/o arcos; `points=` es el atajo recto).
+        self.assertIs(core_sp.PolylineSpec, milling_polyline.PolylineSpec)
+        self.assertIs(core_sp.build_polyline_spec, milling_polyline.build_polyline_spec)
+        self.assertIs(core_sp.PolylineSegment, milling_polyline.PolylineSegment)
+        # `profile.py` queda como MOTOR compartido de autoría de perfiles curvos (interno del
+        # paquete milling: lo usan arc/circle/poly_profile/squaring, no es API pública del core).
+        self.assertTrue(callable(milling_curve_profile._append_curve_profile_milling))
+        self.assertEqual(milling_curve_profile.__all__, ["_append_curve_profile_milling"])
+
+        polyline = milling_polyline.build_polyline_spec(
+            points=((0, 0), (100, 0), (100, 50), (0, 0)),
             side_of_feature="izquierda",
         )
-        self.assertIsInstance(polyline, milling_profile.PolylineMillingSpec)
+        self.assertIsInstance(polyline, milling_polyline.PolylineSpec)
         self.assertEqual(polyline.side_of_feature, "Left")
-        self.assertTrue(milling_profile._is_closed_polyline_points(polyline.points))
+        self.assertTrue(polyline.is_closed)
+        self.assertTrue(common_geometry._is_closed_polyline_points(polyline.points))
+        self.assertTrue(all(not segment.is_arc for segment in polyline.segments))
+
+        # La misma spec acepta arcos mezclados con rectas.
+        mixed = milling_polyline.build_polyline_spec(
+            start=(0, 0),
+            segments=[((0, 50),), ((50, 100), (50, 50), "CounterClockwise"), ((150, 100),)],
+        )
+        self.assertTrue(mixed.segments[1].is_arc)
+        self.assertFalse(mixed.is_closed)
+
         with self.assertRaisesRegex(ValueError, "Maestro no postprocesa"):
-            milling_profile.build_polyline_milling_spec(
-                ((0, 0), (100, 0), (100, 50)),
+            milling_polyline.build_polyline_spec(
+                points=((0, 0), (100, 0), (100, 50)),
                 milling_strategy=common_strategy.build_unidirectional_milling_strategy_spec(
                     allow_multiple_passes=True,
                     axial_cutting_depth=5.0,
@@ -598,20 +604,20 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
                 retract_type="Arc",
                 retract_mode="Up",
             )
-        self.assertIs(core_sp.CircleMillingSpec, milling_circle.CircleMillingSpec)
-        self.assertIs(core_sp._HydratedCircleMillingSpec, milling_circle._HydratedCircleMillingSpec)
-        self.assertIs(core_sp.build_circle_milling_spec, milling_circle.build_circle_milling_spec)
-        self.assertIs(core_sp._append_circle_milling, milling_circle._append_circle_milling)
-        self.assertIs(core_sp._normalize_circle_milling_spec, milling_circle._normalize_circle_milling_spec)
+        self.assertIs(core_sp.CircleSpec, milling_circle.CircleSpec)
+        self.assertIs(core_sp._HydratedCircleSpec, milling_circle._HydratedCircleSpec)
+        self.assertIs(core_sp.build_circle_spec, milling_circle.build_circle_spec)
+        self.assertIs(core_sp._append_circle, milling_circle._append_circle)
+        self.assertIs(core_sp._normalize_circle_spec, milling_circle._normalize_circle_spec)
         self.assertIs(core_sp._build_circle_toolpath_profile, milling_circle._build_circle_toolpath_profile)
         self.assertIs(core_sp._matches_circle_geometry, milling_circle._matches_circle_geometry)
         self.assertIs(
             core_sp._can_hydrate_exact_circle_serialization,
             milling_circle._can_hydrate_exact_circle_serialization,
         )
-        self.assertIs(core_sp._extract_circle_milling_template, milling_circle._extract_circle_milling_template)
-        self.assertIs(core_sp._hydrate_circle_milling_spec, milling_circle._hydrate_circle_milling_spec)
-        circle = milling_circle.build_circle_milling_spec(
+        self.assertIs(core_sp._extract_circle_template, milling_circle._extract_circle_template)
+        self.assertIs(core_sp._hydrate_circle_spec, milling_circle._hydrate_circle_spec)
+        circle = milling_circle.build_circle_spec(
             center_x=50,
             center_y=60,
             radius=20,
@@ -619,27 +625,27 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             side_of_feature="derecha",
             milling_strategy=common_strategy.build_helical_milling_strategy_spec(axial_cutting_depth=2.0),
         )
-        self.assertIsInstance(circle, milling_circle.CircleMillingSpec)
+        self.assertIsInstance(circle, milling_circle.CircleSpec)
         self.assertEqual(circle.winding, "Clockwise")
         self.assertEqual(circle.side_of_feature, "Right")
         self.assertIsInstance(circle.milling_strategy, common_strategy.HelicalMillingStrategySpec)
         with self.assertRaisesRegex(ValueError, "radio"):
-            milling_circle.build_circle_milling_spec(center_x=0, center_y=0, radius=0)
-        self.assertIs(core_sp.SquaringMillingSpec, milling_squaring.SquaringMillingSpec)
-        self.assertIs(core_sp._HydratedSquaringMillingSpec, milling_squaring._HydratedSquaringMillingSpec)
-        self.assertIs(core_sp.build_squaring_milling_spec, milling_squaring.build_squaring_milling_spec)
-        self.assertIs(core_sp._append_squaring_milling, milling_squaring._append_squaring_milling)
-        self.assertIs(core_sp._normalize_squaring_milling_spec, milling_squaring._normalize_squaring_milling_spec)
-        self.assertIs(core_sp._hydrate_squaring_milling_spec, milling_squaring._hydrate_squaring_milling_spec)
-        self.assertIs(core_sp._build_squaring_outline_points, milling_squaring._build_squaring_outline_points)
-        self.assertIs(core_sp._build_squaring_geometry_profile, milling_squaring._build_squaring_geometry_profile)
-        self.assertIs(core_sp._build_squaring_toolpath_profile, milling_squaring._build_squaring_toolpath_profile)
+            milling_circle.build_circle_spec(center_x=0, center_y=0, radius=0)
+        self.assertIs(core_sp.ContourSpec, milling_contour.ContourSpec)
+        self.assertIs(core_sp._HydratedContourSpec, milling_contour._HydratedContourSpec)
+        self.assertIs(core_sp.build_contour_spec, milling_contour.build_contour_spec)
+        self.assertIs(core_sp._append_contour, milling_contour._append_contour)
+        self.assertIs(core_sp._normalize_contour_spec, milling_contour._normalize_contour_spec)
+        self.assertIs(core_sp._hydrate_contour_spec, milling_contour._hydrate_contour_spec)
+        self.assertIs(core_sp._build_squaring_outline_points, milling_contour._build_squaring_outline_points)
+        self.assertIs(core_sp._build_squaring_geometry_profile, milling_contour._build_squaring_geometry_profile)
+        self.assertIs(core_sp._build_squaring_toolpath_profile, milling_contour._build_squaring_toolpath_profile)
         self.assertIs(
             core_sp._reparameterize_squaring_toolpath_profile,
-            milling_squaring._reparameterize_squaring_toolpath_profile,
+            milling_contour._reparameterize_squaring_toolpath_profile,
         )
-        squaring = milling_squaring.build_squaring_milling_spec(start_edge="borde-derecho", winding="horario")
-        self.assertIsInstance(squaring, milling_squaring.SquaringMillingSpec)
+        squaring = milling_contour.build_contour_spec(start_edge="borde-derecho", winding="horario")
+        self.assertIsInstance(squaring, milling_contour.ContourSpec)
         self.assertEqual(squaring.start_edge, "Right")
         self.assertEqual(squaring.winding, "Clockwise")
         self.assertEqual(squaring.side_of_feature, "Left")
@@ -647,14 +653,14 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertTrue(squaring.depth_spec.is_through)
         self.assertEqual(squaring.depth_spec.extra_depth, 1.0)
         self.assertEqual(squaring.approach.approach_type, "Arc")
-        self.assertIs(core_sp.PocketMillingSpec, milling_pocket.PocketMillingSpec)
+        self.assertIs(core_sp.PocketSpec, milling_pocket.PocketSpec)
         self.assertIs(core_sp.PocketBossRouteSeedSpec, milling_pocket.PocketBossRouteSeedSpec)
-        self.assertIs(core_sp._HydratedPocketMillingSpec, milling_pocket._HydratedPocketMillingSpec)
+        self.assertIs(core_sp._HydratedPocketSpec, milling_pocket._HydratedPocketSpec)
         self.assertIs(core_sp._SingleSeedMultiloopRoute, milling_pocket._SingleSeedMultiloopRoute)
-        self.assertIs(core_sp.build_pocket_milling_spec, milling_pocket.build_pocket_milling_spec)
+        self.assertIs(core_sp.build_pocket_spec, milling_pocket.build_pocket_spec)
         self.assertIs(core_sp._build_closed_pocket_feature, milling_pocket._build_closed_pocket_feature)
         self.assertIs(core_sp._build_closed_pocket_boss, milling_pocket._build_closed_pocket_boss)
-        self.assertIs(core_sp._append_pocket_milling, milling_pocket._append_pocket_milling)
+        self.assertIs(core_sp._append_pocket, milling_pocket._append_pocket)
         self.assertIs(core_sp._build_contour_parallel_xyz_path, milling_pocket._build_contour_parallel_xyz_path)
         self.assertIs(
             milling_pocket.generate_rectangular_contour_parallel_xyz_path,
@@ -726,12 +732,12 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         )
         self.assertIs(core_sp._supported_single_seed_route_seed, milling_pocket._supported_single_seed_route_seed)
         self.assertIs(core_sp._xy_bbox_minmax, milling_pocket._xy_bbox_minmax)
-        self.assertIs(core_sp._extract_pocket_milling_template, milling_pocket._extract_pocket_milling_template)
+        self.assertIs(core_sp._extract_pocket_template, milling_pocket._extract_pocket_template)
         self.assertIs(
             core_sp._can_hydrate_pocket_template_trace,
             milling_pocket._can_hydrate_pocket_template_trace,
         )
-        self.assertIs(core_sp._hydrate_pocket_milling_spec, milling_pocket._hydrate_pocket_milling_spec)
+        self.assertIs(core_sp._hydrate_pocket_spec, milling_pocket._hydrate_pocket_spec)
         self.assertIs(
             core_sp.build_pocket_boss_route_seed_spec,
             milling_pocket.build_pocket_boss_route_seed_spec,
@@ -740,21 +746,47 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
             geometry_id="42",
             contour_points=((20, 20), (40, 20), (40, 40), (20, 20)),
         )
-        pocket = milling_pocket.build_pocket_milling_spec(
+        pocket = milling_pocket.build_pocket_spec(
             contour_points=((0, 0), (100, 0), (100, 80), (0, 0)),
             tool_width=20.0,
             allowance_side=2.0,
             boss_route_seeds=(seed,),
         )
-        self.assertIsInstance(pocket, milling_pocket.PocketMillingSpec)
+        self.assertIsInstance(pocket, milling_pocket.PocketSpec)
         self.assertEqual(pocket.feature_name, "Vaciado")
         self.assertEqual(pocket.effective_contour_offset, 12.0)
         self.assertEqual(pocket.radial_step, 10.0)
         self.assertTrue(pocket.has_boss_route_seeds)
         self.assertEqual(pocket.resolved_boss_route_seed_contours, (seed.contour_points,))
         with self.assertRaisesRegex(ValueError, "primer y ultimo punto"):
-            milling_pocket.build_pocket_milling_spec(contour_points=((0, 0), (100, 0), (100, 80), (0, 80)))
+            milling_pocket.build_pocket_spec(contour_points=((0, 0), (100, 0), (100, 80), (0, 80)))
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MachiningOrderAliasesTest(unittest.TestCase):
+    """La tabla de alias del orden de mecanizado es API de cara al usuario (acepta plural,
+    castellano y los nombres previos al refactor de nomenclatura). Un alias que apunte a una
+    clave canónica inexistente NO explota: `_normalize_machining_order` lo descarta EN SILENCIO
+    y el usuario cree que pidió un orden que nunca se aplicó. Esta guarda lo hace fallar ruidoso
+    (el refactor de nomenclatura dejó los 38 alias apuntando a claves muertas durante un rato)."""
+
+    def test_todos_los_alias_apuntan_a_una_clave_canonica(self):
+        import inspect
+        source = inspect.getsource(common_program._normalize_machining_order)
+        targets = set(re.findall(r'"[a-z_]+":\s*"([a-z_]+)"', source))
+        self.assertTrue(targets, "no se pudo leer la tabla de alias")
+        huerfanos = sorted(targets - set(common_program.DEFAULT_MACHINING_ORDER))
+        self.assertEqual(huerfanos, [], f"alias apuntando a claves inexistentes: {huerfanos}")
+
+    def test_los_nombres_previos_al_refactor_siguen_valiendo(self):
+        # Nadie tiene que reescribir sus scripts porque nosotros renombramos.
+        orden = common_program._normalize_machining_order(
+            ["slot", "squaring", "drilling", "drilling_pattern"])
+        self.assertEqual(orden[:4], ("channel", "contour", "drill", "drill_pattern"))
+
+    def test_los_nombres_de_maestro_en_castellano_valen(self):
+        orden = common_program._normalize_machining_order(["canal", "galceado", "vaciado", "taladro"])
+        self.assertEqual(orden[:4], ("channel", "contour", "pocket", "drill"))

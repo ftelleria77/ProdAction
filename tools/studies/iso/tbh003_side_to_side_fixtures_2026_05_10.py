@@ -18,8 +18,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    DrillingSpec,
-    build_drilling_spec,
+    DrillSpec,
+    build_drill_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -72,9 +72,9 @@ def _face_position(fixture: Fixture, face: str, fraction: float) -> float:
     return round(_face_span(fixture, face) * fraction, 3)
 
 
-def _side_drill(fixture: Fixture, face: str, ordinal: int) -> DrillingSpec:
+def _side_drill(fixture: Fixture, face: str, ordinal: int) -> DrillSpec:
     fraction = 0.35 if ordinal == 1 else 0.65
-    return build_drilling_spec(
+    return build_drill_spec(
         feature_name=f"TBH003_{fixture.index:02d}_{ordinal}_{face.upper()}_D8",
         plane_name=face,
         center_x=_face_position(fixture, face, fraction),
@@ -109,7 +109,7 @@ def generate(output_dir: Path, *, force: bool = False) -> list[dict[str, str]]:
         if output_path.exists() and not force:
             raise FileExistsError(f"Refusing to overwrite existing fixture: {output_path}")
 
-        drillings = (
+        drills = (
             _side_drill(fixture, fixture.from_face, 1),
             _side_drill(fixture, fixture.to_face, 2),
         )
@@ -123,7 +123,7 @@ def generate(output_dir: Path, *, force: bool = False) -> list[dict[str, str]]:
             origin_y=fixture.origin_y,
             origin_z=fixture.origin_z,
             execution_fields=fixture.execution_fields,
-            ordered_machinings=drillings,
+            ordered_machinings=drills,
         )
         result = synthesize_request(request)
         expected_iso_path = EXPECTED_ISO_DIR / f"{fixture.name.lower()}.iso"
@@ -139,13 +139,13 @@ def generate(output_dir: Path, *, force: bool = False) -> list[dict[str, str]]:
                 "from_face_label": FACE_LABELS[fixture.from_face],
                 "to_face_label": FACE_LABELS[fixture.to_face],
                 "variant_kind": fixture.variant_kind,
-                "drillings": str(len(drillings)),
+                "drills": str(len(drills)),
                 "diameter": "8",
                 "target_depth": "28",
                 "sha256": result.sha256,
                 "purpose": (
                     f"T-BH-003: isolate side drill transition {fixture.transition} "
-                    "with two consecutive D8 horizontal drillings."
+                    "with two consecutive D8 horizontal drills."
                 ),
             }
         )
@@ -162,7 +162,7 @@ def generate(output_dir: Path, *, force: bool = False) -> list[dict[str, str]]:
         "from_face_label",
         "to_face_label",
         "variant_kind",
-        "drillings",
+        "drills",
         "diameter",
         "target_depth",
         "sha256",

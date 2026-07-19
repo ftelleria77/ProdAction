@@ -957,31 +957,41 @@ def _require_top_plane_for_rotation(spec) -> None:
 
 def _rotate_machining_spec_90_ccw(spec, original_width: float):
     _require_top_plane_for_rotation(spec)
-    if isinstance(spec, sp.LineMillingSpec):
+    if isinstance(spec, sp.LineSpec):
         start_x, start_y = _rotate_point_90_ccw(original_width, spec.start_x, spec.start_y)
         end_x, end_y = _rotate_point_90_ccw(original_width, spec.end_x, spec.end_y)
         return replace(spec, start_x=start_x, start_y=start_y, end_x=end_x, end_y=end_y)
-    if isinstance(spec, sp.SlotMillingSpec):
+    if isinstance(spec, sp.ChannelSpec):
         start_x, start_y = _rotate_point_90_ccw(original_width, spec.start_x, spec.start_y)
         end_x, end_y = _rotate_point_90_ccw(original_width, spec.end_x, spec.end_y)
         return replace(spec, start_x=start_x, start_y=start_y, end_x=end_x, end_y=end_y)
-    if isinstance(spec, sp.PolylineMillingSpec):
-        return replace(
-            spec,
-            points=tuple(_rotate_point_90_ccw(original_width, x_value, y_value) for x_value, y_value in spec.points),
-        )
-    if isinstance(spec, sp.CircleMillingSpec):
+    if isinstance(spec, sp.PolylineSpec):
+        # Polilínea unificada: `points` es una property → se rota el arranque y CADA segmento
+        # (extremo y, si es arco, también su centro; el sentido de giro no cambia con un giro).
+        start_x, start_y = _rotate_point_90_ccw(original_width, spec.start_x, spec.start_y)
+        rotated_segments = []
+        for segment in spec.segments:
+            end_x, end_y = _rotate_point_90_ccw(original_width, segment.end_x, segment.end_y)
+            if segment.is_arc:
+                center_x, center_y = _rotate_point_90_ccw(
+                    original_width, segment.center_x, segment.center_y)
+                rotated_segments.append(replace(
+                    segment, end_x=end_x, end_y=end_y, center_x=center_x, center_y=center_y))
+            else:
+                rotated_segments.append(replace(segment, end_x=end_x, end_y=end_y))
+        return replace(spec, start_x=start_x, start_y=start_y, segments=tuple(rotated_segments))
+    if isinstance(spec, sp.CircleSpec):
         center_x, center_y = _rotate_point_90_ccw(original_width, spec.center_x, spec.center_y)
         return replace(spec, center_x=center_x, center_y=center_y)
-    if isinstance(spec, sp.SquaringMillingSpec):
+    if isinstance(spec, sp.ContourSpec):
         return replace(spec, start_edge=_rotated_start_edge_90_ccw(spec.start_edge))
-    if isinstance(spec, sp.DrillingSpec):
+    if isinstance(spec, sp.DrillSpec):
         center_x, center_y = _rotate_point_90_ccw(original_width, spec.center_x, spec.center_y)
         return replace(spec, center_x=center_x, center_y=center_y)
     raise TypeError(f"Spec de mecanizado no soportado para rotacion: {type(spec).__name__}")
 
 
-def _build_rotated_slot_spec_from_entry(result, entry, original_width: float) -> sp.SlotMillingSpec:
+def _build_rotated_slot_spec_from_entry(result, entry, original_width: float) -> sp.ChannelSpec:
     snapshot = result.snapshot
     feature = snapshot.feature_by_id.get(entry.feature_id)
     if feature is None or feature.geometry_ref is None:
@@ -1006,7 +1016,7 @@ def _build_rotated_slot_spec_from_entry(result, entry, original_width: float) ->
     start_x, start_y = _rotate_point_90_ccw(original_width, primitive.start_point[0], primitive.start_point[1])
     end_x, end_y = _rotate_point_90_ccw(original_width, primitive.end_point[0], primitive.end_point[1])
 
-    return sp.build_slot_milling_spec(
+    return sp.build_channel_spec(
         start_x=start_x,
         start_y=start_y,
         end_x=end_x,

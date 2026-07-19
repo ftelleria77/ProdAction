@@ -1,0 +1,83 @@
+[STRUCT]
+KEYWORD (par.dat) {
+        KEY_SYS;
+        KEY_ORG,cn,cg0;
+        KEY_TWI,twi,10;
+        KEY_THD,thd,10;
+        KEY_CED,ced,10;
+        KEY_WEAR,wear,5;
+        KEY_UT,nc,10;
+        KEY_MAG;
+        KEY_CZO,czone,6;
+        KEY_USRDLL,UsrDll,8;
+        KEY_PROBE,probe,4;
+        KEY_TOR,torcia,1;
+        KEY_GANTRY,gantry,1;
+        KEY_IXCFG;
+        KEY_QXCFG;
+}
+
+#include "Userdll.str"
+#include "org.str"
+#include "twi.str";
+#include "thd.str";
+#include "ced.str";
+#include "ut.str";
+#include "wear.str";
+#include "mag.str";
+#include "czo.str";
+#include "probe.str";
+#include "torcia.str";
+#include "gantry.str";
+#include "fastinp.str"
+#include "Iocfg.str"
+
+KEY_SYS {
+        KEY_CONFGEN;
+        ?1,KEY_CFGPLC;
+        KEY_CONFCHAN,cn,cg0;
+        KEY_PARCHAN,cn,cg0;
+        KEY_GEOCHAN,cn,cg0;
+        KEY_FDC,cn,cg0;
+        KEY_PARAX,ax,cg1;
+        KEY_CONFAX,ax,cg1;
+        KEY_TRASLO,ax,cg1;
+        KEY_SSISTAT,ax,cg1;
+        KEY_DGT;
+        KEY_CAN;
+        KEY_FASTINP;
+}
+
+#include "cnfge.str";
+#include "CnfPLC.str";
+#include "cnfch.str"
+#include "geoch.str"
+#include "parch.str"
+#include "fdc.str"
+#include "cnfax.str"
+#include "parax.str"
+#include "traslo.str"
+#include "ssistat.str"
+#include "dgt.str"
+#include "can.str"
+
+[KEYS]
+CMD0  = DEFAULT
+CMD1  = DEFAULT
+CMD2  = DEFAULT
+CMD3  = DEFAULT
+CMD4  = DEFAULT
+
+           
+CMD5=UIPL
+FILE5=Esa_Link
+ABIL5=(DeGen.DGn0>0)
+
+
+CMD6  = LOAD
+FILE6 = Par
+EXT6  = dat
+
+CMD7  = SAVE
+FILE7 = Par
+EXT7  = dat

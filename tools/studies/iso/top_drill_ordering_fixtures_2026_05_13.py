@@ -30,10 +30,10 @@ from pgmx.snapshot import (  # noqa: E402
     read_pgmx_snapshot,
 )
 from pgmx.synthesis import (  # noqa: E402
-    DrillingSpec,
-    build_drilling_spec,
-    build_line_milling_spec,
-    build_squaring_milling_spec,
+    DrillSpec,
+    build_drill_spec,
+    build_line_spec,
+    build_contour_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -107,8 +107,8 @@ SUSPECTED_SERPENTINE_ORDER = ("A", "B", "C", "D", "E", "F", "G", "H", "I", "J")
 SCRAMBLED_ORDER = ("H", "A", "E", "C", "G", "F", "B", "J", "D", "I")
 
 
-def _top_drill(fixture: Fixture, hole: Hole, ordinal: int) -> DrillingSpec:
-    return build_drilling_spec(
+def _top_drill(fixture: Fixture, hole: Hole, ordinal: int) -> DrillSpec:
+    return build_drill_spec(
         feature_name=(
             f"TBH001_ORDER_{fixture.name}_{ordinal:02d}_"
             f"{hole.label}_{hole.tool}_X{_coord_token(hole.x)}_Y{_coord_token(hole.y)}"
@@ -126,7 +126,7 @@ def _coord_token(value: float) -> str:
     return f"{value:g}".replace(".", "p")
 
 
-def _top_drills(fixture: Fixture) -> tuple[DrillingSpec, ...]:
+def _top_drills(fixture: Fixture) -> tuple[DrillSpec, ...]:
     return tuple(
         _top_drill(fixture, HOLES[label], ordinal)
         for ordinal, label in enumerate(fixture.hole_labels, start=1)
@@ -134,47 +134,47 @@ def _top_drills(fixture: Fixture) -> tuple[DrillingSpec, ...]:
 
 
 def _line_ltr(fixture: Fixture) -> object:
-    return build_line_milling_spec(
-        line_x1=60.0,
-        line_y1=24.0,
-        line_x2=760.0,
-        line_y2=24.0,
-        line_feature_name=f"TBH001_ORDER_{fixture.name}_PREV_LINE_LTR_E001",
-        line_tool_id="1900",
-        line_tool_name="E001",
-        line_tool_width=18.36,
-        line_security_plane=20.0,
-        line_side_of_feature="Center",
-        line_is_through=False,
-        line_target_depth=10.0,
-        line_extra_depth=0.0,
-        line_approach_enabled=False,
-        line_retract_enabled=False,
+    return build_line_spec(
+        start_x=60.0,
+        start_y=24.0,
+        end_x=760.0,
+        end_y=24.0,
+        feature_name=f"TBH001_ORDER_{fixture.name}_PREV_LINE_LTR_E001",
+        tool_id="1900",
+        tool_name="E001",
+        tool_width=18.36,
+        security_plane=20.0,
+        side_of_feature="Center",
+        is_through=False,
+        target_depth=10.0,
+        extra_depth=0.0,
+        approach_enabled=False,
+        retract_enabled=False,
     )
 
 
 def _line_rtl(fixture: Fixture) -> object:
-    return build_line_milling_spec(
-        line_x1=760.0,
-        line_y1=24.0,
-        line_x2=60.0,
-        line_y2=24.0,
-        line_feature_name=f"TBH001_ORDER_{fixture.name}_PREV_LINE_RTL_E001",
-        line_tool_id="1900",
-        line_tool_name="E001",
-        line_tool_width=18.36,
-        line_security_plane=20.0,
-        line_side_of_feature="Center",
-        line_is_through=False,
-        line_target_depth=10.0,
-        line_extra_depth=0.0,
-        line_approach_enabled=False,
-        line_retract_enabled=False,
+    return build_line_spec(
+        start_x=760.0,
+        start_y=24.0,
+        end_x=60.0,
+        end_y=24.0,
+        feature_name=f"TBH001_ORDER_{fixture.name}_PREV_LINE_RTL_E001",
+        tool_id="1900",
+        tool_name="E001",
+        tool_width=18.36,
+        security_plane=20.0,
+        side_of_feature="Center",
+        is_through=False,
+        target_depth=10.0,
+        extra_depth=0.0,
+        approach_enabled=False,
+        retract_enabled=False,
     )
 
 
 def _profile(fixture: Fixture, *, winding: str) -> object:
-    return build_squaring_milling_spec(
+    return build_contour_spec(
         winding=winding,
         feature_name=f"TBH001_ORDER_{fixture.name}_PREV_PROFILE_{winding}_E001",
         tool_id="1900",

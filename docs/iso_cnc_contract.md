@@ -413,7 +413,7 @@ Herramientas o familias aun pendientes para reglas seguras de generacion PGMX:
 - `E005` fuera de division de `en_juego`
 
 Nota sobre `E002`: el catalogo local la clasifica como `Sierra Horizontal`. La
-sintesis publica actual no genera ese caso con `LineMillingSpec`; hace falta
+sintesis publica actual no genera ese caso con `LineSpec`; hace falta
 modelar la familia correcta antes de pedir ISO.
 
 ## Cabecera ISO

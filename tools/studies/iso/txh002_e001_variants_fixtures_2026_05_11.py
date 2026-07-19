@@ -18,11 +18,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    DrillingSpec,
-    SlotMillingSpec,
-    build_drilling_spec,
-    build_line_milling_spec,
-    build_slot_milling_spec,
+    DrillSpec,
+    ChannelSpec,
+    build_drill_spec,
+    build_line_spec,
+    build_channel_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -69,27 +69,27 @@ def _router_line(fixture: Fixture) -> object:
     else:
         raise ValueError(f"Unsupported router tool: {fixture.router_tool}")
 
-    return build_line_milling_spec(
-        line_x1=80.0,
-        line_y1=70.0,
-        line_x2=240.0,
-        line_y2=70.0,
-        line_feature_name=f"TXH002_{fixture.name}_{fixture.router_tool}_LINE",
-        line_tool_id=tool_id,
-        line_tool_name=fixture.router_tool,
-        line_tool_width=tool_width,
-        line_security_plane=20.0,
-        line_side_of_feature="Center",
-        line_is_through=False,
-        line_target_depth=10.0,
-        line_extra_depth=0.0,
-        line_approach_enabled=False,
-        line_retract_enabled=False,
+    return build_line_spec(
+        start_x=80.0,
+        start_y=70.0,
+        end_x=240.0,
+        end_y=70.0,
+        feature_name=f"TXH002_{fixture.name}_{fixture.router_tool}_LINE",
+        tool_id=tool_id,
+        tool_name=fixture.router_tool,
+        tool_width=tool_width,
+        security_plane=20.0,
+        side_of_feature="Center",
+        is_through=False,
+        target_depth=10.0,
+        extra_depth=0.0,
+        approach_enabled=False,
+        retract_enabled=False,
     )
 
 
-def _top_drill(fixture: Fixture, *, ordinal: int, diameter: float) -> DrillingSpec:
-    return build_drilling_spec(
+def _top_drill(fixture: Fixture, *, ordinal: int, diameter: float) -> DrillSpec:
+    return build_drill_spec(
         feature_name=f"TXH002_{fixture.name}_TOP_D{diameter:g}_{ordinal}",
         plane_name="Top",
         center_x=250.0 + (ordinal * 30.0),
@@ -100,8 +100,8 @@ def _top_drill(fixture: Fixture, *, ordinal: int, diameter: float) -> DrillingSp
     )
 
 
-def _side_drill(fixture: Fixture) -> DrillingSpec:
-    return build_drilling_spec(
+def _side_drill(fixture: Fixture) -> DrillSpec:
+    return build_drill_spec(
         feature_name=f"TXH002_{fixture.name}_{fixture.side_plane.upper()}_D8",
         plane_name=fixture.side_plane,
         center_x=fixture.length * 0.5,
@@ -112,8 +112,8 @@ def _side_drill(fixture: Fixture) -> DrillingSpec:
     )
 
 
-def _top_slot(fixture: Fixture) -> SlotMillingSpec:
-    return build_slot_milling_spec(
+def _top_slot(fixture: Fixture) -> ChannelSpec:
+    return build_channel_spec(
         feature_name=f"TXH002_{fixture.name}_TOP_SLOT_082",
         start_x=120.0,
         start_y=140.0,

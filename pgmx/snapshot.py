@@ -205,6 +205,7 @@ class PgmxReplicatedBaseFeatureSnapshot:
     depth_end: Optional[float]
     diameter: Optional[float]
     taper_height: Optional[float]
+    bottom_is_flat: Optional[bool] = None
 
 
 @dataclass(frozen=True)
@@ -242,6 +243,7 @@ class PgmxFeatureSnapshot:
     base_feature: Optional[PgmxReplicatedBaseFeatureSnapshot] = None
     boss_geometry_curves: tuple[PgmxCurveSnapshot, ...] = ()
     boss_refs: tuple[PgmxObjectRefSnapshot, ...] = ()
+    bottom_is_flat: Optional[bool] = None
 
 
 @dataclass(frozen=True)
@@ -267,6 +269,12 @@ class PgmxOperationSnapshot:
     allowance_side: Optional[float]
     toolpaths: tuple[PgmxToolpathSnapshot, ...]
     machine_functions: tuple[PgmxMachineFunctionSnapshot, ...]
+    # MachiningStrategy i:type="MultiStepDrilling" (taladro multi-paso / peck)
+    step_number: int = 0
+    step_depth: float = 0.0
+    # Cambios DURANTE el recorrido (fresado): (UPar 0..1, valor). Ver _path_attributes_from_operation.
+    speed_changes: tuple[tuple[float, float], ...] = ()
+    depth_changes: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -521,6 +529,59 @@ def _optional_float_text(node: Optional[ET.Element], local_name: str) -> Optiona
     return sp._safe_float(child.text, 0.0)
 
 
+def _optional_bool_text(node: Optional[ET.Element], local_name: str) -> Optional[bool]:
+    child = _first_child(node, local_name)
+    if child is None or child.text is None:
+        return None
+    return sp._safe_bool(child.text, False)
+
+
+def _bottom_is_flat(bottom_condition: Optional[ET.Element]) -> Optional[bool]:
+    """IsFlat de un BottomCondition (presente en ThroughHoleBottom: true=punta plana,
+    false=punta cónica). None si no aparece. Discrimina punta plana vs. cónica en
+    pasantes, donde bottom_condition_type='ThroughHoleBottom' no lo indica."""
+    return _optional_bool_text(bottom_condition, "IsFlat")
+
+
+def _multistep_from_operation(operation: ET.Element) -> tuple[int, float]:
+    """Lee StepNumber/StepDepth de la MachiningStrategy MultiStepDrilling de un taladro.
+
+    Devuelve (0, 0.0) si la operación no usa multi-step.
+    """
+    strategy = _first_child(operation, "MachiningStrategy")
+    if strategy is None or "MultiStepDrilling" not in sp._xsi_type(strategy):
+        return (0, 0.0)
+    step_number = int(sp._safe_float(_child_text(strategy, "StepNumber"), 0.0))
+    step_depth = sp._safe_float(_child_text(strategy, "StepDepth"), 0.0)
+    return (step_number, step_depth)
+
+
+def _path_attributes_from_operation(
+    operation: ET.Element,
+) -> tuple[tuple[tuple[float, float], ...], tuple[tuple[float, float], ...]]:
+    """Lee los OperationAttribute de la operación (Attributes directos, no los del Toolpath):
+    cambios de velocidad/profundidad DURANTE el recorrido, anclados a una posición paramétrica.
+
+    - SpeedAttribute: (UPar, Speed[m/min]) — desde ese punto el avance pasa a Speed.
+    - DepthAttribute: (UPar, Depth[mm]) — rampa lineal desde la profundidad de la operación en el
+      inicio hasta Depth, alcanzándola en UPar; sigue a Depth. (Derivado de N_RT_E001_Vel/_Prof.)
+    Devuelve (speed_changes, depth_changes), ordenados por UPar.
+    """
+    speed: list[tuple[float, float]] = []
+    depth: list[tuple[float, float]] = []
+    attributes = _first_child(operation, "Attributes")
+    if attributes is None:
+        return ((), ())
+    for node in list(attributes):
+        xsi = sp._xsi_type(node)
+        upar = sp._safe_float(_child_text(node, "UPar"), 0.0)
+        if "SpeedAttribute" in xsi:
+            speed.append((upar, sp._safe_float(_child_text(node, "Speed"), 0.0)))
+        elif "DepthAttribute" in xsi:
+            depth.append((upar, sp._safe_float(_child_text(node, "Depth"), 0.0)))
+    return (tuple(sorted(speed)), tuple(sorted(depth)))
+
+
 def _first_descendant_float(node: Optional[ET.Element], local_name: str) -> Optional[float]:
     descendant = _first_descendant(node, local_name)
     if descendant is None or descendant.text is None:
@@ -685,6 +746,7 @@ def _replicated_base_feature_snapshot(feature: ET.Element) -> Optional[PgmxRepli
         depth_end=_optional_float_text(_first_child(base_feature, "Depth"), "EndDepth"),
         diameter=_optional_float_text(base_feature, "Diameter"),
         taper_height=_optional_float_text(base_feature, "TaperHeight"),
+        bottom_is_flat=_bottom_is_flat(_first_child(base_feature, "BottomCondition")),
     )
 
 
@@ -1047,6 +1109,8 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
     operations: list[PgmxOperationSnapshot] = []
     for operation in operations_raw.values():
         approach, retract = _operation_specs(operation)
+        multistep = _multistep_from_operation(operation)
+        speed_changes, depth_changes = _path_attributes_from_operation(operation)
         machine_functions_node = _first_child(operation, "MachineFunctions")
         machine_functions = ()
         if machine_functions_node is not None:
@@ -1081,6 +1145,10 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
                 allowance_side=_optional_float_text(operation, "AllowanceSide"),
                 toolpaths=toolpaths,
                 machine_functions=machine_functions,
+                step_number=multistep[0],
+                step_depth=multistep[1],
+                speed_changes=speed_changes,
+                depth_changes=depth_changes,
             )
         )
 
@@ -1119,6 +1187,7 @@ def read_pgmx_snapshot(path: Path, *, include_xml_text: bool = False) -> PgmxSna
                 operation_refs=operation_refs,
                 workpiece_ref=_object_ref(_first_child(feature, "WorkpieceID")),
                 bottom_condition_type=sp._xsi_type(_first_child(feature, "BottomCondition")),
+                bottom_is_flat=_bottom_is_flat(_first_child(feature, "BottomCondition")),
                 depth_start=_optional_float_text(_first_child(feature, "Depth"), "StartDepth"),
                 depth_end=_optional_float_text(_first_child(feature, "Depth"), "EndDepth"),
                 depth_spec=_parse_feature_depth_spec(

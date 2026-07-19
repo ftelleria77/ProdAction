@@ -19,8 +19,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    DrillingSpec,
-    build_drilling_spec,
+    DrillSpec,
+    build_drill_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -94,8 +94,8 @@ def _side_span(fixture: Fixture) -> float:
     return fixture.width
 
 
-def _side_drill(fixture: Fixture) -> DrillingSpec:
-    return build_drilling_spec(
+def _side_drill(fixture: Fixture) -> DrillSpec:
+    return build_drill_spec(
         feature_name=f"TBH004_{fixture.index:02d}_{fixture.side_face.upper()}_D8",
         plane_name=fixture.side_face,
         center_x=round(_side_span(fixture) * 0.5, 3),
@@ -106,9 +106,9 @@ def _side_drill(fixture: Fixture) -> DrillingSpec:
     )
 
 
-def _top_drill(fixture: Fixture) -> DrillingSpec:
+def _top_drill(fixture: Fixture) -> DrillSpec:
     tool_offset = fixture.index % len(TOP_TOOLS)
-    return build_drilling_spec(
+    return build_drill_spec(
         feature_name=f"TBH004_{fixture.index:02d}_TOP_{fixture.top_tool.name}_D{fixture.top_tool.diameter:g}",
         plane_name="Top",
         center_x=120.0 + (tool_offset * 25.0),

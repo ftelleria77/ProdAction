@@ -20,8 +20,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    DrillingSpec,
-    build_drilling_spec,
+    DrillSpec,
+    build_drill_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -56,8 +56,8 @@ class Fixture:
     execution_fields: str = "HG"
 
 
-def _top_drill(fixture: Fixture, hole: Hole, ordinal: int) -> DrillingSpec:
-    return build_drilling_spec(
+def _top_drill(fixture: Fixture, hole: Hole, ordinal: int) -> DrillSpec:
+    return build_drill_spec(
         feature_name=f"TBH001_SAME_{fixture.index:02d}_{ordinal}_D{fixture.diameter:g}",
         plane_name="Top",
         center_x=hole.x,
@@ -122,7 +122,7 @@ def generate(output_dir: Path, *, force: bool = False) -> list[dict[str, str]]:
         if output_path.exists() and not force:
             raise FileExistsError(f"Refusing to overwrite existing fixture: {output_path}")
 
-        drillings = tuple(
+        drills = tuple(
             _top_drill(fixture, hole, ordinal)
             for ordinal, hole in enumerate(fixture.holes, start=1)
         )
@@ -136,7 +136,7 @@ def generate(output_dir: Path, *, force: bool = False) -> list[dict[str, str]]:
             origin_y=fixture.origin_y,
             origin_z=fixture.origin_z,
             execution_fields=fixture.execution_fields,
-            ordered_machinings=drillings,
+            ordered_machinings=drills,
         )
         result = synthesize_request(request)
         expected_iso_path = EXPECTED_ISO_DIR / f"{fixture.name.lower()}.iso"

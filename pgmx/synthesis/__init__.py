@@ -6,17 +6,17 @@ from . import core as _core
 from .cli import main
 from .core import *  # noqa: F401,F403
 from .core import __all__ as _core_all
-from .vaciado import (
-    VaciadoSynthesisSupport,
-    adapt_pocket_milling_to_vaciado_contract,
-    vaciado_support_status,
+from .pocket_support import (
+    PocketSynthesisSupport,
+    adapt_pocket_to_contract,
+    pocket_support_status,
 )
 
 __all__ = tuple(_core_all) + (
-    "VaciadoSynthesisSupport",
-    "adapt_pocket_milling_to_vaciado_contract",
+    "PocketSynthesisSupport",
+    "adapt_pocket_to_contract",
     "main",
-    "vaciado_support_status",
+    "pocket_support_status",
 )
 
 

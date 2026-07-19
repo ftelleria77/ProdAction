@@ -24,8 +24,8 @@ if str(ROOT) not in sys.path:
 
 from pgmx.adapters import adapt_pgmx_path  # noqa: E402
 from pgmx.synthesis import (  # noqa: E402
-    DrillingSpec,
-    build_drilling_spec,
+    DrillSpec,
+    build_drill_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -51,7 +51,7 @@ class Fixture:
     profile: PieceProfile
     purpose: str
     focus: str
-    drillings: Sequence[DrillingSpec]
+    drills: Sequence[DrillSpec]
 
 
 PROFILES = (
@@ -80,8 +80,8 @@ def _face_position(profile: PieceProfile, plane_name: str, position_code: str) -
     return positions[position_code]
 
 
-def _side_drill(profile: PieceProfile, plane_name: str, position_code: str) -> DrillingSpec:
-    return build_drilling_spec(
+def _side_drill(profile: PieceProfile, plane_name: str, position_code: str) -> DrillSpec:
+    return build_drill_spec(
         feature_name=f"{plane_name.upper()}_D8_{position_code.upper()}",
         plane_name=plane_name,
         center_x=_face_position(profile, plane_name, position_code),
@@ -102,7 +102,7 @@ def _single_face_fixture(
         profile=profile,
         purpose=f"{profile.code}: three D8 holes on {plane_name}, at 20/50/80 percent of local side span.",
         focus=f"same-face {plane_name} reentry without side-face change",
-        drillings=tuple(
+        drills=tuple(
             _side_drill(profile, plane_name, position_code)
             for position_code in POSITION_CODES
         ),
@@ -122,7 +122,7 @@ def _all_faces_fixture(
             "position; sorted workplan should exercise Front->Back, Back->Left, Left->Right."
         ),
         focus="multi-face transition sequence: Front->Back, Back->Left, Left->Right",
-        drillings=tuple(
+        drills=tuple(
             _side_drill(profile, plane_name, position_code)
             for plane_name in ("Front", "Back", "Left", "Right")
         ),
@@ -143,7 +143,7 @@ def _transition_fixture(
             f"isolates the sorted transition {first_face}->{second_face}."
         ),
         focus=f"isolated transition: {first_face}->{second_face}",
-        drillings=(
+        drills=(
             _side_drill(profile, first_face, "Mid"),
             _side_drill(profile, second_face, "Mid"),
         ),
@@ -185,7 +185,7 @@ def generate(output_dir: Path) -> list[dict[str, str]]:
             origin_y=profile.origin_y,
             origin_z=profile.origin_z,
             execution_fields="HG",
-            drillings=fixture.drillings,
+            drills=fixture.drills,
         )
         result = synthesize_request(request)
         adaptation = adapt_pgmx_path(result.output_path)
@@ -201,7 +201,7 @@ def generate(output_dir: Path) -> list[dict[str, str]]:
                 "origin_z": f"{profile.origin_z:g}",
                 "focus": fixture.focus,
                 "purpose": fixture.purpose,
-                "drillings": str(len(fixture.drillings)),
+                "drills": str(len(fixture.drills)),
                 "adapted": str(len(adaptation.adapted_entries)),
                 "unsupported": str(len(adaptation.unsupported_entries)),
                 "ignored": str(len(adaptation.ignored_entries)),
@@ -222,7 +222,7 @@ def generate(output_dir: Path) -> list[dict[str, str]]:
         "origin_z",
         "focus",
         "purpose",
-        "drillings",
+        "drills",
         "adapted",
         "unsupported",
         "ignored",

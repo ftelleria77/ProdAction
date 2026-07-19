@@ -121,14 +121,14 @@ Fuente de verdad: `docs/synthesize_pgmx_help.md`.
 
 Specs publicos soportados por `pgmx.synthesis`:
 
-- `LineMillingSpec`;
-- `SlotMillingSpec`;
-- `PolylineMillingSpec`;
-- `CircleMillingSpec`;
-- `SquaringMillingSpec`;
-- `PocketMillingSpec`;
-- `DrillingSpec`;
-- `DrillingPatternSpec`;
+- `LineSpec`;
+- `ChannelSpec`;
+- `PolylineSpec`;
+- `CircleSpec`;
+- `ContourSpec`;
+- `PocketSpec`;
+- `DrillSpec`;
+- `DrillPatternSpec`;
 - `XnSpec`.
 
 Reglas importantes:

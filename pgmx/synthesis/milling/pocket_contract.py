@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Sequence
 from ..common.strategy import ContourParallelMillingStrategySpec
 
 if TYPE_CHECKING:
-    from .pocket import PocketMillingSpec
+    from .pocket import PocketSpec
 
 Point2 = tuple[float, float]
 
@@ -24,7 +24,7 @@ __all__ = [
     "VaciadoDepth",
     "VaciadoGeometry",
     "VaciadoStrategy",
-    "from_pocket_milling_spec",
+    "from_pocket_spec",
     "plan_rectangular_no_islands",
     "rectangular_loop_sequence",
 ]
@@ -232,8 +232,8 @@ class RectangularNoIslandTracePlan:
     primitive_sequences: tuple[TracePrimitiveSequence2D, ...]
 
 
-def from_pocket_milling_spec(
-    spec: PocketMillingSpec,
+def from_pocket_spec(
+    spec: PocketSpec,
 ) -> tuple[VaciadoGeometry, VaciadoStrategy, VaciadoDepth]:
     strategy_spec = spec.milling_strategy
     if not isinstance(strategy_spec, ContourParallelMillingStrategySpec):

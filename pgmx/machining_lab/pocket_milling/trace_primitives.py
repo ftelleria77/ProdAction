@@ -122,7 +122,7 @@ def _analyze_one(path: Path, root: Path) -> tuple[TraceCaseRow, list[TracePrimit
     if feature is None or operation is None:
         return TraceCaseRow(relative_path, "missing_feature_or_operation"), []
 
-    spec = adaptation.pocket_millings[0] if adaptation.pocket_millings else None
+    spec = adaptation.pockets[0] if adaptation.pockets else None
     strategy = operation.milling_strategy
     if not isinstance(strategy, sp.ContourParallelMillingStrategySpec):
         return TraceCaseRow(relative_path, "unsupported_strategy", geometry_type=geometry.geometry_type if geometry else ""), []

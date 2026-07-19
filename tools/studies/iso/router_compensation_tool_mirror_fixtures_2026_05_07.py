@@ -18,7 +18,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    build_polyline_milling_spec,
+    build_polyline_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -101,7 +101,7 @@ def build_fixtures() -> tuple[Fixture, ...]:
 
 
 def _build_milling(tool: ToolInfo, fixture: Fixture, feature_name: str) -> object:
-    return build_polyline_milling_spec(
+    return build_polyline_spec(
         points=POLYLINE_POINTS,
         feature_name=feature_name,
         tool_id=tool.tool_id,

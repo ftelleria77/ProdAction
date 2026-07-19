@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(py -3.14 -m pgmx.machining_lab.aparcamiento.scan_samples --root \"S:\\\\Maestro\\\\Projects\\\\ProdAction\\\\PGMX\\\\aparcamiento\\\\manual\" --output \"S:\\\\Maestro\\\\Projects\\\\ProdAction\\\\PGMX\\\\aparcamiento\\\\_analysis\\\\aparcamiento_fields.csv\")"
+    ]
+  }
+}

@@ -154,13 +154,17 @@ def _build_profile_feature(
     )
     _set_xmlns(slot_end_a, "a", MILLING_NS)
     _set_xmlns(slot_end_b, "a", MILLING_NS)
-    _append_node(feature, PGMX_NS, "IsGeomSameDirection", "true")
-    _append_node(feature, PGMX_NS, "IsPrecise", "false")
+    # Autoría de los flags del feature (directiva Fermín 2026-07-04): salen del spec; los
+    # defaults reproducen los bytes históricos. getattr: specs sin estos campos (slot) → default.
+    _append_node(feature, PGMX_NS, "IsGeomSameDirection",
+                 "false" if getattr(spec, "invert_work", False) else "true")
+    _append_node(feature, PGMX_NS, "IsPrecise",
+                 "true" if getattr(spec, "is_precise", False) else "false")
     _append_node(feature, PGMX_NS, "MaterialPosition", "Left")
     _append_node(feature, PGMX_NS, "OvercutLenghtInput", "0")
     _append_node(feature, PGMX_NS, "OvercutLenghtOutput", "0")
     _append_node(feature, PGMX_NS, "SideOfFeature", spec.side_of_feature)
-    _append_node(feature, PGMX_NS, "SideOffset", "0")
+    _append_node(feature, PGMX_NS, "SideOffset", _compact_number(getattr(spec, "side_offset", 0.0)))
     swept_shape = _append_node(
         feature,
         PGMX_NS,
@@ -178,11 +182,15 @@ def _build_profile_feature(
 
 
 def _is_hydrated_line_or_slot_milling_spec(spec) -> bool:
-    return type(spec).__name__ in {"_HydratedLineMillingSpec", "_HydratedSlotMillingSpec"}
+    return type(spec).__name__ in {"_HydratedLineSpec", "_HydratedChannelSpec"}
 
 
 def _is_hydrated_slot_milling_spec(spec) -> bool:
-    return type(spec).__name__ == "_HydratedSlotMillingSpec"
+    return type(spec).__name__ == "_HydratedChannelSpec"
+
+
+def _is_hydrated_line_milling_spec(spec) -> bool:
+    return type(spec).__name__ == "_HydratedLineSpec"
 
 
 def _validate_tool_sinking_length_for_spec(
@@ -237,6 +245,11 @@ def _validate_tool_type_for_milling_spec(spec, tool_catalog: dict[str, dict[str,
         )
 
     tool_type = (catalog_entry.get("type") or "").strip()
+    # Fresado LINEAL: no se distingue el tipo de herramienta. Una sierra (p.ej. E002 Sierra
+    # Horizontal) se programa igual que una fresa en una línea; el uso/recorrido es responsabilidad
+    # del programador de Maestro. (La ranura SlotSide sí exige Sierra Vertical X — se valida abajo.)
+    if _is_hydrated_line_milling_spec(spec):
+        return
     usage_group = _normalize_tool_usage_group(tool_type)
     if _is_hydrated_slot_milling_spec(spec):
         if not _is_vertical_x_saw(tool_type):

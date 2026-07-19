@@ -1,0 +1,2340 @@
+[STRUCT]
+KEY_SYSPARAX {
+        KEY_PARAX,ax,cg1;
+}
+KEY_PARAX {
+        AP_NAME;
+        *,AP_AXTYPE;
+        if (pa0==1) {
+                *,AP_DRVTYPE;
+                AP_MINQUOTA;
+                AP_MAXQUOTA;
+
+                AP_VELMAX;
+                if(@cg20<1) {
+                    AP_ACCTIME;
+                    AP_DECTIME;
+                    AP_DELAYS;
+                    AP_GAINP;
+                    AP_GAIND;
+                    AP_INFWD;
+                    AP_GAINP_I;
+                    AP_FWERRVLIM;
+                    AP_FWERR;
+                }
+                if(@cg20>=1) {
+                    AP_ACCEL;
+                    AP_DECEL;
+                    AP_JERK;
+                    AP_KPGAIN;
+                    AP_KDGAIN;
+                    AP_KVFFGAIN;
+                    AP_KPGAIN_I;
+                    AP_SSERRK;
+                    AP_SSERR;
+                    FIR_AUXF;
+                    FIR_AUXG;
+                    FIR_AUXH;
+                }
+                if(@cg20<1) {
+                    AP_EMERTIME;
+                }
+                if(@cg20>=1) {
+                    AP_EMERDEC;
+                }
+                AP_OPZIONI6;
+                AP_OPZIONI14;
+                AP_OPZIONI18;
+
+                AP_QTARECG;
+                AP_TYPERECG;
+                AP_TIMCOMDIR;
+                AP_RECQTA;
+                AP_OPZIONI9;
+                AP_AXNZONE;
+                AP_OPZIONI21;
+                AP_CZMASTER;
+
+                AP_OPZIONI24;
+                AP_AXNTORCIA;
+
+                AP_OPZIONI25;
+                AP_AXNGANTRY;
+
+                if(@cg20<1) {
+                    AP_FATTCONV;
+                    AP_FATTCONVDIV;
+                }
+                if(@cg20>=1) {
+                    AP_QFATTCONV;
+                    AP_QFATTCONVDIV;
+                }
+                AP_OPZIONI31;
+                if (nvel11==0) {
+                    AP_TIMEREG;
+                    AP_TIPOTSTENC;
+                    AP_OPZIONI1;
+                }
+                if (nvel11==5) {
+                    AP_TIMEREG;
+                    AP_TIPOTSTENC;
+                    AP_OPZIONI1;
+                }
+                if(@cg20>=1) {
+                    DC_DACREF;
+                }
+                if (nvel11==0) {
+                    AP_INSPOS;
+                    AP_INSNEG;
+                    AP_OPZIONI23;
+                    AP_OFFSETDAC;
+                    AP_OFFSET;
+                    AP_TIMEOFF;
+                    AP_OPZIONI11;
+                    AP_OPZIONI2;
+                    AP_OPZIONI15;
+                    AP_OPZIONI16;
+                    AP_OPZIONI19;
+                    AP_OPZIONI17;
+                    AP_OPZIONI12;
+                    AP_OPZIONI13;
+                    AP_TIMERFRENO;
+                    AP_OPZIONI20;
+                }
+                if (nvel11==5) {
+                    AP_INSPOS;
+                    AP_INSNEG;
+                    AP_OPZIONI23;
+                    AP_OFFSETDAC;
+                    AP_OFFSET;
+                    AP_TIMEOFF;
+                    AP_OPZIONI11;
+                    AP_OPZIONI2;
+                    AP_OPZIONI15;
+                    AP_OPZIONI16;
+                    AP_OPZIONI19;
+                    AP_OPZIONI17;
+                    AP_OPZIONI12;
+                    AP_OPZIONI13;
+                    AP_TIMERFRENO;
+                    AP_OPZIONI20;
+                }
+                if (nvel11==2) {
+                    AP_OPZIONI13;
+                    AP_TIMERFRENO;
+                    AP_OPZIONI20;
+                }
+                AP_OPZIONI3;
+                AP_TOLLERG;
+                AP_TOLLERF;
+                AP_TOLLER;
+                if (nvel11==0) {
+                    AP_OPZIONI5;
+                }
+                if (nvel11==5) {
+                    AP_OPZIONI5;
+                }
+
+                AP_VELMAN;
+
+                if (nvel11==0) {
+                    AP_TARTYPE;
+                }
+                if (nvel11==5) {
+                    AP_TARTYPE;
+                }
+                if (nvel11==1) {
+                    AP_TARTYPE;
+                }
+                if (nvel11==2) {
+                    AP_SERCOSREF;
+                    AP_OPZIONI22;
+                }
+                if (nvel11==3) {
+                    AP_CANOPENREF;
+                    AP_OPZIONI22;
+                }
+                if (nvel11==4) {
+                    AP_CANOPENREF;
+                }
+                AP_TARQUOTA;
+                AP_VELMICRO;
+                AP_VELTACCA;
+                if(@cg20>=1) {
+                    AP_MINICS;
+                    AP_ICSTIME;
+                }
+                AP_QCHKTARA;
+                AP_PARKQTA;
+                AP_OPZIONI0;
+                if (nvel11==0) {
+                    AP_OPZIONI4;
+                }
+                if (nvel11==5) {
+                    AP_OPZIONI4;
+                }
+                AP_OPZIONI10;
+
+                AP_OPZIONI7;
+
+                AP_OPZIONI8;
+                AP_OPZIONI26;
+                if (nvel6==2) {
+                    AP_CAL_ADC1;
+                    AP_CAL_QTA1;
+                    AP_CAL_ADC2;
+                    AP_CAL_QTA2;
+                }
+        }
+        if (pa0==2) {
+                *,AP_DRVTYPE;
+                AP_AXMOD;
+                POL_MINQUOTA;
+                POL_MAXQUOTA;
+
+                POL_VELMAX;
+                if(@cg20<1) {
+                    AP_ACCTIME;
+                    AP_DECTIME;
+                    AP_DELAYS;
+                    AP_GAINP;
+                    AP_GAIND;
+                    AP_INFWD;
+                    POL_FWERRVLIM;
+                    AP_FWERR;
+                }
+                if(@cg20>=1) {
+                    POL_ACCEL;
+                    POL_DECEL;
+                    POL_JERK;
+                    POL_KPGAIN;
+                    POL_KDGAIN;
+                    POL_KVFFGAIN;
+                    POL_SSERRK;
+                    POL_SSERR;
+                    FIR_AUXF;
+                    FIR_AUXG;
+                    FIR_AUXH;
+                }
+                if(@cg20<1) {
+                    AP_EMERTIME;
+                }
+                if(@cg20>=1) {
+                    POL_EMERDEC;
+                }
+                AP_OPZIONI6;
+                AP_OPZIONI14;
+                AP_OPZIONI18;
+
+                POL_QTARECG;
+                AP_TYPERECG;
+                POL_RECQTA;
+                AP_OPZIONI9;
+
+                AP_OPZIONI25;
+                AP_AXNGANTRY;
+
+                if(@cg20<1) {
+                    POL_FATTCONV;
+                    POL_FATTCONVDIV;
+                }
+                if(@cg20>=1) {
+                    POL_QFATTCONV;
+                    POL_QFATTCONVDIV;
+                }
+
+                AP_OPZIONI31;
+                if (nvel11==0) {
+                    AP_TIMEREG;
+                    AP_TIPOTSTENC;
+                    AP_OPZIONI1;
+                }
+                if (nvel11==5) {
+                    AP_TIMEREG;
+                    AP_TIPOTSTENC;
+                    AP_OPZIONI1;
+                }
+                if(@cg20>=1) {
+                    DC_DACREF;
+                }
+                if (nvel11==0) {
+                    AP_INSPOS;
+                    AP_INSNEG;
+                    AP_OPZIONI23;
+                    AP_OFFSETDAC;
+                    AP_OFFSET;
+                    AP_TIMEOFF;
+                    AP_OPZIONI11;
+                    AP_OPZIONI2;
+                    AP_OPZIONI15;
+                    AP_OPZIONI16;
+                    AP_OPZIONI19;
+                    AP_OPZIONI17;
+                    AP_OPZIONI12;
+                    AP_OPZIONI13;
+                    AP_TIMERFRENO;
+                    AP_OPZIONI20;
+                }
+                if (nvel11==5) {
+                    AP_INSPOS;
+                    AP_INSNEG;
+                    AP_OPZIONI23;
+                    AP_OFFSETDAC;
+                    AP_OFFSET;
+                    AP_TIMEOFF;
+                    AP_OPZIONI11;
+                    AP_OPZIONI2;
+                    AP_OPZIONI15;
+                    AP_OPZIONI16;
+                    AP_OPZIONI19;
+                    AP_OPZIONI17;
+                    AP_OPZIONI12;
+                    AP_OPZIONI13;
+                    AP_TIMERFRENO;
+                    AP_OPZIONI20;
+                }
+                AP_OPZIONI3;
+                POL_TOLLERG;
+                POL_TOLLERF;
+                AP_TOLLER;
+                if (nvel11==0) {
+                    AP_OPZIONI5;
+                }
+                if (nvel11==5) {
+                    AP_OPZIONI5;
+                }
+
+                POL_VELMAN;
+
+                if (nvel11==0) {
+                	AP_TARTYPE;
+                }
+                if (nvel11==1) {
+                AP_TARTYPE;
+                }
+                if (nvel11==2) {
+                    AP_SERCOSREF;
+                    AP_OPZIONI22;
+                }
+                if (nvel11==3) {
+                    AP_CANOPENREF;
+                    AP_OPZIONI22;
+                }
+                if (nvel11==4) {
+                    AP_CANOPENREF;
+                }
+
+                POL_TARQUOTA;
+                POL_VELMICRO;
+                POL_VELTACCA;
+                if(@cg20>=1) {
+                    AP_MINICS;
+                    AP_ICSTIME;
+                }
+                POL_QCHKTARA;
+                POL_PARKQTA;
+                AP_OPZIONI0;
+                if (nvel11==0) {
+                    AP_OPZIONI4;
+                }
+                if (nvel11==5) {
+                    AP_OPZIONI4;
+                }
+                AP_OPZIONI10;
+
+                AP_OPZIONI7;
+                AP_OPZIONI26;
+                if (nvel6==2) {
+                    AP_CAL_ADC1;
+                    AP_CAL_QTA1;
+                    AP_CAL_ADC2;
+                    AP_CAL_QTA2;
+                }
+        }
+        if (pa0==3) {
+                *,AP_DRVTYPE;
+                AP_ROTARYMODE;
+                AP_AXMOD;
+
+                POL_VELMAX;
+                if(@cg20<1) {
+                    AP_ACCTIME;
+                    AP_DECTIME;
+                    AP_DELAYS;
+                    AP_GAINP;
+                    AP_GAIND;
+                    AP_INFWD;
+                    POL_FWERRVLIM;
+                    AP_FWERR;
+                }
+                if(@cg20>=1) {
+                    POL_ACCEL;
+                    POL_DECEL;
+                    POL_JERK;
+                    POL_KPGAIN;
+                    POL_KDGAIN;
+                    POL_KVFFGAIN;
+                    POL_SSERRK;
+                    POL_SSERR;
+                    FIR_AUXF;
+                    FIR_AUXG;
+                    FIR_AUXH;
+                }
+                if(@cg20<1) {
+                    AP_EMERTIME;
+                }
+                if(@cg20>=1) {
+                    POL_EMERDEC;
+                }
+                AP_OPZIONI6;
+                AP_OPZIONI14;
+                AP_OPZIONI18;
+
+                POL_QTARECG;
+                AP_TYPERECG;
+                POL_RECQTA;
+                AP_OPZIONI9;
+                AP_AXNZONE;
+                if(@cg20<1) {
+                    POL_FATTCONV;
+                    POL_FATTCONVDIV;
+                }
+                if(@cg20>=1) {
+                    POL_QFATTCONV;
+                    POL_QFATTCONVDIV;
+                }
+
+                AP_OPZIONI31;
+                if (nvel11==0) {
+                    AP_TIMEREG;
+                    AP_TIPOTSTENC;
+                    AP_OPZIONI1;
+                }
+                if (nvel11==5) {
+                    AP_TIMEREG;
+                    AP_TIPOTSTENC;
+                    AP_OPZIONI1;
+                }
+                if(@cg20>=1) {
+                    DC_DACREF;
+                }
+                if (nvel11==0) {
+                    AP_INSPOS;
+                    AP_INSNEG;
+                    AP_OPZIONI23;
+                    AP_OFFSETDAC;
+                    AP_OFFSET;
+                    AP_TIMEOFF;
+                    AP_OPZIONI11;
+                    AP_OPZIONI2;
+                    AP_OPZIONI15;
+                    AP_OPZIONI16;
+                    AP_OPZIONI19;
+                    AP_OPZIONI17;
+                    AP_OPZIONI12;
+                    AP_OPZIONI13;
+                    AP_TIMERFRENO;
+                    AP_OPZIONI20;
+                }
+                if (nvel11==5) {
+                    AP_INSPOS;
+                    AP_INSNEG;
+                    AP_OPZIONI23;
+                    AP_OFFSETDAC;
+                    AP_OFFSET;
+                    AP_TIMEOFF;
+                    AP_OPZIONI11;
+                    AP_OPZIONI2;
+                    AP_OPZIONI15;
+                    AP_OPZIONI16;
+                    AP_OPZIONI19;
+                    AP_OPZIONI17;
+                    AP_OPZIONI12;
+                    AP_OPZIONI13;
+                    AP_TIMERFRENO;
+                    AP_OPZIONI20;
+                }
+                AP_OPZIONI3;
+                POL_TOLLERG;
+                POL_TOLLERF;
+                AP_TOLLER;
+                if (nvel11==0) {
+                    AP_OPZIONI5;
+                }
+                if (nvel11==5) {
+                    AP_OPZIONI5;
+                }
+
+                POL_VELMAN;
+
+                if (nvel11==0) {
+                    AP_TARTYPE;
+                }
+                if (nvel11==5) {
+                    AP_TARTYPE;
+                }
+                if (nvel11==1) {
+                    AP_TARTYPE;
+                }
+                if (nvel11==2) {
+                    AP_SERCOSREF;
+                    AP_OPZIONI22;
+                }
+                if (nvel11==3) {
+                    AP_CANOPENREF;
+                    AP_OPZIONI22;
+                }
+                if (nvel11==4) {
+                    AP_CANOPENREF;
+                }
+                POL_TARQUOTA;
+                POL_VELMICRO;
+                POL_VELTACCA;
+                if(@cg20>=1) {
+                    AP_MINICS;
+                    AP_ICSTIME;
+                }
+                POL_QCHKTARA;
+                POL_PARKQTA;
+                AP_OPZIONI0;
+                if (nvel11==0) {
+                    AP_OPZIONI4;
+                }
+                if (nvel11==5) {
+                    AP_OPZIONI4;
+                }
+                AP_OPZIONI10;
+
+                AP_OPZIONI7;
+                AP_OPZIONI26;
+                if (nvel6==2) {
+                    AP_CAL_ADC1;
+                    AP_CAL_QTA1;
+                    AP_CAL_ADC2;
+                    AP_CAL_QTA2;
+                }
+        }
+        if (pa0==4) {
+                AP_MINQUOTA;
+                AP_MAXQUOTA;
+
+                AP_VELMAX;
+                if(@cg20<1) {
+                    AP_ACCTIME;
+                    AP_DECTIME;
+                    AP_DELAYS;
+                    AP_GAINP;
+                    AP_GAIND;
+                    AP_INFWD;
+                    AP_GAINP_I;
+                    AP_FWERRVLIM;
+                    AP_FWERR;
+                }
+                if(@cg20>=1) {
+                    AP_ACCEL;
+                    AP_DECEL;
+                    AP_JERK;
+                    AP_KPGAIN;
+                    AP_KDGAIN;
+                    AP_KVFFGAIN;
+                    AP_KPGAIN_I;
+                    AP_SSERRK;
+                    AP_SSERR;
+                }
+                if(@cg20<1) {
+                    AP_EMERTIME;
+                }
+                if(@cg20>=1) {
+                    AP_EMERDEC;
+                }
+                AP_OPZIONI6;
+                AP_OPZIONI14;
+                AP_OPZIONI18;
+
+                AP_QTARECG;
+                AP_TYPERECG;
+                AP_TIMCOMDIR;
+                AP_INERZAV;
+                AP_INERZIND;
+                AP_RECQTA;
+                AP_OPZIONI9;
+                if(@cg20<1) {
+                    AP_FATTCONV;
+                    AP_FATTCONVDIV;
+                }
+                if(@cg20>=1) {
+                    AP_QFATTCONV;
+                    AP_QFATTCONVDIV;
+                }
+
+                AP_OPZIONI31;
+                AP_TIMEREG;
+                AP_TIPOTSTENC;
+                AP_OPZIONI1;
+                if(@cg20>=1) {
+                    DC_DACREF;
+                }
+                AP_INSPOS;
+                AP_INSNEG;
+                AP_OPZIONI11;
+                AP_OPZIONI2;
+                AP_OPZIONI15;
+                AP_OPZIONI16;
+                AP_OPZIONI19;
+                AP_OPZIONI17;
+                AP_OPZIONI12;
+                AP_OPZIONI13;
+                AP_TIMERFRENO;
+                AP_OPZIONI20;
+
+                AP_OPZIONI3;
+                AP_TOLLERG;
+                AP_TOLLERF;
+                AP_TOLLER;
+                AP_OPZIONI5;
+
+                AP_VELMAN;
+
+                AP_TARTYPE;
+                AP_TARQUOTA;
+                AP_VELMICRO;
+                AP_VELTACCA;
+                AP_QCHKTARA;
+                AP_PARKQTA;
+                AP_OPZIONI0;
+                AP_OPZIONI4;
+                AP_OPZIONI10;
+
+                AP_OPZIONI7;
+                AP_OPZIONI26;
+                if (nvel6==2) {
+                    AP_CAL_ADC1;
+                    AP_CAL_QTA1;
+                    AP_CAL_ADC2;
+                    AP_CAL_QTA2;
+                }
+        }
+        if (pa0==20) {
+                NV_MINQUOTA;
+                NV_MAXQUOTA;
+
+                NV_VELMAX;
+                NV_OPZIONI6;
+                NV_OPZIONI14;
+                NV_OPZIONI18;
+
+                NV_QTARECG;
+                NV_TYPERECG;
+                NV_TIMCOMDIR;
+                NV_INERZAV;
+                NV_INERZIND;
+                if(@cg20<1) {
+                    NV_FATTCONV;
+                    NV_FATTCONVDIV;
+                }
+                if(@cg20>=1) {
+                    NV_QFATTCONV;
+                    NV_QFATTCONVDIV;
+                }
+
+                NV_OPZIONI31;
+                NV_TIMEREG;
+                NV_TIPOTSTENC;
+                NV_OPZIONI1;
+                NV_DECV1AVA;
+                NV_DECV2AVA;
+                NV_DECV1IND;
+                NV_DECV2INV;
+                NV_DECSOGV1;
+                NV_DECSOGV2;
+                NV_TIMCOMVEL;
+                NV_OPZIONI13;
+                NV_TIMERFRENO;
+
+                NV_OPZIONI3;
+                NV_TOLLERG;
+                NV_TOLLER;
+                NV_TARTYPE;
+                NV_OPZIONI5;
+
+                NV_VELMAN;
+
+                NV_TARQUOTA;
+                NV_VELMICRO;
+                NV_VELTACCA;
+                NV_QCHKTARA;
+                NV_PARKQTA;
+                NV_OPZIONI0;
+                NV_OPZIONI4;
+                NV_OPZIONI10;
+                NV_OPZIONI26;
+                if (nvel10==2) {
+                    AP_CAL_ADC1;
+                    AP_CAL_QTA1;
+                    AP_CAL_ADC2;
+                    AP_CAL_QTA2;
+                }
+        }
+        if (pa0==22) {
+                AP_MINQUOTA;
+                AP_MAXQUOTA;
+
+                AP_OPZIONI7;
+                AP_VELMAX;
+                AP_VELMAN;
+
+                AP_TIMEREG;
+
+                AP_OPZIONI6;
+                AP_OPZIONI18;
+                AP_OPZIONI14;
+
+                AP_TYPERECG;
+                AP_TIMCOMDIR;
+                AP_QTARECG;
+
+                AP_OPZIONI9;
+                AP_RECQTA;
+
+                AP_INERZAV;
+                AP_INERZIND;
+
+                if(@cg20<1) {
+                    AP_FATTCONV;
+                    AP_FATTCONVDIV;
+                }
+                if(@cg20>=1) {
+                    AP_QFATTCONV;
+                    AP_QFATTCONVDIV;
+                }
+
+                AP_OPZIONI31;
+                AP_OPZIONI5;
+
+                AP_OPZIONI11;
+                AP_OPZIONI17;
+                AP_OPZIONI12;
+
+                AP_OPZIONI16;
+
+                AP_OPZIONI15;
+                AP_OPZIONI19;
+
+                AP_OPZIONI2;
+
+                AP_OPZIONI1;
+                AP_TIPOTSTENC;
+
+                AP_OPZIONI20;
+                AP_OPZIONI13;
+                AP_TIMERFRENO;
+
+                AP_OPZIONI3;
+                AP_TOLLER;
+                AP_TOLLERG;
+                AP_TOLLERF;
+
+                AP_TARTYPE;
+                AP_TARQUOTA;
+                AP_QCHKTARA;
+                AP_PARKQTA;
+
+                AP_VELMICRO;
+                AP_VELTACCA;
+                AP_OPZIONI0;
+                AP_OPZIONI10;
+                AP_OPZIONI26;
+                if (nvel6==2) {
+                    AP_CAL_ADC1;
+                    AP_CAL_QTA1;
+                    AP_CAL_ADC2;
+                    AP_CAL_QTA2;
+                }
+        }
+        if (pa0==10) {
+                *,AP_DRVTYPE;
+                SP_VELMAX;
+                if(@cg20<1) {
+                    SP_ACCTIME;
+                    SP_DECTIME;
+                    SP_DELAYS;
+                    SP_GAINP;
+                    SP_GAIND;
+                    SP_INFWD;
+                    SP_FWERRVLIM;
+                    SP_FWERR;
+                }
+                if(@cg20>=1) {
+                    SP_ACCEL;
+                    SP_DECEL;
+                    SP_JERK;
+                    SP_KPGAIN;
+                    SP_KDGAIN;
+                    SP_KVFFGAIN;
+                    SP_SSERRK;
+                    SP_SSERR;
+                }
+                if(@cg20<1) {
+                    SP_EMERTIME;
+                }
+                if(@cg20>=1) {
+                    SP_EMERDEC;
+                }
+
+                SP_N1;
+                SP_N2;
+                SP_N3;
+                SP_N4;
+                SP_VELND;
+                SP_TPACC;
+                SP_TPAVA;
+                SP_TPIND;
+                SP_VELLIM1;
+                SP_VELLIM2;
+                SP_VELLIM3;
+                SP_VELLIM4;
+                SP_VELMIN1;
+                SP_VELMIN2;
+                SP_VELMIN3;
+                SP_VELMIN4;
+                SP_VELLTOL;
+                SP_FLT;
+                SP_VELMIN;
+                SP_VELSTOP;
+                SP_FATTCONV;
+
+                SP_OPZIONI31;
+                SP_TIMEREG;
+                SP_ENCTYPE;
+                SP_TIPOTSTENC;
+                SP_OPZIONI1;
+                if(@cg20<1) {
+                    SP_VEL10V;
+                }
+                if(@cg20>=1) {
+                    DC_DACREF;
+                }
+                SP_INSPOS;
+                SP_INSNEG;
+                SP_OPZIONI11;
+                SP_OPZIONI2;
+                SP_OPZIONI15;
+                AP_OPZIONI16;
+                AP_OPZIONI19;
+                AP_OPZIONI17;
+                SP_OPZIONI12;
+
+                SP_OPZIONI3;
+                SP_TOLLERG;
+                SP_TOLLERF;
+                SP_TOLLER;
+
+                SP_VELJOG;
+
+                SP_TARTYPE;
+                SP_TARQUOTA;
+                SP_VELMICRO;
+                SP_VELTACCA;
+                SP_QCHKTARA;
+                SP_OPZIONI0;
+                SP_OPZIONI4;
+                SP_OPZIONI10;
+
+                SP_VELM19;
+        }
+        if (pa0==11) {
+                *,AP_DRVTYPE;
+                if(@cg20>=1) {
+                    SP_VELMAX;
+                }
+                if(@cg20<1) {
+                    SP_ACCTIME;
+                    SP_DECTIME;
+                }
+                if(@cg20>=1) {
+                    SP_ACCEL;
+                    SP_DECEL;
+                }
+                if(@cg20<1) {
+                    SP_EMERTIME;
+                }
+                if(@cg20>=1) {
+                    SP_EMERDEC;
+                }
+
+                SP_N1;
+                SP_N2;
+                SP_N3;
+                SP_N4;
+                SP_VELND;
+                SP_TPACC;
+                SP_TPAVA;
+                SP_TPIND;
+                SP_VELLIM1;
+                SP_VELLIM2;
+                SP_VELLIM3;
+                SP_VELLIM4;
+                SP_VELMIN1;
+                SP_VELMIN2;
+                SP_VELMIN3;
+                SP_VELMIN4;
+
+                SP_OPZIONI31;
+                SP_TIMEREG;
+                if(@cg20<1) {
+                    SP_VEL10V;
+                }
+                if(@cg20>=1) {
+                    DC_DACREF;
+                }
+                SP_OPZIONI11;
+                SP_OPZIONI2;
+                SP_OPZIONI15;
+                AP_OPZIONI16;
+                AP_OPZIONI19;
+                AP_OPZIONI17;
+                SP_OPZIONI12;
+
+                SP_VELJOG;
+        }
+        if (pa0==30) {
+                PT_MINQUOTA;
+                PT_MAXQUOTA;
+
+                PT_VELMAX;
+                if(@cg20<1) {
+                    PT_ACCTIME;
+                    PT_DECTIME;
+                    PT_GAINP;
+                    PT_GAIND;
+                    PT_GAINFWD;
+                    PT_FWERRVLIM;
+                    PT_FWERR;
+                }
+                if(@cg20>=1) {
+                    PT_ACCEL;
+                    PT_DECEL;
+                    PT_KPGAIN;
+                    PT_KDGAIN;
+                    PT_KVFFGAIN;
+                    PT_SSERRK;
+                    PT_SSERR;
+                }
+                if(@cg20<1) {
+                    PT_EMERTIME;
+                }
+                if(@cg20>=1) {
+                    PT_EMERDEC;
+                }
+                PT_OPZIONI6;
+                PT_OPZIONI14;
+
+                PT_OPZIONI9;
+                if(@cg20<1) {
+                    PT_FATTCONV;
+                    PT_FATTCONVDIV;
+                }
+                if(@cg20>=1) {
+                    PT_QFATTCONV;
+                    PT_QFATTCONVDIV;
+                }
+
+                PT_OPZIONI31;
+                PT_TIMEREG;
+                PT_TIPOTSTENC;
+                PT_OPZIONI1;
+                if(@cg20>=1) {
+                    DC_DACREF;
+                }
+                PT_INSPOS;
+                PT_INSNEG;
+                PT_OPZIONI2;
+                PT_OPZIONI15;
+                PT_OPZIONI16;
+                AP_OPZIONI19;
+
+                PT_OPZIONI3;
+                PT_TOLLERG;
+                PT_TOLLERF;
+                PT_TOLLER;
+                PT_OPZIONI5;
+
+                PT_VELMAN;
+
+                PT_TARTYPE;
+                PT_TARQUOTA;
+                PT_VELMICRO;
+                PT_VELTACCA;
+                PT_PARKQTA;
+                PT_OPZIONI0;
+                PT_OPZIONI4;
+                PT_OPZIONI10;
+
+                AP_OPZIONI7;
+                AP_OPZIONI26;
+                AP_OPZIONI23;
+                AP_OFFSETDAC;
+                if (nvel6==2) {
+                    AP_CAL_ADC1;
+                    AP_CAL_QTA1;
+                    AP_CAL_ADC2;
+                    AP_CAL_QTA2;
+                }
+        }
+        if (pa0==40) {
+                *,AP_DRVTYPE;
+                if(@cg20<1) {
+                    NV_FATTCONV;
+                    NV_FATTCONVDIV;
+                }
+                if(@cg20>=1) {
+                    NV_QFATTCONV;
+                    NV_QFATTCONVDIV;
+                }
+
+                NV_TIPOTSTENC;
+                NV_OPZIONI1;
+
+                NV_OPZIONI10;
+                if (nvel10==2) {
+                    AP_CAL_ADC1;
+                    AP_CAL_QTA1;
+                    AP_CAL_ADC2;
+                    AP_CAL_QTA2;
+                }
+        }
+        AP_SCALING;
+        AP_ABSENCOFFS;
+}
+
+[DEFAULT]
+MSK = 0, 32
+FRM = DEC, 0
+LEN = 10
+
+[DC_DACREF]
+ADR = dDacRef
+FRM = DEC, 3
+HLP = DC_DACREF
+
+[AP_NAME]
+ADR = nam0
+FRM = STR
+HLP = AP_NAME
+
+[AP_AXTYPE]
+ADR = pa0
+RNG = {0,1,2,3,4,10,11,20,22,30,40}
+FRM = CBX, 11
+LST = AP_AXTYPELIST
+RST = 1
+HLP = AP_AXTYPE
+[AP_DRVTYPE]
+ADR = nvel11
+RNG = {0,1,2,3,4,5}
+FRM = CBX, 6
+LST = AP_DRVTYPELIST
+RST = 1
+HLP = AP_DRVTYPE
+[AP_ROTARYMODE]
+ADR = pa45
+RNG = {0,1,2}
+FRM = CBX, 15
+LST = AP_ROTARYMODELIST
+RST = 1
+HLP = AP_ROTARYMODE
+[AP_ACCTIME]
+ADR = pa1
+FRM = DEC, 3
+HLP = AP_ACCTIME
+HFG = acc.bmp
+[AP_DECTIME]
+ADR = pa2
+FRM = DEC, 3
+HLP = AP_DECTIME
+HFG = acc.bmp
+[AP_DELAYS]
+ADR = pa25
+FRM = DEC, 3
+HLP = AP_DELAYS
+[AP_ACCEL]
+ADR = pa1
+FRM = QTA, 0
+HLP = AP_ACCEL
+[AP_DECEL]
+ADR = pa2
+FRM = QTA, 0
+HLP = AP_DECEL
+[AP_JERK]
+ADR = pa25
+FRM = QTA, 0
+HLP = AP_JERK
+[AP_OPZIONI0]
+ADR = pa3
+MSK = 0, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI0
+[AP_OPZIONI1]
+ADR = pa3
+RST = 1
+MSK = 1, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI1
+[AP_OPZIONI2]
+ADR = pa3
+RST = 1
+MSK = 2, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI2
+[AP_OPZIONI3]
+ADR = pa3
+MSK = 3, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI3
+[AP_OPZIONI4]
+ADR = pa3
+MSK = 4, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI4
+[AP_OPZIONI5]
+ADR = pa3
+RST = 1
+MSK = 5, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI5
+[AP_OPZIONI6]
+ADR = pa3
+RST = 1
+MSK = 6, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI6
+[AP_OPZIONI7]
+ADR = pa3
+RST = 1
+MSK = 7, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI7
+[AP_OPZIONI8]
+ADR = pa3
+RST = 1
+MSK = 8, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI8
+[AP_OPZIONI9]
+ADR = pa3
+MSK = 9, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI9
+[AP_OPZIONI10]
+ADR = pa3
+RST = 1
+MSK = 10, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI10
+[AP_OPZIONI11]
+ADR = pa3
+RST = 1
+MSK = 11, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI11
+[AP_OPZIONI12]
+ADR = pa3
+RST = 1
+MSK = 12, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI12
+[AP_OPZIONI13]
+ADR = pa3
+RST = 1
+MSK = 13, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI13
+[AP_OPZIONI14]
+ADR = pa3
+RST = 1
+MSK = 14, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI14
+[AP_OPZIONI15]
+ADR = pa3
+RST = 1
+MSK = 15, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI15
+[AP_OPZIONI16]
+ADR = pa3
+RST = 1
+MSK = 16, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI16
+[AP_OPZIONI17]
+ADR = pa3
+RST = 1
+MSK = 17, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI17
+[AP_OPZIONI18]
+ADR = pa3
+RST = 1
+MSK = 18, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI18
+[AP_OPZIONI19]
+ADR = pa3
+RST = 1
+MSK = 19, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI19
+[AP_OPZIONI20]
+ADR = pa3
+RST = 1
+MSK = 20, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI20
+[AP_OPZIONI21]
+ADR = pa3
+RST = 1
+MSK = 21, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI21
+[AP_OPZIONI22]
+ADR = pa3
+RST = 1
+MSK = 22, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI22
+[AP_OPZIONI23]
+ADR = pa3
+RST = 1
+MSK = 23, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI23
+[AP_OPZIONI24]
+ADR = pa3
+RST = 1
+MSK = 24, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI24
+[AP_OPZIONI25]
+ADR = pa3
+RST = 1
+MSK = 25, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI25
+[AP_OPZIONI26]
+ADR = pa3
+RST = 1
+MSK = 26, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI26
+[AP_OPZIONI31]
+ADR = pa3
+RST = 1
+MSK = 31, 1
+FRM = BIN, 0
+HLP = AP_OPZIONI31
+[AP_FWERRVLIM]
+ADR = pa4
+FRM = QTA, 0
+HLP = AP_FWERRVLIM
+[AP_FWERR]
+ADR = pa5
+FRM = DEC, 0
+HLP = AP_FWERR
+[AP_SSERRK]
+ADR = pa4
+FRM = DEC, 3
+HLP = AP_SSERRK
+[AP_SSERR]
+ADR = pa5
+FRM = QTA, 3
+HLP = AP_SSERR
+[AP_TOLLERG]
+ADR = pa6
+FRM = QTA, 3
+HLP = AP_TOLLERG
+[AP_TOLLERF]
+ADR = pa7
+FRM = QTA, 3
+HLP = AP_TOLLERF
+[AP_TOLLER]
+ADR = pa8
+FRM = DEC, 3
+HLP = AP_TOLLER
+[AP_VELMAX]
+ADR = pa9
+FRM = QTA, 0
+HLP = AP_VELMAX
+[AP_GAINP]
+ADR = pa10
+FRM = DEC, 3
+HLP = AP_GAINP
+[AP_GAIND]
+ADR = pa11
+FRM = DEC, 3
+HLP = AP_GAIND
+[AP_INFWD]
+ADR = pa12
+FRM = DEC, 3
+HLP = AP_INFWD
+[AP_KPGAIN]
+ADR = pa10
+FRM = DEC, 3
+HLP = AP_KPGAIN
+[AP_KDGAIN]
+ADR = pa11
+FRM = DEC, 3
+HLP = AP_KDGAIN
+[AP_KVFFGAIN]
+ADR = pa12
+FRM = DEC, 3
+HLP = AP_KVFFGAIN
+[AP_INSPOS]
+ADR = pa14
+FRM = DEC, 3
+HLP = AP_INSPOS
+[AP_FATTCONV]
+ADR = pa15
+FRM = DEC, 4
+HLP = AP_FATTCONV
+[AP_FATTCONVDIV]
+ADR = pa42
+FRM = DEC, 4
+HLP = AP_FATTCONVDIV
+[AP_QFATTCONV]
+ADR = dQFattConv
+FRM = DEC, 4
+HLP = AP_FATTCONV
+[AP_QFATTCONVDIV]
+ADR = dQFattConvDiv
+FRM = DEC, 4
+HLP = AP_FATTCONVDIV
+[AP_TARTYPE]
+ADR = pa16
+RNG = {0,1,2,3,4,10,11}
+HLP = AP_TARTYPE
+[AP_SERCOSREF]
+ADR = pa16
+HLP = AP_SERCOSREF
+[AP_CANOPENREF]
+ADR = pa16
+RNG = {0:41}
+HLP = AP_CANOPENREF
+[AP_INSNEG]
+ADR = pa17
+FRM = DEC, 3
+HLP = AP_INSNEG
+[AP_TARQUOTA]
+ADR = pa18
+FRM = QTA, 3
+HLP = AP_TARQUOTA
+[AP_VELMICRO]
+ADR = pa19
+FRM = QTA, 0
+HLP = AP_VELMICRO
+[AP_VELTACCA]
+ADR = pa20
+FRM = QTA, 0
+HLP = AP_VELTACCA
+[AP_MINQUOTA]
+ADR = pa21
+FRM = QTA, 3
+HLP = AP_MINQUOTA
+[AP_MAXQUOTA]
+ADR = pa22
+FRM = QTA, 3
+HLP = AP_MAXQUOTA
+[AP_VELMAN]
+ADR = pa23
+FRM = QTA, 0
+HLP = AP_VELMAN
+[AP_MINICS]
+ADR = pa24
+FRM = QTA, 0
+HLP = AP_MINICS
+[AP_ICSTIME]
+ADR = pa48
+FRM = DEC, 3
+HLP = AP_ICSTIME
+[AP_QCHKTARA]
+ADR = pa26
+FRM = QTA, 3
+HLP = AP_QCHKTARA
+[AP_TIPOTSTENC]
+ADR = pa27
+RST = 1
+RNG = {0,1}
+HLP = AP_TIPOTSTENC
+[AP_OFFSET]
+ADR = pa28
+RST = 1
+FRM = DEC, 3
+HLP = AP_OFFSET
+[AP_TIMEOFF]
+ADR = pa29
+RST = 1
+FRM = DEC, 3
+HLP = AP_TIMEOFF
+[AP_RECQTA]
+ADR = pa30
+FRM = QTA, 3
+HLP = AP_RECQTA
+[AP_PARKQTA]
+ADR = pa31
+FRM = QTA, 3
+HLP = AP_PARKQTA
+[AP_EMERTIME]
+ADR = pa32
+FRM = DEC, 3
+HLP = AP_EMERTIME
+[AP_EMERDEC]
+ADR = pa32
+FRM = QTA, 0
+HLP = AP_EMERDEC
+[AP_AXMOD]
+ADR = pa33
+FRM = DEC, 0
+HLP = AP_AXMOD
+[AP_QTARECG]
+ADR = pa34
+FRM = QTA, 3
+HLP = AP_QTARECG
+[AP_TYPERECG]
+ADR = pa35
+RNG = {0,1,2}
+HLP = AP_TYPERECG
+[AP_TIMCOMDIR]
+ADR = pa36
+FRM = DEC, 3
+HLP = AP_TIMCOMDIR
+[AP_INERZAV]
+ADR = pa37
+FRM = QTA, 3
+HLP = AP_INERZAV
+[AP_INERZIND]
+ADR = pa38
+FRM = QTA, 3
+HLP = AP_INERZIND
+[AP_TIMERFRENO]
+ADR = pa39
+RST = 1
+FRM = DEC, 3
+HLP = AP_TIMERFRENO
+[AP_AXNZONE]
+ADR = pa40
+FRM = DEC, 0
+HLP = AP_AXNZONE
+[AP_TIMEREG]
+ADR = pa41
+RST = 1
+RNG = {0,1,2,4}
+HLP = AP_TIMEREG
+[AP_CZMASTER]
+ADR = pa43
+FRM = DEC, 0
+HLP = AP_CZMASTER
+[AP_OFFSETDAC]
+ADR = pa44
+FRM = DEC, 3
+HLP = AP_OFFSETDAC
+[AP_AXNTORCIA]
+ADR = pa46
+FRM = DEC, 0
+HLP = AP_AXNTORCIA
+[AP_AXNGANTRY]
+ADR = pa47
+FRM = DEC, 0
+HLP = AP_AXNGANTRY
+[AP_GAINP_I]
+ADR = pa49
+FRM = DEC, 3
+HLP = AP_KPGAIN_I
+[AP_KPGAIN_I]
+ADR = pa49
+FRM = DEC, 3
+HLP = AP_KPGAIN_I
+[AP_SCALING]
+ADR = wScaling
+FRM = DEC, 0
+HLP = AP_SCALING
+[AP_CAL_ADC1]
+ADR = cal0
+FRM = DEC, 0
+RST = 1
+HLP = AP_CAL_ADC1
+[AP_CAL_QTA1]
+ADR = cal2
+FRM = QTA, 3
+RST = 1
+HLP = AP_CAL_QTA1
+[AP_CAL_ADC2]
+ADR = cal1
+FRM = DEC, 0
+RST = 1
+HLP = AP_CAL_ADC2
+[AP_CAL_QTA2]
+ADR = cal3
+FRM = QTA, 3
+RST = 1
+HLP = AP_CAL_QTA2
+
+[POL_FWERRVLIM]
+ADR = pa4
+FRM = DEC, 0
+HLP = POL_FWERRVLIM
+[POL_TOLLERG]
+ADR = pa6
+FRM = DEC, 3
+HLP = POL_TOLLERG
+[POL_TOLLERF]
+ADR = pa7
+FRM = DEC, 3
+HLP = POL_TOLLERF
+[POL_VELMAX]
+ADR = pa9
+FRM = DEC, 0
+HLP = POL_VELMAX
+[POL_FATTCONV]
+ADR = pa15
+FRM = DEC, 4
+HLP = POL_FATTCONV
+[POL_FATTCONVDIV]
+ADR = pa42
+FRM = DEC, 4
+HLP = POL_FATTCONVDIV
+[POL_QFATTCONV]
+ADR = dQFattConv
+FRM = DEC, 4
+HLP = POL_FATTCONV
+[POL_QFATTCONVDIV]
+ADR = dQFattConvDiv
+FRM = DEC, 4
+HLP = POL_FATTCONVDIV
+[POL_TARQUOTA]
+ADR = pa18
+FRM = DEC, 3
+HLP = POL_TARQUOTA
+[POL_VELMICRO]
+ADR = pa19
+FRM = DEC, 0
+HLP = POL_VELMICRO
+[POL_VELTACCA]
+ADR = pa20
+FRM = DEC, 0
+HLP = POL_VELTACCA
+[POL_MINQUOTA]
+ADR = pa21
+FRM = DEC, 3
+HLP = POL_MINQUOTA
+[POL_MAXQUOTA]
+ADR = pa22
+FRM = DEC, 3
+HLP = POL_MAXQUOTA
+[POL_VELMAN]
+ADR = pa23
+FRM = DEC, 0
+HLP = POL_VELMAN
+[POL_QCHKTARA]
+ADR = pa26
+FRM = DEC, 3
+HLP = POL_QCHKTARA
+[POL_RECQTA]
+ADR = pa30
+FRM = DEC, 3
+HLP = POL_RECQTA
+[POL_PARKQTA]
+ADR = pa31
+FRM = DEC, 3
+HLP = POL_PARKQTA
+[POL_QTARECG]
+ADR = pa34
+FRM = DEC, 3
+HLP = POL_QTARECG
+[POL_ACCEL]
+ADR = pa1
+FRM = DEC, 0
+HLP = POL_ACCEL
+[POL_DECEL]
+ADR = pa2
+FRM = DEC, 0
+HLP = POL_DECEL
+[POL_JERK]
+ADR = pa25
+FRM = DEC, 0
+HLP = POL_JERK
+[POL_EMERDEC]
+ADR = pa32
+FRM = DEC, 0
+HLP = POL_EMERDEC
+[POL_KPGAIN]
+ADR = pa10
+FRM = DEC, 3
+HLP = POL_KPGAIN
+[POL_KDGAIN]
+ADR = pa11
+FRM = DEC, 3
+HLP = POL_KDGAIN
+[POL_KVFFGAIN]
+ADR = pa12
+FRM = DEC, 3
+HLP = POL_KVFFGAIN
+[POL_SSERRK]
+ADR = pa4
+FRM = DEC, 3
+HLP = POL_SSERRK
+[POL_SSERR]
+ADR = pa5
+FRM = DEC, 3
+HLP = POL_SSERR
+
+[SP_ACCTIME]
+ADR = pa1
+FRM = DEC, 3
+HLP = SP_ACCTIME
+HFG = acc.bmp
+[SP_DECTIME]
+ADR = pa2
+FRM = DEC, 3
+HLP = SP_DECTIME
+HFG = acc.bmp
+[SP_DELAYS]
+ADR = pa42
+FRM = DEC, 3
+HLP = SP_DELAYS
+[SP_ACCEL]
+ADR = pa1
+FRM = DEC, 0
+HLP = SP_ACCEL
+[SP_DECEL]
+ADR = pa2
+FRM = DEC, 0
+HLP = SP_DECEL
+[SP_JERK]
+ADR = pa42
+FRM = QTA, 0
+HLP = SP_JERK
+[SP_OPZIONI0]
+ADR = pa3
+MSK = 0, 1
+FRM = BIN, 0
+HLP = SP_OPZIONI0
+[SP_OPZIONI1]
+ADR = pa3
+RST = 1
+MSK = 1, 1
+FRM = BIN, 0
+HLP = SP_OPZIONI1
+[SP_OPZIONI2]
+ADR = pa3
+RST = 1
+MSK = 2, 1
+FRM = BIN, 0
+HLP = SP_OPZIONI2
+[SP_OPZIONI3]
+ADR = pa3
+RST = 1
+MSK = 3, 1
+FRM = BIN, 0
+HLP = SP_OPZIONI3
+[SP_OPZIONI4]
+ADR = pa3
+MSK = 4, 1
+FRM = BIN, 0
+HLP = SP_OPZIONI4
+[SP_OPZIONI10]
+ADR = pa3
+RST = 1
+MSK = 10, 1
+FRM = BIN, 0
+HLP = SP_OPZIONI10
+[SP_OPZIONI11]
+ADR = pa3
+RST = 1
+MSK = 11, 1
+FRM = BIN, 0
+HLP = SP_OPZIONI11
+[SP_OPZIONI12]
+ADR = pa3
+RST = 1
+MSK = 12, 1
+FRM = BIN, 0
+HLP = SP_OPZIONI12
+[SP_OPZIONI15]
+ADR = pa3
+RST = 1
+MSK = 15, 1
+FRM = BIN, 0
+HLP = SP_OPZIONI15
+[SP_OPZIONI31]
+ADR = pa3
+RST = 1
+MSK = 31, 1
+FRM = BIN, 0
+HLP = SP_OPZIONI31
+[SP_FWERRVLIM]
+ADR = pa4
+FRM = DEC, 0
+HLP = SP_FWERRVLIM
+[SP_FWERR]
+ADR = pa5
+FRM = DEC, 0
+HLP = SP_FWERR
+[SP_SSERRK]
+ADR = pa4
+FRM = DEC, 3
+HLP = SP_SSERRK
+[SP_SSERR]
+ADR = pa5
+FRM = DEC, 3
+HLP = SP_SSERR
+[SP_TOLLERG]
+ADR = pa6
+FRM = DEC, 1
+HLP = SP_TOLLERG
+[SP_TOLLERF]
+ADR = pa7
+FRM = DEC, 1
+HLP = SP_TOLLERF
+[SP_TOLLER]
+ADR = pa8
+FRM = DEC, 3
+HLP = SP_TOLLER
+[SP_VELMAX]
+ADR = pa9
+FRM = DEC, 0
+HLP = SP_VELMAX
+[SP_GAINP]
+ADR = pa10
+FRM = DEC, 3
+HLP = SP_GAINP
+[SP_GAIND]
+ADR = pa11
+FRM = DEC, 3
+HLP = SP_GAIND
+[SP_INFWD]
+ADR = pa12
+FRM = DEC, 3
+HLP = SP_INFWD
+[SP_KPGAIN]
+ADR = pa10
+FRM = DEC, 3
+HLP = SP_KPGAIN
+[SP_KDGAIN]
+ADR = pa11
+FRM = DEC, 3
+HLP = SP_KDGAIN
+[SP_KVFFGAIN]
+ADR = pa12
+FRM = DEC, 3
+HLP = SP_KVFFGAIN
+[SP_INSPOS]
+ADR = pa14
+FRM = DEC, 3
+HLP = SP_INSPOS
+[SP_FATTCONV]
+ADR = pa15
+RST = 1
+FRM = DEC, 0
+HLP = SP_FATTCONV
+[SP_TARTYPE]
+ADR = pa16
+RNG = {0,1,2,3,4}
+HLP = SP_TARTYPE
+[SP_INSNEG]
+ADR = pa17
+FRM = DEC, 3
+HLP = SP_INSNEG
+[SP_TARQUOTA]
+ADR = pa18
+FRM = DEC, 1
+HLP = SP_TARQUOTA
+[SP_VELMICRO]
+ADR = pa19
+FRM = DEC, 0
+HLP = SP_VELMICRO
+[SP_VELTACCA]
+ADR = pa20
+FRM = DEC, 0
+HLP = SP_VELTACCA
+[SP_VEL10V]
+ADR = pa21
+FRM = DEC, 0
+HLP = SP_VEL10V
+[SP_ENCTYPE]
+ADR = pa22
+RST = 1
+RNG = {0,1}
+HLP = SP_ENCTYPE
+[SP_N1]
+ADR = pa23
+FRM = DEC, 3
+HLP = SP_N1
+[SP_N2]
+ADR = pa24
+FRM = DEC, 3
+HLP = SP_N2
+[SP_N3]
+ADR = pa25
+FRM = DEC, 3
+HLP = SP_N3
+[SP_N4]
+ADR = pa26
+FRM = DEC, 3
+HLP = SP_N4
+[SP_VELND]
+ADR = pa27
+FRM = DEC, 0
+HLP = SP_VELND
+[SP_TPACC]
+ADR = pa47
+FRM = DEC, 3
+HLP = SP_TPACC
+[SP_TPAVA]
+ADR = pa48
+FRM = DEC, 3
+HLP = SP_TPAVA
+[SP_TPIND]
+ADR = pa49
+FRM = DEC, 3
+HLP = SP_TPIND
+[SP_VELLIM1]
+ADR = pa28
+FRM = DEC, 0
+HLP = SP_VELLIM1
+[SP_VELLIM2]
+ADR = pa29
+FRM = DEC, 0
+HLP = SP_VELLIM2
+[SP_VELLIM3]
+ADR = pa30
+FRM = DEC, 0
+HLP = SP_VELLIM3
+[SP_VELLIM4]
+ADR = pa31
+FRM = DEC, 0
+HLP = SP_VELLIM4
+[SP_VELLTOL]
+ADR = pa32
+FRM = DEC, 3
+HLP = SP_VELLTOL
+[SP_FLT]
+ADR = pa33
+FRM = DEC, 3
+HLP = SP_FLT
+[SP_VELMIN]
+ADR = pa34
+FRM = DEC, 0
+HLP = SP_VELMIN
+[SP_VELSTOP]
+ADR = pa35
+FRM = DEC, 0
+HLP = SP_VELSTOP
+[SP_VELJOG]
+ADR = pa36
+FRM = DEC, 0
+HLP = SP_VELJOG
+[SP_VELM19]
+ADR = pa37
+FRM = DEC, 0
+HLP = SP_VELM19
+[SP_EMERTIME]
+ADR = pa38
+FRM = DEC, 3
+HLP = SP_EMERTIME
+[SP_TIMEREG]
+ADR = pa39
+RST = 1
+RNG = {0,1,2,4}
+HLP = SP_TIMEREG
+[SP_TIPOTSTENC]
+ADR = pa40
+RST = 1
+RNG = {0,1}
+HLP = SP_TIPOTSTENC
+[SP_QCHKTARA]
+ADR = pa41
+FRM = DEC, 1
+HLP = SP_QCHKTARA
+[SP_EMERDEC]
+ADR = pa38
+FRM = DEC, 0
+HLP = SP_EMERDEC
+[SP_VELMIN1]
+ADR = pa43
+FRM = DEC, 0
+HLP = SP_VELMIN1
+[SP_VELMIN2]
+ADR = pa44
+FRM = DEC, 0
+HLP = SP_VELMIN2
+[SP_VELMIN3]
+ADR = pa45
+FRM = DEC, 0
+HLP = SP_VELMIN3
+[SP_VELMIN4]
+ADR = pa46
+FRM = DEC, 0
+HLP = SP_VELMIN4
+
+[NV_OPZIONI0]
+ADR = pa1
+MSK = 0, 1
+FRM = BIN, 0
+HLP = NV_OPZIONI0
+[NV_OPZIONI1]
+ADR = pa1
+RST = 1
+MSK = 1, 1
+FRM = BIN, 0
+HLP = NV_OPZIONI1
+[NV_OPZIONI3]
+ADR = pa1
+MSK = 3, 1
+FRM = BIN, 0
+HLP = NV_OPZIONI3
+[NV_OPZIONI4]
+ADR = pa1
+MSK = 4, 1
+FRM = BIN, 0
+HLP = NV_OPZIONI4
+[NV_OPZIONI5]
+ADR = pa1
+RST = 1
+MSK = 5, 1
+FRM = BIN, 0
+HLP = NV_OPZIONI5
+[NV_OPZIONI6]
+ADR = pa1
+RST = 1
+MSK = 6, 1
+FRM = BIN, 0
+HLP = NV_OPZIONI6
+[NV_OPZIONI10]
+ADR = pa1
+RST = 1
+MSK = 10, 1
+FRM = BIN, 0
+HLP = NV_OPZIONI10
+[NV_OPZIONI13]
+ADR = pa1
+RST = 1
+MSK = 13, 1
+FRM = BIN, 0
+HLP = NV_OPZIONI13
+[NV_OPZIONI14]
+ADR = pa1
+RST = 1
+MSK = 14, 1
+FRM = BIN, 0
+HLP = NV_OPZIONI14
+[NV_OPZIONI18]
+ADR = pa1
+RST = 1
+MSK = 18, 1
+FRM = BIN, 0
+HLP = NV_OPZIONI18
+[NV_OPZIONI26]
+ADR = pa1
+RST = 1
+MSK = 26, 1
+FRM = BIN, 0
+HLP = NV_OPZIONI26
+[NV_OPZIONI31]
+ADR = pa1
+RST = 1
+MSK = 31, 1
+FRM = BIN, 0
+HLP = NV_OPZIONI31
+[NV_TOLLERG]
+ADR = pa2
+FRM = QTA, 3
+HLP = NV_TOLLERG
+[NV_TOLLER]
+ADR = pa3
+FRM = DEC, 3
+HLP = NV_TOLLER
+[NV_VELMAX]
+ADR = pa4
+RNG = {1,2,3}
+FRM = DEC, 0
+HLP = NV_VELMAX
+[NV_FATTCONV]
+ADR = pa5
+FRM = DEC, 4
+HLP = NV_FATTCONV
+[NV_FATTCONVDIV]
+ADR = pa31
+FRM = DEC, 4
+HLP = NV_FATTCONVDIV
+[NV_QFATTCONV]
+ADR = dQFattConv
+FRM = DEC, 4
+HLP = NV_FATTCONV
+[NV_QFATTCONVDIV]
+ADR = dQFattConvDiv
+FRM = DEC, 4
+HLP = NV_FATTCONVDIV
+[NV_TARTYPE]
+ADR = pa6
+RNG = {0,1,2,3,4}
+HLP = NV_TARTYPE
+[NV_TARQUOTA]
+ADR = pa7
+FRM = QTA, 3
+HLP = NV_TARQUOTA
+[NV_VELMICRO]
+ADR = pa8
+FRM = DEC, 0
+HLP = NV_VELMICRO
+[NV_VELTACCA]
+ADR = pa9
+FRM = DEC, 0
+HLP = NV_VELTACCA
+[NV_MINQUOTA]
+ADR = pa10
+FRM = QTA, 3
+HLP = NV_MINQUOTA
+[NV_MAXQUOTA]
+ADR = pa11
+FRM = QTA, 3
+HLP = NV_MAXQUOTA
+[NV_VELMAN]
+ADR = pa12
+FRM = DEC, 0
+HLP = NV_VELMAN
+[NV_QCHKTARA]
+ADR = pa13
+FRM = QTA, 3
+HLP = NV_QCHKTARA
+[NV_TIPOTSTENC]
+ADR = pa14
+RST = 1
+RNG = {0,1}
+HLP = NV_TIPOTSTENC
+[NV_PARKQTA]
+ADR = pa16
+FRM = QTA, 3
+HLP = NV_PARKQTA
+[NV_DECV1AVA]
+ADR = pa17
+FRM = QTA, 3
+HLP = NV_DECV1AVA
+[NV_DECV2AVA]
+ADR = pa18
+FRM = QTA, 3
+HLP = NV_DECV2AVA
+[NV_DECV1IND]
+ADR = pa19
+FRM = QTA, 3
+HLP = NV_DECV1IND
+[NV_DECV2INV]
+ADR = pa20
+FRM = QTA, 3
+HLP = NV_DECV2INV
+[NV_DECSOGV1]
+ADR = pa21
+FRM = QTA, 3
+HLP = NV_DECSOGV1
+[NV_DECSOGV2]
+ADR = pa22
+FRM = QTA, 3
+HLP = NV_DECSOGV2
+[NV_TIMCOMVEL]
+ADR = pa23
+FRM = DEC, 3
+HLP = NV_TIMCOMVEL
+[NV_TIMCOMDIR]
+ADR = pa24
+FRM = DEC, 3
+HLP = NV_TIMCOMDIR
+[NV_QTARECG]
+ADR = pa25
+FRM = QTA, 3
+HLP = NV_QTARECG
+[NV_TYPERECG]
+ADR = pa26
+RNG = {0,1,2}
+HLP = NV_TYPERECG
+[NV_INERZAV]
+ADR = pa27
+FRM = QTA, 3
+HLP = NV_INERZAV
+[NV_INERZIND]
+ADR = pa28
+FRM = QTA, 3
+HLP = NV_INERZIND
+[NV_TIMERFRENO]
+ADR = pa29
+RST = 1
+FRM = DEC, 3
+HLP = NV_TIMERFRENO
+[NV_TIMEREG]
+ADR = pa30
+RST = 1
+RNG = {0,1,2,4}
+HLP = NV_TIMEREG
+
+[PT_ACCTIME]
+ADR = pa1
+FRM = DEC, 3
+HLP = PT_ACCTIME
+HFG = acc.bmp
+[PT_DECTIME]
+ADR = pa2
+FRM = DEC, 3
+HLP = PT_DECTIME
+HFG = acc.bmp
+[PT_ACCEL]
+ADR = pa1
+FRM = QTA, 0
+HLP = PT_ACCEL
+[PT_DECEL]
+ADR = pa2
+FRM = QTA, 0
+HLP = PT_DECEL
+[PT_OPZIONI0]
+ADR = pa3
+MSK = 0, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI0
+[PT_OPZIONI1]
+ADR = pa3
+MSK = 1, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI1
+[PT_OPZIONI2]
+ADR = pa3
+RST = 1
+MSK = 2, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI2
+[PT_OPZIONI3]
+ADR = pa3
+RST = 1
+MSK = 3, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI3
+[PT_OPZIONI4]
+ADR = pa3
+MSK = 4, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI4
+[PT_OPZIONI5]
+ADR = pa3
+RST = 1
+MSK = 5, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI5
+[PT_OPZIONI6]
+ADR = pa3
+RST = 1
+MSK = 6, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI6
+[PT_OPZIONI9]
+ADR = pa3
+MSK = 9, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI9
+[PT_OPZIONI10]
+ADR = pa3
+RST = 1
+MSK = 10, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI10
+[PT_OPZIONI11]
+ADR = pa3
+RST = 1
+MSK = 11, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI11
+[PT_OPZIONI12]
+ADR = pa3
+RST = 1
+MSK = 12, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI12
+[PT_OPZIONI13]
+ADR = pa3
+RST = 1
+MSK = 13, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI13
+[PT_OPZIONI14]
+ADR = pa3
+RST = 1
+MSK = 14, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI14
+[PT_OPZIONI15]
+ADR = pa3
+RST = 1
+MSK = 15, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI15
+[PT_OPZIONI16]
+ADR = pa3
+RST = 1
+MSK = 16, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI16
+[PT_OPZIONI18]
+ADR = pa3
+RST = 1
+MSK = 18, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI18
+[PT_OPZIONI31]
+ADR = pa3
+RST = 1
+MSK = 31, 1
+FRM = BIN, 0
+HLP = PT_OPZIONI31
+[PT_FWERRVLIM]
+ADR = pa4
+FRM = QTA, 0
+HLP = PT_FWERRVLIM
+[PT_FWERR]
+ADR = pa5
+FRM = DEC, 0
+HLP = PT_FWERR
+[PT_SSERRK]
+ADR = pa4
+FRM = DEC, 3
+HLP = PT_SSERRK
+[PT_SSERR]
+ADR = pa5
+FRM = QTA, 3
+HLP = PT_SSERR
+[PT_TOLLERG]
+ADR = pa6
+FRM = QTA, 3
+HLP = PT_TOLLERG
+[PT_TOLLERF]
+ADR = pa7
+FRM = QTA, 3
+HLP = PT_TOLLERF
+[PT_TOLLER]
+ADR = pa8
+FRM = DEC, 3
+HLP = PT_TOLLER
+[PT_VELMAX]
+ADR = pa9
+FRM = QTA, 0
+HLP = PT_VELMAX
+[PT_GAINP]
+ADR = pa10
+FRM = DEC, 3
+HLP = PT_GAINP
+[PT_GAIND]
+ADR = pa11
+FRM = DEC, 3
+HLP = PT_GAIND
+[PT_GAINFWD]
+ADR = pa12
+FRM = DEC, 3
+HLP = PT_GAINFWD
+[PT_INSPOS]
+ADR = pa13
+FRM = DEC, 3
+HLP = PT_INSPOS
+[PT_FATTCONV]
+ADR = pa14
+FRM = DEC, 4
+HLP = PT_FATTCONV
+[PT_FATTCONVDIV]
+ADR = pa38
+FRM = DEC, 4
+HLP = PT_FATTCONVDIV
+[PT_QFATTCONV]
+ADR = dQFattConv
+FRM = DEC, 4
+HLP = PT_FATTCONV
+[PT_QFATTCONVDIV]
+ADR = dQFattConvDiv
+FRM = DEC, 4
+HLP = PT_FATTCONVDIV
+[PT_TARTYPE]
+ADR = pa15
+RNG = {0,1,2,3,4}
+HLP = PT_TARTYPE
+[PT_INSNEG]
+ADR = pa16
+FRM = DEC, 3
+HLP = PT_INSNEG
+[PT_TARQUOTA]
+ADR = pa17
+FRM = QTA, 3
+HLP = PT_TARQUOTA
+[PT_VELMICRO]
+ADR = pa18
+FRM = QTA, 0
+HLP = PT_VELMICRO
+[PT_VELTACCA]
+ADR = pa19
+FRM = QTA, 3
+HLP = PT_VELTACCA
+[PT_MINQUOTA]
+ADR = pa20
+FRM = QTA, 3
+HLP = PT_MINQUOTA
+[PT_MAXQUOTA]
+ADR = pa21
+FRM = QTA, 3
+HLP = PT_MAXQUOTA
+[PT_VELMAN]
+ADR = pa22
+FRM = QTA, 0
+HLP = PT_VELMAN
+[PT_PARKQTA]
+ADR = pa23
+FRM = QTA, 3
+HLP = PT_PARKQTA
+[PT_EMERTIME]
+ADR = pa24
+FRM = DEC, 3
+HLP = PT_EMERTIME
+[PT_TIMEREG]
+ADR = pa36
+RST = 1
+RNG = {0,1,2,4}
+HLP = PT_TIMEREG
+[PT_TIPOTSTENC]
+ADR = pa37
+RST = 1
+RNG = {0,1}
+HLP = PT_TIPOTSTENC
+[PT_EMERDEC]
+ADR = pa32
+FRM = QTA, 0
+HLP = PT_EMERDEC
+[PT_KPGAIN]
+ADR = pa10
+FRM = DEC, 3
+HLP = PT_KPGAIN
+[PT_KDGAIN]
+ADR = pa11
+FRM = DEC, 3
+HLP = PT_KDGAIN
+[PT_KVFFGAIN]
+ADR = pa12
+FRM = DEC, 3
+HLP = PT_KVFFGAIN
+
+[FIR_AUXF]
+HLP = FIR_AUXF
+ADR = TRA_AuxF
+FRM = DEC, 3
+MSK = 0, 64
+
+[FIR_AUXG]
+HLP = FIR_AUXG
+ADR = TRA_AuxG
+FRM = DEC, 3
+MSK = 0, 64
+
+[FIR_AUXH]
+HLP = FIR_AUXH
+ADR = TRA_AuxH
+FRM = DEC, 3
+MSK = 0, 64

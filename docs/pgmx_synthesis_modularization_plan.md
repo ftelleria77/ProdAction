@@ -89,13 +89,13 @@ fueron retiradas.
 
 | Familia | Contrato actual | Produccion objetivo | Laboratorio objetivo |
 | --- | --- | --- | --- |
-| Linea | `LineMillingSpec` | `pgmx.synthesis.milling.line` | `pgmx.machining_lab.line_milling` |
-| Ranura | `SlotMillingSpec` | `pgmx.synthesis.milling.slot` | `pgmx.machining_lab.slot_milling` |
-| Perfil | `PolylineMillingSpec`, `CircleMillingSpec` | `pgmx.synthesis.milling.profile`, `circle` | `pgmx.machining_lab.profile_milling` |
-| Escuadrado | `SquaringMillingSpec` | `pgmx.synthesis.milling.squaring` | `pgmx.machining_lab.squaring` |
-| Pocket / ClosedPocket | `PocketMillingSpec`, contrato promovido `pgmx.synthesis.milling.pocket_contract` | `pgmx.synthesis.milling.pocket` | `pgmx.machining_lab.pocket_milling` |
-| Taladro | `DrillingSpec` | `pgmx.synthesis.drilling.single` | `pgmx.machining_lab.drilling` |
-| Patron de taladros | `DrillingPatternSpec` | `pgmx.synthesis.drilling.pattern` | `pgmx.machining_lab.drilling` |
+| Linea | `LineSpec` | `pgmx.synthesis.milling.line` | `pgmx.machining_lab.line_milling` |
+| Ranura | `ChannelSpec` | `pgmx.synthesis.milling.channel` | `pgmx.machining_lab.slot_milling` |
+| Perfil | `PolylineSpec`, `CircleSpec` | `pgmx.synthesis.milling._curve_profile`, `circle` | `pgmx.machining_lab.profile_milling` |
+| Escuadrado | `ContourSpec` | `pgmx.synthesis.milling.contour` | `pgmx.machining_lab.squaring` |
+| Pocket / ClosedPocket | `PocketSpec`, contrato promovido `pgmx.synthesis.milling.pocket_contract` | `pgmx.synthesis.milling.pocket` | `pgmx.machining_lab.pocket_milling` |
+| Taladro | `DrillSpec` | `pgmx.synthesis.drilling.single` | `pgmx.machining_lab.drilling` |
+| Patron de taladros | `DrillPatternSpec` | `pgmx.synthesis.drilling.pattern` | `pgmx.machining_lab.drilling` |
 | Xn | `XnSpec` | `pgmx.synthesis.common.program` | sin laboratorio propio |
 
 ## Flujo De Promocion
@@ -333,7 +333,7 @@ smoke import de la API publica vigente.
 - `profile.py` y `circle.py` se mantienen como modulos productivos separados.
   Motivo: los circulos comparten algunas bases con perfiles, pero tienen reglas
   propias de familia, estrategia helicoidal y serializacion circular especifica.
-- `PocketMillingSpec` se mantiene como contrato publico final de
+- `PocketSpec` se mantiene como contrato publico final de
   `ClosedPocket`/pocket milling. Motivo: ya esta expuesto por `pgmx.synthesis`,
   validado por tests, documentado en la ayuda publica y alineado con el
   contrato promovido `pgmx.synthesis.milling.pocket_contract`.

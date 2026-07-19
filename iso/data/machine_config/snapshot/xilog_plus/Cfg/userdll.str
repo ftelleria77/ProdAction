@@ -1,0 +1,24 @@
+[STRUCT]
+KEY_USRDLL {
+        DL_ENABLE;
+        DL_PORT;
+}
+
+[DEFAULT]
+MSK = 0, 32
+FRM = DEC, 0
+LEN = 10
+
+[DL_ENABLE]
+ADR = bDllEnable
+LEN = 1
+MCH = 2
+RNG = { 0: 2 };
+HLP = DL_ENABLE
+
+[DL_PORT]
+ADR = wComPort
+LEN = 5
+RNG = { 0: 65535 };
+HLP = DL_PORT
+

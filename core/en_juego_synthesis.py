@@ -433,7 +433,7 @@ def _transferred_machinings(
             spec = entry.spec
             if spec is None:
                 continue
-            if isinstance(spec, sp.SquaringMillingSpec):
+            if isinstance(spec, sp.ContourSpec):
                 continue
             if getattr(spec, "plane_name", "Top") != "Top":
                 continue
@@ -781,7 +781,7 @@ def _build_division_spec(
         "milling_strategy": _build_division_strategy(settings),
     }
     if len(path.points) == 2:
-        return sp.build_line_milling_spec(
+        return sp.build_line_spec(
             path.points[0][0],
             path.points[0][1],
             path.points[1][0],
@@ -791,19 +791,19 @@ def _build_division_spec(
             cutting_tool_name,
             cutting_tool_width,
             None,
-            line_side_of_feature="Center",
-            line_approach_enabled=common_kwargs["approach_enabled"],
-            line_approach_type=common_kwargs["approach_type"],
-            line_approach_mode=common_kwargs["approach_mode"],
-            line_approach_radius_multiplier=common_kwargs["approach_radius_multiplier"],
-            line_retract_enabled=common_kwargs["retract_enabled"],
-            line_retract_type=common_kwargs["retract_type"],
-            line_retract_mode=common_kwargs["retract_mode"],
-            line_retract_radius_multiplier=common_kwargs["retract_radius_multiplier"],
-            line_milling_strategy=common_kwargs["milling_strategy"],
+            side_of_feature="Center",
+            approach_enabled=common_kwargs["approach_enabled"],
+            approach_type=common_kwargs["approach_type"],
+            approach_mode=common_kwargs["approach_mode"],
+            approach_radius_multiplier=common_kwargs["approach_radius_multiplier"],
+            retract_enabled=common_kwargs["retract_enabled"],
+            retract_type=common_kwargs["retract_type"],
+            retract_mode=common_kwargs["retract_mode"],
+            retract_radius_multiplier=common_kwargs["retract_radius_multiplier"],
+            milling_strategy=common_kwargs["milling_strategy"],
             **_division_depth_kwargs(settings),
         )
-    return sp.build_polyline_milling_spec(
+    return sp.build_polyline_spec(
         path.points,
         feature_name=feature_name,
         tool_id=cutting_tool_id,
@@ -864,13 +864,13 @@ def _division_specs(
     return tuple(specs)
 
 
-def _squaring_spec(module_name: str, settings: dict) -> sp.SquaringMillingSpec:
+def _squaring_spec(module_name: str, settings: dict) -> sp.ContourSpec:
     squaring_tool_id = str(settings.get("squaring_tool_id") or "").strip()
     squaring_tool_name = _resolved_tool_name(settings, "squaring")
     squaring_tool_width = _nonnegative_setting(settings.get("squaring_tool_diameter"), 0.0)
     if not squaring_tool_id or not squaring_tool_name or squaring_tool_width <= 0.0:
         raise ValueError("Debe configurar una herramienta de escuadrado valida antes de crear el En-Juego.")
-    return sp.build_squaring_milling_spec(
+    return sp.build_contour_spec(
         feature_name=f"{module_name} - Escuadrado",
         tool_id=squaring_tool_id,
         tool_name=squaring_tool_name,
@@ -898,7 +898,7 @@ def _squaring_spec(module_name: str, settings: dict) -> sp.SquaringMillingSpec:
 def _ordered_machinings(
     transferred_specs: Sequence[sp.MachiningSpec],
     division_specs: Sequence[sp.MachiningSpec],
-    squaring_spec: sp.SquaringMillingSpec,
+    squaring_spec: sp.ContourSpec,
     settings: dict,
 ) -> tuple[sp.MachiningSpec, ...]:
     raw_order = str(settings.get("division_squaring_order") or "").strip().lower()

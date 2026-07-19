@@ -17,11 +17,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    DrillingSpec,
-    SlotMillingSpec,
-    build_drilling_spec,
-    build_line_milling_spec,
-    build_slot_milling_spec,
+    DrillSpec,
+    ChannelSpec,
+    build_drill_spec,
+    build_line_spec,
+    build_channel_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -55,27 +55,27 @@ class Fixture:
 
 def _line_e004(fixture: Fixture) -> object:
     offset = (fixture.index - 1) * 8.0
-    return build_line_milling_spec(
-        line_x1=80.0 + offset,
-        line_y1=70.0,
-        line_x2=220.0 + offset,
-        line_y2=70.0,
-        line_feature_name=f"{fixture.transition_id}_{fixture.index:02d}_LINE_E004",
-        line_tool_id="1903",
-        line_tool_name="E004",
-        line_tool_width=4.0,
-        line_security_plane=20.0,
-        line_side_of_feature="Center",
-        line_is_through=False,
-        line_target_depth=10.0,
-        line_extra_depth=0.0,
-        line_approach_enabled=False,
-        line_retract_enabled=False,
+    return build_line_spec(
+        start_x=80.0 + offset,
+        start_y=70.0,
+        end_x=220.0 + offset,
+        end_y=70.0,
+        feature_name=f"{fixture.transition_id}_{fixture.index:02d}_LINE_E004",
+        tool_id="1903",
+        tool_name="E004",
+        tool_width=4.0,
+        security_plane=20.0,
+        side_of_feature="Center",
+        is_through=False,
+        target_depth=10.0,
+        extra_depth=0.0,
+        approach_enabled=False,
+        retract_enabled=False,
     )
 
 
-def _top_drill(fixture: Fixture) -> DrillingSpec:
-    return build_drilling_spec(
+def _top_drill(fixture: Fixture) -> DrillSpec:
+    return build_drill_spec(
         feature_name=f"{fixture.transition_id}_{fixture.index:02d}_TOP_D8",
         plane_name="Top",
         center_x=260.0,
@@ -86,8 +86,8 @@ def _top_drill(fixture: Fixture) -> DrillingSpec:
     )
 
 
-def _side_drill(fixture: Fixture) -> DrillingSpec:
-    return build_drilling_spec(
+def _side_drill(fixture: Fixture) -> DrillSpec:
+    return build_drill_spec(
         feature_name=f"{fixture.transition_id}_{fixture.index:02d}_FRONT_D8",
         plane_name="Front",
         center_x=fixture.length * 0.5,
@@ -98,8 +98,8 @@ def _side_drill(fixture: Fixture) -> DrillingSpec:
     )
 
 
-def _top_slot(fixture: Fixture) -> SlotMillingSpec:
-    return build_slot_milling_spec(
+def _top_slot(fixture: Fixture) -> ChannelSpec:
+    return build_channel_spec(
         feature_name=f"{fixture.transition_id}_{fixture.index:02d}_TOP_SLOT_082",
         start_x=120.0,
         start_y=140.0,

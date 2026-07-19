@@ -23,22 +23,22 @@ Casos publicos soportados hoy:
 - lectura de estado basico de pieza (`read_pgmx_state`)
 - lectura y clasificacion de geometria base (`read_pgmx_geometries`)
 - compensacion geometrica reusable (`build_compensated_toolpath_profile`)
-- fresado lineal abierto (`LineMillingSpec`)
-- ranura lineal `SlotSide` con Sierra Vertical X (`SlotMillingSpec`)
-- fresado sobre polilinea lineal abierta o cerrada (`PolylineMillingSpec`)
-- fresado circular cerrado (`CircleMillingSpec`)
-- escuadrado exterior del contorno de pieza (`SquaringMillingSpec`)
-- pocket milling / `ClosedPocket` (`PocketMillingSpec`)
-- taladro puntual sobre punto (`DrillingSpec`)
-- repeticion rectangular de taladros (`DrillingPatternSpec`)
+- fresado lineal abierto (`LineSpec`)
+- ranura lineal `SlotSide` con Sierra Vertical X (`ChannelSpec`)
+- fresado sobre polilinea lineal abierta o cerrada (`PolylineSpec`)
+- fresado circular cerrado (`CircleSpec`)
+- escuadrado exterior del contorno de pieza (`ContourSpec`)
+- pocket milling / `ClosedPocket` (`PocketSpec`)
+- taladro puntual sobre punto (`DrillSpec`)
+- repeticion rectangular de taladros (`DrillPatternSpec`)
 - control de profundidad pasante/no pasante
 - estrategias publicas `Unidireccional` y `Bidireccional` para:
-  - linea simple via `LineMillingSpec`
-  - polilinea lineal abierta o cerrada via `PolylineMillingSpec`
-  - circulo cerrado via `CircleMillingSpec`
-  - escuadrado via `SquaringMillingSpec`
+  - linea simple via `LineSpec`
+  - polilinea lineal abierta o cerrada via `PolylineSpec`
+  - circulo cerrado via `CircleSpec`
+  - escuadrado via `ContourSpec`
 - estrategia publica `Helicoidal` para:
-  - circulo cerrado via `CircleMillingSpec`
+  - circulo cerrado via `CircleSpec`
 - estrategia de lectura `Paralela al perfil/contorno`
   (`ContourParallelMillingStrategySpec`) para vaciados Maestro existentes
 - `Approach` y `Retract` con reglas ya volcadas desde Maestro y ya unificadas
@@ -49,15 +49,15 @@ Casos que no deben asumirse como API publica estable si no estan documentados aq
 - familias de feature distintas de `GeneralProfileFeature`, `SlotSide`,
   `ClosedPocket`, `RoundHole` y `ReplicateFeature`
 - cualquier mecanizado que no este construido con
-  `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
-  `CircleMillingSpec`, `SquaringMillingSpec`, `PocketMillingSpec`,
-  `DrillingSpec` o `DrillingPatternSpec`
+  `LineSpec`, `ChannelSpec`, `PolylineSpec`,
+  `CircleSpec`, `ContourSpec`, `PocketSpec`,
+  `DrillSpec` o `DrillPatternSpec`
 
 Importante:
 - la sintesis completa de feature + operation sigue expuesta hoy por
-  `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
-  `CircleMillingSpec`, `SquaringMillingSpec`, `PocketMillingSpec`,
-  `DrillingSpec` y `DrillingPatternSpec`
+  `LineSpec`, `ChannelSpec`, `PolylineSpec`,
+  `CircleSpec`, `ContourSpec`, `PocketSpec`,
+  `DrillSpec` y `DrillPatternSpec`
 - la capa de compensacion sigue resolviendo lineas, arcos, circulos y curvas
   compuestas abiertas/cerradas como base de estas familias publicas
 
@@ -83,10 +83,10 @@ Mapa interno vigente:
 | `pgmx.synthesis.common.hydration` | Lectura de templates y contenedores `.pgmx`/`Pieza.xml`. |
 | `pgmx.synthesis.common.leads` | Acercamientos y alejamientos Maestro. |
 | `pgmx.synthesis.milling.line` | Fresados lineales. |
-| `pgmx.synthesis.milling.slot` | Ranuras `SlotSide`. |
-| `pgmx.synthesis.milling.profile` | Fresados sobre perfiles/polilineas. |
+| `pgmx.synthesis.milling.channel` | Ranuras `SlotSide`. |
+| `pgmx.synthesis.milling._curve_profile` | Fresados sobre perfiles/polilineas. |
 | `pgmx.synthesis.milling.circle` | Fresados circulares. |
-| `pgmx.synthesis.milling.squaring` | Escuadrado exterior. |
+| `pgmx.synthesis.milling.contour` | Escuadrado exterior. |
 | `pgmx.synthesis.milling.pocket` | Produccion `ClosedPocket` / pocket milling. |
 | `pgmx.synthesis.milling.pocket_contract` | Contrato promovido desde el V2 historico de Vaciado. |
 | `pgmx.synthesis.milling.pocket_trace` y `pocket_rectangular` | Reglas productivas cerradas de trazas/rectangulares para pocket milling. |
@@ -109,9 +109,9 @@ Orden recomendado para usar el sintetizador:
 3. Leer o definir la pieza.
 4. Construir la profundidad.
 5. Construir `Approach` y `Retract`.
-6. Construir uno o mas mecanizados (`LineMillingSpec`, `SlotMillingSpec`,
-   `PolylineMillingSpec`, `CircleMillingSpec`, `SquaringMillingSpec`,
-   `PocketMillingSpec` y/o `DrillingSpec`/`DrillingPatternSpec`).
+6. Construir uno o mas mecanizados (`LineSpec`, `ChannelSpec`,
+   `PolylineSpec`, `CircleSpec`, `ContourSpec`,
+   `PocketSpec` y/o `DrillSpec`/`DrillPatternSpec`).
 7. Construir el `PgmxSynthesisRequest`.
 8. Ejecutar `synthesize_request(...)`.
 
@@ -329,8 +329,8 @@ Notas:
   - `Automatic`
   - `SafetyHeight` / `SalidaCota`
   - `InPiece` / `EnLaPieza`
-- en `LineMillingSpec`, `Automatic` cae en `SafetyHeight`
-- en `PolylineMillingSpec` cerrado y en `SquaringMillingSpec`, `Automatic`
+- en `LineSpec`, `Automatic` cae en `SafetyHeight`
+- en `PolylineSpec` cerrado y en `ContourSpec`, `Automatic`
   cae en `InPiece`
 - si `axial_cutting_depth > 0` o `axial_finish_cutting_depth > 0`, la helper
   activa `allow_multiple_passes=True` automaticamente
@@ -376,7 +376,7 @@ build_helical_milling_strategy_spec(
 ```
 
 Notas:
-- por ahora esta familia queda validada solo para `CircleMillingSpec`
+- por ahora esta familia queda validada solo para `CircleSpec`
 - `axial_cutting_depth` mapea a `PH`
 - `allows_finish_cutting` mapea a `Habilitar pasada final`
 - `axial_finish_cutting_depth` mapea a `UH`
@@ -461,14 +461,14 @@ Notas:
 - cuando `y` tiene valor, el sintetizador serializa `GeometryID = nil`
 - el `Xn` sintetizado se escribe al final de `MainWorkplan/Elements`
 
-### `build_line_milling_spec(...) -> LineMillingSpec | None`
+### `build_line_spec(...) -> LineSpec | None`
 
 Construye un fresado lineal de dos puntos.
 
 Firma simplificada:
 
 ```python
-build_line_milling_spec(
+build_line_spec(
     line_x1,
     line_y1,
     line_x2,
@@ -512,7 +512,7 @@ Notas:
   - `Central/Right/Left`
   - `Approach/Retract` lineales sobre multipaso
 
-### `build_slot_milling_spec(...) -> SlotMillingSpec`
+### `build_channel_spec(...) -> ChannelSpec`
 
 Construye una ranura lineal Maestro `SlotSide` validada para la herramienta
 `Sierra Vertical X`.
@@ -520,7 +520,7 @@ Construye una ranura lineal Maestro `SlotSide` validada para la herramienta
 Firma simplificada:
 
 ```python
-build_slot_milling_spec(
+build_channel_spec(
     *,
     start_x,
     start_y,
@@ -569,7 +569,7 @@ Defaults operativos observados:
   curvas verticales `Approach` y `Lift`
 
 Reglas de maquina volcadas al codigo:
-- `SlotMillingSpec` genera una feature `a:SlotSide`, no un
+- `ChannelSpec` genera una feature `a:SlotSide`, no un
   `GeneralProfileFeature`
 - la herramienta `1899 / 082` esta catalogada como `Sierra Vertical X`
 - para esa herramienta, el sintetizador solo acepta ranuras lineales
@@ -592,14 +592,14 @@ Reglas de maquina volcadas al codigo:
 - una ranura vertical queda rechazada porque el CNC no puede ejecutar ese
   recorrido con ninguna herramienta disponible en el catalogo actual
 
-### `build_polyline_milling_spec(...) -> PolylineMillingSpec`
+### `build_polyline_spec(...) -> PolylineSpec`
 
 Construye un fresado sobre polilinea lineal abierta o cerrada.
 
 Firma simplificada:
 
 ```python
-build_polyline_milling_spec(
+build_polyline_spec(
     points,
     feature_name=None,
     tool_id=None,
@@ -632,23 +632,23 @@ Notas:
 - no admite segmentos de longitud cero
 - si el ultimo punto coincide con el primero, la polilinea se interpreta como
   contorno cerrado
-- la capa publica de estrategias sobre `PolylineMillingSpec` ya cubre
+- la capa publica de estrategias sobre `PolylineSpec` ya cubre
   polilineas lineales abiertas y cerradas
-- para una sola recta sigue conviniendo `LineMillingSpec`, porque hace mas
+- para una sola recta sigue conviniendo `LineSpec`, porque hace mas
   explicita la intencion del mecanizado
 - `milling_strategy` admite:
   - `build_unidirectional_milling_strategy_spec(...)`
   - `build_bidirectional_milling_strategy_spec(...)`
   - `Helicoidal` no queda validada para polilinea lineal
 
-### `build_circle_milling_spec(...) -> CircleMillingSpec`
+### `build_circle_spec(...) -> CircleSpec`
 
 Construye un fresado circular cerrado sobre `Top`.
 
 Firma simplificada:
 
 ```python
-build_circle_milling_spec(
+build_circle_spec(
     *,
     center_x,
     center_y,
@@ -685,10 +685,10 @@ Notas:
 - `radius` debe ser mayor que cero
 - `winding` admite `CounterClockwise/Antihorario` o `Clockwise/Horario`
 - `side_of_feature` admite `Center`, `Right`, `Left`
-- en `CircleMillingSpec`, `side_of_feature` no reescribe la geometria nominal:
+- en `CircleSpec`, `side_of_feature` no reescribe la geometria nominal:
   conserva el circulo base y desplaza el radio efectivo del toolpath segun
   winding + `tool_width / 2`
-- la capa publica de estrategias sobre `CircleMillingSpec` ya cubre:
+- la capa publica de estrategias sobre `CircleSpec` ya cubre:
   - contornos cerrados con multipaso `Unidireccional`
   - contornos cerrados con multipaso `Bidireccional`
   - desbaste `Helicoidal` con vuelta final opcional
@@ -697,14 +697,14 @@ Notas:
   - `build_bidirectional_milling_strategy_spec(...)`
   - `build_helical_milling_strategy_spec(...)`
 
-### `build_squaring_milling_spec(...) -> SquaringMillingSpec`
+### `build_contour_spec(...) -> ContourSpec`
 
 Construye un escuadrado exterior del contorno real de la pieza.
 
 Firma simplificada:
 
 ```python
-build_squaring_milling_spec(
+build_contour_spec(
     *,
     start_edge=None,
     winding=None,
@@ -761,7 +761,7 @@ Notas:
   relevados; la parametrizacion interna de algunas curvas puede no quedar
   serializada byte a byte igual si no se parte de una plantilla manual
 
-### `build_pocket_milling_spec(...) -> PocketMillingSpec`
+### `build_pocket_spec(...) -> PocketSpec`
 
 Construye un pocket milling superior observado en Maestro como `ClosedPocket`.
 Es la familia productiva donde quedo integrado el frente historico de
@@ -770,7 +770,7 @@ Es la familia productiva donde quedo integrado el frente historico de
 Firma simplificada:
 
 ```python
-build_pocket_milling_spec(
+build_pocket_spec(
     *,
     contour_points,
     feature_name=None,
@@ -813,14 +813,14 @@ Notas:
 - el contrato V2 historico de Vaciado vive ahora en
   `pgmx.synthesis.milling.pocket_contract`.
 
-### `build_drilling_spec(...) -> DrillingSpec`
+### `build_drill_spec(...) -> DrillSpec`
 
 Construye un taladro puntual asociado a un `GeomCartesianPoint`.
 
 Firma simplificada:
 
 ```python
-build_drilling_spec(
+build_drill_spec(
     *,
     center_x,
     center_y,
@@ -930,7 +930,7 @@ Reglas practicas relevantes:
   herramienta queda resuelta a una herramienta real; si `ToolKey` queda vacio,
   no hay chequeo de `sinking_length`
 
-### `build_drilling_pattern_spec(...) -> DrillingPatternSpec`
+### `build_drill_pattern_spec(...) -> DrillPatternSpec`
 
 Construye una repeticion rectangular de taladros iguales usando la familia
 Maestro `ReplicateFeature` con `ReplicationPattern = RectangularPattern`.
@@ -938,7 +938,7 @@ Maestro `ReplicateFeature` con `ReplicationPattern = RectangularPattern`.
 Firma simplificada:
 
 ```python
-build_drilling_pattern_spec(
+build_drill_pattern_spec(
     center_x,
     center_y,
     diameter,
@@ -974,12 +974,12 @@ Reglas publicas de la spec:
 - `center_x/center_y` son el centro del taladro base del patron
 - `columns` y `rows` deben ser mayores o iguales a `1`
 - `columns * rows` debe ser mayor o igual a `2`; para un unico hueco usar
-  `DrillingSpec`
+  `DrillSpec`
 - `spacing` es la separacion entre columnas
 - `row_spacing` es la separacion entre filas; si se omite, usa `spacing`
 - el patron se valida contra el rectangulo util del plano `Top`
 - profundidad, familia de broca y resolucion de herramienta reutilizan las
-  reglas de `DrillingSpec`
+  reglas de `DrillSpec`
 
 Serializacion validada contra Maestro:
 - `ManufacturingFeature i:type = a:ReplicateFeature`
@@ -1019,14 +1019,14 @@ build_synthesis_request(
     origin_y=None,
     origin_z=None,
     execution_fields=None,
-    line_millings=None,
-    slot_millings=None,
-    polyline_millings=None,
-    circle_millings=None,
-    squaring_millings=None,
-    pocket_millings=None,
-    drillings=None,
-    drilling_patterns=None,
+    lines=None,
+    channels=None,
+    polylines=None,
+    circles=None,
+    contours=None,
+    pockets=None,
+    drills=None,
+    drill_patterns=None,
     ordered_machinings=None,
     machining_order=None,
     xn=None,
@@ -1041,9 +1041,9 @@ Reglas:
   abiertas, circulares, de escuadrado, pocket milling, de taladrado y de
   patrones de taladrado en un mismo request
 - `ordered_machinings` permite insertar una secuencia exacta de specs publicos
-  (`LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
-  `CircleMillingSpec`, `SquaringMillingSpec`, `PocketMillingSpec`, `DrillingSpec`,
-  `DrillingPatternSpec`) preservando ese orden de worksteps
+  (`LineSpec`, `ChannelSpec`, `PolylineSpec`,
+  `CircleSpec`, `ContourSpec`, `PocketSpec`, `DrillSpec`,
+  `DrillPatternSpec`) preservando ese orden de worksteps
 - `machining_order` permite definir el orden de aplicacion de familias de
   mecanizado; por defecto es `line`, `slot`, `polyline`, `circle`,
   `squaring`, `pocket`, `drilling`, `drilling_pattern`
@@ -1119,7 +1119,7 @@ result = synthesize_request(request)
   centrado en el vertice nominal.
 - En una esquina interior para el lado elegido, Maestro recorta y une por
   interseccion de los segmentos offset.
-- Esta regla ya esta reutilizada por la sintesis actual de `PolylineMillingSpec`.
+- Esta regla ya esta reutilizada por la sintesis actual de `PolylineSpec`.
 
 ### Compensacion: polilineas cerradas con esquinas vivas
 
@@ -1209,7 +1209,7 @@ Serializacion observada:
 
 Uso practico:
 
-- este patron ya quedo expuesto por `build_squaring_milling_spec(...)`
+- este patron ya quedo expuesto por `build_contour_spec(...)`
 - el builder publico cubre:
   - `CounterClockwise + Right`
   - `Clockwise + Left`
@@ -1267,7 +1267,7 @@ Limitacion Maestro observada:
   no postprocesa `Retract Arc + Up`;
 - el fallo ocurre en `MoveOnCompositeCurve` / `WritePointOnParameters` al crear
   un punto cartesiano;
-- desde `SYNTHESIZER_VERSION = "1.6"`, `build_polyline_milling_spec(...)`
+- desde `SYNTHESIZER_VERSION = "1.6"`, `build_polyline_spec(...)`
   rechaza esa combinacion con `ValueError`;
 - para archivos que deban postprocesarse, usar `Retract Line + Up` o
   `Arc + Quote` en esa familia.
@@ -1308,12 +1308,12 @@ toolpath = build_compensated_toolpath_profile(
 ```python
 from pathlib import Path
 from pgmx.synthesis import (
-    build_line_milling_spec,
+    build_line_spec,
     build_synthesis_request,
     synthesize_request,
 )
 
-line = build_line_milling_spec(
+line = build_line_spec(
     line_x1=200.0,
     line_y1=0.0,
     line_x2=200.0,
@@ -1337,7 +1337,7 @@ request = build_synthesis_request(
     origin_x=5.0,
     origin_y=5.0,
     origin_z=25.0,
-    line_millings=[line],
+    lines=[line],
 )
 
 result = synthesize_request(request)
@@ -1350,12 +1350,12 @@ print(result.sha256)
 ```python
 from pathlib import Path
 from pgmx.synthesis import (
-    build_slot_milling_spec,
+    build_channel_spec,
     build_synthesis_request,
     synthesize_request,
 )
 
-slot = build_slot_milling_spec(
+slot = build_channel_spec(
     start_x=7.55,
     start_y=570.0,
     end_x=341.55,
@@ -1373,7 +1373,7 @@ request = build_synthesis_request(
     origin_x=5.0,
     origin_y=5.0,
     origin_z=25.0,
-    slot_millings=[slot],
+    channels=[slot],
 )
 
 result = synthesize_request(request)
@@ -1386,13 +1386,13 @@ print(result.sha256)
 ```python
 from pathlib import Path
 from pgmx.synthesis import (
-    build_line_milling_spec,
+    build_line_spec,
     build_synthesis_request,
     build_unidirectional_milling_strategy_spec,
     synthesize_request,
 )
 
-line = build_line_milling_spec(
+line = build_line_spec(
     line_x1=400.0,
     line_y1=0.0,
     line_x2=400.0,
@@ -1421,7 +1421,7 @@ request = build_synthesis_request(
     origin_x=5.0,
     origin_y=5.0,
     origin_z=9.0,
-    line_millings=[line],
+    lines=[line],
 )
 
 result = synthesize_request(request)
@@ -1433,12 +1433,12 @@ print(result.output_path)
 ```python
 from pathlib import Path
 from pgmx.synthesis import (
-    build_polyline_milling_spec,
+    build_polyline_spec,
     build_synthesis_request,
     synthesize_request,
 )
 
-polyline = build_polyline_milling_spec(
+polyline = build_polyline_spec(
     points=[
         (250.0, 0.0),
         (125.0, 250.0),
@@ -1463,7 +1463,7 @@ request = build_synthesis_request(
     origin_x=5.0,
     origin_y=5.0,
     origin_z=9.0,
-    polyline_millings=[polyline],
+    polylines=[polyline],
 )
 
 result = synthesize_request(request)
@@ -1476,12 +1476,12 @@ print(result.output_path)
 from pathlib import Path
 from pgmx.synthesis import (
     build_bidirectional_milling_strategy_spec,
-    build_polyline_milling_spec,
+    build_polyline_spec,
     build_synthesis_request,
     synthesize_request,
 )
 
-closed_polyline = build_polyline_milling_spec(
+closed_polyline = build_polyline_spec(
     points=[
         (150.0, 0.0),
         (0.0, 0.0),
@@ -1514,7 +1514,7 @@ request = build_synthesis_request(
     origin_x=5.0,
     origin_y=5.0,
     origin_z=25.0,
-    polyline_millings=[closed_polyline],
+    polylines=[closed_polyline],
 )
 
 result = synthesize_request(request)
@@ -1526,8 +1526,8 @@ print(result.output_path)
 ```python
 from pathlib import Path
 from pgmx.synthesis import (
-    build_drilling_spec,
-    build_squaring_milling_spec,
+    build_drill_spec,
+    build_contour_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -1544,13 +1544,13 @@ request = build_synthesis_request(
     origin_x=5,
     origin_y=5,
     origin_z=25,
-    squaring_millings=(
-        build_squaring_milling_spec(
+    contours=(
+        build_contour_spec(
             winding="Antihorario",
         ),
     ),
-    drillings=(
-        build_drilling_spec(
+    drills=(
+        build_drill_spec(
             feature_name="Camlock Superior Izquierdo Delantero",
             plane_name="Top",
             center_x=33,
@@ -1559,7 +1559,7 @@ request = build_synthesis_request(
             target_depth=15,
             tool_resolution="Auto",
         ),
-        build_drilling_spec(
+        build_drill_spec(
             feature_name="Camlock Superior Izquierdo Trasero",
             plane_name="Top",
             center_x=33,
@@ -1568,7 +1568,7 @@ request = build_synthesis_request(
             target_depth=15,
             tool_resolution="Auto",
         ),
-        build_drilling_spec(
+        build_drill_spec(
             feature_name="Camlock Superior Derecho Delantero",
             plane_name="Top",
             center_x=417,
@@ -1577,7 +1577,7 @@ request = build_synthesis_request(
             target_depth=15,
             tool_resolution="Auto",
         ),
-        build_drilling_spec(
+        build_drill_spec(
             feature_name="Camlock Superior Derecho Trasero",
             plane_name="Top",
             center_x=417,
@@ -1586,7 +1586,7 @@ request = build_synthesis_request(
             target_depth=15,
             tool_resolution="Auto",
         ),
-        build_drilling_spec(
+        build_drill_spec(
             feature_name="Camlock Izquierdo Delantero",
             plane_name="Left",
             center_x=64,
@@ -1595,7 +1595,7 @@ request = build_synthesis_request(
             target_depth=28,
             tool_resolution="Auto",
         ),
-        build_drilling_spec(
+        build_drill_spec(
             feature_name="Camlock Izquierdo Trasero",
             plane_name="Left",
             center_x=256,
@@ -1604,7 +1604,7 @@ request = build_synthesis_request(
             target_depth=28,
             tool_resolution="Auto",
         ),
-        build_drilling_spec(
+        build_drill_spec(
             feature_name="Camlock Derecho Delantero",
             plane_name="Right",
             center_x=64,
@@ -1613,7 +1613,7 @@ request = build_synthesis_request(
             target_depth=28,
             tool_resolution="Auto",
         ),
-        build_drilling_spec(
+        build_drill_spec(
             feature_name="Camlock Derecho Trasero",
             plane_name="Right",
             center_x=256,
@@ -1632,8 +1632,8 @@ print(result.sha256)
 
 Lectura conceptual del ejemplo:
 - la pieza se define en el `request`
-- el escuadrado completo vive en un `SquaringMillingSpec`
-- cada hueco vive en un `DrillingSpec`
+- el escuadrado completo vive en un `ContourSpec`
+- cada hueco vive en un `DrillSpec`
 - `tool_resolution="Auto"` resuelve herramientas en la cara `Top`, pero deja
   `ToolKey` vacio en `Front`, `Back`, `Right` y `Left`
 - como no se indica `baseline_path`, se usa `pgmx/data/maestro_baselines`
@@ -1644,7 +1644,7 @@ Lectura conceptual del ejemplo:
 from pathlib import Path
 
 from pgmx.synthesis import (
-    build_drilling_pattern_spec,
+    build_drill_pattern_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -1658,8 +1658,8 @@ request = build_synthesis_request(
     origin_x=5,
     origin_y=5,
     origin_z=25,
-    drilling_patterns=(
-        build_drilling_pattern_spec(
+    drill_patterns=(
+        build_drill_pattern_spec(
             80,
             80,
             8,
@@ -1668,7 +1668,7 @@ request = build_synthesis_request(
             spacing=32,
             feature_name="Patron_Horizontal_1_D8",
         ),
-        build_drilling_pattern_spec(
+        build_drill_pattern_spec(
             280,
             80,
             8,
@@ -1689,7 +1689,7 @@ Lectura conceptual del ejemplo:
 - el archivo queda con dos features de tipo `ReplicateFeature`
 - el primer patron crea una fila de `3` columnas separadas `32 mm`
 - el segundo patron crea una columna de `3` filas separadas `32 mm`
-- no se deben modelar estos casos como tres `DrillingSpec` individuales si el
+- no se deben modelar estos casos como tres `DrillSpec` individuales si el
   objetivo es que Maestro conserve la definicion de patron
 
 ## 7. Reglas de trabajo para no perder el hilo
@@ -1712,8 +1712,8 @@ Estas reglas aplican cada vez que se trabaja con esta herramienta:
   - `xsi:type` y namespaces
   - referencias internas
   - si el caso se esta construyendo con la familia correcta
-    (`LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
-    `PocketMillingSpec`, etc.)
+    (`LineSpec`, `ChannelSpec`, `PolylineSpec`,
+    `PocketSpec`, etc.)
 
 ## 8. Fuente de verdad
 

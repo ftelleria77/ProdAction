@@ -24,11 +24,13 @@ from ..common.geometry import (
     _build_toolpath_description,
     _curve_spec_from_profile_geometry,
     _curve_spec_from_toolpath_node,
+    _line_primitive_3d,
     _parse_line_serialization,
     _profile_entry_exit_context,
     _profile_endpoint_points,
     _trimmed_curve_spec,
     build_compensated_toolpath_profile,
+    build_composite_geometry_profile,
     build_line_geometry_profile,
 )
 from ..common.hydration import _load_pgmx_container
@@ -46,6 +48,7 @@ from ..common.leads import (
 )
 from ..common.strategy import (
     BidirectionalMillingStrategySpec,
+    ZigZagMillingStrategySpec,
     ContourParallelMillingStrategySpec,
     HelicalMillingStrategySpec,
     MillingStrategySpec,
@@ -55,6 +58,7 @@ from ..common.strategy import (
     _build_bidirectional_line_strategy_profile,
     _build_milling_strategy_node,
     _build_unidirectional_line_strategy_profile,
+    _build_zigzag_line_strategy_profile,
     _normalize_milling_strategy_spec,
     _should_activate_cnc_correction,
     _strategy_comparison_key,
@@ -91,24 +95,24 @@ from ._common import (
 )
 
 __all__ = [
-    "LineMillingSpec",
-    "build_line_milling_spec",
-    "_HydratedLineMillingSpec",
-    "_append_line_milling",
+    "LineSpec",
+    "build_line_spec",
+    "_HydratedLineSpec",
+    "_append_line",
     "_build_line_geometry",
     "_build_line_operation",
     "_build_line_toolpath_profile",
     "_can_hydrate_exact_serialization",
-    "_extract_line_milling_template",
-    "_hydrate_line_milling_spec",
+    "_extract_line_template",
+    "_hydrate_line_spec",
     "_matches_line_geometry",
-    "_normalize_line_milling_spec",
+    "_normalize_line_spec",
     "_offset_line_for_toolpath",
 ]
 
 
 @dataclass(frozen=True)
-class LineMillingSpec:
+class LineSpec:
     """Descripcion reutilizable de un fresado lineal sobre un plano."""
 
     start_x: float
@@ -127,13 +131,45 @@ class LineMillingSpec:
     retract: RetractSpec = field(default_factory=RetractSpec)
     milling_strategy: Optional[MillingStrategySpec] = None
     is_enabled_expr: Optional[str] = None
+    # Cambios DURANTE el recorrido (Maestro: OperationAttribute anclado a UPar 0..1 normalizado):
+    # - speed_changes: (UPar, Speed m/min) — desde ese punto el avance pasa a Speed.
+    # - depth_changes: (UPar, Depth mm) — rampa lineal desde la prof. de la operación en el inicio
+    #   hasta Depth, alcanzándola en UPar; sigue a Depth. (N_RT_E001_Vel/_Prof, hechos por Fermín.)
+    # Solo LECTURA por ahora: la autoría del sintetizador no los serializa (los .pgmx los genera
+    # Maestro). Ver iso/synthesis/_router.py para el render ISO.
+    speed_changes: tuple[tuple[float, float], ...] = ()
+    depth_changes: tuple[tuple[float, float], ...] = ()
+    # Rebaba (N024): en el fresado LINEAL Maestro la guarda como <SideOffset> del
+    # ManufacturingFeature (igual que el slot; NO usa AllowanceSide, que queda 0). En el ISO suma
+    # al corrector de radio: SVR = width/2 + rebaba (si da 0, las líneas SVR se omiten). Admite
+    # negativo. Solo LECTURA (la autoría hornea 0; los .pgmx con rebaba los genera Maestro).
+    side_offset: float = 0.0
+    # Allowance* de la operación: sin uso conocido en línea (siempre 0); si llegan ≠0 → fail-loud.
+    allowance_side: float = 0.0
+    allowance_bottom: float = 0.0
+    # Corrección de longitud (<IsPrecise> del feature, N023 _long): el recorrido se ACORTA el radio
+    # de la fresa en ambos extremos (centro viaja [start+r·dir, end−r·dir]) para que el FILO cubra
+    # exactamente el segmento programado. Solo LECTURA (la autoría hornea false).
+    is_precise: bool = False
+    # Corrección C.N. (true, ActivateCNCCorrection: el control compensa con G41/G42 — TODO lo
+    # validado) vs Corrección CAD (false: trayectoria calculada al eje de la herramienta — EN
+    # INVESTIGACIÓN, fixtures de Fermín pendientes). Solo LECTURA.
+    activate_cnc_correction: bool = True
+    # Avanz./Rotación por operación (UI Datos tecnológicos → Parámetros de trabajo; N028 F3_S12K):
+    # corte a F=Avanz×1000 (el plunge no cambia); S{Rotación}M3 antes del G17 en transición
+    # misma-fresa, o reemplaza el S del header en cambio de herramienta. 0 = sin override. LECTURA.
+    feedrate: float = 0.0
+    spindle: float = 0.0
+    # Invertir trabajo (Datos avanzados; <IsGeomSameDirection>=false): recorre la línea al revés
+    # manteniendo el lado FÍSICO (Left emite G42 con el avance invertido). N023 _invert. LECTURA.
+    invert_work: bool = False
 
 
 @dataclass(frozen=True)
-class _HydratedLineMillingSpec:
-    """Datos internos de serializacion que complementan un `LineMillingSpec`."""
+class _HydratedLineSpec:
+    """Datos internos de serializacion que complementan un `LineSpec`."""
 
-    spec: LineMillingSpec
+    spec: LineSpec
     preferred_id_start: Optional[int] = None
     geometry_serialization: Optional[str] = None
     approach_curve: Optional[_CurveSpec] = None
@@ -204,12 +240,45 @@ class _HydratedLineMillingSpec:
     def is_enabled_expr(self) -> Optional[str]:
         return self.spec.is_enabled_expr
 
+    @property
+    def speed_changes(self) -> tuple[tuple[float, float], ...]:
+        return self.spec.speed_changes
 
-def _normalize_line_milling_spec(line_milling: LineMillingSpec) -> LineMillingSpec:
+    @property
+    def depth_changes(self) -> tuple[tuple[float, float], ...]:
+        return self.spec.depth_changes
+
+    @property
+    def side_offset(self) -> float:
+        return self.spec.side_offset
+
+    @property
+    def is_precise(self) -> bool:
+        return self.spec.is_precise
+
+    @property
+    def invert_work(self) -> bool:
+        return self.spec.invert_work
+
+    @property
+    def activate_cnc_correction(self) -> bool:
+        return self.spec.activate_cnc_correction
+
+    @property
+    def feedrate(self) -> float:
+        return self.spec.feedrate
+
+    @property
+    def spindle(self) -> float:
+        return self.spec.spindle
+
+
+def _normalize_line_spec(line_milling: LineSpec) -> LineSpec:
     normalized_strategy = _ensure_milling_strategy_allowed(
         _normalize_milling_strategy_spec(line_milling.milling_strategy),
-        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
-        context="LineMillingSpec",
+        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec,
+                       ZigZagMillingStrategySpec),
+        context="LineSpec",
     )
     return replace(
         line_milling,
@@ -221,10 +290,62 @@ def _normalize_line_milling_spec(line_milling: LineMillingSpec) -> LineMillingSp
     )
 
 
+def _line_change_boundaries(spec: LineSpec) -> tuple[float, ...]:
+    """UPars (ordenados, sin duplicados) donde la curva del toolpath se PARTE por un cambio
+    on-route de velocidad o profundidad (forma Maestro, N022 Vel/Prof y N028 _coment)."""
+
+    speed_changes = tuple(getattr(spec, "speed_changes", ()) or ())
+    depth_changes = tuple(getattr(spec, "depth_changes", ()) or ())
+    return tuple(sorted({float(u) for u, _ in speed_changes} | {float(u) for u, _ in depth_changes}))
+
+
+def _build_changes_line_profile(
+    top_level: float,
+    final_level: float,
+    base_profile: GeometryProfileSpec,
+    spec: LineSpec,
+) -> GeometryProfileSpec:
+    """Toolpath con cambios on-route (forma Maestro, N028 _coment): la Z interpola LINEALMENTE
+    entre eventos de profundidad consecutivos — desde (0, prof. base) hasta el primero, y plana
+    después del último — y la curva se parte además en cada evento de velocidad. Ojo: el ISO de
+    Maestro NO sigue esta Z entre eventos (postprocesa desde los atributos de la operación con
+    tramos planos); esta es la forma que Maestro ALMACENA al generar el toolpath."""
+
+    start_xy, end_xy = _profile_endpoint_points(base_profile)
+    boundaries = _line_change_boundaries(spec)
+    depth_points = [(0.0, float(final_level))]
+    for upar, depth_value in sorted(getattr(spec, "depth_changes", ()) or ()):
+        depth_points.append((float(upar), float(top_level) - float(depth_value)))
+
+    def z_at(upar: float) -> float:
+        for (u_a, z_a), (u_b, z_b) in zip(depth_points, depth_points[1:]):
+            if upar <= u_b + 1e-12:
+                if upar <= u_a + 1e-12:
+                    return z_a
+                return z_a + (z_b - z_a) * (upar - u_a) / (u_b - u_a)
+        return depth_points[-1][1]
+
+    upars = (0.0,) + boundaries + (1.0,)
+    primitives = []
+    for u_start, u_end in zip(upars, upars[1:]):
+        point_start = (
+            start_xy[0] + u_start * (end_xy[0] - start_xy[0]),
+            start_xy[1] + u_start * (end_xy[1] - start_xy[1]),
+            z_at(u_start),
+        )
+        point_end = (
+            start_xy[0] + u_end * (end_xy[0] - start_xy[0]),
+            start_xy[1] + u_end * (end_xy[1] - start_xy[1]),
+            z_at(u_end),
+        )
+        primitives.append(_line_primitive_3d(point_start, point_end))
+    return build_composite_geometry_profile(tuple(primitives))
+
+
 def _build_line_toolpath_profile(
     top_level: float,
     final_level: float,
-    spec: LineMillingSpec,
+    spec: LineSpec,
 ) -> GeometryProfileSpec:
     """Construye el perfil de trayectoria efectivo para un fresado lineal."""
 
@@ -243,7 +364,15 @@ def _build_line_toolpath_profile(
         tool_width=spec.tool_width,
         z_value=cut_z,
     )
+    if _line_change_boundaries(spec):
+        return _build_changes_line_profile(float(top_level), cut_z, base_profile, spec)
     strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
+    if isinstance(strategy, ZigZagMillingStrategySpec):
+        if strategy.allow_multiple_passes and (
+            float(strategy.feed_cutting_depth) > 0.0 or float(strategy.return_cutting_depth) > 0.0
+        ):
+            return _build_zigzag_line_strategy_profile(float(top_level), cut_z, base_profile, strategy)
+        return base_profile
     if isinstance(strategy, UnidirectionalMillingStrategySpec):
         return _build_unidirectional_line_strategy_profile(
             float(top_level),
@@ -257,7 +386,7 @@ def _build_line_toolpath_profile(
     return base_profile
 
 
-def _offset_line_for_toolpath(spec: LineMillingSpec) -> tuple[tuple[float, float], tuple[float, float]]:
+def _offset_line_for_toolpath(spec: LineSpec) -> tuple[tuple[float, float], tuple[float, float]]:
     toolpath_profile = build_compensated_toolpath_profile(
         build_line_geometry_profile(spec.start_x, spec.start_y, spec.end_x, spec.end_y),
         side_of_feature=spec.side_of_feature,
@@ -270,7 +399,7 @@ def _build_line_geometry(
     geometry_id: str,
     plane_id: str,
     plane_object_type: str,
-    spec: _HydratedLineMillingSpec,
+    spec: _HydratedLineSpec,
 ):
     return _build_geometry_from_curve_spec(
         geometry_id,
@@ -294,6 +423,8 @@ def _build_line_operation(
     trajectory_curve_member_keys: Sequence[str] = (),
     toolpath_start: Optional[tuple[float, float]] = None,
     toolpath_end: Optional[tuple[float, float]] = None,
+    attribute_key_ids: Sequence[str] = (),
+    trajectory_speed_attrs: Sequence[tuple[str, float]] = (),
 ) -> ET.Element:
     operation = ET.Element(
         _qname(PGMX_NS, "Operation"),
@@ -306,9 +437,36 @@ def _build_line_operation(
         operation,
         PGMX_NS,
         "ActivateCNCCorrection",
-        "true" if _should_activate_cnc_correction(spec) else "false",
+        # C.N. (true) salvo que el usuario elija CAD o la estrategia multipaso lo fuerce a false.
+        "true" if (getattr(spec, "activate_cnc_correction", True)
+                   and _should_activate_cnc_correction(spec)) else "false",
     )
-    _append_node(operation, PGMX_NS, "Attributes", "")
+    # Atributos de recorrido (forma Maestro, N022 Vel/Prof): el elemento OperationAttribute y sus
+    # campos escalares viven en el namespace del modelo base (¡no en el default del proyecto! —
+    # el deserializador de Maestro los IGNORA en silencio si van en otro namespace, N032); Key/Name
+    # y las hojas de las claves van en Utility. El Key lleva un ID real asignado; el ElementKey a
+    # nivel operación queda en 0/System.Object.
+    _attr_events = sorted(
+        [(u, v, "Speed") for u, v in (getattr(spec, "speed_changes", ()) or ())]
+        + [(u, v, "Depth") for u, v in (getattr(spec, "depth_changes", ()) or ())]
+    )
+    if _attr_events:
+        if len(attribute_key_ids) != len(_attr_events):
+            raise ValueError("Cada atributo de recorrido necesita un ID reservado para su Key.")
+        attributes = _append_node(operation, PGMX_NS, "Attributes")
+        for (upar, val, kind), key_id in zip(_attr_events, attribute_key_ids):
+            attr = _append_node(
+                attributes, BASE_MODEL_NS, "OperationAttribute",
+                attrib={f"{{{XSI_NS}}}type": f"b:{kind}Attribute"})
+            _set_xmlns(attr, "b", BASE_MODEL_NS)
+            _append_key(attr, key_id, f"ScmGroup.XCam.MachiningDataModel.{kind}Attribute")
+            _append_blank_name(attr)
+            _append_object_ref(attr, BASE_MODEL_NS, "ElementKey", "0", "System.Object")
+            _append_node(attr, BASE_MODEL_NS, "IsNormalized", "true")
+            _append_node(attr, BASE_MODEL_NS, "UPar", _compact_number(upar))
+            _append_node(attr, BASE_MODEL_NS, kind, _compact_number(val))
+    else:
+        _append_node(operation, PGMX_NS, "Attributes", "")
     _append_node(operation, PGMX_NS, "ToolDirection", attrib={f"{{{XSI_NS}}}nil": "true"})
     toolpath_list = _append_node(operation, PGMX_NS, "ToolpathList")
     _set_xmlns(toolpath_list, "b", BASE_MODEL_NS)
@@ -338,6 +496,7 @@ def _build_line_operation(
                 )
             ),
             generated_member_keys=trajectory_curve_member_keys,
+            speed_attributes=trajectory_speed_attrs,
         )
     )
     toolpath_list.append(
@@ -368,9 +527,9 @@ def _build_line_operation(
         "Technology",
         attrib={f"{{{XSI_NS}}}type": "MillingTechnology"},
     )
-    _append_node(technology, PGMX_NS, "Feedrate", "0")
+    _append_node(technology, PGMX_NS, "Feedrate", _compact_number(getattr(spec, "feedrate", 0.0)))
     _append_node(technology, PGMX_NS, "CutSpeed", "0")
-    _append_node(technology, PGMX_NS, "Spindle", "0")
+    _append_node(technology, PGMX_NS, "Spindle", _compact_number(getattr(spec, "spindle", 0.0)))
     _append_object_ref(
         operation,
         PGMX_NS,
@@ -414,7 +573,7 @@ def _build_line_operation(
     return operation
 
 
-def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec) -> None:
+def _append_line(root: ET.Element, state, spec: _HydratedLineSpec) -> None:
     geometries = root.find("./{*}Geometries")
     features = root.find("./{*}Features")
     operations = root.find("./{*}Operations")
@@ -430,7 +589,8 @@ def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec
     plane_id, plane_object_type = _find_plane_ref(root, spec.plane_name)
     uses_depth_expressions = _uses_feature_depth_expressions(spec)
     has_enabled_expr = spec.is_enabled_expr is not None
-    n_total = 4 + (2 if uses_depth_expressions else 0) + has_enabled_expr
+    n_attributes = len(getattr(spec, "speed_changes", ()) or ()) + len(getattr(spec, "depth_changes", ()) or ())
+    n_total = 4 + (2 if uses_depth_expressions else 0) + has_enabled_expr + n_attributes
     reserved_ids = _reserve_ids(root, n_total, spec.preferred_id_start)
     geometry_id, operation_id, feature_id, step_id = reserved_ids[:4]
     i = 4
@@ -439,7 +599,9 @@ def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec
         start_expression_id = reserved_ids[i]; i += 1
         end_expression_id = reserved_ids[i]; i += 1
     enabled_expr_id = reserved_ids[i] if has_enabled_expr else None
-    last_reserved_id = enabled_expr_id or end_expression_id or step_id
+    i += has_enabled_expr
+    attribute_key_ids = tuple(reserved_ids[i:i + n_attributes])
+    last_reserved_id = reserved_ids[n_total - 1]
     generated_toolpath_profile = _build_line_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
     toolpath_start, toolpath_end, _, _ = _profile_entry_exit_context(generated_toolpath_profile)
     approach_curve = spec.approach_curve
@@ -469,6 +631,18 @@ def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec
         lift_curve_member_keys = tuple(str(next_generated_aux_id + offset) for offset in range(member_count))
         next_generated_aux_id += member_count
 
+    # Cambios de velocidad on-route: SpeedAttribute a nivel toolpath anclado al miembro de la
+    # curva compuesta que ARRANCA en su UPar (forma Maestro, N022 Vel / N028 _coment). El miembro
+    # que arranca en boundaries[j] es el j+1 (el 0 arranca en el inicio de la línea).
+    trajectory_speed_attrs: tuple[tuple[str, float], ...] = ()
+    effective_trajectory_keys = trajectory_curve.member_keys or trajectory_curve_member_keys
+    if spec.trajectory_curve is None and getattr(spec, "speed_changes", ()) and effective_trajectory_keys:
+        boundaries = _line_change_boundaries(spec)
+        trajectory_speed_attrs = tuple(
+            (effective_trajectory_keys[boundaries.index(float(upar)) + 1], float(speed_value))
+            for upar, speed_value in sorted(spec.speed_changes)
+        )
+
     geometries.append(_build_line_geometry(geometry_id, plane_id, plane_object_type, spec))
     features.append(
         _build_profile_feature(
@@ -495,6 +669,8 @@ def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec
             trajectory_curve_member_keys=trajectory_curve.member_keys or trajectory_curve_member_keys,
             toolpath_start=toolpath_start,
             toolpath_end=toolpath_end,
+            attribute_key_ids=attribute_key_ids,
+            trajectory_speed_attrs=trajectory_speed_attrs,
         )
     )
     elements.append(_build_working_step(spec.feature_name, step_id, feature_id, operation_id))
@@ -513,7 +689,7 @@ def _append_line_milling(root: ET.Element, state, spec: _HydratedLineMillingSpec
         )
 
 
-def _matches_line_geometry(template: dict[str, object], spec: LineMillingSpec, tolerance: float = 1e-6) -> bool:
+def _matches_line_geometry(template: dict[str, object], spec: LineSpec, tolerance: float = 1e-6) -> bool:
     parsed = _parse_line_serialization(str(template.get("geometry_serialization") or ""))
     if parsed is None:
         return False
@@ -528,7 +704,7 @@ def _matches_line_geometry(template: dict[str, object], spec: LineMillingSpec, t
     return close(direct, expected) or close(reverse, expected)
 
 
-def _can_hydrate_exact_serialization(template: dict[str, object], spec: LineMillingSpec) -> bool:
+def _can_hydrate_exact_serialization(template: dict[str, object], spec: LineSpec) -> bool:
     source_depth_spec = template.get("depth_spec") if isinstance(template.get("depth_spec"), MillingDepthSpec) else None
     requested_depth_spec = _normalize_milling_depth_spec(spec.depth_spec)
     if source_depth_spec is None or _normalize_milling_depth_spec(source_depth_spec) != requested_depth_spec:
@@ -574,7 +750,7 @@ def _can_hydrate_exact_serialization(template: dict[str, object], spec: LineMill
     )
 
 
-def _extract_line_milling_template(source_pgmx_path: Path) -> dict[str, object]:
+def _extract_line_template(source_pgmx_path: Path) -> dict[str, object]:
     root, _, _ = _load_pgmx_container(source_pgmx_path)
 
     geometry = next(
@@ -642,17 +818,17 @@ def _extract_line_milling_template(source_pgmx_path: Path) -> dict[str, object]:
     }
 
 
-def _hydrate_line_milling_spec(
-    line_milling: LineMillingSpec,
+def _hydrate_line_spec(
+    line_milling: LineSpec,
     source_pgmx_path: Optional[Path],
-) -> _HydratedLineMillingSpec:
-    normalized_line_milling = _normalize_line_milling_spec(line_milling)
+) -> _HydratedLineSpec:
+    normalized_line_milling = _normalize_line_spec(line_milling)
     if source_pgmx_path is None:
-        return _HydratedLineMillingSpec(spec=normalized_line_milling)
-    template = _extract_line_milling_template(source_pgmx_path)
+        return _HydratedLineSpec(spec=normalized_line_milling)
+    template = _extract_line_template(source_pgmx_path)
     if not _can_hydrate_exact_serialization(template, normalized_line_milling):
-        return _HydratedLineMillingSpec(spec=normalized_line_milling)
-    return _HydratedLineMillingSpec(
+        return _HydratedLineSpec(spec=normalized_line_milling)
+    return _HydratedLineSpec(
         spec=normalized_line_milling,
         preferred_id_start=int(template["preferred_id_start"]),
         geometry_serialization=str(template["geometry_serialization"]),
@@ -662,85 +838,98 @@ def _hydrate_line_milling_spec(
     )
 
 
-def build_line_milling_spec(
-    line_x1: Optional[float],
-    line_y1: Optional[float],
-    line_x2: Optional[float],
-    line_y2: Optional[float],
-    line_feature_name: Optional[str],
-    line_tool_id: Optional[str],
-    line_tool_name: Optional[str],
-    line_tool_width: Optional[float],
-    line_security_plane: Optional[float],
-    line_side_of_feature: Optional[str] = None,
-    line_is_through: Optional[bool] = None,
-    line_target_depth: Optional[float] = None,
-    line_extra_depth: Optional[float] = None,
-    line_approach_enabled: Optional[bool] = None,
-    line_approach_type: Optional[str] = None,
-    line_approach_mode: Optional[str] = None,
-    line_approach_radius_multiplier: Optional[float] = None,
-    line_approach_speed: Optional[float] = None,
-    line_approach_arc_side: Optional[str] = None,
-    line_retract_enabled: Optional[bool] = None,
-    line_retract_type: Optional[str] = None,
-    line_retract_mode: Optional[str] = None,
-    line_retract_radius_multiplier: Optional[float] = None,
-    line_retract_speed: Optional[float] = None,
-    line_retract_arc_side: Optional[str] = None,
-    line_retract_overlap: Optional[float] = None,
-    line_milling_strategy: Optional[MillingStrategySpec] = None,
+def build_line_spec(
+    start_x: Optional[float],
+    start_y: Optional[float],
+    end_x: Optional[float],
+    end_y: Optional[float],
+    feature_name: Optional[str],
+    tool_id: Optional[str],
+    tool_name: Optional[str],
+    tool_width: Optional[float],
+    security_plane: Optional[float],
+    feedrate: Optional[float] = None,      # Avanz. m/min (0/None = default de la fresa)
+    spindle: Optional[float] = None,       # Rotación rpm
+    side_offset: Optional[float] = None,   # Rebaba (SideOffset)
+    is_precise: Optional[bool] = None,     # Corrección en longitud
+    invert_work: Optional[bool] = None,    # Invertir trabajo
+    activate_cnc_correction: Optional[bool] = None, # True=C.N. (default) / False=CAD
+    side_of_feature: Optional[str] = None,
+    is_through: Optional[bool] = None,
+    target_depth: Optional[float] = None,
+    extra_depth: Optional[float] = None,
+    approach_enabled: Optional[bool] = None,
+    approach_type: Optional[str] = None,
+    approach_mode: Optional[str] = None,
+    approach_radius_multiplier: Optional[float] = None,
+    approach_speed: Optional[float] = None,
+    approach_arc_side: Optional[str] = None,
+    retract_enabled: Optional[bool] = None,
+    retract_type: Optional[str] = None,
+    retract_mode: Optional[str] = None,
+    retract_radius_multiplier: Optional[float] = None,
+    retract_speed: Optional[float] = None,
+    retract_arc_side: Optional[str] = None,
+    retract_overlap: Optional[float] = None,
+    milling_strategy: Optional[MillingStrategySpec] = None,
     is_enabled_expr: Optional[str] = None,
-) -> Optional[LineMillingSpec]:
-    """Construye un `LineMillingSpec` reusable para un fresado lineal.
+) -> Optional[LineSpec]:
+    """Construye un `LineSpec` reusable para un fresado lineal.
 
     Devuelve `None` si la linea no viene informada, lo que simplifica el uso
     desde CLI y desde capas superiores que quieren tratar este mecanizado como
     opcional.
     """
 
-    values = [line_x1, line_y1, line_x2, line_y2]
+    values = [start_x, start_y, end_x, end_y]
     if all(value is None for value in values):
         return None
     if any(value is None for value in values):
         raise ValueError("Para sintetizar el fresado lineal hay que indicar x1, y1, x2 e y2.")
     normalized_strategy = _ensure_milling_strategy_allowed(
-        _normalize_milling_strategy_spec(line_milling_strategy),
-        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
-        context="LineMillingSpec",
+        _normalize_milling_strategy_spec(milling_strategy),
+        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec,
+                       ZigZagMillingStrategySpec),
+        context="LineSpec",
     )
-    return LineMillingSpec(
-        start_x=float(line_x1),
-        start_y=float(line_y1),
-        end_x=float(line_x2),
-        end_y=float(line_y2),
-        feature_name=(line_feature_name or "Fresado").strip() or "Fresado",
-        side_of_feature=_normalize_side_of_feature(line_side_of_feature),
-        tool_id=(line_tool_id or "1902").strip() or "1902",
-        tool_name=(line_tool_name or "E003").strip() or "E003",
-        tool_width=9.52 if line_tool_width is None else float(line_tool_width),
-        security_plane=20.0 if line_security_plane is None else float(line_security_plane),
+    return LineSpec(
+        start_x=float(start_x),
+        start_y=float(start_y),
+        end_x=float(end_x),
+        end_y=float(end_y),
+        feature_name=(feature_name or "Fresado").strip() or "Fresado",
+        side_of_feature=_normalize_side_of_feature(side_of_feature),
+        tool_id=(tool_id or "1902").strip() or "1902",
+        tool_name=(tool_name or "E003").strip() or "E003",
+        tool_width=9.52 if tool_width is None else float(tool_width),
+        security_plane=20.0 if security_plane is None else float(security_plane),
+        feedrate=0.0 if feedrate is None else float(feedrate),
+        spindle=0.0 if spindle is None else float(spindle),
+        side_offset=0.0 if side_offset is None else float(side_offset),
+        is_precise=bool(is_precise),
+        invert_work=bool(invert_work),
+        activate_cnc_correction=True if activate_cnc_correction is None else bool(activate_cnc_correction),
         depth_spec=build_milling_depth_spec(
-            is_through=line_is_through,
-            target_depth=line_target_depth,
-            extra_depth=line_extra_depth,
+            is_through=is_through,
+            target_depth=target_depth,
+            extra_depth=extra_depth,
         ),
         approach=build_approach_spec(
-            enabled=line_approach_enabled,
-            approach_type=line_approach_type,
-            mode=line_approach_mode,
-            radius_multiplier=line_approach_radius_multiplier,
-            speed=line_approach_speed,
-            arc_side=line_approach_arc_side,
+            enabled=approach_enabled,
+            approach_type=approach_type,
+            mode=approach_mode,
+            radius_multiplier=approach_radius_multiplier,
+            speed=approach_speed,
+            arc_side=approach_arc_side,
         ),
         retract=build_retract_spec(
-            enabled=line_retract_enabled,
-            retract_type=line_retract_type,
-            mode=line_retract_mode,
-            radius_multiplier=line_retract_radius_multiplier,
-            speed=line_retract_speed,
-            arc_side=line_retract_arc_side,
-            overlap=line_retract_overlap,
+            enabled=retract_enabled,
+            retract_type=retract_type,
+            mode=retract_mode,
+            radius_multiplier=retract_radius_multiplier,
+            speed=retract_speed,
+            arc_side=retract_arc_side,
+            overlap=retract_overlap,
         ),
         milling_strategy=normalized_strategy,
         is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,

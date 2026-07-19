@@ -19,9 +19,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    build_circle_milling_spec,
-    build_line_milling_spec,
-    build_polyline_milling_spec,
+    build_circle_spec,
+    build_line_spec,
+    build_polyline_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -68,27 +68,27 @@ def _load_tools() -> dict[str, ToolInfo]:
 
 
 def _line_vertical(tool: ToolInfo, feature_name: str) -> object:
-    return build_line_milling_spec(
-        line_x1=200.0,
-        line_y1=50.0,
-        line_x2=200.0,
-        line_y2=200.0,
-        line_feature_name=feature_name,
-        line_tool_id=tool.tool_id,
-        line_tool_name=tool.name,
-        line_tool_width=tool.width,
-        line_security_plane=20.0,
-        line_side_of_feature="Center",
-        line_is_through=False,
-        line_target_depth=15.0,
-        line_extra_depth=0.0,
-        line_approach_enabled=False,
-        line_retract_enabled=False,
+    return build_line_spec(
+        start_x=200.0,
+        start_y=50.0,
+        end_x=200.0,
+        end_y=200.0,
+        feature_name=feature_name,
+        tool_id=tool.tool_id,
+        tool_name=tool.name,
+        tool_width=tool.width,
+        security_plane=20.0,
+        side_of_feature="Center",
+        is_through=False,
+        target_depth=15.0,
+        extra_depth=0.0,
+        approach_enabled=False,
+        retract_enabled=False,
     )
 
 
 def _open_polyline(tool: ToolInfo, feature_name: str) -> object:
-    return build_polyline_milling_spec(
+    return build_polyline_spec(
         points=((150.0, 0.0), (100.0, 150.0), (300.0, 100.0), (250.0, 250.0)),
         feature_name=feature_name,
         tool_id=tool.tool_id,
@@ -112,7 +112,7 @@ def _circle_cw(tool: ToolInfo, feature_name: str) -> object:
 
 
 def _circle(tool: ToolInfo, feature_name: str, winding: str) -> object:
-    return build_circle_milling_spec(
+    return build_circle_spec(
         center_x=200.0,
         center_y=125.0,
         radius=50.0,

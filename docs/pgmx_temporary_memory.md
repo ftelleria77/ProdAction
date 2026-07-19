@@ -382,14 +382,14 @@ Reconstruir paso a paso:
     - lado efectivo de compensacion
     - borde/orientacion del `MidEdgeStart`
 
-### Ronda 10 - Implementacion de `SquaringMillingSpec`
+### Ronda 10 - Implementacion de `ContourSpec`
 
 - Estado: completado
 - Cambios aplicados en codigo:
-  - se agrego la spec publica `SquaringMillingSpec`
-  - se agrego el builder `build_squaring_milling_spec(...)`
+  - se agrego la spec publica `ContourSpec`
+  - se agrego el builder `build_contour_spec(...)`
   - `build_synthesis_request(...)`, `synthesize_request(...)` y
-    `synthesize_pgmx(...)` ya aceptan `squaring_millings`
+    `synthesize_pgmx(...)` ya aceptan `contours`
   - la geometria nominal del escuadrado se sintetiza desde:
     - `length`
     - `width`
@@ -914,14 +914,14 @@ Reconstruir paso a paso:
   - por lo tanto, la futura spec deberia modelar explicitamente
     `drill_family`, sin depender solo de `bottom_condition`
 
-### Ronda 17 - Implementacion de `DrillingSpec`
+### Ronda 17 - Implementacion de `DrillSpec`
 
 - Estado: completado
 - Cambios aplicados en `tools/synthesize_pgmx.py`:
-  - se agrego la spec publica `DrillingSpec`
-  - se agrego la helper publica `build_drilling_spec(...)`
+  - se agrego la spec publica `DrillSpec`
+  - se agrego la helper publica `build_drill_spec(...)`
   - `build_synthesis_request(...)`, `synthesize_request(...)` y
-    `synthesize_pgmx(...)` ya aceptan `drillings`
+    `synthesize_pgmx(...)` ya aceptan `drills`
   - el sintetizador ya escribe:
     - `GeomCartesianPoint`
     - `RoundHole`
@@ -1273,8 +1273,8 @@ Reconstruir paso a paso:
     - `<Head i:nil="true" xmlns:b="..." />`
     - `<MachineFunctions xmlns:b="..." />`
 - Conclusión importante para el sintetizador:
-  - en este caso el problema no fue el uso de `DrillingSpec` o
-    `SquaringMillingSpec`
+  - en este caso el problema no fue el uso de `DrillSpec` o
+    `ContourSpec`
   - el problema estaba en la capa de serializacion/finalizacion XML del
     sintetizador
 
@@ -1297,8 +1297,8 @@ Reconstruir paso a paso:
   - `README.md` ya resume la nueva ubicacion canonica
   - `docs/synthesize_pgmx_help.md` ahora deja mas claro el flujo de specs:
     - pieza en `build_synthesis_request(...)`
-    - escuadrado en `SquaringMillingSpec`
-    - cada hueco en `DrillingSpec`
+    - escuadrado en `ContourSpec`
+    - cada hueco en `DrillSpec`
     - ejecucion en `synthesize_request(...)`
   - la guia tambien agrega un ejemplo completo de pieza escuadrada con doble
     camlock lateral usando el baseline por defecto
@@ -1574,10 +1574,10 @@ Reconstruir paso a paso:
   - sintetizar una pieza de prueba `Fondo` con ranura horizontal real
 - Cambios aplicados en `tools/synthesize_pgmx.py`:
   - `SYNTHESIZER_VERSION` sube a `1.3`
-  - se agrego `SlotMillingSpec`
-  - se agrego `build_slot_milling_spec(...)`
+  - se agrego `ChannelSpec`
+  - se agrego `build_channel_spec(...)`
   - `PgmxSynthesisRequest` y `PgmxSynthesisResult` ahora aceptan
-    `slot_millings`
+    `channels`
   - `synthesize_request(...)` hidrata, valida y aplica ranuras `SlotSide`
   - `machining_order` incorpora la familia `slot`
   - la feature generada es `a:SlotSide`, con:
@@ -1588,16 +1588,16 @@ Reconstruir paso a paso:
     - `Radius = 60`
     - `Angle = 1.5707963267948966`
   - la herramienta default de la spec es `1899 / 082`
-  - la validacion de tipo de herramienta exige que `SlotMillingSpec` use
+  - la validacion de tipo de herramienta exige que `ChannelSpec` use
     `Sierra Vertical X`
   - para `Sierra Vertical X`, el sintetizador rechaza recorridos no
     horizontales, planos distintos de `Top` y ranuras pasantes
 - Cambios aplicados en `tools/pgmx_adapters.py`:
-  - `SlotSide` horizontal se adapta como `SlotMillingSpec`
+  - `SlotSide` horizontal se adapta como `ChannelSpec`
   - `SlotSide` vertical queda `unsupported`
   - `CanalCentral` adapta como:
     - `adapted = 1`
-    - `slot_millings = 1`
+    - `channels = 1`
   - `CanalErroneo` queda:
     - `unsupported = 1`
     - razon: `SlotSide` con `Sierra Vertical X` requiere una recta horizontal
@@ -1703,8 +1703,8 @@ Reconstruir paso a paso:
     - `Retract Arc + Quote`, habilitado
     - `MachineFunction = PneumaticHood`
   - adaptacion:
-    - original: `SquaringMillingSpec(start_edge=Right, winding=Clockwise)`
-    - girado: `SquaringMillingSpec(start_edge=Top, winding=Clockwise)`
+    - original: `ContourSpec(start_edge=Right, winding=Clockwise)`
+    - girado: `ContourSpec(start_edge=Top, winding=Clockwise)`
 - Taladros:
   - ambos tienen 8 `RoundHole` sobre `Top`
   - `XBO_1` a `XBO_4`:
@@ -1717,7 +1717,7 @@ Reconstruir paso a paso:
     - `ID = 0`
     - `ObjectType = System.Object`
     - `Name = ""`
-  - el adaptador los conserva como `DrillingSpec` con
+  - el adaptador los conserva como `DrillSpec` con
     `tool_resolution = None`
 - Ranura `LAV_2`:
   - ambos usan:
@@ -1750,25 +1750,25 @@ Reconstruir paso a paso:
     - `adapted = 9`
     - `unsupported = 1`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `drillings = 8`
-    - `slot_millings = 0`
+    - `contours = 1`
+    - `drills = 8`
+    - `channels = 0`
     - no soportado: `LAV_2`, porque `SlotSide` con `Sierra Vertical X`
       requiere una recta horizontal sobre `Top`
   - `Fondo_Girado`:
     - `adapted = 10`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
-    - `drillings = 8`
-    - `slot_millings = 1`
+    - `contours = 1`
+    - `drills = 8`
+    - `channels = 1`
 - Hallazgo para sintesis:
   - para esta pieza, el giro correcto no debe tratarse como rotacion de
     `WorkpieceSetup/Placement`
   - se debe transformar la geometria local y tambien intercambiar dimensiones
   - para recuperar ejecutabilidad CNC, la ranura debe quedar horizontal en el
     sistema local final
-  - regla practica: antes de emitir `SlotMillingSpec`, si el recorrido sale
+  - regla practica: antes de emitir `ChannelSpec`, si el recorrido sale
     vertical, hay que evaluar una variante girada con el mapeo
     `(x, y) -> (width_original - y, x)`
 - Validaciones ejecutadas:
@@ -1798,7 +1798,7 @@ Reconstruir paso a paso:
   - deteccion: `Fondo_Original.pgmx -> 1`, `Fondo_Girado.pgmx -> 0`
   - reparacion sobre copia temporal de `Fondo_Original.pgmx`
   - resultado validado: `349.1 x 580 x 18`, `unsupported = 0`,
-    `slot_millings = 1`, ranura horizontal `y = 570`
+    `channels = 1`, ranura horizontal `y = 570`
 
 ### Ronda 31 - Patrones rectangulares de huecos con `ReplicateFeature`
 
@@ -1851,19 +1851,19 @@ Reconstruir paso a paso:
     `ReplicateFeature` para inspeccion/adaptacion.
   - `tools/synthesize_pgmx.py` no tenia soporte publico de escritura para
     patrones de huecos; solo podia emitir taladros individuales con
-    `DrillingSpec`.
+    `DrillSpec`.
 - Implementacion agregada:
   - version publica del sintetizador: `v1.4`
-  - `DrillingPatternSpec`
-  - `build_drilling_pattern_spec(...)`
-  - argumento `drilling_patterns` en `build_synthesis_request(...)`
+  - `DrillPatternSpec`
+  - `build_drill_pattern_spec(...)`
+  - argumento `drill_patterns` en `build_synthesis_request(...)`
   - soporte en `ordered_machinings` y `machining_order`
   - serializacion de `ReplicateFeature` + `BaseFeature RoundHole` +
     `RectangularPattern`
   - lectura de `replication_pattern` y `base_feature` en
     `tools/pgmx_snapshot.py`
 - Limite deliberado:
-  - por ahora `DrillingPatternSpec` queda validado solo sobre `Top`; no se
+  - por ahora `DrillPatternSpec` queda validado solo sobre `Top`; no se
     asumen patrones laterales hasta tener un caso manual.
 - Validacion ejecutada:
   - `py -3 -m py_compile tools\synthesize_pgmx.py tools\pgmx_snapshot.py`
@@ -1920,12 +1920,12 @@ Reconstruir paso a paso:
 
 - Implementacion agregada:
   - version publica del sintetizador: `v1.5`
-  - `DrillingPatternSpec` ya no queda limitado a `Top`; ahora acepta las
-    mismas caras que `DrillingSpec`.
+  - `DrillPatternSpec` ya no queda limitado a `Top`; ahora acepta las
+    mismas caras que `DrillSpec`.
   - `_apply_drilling_patterns(...)` ordena por plano con la misma prioridad de
     taladros multicara: `Top`, `Front`, `Back`, `Left`, `Right`.
   - `tools/pgmx_adapters.py` adapta `ReplicateFeature + RectangularPattern`
-    hacia `DrillingPatternSpec`.
+    hacia `DrillPatternSpec`.
 - Validacion ejecutada:
   - `py -3 -m py_compile tools\synthesize_pgmx.py tools\pgmx_snapshot.py tools\pgmx_adapters.py`
   - lectura con `read_pgmx_snapshot(...)`:
@@ -1939,7 +1939,7 @@ Reconstruir paso a paso:
     - `adapted = 4`
     - `unsupported = 0`
     - `ignored = 1`
-    - `drilling_patterns = 4`
+    - `drill_patterns = 4`
   - `sha256 =
     b4a71ed3bb52a050a87b313d6e3abb92ca54902486c438d04ded921fecc0a177`
 - Pendiente:
@@ -1963,8 +1963,8 @@ Reconstruir paso a paso:
   - `origin = (5, 5, 25)`
   - `execution_fields = HG`
 - Ranura emitida:
-  - spec publica: `SlotMillingSpec`
-  - builder: `build_slot_milling_spec(...)`
+  - spec publica: `ChannelSpec`
+  - builder: `build_channel_spec(...)`
   - feature `Ranura_Central`
   - tipo `a:SlotSide`
   - plano `Top`
@@ -1983,7 +1983,7 @@ Reconstruir paso a paso:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `slot_millings = 1`
+    - `channels = 1`
   - `sha256 =
     6c505688db5c83b9488710b32508dfb64b58b213ac4ff32cf78f093e62b171be`
 - Postprocesado recibido:
@@ -2017,8 +2017,8 @@ Reconstruir paso a paso:
   - `origin = (5, 5, 25)`
   - `execution_fields = HG`
 - Ranura emitida:
-  - spec publica: `SlotMillingSpec`
-  - builder: `build_slot_milling_spec(...)`
+  - spec publica: `ChannelSpec`
+  - builder: `build_channel_spec(...)`
   - feature `Ranura_Central_Inversa`
   - tipo `a:SlotSide`
   - plano `Top`
@@ -2038,7 +2038,7 @@ Reconstruir paso a paso:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `slot_millings = 1`
+    - `channels = 1`
     - el spec adaptado conserva `start = (350, 125)` y `end = (50, 125)`
   - `sha256 =
     cebb68e0da68d862369bf149e925f55904381da7f91083fded9f02ab6392850d`
@@ -2098,11 +2098,11 @@ Reconstruir paso a paso:
     - todos son `a:SlotSide` en `Top`
     - todos tienen `bounding_box = (50, 125, 350, 125)`
   - adaptacion con `adapt_pgmx_path(...)`:
-    - cada archivo queda como `SlotMillingSpec`
+    - cada archivo queda como `ChannelSpec`
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `slot_millings = 1`
+    - `channels = 1`
     - el spec adaptado conserva recorrido y correccion pedidos.
 - Hashes:
   - `Pieza_008.pgmx`:
@@ -2198,7 +2198,7 @@ Reconstruir paso a paso:
   - cada archivo tiene `features = 1`, `operations = 1`,
     `working_steps = 2`
   - todos son `a:RoundHole` en `Top`
-  - todos adaptan como `DrillingSpec`
+  - todos adaptan como `DrillSpec`
   - `adapted = 1`
   - `unsupported = 0`
   - `ignored = 1`
@@ -2270,8 +2270,8 @@ Reconstruir paso a paso:
   - `origin = (5, 5, 25)`
   - `execution_fields = HG`
 - Fresado emitido:
-  - spec publica: `LineMillingSpec`
-  - builder: `build_line_milling_spec(...)`
+  - spec publica: `LineSpec`
+  - builder: `build_line_spec(...)`
   - feature `Fresado_Linea_Vertical_E004_Central_P15`
   - feature type `a:GeneralProfileFeature`
   - operation type `a:BottomAndSideFinishMilling`
@@ -2298,7 +2298,7 @@ Reconstruir paso a paso:
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `line_millings = 1`
+    - `lines = 1`
     - el spec adaptado conserva `start = (200, 50)`, `end = (200, 200)`,
       `SideOfFeature = Center`, herramienta `E004` y `target_depth = 15`.
   - `sha256 =
@@ -2308,7 +2308,7 @@ Reconstruir paso a paso:
 - Confirmacion desde ISO:
   - `pieza_015.iso` tiene `96` lineas y `1344` bytes.
   - `sha256 = 6AB983FBAC156EB9513E395A212565A4BE7D2C65BB568AB1BE90F9B6A50071DB`.
-  - el postprocesador acepto el `LineMillingSpec` con E004 central no pasante.
+  - el postprocesador acepto el `LineSpec` con E004 central no pasante.
 - Bloque ISO observado:
   - cambio de herramienta `T4 / M06`
   - `?%ETK[6]=1`
@@ -2367,7 +2367,7 @@ Reconstruir paso a paso:
 - Parametros comunes:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
-  - spec publica `PolylineMillingSpec`
+  - spec publica `PolylineSpec`
   - plano `Top`
   - polilinea abierta nominal:
     - `(150, 50)`
@@ -2385,11 +2385,11 @@ Reconstruir paso a paso:
     - familia `OpenPolyline`
     - bounding box nominal `(150, 50, 250, 125)`
   - adaptacion con `adapt_pgmx_path(...)`:
-    - cada archivo queda como `PolylineMillingSpec`
+    - cada archivo queda como `PolylineSpec`
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `polyline_millings = 1`
+    - `polylines = 1`
 - Toolpath compensado:
   - `Pieza_016` / `Left`:
     - `Approach = 8 0 35 | 1 148 50 38 0 0 -1`
@@ -2458,7 +2458,7 @@ Reconstruir paso a paso:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `execution_fields = HG`
-  - spec publica `SquaringMillingSpec`
+  - spec publica `ContourSpec`
   - `start_edge = Bottom`
   - plano `Top`
   - familia geometrica `ClosedPolylineMidEdgeStart`
@@ -2480,11 +2480,11 @@ Reconstruir paso a paso:
     - operacion `a:BottomAndSideFinishMilling`
     - herramienta `1900 / E001`
   - adaptacion con `adapt_pgmx_path(...)`:
-    - cada archivo queda como `SquaringMillingSpec`
+    - cada archivo queda como `ContourSpec`
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
+    - `contours = 1`
 - Toolpath resumido:
   - ambas variantes generan `TrajectoryPath` cerrado compuesto por `9`
     miembros: `5` lineas y `4` arcos en las esquinas.
@@ -2536,7 +2536,7 @@ Reconstruir paso a paso:
   - conclusion:
     - el escuadrado E001 conserva el winding en el ISO.
     - `Right -> G42` y `Left -> G41`.
-    - para `SquaringMillingSpec`, la compensacion queda en el control CNC, no
+    - para `ContourSpec`, la compensacion queda en el control CNC, no
       en coordenadas ya desplazadas.
 - Correccion posterior:
   - el usuario aclaro que `Pieza_018` y `Pieza_019` debian generarse sin
@@ -2561,11 +2561,11 @@ Reconstruir paso a paso:
     - `Lift` queda sin miembros de curva y sube directo:
       `(200, -9.18, -1)` -> `(200, -9.18, 38)`
   - validacion con `adapt_pgmx_path(...)`:
-    - cada archivo queda como `SquaringMillingSpec`
+    - cada archivo queda como `ContourSpec`
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
+    - `contours = 1`
     - el adaptador preserva `approach_enabled = False` y
       `retract_enabled = False`.
   - hashes actuales:
@@ -2639,7 +2639,7 @@ Reconstruir paso a paso:
   - pieza `400 x 250 x 18`
   - origen `(5, 5, 25)`
   - `execution_fields = HG`
-  - spec publica `SquaringMillingSpec`
+  - spec publica `ContourSpec`
   - `start_edge = Bottom`
   - plano `Top`
   - familia geometrica `ClosedPolylineMidEdgeStart`
@@ -2669,11 +2669,11 @@ Reconstruir paso a paso:
     - operacion `a:BottomAndSideFinishMilling`
     - herramienta `1900 / E001`
   - adaptacion con `adapt_pgmx_path(...)`:
-    - cada archivo queda como `SquaringMillingSpec`
+    - cada archivo queda como `ContourSpec`
     - `adapted = 1`
     - `unsupported = 0`
     - `ignored = 1`
-    - `squaring_millings = 1`
+    - `contours = 1`
     - el adaptador preserva `Approach = Arc + Quote / 2.0` y
       `Retract = Arc + Quote / 2.0`.
 - Toolpath resumido:
@@ -2716,7 +2716,7 @@ Reconstruir paso a paso:
   - conclusion:
     - declarar explicitamente `Acercamiento Arco, 2, en cota` y
       `Alejamiento Arco, 2, en cota` produce el mismo ISO que el default
-      publico del `SquaringMillingSpec`.
+      publico del `ContourSpec`.
     - el default publico de escuadrado ya corresponde a esa configuracion.
 
 ## Discrepancias Acumuladas
@@ -2731,7 +2731,7 @@ Reconstruir paso a paso:
   usa cuadrantes absolutos fijos; ahora lo expresa desde la tangente local del
   toolpath efectivo y deja asentadas las 4 orientaciones validadas.
 - Resuelta: los patrones de huecos de `Pieza_004` no deben sintetizarse como
-  varios `RoundHole` sueltos; ahora se modelan con `DrillingPatternSpec` y
+  varios `RoundHole` sueltos; ahora se modelan con `DrillPatternSpec` y
   `ReplicateFeature`.
 - Resuelta: la documentacion ya explicita que `origin_x/origin_y/origin_z`
   modifica `WorkpieceSetup/Placement`, pero no traslada las curvas internas del
@@ -2745,7 +2745,7 @@ Reconstruir paso a paso:
   byte a byte identica a todos los ejemplos manuales, aunque si reproduce la
   geometria y el mecanizado efectivo observados.
 - Resuelta: la capa publica ya lee y escribe `GeomCartesianPoint`, y la V1 de
-  `DrillingSpec` ya sintetiza `RoundHole + DrillingOperation +
+  `DrillSpec` ya sintetiza `RoundHole + DrillingOperation +
   MachiningWorkingStep`.
 - Resuelta: en los taladros laterales/frontal/posterior, el sintetizador debe
   conservar `ToolKey` vacio por defecto. El archivo `Pieza_002.pgmx` corregido
@@ -2779,7 +2779,7 @@ Reconstruir paso a paso:
   - `Clockwise + Left`
 - si mas adelante hace falta clonar exactamente una serializacion manual
   determinada, estudiar una capa opcional de hidratacion exacta para
-  `SquaringMillingSpec`
+  `ContourSpec`
 - si aparecen variantes manuales adicionales, ampliar el caso documentado con
   mas combinaciones de herramienta, correccion y estrategias de entrada/salida
 - para taladros laterales/frontal/posterior, no resolver automaticamente
@@ -2827,9 +2827,9 @@ Decision registrada:
 Plan pendiente a formular antes de reactivar `Vaciado`:
 
 1. Inventariar las familias actuales de specs publicas:
-   `LineMillingSpec`, `SlotMillingSpec`, `PolylineMillingSpec`,
-   `CircleMillingSpec`, `SquaringMillingSpec`, `PocketMillingSpec`,
-   `DrillingSpec` y `DrillingPatternSpec`.
+   `LineSpec`, `ChannelSpec`, `PolylineSpec`,
+   `CircleSpec`, `ContourSpec`, `PocketSpec`,
+   `DrillSpec` y `DrillPatternSpec`.
 2. Separar responsabilidades comunes del sintetizador:
    namespaces/XML, IDs, geometria, profundidad, herramientas, estrategias,
    hidratacion desde baseline y escritura de worksteps.

@@ -18,11 +18,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pgmx.synthesis import (  # noqa: E402
-    DrillingSpec,
-    build_drilling_spec,
-    build_line_milling_spec,
-    build_polyline_milling_spec,
-    build_squaring_milling_spec,
+    DrillSpec,
+    build_drill_spec,
+    build_line_spec,
+    build_polyline_spec,
+    build_contour_spec,
     build_synthesis_request,
     synthesize_request,
 )
@@ -73,27 +73,27 @@ def _top_tool_name(diameter: float) -> str:
 
 
 def _line_milling(fixture: Fixture) -> object:
-    return build_line_milling_spec(
-        line_x1=80.0,
-        line_y1=60.0,
-        line_x2=240.0,
-        line_y2=60.0,
-        line_feature_name=f"TXH_OPEN_{fixture.name}_FIRST_E001_LINE",
-        line_tool_id="1900",
-        line_tool_name="E001",
-        line_tool_width=18.36,
-        line_security_plane=20.0,
-        line_side_of_feature="Center",
-        line_is_through=False,
-        line_target_depth=10.0,
-        line_extra_depth=0.0,
-        line_approach_enabled=False,
-        line_retract_enabled=False,
+    return build_line_spec(
+        start_x=80.0,
+        start_y=60.0,
+        end_x=240.0,
+        end_y=60.0,
+        feature_name=f"TXH_OPEN_{fixture.name}_FIRST_E001_LINE",
+        tool_id="1900",
+        tool_name="E001",
+        tool_width=18.36,
+        security_plane=20.0,
+        side_of_feature="Center",
+        is_through=False,
+        target_depth=10.0,
+        extra_depth=0.0,
+        approach_enabled=False,
+        retract_enabled=False,
     )
 
 
 def _profile_milling(fixture: Fixture) -> object:
-    return build_squaring_milling_spec(
+    return build_contour_spec(
         winding="Clockwise",
         feature_name=f"TXH_OPEN_{fixture.name}_FIRST_PROFILE_E001",
         tool_id="1900",
@@ -127,8 +127,8 @@ def _first_router_work(fixture: Fixture) -> object:
     raise ValueError(f"Unsupported router family: {fixture.first_router_family}")
 
 
-def _top_drill(fixture: Fixture, *, ordinal: int, diameter: float) -> DrillingSpec:
-    return build_drilling_spec(
+def _top_drill(fixture: Fixture, *, ordinal: int, diameter: float) -> DrillSpec:
+    return build_drill_spec(
         feature_name=f"TXH_OPEN_{fixture.name}_TOP_{_top_tool_name(diameter)}_{ordinal}",
         plane_name="Top",
         center_x=220.0 + (ordinal * 28.0),
@@ -139,7 +139,7 @@ def _top_drill(fixture: Fixture, *, ordinal: int, diameter: float) -> DrillingSp
     )
 
 
-def _top_drills(fixture: Fixture) -> tuple[DrillingSpec, ...]:
+def _top_drills(fixture: Fixture) -> tuple[DrillSpec, ...]:
     return tuple(
         _top_drill(fixture, ordinal=ordinal, diameter=diameter)
         for ordinal, diameter in enumerate(fixture.top_diameters, start=1)
@@ -169,7 +169,7 @@ def _open_profile_reentry(fixture: Fixture) -> object:
             "retract_enabled": False,
         }
 
-    return build_polyline_milling_spec(
+    return build_polyline_spec(
         points=((-5.0, 44.0), (90.0, 44.0), (90.0, -5.0)),
         feature_name=f"TXH_OPEN_{fixture.name}_SECOND_OPEN_E001_{fixture.reentry_side}",
         tool_id="1900",

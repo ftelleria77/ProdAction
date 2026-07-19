@@ -98,7 +98,7 @@ def _analyze_one(path: Path, root: Path) -> tuple[str, list[IslandSequenceRow]]:
         )
 
     adaptation = adapt_pgmx_path(path)
-    if not adaptation.pocket_millings:
+    if not adaptation.pockets:
         return (
             "\n".join(
                 [
@@ -112,7 +112,7 @@ def _analyze_one(path: Path, root: Path) -> tuple[str, list[IslandSequenceRow]]:
             [],
         )
 
-    spec = adaptation.pocket_millings[0]
+    spec = adaptation.pockets[0]
     operation = adaptation.snapshot.operations[0]
     feature = adaptation.snapshot.features[0]
     sequences = _actual_trajectory_xyz_sequences(operation)
@@ -206,7 +206,7 @@ def _sequence_note(
 
 
 def _vaciado_027_notes(adaptation, sequences: Sequence[Sequence[tuple[float, float, float]]]) -> list[str]:
-    spec = adaptation.pocket_millings[0]
+    spec = adaptation.pockets[0]
     generated = _bossless_rectangular_path(adaptation, spec)
     first_sequence = sequences[0] if sequences else ()
     prefix = _common_prefix_length(first_sequence, generated)
@@ -268,9 +268,9 @@ def _build_cross_case_notes(root: Path) -> str:
                         f"`{_bbox_tuple_text(rule.kernel_bbox)}` and radius `{_num(rule.radius)}` "
                         f"(max delta `{_num(rule.max_delta)}`).",
                         "- `Vaciado_027`: "
-                        f"{_kernel_relation_to_bosses(rule.kernel_bbox, v027.pocket_millings[0].boss_contours)}",
+                        f"{_kernel_relation_to_bosses(rule.kernel_bbox, v027.pockets[0].boss_contours)}",
                         "- `Vaciado_031`: "
-                        f"{_kernel_relation_to_bosses(rule.kernel_bbox, v031.pocket_millings[0].boss_contours)}",
+                        f"{_kernel_relation_to_bosses(rule.kernel_bbox, v031.pockets[0].boss_contours)}",
                         "- BossList evidence: the same kernel matches a resolved "
                         "`BossList.GeometryID` bbox in both `Vaciado_027` and `Vaciado_031`; "
                         "`BossGeometryList` keeps the physical island geometry separately.",
@@ -290,10 +290,10 @@ def _build_cross_case_notes(root: Path) -> str:
 
 
 def resolved_boss_ref_xy_contours(adaptation) -> tuple[tuple[str, tuple[tuple[float, float], ...]], ...]:
-    if adaptation.pocket_millings:
+    if adaptation.pockets:
         return tuple(
             (seed.geometry_id, seed.contour_points)
-            for seed in adaptation.pocket_millings[0].boss_route_seeds
+            for seed in adaptation.pockets[0].boss_route_seeds
         )
 
     snapshot = adaptation.snapshot

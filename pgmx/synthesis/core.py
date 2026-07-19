@@ -23,9 +23,10 @@ from .milling._common import *  # noqa: F401,F403
 from .milling.circle import *  # noqa: F401,F403
 from .milling.line import *  # noqa: F401,F403
 from .milling.pocket import *  # noqa: F401,F403
-from .milling.profile import *  # noqa: F401,F403
-from .milling.slot import *  # noqa: F401,F403
-from .milling.squaring import *  # noqa: F401,F403
+from .milling.arc import *  # noqa: F401,F403
+from .milling.polyline import *  # noqa: F401,F403
+from .milling.channel import *  # noqa: F401,F403
+from .milling.contour import *  # noqa: F401,F403
 
 register_pgmx_namespaces()
 
@@ -44,14 +45,17 @@ __all__ = [
     "GeometryPrimitiveSpec",
     "GeometryProfileSpec",
     "PocketBossRouteSeedSpec",
-    "LineMillingSpec",
-    "SlotMillingSpec",
-    "PolylineMillingSpec",
-    "CircleMillingSpec",
-    "SquaringMillingSpec",
-    "PocketMillingSpec",
-    "DrillingSpec",
-    "DrillingPatternSpec",
+    "LineSpec",
+    "ChannelSpec",
+    "ArcSpec",
+    "PolylineSpec",
+    "PolylineSegment",
+    "PolylineSpec",
+    "CircleSpec",
+    "ContourSpec",
+    "PocketSpec",
+    "DrillSpec",
+    "DrillPatternSpec",
     "MachiningSpec",
     "MachineOperationSpec",
     "WorkplanSpec",
@@ -78,14 +82,16 @@ __all__ = [
     "build_composite_geometry_profile",
     "build_compensated_toolpath_profile",
     "build_pocket_boss_route_seed_spec",
-    "build_line_milling_spec",
-    "build_slot_milling_spec",
-    "build_polyline_milling_spec",
-    "build_circle_milling_spec",
-    "build_squaring_milling_spec",
-    "build_pocket_milling_spec",
-    "build_drilling_spec",
-    "build_drilling_pattern_spec",
+    "build_line_spec",
+    "build_channel_spec",
+    "build_arc_spec",
+    "build_polyline_spec",
+    "build_polyline_spec",
+    "build_circle_spec",
+    "build_contour_spec",
+    "build_pocket_spec",
+    "build_drill_spec",
+    "build_drill_pattern_spec",
     "build_workplan_spec",
     "build_xn_spec",
     "build_xmsg_spec",

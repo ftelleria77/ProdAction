@@ -1,0 +1,69 @@
+[STRUCT]
+KEY_TOR {
+    REGIN;
+    TDAT0;
+    TDAT1;
+    TDAT2;
+    TDAT3;
+    TDAT4;
+    TDAT5;
+    TDAT6;
+    KEY_REGOLATORE;
+    TDAT7;
+    TDAT8;
+    TDAT9;
+    TDAT10;
+    TDAT11;
+    TDAT12;
+    KEY_REGOLATORE;
+    TDAT13;
+}
+
+[KEY_REGOLATORE]
+FSZ = 8
+
+[REGIN]
+ADR = Regin0
+FRM = STR, 16
+[TDAT0]
+ADR = Tdat0
+FRM = DEC, 1
+[TDAT1]
+ADR = Tdat1
+FRM = DEC, 1
+[TDAT2]
+ADR = Tdat2
+FRM = DEC, 1
+[TDAT3]
+ADR = Tdat3
+FRM = DEC, 0
+[TDAT4]
+ADR = Tdat4
+FRM = DEC, 1
+[TDAT5]
+ADR = Tdat5
+FRM = DEC, 0
+[TDAT6]
+ADR = Tdat6
+FRM = DEC, 1
+[TDAT7]
+ADR = Tdat7
+FRM = DEC, 0
+[TDAT8]
+ADR = Tdat8
+FRM = QTA, 3
+[TDAT9]
+ADR = Tdat9
+FRM = QTA, 3
+[TDAT10]
+ADR = Tdat10
+FRM = DEC, 1
+[TDAT11]
+ADR = Tdat11
+FRM = DEC, 6
+[TDAT12]
+ADR = Tdat12
+FRM = DEC, 6
+[TDAT13]
+ADR = Tdat13
+FRM = DEC, 1
