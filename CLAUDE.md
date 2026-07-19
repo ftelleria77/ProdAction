@@ -40,7 +40,36 @@ construir sobre una definición falsa y descubrirlo más tarde.
 Nombrá la incongruencia concreta, decí las lecturas posibles y **cuál sería la consecuencia de
 cada una**. No pidas "confirmame el nombre": mostrá qué cambia según la respuesta.
 
-## 2. La nomenclatura manda desde la UI de Maestro
+## 2. Ante un programa de Maestro: consultar PRIMERO la documentación
+
+**Cuando trabajes con un programa de Maestro (una operación, un campo del `.pgmx`, la estructura
+de un `Executable`), consultá la documentación antes de asumir nada o de pedirle a Fermín que te
+lo explique.** Casi siempre la definición ya está escrita y validada.
+
+Dónde mirar, en orden:
+
+1. **`docs/synthesize_pgmx_help.md`** — la API de nuestro sintetizador: qué specs y builders hay,
+   qué escribe cada uno en el `.pgmx`. `docs/pgmx_snapshot_help.md` es el lado de lectura.
+2. **`pgmx/machining_lab/<operación>/memory/current-state.md`** — reglas DERIVADAS por operación,
+   con su evidencia y sus rondas (ej. `aparcamiento/` para el Park: campos, modos de paro, qué
+   expone la UI y qué no). Si existe un lab de lo que estás tocando, empezá ahí.
+3. **`iso/docs/experiments/<feature>.md`** — el mapa UI → `.pgmx` → ISO de cada feature, con lo
+   derivado y lo pendiente (ej. `galceado_perfilado.md`, `xn_operacion_nula.md`).
+4. **`pgmx/docs/`** — el manual de referencia de SCM: `xilog_plus_pgm/` (editor Xilog Plus) y
+   `maestro_scripting/` (API de scripting). Es la fuente sobre Maestro/Xilog mismo, no sobre
+   nuestro código. `pgmx/docs/README.md` es el índice.
+
+Por qué es regla: la definición correcta suele existir y contradecir lo que uno supondría. El Xn,
+el Xmsg y el Park (Aparcamiento) son **tres operaciones distintas** con tipos serializados
+distintos — `XnSpec` / `XmsgSpec` / `ParkSpec` ya en producción —; el converter las venía tratando
+como si "Xn" y "park" fueran lo mismo. Estaba documentado en `pgmx/machining_lab/aparcamiento/`
+desde antes. Preguntar sin leer primero desperdicia el trabajo ya hecho, y peor: invita a
+reinventarlo mal (ver la regla 1).
+
+Si leíste y la documentación NO cubre el caso, o se contradice con lo que ves en un archivo real,
+ESO sí es para traérselo a Fermín — nombrando qué doc miraste y qué no cerró.
+
+## 3. La nomenclatura manda desde la UI de Maestro
 
 Los nombres salen del vocabulario de la UI de Maestro (Fermín es quien la usa). Si en Maestro se
 llama Galceado, no lo llamamos Squaring. Ver `iso/docs/experiments/` para el mapa
@@ -53,7 +82,7 @@ Excepciones legítimas, que NO son incongruencias:
 - **La tabla de alias de `_normalize_machining_order`**: ahí los alias SON la API (tolera plural,
   castellano y los nombres previos), no deuda.
 
-## 3. Byte-idéntico o fail-loud. Nunca aproximar en silencio
+## 4. Byte-idéntico o fail-loud. Nunca aproximar en silencio
 
 El converter PGMX→ISO se valida **byte a byte** contra los ISO que produce Maestro. Si falta
 evidencia para un caso, se RECHAZA con un mensaje que diga qué fixture falta — no se adivina.
@@ -62,7 +91,7 @@ Un default inventado es una hipótesis disfrazada: impide que el sistema note qu
 **El convertidor no puede tener constantes internas para el cálculo de trazas.** Todo sale de la
 config, del catálogo de herramientas o de la operación. Ver `converter_magic_numbers.md`.
 
-## 4. Los fixtures: quién los hace, y por qué importa
+## 5. Los fixtures: quién los hace, y por qué importa
 
 - **Los genera el sintetizador** cuando la traza NO es la incógnita (el ISO es lo que se deriva).
 - **Los hace Fermín en Maestro** cuando la traza ES la incógnita. Ejemplo: con
@@ -74,6 +103,6 @@ N001–N042 tienen todos `Xn` porque los escribía nuestro sintetizador; un `.pg
 Maestro no lo trae, y ahí el footer es otro. Antes de confiar en que "el corpus lo cubre",
 preguntate qué no puede contener por venir de nuestra propia autoría.
 
-## 5. Comunicación
+## 6. Comunicación
 
 En **español rioplatense** ("vos"), siempre.
