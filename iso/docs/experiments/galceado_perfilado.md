@@ -126,15 +126,67 @@ producción real. El corpus nunca lo pudo ver porque está enteramente auto-gene
 
 Matiza N015: "sin Xn, el default de Maestro" se derivó sin ningún fixture sin `Xn`.
 
-## Implementación (Eje B etapa 4)
+## Implementación (Eje B etapa 4) — HECHA (2026-07-23, 4/4 byte-idéntico, suite 598)
 
-1. **Adapter**: `ContourFeature` → `PolylineSpec` (resolviendo el contorno: `Workpiece` = el
-   rectángulo del panel derivado de dx1/dy1; `Geometry` = la geometría dibujada, ya en el XML).
-   El `ContourType` NO va a la spec: no lo necesita el render.
-2. **Escuadrado**: revisar `_detect_squaring_signature` + `ContourSpec`. La evidencia dice que un
-   galceado es UNA POLILÍNEA CERRADA y nada más; el `ContourSpec` sintético
-   (start_edge/winding/start_coordinate) parece deuda evitable — habría que mandarlo a
-   `PolylineSpec` y borrar el intercept.
-3. **Render**: A (ACC=true) ya sale byte-idéntico. Falta B (ACC=false): offset + arcos de esquina.
-4. **Footer sin Xn**: derivar y corregir (ortogonal, pero afecta a TODO el converter).
-5. `Galceado.pgmx` (2 contornos + cambio de herramienta) queda como caso de TRANSICIÓN.
+1. **Adapter** ✅: `ContourFeature` va a la MISMA rama que `GeneralProfileFeature` (el tipo es
+   invisible; la geometría ya llega resuelta en el XML — no hace falta derivarla del panel). El
+   `ContourType` no viaja a la spec.
+2. **Escuadrado** ✅ (decisión de Fermín: el `ContourSpec` SE CONSERVA como spec de AUTORÍA de
+   En-Juego; el converter unifica). El intercept `_detect_squaring_signature` ahora exige la
+   forma que `ContourSpec` puede representar: **arranque a MITAD del borde** (la forma canónica
+   de En-Juego — los N043 arrancan en una esquina y `ContourSpec` los re-autoraría con otra
+   geometría), **ACC=true** (no tiene campo de corrección: el Escuadrado-CAD perdía el
+   `ActivateCNCCorrection=false` EN SILENCIO) y **estrategia None/Uni/Bi**. Todo lo demás cae a
+   la rama polilínea, que ganó el campo `activate_cnc_correction` (espejo de la línea; la
+   serialización sale sola de `_build_line_operation`).
+3. **Render** ✅: A (ACC=true) era la polilínea cerrada de N042 — byte-idéntico sin tocar nada.
+   B (ACC=false): `_poly_cad_chain`/`_poly_cad_body` en `_router.py` — offset r=w/2 por borde +
+   cuarto de arco por vértice (I/J absolutos al vértice nominal, F en todos los movimientos),
+   entrada por el fin del último borde offseteado, plunge a feed de CORTE, sin reset de preamble
+   (el predicado de `converter.py` ya excluía ACC=false por getattr). SOLO la forma fixtureada:
+   cerrado, rectas, CCW+Right (offset exterior), esquinas convexas a 90° — el resto fail-loud
+   (`_validate_polyline_cad`).
+4. **Footer sin Xn** ✅ (ya estaba, era pi_converter).
+5. `Galceado.pgmx` (ZigZag+CAD en op1, leads Line/Down+Up en op2, cambio E001→E003): sigue
+   PENDIENTE como caso de transición — fail-loud con mensaje, ver "Pendientes".
+- Tests: `tests/test_iso_galceado.py` (render golden offline + guardas + adapter + e2e 4/4).
+- ⚠️ Maestro escribe el ISO en **ANSI (cp1252)**, no UTF-8 — visible recién con "Geometría"
+  (lotes previos ASCII puro). Leer referencias con cp1252.
+
+## N044 DERIVADO 11/13 (2026-07-23) — leads Línea + forma En-Juego + CAD estilo B general
+
+13 fixtures en `S:\...\N044_galceado_combos\` (generador `iso/machining_lab/n044_galceado_combos/`).
+**11/13 byte-idéntico**, 2 fail-loud por subdeterminación. Tests en `test_iso_galceado.py`, suite 602.
+
+**CN leads LÍNEA compensados** (`app_line`, `app_line_down`, `ret_line`, `ret_line_up`,
+`leads_line_down_up`) ✅: lead-in/out lineal al punto exterior (start∓lead·û, lead=w/2×RM); "En
+cota" = plunge vertical + línea plana; "En bajada"/"En subida" = rampa (baja/sube en el mismo
+movimiento, sin G1 Z aparte). El 1 mm del G40 sigue sobre û. `_poly_body` compensado ganó la rama
+Line (approach/retract) + la rama retract Arco.
+
+**Forma EN-JUEGO** (`enjuego`, `enjuego_noleads`) ✅ — RESPUESTA al contour de la App: un
+`ContourSpec` se MAPEA a la polilínea del perímetro en el reader (`_contour_to_polyline`, usa
+`_build_squaring_outline_points`) y se renderiza como perfil cerrado. Arranca a MITAD del borde
+inicial, con o sin leads Arco. `ContourSpec` sigue siendo la spec de AUTORÍA de la App (decisión
+de Fermín); esto es solo la traducción de LECTURA del converter.
+
+**CAD estilo B GENERALIZADO** (`cad_concava`, `cad_interno`, `cad_cw_left`, `cad_chaflan`) ✅ —
+`_poly_cad_moves` reescrito general: cada borde offseteado r=w/2 (Right=rot90cw/arcos G3,
+Left=rot90ccw/arcos G2); cada vértice por el giro cruzado con el lado:
+- offset que abre HUECO (Right+giro-izq / Left+giro-der) → **ARCO** (centro=vértice nominal, del
+  punto entrante al saliente — un cuarto en 90°, el ángulo del giro en general: el chaflán a 45°
+  da un octavo);
+- offset que SUPERPONE → **ESQUINA VIVA** (intersección de las rectas offseteadas, sin arco).
+- **RESPUESTA a la pregunta estrella**: la esquina CÓNCAVA es **VIVA** (cad_concava: el fondo de
+  la muesca; cad_interno: CW+Right = todo interior = todo vivo, rectángulo simple sin arcos).
+- Fase de arranque: vértice inicial arco → primero con Right, último con Left; vivo → arranca ahí.
+
+**Fail-loud (2/13, subdeterminados con 1 fixture)**:
+- `cad_leads`: el lead CAD usa un cuarto de arco de radio **w/2** (≠ el lead de la línea, w/2×RM)
+  anclado tangencialmente al arranque de la traza offseteada — un solo fixture no fija cómo entra RM.
+- `cad_zigzag`: ZigZag en contorno CERRADO CAD (= op1 de `Galceado.pgmx`). `build_polyline_spec` ni
+  siquiera admite ZigZag hoy (solo Uni/Bi), y el render del zigzag sobre el perfil offseteado no
+  está derivado. El adapter lo deja unsupported (fail-loud correcto).
+
+Con N044 quedan destrabables el contour de En-Juego (ya) y, cuando se cierren cad_leads/cad_zigzag
+con más fixtures, `Galceado.pgmx` completo (transición + cambio de herramienta).

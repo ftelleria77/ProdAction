@@ -654,6 +654,14 @@ def _detect_squaring_signature(
     if start_edge is None:
         return None
     start_coordinate = points[0][0] if start_edge in {"Bottom", "Top"} else points[0][1]
+    # La firma detecta la FORMA CANÓNICA de En-Juego (build_contour_spec): arranque a MITAD
+    # del borde inicial (borde partido en 2 tramos). Un perímetro que arranca en otro punto
+    # (los N043 arrancan en una ESQUINA) NO es esa forma: ContourSpec la re-autoraría con el
+    # arranque a mitad de borde — otra geometría (el punto inicial IMPORTA) — así que va por
+    # la rama polilínea, que conserva el arranque real.
+    edge_length = length if start_edge in {"Bottom", "Top"} else width
+    if not math.isclose(float(start_coordinate), edge_length / 2.0, abs_tol=1e-6):
+        return None
     return (start_edge, winding, float(start_coordinate))
 
 
@@ -1256,7 +1264,20 @@ def _adapt_milling(
             warnings=warnings,
         )
 
-    squaring_signature = _detect_squaring_signature(snapshot, feature)
+    # El intercept del escuadrado SOLO cuando ContourSpec puede representar la operación:
+    # ACC=true (no tiene campo de corrección CAD — el Fresado-Escuadrado CAD de N043 perdía
+    # el ActivateCNCCorrection=false EN SILENCIO) y estrategia None/Uni/Bi (su allowlist).
+    # Lo demás cae a la rama polilínea, que sí conserva ACC y arranque reales.
+    _contour_strategy_ok = (
+        operation.milling_strategy is None
+        or isinstance(operation.milling_strategy,
+                      (sp.UnidirectionalMillingStrategySpec, sp.BidirectionalMillingStrategySpec))
+    )
+    squaring_signature = (
+        _detect_squaring_signature(snapshot, feature)
+        if operation.activate_cnc_correction and _contour_strategy_ok
+        else None
+    )
     if squaring_signature is not None:
         start_edge, winding, start_coordinate = squaring_signature
         try:
@@ -1507,6 +1528,7 @@ def _adapt_milling(
                     retract_arc_side=retract.arc_side,
                     retract_overlap=retract.overlap,
                     milling_strategy=operation.milling_strategy,
+                    activate_cnc_correction=bool(operation.activate_cnc_correction),
                 )
             except Exception as exc:
                 return _unsupported_entry(
@@ -1628,7 +1650,13 @@ def _adapt_feature(
             step,
             order_index=order_index,
         )
-    if "GeneralProfileFeature" in feature.feature_type or "SlotSide" in feature.feature_type:
+    # ContourFeature (Galceado/Perfilado, N043): el TIPO de feature es INVISIBLE en el ISO —
+    # ContourFeature y GeneralProfileFeature con la misma geometría y el mismo ACC dan el mismo
+    # byte. El ContourType (Pieza/Geometría) es comodidad de autoría: la geometría ya llega
+    # resuelta en el XML y no viaja a la spec. Misma rama que el fresado de perfil.
+    if ("GeneralProfileFeature" in feature.feature_type
+            or "SlotSide" in feature.feature_type
+            or "ContourFeature" in feature.feature_type):
         return _adapt_milling(
             snapshot,
             feature,

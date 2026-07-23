@@ -51,12 +51,17 @@ class FailLoudTest(unittest.TestCase):
         with self.assertRaises(UnsupportedOperationError):
             convert(path)
 
-    def test_unsupported_spec_type(self):
-        # Canal (N037), circulo (N038), arco (N040) y polilinea (N041) ya son familias
-        # soportadas; el ESCUADRADO sigue sin derivar (etapa 4 del Eje B).
+    def test_escuadrado_convierte(self):
+        # Etapa 4 del Eje B (N043/N044): el ESCUADRADO/Galceado (ContourSpec) YA no se rechaza —
+        # se mapea a la polilínea del perímetro y se renderiza como perfil cerrado. La forma
+        # canónica de En-Juego arranca a MITAD del borde inicial (300/2=150 en Bottom).
         from pgmx.synthesis import build_contour_spec
-        self._assert_rejected("squaring", contours=[build_contour_spec(
+        path = _make(self.tmp, "squaring", contours=[build_contour_spec(
             target_depth=5.0, feature_name="Escuadrado")])
+        iso = convert(path)
+        self.assertIn("G42", iso)                                    # corrección C.N. (ACC=true)
+        self.assertIn("G2 X150.000 Y0.000 I150.000 J-18.360", iso)   # arco al vértice a mitad de borde
+        self.assertIn("G1 X300.000 Z-5.000", iso)                    # contorno del perímetro (ciego 5)
 
     def test_polyline_recta_soportada_convierte(self):
         from pgmx.synthesis import build_polyline_spec

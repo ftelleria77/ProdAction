@@ -383,9 +383,15 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
         # DESPLAZADAS radio×normal(lado) — izquierda=rot90ccw(û) — sin G41/G42 ni leads (N023 _CAD).
         # El MISMO desplazamiento aplica a la multipasada con lado (N029 mp_side_l: la estrategia
         # fuerza ACC=false y las pasadas corren en las coordenadas desplazadas, sin G41).
+        # CÍRCULO (N038/N039), ARCO SUELTO (N040) y POLILÍNEA (N041/N042/N043): dispatch propio;
+        # los bloques de línea no los tocan (el desplazamiento CAD de la POLILÍNEA es por-borde
+        # con arcos de esquina — _poly_cad_moves — no el shift único de la línea).
+        is_circle = isinstance(spec, CircleSpec)
+        is_arc = isinstance(spec, ArcSpec)
+        is_poly = isinstance(spec, PolylineSpec)
         _acc = getattr(spec, "activate_cnc_correction", True)
         cad = (not _acc) and spec.milling_strategy is None
-        if (not _acc) and spec.side_of_feature != "Center":
+        if (not _acc) and spec.side_of_feature != "Center" and not (is_circle or is_arc or is_poly):
             r_off = spec.tool_width / 2.0
             ux, uy = _unit_dir(spec)
             nx, ny = (-uy, ux) if spec.side_of_feature == "Left" else (uy, -ux)
@@ -408,12 +414,6 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
         ret_suppresses_g0 = has_ret   # default (Quote); el branch de leads lo ajusta
         lead_app = spec.tool_width / 2.0 * spec.approach.radius_multiplier
         lead_ret = spec.tool_width / 2.0 * spec.retract.radius_multiplier
-
-        # CÍRCULO (N038/N039) y ARCO SUELTO (N040): dispatch propio más abajo; los bloques de
-        # línea no los tocan. El arco baseline (Center, sin leads/estrategia) es un G3/G2 único.
-        is_circle = isinstance(spec, CircleSpec)
-        is_arc = isinstance(spec, ArcSpec)
-        is_poly = isinstance(spec, PolylineSpec)
 
         # Lead programable + compensación (N029 side_l_leads / N035): el lead se emite en
         # coordenadas de CONTORNO con G41/G42 activo; el 1 mm de la corrección se ancla al punto
@@ -442,9 +442,10 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
             # ARCO SUELTO (N040): entra por el START real del arco (baseline; combos → guarda).
             entry_xy = (spec.start_x, spec.start_y)
         elif is_poly:
-            # POLILÍNEA (N041 baseline / N042 corrección+entrada): el punto de aproximación sale
-            # de _poly_entry_xy (arranque, o 1 mm antes con corrección, o exterior del arco).
-            entry_xy = _poly_entry_xy(spec, compensated, has_app, lead_app)
+            # POLILÍNEA (N041 baseline / N042 corrección+entrada / N043 CAD): el punto de
+            # aproximación sale de _poly_entry_xy (arranque, 1 mm antes con corrección,
+            # exterior del arco, o el fin del último borde offseteado con CAD).
+            entry_xy = _poly_entry_xy(spec, compensated, has_app, lead_app, cad)
         elif is_circle:
             entry_xy = _circle_entry_xy(spec, compensated, has_app, lead_app)
         elif comp_app:
@@ -552,8 +553,14 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
             # POLILÍNEA (N041 baseline / N042 corrección+entrada): cuerpo estilo línea con la
             # cadena de segmentos. Corrección = G41/G42 + lead-in sobre el 1er segmento y
             # lead-out sobre el último; segmentos NOMINALES (el control empalma las esquinas).
-            body, ret_suppresses_g0, poly_end = _poly_body(
-                spec, depth, security, plunge_feed, cut_feed, compensated, has_app, lead_app)
+            # CAD (N043 estilo B): polígono OFFSETEADO + arcos de esquina, sin G41 ni leads.
+            if cad:
+                body, ret_suppresses_g0, poly_end = _poly_cad_body(
+                    spec, depth, security, plunge_feed, cut_feed)
+            else:
+                body, ret_suppresses_g0, poly_end = _poly_body(
+                    spec, depth, security, plunge_feed, cut_feed, compensated,
+                    has_app, has_ret, lead_app, lead_ret)
             lines += body
             if compensated:
                 lines += [
@@ -1093,12 +1100,111 @@ def _poly_cut_lines(start, segs, depth, cut_feed):
     return lines, (px, py)
 
 
-def _poly_entry_xy(spec, compensated, has_app, lead_app):
+def _line_intersection(p0, d0, p1, d1):
+    """Punto donde se cruzan las rectas (p0 + t·d0) y (p1 + s·d1). d0/d1 no paralelos."""
+    det = d1[0] * d0[1] - d0[0] * d1[1]
+    t = (-(p1[0] - p0[0]) * d1[1] + d1[0] * (p1[1] - p0[1])) / det
+    return (p0[0] + t * d0[0], p0[1] + t * d0[1])
+
+
+def _poly_cad_moves(spec):
+    """Traza CAD de un contorno CERRADO (N043 + N044, byte-validado). Cada borde corre
+    OFFSETEADO r=w/2 hacia el lado (Right=rot90cw(û)/arcos G3, Left=rot90ccw(û)/arcos G2) y cada
+    VÉRTICE se resuelve por el signo del giro cruzado con el lado:
+    - offset que abre un HUECO (Right+giro-izq / Left+giro-der) → ARCO (centro=vértice nominal,
+      radio=r; del punto de offset del borde entrante al del saliente — un cuarto en 90°, el
+      ángulo del giro en general);
+    - offset que SUPERPONE los bordes → ESQUINA VIVA (intersección de las dos rectas offseteadas,
+      sin arco). Es la respuesta a "¿la cóncava es arco o viva?": viva (N044 cad_concava/interno).
+    Fase de arranque: si el vértice inicial es arco, va PRIMERO con Right y ÚLTIMO con Left; si es
+    vivo, la traza arranca en ese punto y el borde va primero. Devuelve (entry_xy, moves) con
+    moves = [('line', (x,y)) | ('arc', (x,y)=p_out, (cx,cy)=vértice, 'G3'|'G2')]."""
+    start, segs = _poly_start_and_segments(spec)
+    verts = [start] + [(s[0], s[1]) for s in segs[:-1]]   # cerrado: el último end == start
+    n = len(verts)
+    r = spec.tool_width / 2.0
+    right = spec.side_of_feature == "Right"
+    g_arc = "G3" if right else "G2"
+    dirs, offs = [], []   # dir unitaria del borde i, (a_i, b_i) = inicio/fin offseteados
+    for i in range(n):
+        vx, vy = verts[i]
+        wx, wy = verts[(i + 1) % n]
+        ux, uy = wx - vx, wy - vy
+        length = math.hypot(ux, uy)
+        ux, uy = ux / length, uy / length
+        nx, ny = (uy, -ux) if right else (-uy, ux)   # rot90cw / rot90ccw
+        dirs.append((ux, uy))
+        offs.append(((vx + r * nx, vy + r * ny), (wx + r * nx, wy + r * ny)))
+    corners = []   # ('arc', p_in, p_out) o ('live', p)
+    for i in range(n):
+        p = (i - 1) % n
+        turn = dirs[p][0] * dirs[i][1] - dirs[p][1] * dirs[i][0]
+        is_arc = (turn > 1e-9) if right else (turn < -1e-9)
+        if is_arc:
+            corners.append(("arc", offs[p][1], offs[i][0]))   # p_in=b_prev, p_out=a_i
+        else:
+            corners.append(("live", _line_intersection(offs[p][0], dirs[p], offs[i][0], dirs[i])))
+    entry_of = lambda c: c[1]                       # arco: p_in ; vivo: p
+    # Orden cíclico corner_0, edge_0, corner_1, edge_1, ... con la fase de arranque derivada.
+    if corners[0][0] == "arc" and right:
+        entry = corners[0][1]                       # p_in del arco inicial (va primero)
+        order = [(0, "corner"), (0, "edge")] + [(i, k) for i in range(1, n) for k in ("corner", "edge")]
+    elif corners[0][0] == "arc":
+        entry = corners[0][2]                       # p_out del arco inicial (va último, Left)
+        order = [(0, "edge")] + [(i, k) for i in range(1, n) for k in ("corner", "edge")] + [(0, "corner")]
+    else:
+        entry = corners[0][1]                       # esquina viva inicial
+        order = [(0, "edge")] + [(i, k) for i in range(1, n) for k in ("corner", "edge")]
+    moves = []
+    for idx, kind in order:
+        c = corners[idx]
+        if kind == "corner":
+            if c[0] == "arc":
+                moves.append(("arc", c[2], verts[idx], g_arc))
+        else:   # borde idx: hasta la ENTRADA del vértice siguiente
+            moves.append(("line", entry_of(corners[(idx + 1) % n])))
+    return entry, moves
+
+
+def _poly_cad_body(spec, depth, security, plunge_feed, cut_feed):
+    """Cuerpo CAD del contorno cerrado (N043/N044): bajada a security a feed de PLUNGE, ETK[7]=4,
+    plunge a feed de CORTE (patrón CAD de la línea), y la cadena de arcos de esquina + bordes
+    offseteados (arcos con I/J ABSOLUTOS al vértice nominal, F en todos los movimientos), cerrando
+    donde arrancó; retracción final a feed de corte (el G0 Z del teardown queda)."""
+    entry, moves = _poly_cad_moves(spec)
+    lines = [
+        f"G1 Z{security:.3f} F{plunge_feed:.3f}",
+        "?%ETK[7]=4",
+        f"G1 Z{-depth:.3f} F{cut_feed:.3f}",
+    ]
+    px, py = entry
+    for move in moves:
+        if move[0] == "arc":
+            (ax, ay), (cx, cy), g = move[1], move[2], move[3]
+            lines.append(f"{g} X{ax:.3f} Y{ay:.3f} I{cx:.3f} J{cy:.3f} F{cut_feed:.3f}")
+            px, py = ax, ay
+        else:
+            ex, ey = move[1]
+            lines.append(_g1_cut(px, py, ex, ey, -depth, cut_feed, prev_z=-depth))
+            px, py = ex, ey
+    lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
+    return lines, False, (px, py)
+
+
+def _poly_entry_xy(spec, compensated, has_app, lead_app, cad=False):
     """Punto de APROXIMACIÓN (G0) de una polilínea (N042). Con corrección: 1 mm antes del
     arranque sobre la dir. del primer segmento (o sobre la tangente del arco de acercamiento).
-    Con acercamiento sin corrección: el punto exterior del arco. Baseline: el arranque."""
+    Con acercamiento sin corrección: el punto exterior del arco. CAD (N043/N044): el punto de
+    arranque de la traza offseteada. Baseline: el arranque."""
+    if cad:
+        entry, _moves = _poly_cad_moves(spec)
+        return entry
     start, segs = _poly_start_and_segments(spec)
     first_dir = _seg_dir_from(start, segs[0])
+    if compensated and has_app and spec.approach.approach_type == "Line":
+        # Lead-in lineal (N044): 1 mm antes del punto exterior (start − lead·û), sobre û.
+        return (start[0] - (lead_app + _COMP_LEAD) * first_dir[0],
+                start[1] - (lead_app + _COMP_LEAD) * first_dir[1])
     if compensated and has_app:
         (apx, apy), (acx, acy), ag = _lead_geometry_at(
             start, first_dir, lead_app, _comp_auto_arc_side(spec), True)
@@ -1113,18 +1219,32 @@ def _poly_entry_xy(spec, compensated, has_app, lead_app):
     return start
 
 
-def _poly_body(spec, depth, security, plunge_feed, cut_feed, compensated, has_app, lead_app):
-    """Cuerpo de una polilínea (N041 baseline + N042 corrección/acercamiento). Devuelve
+def _poly_body(spec, depth, security, plunge_feed, cut_feed, compensated, has_app, has_ret,
+               lead_app, lead_ret):
+    """Cuerpo de una polilínea (N041 baseline + N042/N044 corrección/leads). Devuelve
     (líneas, ret_suprime_G0, salida_xy). Corrección = modelo de la LÍNEA con lead-in sobre el
     primer segmento y lead-out sobre el último; los segmentos van NOMINALES (G41/G42 delega el
-    empalme de esquinas al control)."""
+    empalme de esquinas al control). Leads Arco (N042) o Línea con modo En cota/En bajada/En
+    subida (N044)."""
     start, segs = _poly_start_and_segments(spec)
     first_dir, last_end, last_dir = _poly_first_last(start, segs)
     cut, cut_end = _poly_cut_lines(start, segs, depth, cut_feed)
 
     if compensated:
         lines = ["?%ETK[7]=4", "G41" if spec.side_of_feature == "Left" else "G42"]
-        if has_app:
+        if has_app and spec.approach.approach_type == "Line":
+            # Lead-in LINEAL (N044): al punto exterior (start − lead·û) a security, y línea al
+            # start. "En bajada" (Down) = rampa (baja mientras avanza, sin plunge aparte); "En
+            # cota" (Quote) = plunge vertical + línea plana. Todo a feed de plunge.
+            ux, uy = first_dir
+            apx, apy = start[0] - lead_app * ux, start[1] - lead_app * uy
+            lines.append(f"G1 X{apx:.3f} Y{apy:.3f} Z{security:.3f} F{plunge_feed:.3f}")
+            if spec.approach.mode == "Down":
+                lines.append(_g1_cut(apx, apy, start[0], start[1], -depth, plunge_feed, prev_z=security))
+            else:
+                lines.append(f"G1 Z{-depth:.3f} F{plunge_feed:.3f}")
+                lines.append(_g1_cut(apx, apy, start[0], start[1], -depth, plunge_feed, prev_z=-depth))
+        elif has_app:
             (apx, apy), (acx, acy), ag = _lead_geometry_at(
                 start, first_dir, lead_app, _comp_auto_arc_side(spec), True)
             lines += [
@@ -1138,12 +1258,43 @@ def _poly_body(spec, depth, security, plunge_feed, cut_feed, compensated, has_ap
                 f"G1 Z{-depth:.3f} F{plunge_feed:.3f}",
             ]
         lines += cut
-        out = (last_end[0] + _COMP_LEAD * last_dir[0], last_end[1] + _COMP_LEAD * last_dir[1])
-        lines += [
-            f"G1 Z{security:.3f} F{cut_feed:.3f}",
-            "G40",
-            f"G1 X{out[0]:.3f} Y{out[1]:.3f} Z{security:.3f} F{cut_feed:.3f}",
-        ]
+        if has_ret and spec.retract.retract_type == "Line":
+            # Lead-out LINEAL (N044): línea al punto exterior (end + lead·û); "En subida" (Up)
+            # sube a security en la misma rampa (sin G1 Z aparte), "En cota" (Quote) sale a
+            # profundidad + G1 Z. El 1 mm del G40 sigue sobre û. Todo a feed de corte.
+            ux, uy = last_dir
+            rpx, rpy = last_end[0] + lead_ret * ux, last_end[1] + lead_ret * uy
+            out = (rpx + _COMP_LEAD * ux, rpy + _COMP_LEAD * uy)
+            if spec.retract.mode == "Up":
+                lines.append(_g1_cut(last_end[0], last_end[1], rpx, rpy, security, cut_feed, prev_z=-depth))
+                lines += ["G40", f"G1 X{out[0]:.3f} Y{out[1]:.3f} Z{security:.3f} F{cut_feed:.3f}"]
+            else:
+                lines.append(_g1_cut(last_end[0], last_end[1], rpx, rpy, -depth, cut_feed, prev_z=-depth))
+                lines += [
+                    f"G1 Z{security:.3f} F{cut_feed:.3f}",
+                    "G40",
+                    f"G1 X{out[0]:.3f} Y{out[1]:.3f} Z{security:.3f} F{cut_feed:.3f}",
+                ]
+        elif has_ret and spec.retract.retract_type == "Arc":
+            # Alejamiento en ARCO compensado (N044 enjuego): arco de salida A PROFUNDIDAD sobre el
+            # lado LIBRE, G1 Z a security, G40 y 1 mm sobre la tangente. Mismo patrón que la línea.
+            (rpx, rpy), (rcx, rcy), rg = _lead_geometry_at(
+                last_end, last_dir, lead_ret, _comp_auto_arc_side(spec), False)
+            rtx, rty = _arc_tangent(rpx, rpy, rcx, rcy, rg)
+            out = (rpx + _COMP_LEAD * rtx, rpy + _COMP_LEAD * rty)
+            lines += [
+                f"{rg} X{rpx:.3f} Y{rpy:.3f} I{rcx:.3f} J{rcy:.3f} F{cut_feed:.3f}",
+                f"G1 Z{security:.3f} F{cut_feed:.3f}",
+                "G40",
+                f"G1 X{out[0]:.3f} Y{out[1]:.3f} Z{security:.3f} F{cut_feed:.3f}",
+            ]
+        else:
+            out = (last_end[0] + _COMP_LEAD * last_dir[0], last_end[1] + _COMP_LEAD * last_dir[1])
+            lines += [
+                f"G1 Z{security:.3f} F{cut_feed:.3f}",
+                "G40",
+                f"G1 X{out[0]:.3f} Y{out[1]:.3f} Z{security:.3f} F{cut_feed:.3f}",
+            ]
         return lines, False, out
 
     if has_app:

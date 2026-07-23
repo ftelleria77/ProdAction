@@ -16,8 +16,9 @@ from pgmx.adapters import adapt_pgmx_path
 from pgmx.synthesis.drilling.pattern import DrillPatternSpec
 from pgmx.synthesis.drilling.single import DrillSpec
 from pgmx.synthesis.milling.arc import ArcSpec
-from pgmx.synthesis.milling.polyline import PolylineSpec
+from pgmx.synthesis.milling.polyline import PolylineSpec, build_polyline_spec
 from pgmx.synthesis.milling.circle import CircleSpec
+from pgmx.synthesis.milling.contour import ContourSpec, _build_squaring_outline_points
 from pgmx.synthesis.milling.line import LineSpec
 from pgmx.synthesis.milling.channel import ChannelSpec
 
@@ -162,6 +163,41 @@ class ProgramOps:
     saw_channels: tuple[ChannelSpec, ...] = ()
 
 
+def _contour_to_polyline(spec: ContourSpec, length: float, width: float) -> PolylineSpec:
+    """Un ContourSpec (Galceado/Escuadrado, forma canónica de En-Juego) ES una polilínea CERRADA
+    del perímetro — el galceado NO es una feature nueva del ISO (N043). El converter lo mapea a
+    PolylineSpec para reusar el render de perfil (arranque a mitad de borde + leads, N044 enjuego).
+    ContourSpec se conserva como spec de AUTORÍA de la App (decisión de Fermín); esto es solo la
+    traducción de LECTURA del converter."""
+    points = _build_squaring_outline_points(
+        length, width, start_edge=spec.start_edge, winding=spec.winding)
+    return build_polyline_spec(
+        points=[(float(x), float(y)) for x, y in points],
+        feature_name=spec.feature_name,
+        tool_id=spec.tool_id, tool_name=spec.tool_name, tool_width=spec.tool_width,
+        security_plane=spec.security_plane,
+        side_of_feature=spec.side_of_feature,
+        is_through=spec.depth_spec.is_through,
+        target_depth=spec.depth_spec.target_depth,
+        extra_depth=spec.depth_spec.extra_depth,
+        approach_enabled=spec.approach.is_enabled,
+        approach_type=spec.approach.approach_type,
+        approach_mode=spec.approach.mode,
+        approach_radius_multiplier=spec.approach.radius_multiplier,
+        approach_speed=spec.approach.speed,
+        approach_arc_side=spec.approach.arc_side,
+        retract_enabled=spec.retract.is_enabled,
+        retract_type=spec.retract.retract_type,
+        retract_mode=spec.retract.mode,
+        retract_radius_multiplier=spec.retract.radius_multiplier,
+        retract_speed=spec.retract.speed,
+        retract_arc_side=spec.retract.arc_side,
+        retract_overlap=spec.retract.overlap,
+        milling_strategy=spec.milling_strategy,
+        activate_cnc_correction=True,   # la forma En-Juego siempre emite ACC=true (N043)
+    )
+
+
 def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
     result = adapt_pgmx_path(path)
     state = result.snapshot.state
@@ -178,7 +214,15 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
         raise UnsupportedOperationError(
             f"El .pgmx tiene {len(unsupported)} operación(es) que el adapter no pudo adaptar "
             f"(se omitirían en silencio): {reasons}")
-    validate_entries(result.adapted_entries)
+    # ContourSpec (Galceado/Escuadrado forma App) → polilínea del perímetro para el render; se
+    # valida y enruta como una polilínea más (N043/N044). ContourSpec sigue siendo la spec de
+    # autoría de la App; esto es solo la lectura del converter.
+    specs = [
+        _contour_to_polyline(e.spec, state.length, state.width)
+        if isinstance(e.spec, ContourSpec) else e.spec
+        for e in result.adapted_entries
+    ]
+    validate_entries(specs)
 
     field = _execution_field(path)
     # Fail-loud: campo fuera de la grilla 2×2 conocida (AB/DC/EF/HG). El modelo de origen/SHF/EDK
@@ -212,8 +256,7 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
     side_drills: list[DrillSpec] = []
     saw_channels: list[ChannelSpec] = []
 
-    for entry in result.adapted_entries:
-        spec = entry.spec
+    for spec in specs:
         if isinstance(spec, DrillPatternSpec):
             drills = expand_drilling_pattern(spec)
         elif isinstance(spec, DrillSpec):

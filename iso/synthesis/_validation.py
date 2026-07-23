@@ -11,6 +11,7 @@ Cada límite referencia la fase del roadmap que lo levantará
 
 from __future__ import annotations
 
+import math
 from typing import Iterable
 
 from pgmx.synthesis.drilling.pattern import DrillPatternSpec
@@ -420,23 +421,91 @@ def _validate_polyline(spec: PolylineSpec) -> None:
         _fail(spec, "polilínea con menos de 2 segmentos. [B]")
     if spec.side_of_feature not in ("Center", "Left", "Right"):
         _fail(spec, f"polilínea con side_of_feature={spec.side_of_feature!r} desconocido. [B]")
-    # Corrección/acercamiento sobre el PRIMER o ÚLTIMO segmento cuando es ARCO: sin fixture (en
-    # N042 los extremos son siempre rectas; el lead ancla en la tangente del arco, sin derivar).
-    if spec.side_of_feature != "Center" or spec.approach.is_enabled:
-        if spec.segments[0].is_arc or spec.segments[-1].is_arc:
-            _fail(spec, "corrección/acercamiento con primer o último segmento en ARCO: sin "
-                        "fixture de referencia. [B]")
-    # Acercamiento: N042 solo validó Arco / En cota / Automatic / sin velocidad. Alejamiento y
-    # las demás formas → guarda.
-    if spec.retract.is_enabled:
-        _fail(spec, "polilínea + alejamiento: sin fixture de referencia (N042 valida "
-                    "solo acercamiento). [B]")
-    if spec.approach.is_enabled:
-        if spec.approach.approach_type != "Arc" or spec.approach.mode != "Quote" \
-                or spec.approach.speed > 0 or spec.approach.arc_side != "Automatic":
-            _fail(spec, "polilínea + acercamiento no Arco/En cota/Automatic/sin velocidad: "
-                        "sin fixture de referencia. [B]")
     if spec.milling_strategy is not None:
         _fail(spec, "polilínea + estrategia multipasada: sin fixture de referencia. [B]")
+    # CAD (ActivateCNCCorrection=false) tiene su propia validación (offset + arcos de esquina,
+    # N043/N044). Se chequea aparte y no pasa por las reglas de leads C.N.
+    if not getattr(spec, "activate_cnc_correction", True):
+        _validate_polyline_cad(spec)
+        return
+    # Corrección/lead sobre el PRIMER o ÚLTIMO segmento cuando es ARCO: sin fixture (en N042/N044
+    # los extremos son siempre rectas; el lead ancla en la tangente del arco, sin derivar).
+    if spec.side_of_feature != "Center" or spec.approach.is_enabled or spec.retract.is_enabled:
+        if spec.segments[0].is_arc or spec.segments[-1].is_arc:
+            _fail(spec, "corrección/lead con primer o último segmento en ARCO: sin "
+                        "fixture de referencia. [B]")
+    # Acercamiento: N042 validó Arco/En cota/Automatic/sin velocidad; N044 sumó Línea En cota/En
+    # bajada, con corrección (compensado). Alejamiento (N044): Línea En cota/En subida, compensado.
+    if spec.approach.is_enabled:
+        _validate_poly_lead(spec, spec.approach, spec.approach.approach_type, "acercamiento")
+    if spec.retract.is_enabled:
+        _validate_poly_lead(spec, spec.retract, spec.retract.retract_type, "alejamiento")
+
+
+def _validate_poly_lead(spec: PolylineSpec, lead, lead_type: str, name: str) -> None:
+    """Un lead de polilínea (acercamiento/alejamiento). Arco: solo acercamiento En cota/Automatic
+    (N042). Línea: En cota o En bajada/subida, siempre CON corrección (N044 son compensados; el
+    render lineal sin corrección no está derivado). Sin velocidad propia en ningún caso."""
+    if lead.speed > 0:
+        _fail(spec, f"polilínea + {name} con velocidad propia: sin fixture. [B]")
+    if lead_type == "Arc":
+        if lead.mode != "Quote" or lead.arc_side != "Automatic":
+            _fail(spec, f"polilínea + {name} Arco no En cota/Automatic: sin fixture. [B]")
+        # Alejamiento en arco: solo compensado (N044 enjuego). El acercamiento en arco sí está
+        # en Center (N042 closed_app).
+        if name == "alejamiento" and spec.side_of_feature == "Center":
+            _fail(spec, "polilínea + alejamiento en Arco SIN corrección: sin fixture (N044 "
+                        "enjuego es compensado). [B]")
+    elif lead_type == "Line":
+        ok_mode = "Down" if name == "acercamiento" else "Up"
+        if lead.mode not in ("Quote", ok_mode):
+            _fail(spec, f"polilínea + {name} Línea en modo {lead.mode!r}: sin fixture "
+                        f"(N044 validó En cota y {ok_mode}). [B]")
+        if spec.side_of_feature == "Center":
+            _fail(spec, f"polilínea + {name} Línea SIN corrección: sin fixture (N044 son "
+                        f"compensados). [B]")
+    else:
+        _fail(spec, f"polilínea + {name} de tipo {lead_type!r} desconocido. [B]")
+
+
+def _validate_polyline_cad(spec: PolylineSpec) -> None:
+    """Polilínea con corrección CAD (ActivateCNCCorrection=false) — estilo B (N043 + N044): polígono
+    OFFSETEADO r=w/2 hacia el lado, con ARCO en la esquina donde el offset abre un hueco (convexa
+    hacia afuera) y ESQUINA VIVA donde superpone los bordes (cóncava, o convexa con offset interior).
+    Byte-validado: contorno CERRADO de rectas, Right o Left, cualquier ángulo convexo, cóncavas
+    como esquina viva (N044 cad_concava/interno/cw_left/chaflan). SIN fixture (los CAD los hace
+    Fermín en Maestro — con ACC=false la traza almacenada ya trae el offset, autorarla sería
+    circular): leads, segmentos de arco, contorno abierto, y el ARCO sobre una esquina CÓNCAVA
+    (giro reflex sin derivar). Eso → fail-loud."""
+    if spec.approach.is_enabled or spec.retract.is_enabled:
+        _fail(spec, "CAD (ACC=false) + acercamiento/alejamiento en polilínea: sin fixture. [B4]")
+    if any(seg.is_arc for seg in spec.segments):
+        _fail(spec, "CAD (ACC=false) con segmentos de ARCO: el offset de un arco no tiene "
+                    "fixture de referencia. [B4]")
+    if not spec.is_closed:
+        _fail(spec, "CAD (ACC=false) en polilínea ABIERTA: sin fixture de referencia (N043/N044 "
+                    "solo cubren el contorno cerrado). [B4]")
+    if spec.side_of_feature not in ("Right", "Left"):
+        _fail(spec, f"CAD (ACC=false) con side_of_feature={spec.side_of_feature!r}: Center no "
+                    f"define lado de offset. Solo Right/Left tienen fixture (N044). [B4]")
+    points = spec.points  # cerrado: points[-1] == points[0]
+    verts = points[:-1]
+    n = len(verts)
+    right = spec.side_of_feature == "Right"
+    for i in range(n):
+        ax, ay = verts[(i - 1) % n]
+        bx, by = verts[i]
+        cx, cy = verts[(i + 1) % n]
+        ux, uy = bx - ax, by - ay
+        vx, vy = cx - bx, cy - by
+        lu, lv = math.hypot(ux, uy), math.hypot(vx, vy)
+        if lu <= 1e-9 or lv <= 1e-9:
+            _fail(spec, "CAD (ACC=false) con segmento degenerado (largo 0). [B4]")
+        # Vértice colineal (giro ≈ 0): no es esquina real y dejaría las rectas offseteadas
+        # paralelas (intersección indefinida en el render). N044 no lo cubre → fail-loud.
+        turn = (ux * vy - uy * vx) / (lu * lv)
+        if abs(turn) <= 1e-6:
+            _fail(spec, "CAD (ACC=false) con vértice colineal (esquina de 180°): sin fixture y "
+                        "geometría degenerada para el offset. [B4]")
 
 

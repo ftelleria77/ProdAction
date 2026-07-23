@@ -96,6 +96,10 @@ class PolylineSpec:
     approach: ApproachSpec = field(default_factory=ApproachSpec)
     retract: RetractSpec = field(default_factory=RetractSpec)
     milling_strategy: Optional[MillingStrategySpec] = None
+    # Corrección C.N. (true, ActivateCNCCorrection) / CAD (false): misma dicotomía que la línea
+    # (N023/N036) — con CAD el ISO va en coordenadas desplazadas y, en contornos CERRADOS, con
+    # arcos de esquina (N043). La serialización sale de _build_line_operation vía getattr.
+    activate_cnc_correction: bool = True
     is_enabled_expr: Optional[str] = None
 
     @property
@@ -287,6 +291,7 @@ def build_polyline_spec(
     retract_arc_side: Optional[str] = None,
     retract_overlap: Optional[float] = None,
     milling_strategy: Optional[MillingStrategySpec] = None,
+    activate_cnc_correction: Optional[bool] = None,  # True=C.N. (default) / False=CAD
     is_enabled_expr: Optional[str] = None,
 ) -> PolylineSpec:
     """Construye una polilínea de perfil.
@@ -350,6 +355,8 @@ def build_polyline_spec(
                 overlap=retract_overlap,
             ),
             milling_strategy=milling_strategy,
+            activate_cnc_correction=(True if activate_cnc_correction is None
+                                     else bool(activate_cnc_correction)),
             is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,
         )
     )
