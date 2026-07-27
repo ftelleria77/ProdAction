@@ -477,8 +477,10 @@ def _validate_polyline_cad(spec: PolylineSpec) -> None:
     Fermín en Maestro — con ACC=false la traza almacenada ya trae el offset, autorarla sería
     circular): leads, segmentos de arco, contorno abierto, y el ARCO sobre una esquina CÓNCAVA
     (giro reflex sin derivar). Eso → fail-loud."""
-    if spec.approach.is_enabled or spec.retract.is_enabled:
-        _fail(spec, "CAD (ACC=false) + acercamiento/alejamiento en polilínea: sin fixture. [B4]")
+    if spec.approach.is_enabled:
+        _validate_cad_lead(spec, spec.approach, spec.approach.approach_type, "acercamiento")
+    if spec.retract.is_enabled:
+        _validate_cad_lead(spec, spec.retract, spec.retract.retract_type, "alejamiento")
     if any(seg.is_arc for seg in spec.segments):
         _fail(spec, "CAD (ACC=false) con segmentos de ARCO: el offset de un arco no tiene "
                     "fixture de referencia. [B4]")
@@ -507,5 +509,27 @@ def _validate_polyline_cad(spec: PolylineSpec) -> None:
         if abs(turn) <= 1e-6:
             _fail(spec, "CAD (ACC=false) con vértice colineal (esquina de 180°): sin fixture y "
                         "geometría degenerada para el offset. [B4]")
+
+
+def _validate_cad_lead(spec: PolylineSpec, lead, lead_type: str, name: str) -> None:
+    """Un lead de contorno CAD (N045, 6/6 byte-idéntico). Derivado: Arco y Línea, En cota,
+    Automatic, sin velocidad propia, con side_of_feature=Right — barrido de RM (1/2/3) y de fresa
+    (E001/E003/E004). El lead se ancla a la traza OFFSETEADA y usa las fórmulas de estrategia:
+    Arco (w/2)×(RM−1) (RM=1 lo omite), Línea (w/2)×RM. Lo NO fixtureado → fail-loud."""
+    if lead.speed > 0:
+        _fail(spec, f"CAD (ACC=false) + {name} con velocidad propia: sin fixture. [B4]")
+    if lead.mode != "Quote":
+        _fail(spec, f"CAD (ACC=false) + {name} en modo {lead.mode!r}: N045 solo fixturea En cota "
+                    f"(En bajada/subida sobre la traza offseteada sin derivar). [B4]")
+    if lead_type not in ("Arc", "Line"):
+        _fail(spec, f"CAD (ACC=false) + {name} de tipo {lead_type!r} desconocido. [B4]")
+    if lead_type == "Arc" and lead.arc_side != "Automatic":
+        _fail(spec, f"CAD (ACC=false) + {name} en Arco con lado {lead.arc_side!r} explícito: "
+                    f"N045 solo fixturea Automatic. [B4]")
+    # Automatic SIGUE el lado del offset (_mp_arc_side); con Left el arco espeja a G3 sobre la
+    # traza offseteada del otro lado, y eso no tiene fixture (los 6 de N045 son Right).
+    if spec.side_of_feature != "Right":
+        _fail(spec, f"CAD (ACC=false) + {name} con side_of_feature={spec.side_of_feature!r}: "
+                    f"solo Right tiene fixture (N045). [B4]")
 
 

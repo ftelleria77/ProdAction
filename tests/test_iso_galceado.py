@@ -15,7 +15,9 @@ Ver iso/docs/experiments/galceado_perfilado.md.
 
 from __future__ import annotations
 
+import re
 import unittest
+import zipfile
 from dataclasses import replace
 from pathlib import Path
 
@@ -144,14 +146,23 @@ class CadGuardsTest(unittest.TestCase):
         # Center no define lado de offset (Right/Left sí tienen fixture).
         self._assert_rejects(_rect_cad(side_of_feature="Center"), "Center")
 
-    def test_cad_con_leads_guardado(self):
-        # cad_leads sigue subdeterminado (lead CAD de radio w/2, ≠ el de la línea).
+    def test_cad_con_leads_no_fixtureados_guardados(self):
+        # N045 derivó el lead CAD En cota/Automatic/Right (Arco y Línea). Lo que queda sin
+        # fixture sigue rechazado: velocidad propia, modos En bajada/subida, lado explícito
+        # del arco, y el offset del otro lado (Left) con lead.
         self._assert_rejects(
-            _rect_cad(approach=build_approach_spec(True, approach_type="Arc")),
-            "acercamiento")
+            _rect_cad(approach=build_approach_spec(True, approach_type="Arc", speed=2.0)),
+            "velocidad")
         self._assert_rejects(
-            _rect_cad(retract=build_retract_spec(True, retract_type="Arc")),
-            "alejamiento")
+            _rect_cad(approach=build_approach_spec(True, approach_type="Line", mode="Down")),
+            "En cota")
+        self._assert_rejects(
+            _rect_cad(approach=build_approach_spec(True, approach_type="Arc", arc_side="Left")),
+            "Automatic")
+        self._assert_rejects(
+            _rect_cad(side_of_feature="Left",
+                      approach=build_approach_spec(True, approach_type="Arc")),
+            "Right")
 
 
 class AdapterContourTest(unittest.TestCase):
@@ -239,26 +250,128 @@ class EndToEndN044Test(unittest.TestCase):
                 _e2e_check(self, self._FIXTURES / f"{stem}.pgmx", self._REFS / f"{stem.lower()}.iso")
 
 
+class EndToEndManualLeadsTest(unittest.TestCase):
+    """`Galceado_Ar3Cota` (2026-07-27): galceado de AUTORÍA 100% MANUAL en Maestro — contorno de
+    pieza, E003, sin estrategia, acercamiento y alejamiento Arco RM=3 En cota, C.N. (ACC=true).
+
+    Es la primera referencia GENUINA del contorno compensado con leads: la traza y el lead los
+    calculó Maestro, no nuestro sintetizador. Byte-idéntico ⇒ valida el modelo de N042/N044 (lead
+    = arco tangente de radio (w/2)×RM anclado al vértice nominal, G42, 1 mm de activación) sin la
+    circularidad que arrastraban los lotes autorados.
+    """
+
+    STEMS = ("Galceado_Ar3Cota", "Galceado_Ar3Cota_Geom",
+             "Fresado_perimetral_Ar3Cota_CAD", "Fresado_perimetral_Ar3Cota_CN")
+
+    def test_byte_identico(self):
+        for stem in self.STEMS:
+            with self.subTest(stem):
+                _e2e_check(self, _FIXTURE_DIR / f"{stem}.pgmx", _REF_DIR / f"{stem.lower()}.iso")
+
+    def test_lead_cad_confirmado_contra_autoria_manual(self):
+        # El par Fresado_perimetral (mismo contorno, mismos leads Arco RM=3 En cota, solo cambia
+        # C.N./CAD) CIERRA la pregunta de N045/N046: en el CAD, Maestro CALCULÓ y almacenó el lead
+        # con radio (w/2)×(RM−1)=9.52 anclado a la traza OFFSETEADA, y lo copió al ISO — la regla
+        # de N045, ahora sin circularidad. En el C.N., el MISMO pgmx almacena la misma curva pero
+        # el ISO emite (w/2)×RM=14.28 sobre el vértice nominal (recalculado).
+        refs = {t: _REF_DIR / f"fresado_perimetral_ar3cota_{t}.iso" for t in ("cad", "cn")}
+        if not all(r.exists() for r in refs.values()):
+            self.skipTest("fixtures P: no disponibles")
+        cad = refs["cad"].read_text(encoding="cp1252")
+        cn = refs["cn"].read_text(encoding="cp1252")
+        self.assertIn("G2 X-4.760 Y0.000 I-14.280 J0.000", cad)   # r=9.52 sobre la offseteada
+        self.assertIn("G2 X0.000 Y0.000 I0.000 J-14.280", cn)     # r=14.28 sobre el vértice
+        self.assertNotIn("G42", cad)                              # CAD: sin corrección de control
+        self.assertIn("G42", cn)
+
+    def test_contour_type_es_invisible_en_el_iso(self):
+        # Los dos fixtures son el MISMO galceado con Perfil: Pieza (Workpiece) y Perfil: Geometría
+        # (Geometry). N043 ya lo había derivado con archivos autorados; acá queda confirmado con
+        # dos programas MANUALES: los ISO son idénticos salvo el comentario con el nombre del .pgm.
+        refs = [_REF_DIR / f"{s.lower()}.iso" for s in self.STEMS]
+        if not all(r.exists() for r in refs):
+            self.skipTest("fixtures P: no disponibles")
+        cuerpos = [[ln.rstrip() for ln in r.read_text(encoding="cp1252")
+                    .replace("\r\n", "\n").splitlines()][1:] for r in refs]
+        self.assertEqual(cuerpos[0], cuerpos[1])
+
+    def test_maestro_ignora_la_curva_almacenada_con_acc_true(self):
+        # El .pgmx GUARDA el lead con radio (w/2)×(RM−1)=9.52 y en una posición que ni siquiera
+        # toca el arranque del contorno; el ISO emite (w/2)×RM=14.28 anclado al vértice (0,0).
+        # Con ACC=true Maestro recalcula el lead del spec — lo contrario de lo que hace en CAD
+        # (N046). Este test fija esa asimetría, que es la que decide si el converter puede
+        # recalcular o tiene que leer la curva.
+        pgmx = _FIXTURE_DIR / "Galceado_Ar3Cota.pgmx"
+        ref = _REF_DIR / "galceado_ar3cota.iso"
+        if not pgmx.exists() or not ref.exists():
+            self.skipTest("fixtures S:/P: no disponibles")
+        iso = ref.read_text(encoding="cp1252")
+        self.assertIn("G2 X0.000 Y0.000 I0.000 J-14.280", iso)   # emitido: r = (w/2)×RM
+        with zipfile.ZipFile(pgmx) as z:
+            name = next(n for n in z.namelist() if n.lower().endswith(".xml"))
+            xml = z.read(name).decode("utf-8", "replace")
+        radios = [float(ln.split()[-1]) for block in re.findall(
+                      r"<\w+:_serializingMembers[^>]*>(.*?)</\w+:_serializingMembers>", xml, re.S)
+                  for item in re.findall(r"<\w+:string>(.*?)</\w+:string>", block, re.S)
+                  for ln in [item.strip().split("\n")[-1]] if ln.startswith("2 ")]
+        w2 = 9.52 / 2.0
+        # Los arcos del CUERPO son las esquinas (r = w/2); los dos leads son los de r = (w/2)×(RM−1).
+        leads = [r for r in radios if abs(r - w2) > 1e-6]
+        self.assertTrue(leads, "no se encontraron los arcos de lead en la curva almacenada")
+        for r in leads:
+            self.assertAlmostEqual(r, w2 * (3 - 1), places=6)      # almacenado: (w/2)×(RM−1)=9.52
+        self.assertNotAlmostEqual(leads[0], w2 * 3, places=6)      # emitido: (w/2)×RM=14.28
+
+
+class EndToEndN045Test(unittest.TestCase):
+    """N045: el lead del contorno CAD, byte-idéntico contra Maestro (requiere S:/P: montados).
+
+    Barrido que separa las dos dependencias que N044 dejaba confundidas en un solo fixture:
+    RM (1/2/3 con la misma fresa) y fresa (E001/E003/E004 con la misma RM). Resultado: el lead
+    CAD usa las MISMAS fórmulas que en estrategia — Arco (w/2)×(RM−1), con RM=1 omitiendo el
+    arco; Línea (w/2)×RM — ancladas a la tangente de la traza OFFSETEADA, no a la nominal.
+    Los tres `cad_zz` son el contorno CN sin estrategia (el ZigZag no llegó a agregarse en
+    Maestro): valen como regresión de profundidad/pasante, no cubren el zigzag CAD.
+    """
+
+    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\N045_galceado_cad_combos")
+    _REFS = Path(r"P:\USBMIX\ProdAction\N045_galceado_cad_combos")
+
+    STEMS = (
+        "N_G5_cad_leads_rm1", "N_G5_cad_leads_rm2", "N_G5_cad_leads_rm3",
+        "N_G5_cad_leads_e001", "N_G5_cad_leads_e004", "N_G5_cad_leads_line",
+        "N_G5_cad_zz_d9", "N_G5_cad_zz_d13", "N_G5_cad_zz_d18",
+    )
+
+    def test_byte_identico(self):
+        for stem in self.STEMS:
+            with self.subTest(stem):
+                _e2e_check(self, self._FIXTURES / f"{stem}.pgmx", self._REFS / f"{stem.lower()}.iso")
+
+
 class PendingN044Test(unittest.TestCase):
-    """Combos CAD que quedan fail-loud (regla 4: rechazo con mensaje, no aproximar). Cada uno
-    depende de UN fixture y está subdeterminado: cad_leads usa un lead CAD de radio w/2 (≠ el
-    lead de la línea, w/2×RM); cad_zigzag es ZigZag en contorno cerrado CAD (la spec de polilínea
-    ni siquiera admite ZigZag hoy, y el render sin derivar). Necesitan más fixtures para cerrarlos."""
+    """Lo que sigue fail-loud de la etapa 4 (regla 4: rechazo con mensaje, no aproximar).
+
+    `cad_leads` de N044 YA NO está acá: N045 derivó el lead CAD y el fixture cierra byte-idéntico
+    (test_cad_leads_de_n044_cierra_con_la_regla_de_n045). Queda `cad_zigzag`: ZigZag en contorno
+    cerrado CAD, que la spec de polilínea ni siquiera admite hoy y cuyo render no está derivado
+    — el lote N045 no lo cubrió porque la estrategia no llegó a agregarse en Maestro."""
 
     _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\N044_galceado_combos")
+    _REFS = Path(r"P:\USBMIX\ProdAction\N044_galceado_combos")
 
-    def _assert_fail_loud(self, name: str) -> None:
-        pgmx = self._FIXTURES / f"{name}.pgmx"
+    def test_cad_zigzag_fail_loud(self):
+        pgmx = self._FIXTURES / "N_G_cad_zigzag.pgmx"
         if not pgmx.exists():
             self.skipTest("fixtures S: no disponibles")
         with self.assertRaises(UnsupportedOperationError):
             convert(pgmx)
 
-    def test_cad_leads_fail_loud(self):
-        self._assert_fail_loud("N_G_cad_leads")
-
-    def test_cad_zigzag_fail_loud(self):
-        self._assert_fail_loud("N_G_cad_zigzag")
+    def test_cad_leads_de_n044_cierra_con_la_regla_de_n045(self):
+        # Validación CRUZADA: el fixture que planteó la pregunta (RM=2, donde (w/2)×(RM−1) y
+        # w/2 coinciden) tiene que caer solo con la regla derivada del barrido de N045.
+        _e2e_check(self, self._FIXTURES / "N_G_cad_leads.pgmx",
+                   self._REFS / "n_g_cad_leads.iso")
 
 
 if __name__ == "__main__":

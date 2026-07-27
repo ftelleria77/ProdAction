@@ -556,7 +556,7 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
             # CAD (N043 estilo B): polígono OFFSETEADO + arcos de esquina, sin G41 ni leads.
             if cad:
                 body, ret_suppresses_g0, poly_end = _poly_cad_body(
-                    spec, depth, security, plunge_feed, cut_feed)
+                    spec, depth, security, plunge_feed, cut_feed, has_app, has_ret)
             else:
                 body, ret_suppresses_g0, poly_end = _poly_body(
                     spec, depth, security, plunge_feed, cut_feed, compensated,
@@ -1166,17 +1166,50 @@ def _poly_cad_moves(spec):
     return entry, moves
 
 
-def _poly_cad_body(spec, depth, security, plunge_feed, cut_feed):
+def _cad_tangent(p, move, at_end):
+    """Tangente de la traza CAD offseteada en un extremo de `move` (at_end=False → en su arranque
+    `p`; True → en su punto final)."""
+    if move[0] == "arc":
+        qx, qy = move[1] if at_end else p
+        cx, cy = move[2]
+        rx, ry = qx - cx, qy - cy
+        r = math.hypot(rx, ry)
+        return (-ry / r, rx / r) if move[3] == "G3" else (ry / r, -rx / r)
+    qx, qy = move[1]
+    dx, dy = qx - p[0], qy - p[1]
+    length = math.hypot(dx, dy)
+    return (dx / length, dy / length)
+
+
+def _cad_lead_dirs(entry, moves):
+    """(û de entrada, û de salida) de la traza CAD: las tangentes en el arranque del primer move
+    y en el fin del último. En un contorno cerrado ambos extremos caen en el mismo punto."""
+    p = entry
+    for move in moves[:-1]:
+        p = move[1]
+    return _cad_tangent(entry, moves[0], False), _cad_tangent(p, moves[-1], True)
+
+
+def _poly_cad_body(spec, depth, security, plunge_feed, cut_feed, has_app=False, has_ret=False):
     """Cuerpo CAD del contorno cerrado (N043/N044): bajada a security a feed de PLUNGE, ETK[7]=4,
     plunge a feed de CORTE (patrón CAD de la línea), y la cadena de arcos de esquina + bordes
     offseteados (arcos con I/J ABSOLUTOS al vértice nominal, F en todos los movimientos), cerrando
-    donde arrancó; retracción final a feed de corte (el G0 Z del teardown queda)."""
+    donde arrancó; retracción final a feed de corte (el G0 Z del teardown queda).
+
+    Leads (N045): anclados a la traza OFFSETEADA (no a la nominal) sobre su tangente, tras el
+    plunge el de entrada y antes de la retracción el de salida, todos a feed de CORTE. Arco =
+    la geometría de estrategia `_mp_lead_arc` (Right→G2/rot90cw), radio (w/2)×(RM−1); Línea =
+    tramo recto de (w/2)×RM sobre la tangente."""
     entry, moves = _poly_cad_moves(spec)
+    u_in, u_out = _cad_lead_dirs(entry, moves)
     lines = [
         f"G1 Z{security:.3f} F{plunge_feed:.3f}",
         "?%ETK[7]=4",
         f"G1 Z{-depth:.3f} F{cut_feed:.3f}",
     ]
+    if has_app:
+        lines += _cad_lead_moves(spec, spec.approach, spec.approach.approach_type,
+                                 entry, u_in, depth, cut_feed, True)
     px, py = entry
     for move in moves:
         if move[0] == "arc":
@@ -1187,8 +1220,45 @@ def _poly_cad_body(spec, depth, security, plunge_feed, cut_feed):
             ex, ey = move[1]
             lines.append(_g1_cut(px, py, ex, ey, -depth, cut_feed, prev_z=-depth))
             px, py = ex, ey
+    if has_ret:
+        lines += _cad_lead_moves(spec, spec.retract, spec.retract.retract_type,
+                                 (px, py), u_out, depth, cut_feed, False)
+        px, py = _cad_lead_end(spec, spec.retract, spec.retract.retract_type,
+                               (px, py), u_out, False)
     lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
     return lines, False, (px, py)
+
+
+def _cad_lead_moves(spec, lead_spec, lead_type, anchor, u, depth, cut_feed, at_start):
+    """El G-code de UN lead CAD. Arco: G2/G3 con I/J absolutos al centro (entrada: desde el punto
+    exterior al ancla; salida: del ancla al exterior). Línea: un G1 a feed de corte."""
+    px, py = _cad_lead_end(spec, lead_spec, lead_type, anchor, u, at_start)
+    if (px, py) == anchor:
+        return []
+    if lead_type == "Line":
+        if at_start:
+            return [_g1_cut(px, py, anchor[0], anchor[1], -depth, cut_feed, prev_z=-depth)]
+        return [_g1_cut(anchor[0], anchor[1], px, py, -depth, cut_feed, prev_z=-depth)]
+    _p, (cx, cy), g = _mp_lead_arc(anchor, u, _mp_lead(spec, lead_spec),
+                                   _mp_arc_side(spec, lead_spec), at_start)
+    tx, ty = anchor if at_start else (px, py)
+    return [f"{g} X{tx:.3f} Y{ty:.3f} I{cx:.3f} J{cy:.3f} F{cut_feed:.3f}"]
+
+
+def _cad_lead_end(spec, lead_spec, lead_type, anchor, u, at_start):
+    """Punto EXTERIOR de un lead CAD (de donde entra el acercamiento, o adonde sale el
+    alejamiento). Largo: Arco (w/2)×(RM−1) — con RM≤1 el arco se OMITE y el punto es el ancla
+    misma (cad_leads_rm1) —; Línea (w/2)×RM sobre la tangente, hacia atrás en la entrada y hacia
+    adelante en la salida."""
+    if lead_type == "Line":
+        lead = spec.tool_width / 2.0 * lead_spec.radius_multiplier
+        sign = -1.0 if at_start else 1.0
+        return (anchor[0] + sign * lead * u[0], anchor[1] + sign * lead * u[1])
+    lead = _mp_lead(spec, lead_spec)
+    if lead <= 1e-9:
+        return anchor
+    (px, py), _c, _g = _mp_lead_arc(anchor, u, lead, _mp_arc_side(spec, lead_spec), at_start)
+    return (px, py)
 
 
 def _poly_entry_xy(spec, compensated, has_app, lead_app, cad=False):
@@ -1197,8 +1267,13 @@ def _poly_entry_xy(spec, compensated, has_app, lead_app, cad=False):
     Con acercamiento sin corrección: el punto exterior del arco. CAD (N043/N044): el punto de
     arranque de la traza offseteada. Baseline: el arranque."""
     if cad:
-        entry, _moves = _poly_cad_moves(spec)
-        return entry
+        entry, moves = _poly_cad_moves(spec)
+        if not has_app:
+            return entry
+        # Con acercamiento (N045) el G0 va al punto EXTERIOR del lead, sobre la tangente de la
+        # traza offseteada (con RM≤1 el arco se omite y el punto vuelve a ser el arranque).
+        u_in, _u_out = _cad_lead_dirs(entry, moves)
+        return _cad_lead_end(spec, spec.approach, spec.approach.approach_type, entry, u_in, True)
     start, segs = _poly_start_and_segments(spec)
     first_dir = _seg_dir_from(start, segs[0])
     if compensated and has_app and spec.approach.approach_type == "Line":

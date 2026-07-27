@@ -594,13 +594,15 @@ Reglas de maquina volcadas al codigo:
 
 ### `build_polyline_spec(...) -> PolylineSpec`
 
-Construye un fresado sobre polilinea lineal abierta o cerrada.
+Construye un fresado sobre polilinea abierta o cerrada.
 
 Firma simplificada:
 
 ```python
 build_polyline_spec(
-    points,
+    # una de las dos formas de entrada:
+    points=None,              # atajo RECTO: [(x, y), ...]
+    start=None, segments=None,  # forma general: rectas y/o arcos
     feature_name=None,
     tool_id=None,
     tool_name=None,
@@ -624,22 +626,41 @@ build_polyline_spec(
     retract_arc_side=None,
     retract_overlap=None,
     milling_strategy=None,
+    activate_cnc_correction=None,  # True = C.N. (default) / False = CAD
+    is_enabled_expr=None,
 )
 ```
 
 Notas:
+- dos formas de entrada equivalentes (una sola polilinea):
+  - `points=[(x, y), ...]`: atajo recto, todos los segmentos son rectas
+  - `start=(x, y)` + `segments=[...]`: forma general; cada elemento es un
+    `PolylineSegment`, o una tupla `(end)` para recta, o
+    `(end, center, winding)` para arco
 - necesita al menos dos puntos
 - no admite segmentos de longitud cero
 - si el ultimo punto coincide con el primero, la polilinea se interpreta como
-  contorno cerrado
+  contorno cerrado. NO hay flag "cerrado": Maestro clasifica por geometria
+  (decision registrada; si se quiere abrir una cerrada, se abre de verdad)
+- `activate_cnc_correction` es la dicotomia C.N./CAD de la ventana Fresado:
+  - `True` (default): correccion C.N. — la traza almacenada es la NOMINAL y
+    el control compensa con G41/G42
+  - `False`: correccion CAD — la traza almacenada ya lleva el offset
+    `tool_width / 2` (coordenadas corridas, sin G41/G42 en el ISO)
+  - agregar una estrategia multipaso fuerza CAD (`False`) sola, igual que en
+    la UI de Maestro
+  - ver la seccion "Galceado / Perfilado" de las reglas validadas para el
+    detalle de que se ejecuta en cada modo
 - la capa publica de estrategias sobre `PolylineSpec` ya cubre
-  polilineas lineales abiertas y cerradas
+  polilineas abiertas y cerradas
 - para una sola recta sigue conviniendo `LineSpec`, porque hace mas
   explicita la intencion del mecanizado
 - `milling_strategy` admite:
   - `build_unidirectional_milling_strategy_spec(...)`
   - `build_bidirectional_milling_strategy_spec(...)`
   - `Helicoidal` no queda validada para polilinea lineal
+  - `ZigZag` NO esta admitida todavia en polilinea (frente abierto: los
+    fixtures N046 `zz_*` esperan spec + adapter + render)
 
 ### `build_circle_spec(...) -> CircleSpec`
 
@@ -700,6 +721,19 @@ Notas:
 ### `build_contour_spec(...) -> ContourSpec`
 
 Construye un escuadrado exterior del contorno real de la pieza.
+
+Identidad del feature (N043, validado tambien con programas manuales):
+- `ContourSpec` es la spec de AUTORIA de la App (En-Juego) y serializa como
+  `GeneralProfileFeature` — nuestro sintetizador NUNCA escribe
+  `ContourFeature`.
+- El boton Galceado de Maestro produce `ContourFeature` (con el campo
+  `ContourType`): es el MISMO mecanizado por otra ruta de autoria. Con la
+  misma geometria y el mismo ACC, el ISO es byte-identico (solo cambia el
+  comentario `% nombre.pgm`). Ver la seccion "Galceado / Perfilado" de las
+  reglas validadas.
+- En lectura, el converter mapea `ContourSpec` a la polilinea del perimetro
+  (`iso/synthesis/_reader._contour_to_polyline`) y el adapter trata
+  `ContourFeature` igual que `GeneralProfileFeature` (`pgmx/adapters.py`).
 
 Firma simplificada:
 
@@ -1101,6 +1135,47 @@ result = synthesize_request(request)
   - toman `exit_point` y tangente de salida para `Retract`
   - por eso la misma regla sirve para linea, polilinea abierta, escuadrado,
     contorno cerrado redondeado, arco o circulo compensado
+
+### Galceado / Perfilado: ContourFeature = GeneralProfileFeature en el ISO
+
+Derivado en N043 y confirmado con programas 100% manuales (2026-07-27);
+la derivacion completa con evidencia vive en
+`iso/docs/experiments/galceado_perfilado.md`.
+
+- El Galceado de la UI NO es una operacion distinta: es otra RUTA DE AUTORIA
+  hacia el mismo fresado de contorno. La diferencia vive en la UI y en el XML
+  del `.pgmx`; en el ISO no existe.
+- En el XML: el boton Galceado escribe `ManufacturingFeature
+  i:type="ContourFeature"` con el campo `ContourType` (`Workpiece` =
+  "Perfil: Pieza", `Geometry` = "Perfil: Geometria"). El boton Fresado (y
+  nuestro sintetizador, siempre) escribe `GeneralProfileFeature`.
+- `ContourType` es INVISIBLE en el ISO: `Workpiece` y `Geometry` con la misma
+  geometria producen ISOs identicos salvo el comentario `% nombre.pgm`
+  (verificado byte a byte con `Galceado_Ar3Cota` vs `Galceado_Ar3Cota_Geom`,
+  y cruzando `ContourFeature` vs `GeneralProfileFeature` con
+  `Fresado_perimetral_Ar3Cota_CN`).
+- Lo UNICO que cambia el ISO es `ActivateCNCCorrection` (C.N./CAD), y las
+  features usuales (leads, estrategia, pasante...).
+- Dato de UI relevante: la ventana del Galceado NO expone el selector
+  C.N./CAD (los galceados manuales salen siempre C.N.); la ventana de
+  Fresado si lo expone. Un galceado queda en CAD solo si una estrategia
+  multipaso lo fuerza.
+
+### Leads (Acercamiento/Alejamiento): que se almacena y que se ejecuta
+
+Modelo cerrado con el par manual `Fresado_perimetral_Ar3Cota_CN/CAD` mas el
+fixture envenenado N046 (detalle en `galceado_perfilado.md`):
+
+- Maestro SIEMPRE almacena la curva del lead en su forma CAD: radio
+  `(tool_width / 2) * (RM - 1)` para `Arc` (con `RM <= 1` el arco se omite),
+  largo `(tool_width / 2) * RM` para `Line`, anclada tangente a la traza
+  OFFSETEADA.
+- Con `ACC=true` (C.N.): esa curva almacenada se IGNORA y el lead ejecutado
+  se recalcula single-pass — radio `(tool_width / 2) * RM` anclado al
+  vertice NOMINAL, con G41/G42 y 1 mm de activacion/salida.
+- Con `ACC=false` (CAD): la curva almacenada se ejecuta TAL CUAL (semantica
+  de copia — igual que el `TrajectoryPath`, N032/N033). Por eso la autoria
+  del lead CAD tiene que escribir la curva correcta: Maestro no la corrige.
 
 ### Compensacion: lineas
 

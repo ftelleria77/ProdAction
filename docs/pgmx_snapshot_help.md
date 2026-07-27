@@ -118,3 +118,19 @@ py -3 -m pgmx.snapshot archive\maestro_examples\Tapa.pgmx --include-xml-text
 ## Nota de alcance
 
 El snapshot no reemplaza al XML original: lo normaliza y resuelve relaciones entre entidades para trabajo de ingenieria. Si aparece un campo nuevo no mapeado todavia, el archivo fuente sigue siendo la referencia final.
+
+## Features equivalentes al leer
+
+- `ContourFeature` (lo escribe el boton Galceado de Maestro, con su campo
+  `ContourType` Workpiece/Geometry) y `GeneralProfileFeature` (lo escribe el
+  boton Fresado, y nuestro sintetizador siempre) son el MISMO fresado de
+  contorno: con igual geometria y ACC el ISO es byte-identico, y
+  `ContourType` es invisible en el ISO. El adapter los trata igual
+  (`pgmx/adapters.py`, regla N043). Derivacion y evidencia en
+  `iso/docs/experiments/galceado_perfilado.md`.
+- Al leer un `.pgmx` de autoria Maestro, la curva almacenada de un lead
+  (Acercamiento/Alejamiento) esta SIEMPRE en forma CAD — radio
+  `(w/2)*(RM-1)` sobre la traza offseteada — aunque la operacion sea C.N.;
+  en C.N. Maestro la ignora y recalcula `(w/2)*RM` sobre el vertice nominal
+  al postprocesar. No usar la curva almacenada como referencia del ISO en
+  C.N. (si en CAD: ahi se ejecuta tal cual).
