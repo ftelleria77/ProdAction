@@ -497,6 +497,27 @@ def _xy_points_from_curve_snapshot(curve) -> tuple[tuple[float, float], ...]:
     return tuple((float(point[0]), float(point[1])) for point in curve.sampled_points)
 
 
+def _stored_trajectory_primitives(operation) -> tuple[sp.GeometryPrimitiveSpec, ...]:
+    """Primitivas 3D del TrajectoryPath ALMACENADO de la operación (los strokes de la
+    GeomCompositeCurve, parseados). Con ACC=false Maestro postprocesa lo almacenado tal cual
+    (N046: copia, no recalcula) — el ZigZag CAD del converter lee de acá la Z de cada
+    movimiento. Devuelve () si no hay composite o algún miembro no parsea (el consumidor
+    decide fail-loud)."""
+    for toolpath in operation.toolpaths:
+        if toolpath.path_type != "TrajectoryPath" or toolpath.curve is None:
+            continue
+        if toolpath.curve.geometry_type != "GeomCompositeCurve":
+            return ()
+        primitives: list[sp.GeometryPrimitiveSpec] = []
+        for text in toolpath.curve.member_serializations:
+            primitive = sp._parse_geometry_primitive(text)
+            if primitive is None:
+                return ()
+            primitives.append(primitive)
+        return tuple(primitives)
+    return ()
+
+
 def _boss_route_seeds_from_feature(
     snapshot: PgmxSnapshot,
     feature: PgmxFeatureSnapshot,
@@ -1530,6 +1551,12 @@ def _adapt_milling(
                     milling_strategy=operation.milling_strategy,
                     activate_cnc_correction=bool(operation.activate_cnc_correction),
                 )
+                # ZigZag: el render CAD necesita la trayectoria ALMACENADA (la rampa Z del
+                # zigzag la genera Maestro; con ACC=false el ISO la copia — N046). Campo de
+                # SOLO lectura, como speed_changes de la línea.
+                if isinstance(operation.milling_strategy, sp.ZigZagMillingStrategySpec):
+                    spec = _dc_replace(
+                        spec, stored_trajectory=_stored_trajectory_primitives(operation))
             except Exception as exc:
                 return _unsupported_entry(
                     feature,

@@ -17,6 +17,7 @@ from typing import Optional, Sequence
 
 from ..common.depth import MillingDepthSpec, _normalize_milling_depth_spec, build_milling_depth_spec
 from ..common.geometry import (
+    GeometryPrimitiveSpec,
     GeometryProfileSpec,
     _CurveSpec,
     _curve_spec_from_profile_geometry,
@@ -41,6 +42,7 @@ from ..common.strategy import (
     BidirectionalMillingStrategySpec,
     MillingStrategySpec,
     UnidirectionalMillingStrategySpec,
+    ZigZagMillingStrategySpec,
     _build_bidirectional_open_profile_strategy_toolpath,
     _build_closed_profile_strategy_toolpath,
     _build_unidirectional_open_profile_strategy_toolpath,
@@ -101,6 +103,11 @@ class PolylineSpec:
     # arcos de esquina (N043). La serialización sale de _build_line_operation vía getattr.
     activate_cnc_correction: bool = True
     is_enabled_expr: Optional[str] = None
+    # SOLO LECTURA (la cablea el adapter; la autoría NO la serializa — como speed_changes de la
+    # línea): la curva del TrajectoryPath ALMACENADO en el .pgmx, parseada a primitivas. Con
+    # ACC=false Maestro POSTPROCESA lo almacenado tal cual (N046: copia, no recalcula), y el
+    # ZigZag CAD la necesita: la rampa Z del zigzag la genera Maestro y no hay fórmula derivada.
+    stored_trajectory: tuple[GeometryPrimitiveSpec, ...] = ()
 
     @property
     def points(self) -> tuple[tuple[float, float], ...]:
@@ -150,9 +157,13 @@ def _normalize_polyline_spec(spec: PolylineSpec) -> PolylineSpec:
                 raise ValueError(
                     f"Segmento de arco con radios inconsistentes (r_ini={r0:g}, r_fin={r1:g}).")
         current = (seg.end_x, seg.end_y)
+    # ZigZag se admite para LECTURA (N046: contorno cerrado CAD con la estrategia agregada en
+    # Maestro). La AUTORÍA sigue bloqueada en _build_polyline_toolpath_profile: la rampa Z del
+    # zigzag la genera Maestro y no hay fórmula derivada para fabricarla.
     normalized_strategy = _ensure_milling_strategy_allowed(
         _normalize_milling_strategy_spec(spec.milling_strategy),
-        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec),
+        allowed_types=(UnidirectionalMillingStrategySpec, BidirectionalMillingStrategySpec,
+                       ZigZagMillingStrategySpec),
         context="PolylineSpec",
     )
     normalized = replace(
@@ -231,6 +242,15 @@ def _build_polyline_toolpath_profile(
     strategy = _normalize_milling_strategy_spec(spec.milling_strategy)
     if strategy is None:
         return base_profile
+    if isinstance(strategy, ZigZagMillingStrategySpec):
+        # La AUTORÍA del ZigZag en polilínea no está derivada: Maestro postprocesa el toolpath
+        # ALMACENADO (N032/N046) y la rampa Z que genera para el zigzag de un contorno no sigue
+        # ninguna parametrización derivable de los fixtures (N046). Fabricar una curva acá sería
+        # una hipótesis disfrazada. El flujo validado: sintetizar el contorno SIN estrategia y
+        # agregar el ZigZag en Maestro (que además fuerza ACC=false y regenera la curva).
+        raise ValueError(
+            "ZigZag en polilínea: la autoría no está derivada — la rampa Z del zigzag la genera "
+            "Maestro. Sintetizar sin estrategia y agregar el ZigZag en Maestro (lote N046).")
     if nominal_profile.is_closed:
         return _build_closed_profile_strategy_toolpath(float(top_level), cut_z, base_profile, strategy)
     if isinstance(strategy, UnidirectionalMillingStrategySpec):

@@ -399,5 +399,69 @@ documentación de la semántica de copia (con almacenado corrupto el converter d
 — aceptable: es un archivo que ninguna autoría real produce).
 
 Tests: `EndToEndManualLeadsTest` (4 fixtures manuales byte + asimetría CAD/CN). Suite 607.
-**Galceado/Escuadrado etapa 4: lo único abierto es el ZigZag CAD** (los 3 zz de N046 esperan
-spec+adapter+render) y, detrás, `Galceado.pgmx` completo (transición + cambio de herramienta).
+
+## ZigZag CAD DERIVADO + Galceado.pgmx COMPLETO (2026-07-28) — ETAPA 4 CERRADA
+
+Los 3 `zz` de N046 (rampa, ciego −9/−13 y pasante), el `cad_zigzag` de N044 (el fixture que
+planteó la pregunta, cerrado por validación cruzada sin tocarlo) y **`Galceado.pgmx` entero**
+(2 ops + cambio de herramienta) convierten **byte-idéntico**. Suite 635.
+
+### La Z del zigzag NO es una fórmula: es la curva ALMACENADA
+
+El `TrajectoryPath` almacenado de un zz tiene **exactamente un miembro por movimiento del ISO**
+(40 en `zz_d9`), con arcos INCLINADOS en 3D (normales no verticales, radios ≠ w/2) y la Z de
+cada punto final igual a la emitida. La rampa **no es función de la longitud de arco** — en la
+misma vuelta un arco de 7.5 mm baja 0.573 y el borde final de 300 mm baja 0.025; no hay
+parametrización monótona que dé eso. Es la salida del generador interno de Maestro, no algo
+derivable de fixtures. Y por N046 no hace falta derivarlo: **con ACC=false el ISO COPIA lo
+almacenado** — el converter hace lo mismo.
+
+- **Z: se LEE** de la curva almacenada (`PolylineSpec.stored_trajectory`, campo de SOLO lectura
+  que cablea el adapter parseando los miembros del composite; la autoría no lo serializa —
+  espejo de `speed_changes`). ISO_z = z_almacenada − ESPESOR (la curva vive en coordenadas de
+  PIEZA: z=0 en la base, superficie = espesor; `Galceado.pgmx` tiene origen Z=25 y lo
+  discriminó — el origen va a %Or/SHF, no a la geometría).
+- **XY: se RECOMPUTA** con la misma traza offseteada del estilo B (`_poly_cad_moves`): el ISO
+  emite I/J en el vértice NOMINAL, y el centro almacenado del arco inclinado queda corrido
+  (~0.02 en zz_d9) — redondearlo no da el byte. Cada miembro almacenado se VALIDA contra la
+  plantilla (tipo, punto final XY, sentido de giro por el signo de la normal Z); cualquier
+  desajuste → fail-loud (`_poly_cad_zigzag_moves`).
+- **Estructura**: vueltas COMPLETAS alternadas del contorno offseteado — ida = la cadena del
+  estilo B, vuelta = la misma invertida con G3↔G2, sin arco en el punto de reversa (el arco del
+  vértice de arranque va al inicio de las idas y al final de las vueltas). El corte arranca en
+  SUPERFICIE (plunge `G1 Z0` a feed de CORTE, como el zigzag lineal N025) y la vuelta final es
+  plana a −prof. El número de vueltas y dónde clava (total−uh, etc.) también sale de lo
+  almacenado — no se modela.
+- **Render** (`_poly_cad_zigzag_body`): F en TODOS los movimientos; los arcos llevan palabra Z
+  **solo cuando el valor REDONDEADO a 3 decimales cambia** (el arco de fin de vuelta con
+  Δz≈5e-5 la omite — un compare con tolerancia cruda lo emitiría de más); los G1 siguen la
+  regla de `_g1_cut` (borde a un solo eje repite Z).
+
+### Galceado.pgmx (el programa manual original) — 3 reglas nuevas
+
+1. **ZigZag con pa=pr=uh=0** (op1): Maestro genera UNA vuelta PLANA a profundidad total en la
+   curva almacenada (pasante 18+1 → plunge directo `G1 Z-19` a feed de corte, sin rampa).
+2. **Arranque a MITAD de borde** (forma nativa del Perfilado): vértice COLINEAL pass-through —
+   las dos rectas offseteadas coinciden, no hay esquina; el borde partido emite sus dos mitades
+   como dos G1. Admitido SOLO en la ruta zigzag (el CAD single-pass sigue rechazándolo: N043/44
+   arrancan en esquina).
+3. **El `?%ETK[7]=0` del preamble lo decide la PRIMERA op del router, no cualquiera**: op1 es
+   ZigZag CAD (sin reset) y op2 compensada con leads — el preamble va SIN reset y el estado de
+   la op2 lo maneja la transición (doble `?%ETK[7]=0` del teardown no-último, que la polilínea
+   CAD también lleva). Todo el corpus previo tenía la op compensada primera: `any` ≡ `first`
+   hasta este fixture. Además quedó cubierto el **alejamiento programable en la op ÚLTIMA** de
+   un multi-fresado (la guarda ahora rechaza solo el alejamiento en op NO-última).
+
+### Autoría: bloqueada a propósito
+
+`build_polyline_spec` ADMITE ZigZag (lectura), pero `_build_polyline_toolpath_profile` lo
+RECHAZA con mensaje: fabricar la curva almacenada exigiría la fórmula de la rampa que Maestro
+no expone (sería una hipótesis disfrazada — regla 4). El flujo validado es el de N046:
+sintetizar el contorno SIN estrategia y agregar el ZigZag en Maestro (que fuerza ACC=false y
+regenera la curva).
+
+Tests: `CadZigZagRenderTest`/`CadZigZagGuardsTest` (mecánica y guardas, offline),
+`EndToEndN046Test` (3 zz byte + envenenados como doc de la semántica de copia),
+`ClosedN044Test` (cad_zigzag por validación cruzada) y
+`test_galceado_completo_byte_identico`. **ETAPA 4 (Galceado/Escuadrado) CERRADA. Sigue:
+Vaciado (etapa 5).**

@@ -390,7 +390,11 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
         is_arc = isinstance(spec, ArcSpec)
         is_poly = isinstance(spec, PolylineSpec)
         _acc = getattr(spec, "activate_cnc_correction", True)
-        cad = (not _acc) and spec.milling_strategy is None
+        # En LÍNEAS, ACC=false con estrategia NO es "cad": la rama de multipasada corre ella
+        # misma en coordenadas desplazadas (N029 mp_side_l). En POLILÍNEAS, ACC=false siempre
+        # es el estilo CAD (N043); con ZigZag la única combinación que pasa validación es la
+        # de N046 (contorno cerrado + curva almacenada) y va a _poly_cad_zigzag_body.
+        cad = (not _acc) and (spec.milling_strategy is None or is_poly)
         if (not _acc) and spec.side_of_feature != "Center" and not (is_circle or is_arc or is_poly):
             r_off = spec.tool_width / 2.0
             ux, uy = _unit_dir(spec)
@@ -554,7 +558,12 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
             # cadena de segmentos. Corrección = G41/G42 + lead-in sobre el 1er segmento y
             # lead-out sobre el último; segmentos NOMINALES (el control empalma las esquinas).
             # CAD (N043 estilo B): polígono OFFSETEADO + arcos de esquina, sin G41 ni leads.
-            if cad:
+            # ZigZag CAD (N046): vueltas alternadas sobre la traza offseteada, Z de la curva
+            # ALMACENADA (con ACC=false Maestro la copia, no la recalcula).
+            if cad and spec.milling_strategy is not None:
+                body, ret_suppresses_g0, poly_end = _poly_cad_zigzag_body(
+                    spec, ctx, depth, security, plunge_feed, cut_feed)
+            elif cad:
                 body, ret_suppresses_g0, poly_end = _poly_cad_body(
                     spec, depth, security, plunge_feed, cut_feed, has_app, has_ret)
             else:
@@ -795,9 +804,10 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
                         and (getattr(nxt, "feedrate", 0) > 0 or getattr(nxt, "spindle", 0) > 0))
             # Op con leads C.N. (ETK[7]=4 movido antes del plunge): el teardown lleva ADEMÁS un
             # ?%ETK[7]=0 extra al final, antes de la transición (N036 two_leads — doble reset,
-            # como la salida compensada de two_side).
-            leads_style = (has_app and spec.milling_strategy is None
-                           and _acc)
+            # como la salida compensada de two_side). La POLILÍNEA CAD no-última también lleva
+            # el doble reset (Galceado.pgmx: op1 ZigZag CAD → cambio de herramienta → op2).
+            leads_style = ((has_app and spec.milling_strategy is None and _acc)
+                           or (is_poly and cad))
             lines += [
                 *(() if etk_last else ("?%ETK[7]=0",)),
                 f"G0 Z{security:.3f}",
@@ -1142,6 +1152,12 @@ def _poly_cad_moves(spec):
         is_arc = (turn > 1e-9) if right else (turn < -1e-9)
         if is_arc:
             corners.append(("arc", offs[p][1], offs[i][0]))   # p_in=b_prev, p_out=a_i
+        elif abs(turn) <= 1e-9:
+            # Vértice COLINEAL pass-through (arranque a MITAD de borde — Galceado.pgmx op1, forma
+            # nativa del Perfilado): las dos rectas offseteadas COINCIDEN y el "vértice" es el
+            # punto compartido, sin arco ni intersección. La validación decide dónde se admite
+            # (hoy: solo la ruta ZigZag CAD, que es la fixtureada).
+            corners.append(("live", offs[i][0]))
         else:
             corners.append(("live", _line_intersection(offs[p][0], dirs[p], offs[i][0], dirs[i])))
     entry_of = lambda c: c[1]                       # arco: p_in ; vivo: p
@@ -1225,6 +1241,132 @@ def _poly_cad_body(spec, depth, security, plunge_feed, cut_feed, has_app=False, 
                                  (px, py), u_out, depth, cut_feed, False)
         px, py = _cad_lead_end(spec, spec.retract, spec.retract.retract_type,
                                (px, py), u_out, False)
+    lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
+    return lines, False, (px, py)
+
+
+def _poly_cad_zigzag_moves(spec):
+    """Empareja la trayectoria ALMACENADA del .pgmx con la plantilla de vueltas del contorno CAD.
+
+    El ZigZag CAD (N046) recorre el contorno OFFSETEADO en vueltas alternadas (ida = la cadena
+    de `_poly_cad_moves`; vuelta = la misma cadena invertida con G3↔G2), descendiendo en rampa.
+    La Z de esa rampa la genera Maestro y NO sigue ninguna parametrización derivable (en una
+    misma vuelta un arco de 7.5 mm baja 0.57 y un borde de 300 mm baja 0.025): con ACC=false el
+    ISO COPIA la curva almacenada (N046), así que la Z se LEE, no se recalcula. El XY sí se
+    recomputa (el ISO emite I/J en el vértice NOMINAL; el centro almacenado del arco inclinado
+    queda corrido ~0.02 y no redondea a eso), y cada miembro almacenado se VALIDA contra la
+    plantilla: tipo, punto final XY y sentido de giro. Cualquier desajuste → fail-loud.
+
+    Devuelve (entry, [(move, z_almacenada_fin), ...], vueltas) con move en el formato de
+    `_poly_cad_moves` y z en coordenadas de pieza (superficie = DZ)."""
+    from ._validation import UnsupportedOperationError
+
+    stored = getattr(spec, "stored_trajectory", ())
+    if not stored:
+        raise UnsupportedOperationError(
+            "ZigZag CAD sin TrajectoryPath almacenado parseable en el .pgmx: la rampa Z del "
+            "zigzag la genera Maestro y el converter la LEE de la curva almacenada (N046). "
+            "¿El .pgmx pasó por Maestro (agregar estrategia + Aceptar + Guardar)?")
+    entry, fwd = _poly_cad_moves(spec)
+    pts = [entry] + [m[1] for m in fwd]          # pts[k] = fin del move k; cerrado: pts[-1]==entry
+    rev = []
+    for k in range(len(fwd) - 1, -1, -1):        # vuelta: la cadena invertida, arcos volteados
+        m = fwd[k]
+        if m[0] == "arc":
+            rev.append(("arc", pts[k], m[2], "G2" if m[3] == "G3" else "G3"))
+        else:
+            rev.append(("line", pts[k]))
+    def _mismatch(i, why):
+        raise UnsupportedOperationError(
+            f"ZigZag CAD: la curva almacenada no calza con la traza offseteada recomputada "
+            f"(miembro {i}: {why}). Solo está derivada la forma de N046 (vueltas completas "
+            f"alternadas sobre el contorno cerrado). [B4]")
+    sx, sy = stored[0].start_point[0], stored[0].start_point[1]
+    if abs(sx - entry[0]) > 1e-4 or abs(sy - entry[1]) > 1e-4:
+        _mismatch(0, f"arranque ({sx:.4f}, {sy:.4f}), esperado el de la traza offseteada "
+                     f"({entry[0]:.4f}, {entry[1]:.4f})")
+    moves = []
+    i, lap = 0, 0
+    while i < len(stored):
+        template = fwd if lap % 2 == 0 else rev
+        if len(stored) - i < len(template):
+            _mismatch(i, f"vuelta {lap + 1} incompleta: quedan {len(stored) - i} miembros "
+                         f"para una vuelta de {len(template)}")
+        for m in template:
+            prim = stored[i]
+            if prim.primitive_type != ("Arc" if m[0] == "arc" else "Line"):
+                _mismatch(i, f"tipo {prim.primitive_type!r}, esperado "
+                             f"{'Arc' if m[0] == 'arc' else 'Line'}")
+            ex, ey = m[1]
+            if abs(prim.end_point[0] - ex) > 1e-4 or abs(prim.end_point[1] - ey) > 1e-4:
+                _mismatch(i, f"fin ({prim.end_point[0]:.4f}, {prim.end_point[1]:.4f}), "
+                             f"esperado ({ex:.4f}, {ey:.4f})")
+            if m[0] == "arc":
+                nz = (prim.normal_vector or (0.0, 0.0, 1.0))[2]
+                if (nz >= 0.0) != (m[3] == "G3"):
+                    _mismatch(i, f"sentido de giro (normal z={nz:+.3f}, esperado {m[3]})")
+            moves.append((m, prim.end_point[2]))
+            i += 1
+        lap += 1
+    return entry, moves, lap
+
+
+def _poly_cad_zigzag_body(spec, ctx, depth, security, plunge_feed, cut_feed):
+    """Cuerpo ZigZag CAD del contorno cerrado (N046 zz_d9/d13/d18 + Galceado.pgmx op1,
+    byte-validado): bajada a security a feed de PLUNGE, ETK[7]=4, plunge al Z de ARRANQUE de la
+    curva almacenada a feed de CORTE — la superficie (Z0) cuando hay rampa (como el zigzag de la
+    línea N025), la profundidad final cuando la estrategia va con pa=pr=uh=0 y Maestro genera UNA
+    vuelta PLANA (Galceado.pgmx: pasante −19 directo) — y las vueltas alternadas sobre la traza
+    offseteada con la Z de la curva ALMACENADA en cada punto final. F en todos los movimientos;
+    los arcos llevan Z solo cuando el valor REDONDEADO a 3 decimales cambia (el arco de fin de
+    vuelta con Δz≈5e-5 la omite); los G1 siguen la regla de _g1_cut (borde a un eje repite Z).
+    Retracción final a feed de corte (el G0 Z del teardown queda)."""
+    from ._validation import UnsupportedOperationError
+
+    entry, moves, laps = _poly_cad_zigzag_moves(spec)
+    # La curva almacenada vive en coordenadas de PIEZA: z=0 en la base, superficie = espesor
+    # (el origen del programa va a %Or/SHF, no a la geometría — Galceado.pgmx tiene origen Z=25
+    # y su curva igual arranca en z=−1 = 1 bajo la superficie). ISO: Z0 = superficie.
+    espesor = ctx.depth
+    def _z_iso(z_stored):
+        z = z_stored - espesor
+        return 0.0 if abs(z) < 5e-4 else z       # evita el "-0.000" del ruido de parseo
+    z_top = _z_iso(spec.stored_trajectory[0].start_point[2])
+    z_final = _z_iso(moves[-1][1])
+    if abs(z_final + depth) > 5e-4:
+        raise UnsupportedOperationError(
+            f"ZigZag CAD: la vuelta final almacenada queda en Z{z_final:.3f} y la profundidad "
+            f"de la operación es {-depth:.3f}: el .pgmx es inconsistente. [B4]")
+    if laps == 1:
+        # UNA vuelta: solo fixtureada PLANA a profundidad (Galceado.pgmx op1, pa=pr=uh=0).
+        zs = [_z_iso(z) for _m, z in moves] + [z_top]
+        if max(zs) - min(zs) > 5e-4 or abs(z_top + depth) > 5e-4:
+            raise UnsupportedOperationError(
+                "ZigZag CAD de UNA vuelta que no es plana a profundidad: sin fixture (la única "
+                "vuelta única derivada es la plana de Galceado.pgmx, pa=pr=uh=0). [B4]")
+    elif abs(z_top) > 5e-4:
+        raise UnsupportedOperationError(
+            f"ZigZag CAD con rampa que no arranca en la SUPERFICIE (z={z_top:+.3f}): solo está "
+            f"derivado el arranque en superficie de N046. [B4]")
+    lines = [
+        f"G1 Z{security:.3f} F{plunge_feed:.3f}",
+        "?%ETK[7]=4",
+        f"G1 Z{z_top:.3f} F{cut_feed:.3f}",
+    ]
+    px, py = entry
+    prev_z = z_top
+    for m, z_stored in moves:
+        z = _z_iso(z_stored)
+        if m[0] == "arc":
+            (ax, ay), (cx, cy), g = m[1], m[2], m[3]
+            z_word = f" Z{z:.3f}" if f"{z:.3f}" != f"{prev_z:.3f}" else ""
+            lines.append(f"{g} X{ax:.3f} Y{ay:.3f}{z_word} I{cx:.3f} J{cy:.3f} F{cut_feed:.3f}")
+            px, py = ax, ay
+        else:
+            ex, ey = m[1]
+            lines.append(_g1_cut(px, py, ex, ey, z, cut_feed, prev_z=prev_z))
+            px, py = ex, ey
+        prev_z = z
     lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
     return lines, False, (px, py)
 

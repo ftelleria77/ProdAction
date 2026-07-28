@@ -38,19 +38,25 @@ def convert(pgmx_path: Path) -> str:
     # con corrección de herramienta (N023) o con approach programable single-pass (N026).
     # En MULTIPASADA el ETK[7]=4 conserva su posición (tras el descenso a security) aunque
     # haya leads -> SIN reset (N034: ETK[8]=1 pelado en el tercer bloque).
-    router_compensated = any(
-        (m.side_of_feature != "Center" and getattr(m, "activate_cnc_correction", True))
-        or (m.approach.is_enabled and m.milling_strategy is None
-            and getattr(m, "activate_cnc_correction", True))
-        for m in ops.routers)
+    # Lo decide la PRIMERA op del router, no cualquiera (Galceado.pgmx: op1 ZigZag CAD +
+    # op2 compensada con leads → el preamble va SIN reset; el estado de la op2 lo maneja la
+    # transición con su doble ?%ETK[7]=0). Todo el corpus previo tenía la op compensada
+    # primera, así que any≡first hasta ese fixture.
+    router_compensated = bool(ops.routers) and (
+        (ops.routers[0].side_of_feature != "Center"
+         and getattr(ops.routers[0], "activate_cnc_correction", True))
+        or (ops.routers[0].approach.is_enabled and ops.routers[0].milling_strategy is None
+            and getattr(ops.routers[0], "activate_cnc_correction", True)))
     # Programas MULTI-fresado (N036 two_side/two_mp/two_leads, byte-validados): compensación,
     # estrategia y approach conviven con las transiciones (triple G0 al punto de aproximación;
-    # la salida compensada no-última agrega un ?%ETK[7]=0 extra). El RETRACT programable en
-    # multi-op sigue sin fixture (interacción retracción-G1 vs transición).
-    if len(ops.routers) > 1 and any(m.retract.is_enabled for m in ops.routers):
+    # la salida compensada no-última agrega un ?%ETK[7]=0 extra). El RETRACT programable en la
+    # op ÚLTIMA convive con el teardown normal (Galceado.pgmx: op2 con leads Line Down/Up tras
+    # el cambio de herramienta, byte-validado); en una op NO-última sigue sin fixture
+    # (interacción retracción-G1 vs transición).
+    if len(ops.routers) > 1 and any(m.retract.is_enabled for m in ops.routers[:-1]):
         raise UnsupportedOperationError(
-            "alejamiento programable con varios fresados en el programa: sin fixture "
-            "de referencia aún. [A3]")
+            "alejamiento programable en un fresado NO-último del programa: sin fixture de "
+            "referencia aún (Galceado.pgmx solo cubre el alejamiento en la ÚLTIMA op). [A3]")
 
     lines: list[str] = []
     # La sierra maneja su propia entrada MLV (como el router): el preamble no emite el footer.

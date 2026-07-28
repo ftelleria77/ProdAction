@@ -16,6 +16,7 @@ from typing import Iterable
 
 from pgmx.synthesis.drilling.pattern import DrillPatternSpec
 from pgmx.synthesis.drilling.single import DrillSpec
+from pgmx.synthesis.common.strategy import ZigZagMillingStrategySpec
 from pgmx.synthesis.milling.arc import ArcSpec
 from pgmx.synthesis.milling.polyline import PolylineSpec
 from pgmx.synthesis.milling.circle import CircleSpec
@@ -421,11 +422,19 @@ def _validate_polyline(spec: PolylineSpec) -> None:
         _fail(spec, "polilínea con menos de 2 segmentos. [B]")
     if spec.side_of_feature not in ("Center", "Left", "Right"):
         _fail(spec, f"polilínea con side_of_feature={spec.side_of_feature!r} desconocido. [B]")
+    acc = getattr(spec, "activate_cnc_correction", True)
     if spec.milling_strategy is not None:
-        _fail(spec, "polilínea + estrategia multipasada: sin fixture de referencia. [B]")
+        # ZigZag + CAD (N046 zz_d9/d13/d18): la ÚNICA estrategia derivada sobre polilíneas —
+        # la estrategia fuerza ACC=false y el render lee la Z de la curva almacenada. El resto
+        # (Uni/Bi en polilínea, ZigZag con ACC=true) sigue sin fixture.
+        if isinstance(spec.milling_strategy, ZigZagMillingStrategySpec) and not acc:
+            _validate_polyline_cad_zigzag(spec)
+            return
+        _fail(spec, "polilínea + estrategia multipasada: solo ZigZag con corrección CAD tiene "
+                    "fixture (N046). [B]")
     # CAD (ActivateCNCCorrection=false) tiene su propia validación (offset + arcos de esquina,
     # N043/N044). Se chequea aparte y no pasa por las reglas de leads C.N.
-    if not getattr(spec, "activate_cnc_correction", True):
+    if not acc:
         _validate_polyline_cad(spec)
         return
     # Corrección/lead sobre el PRIMER o ÚLTIMO segmento cuando es ARCO: sin fixture (en N042/N044
@@ -490,25 +499,93 @@ def _validate_polyline_cad(spec: PolylineSpec) -> None:
     if spec.side_of_feature not in ("Right", "Left"):
         _fail(spec, f"CAD (ACC=false) con side_of_feature={spec.side_of_feature!r}: Center no "
                     f"define lado de offset. Solo Right/Left tienen fixture (N044). [B4]")
-    points = spec.points  # cerrado: points[-1] == points[0]
-    verts = points[:-1]
+    _cad_contour_edge_dirs(spec)
+
+
+def _cad_contour_edge_dirs(spec: PolylineSpec,
+                           allow_collinear_pass: bool = False) -> list[tuple[float, float]]:
+    """Direcciones unitarias de los bordes del contorno CAD cerrado, validando la geometría
+    degenerada (borde de largo 0; vértice colineal, que dejaría las rectas offseteadas paralelas
+    con intersección indefinida). Compartido entre el CAD single-pass y el ZigZag CAD.
+
+    `allow_collinear_pass`: el vértice colineal en el MISMO sentido (arranque a mitad de borde,
+    forma nativa del Perfilado) es pass-through — las offseteadas coinciden y no hay esquina.
+    Fixtureado SOLO en la ruta ZigZag CAD (Galceado.pgmx op1); el single-pass lo sigue
+    rechazando (N043/N044 arrancan en esquina). El colineal en sentido OPUESTO (espiga de ida y
+    vuelta) es degenerado siempre."""
+    verts = spec.points[:-1]  # cerrado: points[-1] == points[0]
     n = len(verts)
-    right = spec.side_of_feature == "Right"
+    dirs: list[tuple[float, float]] = []
     for i in range(n):
-        ax, ay = verts[(i - 1) % n]
-        bx, by = verts[i]
-        cx, cy = verts[(i + 1) % n]
+        ax, ay = verts[i]
+        bx, by = verts[(i + 1) % n]
         ux, uy = bx - ax, by - ay
-        vx, vy = cx - bx, cy - by
-        lu, lv = math.hypot(ux, uy), math.hypot(vx, vy)
-        if lu <= 1e-9 or lv <= 1e-9:
+        lu = math.hypot(ux, uy)
+        if lu <= 1e-9:
             _fail(spec, "CAD (ACC=false) con segmento degenerado (largo 0). [B4]")
-        # Vértice colineal (giro ≈ 0): no es esquina real y dejaría las rectas offseteadas
-        # paralelas (intersección indefinida en el render). N044 no lo cubre → fail-loud.
-        turn = (ux * vy - uy * vx) / (lu * lv)
-        if abs(turn) <= 1e-6:
+        dirs.append((ux / lu, uy / lu))
+    for i in range(n):
+        px, py = dirs[(i - 1) % n]
+        ux, uy = dirs[i]
+        if abs(px * uy - py * ux) <= 1e-6:
+            if allow_collinear_pass and (px * ux + py * uy) > 0.0:
+                continue
             _fail(spec, "CAD (ACC=false) con vértice colineal (esquina de 180°): sin fixture y "
                         "geometría degenerada para el offset. [B4]")
+    return dirs
+
+
+def _validate_polyline_cad_zigzag(spec: PolylineSpec) -> None:
+    """ZigZag sobre contorno CAD (N046 zz_d9/d13/d18 + Galceado.pgmx op1, byte-validado): la
+    estrategia fuerza ACC=false, Maestro GENERA la Z en la curva almacenada y el ISO la COPIA
+    (N046) — el converter LEE esa Z (spec.stored_trajectory) y recomputa el XY offseteado.
+    Fixtureado: rectángulo CCW+Right (bordes a un eje, esquinas-arco, arranque en esquina o a
+    MITAD de borde), Climb, sin Sobreposición, sin leads, con rampa (pa/pr/uh de N046, ciego y
+    pasante) o UNA vuelta plana a profundidad (pa=pr=uh=0, Galceado.pgmx op1). Lo NO fixtureado
+    → fail-loud."""
+    strategy = spec.milling_strategy
+    if strategy.cutmode != "Climb":
+        _fail(spec, f"ZigZag CAD con Cutmode={strategy.cutmode!r}: solo Climb tiene fixture "
+                    f"(N046). [B4]")
+    if strategy.overlap:
+        _fail(spec, "ZigZag CAD con Sobreposición: sin fixture (N046 usa 0). [B4]")
+    if not strategy.allow_multiple_passes:
+        _fail(spec, "ZigZag CAD sin multipasada: sin fixture (N046). [B4]")
+    if spec.approach.is_enabled or spec.retract.is_enabled:
+        _fail(spec, "ZigZag CAD + acercamiento/alejamiento: sin fixture (los zz de N046 van "
+                    "pelados). [B4]")
+    if any(seg.is_arc for seg in spec.segments):
+        _fail(spec, "ZigZag CAD con segmentos de ARCO: sin fixture de referencia. [B4]")
+    if not spec.is_closed:
+        _fail(spec, "ZigZag CAD en polilínea ABIERTA: sin fixture (N046 solo cubre el contorno "
+                    "cerrado). [B4]")
+    if spec.side_of_feature != "Right":
+        _fail(spec, f"ZigZag CAD con side_of_feature={spec.side_of_feature!r}: solo Right tiene "
+                    f"fixture (N046). [B4]")
+    if not getattr(spec, "stored_trajectory", ()):
+        _fail(spec, "ZigZag CAD sin TrajectoryPath almacenado parseable: la rampa Z la genera "
+                    "Maestro y el converter la LEE de la curva almacenada (N046). ¿El .pgmx "
+                    "pasó por Maestro (agregar estrategia + Aceptar + Guardar)? [B4]")
+    dirs = _cad_contour_edge_dirs(spec, allow_collinear_pass=True)
+    # Lo que el zigzag agrega sobre el CAD single-pass: solo bordes paralelos a los ejes (la
+    # emisión de Z en rampa sobre una DIAGONAL no está derivada) y esquinas ARCO o COLINEALES
+    # pass-through (una esquina VIVA de verdad — offset que superpone — no tiene fixture en
+    # vueltas alternadas).
+    for ux, uy in dirs:
+        if abs(ux) > 1e-9 and abs(uy) > 1e-9:
+            _fail(spec, "ZigZag CAD con borde DIAGONAL: sin fixture (N046/Galceado son "
+                        "rectángulos a ejes). [B4]")
+    right = spec.side_of_feature == "Right"
+    for i in range(len(dirs)):
+        px, py = dirs[i - 1]
+        ux, uy = dirs[i]
+        turn = px * uy - py * ux
+        if abs(turn) <= 1e-9:
+            continue   # colineal pass-through (arranque a mitad de borde, Galceado.pgmx op1)
+        if not (turn > 1e-9 if right else turn < -1e-9):
+            _fail(spec, "ZigZag CAD con esquina VIVA (offset que superpone los bordes): sin "
+                        "fixture — N046/Galceado solo cubren esquinas-arco (contorno "
+                        "exterior). [B4]")
 
 
 def _validate_cad_lead(spec: PolylineSpec, lead, lead_type: str, name: str) -> None:
