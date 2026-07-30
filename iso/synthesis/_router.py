@@ -17,6 +17,7 @@ from pgmx.synthesis.milling.arc import ArcSpec
 from pgmx.synthesis.milling.polyline import PolylineSpec
 from pgmx.synthesis.milling.circle import CircleSpec
 from pgmx.synthesis.milling.line import LineSpec
+from pgmx.synthesis.milling.pocket import PocketSpec
 
 import math
 
@@ -389,13 +390,18 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
         is_circle = isinstance(spec, CircleSpec)
         is_arc = isinstance(spec, ArcSpec)
         is_poly = isinstance(spec, PolylineSpec)
+        # VACIADO (N047): op de familia ROUTER cuyo cuerpo COPIA la trayectoria almacenada.
+        # PocketSpec no tiene side_of_feature ni activate_cnc_correction: los getattr de
+        # abajo lo dejan en el camino neutro (Center, ACC=true, cad=False).
+        is_pocket = isinstance(spec, PocketSpec)
+        _side = getattr(spec, "side_of_feature", "Center")
         _acc = getattr(spec, "activate_cnc_correction", True)
         # En LÍNEAS, ACC=false con estrategia NO es "cad": la rama de multipasada corre ella
         # misma en coordenadas desplazadas (N029 mp_side_l). En POLILÍNEAS, ACC=false siempre
         # es el estilo CAD (N043); con ZigZag la única combinación que pasa validación es la
         # de N046 (contorno cerrado + curva almacenada) y va a _poly_cad_zigzag_body.
         cad = (not _acc) and (spec.milling_strategy is None or is_poly)
-        if (not _acc) and spec.side_of_feature != "Center" and not (is_circle or is_arc or is_poly):
+        if (not _acc) and _side != "Center" and not (is_circle or is_arc or is_poly):
             r_off = spec.tool_width / 2.0
             ux, uy = _unit_dir(spec)
             nx, ny = (-uy, ux) if spec.side_of_feature == "Left" else (uy, -ux)
@@ -404,7 +410,7 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
                 start_x=spec.start_x + r_off * nx, start_y=spec.start_y + r_off * ny,
                 end_x=spec.end_x + r_off * nx, end_y=spec.end_y + r_off * ny,
             )
-        compensated = spec.side_of_feature != "Center" and _acc
+        compensated = _side != "Center" and _acc
         # Leads programables (N026/N027): entrada/salida en línea o arco tangente.
         has_app = spec.approach.is_enabled
         has_ret = spec.retract.is_enabled
@@ -442,7 +448,12 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
         # transiciones — N036 two_leads: apunta al punto exterior del lead, no al start).
         # CÍRCULO (N038/N039): entra por el ESTE (cx+r, cy); con leads/compensación, las mismas
         # reglas de línea con û = TANGENTE de entrada ((0,±1) según el sentido de giro).
-        if is_arc:
+        if is_pocket:
+            # VACIADO (N047): entra por el PRIMER punto de la trayectoria almacenada (el
+            # arranque del anillo más interno con dentro→afuera).
+            _p0 = spec.stored_trajectories[0][0].start_point
+            entry_xy = (_p0[0], _p0[1])
+        elif is_arc:
             # ARCO SUELTO (N040): entra por el START real del arco (baseline; combos → guarda).
             entry_xy = (spec.start_x, spec.start_y)
         elif is_poly:
@@ -542,7 +553,15 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
         ]
         if svr != 0.0:
             lines += [f"SVR {svr:.3f}", f"VL7={svr:.3f}"]
-        if is_arc:
+        if is_pocket:
+            # VACIADO (N047 + manuales de arcos): el cuerpo COPIA las trayectorias
+            # almacenadas — un movimiento por miembro (G1/G2/G3) a feed de CORTE; varias
+            # trayectorias (isla) se encadenan como pasadas de misma fresa (N028).
+            body, ret_suppresses_g0, pocket_end = _pocket_body(
+                spec, ctx, depth, security, plunge_feed, cut_feed,
+                svl, svr, z_router_approach)
+            lines += body
+        elif is_arc:
             # ARCO SUELTO (N040, 10/10): plunge estilo línea y UN G3 (CCW) / G2 (CW) desde el
             # start al end con I/J ABSOLUTOS al centro. Pasante = -(espesor+extra).
             arc_g = "G3" if spec.winding == "CounterClockwise" else "G2"
@@ -838,6 +857,8 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
             prev_end = (spec.end_x, spec.end_y)
         elif is_poly:
             prev_end = poly_end
+        elif is_pocket:
+            prev_end = pocket_end
         else:
             prev_end = (strategy_end if spec.milling_strategy is not None
                         else (spec.end_x, spec.end_y))
@@ -1369,6 +1390,142 @@ def _poly_cad_zigzag_body(spec, ctx, depth, security, plunge_feed, cut_feed):
         prev_z = z
     lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
     return lines, False, (px, py)
+
+
+def _pos3(v: float) -> float:
+    """Normaliza un valor que va a emitirse a 3 decimales: el CERO NEGATIVO (−0.0 o ruido
+    −1e−15 de la trayectoria almacenada) se emite como `0.000`, no `-0.000` (manual
+    Rebaba_negativa: Maestro escribe `G1 Y0.000` donde lo almacenado trae −0.0)."""
+    return 0.0 if abs(v) < 5e-4 else v
+
+
+def _pocket_arc_center(m) -> tuple[float, float]:
+    """I/J de un arco de vaciado (manuales 2026-07-30, 27/27 arcos en 2 fixtures): Maestro
+    NO emite el centro almacenado tal cual — lo REAJUSTA a los endpoints REDONDEADOS a 3
+    decimales: radio = dist(fin redondeado, centro almacenado); centro = punto equidistante
+    de ambos endpoints redondeados con ese radio, el candidato más cercano al almacenado.
+    Con geometría exacta el resultado ES el centro almacenado; el ruido de milésima de los
+    fixtures (I225.001 J224.999 con centro almacenado 225.0 exacto) solo sale con este
+    reajuste — lo delataron los anillos de la isla, cuyos endpoints a 45° redondean."""
+    ax, ay = round(m.start_point[0], 3), round(m.start_point[1], 3)
+    bx, by = round(m.end_point[0], 3), round(m.end_point[1], 3)
+    cx0, cy0 = m.center_point[0], m.center_point[1]
+    dx, dy = bx - ax, by - ay
+    d = math.hypot(dx, dy)
+    if d <= 1e-9:
+        # Arco de vuelta completa (start == end): el ajuste degenera; el centro almacenado
+        # es la única fuente. (Caso circular puro — pendiente de fixture.)
+        return (cx0, cy0)
+    rr = math.hypot(bx - cx0, by - cy0)
+    h = math.sqrt(max(rr * rr - (d / 2.0) ** 2, 0.0))
+    mx, my = (ax + bx) / 2.0, (ay + by) / 2.0
+    ux, uy = -dy / d, dx / d
+    c1 = (mx + h * ux, my + h * uy)
+    c2 = (mx - h * ux, my - h * uy)
+    return min((c1, c2), key=lambda c: (c[0] - cx0) ** 2 + (c[1] - cy0) ** 2)
+
+
+def _pocket_body(spec, ctx, depth, security, plunge_feed, cut_feed, svl, svr, z_approach):
+    """Cuerpo del VACIADO (N047 13/13 + N048 8/8 + N049 7/7 + manuales de arcos 2026-07-30,
+    byte-validado).
+
+    El postprocesador COPIA las trayectorias ALMACENADAS (los envenenados de N047 salieron
+    al ISO con el veneno) — acá se emite UN movimiento por miembro, todo a feed de CORTE:
+    - RECTA → `_g1_cut` (un solo eje repite Z; tramos Z-puros emiten solo Z; en multipaso
+      las transiciones de nivel vienen como miembros de la MISMA trayectoria).
+    - ARCO (isla rectangular, rebaba negativa más allá del radio) → G3 (normal +z) / G2
+      (normal −z) con X/Y del fin almacenado e I/J del centro REAJUSTADO a los endpoints
+      redondeados (`_pocket_arc_center`, 27/27 — el emisor de Maestro no copia el centro:
+      lo re-fitea, y eso produce el ruido I225.001 de los fixtures); palabra Z solo si el
+      REDONDEO a 3 decimales cambia.
+    Una operación puede traer VARIAS trayectorias (isla: anillo exterior + corona de la
+    isla). Cada una se emite como una PASADA de router con misma fresa (N028): teardown
+    no-último (ETK[7]=0 PRIMERO + G0 Z + D0/SVL/VL6/SVR/VL7) + G17/MLV=2 + triple G0
+    (ancla en el fin de la anterior, entrada ×2) + setup D1/SVL/SVR + plunge completo.
+    La bajada a security va a feed de PLUNGE (ETK[7]=4 después, sin reset de preamble);
+    el plunge al primer nivel de cada trayectoria ya va a feed de corte.
+    Z: ISO_z = z_almacenada − ESPESOR (coordenadas de PIEZA, z=0 en la base)."""
+    from ._validation import UnsupportedOperationError
+
+    espesor = ctx.depth
+
+    def _z_iso(z_stored):
+        z = z_stored - espesor
+        return 0.0 if abs(z) < 5e-4 else z       # evita el "-0.000" del ruido de parseo
+
+    trajectories = spec.stored_trajectories
+    for t, members in enumerate(trajectories):
+        px, py, pz = members[0].start_point
+        for i, m in enumerate(members):
+            sx, sy, sz = m.start_point
+            if abs(sx - px) > 1e-4 or abs(sy - py) > 1e-4 or abs(sz - pz) > 1e-4:
+                raise UnsupportedOperationError(
+                    f"vaciado con trayectoria almacenada DISCONTINUA (trayectoria {t}, "
+                    f"miembro {i}): el postprocesador copia cadenas conexas (N047); el "
+                    f".pgmx no es de ninguna autoría conocida. [B5]")
+            if m.primitive_type == "Arc":
+                nz = (m.normal_vector or (0.0, 0.0, 1.0))[2]
+                if m.center_point is None or abs(abs(nz) - 1.0) > 1e-6:
+                    raise UnsupportedOperationError(
+                        f"vaciado con ARCO inclinado o sin centro en la trayectoria "
+                        f"almacenada (trayectoria {t}, miembro {i}): solo hay fixture de "
+                        f"arcos PLANOS (isla rectangular / rebaba negativa). [B5]")
+            elif m.primitive_type != "Line":
+                raise UnsupportedOperationError(
+                    f"vaciado con miembro {m.primitive_type!r} en la trayectoria "
+                    f"almacenada (trayectoria {t}, miembro {i}): sin fixture. [B5]")
+            px, py, pz = m.end_point
+    z_final = _z_iso(trajectories[-1][-1].end_point[2])
+    if abs(z_final + depth) > 5e-4:
+        raise UnsupportedOperationError(
+            f"vaciado cuya trayectoria almacenada termina en Z{z_final:.3f} con profundidad "
+            f"de operación {-depth:.3f}: el .pgmx es inconsistente. [B5]")
+
+    lines: list[str] = []
+    prev_xy = None
+    for t, members in enumerate(trajectories):
+        e0 = members[0].start_point
+        if t > 0:
+            lines += [
+                "?%ETK[7]=0",
+                f"G0 Z{security:.3f}",
+                "D0",
+                "SVL 0.000",
+                "VL6=0.000",
+                *(("SVR 0.000", "VL7=0.000") if svr != 0.0 else ()),
+                "G17",
+                "MLV=2",
+                f"G0 X{prev_xy[0]:.3f} Y{prev_xy[1]:.3f} Z{z_approach:.3f}",
+                f"G0 X{e0[0]:.3f} Y{e0[1]:.3f} Z{z_approach:.3f}",
+                f"G0 X{e0[0]:.3f} Y{e0[1]:.3f} Z{z_approach:.3f}",
+                "D1",
+                f"SVL {svl:.3f}",
+                f"VL6={svl:.3f}",
+                *((f"SVR {svr:.3f}", f"VL7={svr:.3f}") if svr != 0.0 else ()),
+            ]
+        z0 = _z_iso(e0[2])
+        lines += [
+            f"G1 Z{security:.3f} F{plunge_feed:.3f}",
+            "?%ETK[7]=4",
+            f"G1 Z{z0:.3f} F{cut_feed:.3f}",
+        ]
+        px, py = _pos3(e0[0]), _pos3(e0[1])
+        prev_z = z0
+        for m in members:
+            ex, ey = _pos3(m.end_point[0]), _pos3(m.end_point[1])
+            z = _z_iso(m.end_point[2])
+            if m.primitive_type == "Arc":
+                g = "G3" if (m.normal_vector or (0.0, 0.0, 1.0))[2] >= 0.0 else "G2"
+                z_word = f" Z{z:.3f}" if f"{z:.3f}" != f"{prev_z:.3f}" else ""
+                cx, cy = (_pos3(v) for v in _pocket_arc_center(m))
+                lines.append(f"{g} X{ex:.3f} Y{ey:.3f}{z_word} I{cx:.3f} J{cy:.3f} "
+                             f"F{cut_feed:.3f}")
+            else:
+                lines.append(_g1_cut(px, py, ex, ey, z, cut_feed, prev_z=prev_z))
+            px, py, prev_z = ex, ey, z
+        lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
+        prev_xy = (px, py)
+    return lines, False, prev_xy
 
 
 def _cad_lead_moves(spec, lead_spec, lead_type, anchor, u, depth, cut_feed, at_start):

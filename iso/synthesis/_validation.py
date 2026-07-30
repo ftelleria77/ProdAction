@@ -22,6 +22,7 @@ from pgmx.synthesis.milling.polyline import PolylineSpec
 from pgmx.synthesis.milling.circle import CircleSpec
 from pgmx.synthesis.milling.line import LineSpec
 from pgmx.synthesis.milling.channel import ChannelSpec
+from pgmx.synthesis.milling.pocket import PocketSpec
 
 from ._machine import SIDE_FACE, TOP_TOOL, TOP_TOOL_CONICAL, top_tool_or_none
 from ._tool_catalog import tool_geometry
@@ -60,9 +61,11 @@ def validate_entries(entries: Iterable[object]) -> None:
             _validate_arc(spec)
         elif isinstance(spec, PolylineSpec):
             _validate_polyline(spec)
+        elif isinstance(spec, PocketSpec):
+            _validate_pocket(spec)
         else:
             _fail(spec, f"operación de tipo {type(spec).__name__!r} no soportada "
-                        f"(por ahora: taladro, fresado lineal/circular y canal). "
+                        f"(por ahora: taladro, fresado lineal/circular, canal y vaciado). "
                         f"[Eje B del roadmap]")
 
 
@@ -586,6 +589,105 @@ def _validate_polyline_cad_zigzag(spec: PolylineSpec) -> None:
             _fail(spec, "ZigZag CAD con esquina VIVA (offset que superpone los bordes): sin "
                         "fixture — N046/Galceado solo cubren esquinas-arco (contorno "
                         "exterior). [B4]")
+
+
+def _validate_pocket(spec: PocketSpec) -> None:
+    """Vaciado (`ClosedPocket` + `BottomAndSideRoughMilling` + `ContourParallel`) — derivado
+    de N047 (11 sintetizados + 2 gemelos manuales, byte-idéntico). El postprocesador COPIA la
+    trayectoria ALMACENADA (los 2 envenenados salieron al ISO con el veneno) ⇒ el render LEE
+    `stored_trajectories` y emite un G1 por miembro a feed de corte. Fixtureado: contorno
+    rectangular a ejes, estrategia con defaults (Antihorario, LiftShiftPlunge, dentro→afuera,
+    Sobreposición 50%, Climb, sin helicoidal) con o sin multipaso (cd/uh), ciego, sin
+    rebaba/allowance, sin leads, sin islas, UNA trayectoria. Lo NO fixtureado → fail-loud."""
+    if spec.plane_name != "Top":
+        _fail(spec, f"vaciado en cara {spec.plane_name!r} no soportado (solo Top; regla de "
+                    f"dominio: no hay herramental de vaciado en otras caras). [B5]")
+    try:
+        tool_geometry(spec.tool_name)
+        int(spec.tool_name.lstrip("E"))
+    except (KeyError, ValueError):
+        _fail(spec, f"fresa {spec.tool_name!r} no está en el catálogo o su nombre no es "
+                    f"E00N. [B5]")
+    if spec.depth_spec.is_through:
+        _fail(spec, "vaciado PASANTE: sin fixture de referencia (N047 es todo ciego). [B5]")
+    if not (spec.depth_spec.target_depth or 0.0) > 0.0:
+        _fail(spec, "vaciado sin profundidad objetivo. [B5]")
+    if spec.approach.is_enabled or spec.retract.is_enabled:
+        _fail(spec, "vaciado + acercamiento/alejamiento programable: sin fixture (los N047 "
+                    "van pelados). [B5]")
+    # Avanz./Rotación de «Parámetros de trabajo» (captura UI 2026-07-29): la ventana los
+    # expone pero no hay fixture ISO — sin esta guarda, un vaciado real con Avanz. cargado
+    # convertía con el feed del catálogo EN SILENCIO.
+    if getattr(spec, "feedrate", 0.0) > 0.0 or getattr(spec, "spindle", 0.0) > 0.0:
+        _fail(spec, "vaciado con Avanz./Rotación (Parámetros de trabajo): sin fixture de "
+                    "referencia aún. [B5]")
+    # Rebaba (AllowanceSide) LEVANTADA por N048 (reb_p20/reb_m20, ±20 con E006): el campo
+    # solo corre los anillos de la trayectoria ALMACENADA, que el render copia — no toca
+    # ninguna convención de emisión. AllowanceBottom sigue sin fixture (¿la UI lo expone?
+    # pregunta abierta del checklist de capturas).
+    if spec.allowance_bottom:
+        _fail(spec, "vaciado con AllowanceBottom: sin fixture (no sabemos si la ventana "
+                    "Vaciado lo expone — checklist de capturas). [B5]")
+    # ISLAS: levantada para la forma fixtureada (manual 2026-07-30, isla RECTANGULAR con
+    # dos trayectorias, byte-idéntico): el render copia las trayectorias almacenadas y la
+    # isla solo aporta anillos con arcos planos — la forma de la isla no toca convenciones.
+    # Una isla NO rectangular (circular = polilínea muestreada en boss_contours) sigue
+    # fail-loud hasta que su lote la derive.
+    for boss in spec.boss_contours:
+        issue = _rect_contour_issue(boss)
+        if issue is not None:
+            _fail(spec, f"vaciado con ISLA no rectangular a ejes ({issue}): sin fixture "
+                        f"(el manual 2026-07-30 solo cubre la isla rectangular). [B5]")
+    # Parámetros de la estrategia LEVANTADOS por N048 (uno aislado por fixture, 8/8
+    # byte-idéntico): Dirección del recorrido (Horario/Antihorario), Conexión entre huecos
+    # (LiftShiftPlunge/Straghtline — con multipaso, que es donde difieren: las transiciones
+    # van DENTRO de la trayectoria almacenada), Dirección de vaciado (dentro↔afuera),
+    # Sobreposición (50% y 25%) y Habilitar helicoidal (flag INVISIBLE: ni la trayectoria
+    # almacenada ni el ISO cambian — Vaciado_013 ya lo vio a nivel .pgmx). Todos mediados
+    # por la trayectoria copiada; ninguno toca las convenciones (feeds/orden/G-codes).
+    strategy = spec.milling_strategy
+    if strategy.cutmode != "Climb":
+        _fail(spec, f"vaciado con Cutmode {strategy.cutmode!r}: solo Climb aparece en todo "
+                    f"el corpus (sin UI conocida — checklist de capturas). [B5]")
+    if strategy.allow_multiple_passes and not strategy.axial_cutting_depth > 0.0:
+        _fail(spec, "vaciado multipaso sin Profundidad de hueco (AxialCuttingDepth) > 0. [B5]")
+    # Contorno: cerrado, rectas, rectángulo a ejes (se toleran puntos colineales extra sobre
+    # el perímetro — arranque a mitad de borde, y ruido flotante del corpus). El XY del ISO
+    # sale de la trayectoria ALMACENADA, pero solo la forma rectangular tiene fixture.
+    issue = _rect_contour_issue(spec.contour_points)
+    if issue is not None:
+        _fail(spec, f"vaciado con contorno NO rectangular a ejes ({issue}): solo el "
+                    f"rectángulo (pleno o parcial, con colineales tolerados — N047/N049) "
+                    f"tiene fixture; el contorno CIRCULAR existe en la UI y espera su "
+                    f"lote. [B5]")
+    trajectories = getattr(spec, "stored_trajectories", ())
+    if not (1 <= len(trajectories) <= 2) or not all(trajectories):
+        _fail(spec, f"vaciado con {len(trajectories)} trayectorias almacenadas parseables: "
+                    f"hay fixture de UNA (N047) y de DOS (isla rectangular, manual "
+                    f"2026-07-30); más que eso o vacías → sin referencia. ¿El .pgmx tiene "
+                    f"TrajectoryPath materializado? [B5]")
+
+
+def _rect_contour_issue(points) -> "str | None":
+    """None si `points` es un contorno rectangular a ejes CERRADO (se toleran vértices
+    colineales extra sobre el perímetro — arranque a mitad de borde, ruido flotante del
+    corpus); si no, la descripción del problema. Compartido entre el contorno del vaciado
+    y sus islas."""
+    if len(points) < 4 or math.dist(points[0], points[-1]) > 1e-6:
+        return "abierto o degenerado"
+    for (ax, ay), (bx, by) in zip(points, points[1:]):
+        if abs(bx - ax) > 1e-6 and abs(by - ay) > 1e-6:
+            return "borde diagonal"
+    xs = [x for x, _y in points]
+    ys = [y for _x, y in points]
+    min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
+    if max_x - min_x <= 1e-6 or max_y - min_y <= 1e-6:
+        return "sin área"
+    for x, y in points:
+        if not (abs(x - min_x) <= 1e-6 or abs(x - max_x) <= 1e-6
+                or abs(y - min_y) <= 1e-6 or abs(y - max_y) <= 1e-6):
+            return "vértice interior (forma L/muesca)"
+    return None
 
 
 def _validate_cad_lead(spec: PolylineSpec, lead, lead_type: str, name: str) -> None:

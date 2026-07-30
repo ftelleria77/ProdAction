@@ -43,7 +43,7 @@ def convert(pgmx_path: Path) -> str:
     # transición con su doble ?%ETK[7]=0). Todo el corpus previo tenía la op compensada
     # primera, así que any≡first hasta ese fixture.
     router_compensated = bool(ops.routers) and (
-        (ops.routers[0].side_of_feature != "Center"
+        (getattr(ops.routers[0], "side_of_feature", "Center") != "Center"
          and getattr(ops.routers[0], "activate_cnc_correction", True))
         or (ops.routers[0].approach.is_enabled and ops.routers[0].milling_strategy is None
             and getattr(ops.routers[0], "activate_cnc_correction", True)))
@@ -57,6 +57,13 @@ def convert(pgmx_path: Path) -> str:
         raise UnsupportedOperationError(
             "alejamiento programable en un fresado NO-último del programa: sin fixture de "
             "referencia aún (Galceado.pgmx solo cubre el alejamiento en la ÚLTIMA op). [A3]")
+
+    # Xn al INICIO + router compensado: el orden del ?%ETK[7]=0 del preamble respecto del
+    # bloque de park no tiene fixture (el manual 2026-07-30 es un vaciado, sin corrección).
+    if ctx.park_at_start and router_compensated:
+        raise UnsupportedOperationError(
+            "Xn al INICIO en un programa con router compensado: el orden del reset ?%ETK[7]=0 "
+            "respecto del bloque de park no tiene fixture aún. [Eje C]")
 
     lines: list[str] = []
     # La sierra maneja su propia entrada MLV (como el router): el preamble no emite el footer.

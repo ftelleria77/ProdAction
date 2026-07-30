@@ -497,25 +497,37 @@ def _xy_points_from_curve_snapshot(curve) -> tuple[tuple[float, float], ...]:
     return tuple((float(point[0]), float(point[1])) for point in curve.sampled_points)
 
 
-def _stored_trajectory_primitives(operation) -> tuple[sp.GeometryPrimitiveSpec, ...]:
-    """Primitivas 3D del TrajectoryPath ALMACENADO de la operación (los strokes de la
-    GeomCompositeCurve, parseados). Con ACC=false Maestro postprocesa lo almacenado tal cual
-    (N046: copia, no recalcula) — el ZigZag CAD del converter lee de acá la Z de cada
-    movimiento. Devuelve () si no hay composite o algún miembro no parsea (el consumidor
-    decide fail-loud)."""
+def _stored_trajectory_primitives_all(
+    operation,
+) -> tuple[tuple[sp.GeometryPrimitiveSpec, ...], ...]:
+    """Primitivas 3D de TODOS los TrajectoryPath ALMACENADOS de la operación (los strokes de
+    cada GeomCompositeCurve, parseados; una tupla por trayectoria — el vaciado con islas
+    puede materializar varias ternas Approach/TrajectoryPath/Lift). El postprocesador COPIA
+    lo almacenado (N046 con ACC=false; N047 en vaciados) — el converter lee de acá. Una
+    trayectoria no parseable se devuelve como tupla vacía (el consumidor decide fail-loud)."""
+    trajectories: list[tuple[sp.GeometryPrimitiveSpec, ...]] = []
     for toolpath in operation.toolpaths:
         if toolpath.path_type != "TrajectoryPath" or toolpath.curve is None:
             continue
         if toolpath.curve.geometry_type != "GeomCompositeCurve":
-            return ()
+            trajectories.append(())
+            continue
         primitives: list[sp.GeometryPrimitiveSpec] = []
+        parse_failed = False
         for text in toolpath.curve.member_serializations:
             primitive = sp._parse_geometry_primitive(text)
             if primitive is None:
-                return ()
+                parse_failed = True
+                break
             primitives.append(primitive)
-        return tuple(primitives)
-    return ()
+        trajectories.append(() if parse_failed else tuple(primitives))
+    return tuple(trajectories)
+
+
+def _stored_trajectory_primitives(operation) -> tuple[sp.GeometryPrimitiveSpec, ...]:
+    """La PRIMERA trayectoria almacenada (polilíneas: una sola — ZigZag CAD, N046)."""
+    trajectories = _stored_trajectory_primitives_all(operation)
+    return trajectories[0] if trajectories else ()
 
 
 def _boss_route_seeds_from_feature(
@@ -1092,6 +1104,18 @@ def _adapt_pocket_milling(
             allowance_side=operation.allowance_side,
             boss_contours=boss_contours,
             boss_route_seeds=boss_route_seeds,
+        )
+        # El converter ISO necesita las trayectorias ALMACENADAS: el postprocesador las
+        # COPIA (N047: los envenenados salieron al ISO). Campo de SOLO lectura, espejo de
+        # PolylineSpec.stored_trajectory (acá plural: islas = varias ternas). Avanz./
+        # Rotación (Technology) también viajan: la ventana Vaciado los expone (captura
+        # 2026-07-29) y sin cablearlos el converter no puede ni rechazarlos.
+        _tech = operation.technology
+        spec = _dc_replace(
+            spec,
+            stored_trajectories=_stored_trajectory_primitives_all(operation),
+            feedrate=float(_tech.feedrate) if _tech is not None else 0.0,
+            spindle=float(_tech.spindle) if _tech is not None else 0.0,
         )
     except Exception as exc:
         return _unsupported_entry(

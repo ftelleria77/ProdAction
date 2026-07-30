@@ -48,6 +48,19 @@ def render_preamble(
 
     # Three G40 blocks; third one may be face-specific for side-first programs.
     lines += ["?%ETK[8]=1", "G40", "?%ETK[8]=1", "G40"]
+    if ctx.park_at_start:
+        # Xn al INICIO del programa (manual Rebaba_negativa 2026-07-30): el park se emite
+        # ENTRE el segundo y el tercer par ETK[8]/G40 del preamble, SIN M5 (el husillo aún
+        # no giró); el footer de este programa va sin M5/park (ver render_epilogue).
+        lines += [
+            "G61",
+            "MLV=0",
+            "D0",
+            f"G0 G53 Z{Z_PARK:.3f}",
+            f"G0 G53 X{ctx.park_x:.3f}"
+            + (f" Y{ctx.park_y:.3f}" if ctx.park_y is not None else ""),
+            "G64",
+        ]
     if router_compensated:
         # Router con corrección de herramienta (G41/G42): Maestro resetea ?%ETK[7] acá (N023).
         lines.append("?%ETK[7]=0")
@@ -105,8 +118,10 @@ def render_epilogue(
     # machine config (Z_PARK). Maestro pone X e Y en el MISMO bloque G53 cuando hay Y.
     # El Xn (Operación Nula) se RENDERIZA como `M5` + `G0 G53 X{park}`: pide retirar la cabina de
     # seguridad para que el operario acceda a la pieza. Sin Xn (`park_x is None`) NO se emite
-    # ninguno de los dos — nadie lo pidió (N043, .pgmx hechos a mano en Maestro).
-    has_xn = ctx.park_x is not None
+    # ninguno de los dos — nadie lo pidió (N043, .pgmx hechos a mano en Maestro). Con Xn al
+    # INICIO (park_at_start) el park ya salió en el PREAMBLE y el footer va igual de pelado
+    # (manual Rebaba_negativa 2026-07-30).
+    has_xn = ctx.park_x is not None and not ctx.park_at_start
     park_lines = [f"G0 G53 X{ctx.park_x:.3f}" + (
         f" Y{ctx.park_y:.3f}" if ctx.park_y is not None else "")] if has_xn else []
     m5_lines = ["M5"] if has_xn else []

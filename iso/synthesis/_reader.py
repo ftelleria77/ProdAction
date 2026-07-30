@@ -21,6 +21,7 @@ from pgmx.synthesis.milling.circle import CircleSpec
 from pgmx.synthesis.milling.contour import ContourSpec, _build_squaring_outline_points
 from pgmx.synthesis.milling.line import LineSpec
 from pgmx.synthesis.milling.channel import ChannelSpec
+from pgmx.synthesis.milling.pocket import PocketSpec
 
 from ._machine import (
     FACE_PRIORITY, SIDE_MAX_DEPTH, SIDE_SUPPORTED_FIELDS, SUPPORTED_FIELDS, resolve_top_tool,
@@ -34,14 +35,20 @@ def _execution_field(path: Path) -> str:
     """Campo de trabajo elegido en Maestro, registrado en el .pgmx como
     <ExecutionFields>HG</ExecutionFields> (dentro de XilogHeaderParameters). El .pgmx es un ZIP
     con un .xml adentro. Determina el origen del campo (field_origin) y el espejado geométrico.
-    Default "HG" si no aparece (el único campo calibrado hoy)."""
+    Default "HG" si no aparece (el único campo calibrado hoy).
+
+    Alias "A" → "AB": un programa hecho a mano SIN tocar «Parámetros de máquinas» queda con el
+    área default y Maestro escribe ExecutionFields=A — pero su PROPIO postproceso emite el
+    header `-AB` con los orígenes del campo AB (gemelos manuales de N047, byte-validados).
+    Solo "A" tiene fixture; cualquier otro valor fuera de la grilla sigue rechazándose."""
     with zipfile.ZipFile(path) as z:
         xml_name = next((n for n in z.namelist() if n.endswith(".xml")), None)
         if xml_name is None:
             return "HG"
         xml = z.read(xml_name).decode("utf-8", errors="replace")
     m = _EXECUTION_FIELD_RE.search(xml)
-    return m.group(1).strip() if m and m.group(1).strip() else "HG"
+    field = m.group(1).strip() if m and m.group(1).strip() else "HG"
+    return {"A": "AB"}.get(field, field)
 
 Op = Union[DrillSpec, LineSpec]
 
@@ -107,6 +114,10 @@ class PieceCtx:
     # `park_x = None` ⟺ el programa NO tiene Xn ⟺ el footer NO lleva `M5` ni park X (N043).
     park_x: float | None = None
     park_y: float | None = None
+    # El Xn es POSICIONAL: si el paso Xn viene ANTES de todos los mecanizados, el park se
+    # emite en el PREAMBLE (bloque G61/MLV=0/D0/G0 G53 Z/G0 G53 X/G64, SIN M5 — el husillo
+    # aún no giró) y el footer va SIN M5/park (manual Rebaba_negativa 2026-07-30).
+    park_at_start: bool = False
 
     @property
     def DX(self) -> float:  # noqa: N802
@@ -121,8 +132,11 @@ class PieceCtx:
         return self.origin_z + self.depth
 
 
-def _xn_park(snapshot) -> tuple[float, float | None] | None:
-    """(park_x, park_y) del footer a partir del Xn del programa, o None si NO hay Xn.
+def _xn_park(snapshot) -> tuple[float, float | None, bool] | None:
+    """(park_x, park_y, at_start) del Xn del programa, o None si NO hay Xn. `at_start`:
+    el paso Xn viene ANTES de todos los mecanizados en el workplan → el park va en el
+    PREAMBLE y el footer queda sin M5/park (manual Rebaba_negativa 2026-07-30); si no,
+    el modelo clásico del footer (N015). Xn en el MEDIO → fail-loud.
 
     El Xn (Operación Nula) desplaza el cabezal para que la cabina de seguridad libere la zona de
     trabajo y el operario pueda acceder a la pieza — la misma función que el Park. En el ISO se
@@ -138,21 +152,31 @@ def _xn_park(snapshot) -> tuple[float, float | None] | None:
     "park del footer" solo es válido mientras haya UNO SOLO al final — que es lo único que hay en
     los fixtures. Un programa con varios se rechaza. Ver iso/docs/experiments/xn_operacion_nula.md
     """
-    xns = [op for op in getattr(snapshot, "machine_operations", ())
-           if getattr(op, "runtime_type", "") == "Xn" or "Xn" in getattr(op, "object_type", "")]
-    if not xns:
+    steps = getattr(snapshot, "working_steps", ())
+    xn_indices = [i for i, s in enumerate(steps)
+                  if getattr(s, "runtime_type", "") == "Xn"
+                  or "Xn" in getattr(s, "object_type", "")]
+    if not xn_indices:
         return None
-    if len(xns) > 1:
+    if len(xn_indices) > 1:
         raise UnsupportedOperationError(
-            f"El programa tiene {len(xns)} operaciones Xn y solo está derivado el caso de UNA. "
-            f"El Xn es POSICIONAL: ocurre en un punto del programa (flujo real: mecanizar la cara "
-            f"A → Xn+Xmsg para que el operario GIRE la pieza → mecanizar la cara B → Xn para "
-            f"retirarla). Nuestro modelo lo trata como propiedad de la pieza emitida en el footer "
-            f"— indistinguible mientras hay uno solo al final, que es lo único que hay en los "
-            f"fixtures. Falta derivar dónde se emiten los intermedios. "
+            f"El programa tiene {len(xn_indices)} operaciones Xn y solo está derivado el caso de "
+            f"UNA. El Xn es POSICIONAL: ocurre en un punto del programa (flujo real: mecanizar la "
+            f"cara A → Xn+Xmsg para que el operario GIRE la pieza → mecanizar la cara B → Xn para "
+            f"retirarla). Fixturados: UNO al final (footer M5+park, N015) y UNO al inicio "
+            f"(preamble sin M5, manual 2026-07-30). Falta derivar los intermedios/múltiples. "
             f"Ver iso/docs/experiments/xn_operacion_nula.md [Eje C].")
-    xn = xns[-1]
-    return float(xn.x), (None if xn.y is None else -float(xn.y))
+    xn_index = xn_indices[0]
+    machining_indices = [i for i, s in enumerate(steps)
+                         if getattr(s, "manufacturing_feature_ref", None) is not None]
+    at_start = bool(machining_indices) and xn_index < min(machining_indices)
+    if machining_indices and not at_start and xn_index < max(machining_indices):
+        raise UnsupportedOperationError(
+            "El Xn está en el MEDIO del programa (entre mecanizados): sin fixture — solo "
+            "están derivados el Xn al FINAL (footer M5+park) y al INICIO (preamble sin M5). "
+            "[Eje C]")
+    xn = steps[xn_index]
+    return float(xn.x), (None if xn.y is None else -float(xn.y)), at_start
 
 
 @dataclass(frozen=True)
@@ -234,7 +258,7 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
             f"Campo de trabajo '{field}' no soportado (conocidos: {SUPPORTED_FIELDS}).")
 
     park = _xn_park(result.snapshot)
-    park_x, park_y = park if park is not None else (None, None)
+    park_x, park_y, park_at_start = park if park is not None else (None, None, False)
     ctx = PieceCtx(
         # Maestro usa el nombre del ARCHIVO .pgmx para el comentario "% x.pgm" del ISO, no el
         # piece_name interno (evidencia: N007 _not_selected renombrados y N_RT_E001_Vel/_Prof,
@@ -249,6 +273,7 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
         field=field,
         park_x=park_x,
         park_y=park_y,
+        park_at_start=park_at_start,
     )
 
     routers: list[LineSpec] = []
@@ -262,9 +287,9 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
         elif isinstance(spec, DrillSpec):
             drills = [spec]
         elif isinstance(spec, (LineSpec, CircleSpec, ArcSpec,
-                               PolylineSpec)):
-            # Círculo (N038), arco suelto (N040) y polilínea mixta (N041) son ops de
-            # la familia ROUTER: mismo header/transición/teardown que las líneas.
+                               PolylineSpec, PocketSpec)):
+            # Círculo (N038), arco suelto (N040), polilínea mixta (N041) y VACIADO (N047)
+            # son ops de la familia ROUTER: mismo header/transición/teardown que las líneas.
             routers.append(spec)
             continue
         elif isinstance(spec, ChannelSpec):
@@ -287,6 +312,13 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
         raise UnsupportedOperationError(
             "Programa SIN operación Xn que no es solo-router: el footer sin Xn (sin `M5` ni park X) "
             "solo está derivado para router (N043). Falta fixture para taladro/sierra sin Xn.")
+
+    # Fail-loud: Xn al INICIO solo está derivado para programas solo-router (manual
+    # Rebaba_negativa 2026-07-30, vaciado). Con taladros/sierra no hay fixture del preamble.
+    if park_at_start and (top_drills or side_drills or saw_channels):
+        raise UnsupportedOperationError(
+            "Programa con Xn al INICIO que no es solo-router: el bloque de park en el preamble "
+            "solo está derivado para router (manual 2026-07-30). [Eje C]")
 
     # Fail-loud: taladros laterales solo en HG por ahora. El SHF por-cara espejado (Left/Right/
     # Front/Back) para EF/AB/DC todavía no está derivado; el modelo actual solo cubre origen/SHF de
@@ -331,14 +363,21 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
                 f"Fresado lineal {kind} con {milling.tool_name}: profundidad efectiva {eff:g} mm "
                 f"supera el hundimiento máximo de la fresa ({sink:g} mm, def.tlgx SinkingLength). [A3]")
 
-    # Fail-loud: familias del router (línea / círculo / arco / polilínea) MEZCLADAS en un
-    # programa — las transiciones mixtas no tienen fixture (cada lote two-* es de una sola
-    # familia: N028/N036 líneas, N038 círculos, N040 arcos, N041 polilíneas).
+    # Fail-loud: familias del router (línea / círculo / arco / polilínea / vaciado)
+    # MEZCLADAS en un programa — las transiciones mixtas no tienen fixture (cada lote two-*
+    # es de una sola familia: N028/N036 líneas, N038 círculos, N040 arcos, N041 polilíneas).
     router_families = {type(m).__name__ for m in routers}
     if len(router_families) > 1:
         raise UnsupportedOperationError(
-            "fresado de familias mezcladas (línea/círculo/arco/polilínea) en el mismo "
-            f"programa: sin fixture de referencia aún ({sorted(router_families)}). [B]")
+            "fresado de familias mezcladas (línea/círculo/arco/polilínea/vaciado) en el "
+            f"mismo programa: sin fixture de referencia aún ({sorted(router_families)}). [B]")
+
+    # Fail-loud: VARIOS vaciados en un programa — la transición entre pockets no tiene
+    # fixture (N047 es todo single-op). [B5]
+    if sum(isinstance(m, PocketSpec) for m in routers) > 1:
+        raise UnsupportedOperationError(
+            "varios vaciados en el mismo programa: la transición entre pockets no tiene "
+            "fixture de referencia aún (N047 es single-op). [B5]")
 
     # Fail-loud: canal de sierra MEZCLADO con otras familias — el orden/las transiciones
     # entre el cabezal sierra y router/taladros no tienen fixture (N037 es sierra-only). [B]

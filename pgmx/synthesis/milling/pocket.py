@@ -15,6 +15,7 @@ from ..common.depth import (
     build_milling_depth_spec,
 )
 from ..common.geometry import (
+    GeometryPrimitiveSpec,
     _CurveSpec,
     _build_boundary_curve_holder,
     _build_closed_polyline_geometry_profile,
@@ -163,6 +164,19 @@ class PocketSpec:
     boss_contours: tuple[tuple[tuple[float, float], ...], ...] = ()
     boss_route_seeds: tuple[PocketBossRouteSeedSpec, ...] = ()
     is_enabled_expr: Optional[str] = None
+    # SOLO LECTURA (las cablea el adapter; la autoría NO las serializa — espejo de
+    # PolylineSpec.stored_trajectory): las curvas de los TrajectoryPath ALMACENADOS en el
+    # .pgmx, parseadas a primitivas, UNA TUPLA POR TRAYECTORIA — una operación de vaciado
+    # puede materializar varias ternas Approach/TrajectoryPath/Lift (islas, lab 2026-05-18).
+    # El postprocesador ISO COPIA lo almacenado (N047: los dos envenenados salieron al ISO
+    # con el veneno) — el converter LEE de acá la trayectoria.
+    stored_trajectories: tuple[tuple[GeometryPrimitiveSpec, ...], ...] = ()
+    # SOLO LECTURA (adapter): Avanz./Rotación de «Parámetros de trabajo» de la ventana
+    # Vaciado (Technology de la operación — captura UI 2026-07-29). Sin fixture ISO todavía:
+    # el converter los RECHAZA si vienen cargados (sin esto, un vaciado real con Avanz.
+    # convertía con el feed del catálogo EN SILENCIO).
+    feedrate: float = 0.0
+    spindle: float = 0.0
 
     @property
     def effective_contour_offset(self) -> float:
