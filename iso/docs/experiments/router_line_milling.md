@@ -279,6 +279,178 @@ Derivar las 3 interacciones re-guardadas de N029 con cuerpos completos (multipas
 lado+leads, multipaso+leads); ZigZag diagonal y uh=0 (ya sintetizables vía §16). Microuniones:
 rotas en esta versión de Maestro — candidata a implementación propia post-paridad.
 
+## Experimento-01 ELP/SCS (2026-08-03) — PREDICCIÓN REGISTRADA, esperando los ISO
+
+Par de Fermín en `Programas Manuales\Experimento-01\`:
+`Fresado_perimetral_Fresado Lineal_Unidirecional_ELP.pgmx` (En La Pieza) y `..._SCS.pgmx`
+(Salida Cota Seguridad). **Analizados antes de tener los ISO** — los dos `.pgmx` son
+idénticos salvo un campo: `UnidirectionalMillingStrategySpec.connection_mode`
+(`InPiece` vs `SafetyHeight`).
+
+Cada archivo tiene DOS operaciones: (1) *Fresado perimetral* — contorno cerrado, Right,
+pasante +1, leads Arco RM=2 En cota; (2) *Fresado Lineal* — una recta (8,290)→(292,290),
+ciego −10, Avanz. 2, con la estrategia Unidireccional y **«Habilitar multipaso» APAGADO**
+(`allow_multiple_passes=False`, `axial_cutting_depth=0`); su `TrajectoryPath` almacenado
+tiene UN solo miembro.
+
+**Predicción falsable (registrada 2026-08-03, ANTES de postprocesar)**: los dos ISO serán
+**idénticos entre sí salvo la línea de comentario `% archivo.pgm`** — es decir, el
+`connection_mode` es INVISIBLE acá. Razón: la conexión gobierna el retorno ENTRE PASADAS,
+y con multipaso apagado hay una sola pasada. Además N036 (`strat_single`) ya derivó que
+una estrategia con multipaso apagado **≡ sin estrategia** (cuerpo idéntico al fresado
+plano), y por eso el adapter la anula (`_dc_replace(spec, milling_strategy=None)`).
+**Si los ISO difieren, esa regla de N036 se cae** y hay que revisarla.
+
+**Lo que estos fixtures SÍ aportan de nuevo**: son los primeros con DOS FAMILIAS de router
+en un mismo programa (contorno cerrado → polilínea + línea). Hoy el converter los rechaza
+fail-loud por la guarda [B] de *familias mezcladas* — con sus ISO se deriva esa transición
+y la guarda se levanta. Cada operación por separado YA pasa validación.
+
+### Matriz 2×2 completa (2026-08-03): + ELP_MP5 / SCS_MP5
+
+Fermín completó el lote a cuatro archivos — misma pieza, misma recta, variando dos ejes:
+
+| archivo | AllowMultiplePasses | AxialCuttingDepth | conexión |
+|---|---|---|---|
+| `_ELP` | false | **5** | `Straghtline` (En la pieza) |
+| `_ELP_MP5` | true | 5 | `Straghtline` |
+| `_SCS` | false | **5** | `LiftShiftPlunge` (Salida cota seg.) |
+| `_SCS_MP5` | true | 5 | `LiftShiftPlunge` |
+
+**Hallazgo 1 — Maestro CONSERVA «Profundidad de hueco» con el multipaso APAGADO.** Los dos
+sin MP traen `AllowMultiplePasses=false` CON `AxialCuttingDepth=5`. Nuestro
+`build_unidirectional_milling_strategy_spec` PROHIBÍA esa combinación (`ValueError`), así
+que la LECTURA de estos archivos reales **crasheaba**: una regla de AUTORÍA inventada
+aplicada al lado de lectura. Corregido — `_extract_milling_strategy_spec_from_operation`
+construye las dataclasses Uni/Bi directo, sin la validación del builder: **el snapshot debe
+reflejar el archivo**. La guarda sigue vigente para la autoría (decidir si se relaja
+también ahí es de Fermín).
+
+**Hallazgo 2 — N036 CONFIRMADA sin necesidad del ISO.** Con `AMP=false` (y cd=5 residual)
+la trayectoria ALMACENADA es de UNA sola pasada, a la profundidad final: `_ELP` y `_SCS`
+guardan exactamente lo mismo (1 miembro, z=8). O sea que Maestro IGNORA el cd cuando el
+checkbox está apagado — la predicción de arriba (ISO idénticos salvo el comentario) se
+sostiene ya con la evidencia del `.pgmx`.
+
+**Hallazgo 3 — la conexión, visible y coherente con N025.** Con `AMP=true` la trayectoria
+trae las 2 pasadas (z_pieza 13 → 8, o sea ISO −5 y −10) y el retorno entre ellas las
+discrimina:
+
+| variante | retorno entre pasadas (z de pieza) | en ISO | regla |
+|---|---|---|---|
+| `_ELP_MP5` (En la pieza) | 23 | **+5** | z_pasada + `MILLING_RETRACT` (−5+10) |
+| `_SCS_MP5` (Salida cota seg.) | 48 | **+30** | la cota de SEGURIDAD |
+
+Ambas calzan con el modelo ya derivado en N025 (`_multipass_cuts`): retorno a
+`z + MILLING_RETRACT` (=10, `Programaciones.settingsx MillingRetractDistance`) en InPiece,
+y a `security` en SafetyHeight. **Estos fixtures lo CONFIRMAN en contexto nuevo** (y N025
+`uni_piece` ya descartaba la lectura alternativa «superficie + 5»: con pasada −8 el
+retorno era +2, no +5).
+
+### DERIVADO con los ISO (2026-08-03): MP5 byte-idénticos
+
+**Predicción CONFIRMADA**: los ISO de `_ELP` y `_SCS` (sin multipaso) son idénticos salvo
+el comentario del nombre. N036 se sostiene.
+
+**`_ELP_MP5` y `_SCS_MP5` convierten BYTE-IDÉNTICO.** Lo derivado:
+
+1. **La transición entre familias no aporta nada propio**: es exactamente el bloque de
+   CAMBIO DE HERRAMIENTA de N028 (E001→E004). La guarda [B] de familias mezcladas quedó
+   levantada para polilínea + línea con cambio de fresa.
+2. **Alejamiento en op NO-última**: cierra normal (arco, `G1 Z`, `G40`, 1 mm) y recién ahí
+   arranca el cambio de fresa. Guarda [A3] levantada para ese caso; con la MISMA fresa
+   sigue sin fixture.
+3. **El reset EXTRA `?%ETK[7]=0`** de la salida compensada no-última (N036 two_side) **NO
+   va cuando cambia la herramienta**: ahí queda uno solo.
+4. **`%DONTCARESPEEDV=1`** (marcador nuevo): se emite en el teardown de una op cuando
+   ALGUNA op POSTERIOR tiene multipasada con conexión a COTA DE SEGURIDAD — el traslado
+   entre pasadas va por el aire. Con «En la pieza» no aparece; con el multipaso apagado
+   tampoco (no hay traslado real).
+5. **Feeds del multipaso con override de Avanz** (lo que ningún lote previo podía ver,
+   porque sin override el feed del catálogo y el efectivo coinciden): el **plunge inicial**
+   a la primera pasada y el **traslado por el aire** (SafetyHeight) usan el feed de CORTE
+   del CATÁLOGO; las pasadas y el traslado «en la pieza» usan el efectivo (el override).
+
+### ⭐ HITO (2026-08-03): primera EJECUCIÓN EN MÁQUINA de un ISO del converter
+
+Fermín ejecutó los cuatro fixtures en el CNC. Tres corrieron bien; **`SCS_MP5` abortó** con
+`Alarma 67: Assegnazione a registro inesistente`, parándose justo antes del cambio de
+herramienta. Causa: `%DONTCARESPEEDV=1`, la única línea que ese ISO tiene de más.
+
+**Es una instrucción MAL FORMADA de Maestro**, no config faltante de la máquina:
+- el manual de Xilog documenta `SET DONTCARE=1` (sintaxis `SET`, sin `%` ni sufijo
+  `SPEEDV`) — suprime el aviso «No existe cota de seguridad encima de la pieza» para el
+  trabajo SIGUIENTE, justo lo que Maestro quiere al trasladar por encima de la pieza;
+  `%NOMBRE=valor` es, en cambio, asignación a un REGISTRO;
+- `DONTCARESPEEDV` no existe en el manual ni en `S:\Xilog Plus` (búsqueda recursiva);
+- barrido completo: aparece **1 sola vez en TODO `P:\USBMIX`** (el archivo que falló) y
+  **0 veces en `S:\Maestro\Projects`** — ni un `.pgm` de fábrica la usa;
+- el manual exige que entre `SET DONTCARE=1` y el trabajo no haya otras instrucciones:
+  Maestro mete ~20 líneas en el medio.
+
+**Decisión de Fermín: el converter la OMITE.** Se generó
+`P:\...\Experimento-01\scs_mp5_nora.iso` con nuestro converter (146 líneas contra 147,
+resto idéntico línea a línea, cp1252 + CRLF) y **se ejecutó en el CNC sin errores**.
+
+Lo que esto cambia: hasta acá la única vara era *byte-idéntico contra Maestro*. Este caso
+mostró que esa vara y *ejecutable en la máquina* pueden CONTRADECIRSE — y manda la máquina.
+El byte-idéntico sigue siendo el método de derivación (es lo que hace falsables las
+reglas), pero deja de ser el fin en sí mismo. Las divergencias deliberadas viven en
+`iso.synthesis.compare.DELIBERATE_OMISSIONS`, se reportan siempre y nunca perdonan otras
+diferencias. Tests: `test_dontcarespeedv_se_omite_a_proposito`.
+
+### Experimento pendiente: `solo_fresado_lineal_unidireccional_scs_mp5.pgmx`
+
+Generado por NOSOTROS (2026-08-03, a pedido de Fermín) en `Experimento-01\`: el MISMO
+fresado lineal del `SCS_MP5` — línea (8,290)→(292,290), E004, Right, ciego −10, Avanz 2,
+ACC=false, Unidireccional/SafetyHeight con cd=5 — pero como **ÚNICA operación**, sin el
+perimetral. Verificado: estrategia, tecnología, ACC, profundidad y **trayectoria almacenada
+IDÉNTICAS** a las de la op original (5 miembros, con las subidas a Z=48).
+
+**Pregunta que aísla**: `%DONTCARESPEEDV=1` aparecía en el teardown de la op ANTERIOR.
+Sin op anterior, ¿dónde va — o no va?
+
+**Predicción registrada ANTES de postprocesar**: como el traslado por encima de la pieza
+sigue existiendo, Maestro debería emitirla igual, en algún punto previo al trabajo (¿tras
+el preámbulo?). Si la emite, su ISO volverá a abortar con la Alarma 67 — y el nuestro no,
+porque la omitimos siempre. Si NO la emite, el flag depende de que haya una op previa
+donde colgarla, y eso acota todavía más el bug de Maestro.
+
+**CONFIRMADA** (Fermín renombró a `SOLO_Unidirecional_SCS_MP5.pgmx` y postprocesó): Maestro
+emite `%DONTCARESPEEDV=1` igual, sin op previa — la pone en el **PREÁMBULO**, entre el 2º y
+el 3er par `?%ETK[8]=1`/`G40`. Es decir: la línea no cuelga del teardown de la op anterior;
+va en el hueco de instrucciones previas al primer trabajo (**el mismo slot donde va el park
+del Xn-al-INICIO**, ver `xn_operacion_nula.md`). El bug es sistemático: aparece siempre que
+hay multipasada con conexión a cota de seguridad, y solo cambia de lugar según haya o no
+una op antes.
+
+Nuestro converter lo convierte **`funcionalmente_identico`**: 101 líneas de Maestro → 100
+nuestras, 0 deltas numéricos, 0 diferencias estructurales — solo la línea inválida omitida.
+Emitido para ejecutar como `P:\...\Experimento-01\solo_scs_mp5_nora.iso` (cp1252 + CRLF).
+
+**PRUEBA CRUZADA EN MÁQUINA (2026-08-03) — la causa es única y suficiente.** Se ejecutaron
+los dos ISO del MISMO `.pgmx`:
+
+| ISO | origen | resultado en el CNC |
+|---|---|---|
+| `solo_unidirecional_scs_mp5.iso` | Maestro | **ABORTA** (misma alarma) |
+| `solo_scs_mp5_nora.iso` | nuestro converter | **ejecuta perfecto** |
+
+Con el par anterior (`scs_mp5`) da el mismo resultado: **2 de 2 ISO de Maestro abortan, 2
+de 2 nuestros ejecutan**, y los archivos son idénticos salvo esa línea. Queda demostrado
+que `%DONTCARESPEEDV=1` es causa **única y suficiente** del fallo, y que omitirla es
+suficiente para que el programa corra. Refuerzo adicional: nuestro `solo_scs_mp5_nora.iso`
+no contiene NINGUNA instrucción que no estuviera ya en `scs_mp5_nora.iso` (verificado línea
+a línea), así que no hay otra variable en juego.
+
+**Caso conocido NO derivado (registrado, no escondido)**: `_ELP`/`_SCS` sin multipaso
+convierten con UN delta — el plunge va a F5000 (catálogo) en el ISO y a F2000 (feed de
+plunge) en el nuestro. Pasa solo con estrategia DECLARADA + multipaso apagado + override
+de Avanz: el adapter anula la estrategia (N036 `strat_single`) y el converter pierde la
+señal; N028 (override SIN estrategia) sí emite F2000, así que la regla no se puede tocar
+sin un lote que separe «hay estrategia» de «hay override». Fijado en
+`test_sin_multipaso_queda_un_delta_de_feed_conocido`.
+
 ## Hallazgo transversal (N022 Vel/Prof + N007)
 
 El comentario `% x.pgm` del ISO usa el **nombre del archivo** `.pgmx`, no el `piece_name` interno

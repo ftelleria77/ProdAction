@@ -2287,13 +2287,22 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
         )
         self.assertFalse(sp._can_hydrate_pocket_template_trace(template, changed_depth))
 
-    def test_vaciado_035_circular_helical_case_stays_outside_polyline_adapter(self) -> None:
+    def test_vaciado_035_circular_adapts_as_contour_circle(self) -> None:
+        # Desde 2026-07-31 el adapter representa contornos GeomCircle como
+        # PocketSpec.contour_circle (cx, cy, r) sin fabricar polilinea; Vaciado_035
+        # (el caso circular/helicoidal que el lab dejo pendiente) ya ADAPTA. La
+        # SINTESIS productiva de pockets circulares sigue bloqueada (solo lectura).
         manual = _manual_path(35)
         self.assertTrue(manual.exists(), manual)
 
         adaptation = adapt_pgmx_path(manual)
-        self.assertEqual(len(adaptation.pockets), 0)
-        self.assertEqual(len(adaptation.unsupported_entries), 1)
+        self.assertEqual(len(adaptation.unsupported_entries), 0)
+        self.assertEqual(len(adaptation.pockets), 1)
+
+        spec = adaptation.pockets[0]
+        self.assertIsNotNone(spec.contour_circle)
+        self.assertEqual(spec.contour_points, ())
+        self.assertTrue(spec.contour_circle[2] > 0.0)
 
         feature = adaptation.snapshot.features[0]
         operation = adaptation.snapshot.operations[0]
@@ -2304,3 +2313,158 @@ class VaciadoPocketMillingCorpusTests(unittest.TestCase):
         self.assertTrue(operation.milling_strategy.is_helic_strategy)
         self.assertFalse(operation.milling_strategy.inside_to_outside)
         self.assertTrue(math.isclose(operation.allowance_side, 20.0, abs_tol=1e-6))
+
+        with self.assertRaises(NotImplementedError):
+            sp.synthesize_request(adaptation.build_synthesis_request(
+                Path(tempfile.gettempdir()) / "Vaciado_035_no_debe_escribirse.pgmx",
+                baseline_path=BASELINE_PATH,
+                source_pgmx_path=BASELINE_PATH,
+            ))
+
+
+EXPERIMENTO_01 = (Path(r"S:\Maestro\Projects\ProdAction\Programas Manuales")
+                  / "Experimento-01" / "vaciado_interior_esquinas_redondas.pgmx")
+
+
+def _toolpath_primitives(path: Path) -> dict[str, list]:
+    from pgmx.snapshot import read_pgmx_snapshot
+
+    snapshot = read_pgmx_snapshot(path)
+    operation = next(op for op in snapshot.operations
+                     if "RoughMilling" in op.operation_type)
+    result: dict[str, list] = {}
+    for toolpath in operation.toolpaths:
+        if toolpath.curve is None:
+            continue
+        texts = (toolpath.curve.member_serializations
+                 if toolpath.curve.geometry_type == "GeomCompositeCurve"
+                 else (toolpath.curve.serialization,))
+        result[toolpath.path_type] = [sp._parse_geometry_primitive(t) for t in texts]
+    return result
+
+
+class VaciadoRoundedCornersSynthesisTests(unittest.TestCase):
+    """Vaciado de contorno con ESQUINAS REDONDEADAS + leads lineales (Experimento-01,
+    2026-08-03, hecho a mano en Maestro).
+
+    Aporta dos cosas que el corpus del lab no tenia: contorno con ARCOS y leads
+    PROGRAMABLES (los 78 manuales del lab van con lead deshabilitado = descenso vertical).
+    El propio fixture es el ORACULO: se sintetiza la pieza desde los parametros de la UI y
+    se compara contra los toolpaths que Maestro almaceno.
+
+    Modelo derivado: anillos con offset w/2+rebaba y paso w*(1-overlap) recorridos
+    DENTRO->AFUERA, cada uno repitiendo la forma del contorno con radio de esquina R-d
+    (esquina VIVA cuando R-d <= 0), conectados por un tramo recto sobre el x de arranque;
+    lead lineal = (w/2)*RM sobre la direccion de avance (atras al entrar, adelante al salir).
+    """
+
+    CONTOUR = dict(x0=50.0, x1=250.0, y0=50.0, y1=250.0, radius=25.0, start_x=150.0)
+
+    def _contour_primitives(self, z: float = 0.0):
+        c = self.CONTOUR
+        x0, x1, y0, y1, r, sx = (c["x0"], c["x1"], c["y0"], c["y1"],
+                                 c["radius"], c["start_x"])
+
+        def line(a, b):
+            return sp.build_line_geometry_primitive(a[0], a[1], b[0], b[1],
+                                                    start_z=z, end_z=z)
+
+        def arc(a, b, center):
+            return sp.build_arc_geometry_primitive(a[0], a[1], b[0], b[1],
+                                                   center[0], center[1], z_value=z,
+                                                   winding="CounterClockwise")
+
+        return (
+            line((sx, y0), (x1 - r, y0)),
+            arc((x1 - r, y0), (x1, y0 + r), (x1 - r, y0 + r)),
+            line((x1, y0 + r), (x1, y1 - r)),
+            arc((x1, y1 - r), (x1 - r, y1), (x1 - r, y1 - r)),
+            line((x1 - r, y1), (x0 + r, y1)),
+            arc((x0 + r, y1), (x0, y1 - r), (x0 + r, y1 - r)),
+            line((x0, y1 - r), (x0, y0 + r)),
+            arc((x0, y0 + r), (x0 + r, y0), (x0 + r, y0 + r)),
+            line((x0 + r, y0), (sx, y0)),
+        )
+
+    def _spec(self, **kw):
+        base = dict(
+            contour_points=(),
+            contour_primitives=self._contour_primitives(),
+            feature_name="Vaciado",
+            tool_id="1900", tool_name="E001", tool_width=18.36,
+            security_plane=30.0, target_depth=9.0,
+            milling_strategy=sp.build_contour_parallel_milling_strategy_spec(),
+            approach_enabled=True, approach_type="Line", approach_mode="Down",
+            approach_radius_multiplier=2.0, approach_speed=-1.0,
+            retract_enabled=True, retract_type="Line", retract_mode="Up",
+            retract_radius_multiplier=2.0, retract_speed=-1.0,
+        )
+        base.update(kw)
+        return sp.build_pocket_spec(**base)
+
+    def _synthesize(self, output: Path, spec=None):
+        sp.synthesize_request(sp.build_synthesis_request(
+            output_path=output, piece_name="vaciado_interior_esquinas_redondas",
+            length=300.0, width=300.0, depth=18.0,
+            origin_x=0.0, origin_y=0.0, origin_z=0.0,
+            pockets=[spec or self._spec()], xn=None,
+        ))
+
+    @unittest.skipUnless(EXPERIMENTO_01.exists(), "fixture S: no disponible")
+    def test_sintesis_reproduce_los_toolpaths_de_maestro(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="vaciado_esquinas_") as temp_dir:
+            output = Path(temp_dir) / "esquinas_redondas_synth.pgmx"
+            self._synthesize(output)
+            generated = _toolpath_primitives(output)
+            reference = _toolpath_primitives(EXPERIMENTO_01)
+
+            for kind in ("Approach", "TrajectoryPath", "Lift"):
+                with self.subTest(kind):
+                    ref, gen = reference[kind], generated[kind]
+                    self.assertEqual(len(gen), len(ref))
+                    for i, (a, b) in enumerate(zip(ref, gen)):
+                        self.assertEqual(b.primitive_type, a.primitive_type, f"[{i}]")
+                        self.assertAlmostEqual(math.dist(a.start_point, b.start_point),
+                                               0.0, places=6, msg=f"[{i}] start")
+                        self.assertAlmostEqual(math.dist(a.end_point, b.end_point),
+                                               0.0, places=6, msg=f"[{i}] end")
+                        if a.primitive_type == "Arc":
+                            self.assertAlmostEqual(
+                                math.dist(a.center_point, b.center_point), 0.0,
+                                places=6, msg=f"[{i}] centro")
+                            self.assertAlmostEqual(a.radius, b.radius, places=6,
+                                                   msg=f"[{i}] radio")
+
+            self.assertEqual(len(reference["TrajectoryPath"]), 67)   # 59 rectas + 8 arcos
+            arcos = sum(1 for p in generated["TrajectoryPath"]
+                        if p.primitive_type == "Arc")
+            self.assertEqual(arcos, 8)     # solo los 2 anillos externos conservan esquina
+
+    def test_el_sintetizado_se_readapta_conservando_los_arcos(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="vaciado_esquinas_rt_") as temp_dir:
+            output = Path(temp_dir) / "esquinas_redondas_synth.pgmx"
+            self._synthesize(output)
+            adaptation = adapt_pgmx_path(output)
+            self.assertEqual(len(adaptation.unsupported_entries), 0)
+            (spec,) = adaptation.pockets
+            self.assertEqual(spec.contour_points, ())
+            self.assertEqual(len(spec.contour_primitives), 9)
+            self.assertEqual(
+                sum(1 for p in spec.contour_primitives if p.primitive_type == "Arc"), 4)
+
+    def test_formas_no_derivadas_fail_loud(self) -> None:
+        # Solo la forma fixtureada tiene regla: sentido/recorrido distinto o estrategia
+        # multipaso no estan derivados sobre contorno con arcos.
+        with tempfile.TemporaryDirectory(prefix="vaciado_esquinas_guard_") as temp_dir:
+            output = Path(temp_dir) / "no_debe_escribirse.pgmx"
+            for strategy_kw in (
+                dict(rotation_direction="Clockwise"),
+                dict(inside_to_outside=False),
+                dict(allow_multiple_passes=True, axial_cutting_depth=5.0),
+            ):
+                with self.subTest(**strategy_kw):
+                    spec = self._spec(
+                        milling_strategy=sp.build_contour_parallel_milling_strategy_spec(
+                            **strategy_kw))
+                    with self.assertRaises(NotImplementedError):
+                        self._synthesize(output, spec)

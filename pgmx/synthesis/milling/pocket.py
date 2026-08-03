@@ -19,6 +19,9 @@ from ..common.geometry import (
     _CurveSpec,
     _build_boundary_curve_holder,
     _build_closed_polyline_geometry_profile,
+    build_arc_geometry_primitive,
+    build_composite_geometry_profile,
+    build_line_geometry_primitive,
     _build_geometry_from_curve_spec,
     _build_maestro_arc_serialization,
     _build_start_point,
@@ -177,6 +180,20 @@ class PocketSpec:
     # convertía con el feed del catálogo EN SILENCIO).
     feedrate: float = 0.0
     spindle: float = 0.0
+    # SOLO LECTURA (adapter): contorno CIRCULAR (cx, cy, r) — la ventana Vaciado acepta un
+    # círculo como contorno (manual 2026-07-30: anillo circular con isla circular). Cuando
+    # está presente, `contour_points` queda VACÍO: el contorno es el círculo, y fabricar una
+    # polilínea muestreada sería evidencia falsa. La AUTORÍA lo rechaza (solo lectura).
+    contour_circle: Optional[tuple[float, float, float]] = None
+    # SOLO LECTURA (adapter): islas CIRCULARES (cx, cy, r). Un círculo dibujado en Maestro se
+    # serializa como GeomCompositeCurve de 2 arcos con el mismo centro/radio; el adapter lo
+    # RECONOCE y lo conserva como círculo (los sampled_points del snapshot NO son la isla).
+    boss_circles: tuple[tuple[float, float, float], ...] = ()
+    # SOLO LECTURA (adapter): contorno de POLILÍNEA CON ARCOS (Experimento-01, 2026-08-03:
+    # rectángulo de esquinas redondeadas). Las primitivas parseadas del perfil (rectas +
+    # arcos), tal cual el .pgmx; cuando está presente, `contour_points` queda vacío. La
+    # AUTORÍA lo rechaza (solo lectura).
+    contour_primitives: tuple[GeometryPrimitiveSpec, ...] = ()
 
     @property
     def effective_contour_offset(self) -> float:
@@ -292,7 +309,16 @@ def _append_pocket(root: ET.Element, state: PgmxState, spec: _HydratedPocketSpec
     if any(node is None for node in (geometries, features, operations, expressions, elements, workpiece)):
         raise ValueError("La plantilla no contiene todas las colecciones requeridas para sintetizar el Vaciado.")
 
-    if not _is_closed_polyline_points(spec.contour_points):
+    if spec.spec.contour_circle is not None or spec.spec.boss_circles:
+        # Contorno/isla CIRCULAR: solo LECTURA (manual 2026-07-30). La serialización
+        # productiva del vaciado circular no está derivada — fabricarla sería una
+        # hipótesis disfrazada; esos fixtures se hacen EN Maestro (regla 5).
+        raise NotImplementedError(
+            "PocketSpec con contorno o isla CIRCULAR se adapta para lectura, pero la "
+            "síntesis productiva no está implementada (los fixtures circulares se "
+            "dibujan en Maestro).")
+
+    if not spec.spec.contour_primitives and not _is_closed_polyline_points(spec.contour_points):
         raise ValueError("PocketSpec requiere un contorno cerrado.")
 
     workpiece_id = _text(workpiece, "./{*}Key/{*}ID")
@@ -306,7 +332,9 @@ def _append_pocket(root: ET.Element, state: PgmxState, spec: _HydratedPocketSpec
 
     trajectory_sequences = _build_pocket_trajectory_xyz_sequences(state, spec)
     boundary_curve = spec.geometry_curve or _curve_spec_from_profile_geometry(
-        _build_closed_polyline_geometry_profile(spec.contour_points, z_value=0.0)
+        _profile_from_contour_primitives(spec.spec.contour_primitives, z_value=0.0)
+        if spec.spec.contour_primitives
+        else _build_closed_polyline_geometry_profile(spec.contour_points, z_value=0.0)
     )
     boundary_member_count = len(boundary_curve.member_serializations)
     boss_geometry_curves = tuple(
@@ -529,6 +557,31 @@ def _build_closed_pocket_boss(
     return boss
 
 
+def _pocket_lead_offset_xy(lead_spec, spec, sequence, at_start: bool):
+    """XY del extremo exterior de un lead LINEAL «En bajada»/«En subida» de vaciado
+    (Experimento-01): a `(w/2)×RM` del punto de entrada/salida sobre la dirección de
+    avance — hacia atrás en el acercamiento, hacia adelante en el alejamiento. Sin lead
+    habilitado (u otro tipo/modo) devuelve el punto mismo: descenso/ascenso VERTICAL,
+    como en todo el corpus rectangular."""
+    anchor = sequence[0] if at_start else sequence[-1]
+    lead_type = (lead_spec.approach_type if at_start else lead_spec.retract_type)
+    ok_mode = "Down" if at_start else "Up"
+    if not lead_spec.is_enabled or lead_type != "Line" or lead_spec.mode != ok_mode:
+        return (anchor[0], anchor[1])
+    if len(sequence) < 2:
+        return (anchor[0], anchor[1])
+    neighbour = sequence[1] if at_start else sequence[-2]
+    dx = (neighbour[0] - anchor[0]) if at_start else (anchor[0] - neighbour[0])
+    dy = (neighbour[1] - anchor[1]) if at_start else (anchor[1] - neighbour[1])
+    length = math.hypot(dx, dy)
+    if length <= 1e-9:
+        return (anchor[0], anchor[1])
+    lead = float(spec.tool_width) / 2.0 * float(lead_spec.radius_multiplier)
+    sign = -1.0 if at_start else 1.0
+    return (anchor[0] + sign * lead * dx / length,
+            anchor[1] + sign * lead * dy / length)
+
+
 def _build_pocket_operation(
     state,
     spec: _HydratedPocketSpec,
@@ -559,12 +612,20 @@ def _build_pocket_operation(
     first_point = first_sequence[0]
     last_point = last_sequence[-1]
     clearance_z = state.depth + spec.security_plane
+    # Lead LINEAL «En bajada»/«En subida» (Experimento-01, 2026-08-03): el acercamiento
+    # arranca a lead = (w/2)×RM ANTES del inicio sobre la dirección de avance y baja
+    # inclinado hasta la cota de corte; el alejamiento es su espejo. Sin lead habilitado
+    # (o de otro tipo/modo) el descenso es VERTICAL, como en todo el corpus rectangular.
+    approach_xy = _pocket_lead_offset_xy(
+        spec.approach, spec, first_sequence, at_start=True)
+    retract_xy = _pocket_lead_offset_xy(
+        spec.retract, spec, last_sequence, at_start=False)
     toolpath_list.append(
         _build_toolpath(
             "Approach",
             _trimmed_curve_spec(
                 _build_toolpath_description(
-                    (first_point[0], first_point[1], clearance_z),
+                    (approach_xy[0], approach_xy[1], clearance_z),
                     first_point,
                 )
             ),
@@ -586,7 +647,7 @@ def _build_pocket_operation(
             _trimmed_curve_spec(
                 _build_toolpath_description(
                     last_point,
-                    (last_point[0], last_point[1], clearance_z),
+                    (retract_xy[0], retract_xy[1], clearance_z),
                 )
             ),
         )
@@ -1547,12 +1608,155 @@ def _points_are_close_3d(
     )
 
 
+def _profile_from_contour_primitives(primitives, z_value: float):
+    """Perfil compuesto (rectas + arcos) a partir de primitivas de contorno, reasignando z.
+    Usado por el contorno de esquinas REDONDEADAS (Experimento-01)."""
+    rebuilt = []
+    for prim in primitives:
+        if prim.primitive_type == "Arc":
+            winding = ("CounterClockwise"
+                       if (prim.normal_vector is None or prim.normal_vector[2] >= 0)
+                       else "Clockwise")
+            rebuilt.append(build_arc_geometry_primitive(
+                prim.start_point[0], prim.start_point[1],
+                prim.end_point[0], prim.end_point[1],
+                prim.center_point[0], prim.center_point[1],
+                z_value=z_value, winding=winding))
+        else:
+            rebuilt.append(build_line_geometry_primitive(
+                prim.start_point[0], prim.start_point[1],
+                prim.end_point[0], prim.end_point[1],
+                start_z=z_value, end_z=z_value))
+    return build_composite_geometry_profile(tuple(rebuilt))
+
+
+def _rounded_contour_geometry(spec: _HydratedPocketSpec):
+    """(x0, x1, y0, y1, radio, start_x) de un contorno rectilíneo a ejes con las CUATRO
+    esquinas redondeadas al MISMO radio, arrancando sobre el borde inferior (la forma de
+    Experimento-01). None si el contorno no tiene esa forma."""
+    primitives = spec.spec.contour_primitives
+    arcs = [p for p in primitives if p.primitive_type == "Arc"]
+    lines = [p for p in primitives if p.primitive_type == "Line"]
+    if len(arcs) != 4 or len(lines) + len(arcs) != len(primitives):
+        return None
+    if len({round(float(arc.radius), 6) for arc in arcs}) != 1:
+        return None
+    if any((arc.normal_vector or (0.0, 0.0, 1.0))[2] <= 0.0 for arc in arcs):
+        return None            # las 4 esquinas CCW (contorno antihorario)
+    for line in lines:
+        if (abs(line.start_point[0] - line.end_point[0]) > 1e-6
+                and abs(line.start_point[1] - line.end_point[1]) > 1e-6):
+            return None        # recta diagonal
+    radius = float(arcs[0].radius)
+    xs = [v for p in primitives for v in (p.start_point[0], p.end_point[0])]
+    ys = [v for p in primitives for v in (p.start_point[1], p.end_point[1])]
+    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+    # centros de arco = las 4 esquinas del bbox retraídas el radio
+    expected = {(round(x, 6), round(y, 6))
+                for x in (x0 + radius, x1 - radius) for y in (y0 + radius, y1 - radius)}
+    if {(round(a.center_point[0], 6), round(a.center_point[1], 6)) for a in arcs} != expected:
+        return None
+    start = primitives[0].start_point
+    if abs(start[1] - y0) > 1e-6 or not (x0 + radius < start[0] < x1 - radius):
+        return None            # el arranque va sobre el tramo recto del borde inferior
+    if radius <= 0.0 or min(x1 - x0, y1 - y0) / 2.0 <= radius - 1e-9:
+        return None
+    return (x0, x1, y0, y1, radius, float(start[0]))
+
+
+def _rounded_contour_trajectory_primitives(spec: _HydratedPocketSpec, z: float):
+    """Primitivas (rectas + arcos) de la trayectoria ContourParallel sobre un contorno de
+    esquinas redondeadas — modelo derivado de Experimento-01 (67/67 miembros exactos):
+
+    - anillos offseteados hacia adentro: d = w/2 + AllowanceSide, luego pasos de
+      w×(1−Overlap), mientras el anillo tenga área (d < mitad del lado menor);
+    - recorrido DENTRO→AFUERA (`InsideToOutSide`), arrancando cada anillo en
+      (start_x, y0+d) y cerrando ahí mismo;
+    - cada anillo repite la forma del contorno con radio de esquina R−d; cuando R−d ≤ 0 la
+      esquina es VIVA (el anillo es un rectángulo);
+    - entre anillos, un conector RECTO sobre x=start_x (baja al anillo siguiente).
+    """
+    geometry = _rounded_contour_geometry(spec)
+    if geometry is None:
+        return None
+    x0, x1, y0, y1, radius, start_x = geometry
+    strategy = spec.milling_strategy
+    if (strategy.rotation_direction != "CounterClockwise"
+            or not strategy.inside_to_outside
+            or strategy.allow_multiple_passes
+            or strategy.is_helic_strategy):
+        return None
+    step = float(spec.tool_width) * (1.0 - float(strategy.overlap))
+    if step <= 0.0:
+        return None
+    offsets = []
+    d = float(spec.effective_contour_offset)
+    limit = min(x1 - x0, y1 - y0) / 2.0
+    while d < limit - 1e-9:
+        offsets.append(d)
+        d += step
+    if not offsets:
+        return None
+
+    def line(a, b):
+        return build_line_geometry_primitive(a[0], a[1], b[0], b[1], start_z=z, end_z=z)
+
+    def arc(a, b, center):
+        return build_arc_geometry_primitive(a[0], a[1], b[0], b[1], center[0], center[1],
+                                            z_value=z, winding="CounterClockwise")
+
+    primitives = []
+    previous_start = None
+    for offset in reversed(offsets):                      # dentro → afuera
+        ax0, ax1 = x0 + offset, x1 - offset
+        ay0, ay1 = y0 + offset, y1 - offset
+        r = radius - offset
+        start = (start_x, ay0)
+        if previous_start is not None:
+            primitives.append(line(previous_start, start))   # conector entre anillos
+        if r > 1e-9:
+            primitives += [
+                line(start, (ax1 - r, ay0)),
+                arc((ax1 - r, ay0), (ax1, ay0 + r), (ax1 - r, ay0 + r)),
+                line((ax1, ay0 + r), (ax1, ay1 - r)),
+                arc((ax1, ay1 - r), (ax1 - r, ay1), (ax1 - r, ay1 - r)),
+                line((ax1 - r, ay1), (ax0 + r, ay1)),
+                arc((ax0 + r, ay1), (ax0, ay1 - r), (ax0 + r, ay1 - r)),
+                line((ax0, ay1 - r), (ax0, ay0 + r)),
+                arc((ax0, ay0 + r), (ax0 + r, ay0), (ax0 + r, ay0 + r)),
+                line((ax0 + r, ay0), start),
+            ]
+        else:
+            primitives += [
+                line(start, (ax1, ay0)),
+                line((ax1, ay0), (ax1, ay1)),
+                line((ax1, ay1), (ax0, ay1)),
+                line((ax0, ay1), (ax0, ay0)),
+                line((ax0, ay0), start),
+            ]
+        previous_start = start
+    return tuple(primitives)
+
+
 def _build_pocket_trajectory_xyz_sequences(
     state,
     spec: _HydratedPocketSpec,
 ) -> tuple[tuple[tuple[float, float, float], ...], ...]:
     if spec.trajectory_sequences:
         return spec.trajectory_sequences
+
+    if spec.spec.contour_primitives and not spec.boss_contours and not spec.boss_route_seeds:
+        # Contorno de esquinas REDONDEADAS (Experimento-01): la trayectoria se genera con
+        # primitivas (rectas + arcos). Acá se devuelven sus PUNTOS (Approach/Lift, conteos);
+        # las curvas con arcos las arma `_build_pocket_trajectory_curve_specs`.
+        z = float(state.depth) - float(_feature_depth_value(state, spec))
+        primitives = _rounded_contour_trajectory_primitives(spec, z)
+        if primitives is None:
+            raise NotImplementedError(
+                "PocketSpec con contorno de arcos que no es el rectángulo de esquinas "
+                "redondeadas derivado (Experimento-01): sin regla de trayectoria.")
+        points = [primitives[0].start_point] + [p.end_point for p in primitives]
+        return (tuple((p[0], p[1], p[2]) for p in points),)
 
     if not spec.boss_contours and not spec.boss_route_seeds:
         return (_build_contour_parallel_xyz_path(state, spec),)
@@ -1584,6 +1788,13 @@ def _build_pocket_trajectory_curve_specs(
 ) -> tuple[_CurveSpec, ...]:
     if spec.trajectory_curves and len(spec.trajectory_curves) == len(trajectory_sequences):
         return spec.trajectory_curves
+
+    if spec.spec.contour_primitives and not spec.boss_contours and not spec.boss_route_seeds:
+        # Esquinas redondeadas: la curva conserva los ARCOS (no se aplana a polilínea).
+        z = trajectory_sequences[0][0][2]
+        primitives = _rounded_contour_trajectory_primitives(spec, z)
+        return (_curve_spec_from_profile_geometry(
+            build_composite_geometry_profile(primitives)),)
 
     if not spec.boss_contours and not spec.boss_route_seeds:
         return tuple(_curve_spec_from_xyz_path(sequence) for sequence in trajectory_sequences)
@@ -1704,13 +1915,34 @@ def build_pocket_spec(
     boss_contours: Optional[Sequence[Sequence[tuple[float, float]]]] = None,
     boss_route_seeds: Optional[Sequence[PocketBossRouteSeedSpec]] = None,
     is_enabled_expr: Optional[str] = None,
+    contour_circle: Optional[tuple[float, float, float]] = None,
+    boss_circles: Optional[Sequence[tuple[float, float, float]]] = None,
+    contour_primitives: Optional[Sequence[GeometryPrimitiveSpec]] = None,
 ) -> PocketSpec:
     """Construye la spec publica de `Vaciado` para lectura/adaptacion."""
 
-    normalized_points = _normalize_closed_contour(
-        contour_points,
-        label="PocketSpec",
-    )
+    if contour_circle is not None and contour_primitives:
+        raise ValueError("PocketSpec: contour_circle y contour_primitives son excluyentes.")
+    if contour_circle is not None:
+        # Contorno CIRCULAR (solo lectura, manual 2026-07-30): el círculo ES el contorno;
+        # no se fabrica ninguna polilínea equivalente.
+        if contour_points:
+            raise ValueError("PocketSpec: contour_circle y contour_points son excluyentes.")
+        if not float(contour_circle[2]) > 0.0:
+            raise ValueError("PocketSpec: contour_circle necesita radio > 0.")
+        normalized_points: tuple[tuple[float, float], ...] = ()
+    elif contour_primitives:
+        # Contorno de polilínea CON ARCOS (solo lectura, Experimento-01 2026-08-03): las
+        # primitivas parseadas son la representación; no se aplana a puntos.
+        if contour_points:
+            raise ValueError(
+                "PocketSpec: contour_primitives y contour_points son excluyentes.")
+        normalized_points = ()
+    else:
+        normalized_points = _normalize_closed_contour(
+            contour_points,
+            label="PocketSpec",
+        )
     normalized_boss_contours = [
         _normalize_closed_contour(
             boss_contour,
@@ -1790,6 +2022,11 @@ def build_pocket_spec(
         boss_contours=tuple(normalized_boss_contours),
         boss_route_seeds=normalized_boss_route_seeds,
         is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,
+        contour_circle=(None if contour_circle is None
+                        else tuple(float(v) for v in contour_circle)),
+        boss_circles=tuple(
+            (float(cx), float(cy), float(r)) for cx, cy, r in (boss_circles or ())),
+        contour_primitives=tuple(contour_primitives or ()),
     )
 
 

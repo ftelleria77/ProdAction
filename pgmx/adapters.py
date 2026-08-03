@@ -497,6 +497,29 @@ def _xy_points_from_curve_snapshot(curve) -> tuple[tuple[float, float], ...]:
     return tuple((float(point[0]), float(point[1])) for point in curve.sampled_points)
 
 
+def _boss_circle_from_curve(curve) -> "tuple[float, float, float] | None":
+    """(cx, cy, r) si la curva de isla es un CÍRCULO: composite cuyos miembros son todos
+    arcos con el mismo centro y radio (así serializa Maestro un círculo dibujado — 2
+    semicírculos, manual 2026-07-30). None si no es reconocible como círculo."""
+    if curve is None or curve.geometry_type != "GeomCompositeCurve":
+        return None
+    if not curve.member_serializations:
+        return None
+    center_radius = None
+    for text in curve.member_serializations:
+        primitive = sp._parse_geometry_primitive(text)
+        if (primitive is None or primitive.primitive_type != "Arc"
+                or primitive.center_point is None or primitive.radius is None):
+            return None
+        candidate = (primitive.center_point[0], primitive.center_point[1],
+                     float(primitive.radius))
+        if center_radius is None:
+            center_radius = candidate
+        elif any(abs(a - b) > 1e-6 for a, b in zip(center_radius, candidate)):
+            return None
+    return center_radius
+
+
 def _stored_trajectory_primitives_all(
     operation,
 ) -> tuple[tuple[sp.GeometryPrimitiveSpec, ...], ...]:
@@ -1032,16 +1055,38 @@ def _adapt_pocket_milling(
             reasons=reasons,
         )
     profile = geometry.profile
-    if profile.geometry_type != "GeomCompositeCurve" or not profile.is_closed:
-        reasons.append("La geometria del `ClosedPocket` no es un contorno compuesto cerrado.")
-    if profile.has_arcs:
-        reasons.append("El adaptador inicial de `Vaciado` todavia no representa contornos con arcos.")
-    boss_contours = tuple(
-        contour
-        for contour in (_xy_points_from_curve_snapshot(curve) for curve in feature.boss_geometry_curves)
-        if contour
-    )
-    if len(boss_contours) != len(feature.boss_geometry_curves):
+    # Contorno CIRCULAR (manual 2026-07-30): la ventana Vaciado acepta un círculo como
+    # contorno; se representa como (cx, cy, r), sin fabricar polilínea. Contorno de
+    # polilínea CON ARCOS (Experimento-01, 2026-08-03: rectángulo de esquinas
+    # redondeadas): se conservan las primitivas parseadas tal cual.
+    contour_circle = None
+    contour_primitives: tuple = ()
+    if (profile.geometry_type == "GeomCircle" and profile.center_point is not None
+            and profile.radius):
+        contour_circle = (profile.center_point[0], profile.center_point[1],
+                          float(profile.radius))
+    elif profile.geometry_type != "GeomCompositeCurve" or not profile.is_closed:
+        reasons.append("La geometria del `ClosedPocket` no es un contorno compuesto cerrado ni un circulo.")
+    elif profile.has_arcs:
+        contour_primitives = tuple(profile.primitives)
+    # Islas: un círculo dibujado se serializa como composite de arcos concéntricos — se
+    # reconoce y conserva como CÍRCULO (los sampled_points no son la isla real); el resto
+    # sigue como polilínea de puntos muestreados.
+    boss_circles: list[tuple[float, float, float]] = []
+    boss_contours_list: list[tuple[tuple[float, float], ...]] = []
+    unresolved_bosses = 0
+    for curve in feature.boss_geometry_curves:
+        circle = _boss_circle_from_curve(curve)
+        if circle is not None:
+            boss_circles.append(circle)
+            continue
+        contour = _xy_points_from_curve_snapshot(curve)
+        if contour:
+            boss_contours_list.append(contour)
+        else:
+            unresolved_bosses += 1
+    boss_contours = tuple(boss_contours_list)
+    if unresolved_bosses:
         reasons.append("No se pudieron resolver todas las geometrias de isla del `ClosedPocket`.")
     boss_route_seeds = _boss_route_seeds_from_feature(snapshot, feature)
     if feature.depth_spec is None:
@@ -1073,7 +1118,11 @@ def _adapt_pocket_milling(
     retract = operation.retract or sp.build_retract_spec()
     try:
         spec = sp.build_pocket_spec(
-            contour_points=_polyline_points_from_profile(profile),
+            contour_points=(() if (contour_circle is not None or contour_primitives)
+                            else _polyline_points_from_profile(profile)),
+            contour_circle=contour_circle,
+            contour_primitives=contour_primitives,
+            boss_circles=tuple(boss_circles),
             feature_name=_default_name(feature, step, "Vaciado"),
             plane_name=_plane_name_or_default(feature),
             tool_id=tool_key.id,

@@ -594,5 +594,132 @@ class ClosedN044Test(unittest.TestCase):
                    self._REFS / "n_g_cad_leads.iso")
 
 
+class EndToEndExperimento01MixedFamiliesTest(unittest.TestCase):
+    """Experimento-01 ELP/SCS (2026-08-03): contorno perimetral (E001) + fresado lineal
+    (E004) en el MISMO programa — primeros fixtures con DOS familias de router.
+
+    Derivado: la transición entre familias ES la de cambio de herramienta de N028 (no
+    aporta nada propio); el alejamiento de una op NO-última cierra normal cuando la
+    siguiente cambia de fresa; el reset EXTRA de ?%ETK[7]=0 de la salida compensada NO va
+    con cambio de herramienta; `%DONTCARESPEEDV=1` se emite en el teardown cuando una op
+    POSTERIOR tiene multipasada con conexión a cota de seguridad; y en el multipaso el
+    plunge inicial y el traslado por el aire usan el feed del CATÁLOGO (no el override de
+    Avanz), mientras el traslado «en la pieza» usa el efectivo."""
+
+    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\Programas Manuales\Experimento-01")
+    _REFS = Path(r"P:\USBMIX\ProdAction\Programas Manuales\Experimento-01")
+    # Fermín renombró los fixtures el 2026-08-03: los nombres largos daban problemas en el
+    # CNC (el ISO lleva el nombre del archivo en su comentario `% x.pgm`).
+    _STEM = "Fresado Lineal_Unidirecional_"
+
+    def test_multipaso_byte_identico(self):
+        # SCS_MP5 no está acá: es la única DIVERGENCIA DELIBERADA del proyecto
+        # (`%DONTCARESPEEDV=1` omitido) — la cubre el test siguiente.
+        _e2e_check(self, self._FIXTURES / f"{self._STEM}ELP_MP5.pgmx",
+                   self._REFS / f"{self._STEM.lower()}elp_mp5.iso")
+
+    def test_dontcarespeedv_se_omite_a_proposito(self):
+        # DIVERGENCIA DELIBERADA (decisión de Fermín, 2026-08-03): Maestro emite
+        # `%DONTCARESPEEDV=1` y el CNC ABORTA con «Alarma 67: Assegnazione a registro
+        # inesistente» (ejecución real del 2026-08-03: de los 4 fixtures, el único que
+        # falló fue éste, el único con esa línea). El manual de Xilog documenta la
+        # instrucción como `SET DONTCARE=1` y `DONTCARESPEEDV` no existe en la
+        # configuración de la máquina ⇒ la línea está MAL FORMADA. El converter la omite:
+        # nuestro ISO es EJECUTABLE donde el de Maestro no lo es. Todo lo demás,
+        # idéntico línea a línea.
+        pgmx = self._FIXTURES / f"{self._STEM}SCS_MP5.pgmx"
+        ref = self._REFS / f"{self._STEM.lower()}scs_mp5.iso"
+        if not pgmx.exists() or not ref.exists():
+            self.skipTest("fixtures S:/P: no disponibles")
+        generado = [ln.rstrip() for ln in convert(pgmx).splitlines()]
+        maestro = [ln.rstrip() for ln in ref.read_text(encoding="cp1252")
+                   .replace("\r\n", "\n").splitlines()]
+        self.assertIn("%DONTCARESPEEDV=1", maestro)          # Maestro SÍ la emite
+        self.assertNotIn("%DONTCARESPEEDV=1", generado)      # nosotros NO
+        self.assertEqual(generado,
+                         [ln for ln in maestro if ln != "%DONTCARESPEEDV=1"])
+        # El comparador funcional la SALVA: la descuenta y la reporta, sin marcar el
+        # archivo como distinto.
+        from iso.synthesis.compare import classify_iso_diff
+        comparison = classify_iso_diff(convert(pgmx), ref.read_text(encoding="cp1252"))
+        self.assertEqual(comparison.verdict, "funcionalmente_identico",
+                         comparison.report())
+        self.assertEqual(comparison.deliberate_omissions, ("%DONTCARESPEEDV=1",))
+
+    def test_conexion_entre_pasadas(self):
+        # ELP (En la pieza) retorna a z_pasada + MILLING_RETRACT(10) → ISO +5; SCS (Salida
+        # a cota de seguridad) retorna a la cota de seguridad (30). Confirma N025.
+        refs = {t: self._REFS / f"{self._STEM.lower()}{t}.iso" for t in ("elp_mp5", "scs_mp5")}
+        if not all(r.exists() for r in refs.values()):
+            self.skipTest("fixtures P: no disponibles")
+        elp = refs["elp_mp5"].read_text(encoding="cp1252")
+        scs = refs["scs_mp5"].read_text(encoding="cp1252")
+        self.assertIn("G1 Z5.000 F2000.000", elp)          # z_pasada(−5) + 10
+        self.assertIn("G1 X8.000 Z5.000 F2000.000", elp)   # traslado EN LA PIEZA
+        self.assertIn("G1 Z30.000 F2000.000", scs)         # cota de seguridad
+        self.assertIn("G1 X8.000 Z30.000 F5000.000", scs)  # traslado por AIRE: feed catálogo
+        # Maestro emite además `%DONTCARESPEEDV=1` solo en el SCS — la línea inválida que
+        # aborta el CNC y que nosotros omitimos a propósito (ver el test de divergencia).
+        self.assertIn("%DONTCARESPEEDV=1", scs)
+        self.assertNotIn("%DONTCARESPEEDV=1", elp)
+
+    def test_sin_multipaso_la_conexion_es_invisible(self):
+        # Predicción registrada ANTES de postprocesar (router_line_milling.md), CONFIRMADA:
+        # con «Habilitar multipaso» apagado no hay conexión que mostrar, así que los ISO de
+        # ELP y SCS son idénticos salvo el comentario del nombre. Sostiene N036.
+        refs = [self._REFS / f"{self._STEM.lower()}{t}.iso" for t in ("elp", "scs")]
+        if not all(r.exists() for r in refs):
+            self.skipTest("fixtures P: no disponibles")
+        cuerpos = [[ln.rstrip() for ln in r.read_text(encoding="cp1252")
+                    .replace("\r\n", "\n").splitlines()][1:] for r in refs]
+        self.assertEqual(cuerpos[0], cuerpos[1])
+
+    def test_una_sola_op_pone_la_linea_invalida_en_el_PREAMBULO(self):
+        # `SOLO_Unidirecional_SCS_MP5` (2026-08-03): el MISMO fresado lineal como ÚNICA
+        # operación. Maestro emite `%DONTCARESPEEDV=1` igual —sin op previa donde
+        # colgarla— pero en el PREÁMBULO, entre el 2º y el 3er par ?%ETK[8]=1/G40 (el
+        # mismo slot del park del Xn-al-inicio). El bug es sistemático; solo cambia de
+        # lugar. Nuestro ISO queda funcionalmente idéntico y EJECUTABLE.
+        from iso.synthesis.compare import classify_iso_diff
+        pgmx = self._FIXTURES / "SOLO_Unidirecional_SCS_MP5.pgmx"
+        ref = self._REFS / "solo_unidirecional_scs_mp5.iso"
+        if not pgmx.exists() or not ref.exists():
+            self.skipTest("fixtures S:/P: no disponibles")
+        maestro = [ln.rstrip() for ln in ref.read_text(encoding="cp1252")
+                   .replace("\r\n", "\n").splitlines()]
+        posicion = maestro.index("%DONTCARESPEEDV=1")
+        self.assertEqual(maestro[posicion - 2:posicion], ["?%ETK[8]=1", "G40"])
+        self.assertEqual(maestro[posicion + 1:posicion + 3], ["?%ETK[8]=1", "G40"])
+        comparison = classify_iso_diff(convert(pgmx), ref.read_text(encoding="cp1252"))
+        self.assertEqual(comparison.verdict, "funcionalmente_identico",
+                         comparison.report())
+        self.assertEqual(comparison.deliberate_omissions, ("%DONTCARESPEEDV=1",))
+        self.assertEqual(comparison.numeric_diffs, ())
+        self.assertEqual(comparison.structural_issues, ())
+
+    def test_sin_multipaso_queda_un_delta_de_feed_conocido(self):
+        # CASO CONOCIDO NO DERIVADO (queda registrado, no escondido): con la estrategia
+        # declarada pero multipaso APAGADO y override de Avanz, Maestro emite el plunge al
+        # feed de CORTE del catálogo (F5000) y nosotros al de plunge (F2000) — el adapter
+        # anula la estrategia (N036 strat_single) y el converter pierde esa señal. N028
+        # (sin estrategia, con override) sí emite F2000, así que hace falta un lote que
+        # separe «hay estrategia» de «hay override» antes de tocar la regla.
+        from iso.synthesis.compare import classify_iso_diff
+        for tag in ("ELP", "SCS"):
+            pgmx = self._FIXTURES / f"{self._STEM}{tag}.pgmx"
+            ref = self._REFS / f"{self._STEM.lower()}{tag.lower()}.iso"
+            if not pgmx.exists() or not ref.exists():
+                self.skipTest("fixtures S:/P: no disponibles")
+            with self.subTest(tag):
+                comparison = classify_iso_diff(convert(pgmx),
+                                               ref.read_text(encoding="cp1252"))
+                self.assertEqual(comparison.verdict, "diferente")
+                self.assertEqual(len(comparison.numeric_diffs), 1)
+                diff = comparison.numeric_diffs[0]
+                self.assertEqual((diff.value_reference, diff.value_generated),
+                                 (5000.0, 2000.0))
+                self.assertIn("G1 Z-10.000", diff.line_reference)
+
+
 if __name__ == "__main__":
     unittest.main()

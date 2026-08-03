@@ -342,6 +342,111 @@ composite): fail-loud correcto en el adapter. Es EL pendiente de la etapa — re
 el adapter/spec representen contornos circulares (el render ya emite arcos; el fixture y
 su ISO ya están en Programas Manuales). Suite 664.
 
+## VACIADO CIRCULAR (2026-07-31) — representación LISTA; una milésima lo deja guardado
+
+El adapter/spec ya LEEN el círculo: `PocketSpec.contour_circle` (cx, cy, r — sin fabricar
+polilínea; `contour_points` queda vacío) y `PocketSpec.boss_circles` (un círculo dibujado
+se serializa como composite de 2 arcos concéntricos y el adapter lo reconoce — los
+`sampled_points` NO son la isla real). La AUTORÍA los rechaza (`NotImplementedError` en
+`_append_pocket`: solo lectura, los fixtures circulares se dibujan en Maestro — regla 5).
+De regalo: `Vaciado_035` del corpus del lab (el circular/helicoidal pendiente desde mayo)
+ya adapta limpio.
+
+**Pero el anillo NO se declara derivado**: el fixture convierte 143/144 líneas y la que
+falta es una MILÉSIMA subdeterminada. `G2 X209.524 Y209.524` (línea 91): Maestro emite
+`I150.000 J150.001` y nuestro reajuste da `J150.0004`. Se demostró que ese centro **no es
+equidistante de los endpoints redondeados** (dist 84.1800 vs 84.1793) — o sea que NINGÚN
+ajuste geométrico sobre los datos del `.pgmx` puede producirlo. Se barrió: fit de 2 puntos
+(20 variantes: endpoints exactos/redondeados × 5 fuentes de radio × 2 órdenes aritméticos
+× 2 modos de redondeo), circuncentro por 3 puntos (peor: 19/47), y float32 (mucho peor:
+cancelación catastrófica en cuerdas casi diametrales). El reajuste actual explica 46/47
+arcos de los 3 fixtures con arcos; el que resiste es ruido interno del emisor en un caso
+borde (a 0.0005 del corte de redondeo).
+
+Regla 4: antes que aproximar, RECHAZO — `_validate_pocket` deja el contorno circular
+fail-loud con el diagnóstico. **Para dirimir hacen falta más fixtures circulares** (2-3
+anillos manuales con otro radio/centro/herramienta): más muestras del wobble confirman un
+patrón o confirman que esa milésima es irreproducible — y en ese caso la decisión es de
+Fermín (sería la primera vez que el byte-idéntico choca con no-determinismo del emisor).
+Suite 665 (ahora TAMBIÉN corren los 57 tests del corpus del lab: `EXTERNAL_ROOT` ya
+apuntaba a `Investigación previa\PGMX` y la VPN responde — Vaciado_035 re-fixtureado como
+"adapta + autoría bloqueada").
+
+## LA MILÉSIMA, RESUELTA POR DATO DE DOMINIO (Fermín, 2026-07-31) — comparador funcional
+
+**Confirmación de Fermín**: Maestro comete errores de cálculo del orden de las MILÉSIMAS
+de milímetro — suma o resta algunas milésimas a los parámetros sin razón aparente
+(probablemente manejo de coma flotante). La máquina tiene precisión del orden de la
+DÉCIMA de milímetro, así que ese ruido es invisible en el mecanizado. La consecuencia
+metodológica, pedida por él: al comparar ISOs (Maestro vs converter) hay que poder
+IDENTIFICAR esa clase de diferencia — "no byte-idéntico pero probablemente funcionalmente
+idéntico".
+
+Implementado: **`iso/synthesis/compare.py`** — clasifica una comparación en
+`byte_identico` / `funcionalmente_identico` / `diferente`:
+- *funcionalmente idéntico* = mismo ESQUELETO (mismas líneas; los enteros — G2/G3, T{n},
+  índices ETK, S — son esqueleto, nunca valores tolerables) con deltas numéricos
+  ≤ tolerancia (default 0.005 mm: 20× debajo de la precisión de máquina, arriba del ruido
+  observado ±0.001). Cada delta queda REPORTADO — se identifica, no se esconde.
+- CLI para la validación masiva del corpus de control:
+  `py -m iso.synthesis.compare generado.iso referencia.iso`.
+
+Con eso, **el ANILLO CIRCULAR queda DERIVADO (funcionalmente)**: la guarda se levantó
+(forma fixtureada: anillo concéntrico, círculo + una isla circular) y su e2e afirma
+`funcionalmente_identico` con EXACTAMENTE un delta de 0.001 en el `J` conocido. El
+byte-idéntico sigue siendo el estándar de derivación de todos los lotes; el comparador
+entra cuando el byte falla, para separar ruido del emisor de diferencias reales.
+Suite 670. Pendientes de la etapa: manuales de pasante y Avanz./Rotación.
+
+## EXPERIMENTO-01 (2026-08-03) — esquinas redondeadas + LEADS, esperando su ISO
+
+`Programas Manuales\Experimento-01\vaciado_interior_esquinas_redondas.pgmx` (Fermín):
+DOBLE frente en un fixture — (a) contorno de **rectángulo con esquinas REDONDEADAS**
+(5 rectas + 4 arcos r=25, arranque a mitad de borde, E001, ciego −9, una trayectoria de
+59 rectas + 8 arcos plana a −9), y (b) **LEADS habilitados** (Acercamiento Line «En
+bajada» RM=2, Alejamiento Line «En subida» RM=2) con curvas `Approach`/`Lift`
+MATERIALIZADAS en el toolpath — va a responder la pregunta abierta del relevamiento: ¿el
+lead del vaciado se emite desde lo almacenado o se recalcula?
+
+Preparado (2026-08-03): el adapter/spec ya representan el contorno con arcos
+(`PocketSpec.contour_primitives`, solo lectura, sin aplanar a puntos; autoría bloqueada);
+la conversión queda fail-loud por DOS guardas (leads sin fixture + contorno con arcos sin
+ISO). Cuando el ISO esté en `P:\USBMIX\ProdAction\Programas Manuales\Experimento-01\`, la
+derivación esperable: leer también las curvas Approach/Lift almacenadas, emitirlas donde
+el ISO diga, y levantar ambas guardas para la forma fixtureada. Suite 671.
+
+## Experimento-01 (2026-08-03) — SÍNTESIS de contorno con esquinas redondeadas
+
+`Programas Manuales\Experimento-01\vaciado_interior_esquinas_redondas.pgmx`: vaciado con
+contorno rectilíneo de **esquinas redondeadas** (rect. 50..250, R25, arranque a mitad del
+borde inferior), E001, ciego −9, leads **Line En bajada / En subida RM=2**. Pregunta de
+Fermín: *¿podés sintetizar esa pieza?* — **Sí.** El propio fixture es el oráculo (trae la
+trayectoria que calculó Maestro): sintetizando desde los parámetros de la UI, los TRES
+toolpaths salen EXACTOS — `Approach` (1), `TrajectoryPath` (**67/67**, 59 rectas + 8
+arcos) y `Lift` (1) — y el `.pgmx` generado se re-adapta limpio.
+
+**Modelo de trayectoria derivado** (`_rounded_contour_trajectory_primitives`):
+- anillos con offset inicial `w/2 + Rebaba` y paso `w×(1−Overlap)`, mientras el anillo
+  tenga área (offset < mitad del lado menor);
+- recorrido **dentro→afuera**, cada anillo arrancando y cerrando en `(start_x, y0+d)`;
+- cada anillo REPITE la forma del contorno con radio de esquina **R−d**; cuando `R−d ≤ 0`
+  la esquina es **VIVA** (el anillo es un rectángulo) — por eso solo los 2 anillos
+  externos conservan arcos (8 = 4+4) y los 8 internos son rectangulares;
+- entre anillos, un **conector recto** sobre `x = start_x`.
+
+**Leads lineales** (`_pocket_lead_offset_xy`, primer vaciado con leads del proyecto — los
+78 manuales del corpus del lab van todos con lead deshabilitado = descenso vertical): el
+acercamiento arranca a `(w/2)×RM` ANTES del inicio sobre la dirección de avance y baja
+inclinado hasta la cota de corte; el alejamiento es su espejo hacia adelante. Sin lead
+habilitado (u otro tipo/modo) el descenso sigue siendo VERTICAL — el corpus entero quedó
+intacto (verificado archivo por archivo).
+
+**Representación**: `PocketSpec.contour_primitives` (rectas + arcos tal cual el `.pgmx`;
+`contour_points` queda vacío) — el adapter ya no rechaza contornos de polilínea con arcos.
+Lo NO fixtureado (Horario, afuera→adentro, multipaso sobre contorno con arcos, formas de
+contorno distintas de la derivada) → `NotImplementedError`. Tests:
+`VaciadoRoundedCornersSynthesisTests`. Suite 674.
+
 ## Checklist de capturas de la UI de Maestro (F1 — para Fermín)
 
 Para nomenclatura y criterio (regla 3). De la ventana **Vaciado**:

@@ -53,10 +53,16 @@ def convert(pgmx_path: Path) -> str:
     # op ÚLTIMA convive con el teardown normal (Galceado.pgmx: op2 con leads Line Down/Up tras
     # el cambio de herramienta, byte-validado); en una op NO-última sigue sin fixture
     # (interacción retracción-G1 vs transición).
-    if len(ops.routers) > 1 and any(m.retract.is_enabled for m in ops.routers[:-1]):
-        raise UnsupportedOperationError(
-            "alejamiento programable en un fresado NO-último del programa: sin fixture de "
-            "referencia aún (Galceado.pgmx solo cubre el alejamiento en la ÚLTIMA op). [A3]")
+    # Alejamiento en una op NO-última: derivado cuando la op siguiente CAMBIA de
+    # herramienta (Experimento-01, 2026-08-03: el contorno perimetral con retract Arco
+    # cierra normal — arco, G1 Z, G40, 1 mm — y recién ahí arranca el cambio de fresa de
+    # N028). Con la MISMA fresa sigue sin fixture (interacción retracción-G1 vs el triple
+    # G0 de la transición).
+    for index, milling in enumerate(ops.routers[:-1]):
+        if milling.retract.is_enabled and milling.tool_name == ops.routers[index + 1].tool_name:
+            raise UnsupportedOperationError(
+                "alejamiento programable en un fresado NO-último del programa SIN cambio "
+                "de herramienta: sin fixture de referencia aún. [A3]")
 
     # Xn al INICIO + router compensado: el orden del ?%ETK[7]=0 del preamble respecto del
     # bloque de park no tiene fixture (el manual 2026-07-30 es un vaciado, sin corrección).

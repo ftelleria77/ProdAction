@@ -131,6 +131,7 @@ def _mp_lead_arc(
 
 def _multipass_cuts(
     spec: LineSpec, depth: float, security: float, cut_feed: float,
+    plunge_cut_feed: float | None = None,
 ) -> list[str]:
     """Pasadas de la estrategia multipasada (N025). Bidireccional: alterna el sentido y baja en
     el extremo donde quedó. Unidireccional: siempre start→end; entre pasadas retrae y vuelve en
@@ -150,6 +151,8 @@ def _multipass_cuts(
         depths.append(-depth)
     is_uni = type(strategy).__name__.startswith("Unidirectional")
     in_piece = is_uni and getattr(strategy, "connection_mode", "") == "InPiece"
+    if plunge_cut_feed is None:
+        plunge_cut_feed = cut_feed
     start = (spec.start_x, spec.start_y)
     end = (spec.end_x, spec.end_y)
     ux, uy = _unit_dir(spec)
@@ -158,6 +161,12 @@ def _multipass_cuts(
     for i, z in enumerate(depths):
         if i == 0 and spec.approach.is_enabled:
             lines += _strategy_lead_entry(spec, z, start, (ux, uy), cut_feed, security)
+        elif i == 0:
+            # Plunge INICIAL a la primera pasada: va al feed del CATÁLOGO, no al override
+            # de Avanz. (Experimento-01 ELP/SCS con Avanz=2: `G1 Z-5.000 F5000` mientras
+            # el corte va a F2000. En los lotes sin override ambos coinciden — por eso
+            # N025/N036 no lo distinguían.)
+            lines.append(f"G1 Z{z:.3f} F{plunge_cut_feed:.3f}")
         else:
             lines.append(f"G1 Z{z:.3f} F{cut_feed:.3f}")
         target = end if pos == start else start
@@ -166,7 +175,10 @@ def _multipass_cuts(
         if i < len(depths) - 1 and is_uni:
             ret = (z + MILLING_RETRACT) if in_piece else security
             lines.append(f"G1 Z{ret:.3f} F{cut_feed:.3f}")
-            lines.append(_g1_cut(pos[0], pos[1], start[0], start[1], ret, cut_feed))
+            # El TRASLADO de vuelta: en cota de seguridad (aire) va al feed del catálogo;
+            # «en la pieza» va al feed de corte efectivo (Experimento-01 ELP vs SCS).
+            lines.append(_g1_cut(pos[0], pos[1], start[0], start[1], ret,
+                                 cut_feed if in_piece else plunge_cut_feed))
             pos = start
     if spec.retract.is_enabled:
         sign = 1.0 if pos == end else -1.0
@@ -450,9 +462,10 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
         # reglas de línea con û = TANGENTE de entrada ((0,±1) según el sentido de giro).
         if is_pocket:
             # VACIADO (N047): entra por el PRIMER punto de la trayectoria almacenada (el
-            # arranque del anillo más interno con dentro→afuera).
+            # arranque del anillo más interno con dentro→afuera); con lead lineal «En
+            # bajada» (Experimento-01), por el punto EXTERIOR del lead.
             _p0 = spec.stored_trajectories[0][0].start_point
-            entry_xy = (_p0[0], _p0[1])
+            entry_xy = _pocket_lead_xy(spec, True) or (_pos3(_p0[0]), _pos3(_p0[1]))
         elif is_arc:
             # ARCO SUELTO (N040): entra por el START real del arco (baseline; combos → guarda).
             entry_xy = (spec.start_x, spec.start_y)
@@ -591,14 +604,21 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
                     has_app, has_ret, lead_app, lead_ret)
             lines += body
             if compensated:
+                # El reset EXTRA de la salida compensada no-última (N036 two_side) NO va
+                # cuando la op siguiente CAMBIA de herramienta: ahí el bloque de cambio de
+                # fresa arranca directo tras el único ?%ETK[7]=0 (Experimento-01).
+                same_tool_next = (not is_last
+                                  and millings[i + 1].tool_name == spec.tool_name)
                 lines += [
                     "D0",
                     "SVL 0.000",
                     "VL6=0.000",
                     *(("SVR 0.000", "VL7=0.000") if svr != 0.0 else ()),
+                    # (acá Maestro emitiría `%DONTCARESPEEDV=1`: se OMITE a propósito —
+                    # ver la nota de divergencia deliberada arriba)
                     "?%ETK[7]=0",
                 ]
-                if not is_last:
+                if same_tool_next:
                     lines.append("?%ETK[7]=0")
                 prev_end = poly_end
                 continue
@@ -613,7 +633,8 @@ def render_router(millings: list[LineSpec], ctx: PieceCtx) -> list[str]:
             if type(spec.milling_strategy).__name__.startswith("ZigZag"):
                 cuts, strategy_end = _zigzag_cuts(spec, depth, cut_feed)
             else:
-                cuts, strategy_end = _multipass_cuts(spec, depth, security, cut_feed)
+                cuts, strategy_end = _multipass_cuts(spec, depth, security, cut_feed,
+                                                     plunge_cut_feed=geom.feed_std)
             lines += cuts
             # La retracción final va al feed del retract si tiene velocidad propia (mp_ret_sp).
             lines.append(f"G1 Z{security:.3f} F{_strategy_ret_feed(spec, cut_feed):.3f}")
@@ -1392,6 +1413,58 @@ def _poly_cad_zigzag_body(spec, ctx, depth, security, plunge_feed, cut_feed):
     return lines, False, (px, py)
 
 
+r"""DIVERGENCIA DELIBERADA de Maestro — `%DONTCARESPEEDV=1` NO se emite.
+
+Maestro escribe esa línea en el teardown de una op cuando alguna op POSTERIOR tiene
+multipasada con conexión a COTA DE SEGURIDAD (el traslado entre pasadas cruza por encima
+de la pieza). **Es una instrucción inválida y el CNC la RECHAZA**: Fermín ejecutó los
+cuatro fixtures de Experimento-01 el 2026-08-03 y el único que abortó fue `SCS_MP5` —
+justo el único ISO de todo el corpus con esa línea — con `Alarma 67: Assegnazione a
+registro inesistente`, deteniéndose exactamente antes del cambio de herramienta que le
+sigue.
+
+Evidencia de que la línea está MAL FORMADA (no es config faltante de la máquina):
+- el manual de Xilog documenta la instrucción como `SET DONTCARE=1` (sintaxis `SET`, sin
+  `%` y sin el sufijo `SPEEDV`); su función es no emitir el mensaje «No existe cota de
+  seguridad encima de la pieza» para el trabajo SIGUIENTE — justo lo que Maestro quiere
+  acá. `%NOMBRE=valor` es, en cambio, la asignación a un REGISTRO;
+- `DONTCARESPEEDV` no existe ni en el manual ni en la configuración de la máquina
+  (búsqueda recursiva en `S:\Xilog Plus`);
+- el manual exige además que entre `SET DONTCARE=1` y el trabajo no haya otras
+  instrucciones: Maestro mete ~20 líneas (teardown + cambio de herramienta) en el medio.
+
+Decisión de Fermín (2026-08-03): el converter la OMITE. Nuestro ISO queda EJECUTABLE donde
+el de Maestro no lo es — la única divergencia deliberada del proyecto, fijada por
+`test_dontcarespeedv_se_omite_a_proposito`.
+"""
+
+
+def _pocket_lead_xy(spec, at_start: bool):
+    """XY del extremo EXTERIOR del lead lineal de un vaciado (Experimento-01, 2026-08-03),
+    o None si no hay lead. «En bajada»/«En subida»: a (w/2)×RM del inicio/fin de la
+    trayectoria almacenada sobre su dirección de avance — hacia atrás al entrar, hacia
+    adelante al salir. El movimiento es una RAMPA (XY + Z en el mismo G1): reemplaza al
+    plunge vertical a la entrada y a la retracción vertical a la salida."""
+    lead_spec = spec.approach if at_start else spec.retract
+    lead_type = lead_spec.approach_type if at_start else lead_spec.retract_type
+    if not lead_spec.is_enabled or lead_type != "Line":
+        return None
+    if lead_spec.mode != ("Down" if at_start else "Up"):
+        return None
+    members = spec.stored_trajectories[0 if at_start else -1]
+    member = members[0] if at_start else members[-1]
+    anchor = member.start_point if at_start else member.end_point
+    other = member.end_point if at_start else member.start_point
+    # En los DOS extremos el lead se aleja de la traza sobre la misma recta: entrando, es
+    # el opuesto del avance; saliendo, su prolongación. Ambos = (ancla − vecino).
+    dx, dy = (anchor[0] - other[0]), (anchor[1] - other[1])
+    length = math.hypot(dx, dy)
+    if length <= 1e-9:
+        return None
+    lead = spec.tool_width / 2.0 * lead_spec.radius_multiplier
+    return (_pos3(anchor[0] + lead * dx / length), _pos3(anchor[1] + lead * dy / length))
+
+
 def _pos3(v: float) -> float:
     """Normaliza un valor que va a emitirse a 3 decimales: el CERO NEGATIVO (−0.0 o ruido
     −1e−15 de la trayectoria almacenada) se emite como `0.000`, no `-0.000` (manual
@@ -1507,9 +1580,17 @@ def _pocket_body(spec, ctx, depth, security, plunge_feed, cut_feed, svl, svr, z_
         lines += [
             f"G1 Z{security:.3f} F{plunge_feed:.3f}",
             "?%ETK[7]=4",
-            f"G1 Z{z0:.3f} F{cut_feed:.3f}",
         ]
-        px, py = _pos3(e0[0]), _pos3(e0[1])
+        ex0, ey0 = _pos3(e0[0]), _pos3(e0[1])
+        lead_in = _pocket_lead_xy(spec, True) if t == 0 else None
+        if lead_in is not None:
+            # Lead «En bajada»: RAMPA desde el punto exterior — reemplaza al plunge
+            # vertical (mismo patrón que la línea N036 side_app_line_down).
+            lines.append(_g1_cut(lead_in[0], lead_in[1], ex0, ey0, z0, cut_feed,
+                                 prev_z=security))
+        else:
+            lines.append(f"G1 Z{z0:.3f} F{cut_feed:.3f}")
+        px, py = ex0, ey0
         prev_z = z0
         for m in members:
             ex, ey = _pos3(m.end_point[0]), _pos3(m.end_point[1])
@@ -1523,7 +1604,15 @@ def _pocket_body(spec, ctx, depth, security, plunge_feed, cut_feed, svl, svr, z_
             else:
                 lines.append(_g1_cut(px, py, ex, ey, z, cut_feed, prev_z=prev_z))
             px, py, prev_z = ex, ey, z
-        lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
+        lead_out = _pocket_lead_xy(spec, False) if t == len(trajectories) - 1 else None
+        if lead_out is not None:
+            # Lead «En subida»: RAMPA hasta el punto exterior — reemplaza la retracción
+            # vertical (el G0 Z del teardown queda igual).
+            lines.append(_g1_cut(px, py, lead_out[0], lead_out[1], security, cut_feed,
+                                 prev_z=prev_z))
+            px, py = lead_out
+        else:
+            lines.append(f"G1 Z{security:.3f} F{cut_feed:.3f}")
         prev_xy = (px, py)
     return lines, False, prev_xy
 

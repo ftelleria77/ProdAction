@@ -591,15 +591,21 @@ def _extract_milling_strategy_spec_from_operation(
             overlap=_safe_float(_text(strategy_node, "./{*}Overlap"), 0.0),
             cutmode=_text(strategy_node, "./{*}Cutmode", "Climb"),
         )
+    # LECTURA: se construyen las dataclasses DIRECTO, sin la validación de los builders de
+    # AUTORÍA. Maestro CONSERVA el valor de «Profundidad de hueco» cuando se destilda
+    # «Habilitar multipaso» (evidencia: los 4 archivos de Experimento-01 traen
+    # AllowMultiplePasses=false con AxialCuttingDepth=5), y esa combinación hacía CRASHEAR
+    # la lectura con el ValueError del builder. El snapshot debe reflejar el archivo tal
+    # cual: quien decide si el multipaso corre es el flag, no el valor residual.
     if "UnidirectionalMilling" in strategy_type:
-        return build_unidirectional_milling_strategy_spec(
-            connection_mode=stroke_connection_strategy,
+        return UnidirectionalMillingStrategySpec(
+            connection_mode=_normalize_strategy_connection_mode(stroke_connection_strategy),
             allow_multiple_passes=allow_multiple_passes,
             axial_cutting_depth=axial_cutting_depth,
             axial_finish_cutting_depth=axial_finish_cutting_depth,
         )
     if "BidirectionalMilling" in strategy_type:
-        return build_bidirectional_milling_strategy_spec(
+        return BidirectionalMillingStrategySpec(
             allow_multiple_passes=allow_multiple_passes,
             axial_cutting_depth=axial_cutting_depth,
             axial_finish_cutting_depth=axial_finish_cutting_depth,
@@ -1020,18 +1026,25 @@ def _normalize_milling_strategy_spec(
 ) -> Optional[MillingStrategySpec]:
     if strategy is None:
         return None
+    # Normalizar una spec YA construida NO re-aplica la validación de autoría: Maestro
+    # conserva «Profundidad de hueco» con el multipaso apagado (Experimento-01) y esa
+    # combinación llegaba acá desde el snapshot, haciendo fallar la ADAPTACIÓN del .pgmx.
     if isinstance(strategy, UnidirectionalMillingStrategySpec):
-        return build_unidirectional_milling_strategy_spec(
-            connection_mode=strategy.connection_mode,
-            allow_multiple_passes=strategy.allow_multiple_passes,
-            axial_cutting_depth=strategy.axial_cutting_depth,
-            axial_finish_cutting_depth=strategy.axial_finish_cutting_depth,
+        return UnidirectionalMillingStrategySpec(
+            connection_mode=_normalize_strategy_connection_mode(strategy.connection_mode),
+            allow_multiple_passes=bool(strategy.allow_multiple_passes),
+            axial_cutting_depth=_normalize_nonnegative_strategy_depth(
+                strategy.axial_cutting_depth, "AxialCuttingDepth"),
+            axial_finish_cutting_depth=_normalize_nonnegative_strategy_depth(
+                strategy.axial_finish_cutting_depth, "AxialFinishCuttingDepth"),
         )
     if isinstance(strategy, BidirectionalMillingStrategySpec):
-        return build_bidirectional_milling_strategy_spec(
-            allow_multiple_passes=strategy.allow_multiple_passes,
-            axial_cutting_depth=strategy.axial_cutting_depth,
-            axial_finish_cutting_depth=strategy.axial_finish_cutting_depth,
+        return BidirectionalMillingStrategySpec(
+            allow_multiple_passes=bool(strategy.allow_multiple_passes),
+            axial_cutting_depth=_normalize_nonnegative_strategy_depth(
+                strategy.axial_cutting_depth, "AxialCuttingDepth"),
+            axial_finish_cutting_depth=_normalize_nonnegative_strategy_depth(
+                strategy.axial_finish_cutting_depth, "AxialFinishCuttingDepth"),
         )
     if isinstance(strategy, HelicalMillingStrategySpec):
         return build_helical_milling_strategy_spec(

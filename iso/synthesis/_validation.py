@@ -612,9 +612,20 @@ def _validate_pocket(spec: PocketSpec) -> None:
         _fail(spec, "vaciado PASANTE: sin fixture de referencia (N047 es todo ciego). [B5]")
     if not (spec.depth_spec.target_depth or 0.0) > 0.0:
         _fail(spec, "vaciado sin profundidad objetivo. [B5]")
-    if spec.approach.is_enabled or spec.retract.is_enabled:
-        _fail(spec, "vaciado + acercamiento/alejamiento programable: sin fixture (los N047 "
-                    "van pelados). [B5]")
+    # Leads: LEVANTADOS para Línea «En bajada»/«En subida» (Experimento-01, 2026-08-03):
+    # rampa XY+Z que reemplaza el plunge/retracción vertical. Arco y los demás modos
+    # siguen sin fixture.
+    if spec.approach.is_enabled and not (spec.approach.approach_type == "Line"
+                                         and spec.approach.mode == "Down"):
+        _fail(spec, f"vaciado + acercamiento {spec.approach.approach_type}/"
+                    f"{spec.approach.mode}: solo Línea En bajada tiene fixture. [B5]")
+    if spec.retract.is_enabled and not (spec.retract.retract_type == "Line"
+                                        and spec.retract.mode == "Up"):
+        _fail(spec, f"vaciado + alejamiento {spec.retract.retract_type}/"
+                    f"{spec.retract.mode}: solo Línea En subida tiene fixture. [B5]")
+    if ((spec.approach.is_enabled and spec.approach.speed > 0)
+            or (spec.retract.is_enabled and spec.retract.speed > 0)):
+        _fail(spec, "vaciado + lead con velocidad propia: sin fixture. [B5]")
     # Avanz./Rotación de «Parámetros de trabajo» (captura UI 2026-07-29): la ventana los
     # expone pero no hay fixture ISO — sin esta guarda, un vaciado real con Avanz. cargado
     # convertía con el feed del catálogo EN SILENCIO.
@@ -654,12 +665,62 @@ def _validate_pocket(spec: PocketSpec) -> None:
     # Contorno: cerrado, rectas, rectángulo a ejes (se toleran puntos colineales extra sobre
     # el perímetro — arranque a mitad de borde, y ruido flotante del corpus). El XY del ISO
     # sale de la trayectoria ALMACENADA, pero solo la forma rectangular tiene fixture.
-    issue = _rect_contour_issue(spec.contour_points)
-    if issue is not None:
-        _fail(spec, f"vaciado con contorno NO rectangular a ejes ({issue}): solo el "
-                    f"rectángulo (pleno o parcial, con colineales tolerados — N047/N049) "
-                    f"tiene fixture; el contorno CIRCULAR existe en la UI y espera su "
-                    f"lote. [B5]")
+    primitives = getattr(spec, "contour_primitives", ())
+    if primitives:
+        # Contorno de polilínea CON ARCOS — DERIVADO por Experimento-01 (2026-08-03,
+        # rectángulo de esquinas redondeadas): el render copia la trayectoria almacenada
+        # (rectas + arcos G2/G3) igual que en el rectangular; lo único propio son los
+        # leads lineales en rampa. Fixtureado: rectas a ejes + 4 arcos CCW del MISMO radio
+        # en las esquinas (la forma que la UI produce al redondear un rectángulo).
+        arcs = [p for p in primitives if p.primitive_type == "Arc"]
+        if len(arcs) != 4 or len({round(float(a.radius), 6) for a in arcs}) != 1:
+            _fail(spec, "vaciado con contorno de arcos que NO es el rectángulo de 4 "
+                        "esquinas redondeadas del mismo radio: sin fixture "
+                        "(Experimento-01). [B5]")
+        if any((a.normal_vector or (0.0, 0.0, 1.0))[2] <= 0.0 for a in arcs):
+            _fail(spec, "vaciado con contorno de esquinas redondeadas en sentido HORARIO: "
+                        "sin fixture (Experimento-01 es CCW). [B5]")
+        for p in primitives:
+            if (p.primitive_type == "Line"
+                    and abs(p.start_point[0] - p.end_point[0]) > 1e-6
+                    and abs(p.start_point[1] - p.end_point[1]) > 1e-6):
+                _fail(spec, "vaciado de esquinas redondeadas con borde DIAGONAL: sin "
+                            "fixture. [B5]")
+    circle = getattr(spec, "contour_circle", None)
+    if circle is not None:
+        # Contorno CIRCULAR (manual 2026-07-30): fixtureado como ANILLO concéntrico —
+        # contorno círculo + UNA isla círculo con el mismo centro. Su fixture cierra
+        # FUNCIONALMENTE idéntico (143/144 líneas byte; 1 delta de 0.001 en un J que NO
+        # es equidistante de los endpoints redondeados — ruido de coma flotante del
+        # emisor de Maestro, confirmado por Fermín 2026-07-31: Maestro suma/resta
+        # milésimas sin razón aparente y la máquina tiene precisión de 0.1 mm). La
+        # clasificación byte/funcional vive en iso.synthesis.compare.
+        boss_circles = getattr(spec, "boss_circles", ())
+        if len(boss_circles) != 1 or spec.boss_contours:
+            _fail(spec, "vaciado de contorno CIRCULAR: solo el ANILLO (círculo + UNA isla "
+                        "circular) tiene fixture (manual 2026-07-30); círculo pleno o con "
+                        "otras islas → sin referencia. [B5]")
+        bc = boss_circles[0]
+        if math.hypot(bc[0] - circle[0], bc[1] - circle[1]) > 1e-6:
+            _fail(spec, "vaciado anillo con isla circular NO concéntrica: sin fixture "
+                        "(el manual 2026-07-30 es concéntrico). [B5]")
+        if not bc[2] < circle[2]:
+            _fail(spec, "vaciado anillo con isla de radio >= contorno: geometría "
+                        "inválida. [B5]")
+    elif primitives:
+        if getattr(spec, "boss_circles", ()) or spec.boss_contours:
+            _fail(spec, "vaciado de esquinas redondeadas CON ISLAS: sin fixture "
+                        "(Experimento-01 va sin islas). [B5]")
+    else:
+        if getattr(spec, "boss_circles", ()):
+            _fail(spec, "vaciado rectangular con isla CIRCULAR: sin fixture (el manual "
+                        "2026-07-30 solo cubre isla circular en contorno circular). [B5]")
+        issue = _rect_contour_issue(spec.contour_points)
+        if issue is not None:
+            _fail(spec, f"vaciado con contorno NO rectangular a ejes ({issue}): solo el "
+                        f"rectángulo (pleno o parcial, con colineales tolerados — "
+                        f"N047/N049) y el círculo (anillo, manual 2026-07-30) tienen "
+                        f"fixture. [B5]")
     trajectories = getattr(spec, "stored_trajectories", ())
     if not (1 <= len(trajectories) <= 2) or not all(trajectories):
         _fail(spec, f"vaciado con {len(trajectories)} trayectorias almacenadas parseables: "

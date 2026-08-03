@@ -366,11 +366,18 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
     # Fail-loud: familias del router (línea / círculo / arco / polilínea / vaciado)
     # MEZCLADAS en un programa — las transiciones mixtas no tienen fixture (cada lote two-*
     # es de una sola familia: N028/N036 líneas, N038 círculos, N040 arcos, N041 polilíneas).
+    # Familias MEZCLADAS: derivado para polilínea + línea con CAMBIO de herramienta
+    # (Experimento-01 ELP/SCS, 2026-08-03: el contorno perimetral con E001 y el fresado
+    # lineal con E004 — la transición es la de cambio de herramienta de N028, sin nada
+    # propio de la mezcla). El resto de las combinaciones sigue sin fixture.
     router_families = {type(m).__name__ for m in routers}
     if len(router_families) > 1:
-        raise UnsupportedOperationError(
-            "fresado de familias mezcladas (línea/círculo/arco/polilínea/vaciado) en el "
-            f"mismo programa: sin fixture de referencia aún ({sorted(router_families)}). [B]")
+        if (router_families != {"PolylineSpec", "LineSpec"}
+                or len({m.tool_name for m in routers}) < 2):
+            raise UnsupportedOperationError(
+                "fresado de familias mezcladas (línea/círculo/arco/polilínea/vaciado) en "
+                f"el mismo programa: solo polilínea + línea con cambio de herramienta "
+                f"tiene fixture ({sorted(router_families)}). [B]")
 
     # Fail-loud: VARIOS vaciados en un programa — la transición entre pockets no tiene
     # fixture (N047 es todo single-op). [B5]

@@ -25,6 +25,7 @@ from pgmx.synthesis.milling.pocket import PocketSpec
 from pgmx.synthesis import build_contour_parallel_milling_strategy_spec
 
 from iso.synthesis import convert
+from iso.synthesis.compare import classify_iso_diff
 from iso.synthesis._reader import PieceCtx
 from iso.synthesis._router import _pocket_body
 from iso.synthesis._validation import UnsupportedOperationError, _validate_pocket
@@ -257,6 +258,65 @@ class PocketGuardsTest(unittest.TestCase):
                              "trayectorias almacenadas")
 
 
+class IsoCompareTest(unittest.TestCase):
+    """El clasificador byte/funcional/diferente (dato de dominio de Fermín 2026-07-31:
+    Maestro mete ruido de MILÉSIMAS por coma flotante; la máquina tiene precisión de
+    0.1 mm — la clasificación identifica ese ruido en vez de esconderlo)."""
+
+    REF = "G1 X100.000 Y50.000 F5000.000\nG2 X10.000 Y20.000 I150.000 J150.001 F5000.000"
+
+    def test_byte_identico(self):
+        self.assertEqual(classify_iso_diff(self.REF, self.REF).verdict, "byte_identico")
+        # espacios finales no cuentan (la convención de todos los e2e)
+        con_espacios = self.REF.replace("\n", " \n") + " "
+        self.assertEqual(classify_iso_diff(con_espacios, self.REF).verdict, "byte_identico")
+
+    def test_funcionalmente_identico_por_milesimas(self):
+        gen = self.REF.replace("J150.001", "J150.000").replace("Y50.000", "Y50.002")
+        c = classify_iso_diff(gen, self.REF)
+        self.assertEqual(c.verdict, "funcionalmente_identico", c.report())
+        self.assertEqual(len(c.numeric_diffs), 2)
+        self.assertAlmostEqual(c.max_delta, 0.002, places=6)
+
+    def test_delta_grande_es_diferente(self):
+        gen = self.REF.replace("X100.000", "X100.100")   # una décima: ya no es ruido
+        self.assertEqual(classify_iso_diff(gen, self.REF).verdict, "diferente")
+
+    def test_estructura_distinta_es_diferente(self):
+        gen = self.REF.replace("G2", "G3")               # mismo largo, otro esqueleto
+        c = classify_iso_diff(gen, self.REF)
+        self.assertEqual(c.verdict, "diferente")
+        self.assertTrue(c.structural_issues)
+        gen2 = self.REF + "\nG0 Z30.000"                 # línea de más
+        self.assertEqual(classify_iso_diff(gen2, self.REF).verdict, "diferente")
+
+    def test_omision_deliberada_no_cuenta_como_diferencia(self):
+        # `%DONTCARESPEEDV=1`: Maestro la emite mal formada y el CNC aborta con Alarma 67;
+        # el converter la omite a propósito. El comparador la DESCUENTA y la reporta.
+        ref = self.REF.replace("\n", "\n%DONTCARESPEEDV=1\n", 1)
+        c = classify_iso_diff(self.REF, ref)
+        self.assertEqual(c.verdict, "funcionalmente_identico", c.report())
+        self.assertEqual(c.deliberate_omissions, ("%DONTCARESPEEDV=1",))
+        self.assertEqual(c.numeric_diffs, ())
+        self.assertIn("omitida: %DONTCARESPEEDV=1", c.report())
+
+    def test_omision_deliberada_no_tapa_otras_diferencias(self):
+        # Si además hay una diferencia REAL, sigue siendo "diferente": la omisión se
+        # descuenta, no perdona nada más.
+        ref = (self.REF.replace("\n", "\n%DONTCARESPEEDV=1\n", 1)
+               .replace("X100.000", "X100.100"))
+        c = classify_iso_diff(self.REF, ref)
+        self.assertEqual(c.verdict, "diferente")
+        self.assertEqual(c.deliberate_omissions, ("%DONTCARESPEEDV=1",))
+
+    def test_cero_negativo_no_es_delta(self):
+        gen = self.REF.replace("Y50.000", "Y-0.000")
+        ref = self.REF.replace("Y50.000", "Y0.000")
+        c = classify_iso_diff(gen, ref)
+        self.assertEqual(c.verdict, "funcionalmente_identico")
+        self.assertEqual(c.max_delta, 0.0)
+
+
 def _e2e_check(test, pgmx: Path, ref: Path) -> None:
     if not pgmx.exists() or not ref.exists():
         test.skipTest("fixtures S:/P: no disponibles")
@@ -374,12 +434,79 @@ class EndToEndManualesArcosTest(unittest.TestCase):
                 _e2e_check(self, self._FIXTURES / f"{stem}.pgmx",
                            self._REFS / f"{stem.lower()}.iso")
 
-    def test_circular_sigue_fail_loud(self):
+    def test_experimento01_esquinas_redondas_byte_identico(self):
+        # Vaciado de contorno con ESQUINAS REDONDEADAS + leads lineales En bajada/En
+        # subida (rampa XY+Z que reemplaza plunge y retracción verticales).
+        base_s = self._FIXTURES / "Experimento-01"
+        base_p = self._REFS / "Experimento-01"
+        _e2e_check(self, base_s / "vaciado_interior_esquinas_redondas.pgmx",
+                   base_p / "vaciado_interior_esquinas_redondas.iso")
+
+    def test_circular_funcionalmente_identico(self):
+        # ANILLO circular (contorno círculo + isla círculo concéntrica): el adapter lo
+        # representa como contour_circle/boss_circles y el render copia sus trayectorias.
+        # Cierra FUNCIONALMENTE idéntico: 143/144 líneas byte + UN delta de 0.001 en un J
+        # cuyo centro emitido NO es equidistante de los endpoints redondeados — ruido de
+        # coma flotante del emisor de Maestro (Fermín 2026-07-31: Maestro suma/resta
+        # milésimas sin razón aparente; precisión de máquina 0.1 mm). El comparador
+        # IDENTIFICA la diferencia en vez de esconderla (regla 4).
         pgmx = self._FIXTURES / "N_V_e001_d9_Vaciado_Circular_Isla_Circular_manual.pgmx"
+        ref = self._REFS / "n_v_e001_d9_vaciado_circular_isla_circular_manual.iso"
+        if not pgmx.exists() or not ref.exists():
+            self.skipTest("fixtures S:/P: no disponibles")
+        from pgmx.adapters import adapt_pgmx_path
+        result = adapt_pgmx_path(pgmx)
+        self.assertFalse(result.unsupported_entries)
+        (entry,) = result.adapted_entries
+        self.assertEqual(entry.spec.contour_circle, (150.0, 150.0, 150.0))
+        self.assertEqual(entry.spec.boss_circles, ((150.0, 150.0, 75.0),))
+        self.assertEqual(entry.spec.contour_points, ())
+        self.assertEqual(len(entry.spec.stored_trajectories), 2)
+
+        comparison = classify_iso_diff(convert(pgmx), ref.read_text(encoding="cp1252"))
+        self.assertEqual(comparison.verdict, "funcionalmente_identico",
+                         comparison.report())
+        self.assertEqual(len(comparison.numeric_diffs), 1)     # SOLO la milésima conocida
+        self.assertAlmostEqual(comparison.max_delta, 0.001, places=6)
+        self.assertIn("J150.001", comparison.numeric_diffs[0].line_reference)
+
+    def test_experimento01_esquinas_redondas_representacion(self):
+        # Experimento-01 (2026-08-03): DOBLE frente en un fixture — contorno de rectángulo
+        # con esquinas REDONDEADAS (5 rectas + 4 arcos r=25, arranque a mitad de borde) +
+        # LEADS Line En bajada/En subida. Acá se fija la REPRESENTACIÓN (contorno con
+        # arcos sin aplanar a puntos); el byte-idéntico lo cubre
+        # `test_experimento01_esquinas_redondas_byte_identico`.
+        pgmx = (Path(r"S:\Maestro\Projects\ProdAction\Programas Manuales\Experimento-01")
+                / "vaciado_interior_esquinas_redondas.pgmx")
         if not pgmx.exists():
             self.skipTest("fixtures S: no disponibles")
-        with self.assertRaises(UnsupportedOperationError):
-            convert(pgmx)
+        from pgmx.adapters import adapt_pgmx_path
+        result = adapt_pgmx_path(pgmx)
+        self.assertFalse(result.unsupported_entries)
+        (entry,) = result.adapted_entries
+        kinds = [p.primitive_type for p in entry.spec.contour_primitives]
+        self.assertEqual(kinds.count("Line"), 5)
+        self.assertEqual(kinds.count("Arc"), 4)
+        self.assertEqual(entry.spec.contour_points, ())
+        self.assertTrue(entry.spec.approach.is_enabled)
+        self.assertTrue(entry.spec.retract.is_enabled)
+        self.assertEqual(entry.spec.approach.approach_type, "Line")
+        self.assertEqual(entry.spec.approach.mode, "Down")
+        self.assertEqual(entry.spec.retract.mode, "Up")
+
+    def test_autoria_circular_fail_loud(self):
+        # La síntesis productiva de un pocket circular no existe: solo lectura (regla 5).
+        import pgmx.synthesis as sp
+        spec = sp.build_pocket_spec(
+            contour_points=(), contour_circle=(150.0, 150.0, 150.0),
+            boss_circles=((150.0, 150.0, 75.0),),
+            tool_id="1900", tool_name="E001", tool_width=18.36, target_depth=9.0)
+        with self.assertRaises(NotImplementedError):
+            sp.synthesize_request(sp.build_synthesis_request(
+                output_path=Path(r"C:\Users\fermi\AppData\Local\Temp\claude"
+                                 r"\_n050_circular_no_debe_escribirse.pgmx"),
+                piece_name="no", length=300.0, width=300.0, depth=18.0,
+                origin_x=0.0, origin_y=0.0, origin_z=0.0, pockets=[spec]))
 
 
 if __name__ == "__main__":
