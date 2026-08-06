@@ -57,6 +57,15 @@ class ClassifyIsoDiffTest(unittest.TestCase):
         self.assertEqual(comparison.verdict, "funcionalmente_identico")
         self.assertEqual(comparison.deliberate_omissions, ("%DONTCARESPEEDV=1",))
 
+    def test_tolerancia_fisica_en_lineas_Or_micrones(self):
+        # Las líneas %Or van en µm: un delta de 0.024 son 24 nm (ruido f32 del emisor,
+        # ensayo 2026-08-05) → funcional. La MISMA magnitud en una coordenada (mm) → diferente.
+        base = "% p.pgm\n%Or[0].ofX=-758100.000\nG0 X10.000\n"
+        ref = base.replace("-758100.000", "-758099.976")
+        self.assertEqual(classify_iso_diff(base, ref).verdict, "funcionalmente_identico")
+        ref_coord = base.replace("X10.000", "X10.024")
+        self.assertEqual(classify_iso_diff(base, ref_coord).verdict, "diferente")
+
     def test_case_mas_milesimas_sigue_funcional(self):
         ref = (BASE.replace("% faja frontal.pgm", "% Faja Frontal.pgm")
                    .replace("X10.000", "X10.001"))

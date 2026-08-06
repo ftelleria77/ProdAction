@@ -86,11 +86,19 @@ def convert(pgmx_path: Path) -> str:
     if has_top:
         after_router_spindle = (
             tool_geometry(ops.routers[-1].tool_name).spindle_std if has_router else 0)
+        # La ÚLTIMA op del router emite corrección (G41/G42): single-pass con lado y C.N.
+        # activa. Gatilla el `?%ETK[8]=1 + G40` de la transición router→taladro (ensayo
+        # 2026-08-05; ver render_top_drill).
+        last_router_compensated = has_router and (
+            getattr(ops.routers[-1], "side_of_feature", "Center") in ("Left", "Right")
+            and getattr(ops.routers[-1], "activate_cnc_correction", True)
+            and getattr(ops.routers[-1], "milling_strategy", None) is None)
         lines += render_top_drill(
             list(ops.top_drills),
             ctx,
             after_router=has_router,
             router_spindle=after_router_spindle,
+            after_compensated_router=last_router_compensated,
         )
 
     if has_side:

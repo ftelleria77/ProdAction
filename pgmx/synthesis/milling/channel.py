@@ -346,6 +346,23 @@ def _append_channel(root: ET.Element, state, spec: _HydratedChannelSpec) -> None
         lift_curve = _build_generated_lift_curve_for_profile(state, spec, generated_toolpath_profile)
     trajectory_curve = spec.trajectory_curve or _curve_spec_from_profile_geometry(generated_toolpath_profile)
 
+    # Claves de miembro para curvas compuestas GENERADAS (leads con arco): mismo mecanismo
+    # que line.py — sin esto, un canal con Acercamiento/Alejamiento crasheaba al serializar
+    # («GeomCompositeCurve requiere una clave por cada miembro», detectado generando N055).
+    next_generated_aux_id = int(reserved_ids[n_total - 1]) + 1
+    approach_curve_member_keys: tuple[str, ...] = ()
+    if approach_curve.geometry_type == "GeomCompositeCurve" and not approach_curve.member_keys:
+        member_count = len(approach_curve.member_serializations)
+        approach_curve_member_keys = tuple(
+            str(next_generated_aux_id + offset) for offset in range(member_count))
+        next_generated_aux_id += member_count
+    lift_curve_member_keys: tuple[str, ...] = ()
+    if lift_curve.geometry_type == "GeomCompositeCurve" and not lift_curve.member_keys:
+        member_count = len(lift_curve.member_serializations)
+        lift_curve_member_keys = tuple(
+            str(next_generated_aux_id + offset) for offset in range(member_count))
+        next_generated_aux_id += member_count
+
     geometries.append(_build_line_geometry(geometry_id, plane_id, plane_object_type, spec))
     features.append(
         _build_slot_side_feature(
@@ -364,7 +381,9 @@ def _append_channel(root: ET.Element, state, spec: _HydratedChannelSpec) -> None
             spec,
             operation_id,
             approach_curve,
+            approach_curve_member_keys=approach_curve_member_keys,
             lift_curve=lift_curve,
+            lift_curve_member_keys=lift_curve_member_keys,
             trajectory_curve=trajectory_curve,
             trajectory_curve_member_keys=trajectory_curve.member_keys,
             toolpath_start=toolpath_start,

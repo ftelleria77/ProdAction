@@ -172,9 +172,18 @@ def classify_iso_diff(
                 continue
             diffs.append(NumericDiff(i, r, g, float(rv), float(gv)))
 
+    # La tolerancia es FÍSICA (mm). Las líneas `%Or[...]` van en MICRONES (µm): un delta
+    # de 0.024 ahí son 24 nanómetros — el mismo ruido single-precision del emisor visto
+    # en el ensayo general (2026-08-05: 100 archivos con f32 en el ofX y UN archivo,
+    # Tapa_despensero de Cazaux, con ofX exacto y ofY ruidoso EN EL MISMO ISO — el emisor
+    # es inconsistente consigo mismo). Escalar ×1000 mantiene la MISMA tolerancia física.
+    def _allowed(d: NumericDiff) -> float:
+        scale = 1000.0 if d.line_reference.lstrip().startswith("%Or[") else 1.0
+        return tolerance * scale + 1e-9
+
     functional = (not issues
                   and (diffs or case_diffs)
-                  and all(d.delta <= tolerance + 1e-9 for d in diffs))
+                  and all(d.delta <= _allowed(d) for d in diffs))
     return IsoComparison(
         "funcionalmente_identico" if functional else "diferente",
         numeric_diffs=tuple(diffs),

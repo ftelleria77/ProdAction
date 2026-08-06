@@ -72,17 +72,25 @@ def render_top_drill(
     ctx: PieceCtx,
     after_router: bool,
     router_spindle: int,
+    after_compensated_router: bool = False,
 ) -> list[str]:
     """Render all top drill holes.
 
     after_router: True when router preceded this block (changes first-hole setup).
     router_spindle: spindle speed left active by router (only relevant when after_router).
+    after_compensated_router: la ÚLTIMA op del router emitió corrección (G41/G42) → la
+    transición arranca con `?%ETK[8]=1 + G40` (reset de corrección a nivel máquina).
+    Derivado del ensayo general 2026-08-05 (89 contextos en Cazaux: teardown del router
+    SVR/VL7/ETK[7]=0 → par → MLV=0/G53; contraejemplo N001 c006/c007: router SIMPLE +
+    taladros byte-validado SIN el par — la corrección es el discriminante).
     """
     if not drills:
         return []
 
     state = _TopDrillState(spindle=router_spindle if after_router else 0)
     lines: list[str] = []
+    if after_router and after_compensated_router:
+        lines += ["?%ETK[8]=1", "G40"]
 
     for i, drill in enumerate(drills):
         base_tool = resolve_top_tool(drill.diameter, drill.drill_family, drill.tool_name)

@@ -149,6 +149,31 @@ en CINCO reglas de transición derivables, cada una pendiente de derivación mul
    (`-1510.600` = origen −1515.6 + origin_y 5, no −1515.6 + DY).
 5. ~~Cero negativo del park~~ → HECHA (§9).
 
+### 11. F3.2b sesión 2026-08-05: dos reglas más + el hallazgo estructural
+
+- **Regla A implementada**: `?%ETK[8]=1 + G40` en la transición router→taladro cuando la
+  última op del router es COMPENSADA (89 contextos Cazaux; N-lots sin el combo). Faja
+  109→105 líneas. ⚠️ Puede ser un caso particular de la regla general del punto de abajo
+  (el par como "anuncio de estado de cara": `=1` antes de top, `=etk8-de-cara` antes de
+  cada bloque lateral) — se re-deriva con las sondas de N056.
+- **f32 del ofX/ofY near** (§ ya descripto): +3 DeMarco, +15 Haeublein, +8 ISO byte.
+  Tolerancia FÍSICA por unidad en `compare.py` (líneas `%Or` en µm: ×1000) tras el
+  contraejemplo `Tapa_despensero` (el emisor es inconsistente consigo mismo: ofX exacto
+  y ofY ruidoso EN EL MISMO ISO).
+- **Regla C (G4F0.500) RESUELTA como dos condiciones, ninguna implementada aún**: las
+  pausas existen en TODOS los corpus de producción (el censo previo que decía "solo
+  Cazaux" estaba roto por espacios finales — DeMarco trae trailing whitespace, otra
+  rareza de era). Pausa de SETUP ~universal (419/443 cortes laterales); pausa ENTRE
+  agujeros 2:1 (1007/1502) — la condición exacta se deriva junto con la re-arquitectura.
+- **HALLAZGO ESTRUCTURAL (SEXTO punto ciego)**: la anatomía de `fajx 964` (DeMarco)
+  muestra **side→top→side INTERCALADO en el ISO** siguiendo la secuencia FUENTE. Maestro
+  NO reagrupa familias: nuestra emisión global Router→Sierra→Top→Side es un artefacto
+  del corpus propio (el sintetizador serializa las familias agrupadas — igual que la
+  FACE_PRIORITY). El trabajo consecuente: **F3.2c — re-arquitectura de la emisión a
+  bloques en secuencia fuente**, con la gramática de transiciones del emisor viejo
+  (T-BH/T-XH) como mapa y las sondas de secuencia de N056 como evidencia del emisor
+  ACTUAL. Es EL bloqueo de los 52 DeMarco + 22 Haeublein + 111 ISO restantes.
+
 ## Próximos pasos (en orden)
 
 1. **F0.8** — adapter: polilínea de 1 segmento (~162 archivos). Código nuestro.

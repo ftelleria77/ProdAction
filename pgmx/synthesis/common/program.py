@@ -47,6 +47,7 @@ from ..milling.pocket import (
 )
 from ..milling.arc import (
     ArcSpec,
+    _HydratedArcSpec,
     _append_arc,
     _hydrate_arc_spec,
 )
@@ -1268,6 +1269,12 @@ def _append_hydrated_machining(
         return
     if isinstance(spec, _HydratedPolylineSpec):
         _append_polyline(root, state, spec)
+        return
+    if isinstance(spec, _HydratedArcSpec):
+        # Faltaba: el arco hidrataba (_hydrate_arc_spec) pero el despacho de
+        # `ordered_machinings`/workplans no lo conocía — misma asimetría que el `arcs`
+        # ausente de PgmxSynthesisResult (auditoría 2026-08-05). Detectado generando N056.
+        _append_arc(root, state, spec)
         return
     if isinstance(spec, _HydratedCircleSpec):
         _append_circle(root, state, spec)

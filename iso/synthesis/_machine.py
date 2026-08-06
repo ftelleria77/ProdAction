@@ -51,19 +51,28 @@ SHF_X_MACHINE, SHF_Y_MACHINE = field_origin(ACTIVE_FIELD)
 
 
 def or_ofx(ctx, block: bool) -> float:
-    """%Or[0].ofX (µm) del campo. Near: -(D[+origin])×1000. Far: float32(field_x)×1000."""
+    """%Or[0].ofX (µm) del campo. Near: -float32(D[+origin])×1000. Far: float32(field_x)×1000.
+
+    El float32 en NEAR es del ensayo general (2026-08-05, 100 archivos DeMarco/Cazaux):
+    Maestro emite `-1001400.024` para DX+origin=1001.4 — float32(1001.4)×1000, la MISMA
+    regla ya derivada para el far/OR_OFY (todo origen pasa por single precision). Los
+    lotes N no podían verlo: sus medidas (305, 310, 400…) son EXACTAS en float32 —
+    quinto punto ciego por construcción del corpus propio."""
     fx, _ = field_origin(ctx.field)
     if fx == 0.0:
-        return -(ctx.DX + (ctx.origin_x if block else 0.0)) * 1000.0
+        return -_f32(ctx.DX + (ctx.origin_x if block else 0.0)) * 1000.0
     return _f32(fx) * 1000.0
 
 
 def or_ofy(ctx, block: bool) -> float:
-    """%Or[0].ofY (µm) del campo. Near (back): -(DY[+origin_y])×1000. Far (front): float32(field_y)×1000.
-    (El bloque suma origin_y en near, igual que ofX en near-X; en far no depende del bloque.)"""
+    """%Or[0].ofY (µm) del campo. Near (back): -float32(DY[+origin_y])×1000. Far (front):
+    float32(field_y)×1000. (El bloque suma origin_y en near, igual que ofX en near-X; en
+    far no depende del bloque. El float32 en near: misma regla que or_ofx — simétrica y
+    con la misma evidencia; los DY enteros del corpus son exactos en f32 y no la muestran.
+    ofZ queda SIN f32: ningún archivo lo exhibió aún — los DZ reales son enteros.)"""
     _, fy = field_origin(ctx.field)
     if fy == 0.0:
-        return -(ctx.DY + (ctx.origin_y if block else 0.0)) * 1000.0
+        return -_f32(ctx.DY + (ctx.origin_y if block else 0.0)) * 1000.0
     return _f32(fy) * 1000.0
 
 
