@@ -58,7 +58,10 @@ def render_preamble(
             "D0",
             f"G0 G53 Z{Z_PARK:.3f}",
             f"G0 G53 X{ctx.park_x:.3f}"
-            + (f" Y{ctx.park_y:.3f}" if ctx.park_y is not None else ""),
+            # `+ 0.0`: park_y = −Xn.y, y con Xn.y=0 el −0.0 emitiría `Y-0.000`; Maestro
+            # escribe `Y0.000` (Cazaux, ensayo 2026-08-05 — misma regla del cero negativo
+            # que el manual Rebaba_negativa / _pos3 y el `-v+0.0` de spindle_shf).
+            + (f" Y{ctx.park_y + 0.0:.3f}" if ctx.park_y is not None else ""),
             "G64",
         ]
     if router_compensated:
@@ -122,8 +125,9 @@ def render_epilogue(
     # INICIO (park_at_start) el park ya salió en el PREAMBLE y el footer va igual de pelado
     # (manual Rebaba_negativa 2026-07-30).
     has_xn = ctx.park_x is not None and not ctx.park_at_start
+    # `+ 0.0` en Y: normaliza el cero negativo (ver el bloque de park del preamble).
     park_lines = [f"G0 G53 X{ctx.park_x:.3f}" + (
-        f" Y{ctx.park_y:.3f}" if ctx.park_y is not None else "")] if has_xn else []
+        f" Y{ctx.park_y + 0.0:.3f}" if ctx.park_y is not None else "")] if has_xn else []
     m5_lines = ["M5"] if has_xn else []
 
     syn_block = [

@@ -1421,7 +1421,20 @@ def _adapt_milling(
             warnings=warnings,
         )
 
-    if profile.geometry_type == "GeomTrimmedCurve" and profile.primitive_count == 1:
+    # RECTA SIMPLE → LineSpec. Dos serializaciones de la MISMA geometría según la ruta de
+    # dibujo en Maestro: `GeomTrimmedCurve` (línea suelta) o `GeomCompositeCurve` de UN
+    # miembro-recta (la UI de polilínea con un solo tramo — forma dominante en los corpus
+    # de producción: 162 archivos del ensayo general 2026-08-05 rebotaban acá como
+    # "polilínea de 1 segmento"). ⚠️ HIPÓTESIS todavía sin validación byte: el ensayo
+    # 2026-08-05 mostró que TODOS esos archivos tienen además otro bloqueo (familias
+    # mezcladas / leads de polilínea) — ninguno convierte aún de punta a punta. La
+    # validación en masa contra sus ISO de referencia llega sola cuando esas guardas
+    # caigan (lotes N053/N056 del plan de cierre); si el postprocesador distinguiera la
+    # ruta de dibujo (improbable: deriva del perfil), el ensayo lo va a mostrar ahí.
+    if profile.primitive_count == 1 and (
+            profile.geometry_type == "GeomTrimmedCurve"
+            or (profile.geometry_type == "GeomCompositeCurve"
+                and profile.primitives[0].primitive_type == "Line")):
         primitive = profile.primitives[0]
         if primitive.primitive_type != "Line":
             return _unsupported_entry(

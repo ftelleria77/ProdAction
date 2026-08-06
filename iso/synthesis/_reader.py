@@ -6,6 +6,7 @@ Dentro de Side drill: prioridad Front > Left > Right > Back (empírico N001).
 
 from __future__ import annotations
 
+import math
 import re
 import zipfile
 from dataclasses import dataclass
@@ -187,6 +188,111 @@ class ProgramOps:
     saw_channels: tuple[ChannelSpec, ...] = ()
 
 
+def _top_drill_sort_key(spec: DrillSpec, index: int) -> tuple[float, float, str, int]:
+    return (float(spec.center_x), float(spec.center_y), spec.tool_name or "", index)
+
+
+def _ordered_top_drill_block(block: list[tuple[int, DrillSpec]],
+                             preceded_by_milling: bool) -> list[DrillSpec]:
+    """Regla B-BH-002 del orden de taladros verticales, portada del emisor viejo
+    (`iso_state_synthesis/pgmx_source.py::_ordered_top_drill_block`, derivada sobre 453
+    comparaciones reales — 451 explicadas; S042/S055). Re-validada byte a byte acá contra
+    los corpus de producción (primer caso: Cazaux `Faja frontal`, ensayo 2026-08-05).
+
+    - ToolKey EXPLÍCITO en todo el bloque (los .pgmx de nuestro sintetizador) → orden fuente.
+    - Bloque auto de ≤2 → orden geométrico simple (x, y).
+    - Excepción S055 (PGMX-ORD-002): bloque auto de EXACTAMENTE 4, una sola fresa,
+      profundidades MIXTAS, precedido por fresado → vecino más cercano arrancando en
+      max-X/min-Y (caso TabiqueF6 Haeublein).
+    - Resto → vecino más cercano arrancando en el agujero más cercano al ORIGEN.
+
+    Punto ciego que esta regla cierra: los fixtures N llevan ToolKey explícito, así que el
+    corpus sintetizado NO podía fabricar el caso auto (CLAUDE.md §5) — el orden fuente daba
+    byte-idéntico en los lotes y orden EQUIVOCADO en producción (60/60 Cazaux son auto).
+    Tiebreaker equidistante PENDIENTE: los `Pieza_215..218` (tanda B2 del plan) lo dirimen;
+    hasta entonces empata por (x, y, tool, índice) como el emisor viejo."""
+    specs = [spec for _, spec in block]
+    if all((spec.tool_name or "").strip() for spec in specs):
+        return specs
+    if len(specs) <= 2:
+        return [spec for _, spec in sorted(
+            block, key=lambda item: _top_drill_sort_key(item[1], item[0]))]
+    if preceded_by_milling and _auto_block_single_tool_mixed_depth(specs):
+        return _nearest_neighbor(block, start_at_max_x_min_y=True)
+    return _nearest_neighbor(block, start_at_max_x_min_y=False)
+
+
+def _auto_block_single_tool_mixed_depth(specs: list[DrillSpec]) -> bool:
+    if len(specs) != 4:
+        return False
+    if any((spec.tool_name or "").strip() for spec in specs):
+        return False
+    diameters = {round(float(spec.diameter), 6) for spec in specs}
+    depths = {(spec.depth_spec.is_through,
+               round(float(spec.depth_spec.target_depth or 0.0), 6)) for spec in specs}
+    return len(diameters) == 1 and len(depths) > 1
+
+
+def _nearest_neighbor(block: list[tuple[int, DrillSpec]],
+                      *, start_at_max_x_min_y: bool) -> list[DrillSpec]:
+    remaining = sorted(block, key=lambda item: _top_drill_sort_key(item[1], item[0]))
+    keys = {id(item[1]): _top_drill_sort_key(item[1], item[0]) for item in remaining}
+    if start_at_max_x_min_y:
+        start = min(range(len(remaining)),
+                    key=lambda i: (-keys[id(remaining[i][1])][0],) + keys[id(remaining[i][1])][1:])
+    else:
+        start = min(range(len(remaining)),
+                    key=lambda i: (math.hypot(*keys[id(remaining[i][1])][:2]),)
+                    + keys[id(remaining[i][1])])
+    ordered = [remaining.pop(start)[1]]
+    while remaining:
+        px, py = float(ordered[-1].center_x), float(ordered[-1].center_y)
+        nxt, _ = min(enumerate(remaining),
+                     key=lambda item: (math.hypot(keys[id(item[1][1])][0] - px,
+                                                  keys[id(item[1][1])][1] - py),)
+                     + keys[id(item[1][1])])
+        ordered.append(remaining.pop(nxt)[1])
+    return ordered
+
+
+def _ordered_top_drills(source_items: list[tuple]) -> list[DrillSpec]:
+    """Recorre la secuencia FUENTE, agrupa los taladros verticales en bloques contiguos y
+    ordena cada bloque con B-BH-002. Un bloque que contiene la expansión de un PATRÓN y
+    además taladros auto sueltos queda en orden fuente (sin evidencia de cómo los mezcla
+    Maestro — conservador). `preceded_by_milling` es pegajoso hasta consumirse en un bloque
+    de taladros (semántica exacta del emisor viejo)."""
+    ordered: list[DrillSpec] = []
+    preceded_by_milling = False
+    index = 0
+    counter = 0
+    while index < len(source_items):
+        item = source_items[index]
+        if item[0] == "milling":
+            preceded_by_milling = True
+            index += 1
+            continue
+        if item[0] == "side":
+            preceded_by_milling = False
+            index += 1
+            continue
+        # bloque contiguo de items "top"
+        block: list[tuple[int, DrillSpec]] = []
+        has_atomic = False
+        while index < len(source_items) and source_items[index][0] == "top":
+            _, tops, atomic = source_items[index]
+            has_atomic = has_atomic or atomic
+            for spec in tops:
+                block.append((counter, spec))
+                counter += 1
+            index += 1
+        if has_atomic and not all((s.tool_name or "").strip() for _, s in block):
+            ordered.extend(spec for _, spec in block)   # patrón + autos: sin evidencia
+        else:
+            ordered.extend(_ordered_top_drill_block(block, preceded_by_milling))
+        preceded_by_milling = False
+    return ordered
+
+
 def _contour_to_polyline(spec: ContourSpec, length: float, width: float) -> PolylineSpec:
     """Un ContourSpec (Galceado/Escuadrado, forma canónica de En-Juego) ES una polilínea CERRADA
     del perímetro — el galceado NO es una feature nueva del ISO (N043). El converter lo mapea a
@@ -238,6 +344,24 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
         raise UnsupportedOperationError(
             f"El .pgmx tiene {len(unsupported)} operación(es) que el adapter no pudo adaptar "
             f"(se omitirían en silencio): {reasons}")
+    # Fail-loud: operaciones de MÁQUINA sin render derivado. El adapter deja los pasos sin
+    # manufacturing feature como `ignored` (no llegan a adapted_entries NI a unsupported_entries),
+    # así que sin este chequeo un Xmsg («Girar pieza»), un Park (Aparcamiento) o una instrucción
+    # Iso del workplan se PERDÍAN en silencio — ISO incompleto que ejecuta sin parar donde el
+    # programa real para. El Xn es la excepción: sí tiene render (_xn_park, más abajo). Son
+    # CUATRO Executables distintos (labs aparcamiento + machine_operations). Los deshabilitados
+    # pasan: Maestro no los postprocesa. Fixture pendiente: lote M-07 del Eje C (flujo cara A →
+    # Xn+Xmsg girar → cara B → Xn); Park e Iso no tienen lote asignado todavía.
+    machine_ops = [s.runtime_type for s in result.snapshot.working_steps
+                   if s.is_enabled and s.runtime_type in ("Xmsg", "Park", "Iso")]
+    if machine_ops:
+        counts = ", ".join(
+            f"{machine_ops.count(t)}× {t}" for t in dict.fromkeys(machine_ops))
+        raise UnsupportedOperationError(
+            f"El programa trae operaciones de máquina sin render derivado: {counts}. No hay "
+            f"fixture de cómo las emite el postprocesador (Xmsg: lote M-07 del Eje C; Park/Iso: "
+            f"sin lote). Sin esta guarda se omitían EN SILENCIO. "
+            f"Ver iso/docs/experiments/xn_operacion_nula.md [Eje C].")
     # ContourSpec (Galceado/Escuadrado forma App) → polilínea del perímetro para el render; se
     # valida y enruta como una polilínea más (N043/N044). ContourSpec sigue siendo la spec de
     # autoría de la App; esto es solo la lectura del converter.
@@ -277,31 +401,42 @@ def read_pgmx(path: Path) -> tuple[PieceCtx, ProgramOps]:
     )
 
     routers: list[LineSpec] = []
-    top_drills: list[DrillSpec] = []
     side_drills: list[DrillSpec] = []
     saw_channels: list[ChannelSpec] = []
+    # Secuencia FUENTE para el orden de los taladros verticales: ("milling",), ("top", [..],
+    # atomic) o ("side",). La regla B-BH-002 (abajo) necesita los bloques CONTIGUOS del
+    # workplan y saber si el bloque venía precedido por un fresado.
+    source_items: list[tuple] = []
 
     for spec in specs:
         if isinstance(spec, DrillPatternSpec):
             drills = expand_drilling_pattern(spec)
+            atomic = True   # la expansión row-major del patrón es byte-validada (N008): no se reordena
         elif isinstance(spec, DrillSpec):
             drills = [spec]
+            atomic = False
         elif isinstance(spec, (LineSpec, CircleSpec, ArcSpec,
                                PolylineSpec, PocketSpec)):
             # Círculo (N038), arco suelto (N040), polilínea mixta (N041) y VACIADO (N047)
             # son ops de la familia ROUTER: mismo header/transición/teardown que las líneas.
             routers.append(spec)
+            source_items.append(("milling",))
             continue
         elif isinstance(spec, ChannelSpec):
             saw_channels.append(spec)
+            source_items.append(("milling",))
             continue
         else:
             continue
-        for drill in drills:
-            if drill.plane_name == "Top":
-                top_drills.append(drill)
-            else:
-                side_drills.append(drill)
+        tops = [d for d in drills if d.plane_name == "Top"]
+        sides = [d for d in drills if d.plane_name != "Top"]
+        if tops:
+            source_items.append(("top", tops, atomic))
+        if sides:
+            side_drills.extend(sides)
+            source_items.append(("side",))
+
+    top_drills = _ordered_top_drills(source_items)
 
     # Fail-loud: sin Xn, el footer omite `M5` y el park X — derivado del lote N043, cuyos 5
     # archivos (hechos a mano en Maestro) son todos ROUTER-ONLY. Para los demás cabezales no hay

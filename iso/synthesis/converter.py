@@ -138,22 +138,51 @@ def convert(pgmx_path: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _sorted_face_run(run: list[DrillSpec]) -> list[DrillSpec]:
+    """Orden DENTRO de una cara (B007, sin cambios): descendente en center_x para
+    Left/Back (Y_pos = −center_x → coordenada de máquina ascendente), ascendente
+    para Right/Front."""
+    if run and run[0].plane_name in ("Left", "Back"):
+        return sorted(run, key=lambda d: -d.center_x)
+    return sorted(run, key=lambda d: d.center_x)
+
+
 def _sort_side_drills(drills: list[DrillSpec]) -> list[DrillSpec]:
-    """Sort side drills in Maestro execution order.
+    """Orden de CARAS laterales = regla B-BH-005 parcial, portada del emisor viejo
+    (`iso_state_synthesis/pgmx_source.py::_ordered_side_drill_block`) el 2026-08-05.
 
-    Face priority: Front > Left > Right > Back.
-    Within the same face Maestro appears to process holes by descending center_x
-    for Left/Back (Y_pos = -center_x) and ascending center_x for Right/Front.
-    This is empirical from B007 (Left, x=60 then x=140 in PGMX → 140 then 60 in ISO).
-    """
-    from ._machine import FACE_PRIORITY
+    Las caras salen en ORDEN DE APARICIÓN de la fuente (corridas contiguas por cara;
+    las corridas repetidas de una cara se funden en su primera aparición), NO por una
+    prioridad fija. La `FACE_PRIORITY` anterior (Front>Left>Right>Back) era un artefacto
+    del corpus propio: el sintetizador PRE-ORDENA las caras al serializar (`_apply_drills`
+    Front→Back→Left→Right), así que ningún fixture N pudo contradecirla — el testigo es
+    `N_B008_left_then_front.pgmx`, autorado Left→Front pero SERIALIZADO Front→Left
+    (CLAUDE.md §5, tercer punto ciego del corpus). La refutó Cazaux `Faja frontal`:
+    fuente Right→Left, ISO Right→Left (prioridad habría emitido Left primero).
 
-    def sort_key(d: DrillSpec) -> tuple[int, float]:
-        fp = FACE_PRIORITY.get(d.plane_name, 99)
-        # Faces where Y_pos = -center_x: higher center_x drilled first (descending)
-        if d.plane_name in ("Left", "Back"):
-            return (fp, -d.center_x)
-        # Faces where Y_pos = +center_x or X_pos = center_x: ascending center_x
-        return (fp, d.center_x)
+    ROTACIÓN DE TANDA (≥3 corridas con la MISMA cara al inicio y al final): la última
+    corrida pasa adelante y la primera al final — validada por el emisor viejo en Cazaux
+    con Back→Front→Back. ⚠️ ACOTADA a caras Y (Front/Back): Haeublein `Divisor_Horiz1`
+    mostró que Right→Left→Right NO rota (experiments/024 del emisor viejo — quedó como
+    su único operativo sin explicar). El límite exacto es HIPÓTESIS con dos puntos de
+    evidencia; el ensayo general lo re-mide en cada corrida."""
+    runs: list[tuple[str, list[DrillSpec]]] = []
+    for drill in drills:
+        if not runs or runs[-1][0] != drill.plane_name:
+            runs.append((drill.plane_name, [drill]))
+        else:
+            runs[-1][1].append(drill)
 
-    return sorted(drills, key=sort_key)
+    if (len(runs) >= 3 and runs[0][0] == runs[-1][0]
+            and runs[0][0] in ("Front", "Back")):
+        rotated = [runs[-1], *runs[1:-1], runs[0]]
+        return [d for _, run in rotated for d in _sorted_face_run(run)]
+
+    by_plane: dict[str, list[DrillSpec]] = {}
+    plane_order: list[str] = []
+    for drill in drills:
+        if drill.plane_name not in by_plane:
+            by_plane[drill.plane_name] = []
+            plane_order.append(drill.plane_name)
+        by_plane[drill.plane_name].append(drill)
+    return [d for plane in plane_order for d in _sorted_face_run(by_plane[plane])]

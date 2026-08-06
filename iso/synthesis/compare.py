@@ -82,6 +82,16 @@ class IsoComparison:
     tolerance: float = DEFAULT_TOLERANCE
     #: líneas de la referencia que el converter omite A PROPÓSITO (ver DELIBERATE_OMISSIONS)
     deliberate_omissions: tuple[str, ...] = ()
+    #: comentarios (`% nombre.pgm`) que difieren SOLO en mayúsculas/minúsculas. Dato de
+    #: dominio (Fermín, 2026-08-05): los archivos se crean en la PC de oficina técnica y se
+    #: postprocesan en la PC del CNC; el case del comentario CAMBIÓ entre las salidas de
+    #: producción (Cazaux 2026-01: `% Faja frontal.pgm`, preservado) y las actuales
+    #: (2026-05+: `Galceado.pgmx` → `% galceado.pgm`, minusculizado). Ambas son Maestro
+    #: real ⇒ es ruido del EMISOR, como las milésimas — no una regla derivable. El
+    #: converter sigue al oráculo vivo (minusculiza); acá se clasifica como funcional y
+    #: se REPORTA. Solo aplica a líneas de comentario (`% ` con espacio): las asignaciones
+    #: de registro (`%Or`, `%ETK`, `%DONTCARESPEEDV`) no llevan espacio y NO se toleran.
+    comment_case_diffs: tuple[str, ...] = ()
 
     @property
     def max_delta(self) -> float:
@@ -94,6 +104,11 @@ class IsoComparison:
                          f"(línea inválida de Maestro que el CNC rechaza)")
             for omission in self.deliberate_omissions:
                 lines.append(f"  omitida: {omission}")
+        if self.comment_case_diffs:
+            lines.append(f"comentarios con case distinto: {len(self.comment_case_diffs)} "
+                         f"(ruido del emisor — ver docstring)")
+            for diff in self.comment_case_diffs:
+                lines.append(f"  case: {diff}")
         if self.numeric_diffs:
             lines.append(f"deltas numéricos: {len(self.numeric_diffs)} "
                          f"(máximo {self.max_delta:.4f} mm, tolerancia {self.tolerance})")
@@ -132,11 +147,18 @@ def classify_iso_diff(
 
     issues: list[str] = []
     diffs: list[NumericDiff] = []
+    case_diffs: list[str] = []
     if len(gen) != len(ref):
         issues.append(f"cantidad de líneas distinta (referencia {len(ref)}, "
                       f"generado {len(gen)})")
     for i, (r, g) in enumerate(zip(ref, gen), start=1):
         if r == g:
+            continue
+        # Comentario con case distinto (`% nombre.pgm`): ruido del emisor entre versiones
+        # de Maestro (ver IsoComparison.comment_case_diffs). Solo comentarios reales
+        # (`% ` con espacio); los registros `%...=` no llevan espacio y no entran acá.
+        if r.startswith("% ") and g.startswith("% ") and r.lower() == g.lower():
+            case_diffs.append(f"línea {i}: {r!r} → {g!r}")
             continue
         r_nums = _FLOAT_RE.findall(r)
         g_nums = _FLOAT_RE.findall(g)
@@ -151,7 +173,7 @@ def classify_iso_diff(
             diffs.append(NumericDiff(i, r, g, float(rv), float(gv)))
 
     functional = (not issues
-                  and diffs
+                  and (diffs or case_diffs)
                   and all(d.delta <= tolerance + 1e-9 for d in diffs))
     return IsoComparison(
         "funcionalmente_identico" if functional else "diferente",
@@ -159,6 +181,7 @@ def classify_iso_diff(
         structural_issues=tuple(issues),
         tolerance=tolerance,
         deliberate_omissions=omitted,
+        comment_case_diffs=tuple(case_diffs),
     )
 
 
