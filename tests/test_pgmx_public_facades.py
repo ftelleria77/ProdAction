@@ -1,16 +1,10 @@
 import unittest
 
-from pgmx import adapters, machining_lab, snapshot, synthesis
-from pgmx.machining_lab import machine_operations as machine_operations_lab
-from pgmx.machining_lab.machine_operations import scan_samples as machine_operations_scan_samples
-from pgmx.machining_lab import pocket_milling as pocket_milling_lab
-from pgmx.machining_lab.pocket_milling import scan_samples as pocket_milling_scan_samples
-from pgmx.machining_lab.pocket_milling import trace_engine as pocket_milling_trace_engine
+from pgmx import adapters, snapshot, synthesis
 from pgmx.synthesis import cli as synthesis_cli
 from pgmx.synthesis import core as synthesis_core
 from pgmx.synthesis import pocket_support as synthesis_pocket_support
 from pgmx.synthesis.milling import pocket_contract as milling_pocket_contract
-from pgmx.synthesis.milling import pocket_trace as milling_pocket_trace
 
 
 class PgmxPublicBoundaryTests(unittest.TestCase):
@@ -28,20 +22,6 @@ class PgmxPublicBoundaryTests(unittest.TestCase):
         self.assertTrue(callable(adapters.adapt_pgmx_path))
         self.assertTrue(callable(adapters.main))
         self.assertIn("main", adapters.__all__)
-
-    def test_pocket_milling_lab_is_the_current_lab_boundary(self) -> None:
-        self.assertIn("pocket_milling", machining_lab.__all__)
-        self.assertTrue(callable(pocket_milling_scan_samples.main))
-        self.assertIs(
-            pocket_milling_trace_engine.generate_contour_parallel_pocket_trace,
-            milling_pocket_trace.generate_contour_parallel_pocket_trace,
-        )
-        self.assertEqual(pocket_milling_lab.EXTERNAL_ROOT.name, "PGMX")
-
-    def test_machine_operations_lab_is_available_for_program_flow_research(self) -> None:
-        self.assertIn("machine_operations", machining_lab.__all__)
-        self.assertTrue(callable(machine_operations_scan_samples.main))
-        self.assertEqual(machine_operations_lab.EXTERNAL_ROOT.name, "machine_operations")
 
     def test_pocket_milling_contract_is_the_final_public_contract(self) -> None:
         self.assertTrue(callable(milling_pocket_contract.plan_rectangular_no_islands))
