@@ -19,8 +19,8 @@ from pgmx.synthesis.milling.line import LineSpec, build_line_spec
 from iso.synthesis import convert
 from iso.synthesis._validation import UnsupportedOperationError, _validate_line
 
-_FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N024_router_through")
-_REF_DIR = Path(r"P:\USBMIX\ProdAction\N024_router_through")
+_FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N024_router_through")
+_REF_DIR = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N024_router_through")
 
 
 def _line(**kw) -> LineSpec:

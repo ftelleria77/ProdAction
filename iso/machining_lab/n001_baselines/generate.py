@@ -38,7 +38,7 @@ from pgmx.synthesis import (  # noqa: E402
 from pgmx.synthesis.drilling.single import DrillSpec
 from pgmx.synthesis.milling.line import LineSpec
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N001_baselines"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N001_baselines"
 
 
 # ---------------------------------------------------------------------------

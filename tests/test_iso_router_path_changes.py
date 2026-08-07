@@ -21,8 +21,8 @@ from iso.synthesis import convert
 from iso.synthesis._router import _cut_segments, _g1_cut
 from iso.synthesis._validation import UnsupportedOperationError, _validate_line
 
-_FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N022_router_expand")
-_REF_DIR = Path(r"P:\USBMIX\ProdAction\N022_router_expand")
+_FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N022_router_expand")
+_REF_DIR = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N022_router_expand")
 
 
 def _line(**kw) -> LineSpec:

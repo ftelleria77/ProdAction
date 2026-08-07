@@ -30,7 +30,7 @@ if str(ROOT) not in sys.path:
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N023_router_side"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N023_router_side"
 
 # (tag, side, x1,y1,x2,y2, tool_id, tool_name, width)
 CASES = [

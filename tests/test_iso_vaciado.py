@@ -30,8 +30,8 @@ from iso.synthesis._reader import PieceCtx
 from iso.synthesis._router import _pocket_body
 from iso.synthesis._validation import UnsupportedOperationError, _validate_pocket
 
-_FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\N047_vaciado_baseline")
-_REFS = Path(r"P:\USBMIX\ProdAction\N047_vaciado_baseline")
+_FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N047_vaciado_baseline")
+_REFS = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N047_vaciado_baseline")
 
 _RECT = ((0.0, 0.0), (300.0, 0.0), (300.0, 300.0), (0.0, 300.0), (0.0, 0.0))
 
@@ -365,8 +365,8 @@ class EndToEndN048Test(unittest.TestCase):
     transiciones de nivel: a security vs dentro de la pieza, ambas DENTRO de la
     trayectoria); el helicoidal quedó confirmado INVISIBLE."""
 
-    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\N048_vaciado_estrategia")
-    _REFS = Path(r"P:\USBMIX\ProdAction\N048_vaciado_estrategia")
+    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N048_vaciado_estrategia")
+    _REFS = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N048_vaciado_estrategia")
 
     STEMS = ("N_V8_horario", "N_V8_afuera_adentro", "N_V8_overlap25", "N_V8_helicoidal",
              "N_V8_mp_e003", "N_V8_straghtline_mp", "N_V8_reb_p20", "N_V8_reb_m20")
@@ -394,8 +394,8 @@ class EndToEndN049Test(unittest.TestCase):
     Salió 7/7 DIRECTO, sin levantar nada: el render copia lo almacenado y el contorno solo
     gatea validación — la red que confirma que no hay convenciones ocultas por contorno."""
 
-    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\N049_vaciado_contornos")
-    _REFS = Path(r"P:\USBMIX\ProdAction\N049_vaciado_contornos")
+    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N049_vaciado_contornos")
+    _REFS = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N049_vaciado_contornos")
 
     STEMS = ("N_V9_parcial_centro", "N_V9_parcial_esquina", "N_V9_parcial_banda",
              "N_V9_arranque_mitad", "N_V9_contorno_horario", "N_V9_excede_pieza",

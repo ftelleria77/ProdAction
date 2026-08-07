@@ -35,7 +35,7 @@ from pgmx.synthesis.common.strategy import (  # noqa: E402
     build_unidirectional_milling_strategy_spec,
 )
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N025_router_multipass"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N025_router_multipass"
 
 
 def _bi(cd: float, finish: float = 0.0):

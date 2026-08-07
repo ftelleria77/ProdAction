@@ -4,8 +4,8 @@
 
 ## Fixtures
 
-24 archivos `.pgmx` en `S:\Maestro\Projects\ProdAction\N001_baselines\`.  
-24 archivos `.iso` postprocesados en `P:\USBMIX\ProdAction\N001_baselines\`.
+24 archivos `.pgmx` en `S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N001_baselines\`.  
+24 archivos `.iso` postprocesados en `P:\USBMIX\ProdAction\Investigacion iso_converter\N001_baselines\`.
 
 ## Análisis
 

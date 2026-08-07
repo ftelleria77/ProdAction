@@ -20,7 +20,7 @@ if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N031_authoring"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N031_authoring"
 CASES = [
     ("aut_reb2",   dict(side_offset=2.0)),
     ("aut_long",   dict(is_precise=True)),

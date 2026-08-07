@@ -26,7 +26,7 @@ from pgmx.synthesis import (  # noqa: E402
     build_drill_spec, build_synthesis_request, build_xn_spec, synthesize_request,
 )
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N015_xn_park"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N015_xn_park"
 
 # (etiqueta, xn_kwargs o None). Y de la cama: rango 0 a ~-1500 (Fermín).
 CASES = [

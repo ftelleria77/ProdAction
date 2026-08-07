@@ -18,7 +18,7 @@ from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request  # noqa: E402
 from pgmx.synthesis.common.strategy import ZigZagMillingStrategySpec  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N032_authoring_b"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N032_authoring_b"
 
 def _line(tool, width, depth, **kw):
     tid = {"E004": "1903", "E001": "1900"}[tool]

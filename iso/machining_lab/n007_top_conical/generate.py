@@ -22,7 +22,7 @@ if str(ROOT) not in sys.path:
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_drill_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N007_top_conical"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N007_top_conical"
 
 # (etiqueta, espesor, drill_family) — None = auto (D5+pasante -> Conical tool 007).
 CASES = [

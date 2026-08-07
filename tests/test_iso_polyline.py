@@ -20,8 +20,8 @@ from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_
 from iso.synthesis import convert
 from iso.synthesis._validation import UnsupportedOperationError, _validate_polyline
 
-_FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N041_poly_profile")
-_REF_DIR = Path(r"P:\USBMIX\ProdAction\N041_poly_profile")
+_FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N041_poly_profile")
+_REF_DIR = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N041_poly_profile")
 
 
 def _poly(**kw):
@@ -66,8 +66,8 @@ class EndToEndTest(unittest.TestCase):
     STEMS = ("N_R_ll", "N_R_lar", "N_R_lar_cw", "N_R_aa", "N_R_ar_l",
              "N_R_closed", "N_R_prof10", "N_R_th", "N_R_e001", "N_R_two")
 
-    _N042_DIR = Path(r"S:\Maestro\Projects\ProdAction\N042_poly_correction")
-    _N042_REFS = Path(r"P:\USBMIX\ProdAction\N042_poly_correction")
+    _N042_DIR = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N042_poly_correction")
+    _N042_REFS = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N042_poly_correction")
     N042_STEMS = ("N_T_open_l", "N_T_open_r", "N_T_open_app", "N_T_open_l_app",
                   "N_T_closed_l", "N_T_closed_r", "N_T_closed_l_rev",
                   "N_T_closed_app", "N_T_closed_l_app",

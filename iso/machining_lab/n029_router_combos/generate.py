@@ -14,7 +14,7 @@ Requieren TILDAR UNA OPCION en Maestro antes de postprocesar (esta en el nombre)
   f9_tope          : linea limpia -> Avanz. 9 (tope E004=5: clampa o error?)
 
 Uso:  py -m iso.machining_lab.n029_router_combos.generate
-Salida: S:/Maestro/Projects/ProdAction/N029_router_combos/
+Salida: S:/Maestro/Projects/ProdAction/Investigacion iso_converter/N029_router_combos/
 """
 from __future__ import annotations
 import argparse, sys
@@ -25,7 +25,7 @@ from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request  # noqa: E402
 from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_spec  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N029_router_combos"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N029_router_combos"
 X = dict(start_x=20.0, start_y=100.0, end_x=280.0, end_y=100.0)
 DIAG = dict(start_x=20.0, start_y=20.0, end_x=280.0, end_y=180.0)
 ARC = dict(approach_enabled=True, approach_type="Arc",

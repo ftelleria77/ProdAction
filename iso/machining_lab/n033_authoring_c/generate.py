@@ -19,7 +19,7 @@ from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_synthesis_request, synthesize_request  # noqa: E402
 from iso.machining_lab.n032_authoring_b.generate import CASES  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N033_authoring_c"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N033_authoring_c"
 
 def main(argv=None):
     parser = argparse.ArgumentParser(); parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)

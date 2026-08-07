@@ -28,7 +28,7 @@ if str(ROOT) not in sys.path:
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_drill_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N003_eff_floor"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N003_eff_floor"
 
 SP_VALUES = [1, 3, 5, 6, 7, 10]
 

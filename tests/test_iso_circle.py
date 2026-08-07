@@ -19,8 +19,8 @@ from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_
 from iso.synthesis import convert
 from iso.synthesis._validation import UnsupportedOperationError, _validate_circle
 
-_FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N038_circle")
-_REF_DIR = Path(r"P:\USBMIX\ProdAction\N038_circle")
+_FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N038_circle")
+_REF_DIR = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N038_circle")
 
 
 def _circ(**kw):
@@ -87,8 +87,8 @@ class EndToEndTest(unittest.TestCase):
     STEMS = ("N_O_base", "N_O_cw", "N_O_r10", "N_O_r60", "N_O_prof10",
              "N_O_th", "N_O_e001", "N_O_pos", "N_O_sec10", "N_O_two")
 
-    N039_DIR = Path(r"S:\Maestro\Projects\ProdAction\N039_circle_combos")
-    N039_REFS = Path(r"P:\USBMIX\ProdAction\N039_circle_combos")
+    N039_DIR = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N039_circle_combos")
+    N039_REFS = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N039_circle_combos")
     N039_STEMS = ("N_P_side_l", "N_P_side_r", "N_P_side_l_cw", "N_P_side_l_th",
                   "N_P_mp_bi", "N_P_mp_uni", "N_P_heli", "N_P_app_arc",
                   "N_P_app_ret_arc", "N_P_app_line", "N_P_mp_leads", "N_P_side_l_leads")

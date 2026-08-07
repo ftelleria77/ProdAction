@@ -20,7 +20,7 @@ if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_polyline_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N042_poly_correction"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N042_poly_correction"
 
 # perfil ABIERTO tangente (start (40,60)): sube, cuarto de arco, va a la derecha
 OPEN = dict(start=(40.0, 60.0),

@@ -17,7 +17,7 @@ from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_synthesis_request, synthesize_request  # noqa: E402
 from pgmx.synthesis.milling.channel import build_channel_spec  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N037_saw_channel"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N037_saw_channel"
 
 def _slot(x1=280.0, y1=100.0, x2=20.0, y2=100.0, **kw):
     # sentido -x por defecto (280 -> 20), la restriccion fisica de la 082

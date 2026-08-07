@@ -28,7 +28,7 @@ if str(ROOT) not in sys.path:
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N022_router_expand"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N022_router_expand"
 
 # Parte A — (tag, tool_id, tool_name, width)  línea en X (20,100)->(280,100), depth 3.
 # TODAS las herramientas del cabezal: el converter no distingue tipo (decisión de Fermín). E002 es

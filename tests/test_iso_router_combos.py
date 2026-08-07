@@ -24,8 +24,8 @@ from pgmx.synthesis.milling.line import LineSpec, build_line_spec
 from iso.synthesis import convert
 from iso.synthesis._validation import UnsupportedOperationError, _validate_line
 
-_FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N029_router_combos")
-_REF_DIR = Path(r"P:\USBMIX\ProdAction\N029_router_combos")
+_FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N029_router_combos")
+_REF_DIR = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N029_router_combos")
 
 
 def _line(**kw) -> LineSpec:
@@ -119,8 +119,8 @@ class GuardClosingN036Test(unittest.TestCase):
     (cad_long/inv_cad/inv_mp) se derivaron tras REGENERAR el recorrido en Maestro (2026-07-07):
     los eco previos mentían — el acorte, el swap y las pasadas invertidas SÍ aplican."""
 
-    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\N036_router_guards_b")
-    _REFS = Path(r"P:\USBMIX\ProdAction\N036_router_guards_b")
+    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N036_router_guards_b")
+    _REFS = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N036_router_guards_b")
 
     STEMS = (
         "N_H_cad_reb2", "N_H_cad_leads", "N_H_cad_vel", "N_H_cad_th", "N_H_cad_long",

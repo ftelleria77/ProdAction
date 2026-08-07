@@ -19,8 +19,8 @@ from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_
 from iso.synthesis import convert
 from iso.synthesis._validation import UnsupportedOperationError, _validate_arc
 
-_FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N040_arc")
-_REF_DIR = Path(r"P:\USBMIX\ProdAction\N040_arc")
+_FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N040_arc")
+_REF_DIR = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N040_arc")
 
 
 def _arc(**kw):

@@ -184,8 +184,8 @@ class EndToEndTest(unittest.TestCase):
     def test_byte_identico(self):
         for lot, stem in self.CASES:
             with self.subTest(stem):
-                pgmx = Path(rf"S:\Maestro\Projects\ProdAction\{lot}\{stem}.pgmx")
-                ref = Path(rf"P:\USBMIX\ProdAction\{lot}\{stem.lower()}.iso")
+                pgmx = Path(rf"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\{lot}\{stem}.pgmx")
+                ref = Path(rf"P:\USBMIX\ProdAction\Investigacion iso_converter\{lot}\{stem.lower()}.iso")
                 if not pgmx.exists() or not ref.exists():
                     self.skipTest("fixtures S:/P: no disponibles")
                 gen = [ln.rstrip() for ln in convert(pgmx).splitlines()]
@@ -201,8 +201,8 @@ class MultiToolEndToEndTest(unittest.TestCase):
     def test_byte_identico(self):
         for stem in ("N_MF_mf_e4_e1", "N_MF_mf_e1_e4", "N_MF_mf_e4_e4_e1"):
             with self.subTest(stem):
-                pgmx = Path(rf"S:\Maestro\Projects\ProdAction\N028_router_multitool\{stem}.pgmx")
-                ref = Path(rf"P:\USBMIX\ProdAction\N028_router_multitool\{stem.lower()}.iso")
+                pgmx = Path(rf"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N028_router_multitool\{stem}.pgmx")
+                ref = Path(rf"P:\USBMIX\ProdAction\Investigacion iso_converter\N028_router_multitool\{stem.lower()}.iso")
                 if not pgmx.exists() or not ref.exists():
                     self.skipTest("fixtures S:/P: no disponibles")
                 gen = [ln.rstrip() for ln in convert(pgmx).splitlines()]

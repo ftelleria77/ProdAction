@@ -20,8 +20,8 @@ from pgmx.synthesis.common.leads import build_approach_spec
 from iso.synthesis import convert
 from iso.synthesis._validation import UnsupportedOperationError, _validate_channel
 
-_FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\N037_saw_channel")
-_REF_DIR = Path(r"P:\USBMIX\ProdAction\N037_saw_channel")
+_FIXTURE_DIR = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N037_saw_channel")
+_REF_DIR = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N037_saw_channel")
 
 
 def _slot(**kw) -> ChannelSpec:

@@ -37,7 +37,7 @@ from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_line_spec, build_synthesis_request, synthesize_request  # noqa: E402
 from pgmx.synthesis.common.strategy import build_bidirectional_milling_strategy_spec  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N027_router_leads_b"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N027_router_leads_b"
 
 E004 = dict(tool_id="1903", tool_name="E004", tool_width=4.0)
 E001 = dict(tool_id="1900", tool_name="E001", tool_width=18.36)

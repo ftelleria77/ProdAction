@@ -18,8 +18,8 @@ from iso.synthesis._machine_config import field_origin
 from iso.synthesis._reader import _execution_field, read_pgmx
 from iso.synthesis._validation import UnsupportedOperationError
 
-_FIXTURE = Path(r"S:\Maestro\Projects\ProdAction\N001_baselines\N_A001_top_1hole_D5.pgmx")
-_SIDE_FIXTURE = Path(r"S:\Maestro\Projects\ProdAction\N001_baselines\N_B001_left_1hole.pgmx")
+_FIXTURE = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N001_baselines\N_A001_top_1hole_D5.pgmx")
+_SIDE_FIXTURE = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N001_baselines\N_B001_left_1hole.pgmx")
 
 
 class FieldOriginTest(unittest.TestCase):

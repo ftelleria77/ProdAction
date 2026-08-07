@@ -46,7 +46,7 @@ from pgmx.synthesis import (  # noqa: E402
 )
 from pgmx.synthesis.drilling.single import DrillSpec
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N002_baselines"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N002_baselines"
 
 # Geometría base (igual a N001 salvo donde se varía a propósito).
 BASE_L = 300.0

@@ -37,7 +37,7 @@ from pgmx.synthesis.common.strategy import (  # noqa: E402
     build_unidirectional_milling_strategy_spec,
 )
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N030_router_pendientes"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N030_router_pendientes"
 
 LINE_X = dict(start_x=20.0, start_y=100.0, end_x=280.0, end_y=100.0)
 DIAG = dict(start_x=20.0, start_y=20.0, end_x=280.0, end_y=180.0)

@@ -47,7 +47,7 @@ from pgmx.synthesis import (  # noqa: E402
     synthesize_request,
 )
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N047_vaciado_baseline"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N047_vaciado_baseline"
 
 # Convencion del workstream (N043+): pieza 300x300x18, origen 0/0/0, security 30.
 PIECE = dict(length=300.0, width=300.0, depth=18.0, origin_x=0.0, origin_y=0.0, origin_z=0.0)

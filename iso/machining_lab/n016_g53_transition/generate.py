@@ -21,7 +21,7 @@ if str(ROOT) not in sys.path:
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_drill_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N016_g53_transition"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N016_g53_transition"
 
 SP_VALUES = [2.0, 5.0, 10.0, 20.0, 30.0]  # 20 = control (valor ya validado: g53=149.5)
 

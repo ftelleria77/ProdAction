@@ -25,7 +25,7 @@ from pgmx.synthesis import (  # noqa: E402
     build_contour_spec, build_polyline_spec, build_synthesis_request, synthesize_request,
 )
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N044_galceado_combos"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N044_galceado_combos"
 
 # Contexto de N043: pieza 300x300x18, E003 (w=9.52), ciego -9, security 30, origen 0/0/0.
 PIECE = dict(length=300.0, width=300.0, depth=18.0, origin_x=0.0, origin_y=0.0, origin_z=0.0)

@@ -30,7 +30,7 @@ if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_polyline_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N046_cad_lead_poison"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N046_cad_lead_poison"
 
 # Mismo contexto que N043/N044/N045: pieza 300x300x18, ciego -9, security 30, origen 0/0/0.
 PIECE = dict(length=300.0, width=300.0, depth=18.0, origin_x=0.0, origin_y=0.0, origin_z=0.0)

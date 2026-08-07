@@ -15,7 +15,7 @@ if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_circle_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N038_circle"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N038_circle"
 
 def _circ(cx=150.0, cy=100.0, r=30.0, depth=5.0, **kw):
     return build_circle_spec(

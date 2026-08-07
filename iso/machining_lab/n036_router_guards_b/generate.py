@@ -26,7 +26,7 @@ from pgmx.synthesis.common.strategy import (  # noqa: E402
     build_bidirectional_milling_strategy_spec,
 )
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N036_router_guards_b"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N036_router_guards_b"
 
 BI = build_bidirectional_milling_strategy_spec(allow_multiple_passes=True, axial_cutting_depth=4.0)
 BI_SINGLE = build_bidirectional_milling_strategy_spec(allow_multiple_passes=False)

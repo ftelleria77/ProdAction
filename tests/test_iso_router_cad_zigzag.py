@@ -38,8 +38,8 @@ class EndToEndTest(unittest.TestCase):
     def test_byte_identico(self):
         for lot, stem in CASES:
             with self.subTest(stem):
-                pgmx = Path(rf"S:\Maestro\Projects\ProdAction\{lot}\{stem}.pgmx")
-                ref = Path(rf"P:\USBMIX\ProdAction\{lot}\{stem.lower()}.iso")
+                pgmx = Path(rf"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\{lot}\{stem}.pgmx")
+                ref = Path(rf"P:\USBMIX\ProdAction\Investigacion iso_converter\{lot}\{stem.lower()}.iso")
                 if not pgmx.exists() or not ref.exists():
                     self.skipTest("fixtures S:/P: no disponibles")
                 gen = [ln.rstrip() for ln in convert(pgmx).splitlines()]

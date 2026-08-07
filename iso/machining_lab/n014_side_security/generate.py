@@ -21,7 +21,7 @@ if str(ROOT) not in sys.path:
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_drill_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N014_side_security"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N014_side_security"
 
 SP_VALUES = [5.0, 10.0, 20.0, 30.0]  # 20 = control (igual a lo ya validado)
 

@@ -33,16 +33,16 @@ class AuthoringEndToEndTest(unittest.TestCase):
     def test_n031_features_de_postprocesador(self):
         _check_byte_identico(
             self,
-            Path(r"S:\Maestro\Projects\ProdAction\N031_authoring"),
-            Path(r"P:\USBMIX\ProdAction\N031_authoring"),
+            Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N031_authoring"),
+            Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N031_authoring"),
             ("N_A_aut_reb2", "N_A_aut_long", "N_A_aut_invert", "N_A_aut_cad_l", "N_A_aut_f3s12"),
         )
 
     def test_n033_zigzag_y_atributos_forma_maestro(self):
         _check_byte_identico(
             self,
-            Path(r"S:\Maestro\Projects\ProdAction\N033_authoring_c"),
-            Path(r"P:\USBMIX\ProdAction\N033_authoring_c"),
+            Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N033_authoring_c"),
+            Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N033_authoring_c"),
             ("N_C_aut_zz", "N_C_aut_vel", "N_C_aut_prof", "N_C_aut_multi"),
         )
 

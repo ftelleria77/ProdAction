@@ -419,8 +419,8 @@ class EndToEndN044Test(unittest.TestCase):
       interno (CW+Right, todo vivo), Left (arcos G2), chaflán (arco de ángulo cualquiera).
     """
 
-    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\N044_galceado_combos")
-    _REFS = Path(r"P:\USBMIX\ProdAction\N044_galceado_combos")
+    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N044_galceado_combos")
+    _REFS = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N044_galceado_combos")
 
     STEMS = (
         "N_G_app_line", "N_G_app_line_down", "N_G_ret_line", "N_G_ret_line_up",
@@ -518,8 +518,8 @@ class EndToEndN045Test(unittest.TestCase):
     Maestro): valen como regresión de profundidad/pasante, no cubren el zigzag CAD.
     """
 
-    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\N045_galceado_cad_combos")
-    _REFS = Path(r"P:\USBMIX\ProdAction\N045_galceado_cad_combos")
+    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N045_galceado_cad_combos")
+    _REFS = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N045_galceado_cad_combos")
 
     STEMS = (
         "N_G5_cad_leads_rm1", "N_G5_cad_leads_rm2", "N_G5_cad_leads_rm3",
@@ -541,8 +541,8 @@ class EndToEndN046Test(unittest.TestCase):
     (no es función de la longitud de arco — no hay fórmula), y el ISO la COPIA. El converter
     LEE esa Z y recomputa el XY (I/J al vértice nominal). Requiere S:/P: montados."""
 
-    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\N046_cad_lead_poison")
-    _REFS = Path(r"P:\USBMIX\ProdAction\N046_cad_lead_poison")
+    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N046_cad_lead_poison")
+    _REFS = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N046_cad_lead_poison")
 
     STEMS = ("N_G6_zz_d9", "N_G6_zz_d13", "N_G6_zz_d18")
 
@@ -578,8 +578,8 @@ class ClosedN044Test(unittest.TestCase):
     derivó el ZigZag CAD (la Z se LEE de la curva almacenada — con ACC=false Maestro la copia)
     y este fixture, cuya estrategia agregó Fermín en Maestro, cierra byte-idéntico solo."""
 
-    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\N044_galceado_combos")
-    _REFS = Path(r"P:\USBMIX\ProdAction\N044_galceado_combos")
+    _FIXTURES = Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N044_galceado_combos")
+    _REFS = Path(r"P:\USBMIX\ProdAction\Investigacion iso_converter\N044_galceado_combos")
 
     def test_cad_zigzag_cierra_con_la_regla_de_n046(self):
         # Validación CRUZADA (como cad_leads con N045): el fixture que planteó la pregunta

@@ -22,9 +22,9 @@ from pgmx.synthesis.common.strategy import ZigZagMillingStrategySpec
 _XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
 
 _REAL_FIXTURES = {
-    "zigzag": Path(r"S:\Maestro\Projects\ProdAction\N025_router_multipass\N_MP_zigzag_pa2_pr3_uh1.pgmx"),
-    "vel": Path(r"S:\Maestro\Projects\ProdAction\N022_router_expand\N_RT_E001_Vel.pgmx"),
-    "prof": Path(r"S:\Maestro\Projects\ProdAction\N022_router_expand\N_RT_E001_Prof.pgmx"),
+    "zigzag": Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N025_router_multipass\N_MP_zigzag_pa2_pr3_uh1.pgmx"),
+    "vel": Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N022_router_expand\N_RT_E001_Vel.pgmx"),
+    "prof": Path(r"S:\Maestro\Projects\ProdAction\Investigacion iso_converter\N022_router_expand\N_RT_E001_Prof.pgmx"),
 }
 
 

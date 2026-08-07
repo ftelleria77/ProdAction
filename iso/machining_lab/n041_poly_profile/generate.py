@@ -17,7 +17,7 @@ if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_polyline_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N041_poly_profile"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N041_poly_profile"
 
 def _poly(start, segments, **kw):
     return build_polyline_spec(

@@ -16,7 +16,7 @@ if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_arc_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N040_arc"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N040_arc"
 
 def _arc(x1=210.0, y1=100.0, x2=90.0, y2=100.0, cx=150.0, cy=100.0, **kw):
     return build_arc_spec(

@@ -23,7 +23,7 @@ if str(ROOT) not in sys.path:
 from iso.paths import PGMX_ROOT  # noqa: E402
 from pgmx.synthesis import build_drill_spec, build_synthesis_request, synthesize_request  # noqa: E402
 
-DEFAULT_OUTPUT_DIR = PGMX_ROOT / "N009_top_feedspindle"
+DEFAULT_OUTPUT_DIR = PGMX_ROOT / "Investigacion iso_converter" / "N009_top_feedspindle"
 
 # (etiqueta, feedrate, spindle) — 0 = sin override (usa default de la tool).
 # Sub-máximo (f0p5/f1p5/f2p5) desambigua: si F=valor×1000 → value-faithful con clamp;
