@@ -7,11 +7,12 @@ convertidor. Cada sub-laboratorio es una serie numerada e independiente.
 
 | Serie | Prefijo | Descripción |
 | --- | --- | --- |
-| N001 | `n001_baselines/` | Fixtures de línea base: taladro vertical, lateral y router. |
+| R001 | `r001_programa_vacio/` | Reinvestigación, etapa 1: programa sin mecanizados (configuración de programa). |
+| N (archivada) | — | Época anterior (no se usa como evidencia): fixtures en `Investigacion iso_converter\` de S:/P:, generadores y converter en la rama `iso_converter`. |
 
 ## Regla de promoción
 
-Un hallazgo puede pasar a `iso/synthesis/` solo cuando:
+Un hallazgo puede pasar al convertidor definitivo solo cuando:
 
 - La regla fue observada en ISO Maestro generado desde los fixtures del lab.
 - Existe evidencia documentada en `iso/docs/experiments/`.

@@ -1,30 +1,31 @@
-# iso — Convertidor PGMX → ISO
+# iso — Conversión PGMX → ISO (época de reinvestigación)
 
-Paquete para la conversión directa de archivos `.pgmx` (Maestro) a código ISO
-(G-code) para la máquina CNC SCM Group.
+Paquete de la investigación para el convertidor de archivos `.pgmx` (Maestro) a código
+ISO (G-code) de la CNC SCM Group. Desde 2026-08-07 este árbol contiene SOLO la época
+nueva: la reinvestigación metódica desde cero. El convertidor anterior, sus tests y sus
+labs quedaron congelados fuera de esta rama (ramas `iso_converter` y
+`respaldo/ejecucion-plan-f0-f3`) y no se referencian durante la reinvestigación.
 
 ## Estructura
 
 ```
 iso/
-  data/           Configuración de máquina: snapshots de NCI.CFG, pheads.cfg, etc.
-  docs/           Documentación de investigación y uso.
-    memory/       Memoria acumulada de parámetros ISO observados.
-    experiments/  Resultados de estudios controlados con fixtures.
-    contracts/    Contratos de interfaz y formato XISO intermedio.
-  machining_lab/  Laboratorio de pruebas empíricas.
-    n001_baselines/  Primer lote de fixtures: taladro vertical, lateral y router.
-  synthesis/      Módulos productivos del convertidor.
+  data/           Configuración de máquina: snapshot de los archivos extraídos de la
+                  PC del CNC (def.tlgx, spindles.cfg, fields.cfg, …). Fuente única;
+                  se refresca sobreescribiendo la carpeta tras cada calibración.
+  docs/           Documentación de la investigación.
+    experiments/  Un doc por experimento: mapa UI → .pgmx → ISO, derivado y pendiente.
+  machining_lab/  Laboratorio de fixtures controlados (serie R).
+  paths.py        Rutas raíz S:/P: de los pares PGMX/ISO.
 ```
 
-## Enfoque
+## Método
 
-El convertidor se construye desde cero mediante análisis empírico:
+1. Fixtures `.pgmx` de variación controlada (una opción por archivo), serie R.
+2. Postproceso en Maestro (PC del CNC) → ISO de referencia.
+3. Anatomía del ISO: atribuir cada línea y cada valor a su origen (configuración del
+   programa, configuración de la máquina, u operación).
+4. Byte-idéntico o fail-loud; nunca aproximar en silencio.
 
-1. Generar fixtures `.pgmx` con variaciones controladas.
-2. Convertir a ISO con Maestro en la máquina CNC.
-3. Analizar los ISO resultantes para derivar las reglas de conversión.
-4. Implementar cada regla con su nivel de confianza documentado.
-
-El código productivo en `synthesis/` solo incorpora reglas validadas contra
-corpus Maestro real. Las hipótesis sin validar viven en `machining_lab/`.
+La nomenclatura de los algoritmos es genérica y usa la terminología de Maestro; no se
+nombra por proyectos de producción ni por fixtures de la investigación.
