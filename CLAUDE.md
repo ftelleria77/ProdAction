@@ -50,21 +50,23 @@ Dónde mirar, en orden:
 
 1. **`docs/synthesize_pgmx_help.md`** — la API de nuestro sintetizador: qué specs y builders hay,
    qué escribe cada uno en el `.pgmx`. `docs/pgmx_snapshot_help.md` es el lado de lectura.
-2. **`pgmx/machining_lab/<operación>/memory/current-state.md`** — reglas DERIVADAS por operación,
-   con su evidencia y sus rondas (ej. `aparcamiento/` para el Park: campos, modos de paro, qué
-   expone la UI y qué no). Si existe un lab de lo que estás tocando, empezá ahí.
-3. **`iso/docs/experiments/<feature>.md`** — el mapa UI → `.pgmx` → ISO de cada feature, con lo
-   derivado y lo pendiente (ej. `galceado_perfilado.md`, `xn_operacion_nula.md`).
-4. **`pgmx/docs/`** — el manual de referencia de SCM: `xilog_plus_pgm/` (editor Xilog Plus) y
+2. **`iso/docs/experiments/<feature>.md`** — el mapa UI → `.pgmx` → ISO de la época nueva
+   (serie R), con lo derivado y lo pendiente (ej. `programa_vacio.md`).
+3. **`pgmx/docs/`** — el manual de referencia de SCM: `xilog_plus_pgm/` (editor Xilog Plus) y
    `maestro_scripting/` (API de scripting). Es la fuente sobre Maestro/Xilog mismo, no sobre
    nuestro código. `pgmx/docs/README.md` es el índice.
 
+**La época anterior está congelada y NO se consulta durante la reinvestigación** (decisión
+2026-08-07): los labs (`pgmx/machining_lab/*`, `iso/machining_lab/n0*`), los experimentos de la
+serie N y el converter viejo viven en las ramas `iso_converter` y `respaldo/ejecucion-plan-f0-f3`.
+La época nueva deriva su propia evidencia con la serie R; lo congelado no es fuente.
+
 Por qué es regla: la definición correcta suele existir y contradecir lo que uno supondría. El Xn,
 el Xmsg y el Park (Aparcamiento) son **tres operaciones distintas** con tipos serializados
-distintos — `XnSpec` / `XmsgSpec` / `ParkSpec` ya en producción —; el converter las venía tratando
-como si "Xn" y "park" fueran lo mismo. Estaba documentado en `pgmx/machining_lab/aparcamiento/`
-desde antes. Preguntar sin leer primero desperdicia el trabajo ya hecho, y peor: invita a
-reinventarlo mal (ver la regla 1).
+distintos — `XnSpec` / `XmsgSpec` / `ParkSpec` ya en producción —; el converter viejo las venía
+tratando como si "Xn" y "park" fueran lo mismo, y estaba documentado desde antes en el lab de
+aparcamiento de la época anterior. Preguntar sin leer primero desperdicia el trabajo ya hecho, y
+peor: invita a reinventarlo mal (ver la regla 1).
 
 Si leíste y la documentación NO cubre el caso, o se contradice con lo que ves en un archivo real,
 ESO sí es para traérselo a Fermín — nombrando qué doc miraste y qué no cerró.
