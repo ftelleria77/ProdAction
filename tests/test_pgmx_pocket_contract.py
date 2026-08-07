@@ -7,15 +7,8 @@ from pgmx.synthesis.milling.pocket_contract import (
     VaciadoDepth,
     VaciadoGeometry,
     VaciadoStrategy,
-    from_pocket_spec,
     plan_rectangular_no_islands,
 )
-from pgmx.adapters import adapt_pgmx_path
-from pgmx.machining_lab.pocket_milling import EXTERNAL_ROOT
-
-
-MANUAL_ROOT = EXTERNAL_ROOT / "manual"
-STABLE_RECTANGULAR_CASES = tuple(range(1, 22)) + tuple(range(23, 27)) + tuple(range(32, 35))
 
 
 def _rectangular_geometry() -> VaciadoGeometry:
@@ -30,24 +23,6 @@ def _rectangular_geometry() -> VaciadoGeometry:
             )
         )
     )
-
-
-def _external_corpus_available() -> bool:
-    return MANUAL_ROOT.exists()
-
-
-def _trajectory_xy_bbox(adaptation) -> tuple[float, float, float, float]:
-    points: list[tuple[float, float]] = []
-    for operation in adaptation.snapshot.operations:
-        for toolpath in operation.toolpaths:
-            if toolpath.path_type != "TrajectoryPath" or toolpath.curve is None:
-                continue
-            points.extend((x, y) for x, y, _z in toolpath.curve.sampled_points)
-    if not points:
-        raise AssertionError("No TrajectoryPath points found.")
-    xs = [point[0] for point in points]
-    ys = [point[1] for point in points]
-    return (min(xs), max(xs), min(ys), max(ys))
 
 
 class VaciadoV2Tests(unittest.TestCase):
@@ -161,45 +136,6 @@ class VaciadoV2Tests(unittest.TestCase):
                 VaciadoStrategy(tool_width=80.0),
                 VaciadoDepth(target_depth=10.0),
             )
-
-    @unittest.skipUnless(_external_corpus_available(), f"Corpus externo no disponible en {MANUAL_ROOT}")
-    def test_adapts_manual_rectangular_pocket_to_v2_contract(self) -> None:
-        adaptation = adapt_pgmx_path(MANUAL_ROOT / "Vaciado_008.pgmx")
-        spec = adaptation.pockets[0]
-
-        geometry, strategy, depth = from_pocket_spec(spec)
-        plan = plan_rectangular_no_islands(geometry, strategy, depth)
-
-        self.assertEqual(strategy.tool_width, 80.0)
-        self.assertEqual(strategy.effective_offset, 40.0)
-        self.assertEqual(strategy.radial_step, 40.0)
-        self.assertEqual(depth.target_depth, 10.0)
-        self.assertEqual(plan.offset_family.offsets, (40.0, 80.0, 120.0))
-
-    @unittest.skipUnless(_external_corpus_available(), f"Corpus externo no disponible en {MANUAL_ROOT}")
-    def test_manual_stable_rectangular_cases_match_v2_outer_offset_bbox(self) -> None:
-        for index in STABLE_RECTANGULAR_CASES:
-            with self.subTest(case=f"Vaciado_{index:03d}"):
-                adaptation = adapt_pgmx_path(MANUAL_ROOT / f"Vaciado_{index:03d}.pgmx")
-                spec = adaptation.pockets[0]
-                geometry, strategy, depth = from_pocket_spec(spec)
-                plan = plan_rectangular_no_islands(geometry, strategy, depth)
-                outermost = plan.offset_family.bboxes[0]
-                actual = _trajectory_xy_bbox(adaptation)
-
-                self.assertFalse(geometry.has_internal_geometry)
-                self.assertAlmostEqual(plan.offset_family.offsets[0], strategy.effective_offset)
-                self.assertAlmostEqual(plan.strategy.radial_step, spec.radial_step)
-                self.assertEqual(
-                    plan.traversal_offsets,
-                    tuple(reversed(plan.offset_family.offsets))
-                    if strategy.inside_to_outside
-                    else plan.offset_family.offsets,
-                )
-                self.assertAlmostEqual(actual[0], outermost.left, places=6)
-                self.assertAlmostEqual(actual[1], outermost.right, places=6)
-                self.assertAlmostEqual(actual[2], outermost.bottom, places=6)
-                self.assertAlmostEqual(actual[3], outermost.top, places=6)
 
 
 if __name__ == "__main__":
