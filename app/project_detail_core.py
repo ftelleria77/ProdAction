@@ -62,7 +62,6 @@ from pgmx.processing import (
 )
 from core.production_sheet import export_production_sheet, export_production_sheet_pdf
 from core.summary import export_summary
-from iso_state_synthesis.emitter import emit_candidate_for_pgmx
 
 class ProjectDetailCoreMixin:
     def refresh_project_header_info(self):

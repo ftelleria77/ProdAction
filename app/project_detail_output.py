@@ -26,7 +26,6 @@ from pgmx.processing import (
     resolve_piece_program_path,
 )
 from core.production_sheet import export_production_sheet, export_production_sheet_pdf
-from iso_state_synthesis.emitter import emit_candidate_for_pgmx
 
 class ProjectDetailOutputMixin:
     def show_cuts(self):
@@ -198,20 +197,15 @@ class ProjectDetailOutputMixin:
         return module_output_dir / f"{candidate_stem}.iso"
 
     def _export_project_iso_files(self, selected_project: Project, output_root: Path) -> dict:
-        generated_paths: list[Path] = []
+        # CONGELADO (2026-08-07): la emision ISO usaba iso_state_synthesis, retirado del
+        # arbol durante la reinvestigacion del converter (el subsistema vive en la rama
+        # iso_converter). Cada pieza convertible se reporta como FALLIDA con el motivo —
+        # nunca un no-op silencioso —; se rehabilita con el converter definitivo.
         skipped_missing: list[dict] = []
         skipped_failed: list[dict] = []
-        warnings: list[dict] = []
-        duplicate_sources = 0
-        used_stems_by_dir: dict[Path, set[str]] = {}
-        converted_by_module_source: dict[tuple[str, str], Path] = {}
 
         for module in selected_project.modules:
             module_path = Path(module.path)
-            module_output_dir = self._module_cnc_output_dir(selected_project, output_root, module)
-            module_output_dir.mkdir(parents=True, exist_ok=True)
-            used_stems = used_stems_by_dir.setdefault(module_output_dir, set())
-            module_key = str(module.relative_path or module.path).strip().lower()
 
             for piece in module.pieces:
                 source_value = str(piece.cnc_source or piece.f6_source or "").strip()
@@ -230,49 +224,21 @@ class ProjectDetailOutputMixin:
                     )
                     continue
 
-                try:
-                    source_key = str(source_path.resolve()).lower()
-                except OSError:
-                    source_key = str(source_path).lower()
-                conversion_key = (module_key, source_key)
-                if conversion_key in converted_by_module_source:
-                    duplicate_sources += 1
-                    continue
-
-                output_path = self._unique_iso_output_path(module_output_dir, source_path, used_stems, piece)
-                try:
-                    program = emit_candidate_for_pgmx(source_path, program_name=output_path.stem)
-                    program.write_text(output_path)
-                except Exception as exc:
-                    skipped_failed.append(
-                        {
-                            "module": module.name,
-                            "piece": piece_label,
-                            "source": str(source_path),
-                            "error": str(exc),
-                        }
-                    )
-                    continue
-
-                converted_by_module_source[conversion_key] = output_path
-                generated_paths.append(output_path)
-                for warning in program.warnings:
-                    warnings.append(
-                        {
-                            "module": module.name,
-                            "piece": piece_label,
-                            "source": str(source_path),
-                            "code": warning.code,
-                            "message": warning.message,
-                        }
-                    )
+                skipped_failed.append(
+                    {
+                        "module": module.name,
+                        "piece": piece_label,
+                        "source": str(source_path),
+                        "error": "Emisión ISO deshabilitada durante la reinvestigación del converter",
+                    }
+                )
 
         return {
-            "generated_paths": generated_paths,
+            "generated_paths": [],
             "missing": skipped_missing,
             "failed": skipped_failed,
-            "warnings": warnings,
-            "duplicate_sources": duplicate_sources,
+            "warnings": [],
+            "duplicate_sources": 0,
         }
 
     def _production_output_base_name(self, project: Project) -> str:
