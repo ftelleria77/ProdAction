@@ -5,6 +5,10 @@
 origen, porque **cada uno puede escribir el XML a su manera** y el converter tiene que
 aceptarlos a todos (o rechazarlos fail-loud, nunca convertirlos mal en silencio).
 
+> **Nada en el circuito produce `.iso` salvo el postprocesador de Maestro.** Todas las
+> herramientas de acá abajo terminan en un `.pgmx`; ninguna llega al `.iso`. Ese hueco
+> es exactamente el que viene a llenar el converter.
+
 ## Los orígenes
 
 | # | Origen | Cómo nace | Estado |
@@ -55,7 +59,14 @@ Los dos directorios traen el mismo juego de binarios (`pp.dll`, `GEA.dll`,
 - **`PPMode.ini`** — `ExportCreateIsoCenterMilling=0`, `ToolFormat=0`, `Feeler=0`.
 - **`cfg.ini`** — `ToolsNumCol=4`.
 
-### El XConverter es una CLI, y ya convierte por lotes
+### El XConverter es una CLI que convierte entre formatos de ENTRADA
+
+> ⚠️ **El XConverter NO produce ISO.** Tiene varios modos de conversión y **ninguno**
+> emite `.iso` (dato de Fermín, 2026-08-10). Convierte archivos de un formato de entrada
+> a otro —`.xcs` → `.pgmx`, `.csv` → `.mixx`— y ahí termina su trabajo. **El `.iso` lo
+> produce únicamente el postprocesador de Maestro.** No hay nada en el circuito que haga
+> lo que tiene que hacer nuestro converter; lo único aprovechable de acá es la **forma**
+> de la CLI, no su función.
 
 Los `.bat` que quedan en `Tmp\` muestran cómo se lo invoca:
 
@@ -72,15 +83,16 @@ chcp 850
 | Flag | Qué es |
 |---|---|
 | `-s` | silencioso (sin UI) |
-| `-m` | modo: `0` = `.xcs` → `.pgmx` · `11` = `.csv` → `.mixx` (el otro `.bat` del directorio) |
+| `-m` | modo de conversión. Vistos en los `.bat`: `0` = `.xcs` → `.pgmx` · `11` = `.csv` → `.mixx`. **Hay más modos; ninguno produce `.iso`.** |
 | `-i` | entrada, **repetible** |
 | `-o` | salida, **repetible**, pareada por orden con las `-i` |
 | `-t` | catálogo de herramientas (`def.tlgx`) |
 
-**Esto es un precedente directo del objetivo final del converter** (una app que convierta
-proyectos enteros, carpetas y múltiples piezas): la herramienta que ya está en el circuito
-resuelve el lote con *N* entradas y *N* salidas en una sola invocación, y escribe
-directo dentro del proyecto en `S:\Maestro\Projects\<proyecto>\`.
+De acá se puede tomar **la forma de invocación**, que es la que va a necesitar la app de
+conversión por lotes: *N* entradas y *N* salidas pareadas en una sola llamada, el catálogo
+como parámetro explícito, y la escritura directa dentro del proyecto
+(`S:\Maestro\Projects\<proyecto>\`). **La función es otra**: el XConverter alimenta a
+Maestro, no lo reemplaza.
 
 El ejecutable vive en la carpeta de Maestro: `XConverter.exe` (52 KB, **2013**). Al lado
 hay un **`Xconverter.exe.new`** (449 KB, 2023) que **no está en uso** — una versión más
