@@ -24,8 +24,9 @@ Fuente: plantilla baseline `pgmx/data/maestro_baselines/Pieza.xml` (capturada de
 
 | Nodo del `.pgmx` | Qué es | ¿Nuestro synth lo varía? | Nombre en la UI |
 |---|---|---|---|
-| `WorkPiece/Length·Width·Depth` (+ `Geometry`, + variables `dx1/dy1/dz1` + `Expressions`) | dimensiones de la pieza; las variables reservadas están LIGADAS a las dimensiones vía `Expressions` | sí (`length/width/depth`) | a confirmar con captura |
-| `Workplans/MainWorkplan/Setup/WorkpieceSetup/Placement` (`_xP/_yP/_zP` + vectores) | origen/colocación de la pieza en la fase | sí (`origin_x/y/z`) | a confirmar |
+| `WorkPiece/Length·Width·Depth` (+ variables `dx1/dy1/dz1` + `Expressions`) | dimensiones de la pieza; las variables reservadas están LIGADAS a las dimensiones vía `Expressions` | sí (`length/width/depth`) | **panel Pieza → «Dimensiones pieza» → `DX` / `DY` / `DZ`** ✓ |
+| `WorkPiece/Geometry` (`i:type="WorkpieceBoxGeometry"`) | forma de la pieza | no (siempre box) | **panel Pieza → «Modo»: `Rectangular` / `Extrusión`** — sólo al crear ✓ |
+| `Workplans/MainWorkplan/Setup/WorkpieceSetup/Placement` (`_xP/_yP/_zP` + vectores) | origen/colocación de la pieza en la fase | sí (`origin_x/y/z`) | **panel Pieza → «Posicionamiento» → `X origen` / `Y origen` / `Z origen`**, debajo del desplegable «Fases de trabajo» ✓ |
 | `MachiningParameters (XilogHeaderParameters)/ExecutionFields` | campo de ejecución (`HG`/`EF`) | sí (`execution_fields`) | a confirmar |
 | `…/WorkpieceOffsetX·Y·Z` | offset de la pieza | **no** | a confirmar |
 | `…/Repetitions` | repeticiones (default 1) | **no** | a confirmar |
@@ -35,10 +36,10 @@ Fuente: plantilla baseline `pgmx/data/maestro_baselines/Pieza.xml` (capturada de
 | `…/MechanicalOptions` | opciones mecánicas (default 0) | **no** | a confirmar |
 | `…/IsRelatedToOppositeSideStop` | tope del lado opuesto (default false) | **no** | a confirmar |
 | `IsMM` | unidades en milímetros (true) | no (fijo) | **Opciones → Idioma → «Unidad de medida»** (Milímetros/Pulgadas). Es global de la aplicación, no del programa ✓ |
-| `Variables` (más allá de `dx1/dy1/dz1`) | variables de usuario (Double/Integer/Boolean; UnitLess/Length/Speed) | sí (`parametric_variables`) | a confirmar |
+| `Variables` (más allá de `dx1/dy1/dz1`) | variables de usuario (Double/Integer/Boolean; UnitLess/Length/Speed) | sí (`parametric_variables`) | **panel «Parámetros»** (abajo izq.; al aplicar muestra `dx1`/`dy1`/`dz1`; su barra de iconos agrega/importa/borra) ✓ |
 | `Planes` (Top/Bottom/Left/Right/Front/Back) | las 6 caras, derivadas de las dimensiones | automático (plantilla) | — (no editable directo) |
 | `MainWorkplan/Elements` | mecanizados y operaciones de máquina (`Xn`/`Xmsg`/`Park`/`Iso`) | sí | lista de operaciones |
-| `CurrentWorkplanIndex` | fase activa | sí (`current_workplan_index`) | selector de fase |
+| `CurrentWorkplanIndex` | fase activa | sí (`current_workplan_index`) | **panel Pieza → «Posicionamiento» → desplegable «Fases de trabajo»** (`Setup`); también pestaña `Fases` del árbol Proyecto ✓ |
 | `EnvironmentVariablesFileName` | archivo de variables de entorno (vacío en plantilla) | **no** | a confirmar |
 | `GlobalSetup/GlobalFixtureSetup` | utillaje global (vacío en plantilla) | **no** | a confirmar |
 | `Features`, `Geometries`, `Operations`, `ProjectAttributes` | colecciones (vacías sin mecanizados) | vía mecanizados | — |
@@ -139,12 +140,78 @@ archivos por defecto vacíos). Eso no coincide con las rutas de producción
 instalación es la que postprocesa de verdad, los valores de arriba valen como
 «lo que mostraba esta instalación», no como la configuración del CNC.
 
+### 2026-08-10 — La ventana donde nace el programa: el panel Pieza
+
+Dos capturas de Fermín (el panel recién abierto y el mismo panel tras pulsar
+`Aplicar`), en el repo Nora:
+`skills/cnc-scm-maestro/references/pantallas/crear-proyecto-panel-pieza-20260810.png`
+y `…-aplicado-20260810.png`. Transcripción campo por campo en el README de esa
+carpeta.
+
+**Home → Crear → Proyecto** abre el panel **Pieza**, acoplado a la derecha. Es
+donde nace un programa, y cierra cuatro filas del inventario:
+
+| Fila del inventario | Dónde está en la UI |
+|---|---|
+| `Length` / `Width` / `Depth` | «Dimensiones pieza» → **`DX` / `DY` / `DZ`** |
+| `Placement/_xP·_yP·_zP` | «Posicionamiento» → **`X origen` / `Y origen` / `Z origen`** |
+| `Variables` de usuario | panel **«Parámetros»** (abajo a la izquierda) |
+| `CurrentWorkplanIndex` | desplegable **«Fases de trabajo»** |
+
+Lo que la captura fija, más allá del mapeo:
+
+- **El origen pertenece a la FASE, no a la pieza.** Los tres `origen` viven
+  dentro de «Posicionamiento», debajo del desplegable «Fases de trabajo». Es
+  exactamente lo que dice el `.pgmx` (el `Placement` cuelga del `WorkpieceSetup`
+  del workplan), pero hasta ahora era una lectura nuestra del XML: acá se ve.
+- **Una magnitud, cuatro nombres.** `DX/DY/DZ` en este panel · `Longitud /
+  Anchura / Espesor` en `Opciones > Parámetros > Pieza` · `Length/Width/Depth`
+  en el XML · `dx1/dy1/dz1` en las variables. Los cuatro son legítimos (regla 3:
+  los nombres del XML vienen de Maestro y son intocables), pero **la UI misma
+  usa dos nombres distintos para lo mismo según la ventana**: al nombrar en
+  nuestro código hay que decir cuál se está citando.
+- **`Modo`: `Rectangular` / `Extrusión`** — un campo que el inventario no tenía.
+  Está sólo en la toma 1 y **desaparece tras aplicar**: es una decisión de
+  creación, no una propiedad editable después. Nuestro synth escribe siempre
+  `WorkpieceBoxGeometry` (= Rectangular); **qué escribe `Extrusión` en el `.pgmx`
+  es desconocido**, y una pieza extruida bien podría no ser un box.
+- El botón de confirmación dice **`Aplicar`** (no «Aceptar»), y a su lado hay
+  `Deshacer`.
+- La barra de estado expone, sin abrir ningún menú: fase activa (`Setup`),
+  catálogo de herramientas (**`def.tlgx`** — el mismo del que sale nuestro
+  `tool_catalog.csv`), modo de ratón y unidad (`Milímetros`).
+
+**Lo que este panel NO tiene**, y por lo tanto sigue faltando ubicar: el campo
+de ejecución (`HG`/`EF`) y **todo el bloque `XilogHeaderParameters`** — offset
+de pieza, repeticiones, ciclo continuo, espejo tecnológico, opciones de mesa y
+mecánicas, tope del lado opuesto. Son propiedades del programa que viajan en el
+`.pgmx`; la ventana que las edita todavía no está capturada. Candidatos a mirar:
+la pestaña `Máquinas` de la cinta y el diálogo `CAM`.
+
+⚠️ **Incongruencia a resolver (regla 1).** El panel abre con `DX/DY/DZ` =
+**300 / 300 / 18**, pero `Opciones > Parámetros > Pieza` declara como default de
+pieza nueva **1600 × 1200 × 18**. Las dos lecturas posibles cambian cosas
+distintas:
+
+- *El panel recuerda lo último usado.* Entonces un `.pgmx` nuevo nace con
+  valores que dependen del historial de esa instalación — un rastro más del
+  tercer origen, y un dato que ningún archivo del proyecto explica.
+- *La instalación de la captura del 09 no es la misma que la del 10.* Entonces
+  la advertencia que ya arrastra `opciones-de-maestro.md` (rutas de fábrica, no
+  las de producción) se confirma, y los valores de aquella ventana no describen
+  la máquina que postprocesa.
+
+Cuál de las dos sea cambia si el `UI00.exe.Config` que haya que leer es el de la
+PC del CNC o el de la de oficina técnica.
+
 ## Pendiente
 
 - Postproceso del lote → `P:\USBMIX\ProdAction\R001_programa_vacio\` (Fermín).
-- Capturas de la UI: ventana(s) de propiedades del programa/pieza donde viven las opciones
-  de la tabla — para completar la columna "Nombre en la UI" y detectar opciones que la UI
-  tenga y el XML de la plantilla no muestre (o al revés).
+- **Falta la ventana de los `XilogHeaderParameters`** (campo de ejecución, offset,
+  repeticiones, ciclo continuo, espejo tecnológico, mesa, mecánicas, tope opuesto).
+  Buscar en la pestaña `Máquinas` de la cinta y en el diálogo `CAM`.
 - Con el primer ISO: iniciar la anatomía línea por línea (parte, origen de cada valor).
 - Decidir si las opciones que el synth no varía ameritan gemelos manuales (una opción por
   archivo, hechos en Maestro).
+- Averiguar qué escribe el modo **`Extrusión`** en el `.pgmx` (hoy sólo conocemos
+  `WorkpieceBoxGeometry`).
