@@ -68,6 +68,11 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
   PCs difieren en `RadiusMultiplier` (4 vs 2) y `SecurityDistance` (20 vs 30). Doc:
   `experiments/configuracion_aplicacion.md` — ⏸ necesita el experimento de las dos PCs
 
+### F. Origen X-CAB — ⏳ DIFERIDO hasta terminar la reinvestigación (2026-08-10)
+- Los `.pgmx` de X-CAB (vía XConverter) son un tercer origen VIVO y **son alcance del
+  converter**. Se estudian DESPUÉS de cerrar la serie R: primero la anatomía derivada,
+  después los archivos de otra autoría. Registro en `circuito_pgmx.md` — ⏳
+
 ### Cierre — 🔮
 1. Repaso del plan (`plan_cierre_converter.md`, untracked) con las specs de la reinvestigación
 2. Construcción del converter definitivo

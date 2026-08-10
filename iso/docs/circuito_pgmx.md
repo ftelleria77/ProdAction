@@ -192,17 +192,23 @@ en hipótesis o en desconocido. Ver `experiments/anatomia_iso.md`.
 
 ## Preguntas abiertas
 
+**Todas DIFERIDAS hasta terminar la reinvestigación** (decisión de Fermín, 2026-08-10).
+El orden del método manda: primero se cierra la serie R desde el programa vacío; el
+origen X-CAB se estudia después, con la anatomía del ISO ya derivada. Este doc queda
+como el registro de lo que hay que retomar, no como un frente activo.
+
 1. ~~¿El flujo sigue en uso?~~ **RESPONDIDA (2026-08-10): X-CAB SÍ** (326 `.xcs`, último
    lote el 2026-07-10); **EasyNest parece dormido** (58 `.xcs`, último 2024-03-25).
    ⇒ Los `.pgmx` de X-CAB **son alcance del converter**.
-2. ¿El `.pgmx` que emite el XConverter serializa de una **tercera** forma, distinta de
+2. ⏳ ¿El `.pgmx` que emite el XConverter serializa de una **tercera** forma, distinta de
    la de Maestro y de la nuestra? Se responde abriendo uno de los que salieron a
    `S:\Maestro\Projects\BM-3C-PC-800\`.
-3. ¿Un `.pgmx` de X-CAB abierto y re-guardado en Maestro cambia de forma? (Si el operario
-   los toca antes de postprocesar, el converter ve la forma re-guardada, no la original.)
-4. ¿`Xconverter.exe.new` (2023) reemplaza al `XConverter.exe` (2013) en algún momento?
+3. ⏳ ¿Un `.pgmx` de X-CAB abierto y re-guardado en Maestro cambia de forma? (Si el
+   operario los toca antes de postprocesar, el converter ve la forma re-guardada, no la
+   original.)
+4. ⏳ ¿`Xconverter.exe.new` (2023) reemplaza al `XConverter.exe` (2013) en algún momento?
    Un cambio de versión del emisor cambia lo que hay que reproducir.
-5. ¿Hay otros orígenes que todavía no estén en esta lista?
+5. ⏳ ¿Hay otros orígenes que todavía no estén en esta lista?
 
 ## Por qué importa
 
