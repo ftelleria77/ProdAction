@@ -141,13 +141,16 @@ incluir la configuración de la aplicación, que hoy no está.
 > Maestro — es decir, el tercer origen. E1 no es «copiar todo de nuevo»: es
 > agregar esos dos.
 
-**Pregunta abierta que bloquea el uso de los VALORES**: las rutas de `Carpetas`
-apuntan todas a `C:\Program Files (x86)\Scm Group\...` y `Preferencias` está en
-default de fábrica (nombre de proyecto `Progetto`, en italiano; los cinco
-archivos por defecto vacíos). Eso no coincide con las rutas de producción
-(`S:\Maestro\...`, salida `C:\PrgMaestro\USBMIX`). Hasta saber si esta
-instalación es la que postprocesa de verdad, los valores de arriba valen como
-«lo que mostraba esta instalación», no como la configuración del CNC.
+~~**Pregunta abierta que bloquea el uso de los VALORES**~~ — **RESUELTA el 2026-08-10.**
+Las rutas de `Carpetas` apuntaban todas a `C:\Program Files (x86)\Scm Group\...`, lo que
+no coincidía con las rutas de producción. Con los dos `UI00.exe.Config` a la vista quedó
+claro: **era la PC de oficina técnica**, con las rutas todavía en default de fábrica (se
+reapuntaron a `S:`/`P:` entre el 09 y el 10). La del CNC usa `C:\Archivos de programa\…`
+—Windows en español— y saca el post a `C:\PrgMaestro\USBMIX`.
+
+⇒ Los valores relevados el 09 son de la máquina que **dibuja**, no de la que
+**postprocesa**. El config del CNC ya está en el snapshot y la comparación entre ambos
+vive en **`configuracion_aplicacion.md`**: difieren en dos claves que tocan la traza.
 
 ### 2026-08-10 — La ventana donde nace el programa: el panel Pieza
 
