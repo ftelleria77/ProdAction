@@ -8,13 +8,21 @@ rumbo se anotan como decisiones con fecha). La vista visual se republica en cada
 
 Estados: ✅ hecho · 🔄 en curso · ⏸ esperando a Fermín · ⬜ pendiente · 🔮 futuro (sin fecha)
 
-## Estado actual (2026-08-07)
+## Estado actual (2026-08-09)
 
-La limpieza terminó: rama `reinvestigacion` desde `main`, época anterior congelada fuera del
-árbol (ramas `iso_converter` y `respaldo/ejecucion-plan-f0-f3`), suite 282 passed 100%
-offline. El lote R001 (programa sin mecanizados, 7 fixtures) está generado en S: esperando
-postproceso, y el repaso de configuración espera las capturas de la UI. La anatomía del ISO
-arranca con el primer ISO vacío.
+La limpieza está hecha: rama `reinvestigacion` desde `main`, época anterior congelada fuera
+del árbol (ramas `iso_converter` y `respaldo/ejecucion-plan-f0-f3`), suite 282 passed 100%
+offline.
+
+En la etapa 1 hay dos frentes abiertos. **A1**: los 7 fixtures de R001 están en S: esperando
+el postproceso; sin ese ISO no arranca B1. **A2**: el repaso de la UI empezó por la ventana
+**Opciones** (20 pantallas, transcriptas) y de ahí salió el hallazgo que reordenó la etapa —
+hay un TERCER origen del ISO, global de la aplicación, que no viaja en el `.pgmx`. Falta la
+ventana de propiedades del programa/pieza, que es la que responde el inventario.
+
+Consecuencias del tercer origen, ya volcadas al mapa: **B1** pasa de atribuir cada línea a
+dos orígenes a atribuirla a tres, y **E1** aparece como rama nueva — el snapshot de máquina
+que hoy tiene 3 archivos se queda corto frente a una instalación real.
 
 ## El mapa: troncos y ramificaciones
 
