@@ -27,14 +27,14 @@ Fuente: plantilla baseline `pgmx/data/maestro_baselines/Pieza.xml` (capturada de
 | `WorkPiece/Length·Width·Depth` (+ variables `dx1/dy1/dz1` + `Expressions`) | dimensiones de la pieza; las variables reservadas están LIGADAS a las dimensiones vía `Expressions` | sí (`length/width/depth`) | **panel Pieza → «Dimensiones pieza» → `DX` / `DY` / `DZ`** ✓ |
 | `WorkPiece/Geometry` (`i:type="WorkpieceBoxGeometry"`) | forma de la pieza | no (siempre box) | **panel Pieza → «Modo»: `Rectangular` / `Extrusión`** — sólo al crear ✓ |
 | `Workplans/MainWorkplan/Setup/WorkpieceSetup/Placement` (`_xP/_yP/_zP` + vectores) | origen/colocación de la pieza en la fase | sí (`origin_x/y/z`) | **panel Pieza → «Posicionamiento» → `X origen` / `Y origen` / `Z origen`**, debajo del desplegable «Fases de trabajo» ✓ |
-| `MachiningParameters (XilogHeaderParameters)/ExecutionFields` | campo de ejecución (`HG`/`EF`) | sí (`execution_fields`) | a confirmar |
-| `…/WorkpieceOffsetX·Y·Z` | offset de la pieza | **no** | a confirmar |
-| `…/Repetitions` | repeticiones (default 1) | **no** | a confirmar |
-| `…/ContinuousCycle` | ciclo continuo (default false) | **no** | a confirmar |
-| `…/IsTechnologicalMirror` | espejo tecnológico (default false) | **no** | a confirmar |
-| `…/TableOptions` + `UseDefaultForTableOptions` | opciones de mesa (default 0/false) | **no** | a confirmar |
-| `…/MechanicalOptions` | opciones mecánicas (default 0) | **no** | a confirmar |
-| `…/IsRelatedToOppositeSideStop` | tope del lado opuesto (default false) | **no** | a confirmar |
+| `MachiningParameters (XilogHeaderParameters)/ExecutionFields` | campo de ejecución (`HG`/`EF`) | sí (`execution_fields`) | **Parámetros de máquina → «Área»** (desplegable) ✓ |
+| `…/WorkpieceOffsetX·Y·Z` | offset de la pieza | **no** | **no está** en Parámetros de máquina — sigue sin ubicar |
+| `…/Repetitions` | repeticiones (default 1) | **no** | **Parámetros de máquina → «Repeticiones»** ✓ |
+| `…/ContinuousCycle` | ciclo continuo (default false) | **no** | **no está** en Parámetros de máquina — sigue sin ubicar |
+| `…/IsTechnologicalMirror` | espejo tecnológico (default false) | **no** | **Parámetros de máquina → «Habilitar compatibilidad tecnológica en áreas especulares en X o Y»** (checkbox) ✓ |
+| `…/TableOptions` + `UseDefaultForTableOptions` | opciones de mesa (default 0/false) | **no** | **Parámetros de máquina → «Bloqueo»** (valor) + checkbox «predefinido» — correspondencia por forma, sin verificar |
+| `…/MechanicalOptions` | opciones mecánicas (default 0) | **no** | **Parámetros de máquina → «Opciones mecánicas»** (valor + 15 sub-desplegables) ✓ |
+| `…/IsRelatedToOppositeSideStop` | tope del lado opuesto (default false) | **no** | **no está** en Parámetros de máquina — sigue sin ubicar (en Opciones existe el global `EnableOppositeSideStop`) |
 | `IsMM` | unidades en milímetros (true) | no (fijo) | **Opciones → Idioma → «Unidad de medida»** (Milímetros/Pulgadas). Es global de la aplicación, no del programa ✓ |
 | `Variables` (más allá de `dx1/dy1/dz1`) | variables de usuario (Double/Integer/Boolean; UnitLess/Length/Speed) | sí (`parametric_variables`) | **panel «Parámetros»** (abajo izq.; al aplicar muestra `dx1`/`dy1`/`dz1`; su barra de iconos agrega/importa/borra) ✓ |
 | `Planes` (Top/Bottom/Left/Right/Front/Back) | las 6 caras, derivadas de las dimensiones | automático (plantilla) | — (no editable directo) |
@@ -204,12 +204,69 @@ distintas:
 Cuál de las dos sea cambia si el `UI00.exe.Config` que haya que leer es el de la
 PC del CNC o el de la de oficina técnica.
 
+### 2026-08-10 (b) — «Parámetros de máquina» y las cuatro pestañas restantes
+
+Cinco capturas más de Fermín, en el repo Nora
+(`skills/cnc-scm-maestro/references/pantallas/`): `parametros-de-maquina-20260810.png`
+y `editor-cinta-{dibujar,operaciones,maquinas,instrumentos}-20260810.png`.
+Transcripción completa en el README de esa carpeta.
+
+**`Máquinas → Parámetros → Parámetros de máquina`** es la ventana que faltaba: ahí
+viven las propiedades del programa que no son geometría. Cierra cinco filas más:
+
+| Fila del `.pgmx` | En la ventana |
+|---|---|
+| `ExecutionFields` | **«Área»** (desplegable, mostraba `HG`) |
+| `Repetitions` | **«Repeticiones»** (`1`) |
+| `MechanicalOptions` | **«Opciones mecánicas»** (`0`) + 15 sub-desplegables |
+| `TableOptions` + `UseDefaultForTableOptions` | **«Bloqueo»** (`0`) + checkbox «predefinido» |
+| `IsTechnologicalMirror` | **«Habilitar compatibilidad tecnológica en áreas especulares en X o Y»** |
+
+**El campo de ejecución se llama «Área» en la UI.** Nuestro vocabulario («campo»)
+no es el de la ventana — anotarlo antes de nombrar nada nuevo (regla 3).
+
+**Hipótesis por verificar**: tanto «Opciones mecánicas» como «Bloqueo» son UN número
+con un panel de sub-opciones debajo (láser, elevadores, cinco filas de topes, ventosas,
+Combiflex, FX…; y dispositivo/tipo de bloqueo). La forma sugiere que el entero AGREGA
+las sub-opciones como bitmask, pero **no está verificado**: se confirma cambiando una
+sub-opción y mirando cómo se mueve el número y el XML.
+
+**Siguen sin ubicar tres filas**: `WorkpieceOffsetX/Y/Z`, `ContinuousCycle` y
+`IsRelatedToOppositeSideStop` no aparecen en esta ventana. (De la última, en Opciones
+existe el interruptor GLOBAL `EnableOppositeSideStop`: puede que la del programa sólo
+se muestre cuando el global está habilitado.)
+
+**Las cinco `Funciones C.N.` de la pestaña Máquinas son las operaciones de máquina**,
+con su nombre de UI: `ISO` = `Iso` · **`Operación nula` = `Xn`** · **`Impresión mensaje`
+= `Xmsg`** · **`Aparcamiento` = `Park`** · y una quinta, **`Palpación`**, que no tiene
+equivalente en nuestro modelo. Con esto, el trío que la regla 2 del `CLAUDE.md` cita
+como ejemplo de operaciones distintas queda confirmado desde la UI misma, sin depender
+de evidencia de la época congelada.
+
+Y el grupo `Fresado` da los cinco nombres canónicos: **`Fresado` · `Canal` · `Corte con
+cuchilla` · `Vaciado` · `Galceado`** (con `Perforado` como grupo aparte). `Corte con
+cuchilla` no está en nuestro modelo.
+
+⚠️ **Dato a interpretar con cuidado**: en la pestaña Máquinas, **`Post` y `Verificación
+proyecto` están en GRIS**. El programa estaba abierto, sin operaciones y sin guardar.
+Cuál de las dos condiciones lo deshabilita decide algo de R001: si es «sin operaciones»,
+entonces **el programa vacío no se puede postprocesar** y el ISO del esqueleto puro no
+existe como archivo — habría que derivarlo del programa más chico que Maestro acepte.
+
+**Para la rama E**: `Instrumentos → Programaciones → Backup` / `Restore` es el mecanismo
+propio de Maestro para llevarse y traer la configuración. Mirarlo antes de inventar un
+procedimiento de extracción a mano.
+
 ## Pendiente
 
 - Postproceso del lote → `P:\USBMIX\ProdAction\R001_programa_vacio\` (Fermín).
-- **Falta la ventana de los `XilogHeaderParameters`** (campo de ejecución, offset,
-  repeticiones, ciclo continuo, espejo tecnológico, mesa, mecánicas, tope opuesto).
-  Buscar en la pestaña `Máquinas` de la cinta y en el diálogo `CAM`.
+- **Gemelo manual**: `R_PV_manual_base.pgmx`, guardado por Fermín en
+  `S:\Maestro\Projects\ProdAction\Programas Manuales\Reinvestigación\` (400×400×18,
+  origen 0/0/0, sin operaciones). Definir a qué carpeta de `P:` se postprocesa para
+  conservar la simetría.
+- Verificar si `Opciones mecánicas` y `Bloqueo` son bitmask de sus sub-opciones.
+- Ubicar las tres filas que faltan: `WorkpieceOffsetX/Y/Z`, `ContinuousCycle`,
+  `IsRelatedToOppositeSideStop`.
 - Con el primer ISO: iniciar la anatomía línea por línea (parte, origen de cada valor).
 - Decidir si las opciones que el synth no varía ameritan gemelos manuales (una opción por
   archivo, hechos en Maestro).
