@@ -38,11 +38,12 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
   tecnológico, opciones de mesa/mecánica) → gemelos manuales, una opción por archivo — ⬜
 - A4. Fases (workplans) y orígenes múltiples — 🔮
 
-### B. Anatomía del ISO — ⬜ (transversal, arranca con el primer ISO de R001)
+### B. Anatomía del ISO — 🔄 ARRANCÓ (2026-08-10, doc `anatomia_iso.md`)
 - B1. Partes del archivo del programa vacío: atribuir CADA línea a **uno de TRES** orígenes —
   configuración de programa (`.pgmx`), configuración de máquina (snapshot del CNC) o
   **configuración global de la aplicación (ventana Opciones)**. El tercero apareció el
-  2026-08-09 y no estaba previsto — ⬜
+  2026-08-09 y no estaba previsto — 🔄 **esqueleto de 43 líneas ya mapeado** (gemelo manual);
+  quedan ~15 líneas en DESCONOCIDO y varias HIPÓTESIS que cierran los fixtures de R001
 - B2. Con cada operación nueva: qué líneas agrega, origen de cada parámetro y valor — 🔮
 - B3. Ruido del emisor (milésimas, case, f32): re-derivar con evidencia R propia — 🔮
 
@@ -59,10 +60,10 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 ### E. Configuración de máquina — 🔮
 - Ciclo de refresco del snapshot (requisito 2026-08-04: siempre de los archivos extraídos de
   la PC del CNC, refresco = sobreescribir carpeta) — formalizar como spec — 🔮
-- E1. **Ampliar el alcance del snapshot** (2026-08-09): hoy son 3 archivos; una instalación
-  real tiene 83 sólo en `<Xilog Plus>\Cfg\`, más todo el lado Maestro
-  (`UI00.exe.Config` = la ventana Opciones, `Settings\`, `Cfgx\`, `Tlgx\`). Lista de
-  extracción en `experiments/programa_vacio.md` — ⏸ esperando la extracción de la PC del CNC
+- E1. **Sumar el tercer origen al snapshot** (2026-08-09, corregido el 08-10): el snapshot
+  YA tiene 91 archivos (los 82 de `<Xilog Plus>\Cfg\` + `Cfgx\` + `Tlgx\` + manifest con
+  sha256). Lo que falta es puntual: **`UI00.exe.Config` y `Settings\`** del lado Maestro
+  — ⏸ esperando la extracción de la PC del CNC
 
 ### Cierre — 🔮
 1. Repaso del plan (`plan_cierre_converter.md`, untracked) con las specs de la reinvestigación
@@ -72,12 +73,42 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 
 ## Preguntas abiertas
 
-- ¿Maestro postprocesa un programa sin operaciones, o lo rechaza? (R001 lo responde)
+- ~~¿Maestro postprocesa un programa sin operaciones, o lo rechaza?~~ **RESPONDIDA
+  (2026-08-10): SÍ.** El esqueleto existe — 43 líneas, 666 bytes. El gris de `Post` en la
+  captura de la cinta era por el archivo sin guardar.
+- **¿El `UI00.exe.Config` de la PC que POSTPROCESA cambia el ISO?** Lo responde postprocesar
+  el mismo `.pgmx` en las dos PCs. Si cambia, el converter necesita el config de la máquina
+  que postprocesa, y el mismo `.pgmx` da ISOs distintos en dos PCs.
 - ¿El origen de la pieza aparece en el ISO vacío? ¿Dónde?
 - ¿Una variable de usuario sin uso deja rastro en el ISO?
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-08-10 — El primer ISO de la reinvestigación, y el sintetizador validado
+- **A2 cerrado casi entero.** Siete capturas nuevas: el panel **Pieza** (donde nace un
+  programa) y la ventana **Parámetros de máquina**, que resultó ser la que faltaba. Entre
+  las dos cerraron nueve filas del inventario. Quedan tres sin ubicar
+  (`WorkpieceOffsetX/Y/Z`, `ContinuousCycle`, `IsRelatedToOppositeSideStop`).
+- Nomenclatura de la UI: el campo de ejecución se llama **«Área»**; las dimensiones,
+  **DX/DY/DZ**; y las cinco Funciones C.N. confirman **Xn = «Operación nula»**, **Xmsg =
+  «Impresión mensaje»**, **Park = «Aparcamiento»** — desde la UI, sin la época congelada.
+  Aparecen dos cosas que no modelamos: **`Palpación`** y **`Corte con cuchilla`**.
+- **Gemelo manual + experimento de dos PCs** (Fermín): el `.pgmx` creado en oficina técnica
+  y re-guardado en el CNC queda **byte-idéntico** (mismo CRC), y sus ISO difieren sólo en el
+  nombre del archivo. Re-guardar no imprime nada de la instalación. **Falta** el experimento
+  que sí importa: postprocesar el mismo `.pgmx` en las dos PCs.
+- **Maestro postprocesa un programa vacío** ⇒ el esqueleto existe y **B1 arrancó**:
+  43 líneas mapeadas en `anatomia_iso.md`, con DERIVADO / HIPÓTESIS / DESCONOCIDO explícito.
+  El origen sale de `fields.cfg` (área H, −1515.60) y la **precisión simple** del emisor
+  quedó derivada con evidencia propia (`ofY = −1515599.976`).
+- **Control de circularidad OK (regla 5)**: el `.pgmx` manual y el sintetizado tienen los
+  mismos tags, en las mismas cantidades, con los mismos valores; sólo difiere el estilo de
+  serialización. El sintetizador queda validado como fábrica de fixtures de la etapa 1.
+- Hallazgo lateral: **`def.tlgx` viaja dentro del `.pgmx`** (73.449 bytes, mismo CRC en los
+  dos archivos). El catálogo de herramientas no hay que ir a buscarlo a la PC.
+- Corregido un dato del 09: el snapshot **no** tiene 3 archivos sino **91**; los tres eran
+  los que leía el converter viejo. E1 se achica a sumar `UI00.exe.Config` y `Settings\`.
 
 ### 2026-08-06 — El rumbo nuevo
 - Tras ejecutar parte del plan de cierre de la época anterior, Fermín lo revisa y decide

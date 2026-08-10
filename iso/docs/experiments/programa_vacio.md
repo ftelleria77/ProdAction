@@ -126,11 +126,20 @@ finalizada la ejecución» MARCADO y el archivo dice `IsFinalPark=False`. La
 hipótesis del park automático depende de eso, así que **queda en suspenso hasta
 saldarla**.
 
-**Consecuencia para la rama E (snapshot de máquina)**: hoy
-`iso/data/machine_config/` tiene 3 archivos (`NCI.CFG`, `NCI_ORI.CFG`,
-`pheads.cfg`). La carpeta `<Xilog Plus>\Cfg\` de una instalación real tiene **83**.
-Y falta por completo el lado Maestro (`UI00.exe.Config`, `Settings\`, `Cfgx\`,
-`Tlgx\`). El snapshot actual es un recorte, no una copia.
+**Consecuencia para la rama E (snapshot de máquina)**: el snapshot tiene que
+incluir la configuración de la aplicación, que hoy no está.
+
+> **Corregido el 2026-08-10 tras contar los archivos.** Esta sección decía que
+> `iso/data/machine_config/` tenía «3 archivos» y que el snapshot era «un recorte,
+> no una copia». **Es falso**: el snapshot tiene **91 archivos** — 82 en
+> `xilog_plus/Cfg/` (incluidos `fields.cfg`, `spindles.cfg`, `pheads.cfg`,
+> `Params.cfg`), `xilog_plus/axis.ini`, `maestro/Cfgx/` (3) y `maestro/Tlgx/` (3,
+> con `def.tlgx`), más un `manifest.csv` que registra el origen
+> (`source_root = S:\Xilog Plus`) con sha256 por archivo. Los «3» eran los que el
+> converter de la época anterior LEÍA, no los que el snapshot contiene.
+> Lo que falta de verdad es puntual: **`UI00.exe.Config` y `Settings\`** del lado
+> Maestro — es decir, el tercer origen. E1 no es «copiar todo de nuevo»: es
+> agregar esos dos.
 
 **Pregunta abierta que bloquea el uso de los VALORES**: las rutas de `Carpetas`
 apuntan todas a `C:\Program Files (x86)\Scm Group\...` y `Preferencias` está en
@@ -257,13 +266,74 @@ existe como archivo — habría que derivarlo del programa más chico que Maestr
 propio de Maestro para llevarse y traer la configuración. Mirarlo antes de inventar un
 procedimiento de extracción a mano.
 
+### 2026-08-10 (c) — El gemelo manual, y qué hace el re-guardado en otra PC
+
+Fermín construyó el gemelo manual **y** un experimento de dos máquinas:
+
+1. Creó `R_PV_manual_base.pgmx` a mano en Maestro, en la PC de **oficina técnica**
+   (400×400×18, origen 0/0/0, área HG, sin operaciones, nombre interno de pieza
+   `R_PV_manual_base`). Esa instalación **no** es la que postprocesa, y tiene su
+   propio `UI00.exe.Config`.
+2. Lo llevó a la **PC del CNC**, lo abrió y lo postprocesó → `r_pv_manual_base.iso`.
+3. Ahí mismo lo re-guardó como `R_PV_manual_base_CNC.pgmx` y volvió a postprocesar
+   → `r_pv_manual_base_cnc.iso`.
+
+Los cuatro archivos viven en `…\Programas Manuales\Reinvestigación\` (lado S:) y
+`P:\USBMIX\ProdAction\Programas Manuales\Reinvestigación\` (lado P:).
+
+**Resultado 1 — el re-guardado NO toca el programa.** El XML de los dos `.pgmx` es
+**byte-idéntico**: mismo tamaño (18.567) y mismo CRC (`9c64dcab`). Los 16 bytes que
+difieren entre los ZIP son sólo los nombres internos (`R_PV_manual_base.xml/.epl` vs
+`…_CNC.xml/.epl`, cuatro caracteres más, dos veces cada uno por el índice del ZIP).
+⇒ **Abrir y guardar un `.pgmx` en la PC del CNC no le imprime nada de esa
+instalación.**
+
+**Resultado 2 — los dos ISO son iguales salvo el nombre.** Única diferencia:
+`% r_pv_manual_base.pgm` vs `% r_pv_manual_base_cnc.pgm`. Cuatro bytes.
+
+⚠️ **Lo que este experimento NO responde**: los dos ISO se postprocesaron en la
+**misma** PC. Que el `.pgmx` no cambie no dice nada sobre si el `UI00.exe.Config` de
+la máquina que postprocesa cambia el ISO. Eso lo responde postprocesar **el mismo**
+`.pgmx` en las **dos** PCs y comparar — sigue pendiente.
+
+**Resultado 3 — Maestro SÍ postprocesa un programa sin operaciones.** El ISO del
+esqueleto existe: 43 líneas, 666 bytes. El gris de `Post` en la captura de la cinta
+era por el archivo sin guardar, no por la falta de mecanizados. Queda cerrada la
+pregunta abierta del lote R001, y **la etapa B1 arranca**: anatomía línea por línea
+en `anatomia_iso.md`.
+
+**Resultado 4 — el control de circularidad (regla 5) da bien.** Comparado el `.pgmx`
+manual contra nuestro `R_PV_base.pgmx` sintetizado (misma pieza declarada):
+
+- **mismos tags, en las mismas cantidades** — ninguno sobra ni falta de ningún lado;
+- **mismos valores** en todo lo que el inventario mira: `Length/Width/Depth`,
+  `ExecutionFields=HG`, `Repetitions=1`, `ContinuousCycle=false`,
+  `IsTechnologicalMirror=false`, `TableOptions=0`, `UseDefaultForTableOptions=false`,
+  `MechanicalOptions=0`, `IsRelatedToOppositeSideStop=false`,
+  `WorkpieceOffsetX/Y/Z=0`, `IsMM=true`;
+- **sólo cambia la forma de serializar**: el de Maestro repite el namespace por
+  defecto en cada elemento (97 declaraciones `xmlns`, XML de 18.567 bytes); el
+  nuestro usa prefijos declarados una vez (20 declaraciones, 13.245 bytes). Mismo
+  documento, distinta escritura.
+
+⇒ **Para un programa sin operaciones, el sintetizador escribe lo mismo que Maestro.**
+Queda validado como fábrica de fixtures de la etapa 1. (La diferencia de estilo
+importa para el lector del converter, que debe aceptar los dos.)
+
+**Bonus — `def.tlgx` viaja DENTRO del `.pgmx`.** Los dos ZIP traen el catálogo de
+herramientas embebido (73.449 bytes, fecha 2025-02-01, **mismo CRC en ambos**). O sea:
+el catálogo no hay que ir a buscarlo a la PC, viaja con el archivo. Y re-guardar en el
+CNC no lo reemplazó — aunque eso no prueba que nunca lo reemplace: puede que ambas PCs
+tengan el mismo. Pendiente de separar.
+
 ## Pendiente
 
-- Postproceso del lote → `P:\USBMIX\ProdAction\R001_programa_vacio\` (Fermín).
-- **Gemelo manual**: `R_PV_manual_base.pgmx`, guardado por Fermín en
-  `S:\Maestro\Projects\ProdAction\Programas Manuales\Reinvestigación\` (400×400×18,
-  origen 0/0/0, sin operaciones). Definir a qué carpeta de `P:` se postprocesa para
-  conservar la simetría.
+- Postproceso del lote → `P:\USBMIX\ProdAction\R001_programa_vacio\` (Fermín). Con el
+  esqueleto ya derivado, cada fixture ahora responde una fila concreta de
+  `anatomia_iso.md`.
+- **El experimento que falta**: postprocesar el MISMO `.pgmx` en las dos PCs
+  (oficina técnica y CNC) y comparar los ISO. Es lo único que separa «el tercer origen
+  se lee al postprocesar» de «se congela al autorar».
 - Verificar si `Opciones mecánicas` y `Bloqueo` son bitmask de sus sub-opciones.
 - Ubicar las tres filas que faltan: `WorkpieceOffsetX/Y/Z`, `ContinuousCycle`,
   `IsRelatedToOppositeSideStop`.
