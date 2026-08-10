@@ -104,7 +104,7 @@ El ISO de un programa en área **HG** usa **Y = −1515.60**, que es el de **H**
 criterio un área combinada «HG» toma la de H y no la de G es **DESCONOCIDO**; lo
 discrimina `R_PV_campo_EF` (si usa E o F).
 
-Y hay una asimetría real entre ejes: **X resta DX y Q no resta DY.**
+Y hay una asimetría real entre ejes: **X resta DX y el eje Y no resta DY.**
 `SHF[X] = 0 − 400 = −400` mientras `SHF[Y] = −1515.60` tal cual, con DY = 400 también.
 El fixture de dimensiones (500×350) lo despeja de una.
 
