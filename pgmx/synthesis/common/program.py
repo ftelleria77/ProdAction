@@ -382,7 +382,13 @@ def _normalize_physical_unit(value: Optional[str]) -> str:
 def _build_variable_node(var: ParametricVariableSpec, var_id: str) -> ET.Element:
     variable = ET.Element(_qname(PARAMETRIC_NS, "Variable"))
     _append_key(variable, var_id, "ScmGroup.XCam.MachiningDataModel.Parametrics.Variable")
-    _append_node(variable, PARAMETRIC_NS, "Name", var.name)
+    # `Key` y `Name` vienen de la clase base y viven en UTILITY, como en la plantilla de
+    # Maestro; el resto de los campos son de Parametrics. Escribir `Name` en Parametrics
+    # hace que Maestro lo deserialice NULO y reviente al abrir el archivo:
+    # «Error durante al deserializar el flujo de memoria / ArgumentNullException:
+    # El valor no puede ser nulo. Nombre del parámetro: key», en VariableList.Add —
+    # la lista indexa las variables POR NOMBRE. Log de Maestro del 2026-08-10, lote R001.
+    _append_node(variable, UTILITY_NS, "Name", var.name)
     _append_node(variable, PARAMETRIC_NS, "Description", var.description)
     _append_node(variable, PARAMETRIC_NS, "FisicalUnitType", var.physical_unit)
     _append_node(variable, PARAMETRIC_NS, "IsReadOnly", "false")

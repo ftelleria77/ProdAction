@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import unittest
+import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -9,6 +10,7 @@ from tempfile import TemporaryDirectory
 from pgmx.adapters import adapt_pgmx_path
 from pgmx import synthesis as sp
 from pgmx.snapshot import read_pgmx_snapshot
+from pgmx.synthesis.common.xml import UTILITY_NS
 
 
 class PgmxMachineOperationsTests(unittest.TestCase):
@@ -643,6 +645,49 @@ class PgmxMachineOperationsTests(unittest.TestCase):
         self.assertRegex(xml_text, r'<\w+:FisicalUnitType>Lenght</\w+:FisicalUnitType>')
         self.assertRegex(xml_text, r'i:type="b:double"')
         self.assertIn('>18<', xml_text)
+
+    def test_parametric_variable_name_lives_in_utility_namespace(self) -> None:
+        """El `Name` de una variable va en UTILITY, no en el namespace de Parametrics.
+
+        Maestro indexa las variables POR NOMBRE al deserializar. Si el `Name` sale en
+        Parametrics, el nombre le llega NULO y el archivo NO SE PUEDE ABRIR:
+        «Error durante al deserializar el flujo de memoria / ArgumentNullException:
+        El valor no puede ser nulo. Nombre del parámetro: key», en `VariableList.Add`.
+        (Log de Maestro del 2026-08-10, lote R001.)
+
+        Los tests de arriba usan `<\\w+:Name>`, que acepta CUALQUIER prefijo y por eso
+        daban verde con el XML roto; el adapter tampoco lo notaba porque busca con
+        wildcard de namespace (`{*}Name`). Nuestro lector es tolerante donde Maestro es
+        estricto: por eso este test compara el namespace RESUELTO, no el prefijo.
+        """
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "ParamVar_Namespace.pgmx"
+            request = sp.build_synthesis_request(
+                output_path=output_path,
+                length=400,
+                width=400,
+                depth=18,
+                parametric_variables=(
+                    sp.build_parametric_variable_spec(name="p1", value=100.0),
+                ),
+            )
+            result = sp.synthesize_request(request)
+            root = ET.fromstring(_pgmx_xml_text(result.output_path))
+
+        variables = root.find("./{*}Variables")
+        self.assertIsNotNone(variables, "el .pgmx no trae bloque Variables")
+        nombres = {}
+        for variable in variables:
+            name_node = variable.find("./{*}Name")
+            self.assertIsNotNone(name_node, "una Variable quedó sin nodo Name")
+            nombres[name_node.text] = name_node.tag
+
+        # las tres reservadas de la plantilla más la nuestra
+        self.assertIn("p1", nombres)
+        for nombre, tag in nombres.items():
+            self.assertEqual(
+                tag, f"{{{UTILITY_NS}}}Name",
+                f"el Name de la variable {nombre!r} no está en UTILITY: {tag}")
 
     def test_parametric_variable_boolean_written_to_xml(self) -> None:
         with TemporaryDirectory() as tmpdir:

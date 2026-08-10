@@ -46,21 +46,21 @@ y el bloque 22–29. La 43 (`M2`) lleva **dos**. No es adorno: es parte del byte
 | # | Línea | Origen | Confianza |
 |---|---|---|---|
 | 1 | `% r_pv_manual_base.pgm` | **Programa** — nombre del ARCHIVO, en minúsculas, extensión `.pgm` | DERIVADO (el par `_cnc` lo prueba: cambió el nombre del archivo y cambió sólo esta línea) |
-| 2 | `;H DX=400.000 DY=400.000 DZ=18.000 BX=0.000 BY=0.000 BZ=0.000 -HG V=0 *MM C=0 T=0 ` | ver desglose abajo | mixto |
+| 2 | `;H DX=400.000 DY=400.000 DZ=18.000 BX=0.000 BY=0.000 BZ=0.000 -HG V=0 *MM C=0 T=0 ` | ver desglose abajo — **ojo: `DX/DY/DZ` son dimensión + origen**, ver B1b | mixto |
 | 3 | `?%ETK[500]=100` | ? | DESCONOCIDO |
 | 5 | `_paras( 0x00, X, 3, %ax[0].pa[21]/1000, %ETK[500] )` | **Máquina** — parámetro 21 del eje 0 | DERIVADO (referencia explícita a `%ax`) |
 | 7 | `G0 G53 Z %ax[2].pa[22]/1000` | **Máquina** — parámetro 22 del eje 2, en coordenadas de máquina (`G53`) | DERIVADO |
 | 8 | `M58 ` | ? | DESCONOCIDO |
 | 9 | `G71 ` | **Aplicación** — G71 es «medidas en mm» | HIPÓTESIS (lo confirma cambiar `IsMM`, que es global) |
 | 10 | `MLV=0 ` | ? — abre el bloque de origen | DESCONOCIDO |
-| 11 | `%Or[0].ofX=-400000.000 ` | **Programa + Máquina** — µm; `= campo_X(H) − DX = 0 − 400` | HIPÓTESIS (lo confirma `R_PV_dim_500x350x25`: debería dar −500000) |
-| 12 | `%Or[0].ofY=-1515599.976 ` | **Máquina** — µm; `campo_Y(H) = −1515.60` de `fields.cfg` | DERIVADO (el valor está en el archivo) |
-| 13 | `%Or[0].ofZ=18000.000 ` | **Programa** — µm; `= DZ` | HIPÓTESIS (lo confirma el fixture de dimensiones: debería dar 25000) |
+| 11 | `%Or[0].ofX=-400000.000 ` | **Programa + Máquina** — µm; depende del área Y de `DX`, pero la fórmula NO es `campo_X − DX` | **DESCONOCIDO** (refutado en B1b) |
+| 12 | `%Or[0].ofY=-1515599.976 ` | **Máquina** — µm; el Y del área, de `fields.cfg` | DERIVADO (no se mueve con DY ni con el origen; cambia con el área) |
+| 13 | `%Or[0].ofZ=18000.000 ` | **Programa** — µm; `= DZ` (o sea `depth + origin_z`) | DERIVADO (ver B1b) |
 | 14–15 | `?%EDK[0].0=0 ` · `?%EDK[1].0=0 ` | ? | DESCONOCIDO |
 | 16 | `MLV=1 ` | ? | DESCONOCIDO |
-| 17 | `SHF[X]=-400.000 ` | ídem 11, en mm | HIPÓTESIS |
+| 17 | `SHF[X]=-400.000 ` | ídem 11, en mm | **DESCONOCIDO** |
 | 18 | `SHF[Y]=-1515.600 ` | ídem 12, en mm | DERIVADO |
-| 19 | `SHF[Z]=18.000+%ETK[114]/1000 ` | **Programa** (`DZ`) **+ Máquina** (corrección en runtime) | HIPÓTESIS sobre `DZ` |
+| 19 | `SHF[Z]=18.000+%ETK[114]/1000 ` | **Programa** (`DZ`) **+ Máquina** (corrección en runtime) | DERIVADO sobre `DZ` |
 | 20 | `?%ETK[8]=1 ` | ? | DESCONOCIDO |
 | 21 | `G40 ` | cancelación de compensación — constante del protocolo | DERIVADO por contexto |
 | 22 | `SYN` | ? | DESCONOCIDO |
@@ -92,8 +92,8 @@ SetMachiningParameters(
 
 | Campo | Valor | Origen | Confianza |
 |---|---|---|---|
-| `DX` `DY` `DZ` | 400.000 / 400.000 / 18.000 | **Programa** — dimensiones de la pieza | DERIVADO (coinciden exacto) |
-| `BX` `BY` `BZ` | 0.000 / 0.000 / 0.000 | **Programa** — origen de la fase **o** `WorkpieceOffset`; los dos valen 0 acá | HIPÓTESIS — lo separa `R_PV_origen_x100_y50` |
+| `DX` `DY` `DZ` | 400.000 / 400.000 / 18.000 | **Programa** — **dimensión + origen** de cada eje, no la dimensión sola | DERIVADO (ver B1b) |
+| `BX` `BY` `BZ` | 0.000 / 0.000 / 0.000 | ? — **no es el origen** (con origen 100/50/5 siguen en cero); queda `WorkpieceOffset` como candidato | DESCONOCIDO (ver B1b) |
 | `-HG` | | **Programa** — `executionFields`, el «Área» de Parámetros de máquina | **DERIVADO** (doc SCM) |
 | `V=0` | | **Programa** — `tableOptions`, el «Bloqueo» de Parámetros de máquina | **DERIVADO** (doc SCM) |
 | `T=0` | | **Programa** — `mechanicalOptions`, las «Opciones mecánicas» | **DERIVADO** (doc SCM) |
@@ -142,6 +142,84 @@ doble precisión, sería `-1515600.000`. En **float32**, `1515.6` es exactamente
 
 ⇒ El emisor pasa por **precisión simple** al convertir a micras. Queda derivado en la
 época nueva, sin depender de la anterior.
+
+## B1b · Lo que dijeron los seis fixtures de R001 (2026-08-10)
+
+Postprocesados en el CNC. Cada uno varía UNA cosa contra `R_PV_base`, así que la línea
+que se mueve es la respuesta. **Dos hipótesis de arriba quedaron refutadas.**
+
+### ✅ `;H DX·DY·DZ` NO son las dimensiones de la pieza: son **dimensión + origen**
+
+| Fixture | Pieza | Origen | Header |
+|---|---|---|---|
+| base | 400×400×18 | 0/0/0 | `DX=400 DY=400 DZ=18` |
+| dimensiones | **500×350×25** | 0/0/0 | `DX=500 DY=350 DZ=25` |
+| origen XY | 400×400×18 | **100/50**/0 | **`DX=500 DY=450`** DZ=18 |
+| origen Z | 400×400×18 | 0/0/**5** | DX=400 DY=400 **`DZ=23`** |
+
+`DX = length + origin_x` · `DY = width + origin_y` · `DZ = depth + origin_z`. **DERIVADO**
+por dos fixtures independientes. Tiene sentido físico: lo que el header declara es la
+**envolvente ocupada** sobre la mesa, y correr el origen la agranda.
+
+⇒ Un converter que escriba ahí las dimensiones de la pieza acierta **sólo** cuando el
+origen es 0/0/0.
+
+### ❌ REFUTADO: `BX·BY·BZ` no es el origen
+
+Con origen 100/50/5 los tres siguen en `0.000`. Lo que el origen mueve son `DX/DY/DZ`
+(arriba) y los `%Or`/`SHF`. Qué es `BX·BY·BZ` vuelve a **DESCONOCIDO**; el candidato que
+queda es `WorkpieceOffsetX/Y/Z`, que el sintetizador no varía.
+
+### ✅ `%Or[0].ofZ` y `SHF[Z]` = `DZ` (ya con el origen sumado)
+
+25.000 con la pieza de 25 y 23.000 con origen Z=5 sobre pieza de 18. **DERIVADO.**
+
+### ✅ `%Or[0].ofY` = el Y del área, y nada más
+
+No se movió con DY (400→350) ni con el origen Y (0→50): quedó en `-1515.60` en los tres.
+Con área EF pasó a `-1515.25`. ⇒ **`ofY` sale del área, y sólo del área. DERIVADO.**
+
+### ❌ REFUTADO: `ofX` no es `campo_X − DX`
+
+| Área | Campo en `fields.cfg` | `ofX` emitido |
+|---|---|---|
+| **HG** | X = 0.00 | −400.000 (pieza 400) · −500.000 (pieza 500 **y** origen X=100) |
+| **EF** | X = −3688.00 | **−3688.000** (pieza 400) |
+
+Con HG la fórmula `campo_X − (DX+ox)` daba bien (0−400, 0−500). Con EF debería dar
+−4088 y el emisor puso **−3688**, o sea el valor del campo tal cual. La regla que sirve
+para un área no sirve para la otra ⇒ **la fórmula de `ofX` queda DESCONOCIDA**, y con
+ella la correspondencia área↔bloque de `fields.cfg` (que se había leído asignando cada
+letra al bloque que la precede — tampoco está confirmado).
+
+Lo discrimina un lote de áreas: AB, CD, y HG/EF con piezas de distinta medida.
+
+### ✅ El área también cambia el registro `EDK`
+
+`?%EDK[13].0` con **HG** → `?%EDK[10].0` con **EF**, en las dos apariciones (la que abre
+en la línea 30 y la que cierra en la 42). ⇒ **el índice del `EDK` identifica el área.**
+Con dos áreas no alcanza para la tabla completa: hace falta el mismo lote.
+
+### ✅ El bloque del `Xn` («Operación nula»)
+
+Con un `Xn` de defaults, el ISO gana **ocho líneas** entre el `G40` de la línea 21 y el
+`SYN`, sin tocar nada más:
+
+```
+?%ETK[8]=1
+G40
+G61
+MLV=0
+D0
+G0 G53 Z201.000
+G0 G53 X-3700.000
+G64
+```
+
+- **`X-3700.000` es el valor del `Xn`**, no una constante: es el `x` de la spec.
+- `Z201.000` no está en el programa ⇒ **Máquina** (pendiente de ubicar en qué `.cfg`).
+- `G61`/`G64` abren y cierran el bloque; `D0` y `MLV=0` lo preparan.
+- **No hay `M5`.** El Xn va en el CUERPO del programa, no en el cierre.
 
 ## Preguntas que abre el esqueleto
 

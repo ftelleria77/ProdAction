@@ -333,11 +333,45 @@ el catálogo no hay que ir a buscarlo a la PC, viaja con el archivo. Y re-guarda
 CNC no lo reemplazó — aunque eso no prueba que nunca lo reemplace: puede que ambas PCs
 tengan el mismo. Pendiente de separar.
 
+### 2026-08-10 (d) — R001 postprocesado: 6 de 7, y un BUG NUESTRO en el séptimo
+
+Los seis ISO están y cerraron varias filas de `anatomia_iso.md` (sección B1b). El
+séptimo, `R_PV_variable_usuario.pgmx`, **Maestro no lo pudo abrir**:
+
+> `Error durante al deserializar el flujo de memoria.`
+> `El valor no puede ser nulo. Nombre del parámetro: key`
+
+El `.logx` del CNC da la traza exacta: `VariableList.Add(Variable)` →
+`Dictionary.FindEntry(key)` → `ArgumentNullException`. **La lista de variables de Maestro
+indexa POR NOMBRE**, y el nombre le llegaba nulo.
+
+**Causa (nuestra)**: `_build_variable_node` escribía el `Name` de la variable en el
+namespace de `Parametrics`. En la plantilla de Maestro, `Key` y `Name` vienen de la clase
+base y viven en **`Utility`**; sólo el resto (`Description`, `FisicalUnitType`,
+`IsReadOnly`, `Scope`, `Type`, `Value`) es de `Parametrics`. Escrito en el namespace
+equivocado, el deserializador de .NET no lo encuentra y lo da por nulo.
+
+**Por qué no lo detectamos antes** — y esto es lo que importa:
+
+1. El test que decía cubrirlo verificaba `<\w+:Name>GrusorPanel</\w+:Name>`: **acepta
+   cualquier prefijo**, así que daba verde con el XML que Maestro rechaza.
+2. El adapter lee con `{*}Name` (wildcard de namespace), así que el roundtrip cerraba
+   perfecto.
+
+⇒ **Nuestro lector es tolerante donde Maestro es estricto.** Un roundtrip verde prueba que
+podemos releer lo que escribimos, no que Maestro pueda abrirlo. Es el punto ciego de la
+regla 5 en su forma más pura, y sólo lo destapó mandar el archivo a la máquina real.
+
+**Arreglado** (`pgmx/synthesis/common/program.py`), con test de regresión que compara el
+namespace RESUELTO y no el prefijo (`test_parametric_variable_name_lives_in_utility_namespace`,
+verificado en los dos sentidos: falla sin el fix). Suite 283.
+
+Pendiente: **re-postprocesar `R_PV_variable_usuario.pgmx`** ya regenerado, para saber si
+una variable de usuario sin uso deja rastro en el ISO.
+
 ## Pendiente
 
-- Postproceso del lote → `P:\USBMIX\ProdAction\R001_programa_vacio\` (Fermín). Con el
-  esqueleto ya derivado, cada fixture ahora responde una fila concreta de
-  `anatomia_iso.md`.
+- **Re-postprocesar `R_PV_variable_usuario.pgmx`** (regenerado con el fix del namespace).
 - **El experimento que falta**: postprocesar el MISMO `.pgmx` en las dos PCs
   (oficina técnica y CNC) y comparar los ISO. Es lo único que separa «el tercer origen
   se lee al postprocesar» de «se congela al autorar».
