@@ -53,19 +53,19 @@ y el bloque 22–29. La 43 (`M2`) lleva **dos**. No es adorno: es parte del byte
 | 8 | `M58 ` | ? | DESCONOCIDO |
 | 9 | `G71 ` | **Aplicación** — G71 es «medidas en mm» | HIPÓTESIS (lo confirma cambiar `IsMM`, que es global) |
 | 10 | `MLV=0 ` | ? — abre el bloque de origen | DESCONOCIDO |
-| 11 | `%Or[0].ofX=-400000.000 ` | **Programa + Máquina** — µm; depende del área Y de `DX`, pero la fórmula NO es `campo_X − DX` | **DESCONOCIDO** (refutado en B1b) |
-| 12 | `%Or[0].ofY=-1515599.976 ` | **Máquina** — µm; el Y del área, de `fields.cfg` | DERIVADO (no se mueve con DY ni con el origen; cambia con el área) |
+| 11 | `%Or[0].ofX=-400000.000 ` | **Máquina** (campo del área) **+ Programa** (`DX`, sólo si el campo vale 0) — µm | **DERIVADO** (fórmula en B1c, 11/11) |
+| 12 | `%Or[0].ofY=-1515599.976 ` | ídem sobre el eje Y — µm | **DERIVADO** (misma fórmula) |
 | 13 | `%Or[0].ofZ=18000.000 ` | **Programa** — µm; `= DZ` (o sea `depth + origin_z`) | DERIVADO (ver B1b) |
 | 14–15 | `?%EDK[0].0=0 ` · `?%EDK[1].0=0 ` | ? | DESCONOCIDO |
 | 16 | `MLV=1 ` | ? | DESCONOCIDO |
-| 17 | `SHF[X]=-400.000 ` | ídem 11, en mm | **DESCONOCIDO** |
-| 18 | `SHF[Y]=-1515.600 ` | ídem 12, en mm | DERIVADO |
+| 17 | `SHF[X]=-400.000 ` | ídem 11, en mm | **DERIVADO** (B1c) |
+| 18 | `SHF[Y]=-1515.600 ` | ídem 12, en mm | **DERIVADO** (B1c) |
 | 19 | `SHF[Z]=18.000+%ETK[114]/1000 ` | **Programa** (`DZ`) **+ Máquina** (corrección en runtime) | DERIVADO sobre `DZ` |
 | 20 | `?%ETK[8]=1 ` | ? | DESCONOCIDO |
 | 21 | `G40 ` | cancelación de compensación — constante del protocolo | DERIVADO por contexto |
 | 22 | `SYN` | ? | DESCONOCIDO |
 | 23–29 | `?%ETK[0]=0` `[1]` `[2]` `[13]` `[17]` `[18]` `[19]` | reset de registros; el CONJUNTO de índices es fijo | DESCONOCIDO (por qué esos siete) |
-| 30 | `?%EDK[13].0=1 ` | ? | DESCONOCIDO |
+| 30 | `?%EDK[13].0=1 ` | **Programa** (el área) — el índice depende de la MITAD de mesa: 10 izquierda, 13 derecha | **DERIVADO** (B1c) |
 | 31–34 | `MLV=1 ` + `SHF[X]=0 ` `SHF[Y]=0 ` `SHF[Z]=0 ` | teardown: anula el SHF del nivel 1 | DERIVADO por contexto |
 | 35–38 | `MLV=2 ` + `SHF` en cero | ídem nivel 2 — **aparece aunque el nivel 2 nunca se usó** | DERIVADO por contexto |
 | 39 | `MLV=0 ` | vuelve al nivel 0 | DERIVADO por contexto |
@@ -179,7 +179,13 @@ queda es `WorkpieceOffsetX/Y/Z`, que el sintetizador no varía.
 No se movió con DY (400→350) ni con el origen Y (0→50): quedó en `-1515.60` en los tres.
 Con área EF pasó a `-1515.25`. ⇒ **`ofY` sale del área, y sólo del área. DERIVADO.**
 
-### ❌ REFUTADO: `ofX` no es `campo_X − DX`
+### ✅ RESUELTO EN B1c — la fórmula del origen
+
+Lo que sigue quedó abierto con R001 y lo cerró **R002** (ver más abajo): el origen se
+calcula por eje contra el campo del área, y **sólo se resta la dimensión cuando la
+coordenada del campo es cero**.
+
+### ❌ Lo que R001 refutó: `ofX` no es `campo_X − DX` sin más
 
 | Área | Campo en `fields.cfg` | `ofX` emitido |
 |---|---|---|
@@ -220,6 +226,94 @@ G64
 - `Z201.000` no está en el programa ⇒ **Máquina** (pendiente de ubicar en qué `.cfg`).
 - `G61`/`G64` abren y cierran el bloque; `D0` y `MLV=0` lo preparan.
 - **No hay `M5`.** El Xn va en el CUERPO del programa, no en el cierre.
+
+## B1c · El área, resuelta (lote R002, 2026-08-10)
+
+Once fixtures sin operaciones, variando sólo el área (y, en tres, la medida o el origen).
+Cierra las tres preguntas que había dejado R001.
+
+### ✅ La fórmula del origen — verificada 11/11
+
+```
+SHF[eje] = campo(primera letra del área, eje)  −  D_eje   SÓLO SI campo(eje) == 0
+```
+
+donde `D_eje` es el valor del header `;H` (o sea **dimensión + origen**, ver B1b) y
+`%Or[0].of*` es lo mismo en micras.
+
+Leído en castellano: **la coordenada del campo marca el tope contra el que apoya la
+pieza.** Si el tope está en 0 —el extremo de la mesa—, la pieza cuelga hacia el negativo
+y su esquina queda en `−D`. Si el tope ya está en negativo, la esquina **es** el tope, y
+la medida de la pieza no entra.
+
+Por eso R001 parecía contradecirse: con `HG` (campo H, X = 0) el emisor restaba `DX`, y
+con `EF` (campo E, X = −3688) no. No eran dos reglas: es una sola, y el `0` era la
+condición.
+
+| Fixture | Área | 1ª letra | campo X · Y | `SHF[X]` | `SHF[Y]` |
+|---|---|---|---|---|---|
+| `ab` | AB | A | −3685.85 · 0.00 | −3685.850 | −400.000 |
+| `cd` | CD | C | −1843.00 · 0.00 | −1843.000 | −400.000 |
+| `dc` | DC | **D** | 0.00 · 0.00 | **−400.000** | −400.000 |
+| `ef` | EF | E | −3688.00 · −1515.25 | −3688.000 | −1515.250 |
+| `gh` | GH | G | −1843.00 · −1515.75 | −1843.000 | −1515.750 |
+| `hg` | HG | **H** | 0.00 · −1515.60 | **−400.000** | −1515.600 |
+| `ab_dx600` | AB | A | X ≠ 0 | −3685.850 (**no se mueve**) | −400.000 |
+| `ef_dx600` | EF | E | X ≠ 0 | −3688.000 (**no se mueve**) | −1515.250 |
+| `hg_dx600` | HG | H | X = 0 | **−600.000** (sigue a DX) | −1515.600 |
+| `ef_ox100` | EF | E | X ≠ 0 | −3688.000 (**el origen tampoco entra**) | −1515.250 |
+
+Nótese que el eje Y obedece la misma regla, no otra: los campos A–D tienen `Y = 0`, y ahí
+`SHF[Y] = −DY = −400`; los E–H tienen `Y ≈ −1515`, y ahí se usa tal cual. Lo que en R001
+parecía «X resta y el eje Y no» era, otra vez, la condición del cero.
+
+### ✅ Manda la PRIMERA letra del área
+
+`CD` → −1843 (campo C) contra `DC` → −400 (campo D). Mismas dos letras, distinto orden,
+distinto origen. Ídem `GH` (−1843, campo G) contra `HG` (−400, campo H). **El orden no es
+cosmético: elige el campo de referencia.**
+
+### ✅ Un área de una sola letra se normaliza
+
+Pedimos área `A` y el ISO emitió **`-AB`**. Maestro completa el par.
+
+### ✅ La tabla de `?%EDK[n]` — es la MITAD de la mesa, no la fila
+
+| Área | 1ª letra | `EDK` |
+|---|---|---|
+| AB · EF | A · E | **10** |
+| CD · DC · GH · HG | C · D · G · H | **13** |
+
+Las áreas que arrancan en la mitad **izquierda** de la mesa (campos A/B y E/F, los de X
+más negativo) usan `EDK[10]`; las de la mitad **derecha** (C/D y G/H), `EDK[13]`. La fila
+(Y = 0 contra Y ≈ −1515) **no** influye. Con cuatro áreas por mitad no hay más casos que
+probar en esta máquina.
+
+### La tabla de campos de esta máquina
+
+De `fields.cfg`, ya parseado bien: bloques de 29 valores en columnas de 13 caracteres,
+cada uno **cerrado** por una línea separadora rellena de `0x03` que lleva la letra. (El
+primer bloque no trae letra: no es un campo.) Los valores 15 y 16 del bloque son X e Y;
+el 18 y 19, ancho y alto.
+
+| Campo | X | Y | ancho | alto |
+|---|---|---|---|---|
+| A | −3685.85 | 0.00 | 1843 | 1555 |
+| B | −1843.00 | 0.00 | 1843 | 1555 |
+| C | −1843.00 | 0.00 | 1843 | 1555 |
+| D | 0.00 | 0.00 | 1843 | 1555 |
+| E | −3688.00 | −1515.25 | 1843 | 1555 |
+| F | −1843.00 | −1515.75 | 1843 | 1555 |
+| G | −1843.00 | −1515.75 | 1843 | 1555 |
+| H | 0.00 | −1515.60 | 1843 | 1555 |
+
+Dos filas de cuatro campos de 1843 × 1555: la fila `Y = 0` (A–D) y la fila `Y ≈ −1515`
+(E–H). Los campos I–P están en cero — no existen en esta máquina.
+
+⚠️ **Ojo con A y E**: −3685.85 y −3688.00 difieren en 2,15 mm, y sus pares de la otra fila
+también (−1515.25 contra −1515.60/−1515.75). No es ruido del emisor: **son valores de
+calibración, distintos por campo**, y salen del archivo tal cual. Un converter que
+promedie o redondee ahí rompe el byte-idéntico.
 
 ## Preguntas que abre el esqueleto
 

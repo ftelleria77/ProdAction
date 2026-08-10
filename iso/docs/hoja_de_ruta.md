@@ -95,6 +95,27 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 
 ## Bitácora del trayecto
 
+### 2026-08-10 (tarde) — R001 y R002 postprocesados: el origen queda derivado
+- **Un bug NUESTRO, encontrado por el lote**: Maestro no pudo abrir
+  `R_PV_variable_usuario.pgmx` («El valor no puede ser nulo. Nombre del parámetro: key»).
+  El sintetizador escribía el `Name` de una variable en el namespace de `Parametrics`;
+  va en `Utility`. Nadie lo detectó antes porque **el test usaba una regex con prefijo
+  comodín y el adapter lee con wildcard de namespace**: nuestro lector es tolerante donde
+  Maestro es estricto. Arreglado, con test que compara el namespace resuelto. Suite 283.
+- **R001 mató dos hipótesis**: el header `;H DX/DY/DZ` no son las dimensiones de la pieza
+  sino **dimensión + origen** (la envolvente ocupada), y `BX/BY/BZ` **no** es el origen.
+- **R002 (11 fixtures de áreas) cerró la fórmula del origen, verificada 11/11**:
+  `SHF[eje] = campo(1ª letra del área, eje) − D_eje` **sólo si `campo(eje) == 0`**. La
+  coordenada del campo es el tope: si está en 0, la pieza cuelga hacia el negativo; si ya
+  es negativa, la esquina es el tope y la medida no entra. Lo que parecían dos reglas
+  (X restaba, Y no) era una sola con el cero como condición.
+- Además: **manda la primera letra del área** (`CD` ≠ `DC`), un área de una letra se
+  normaliza (`A` → `-AB`), y el índice de `?%EDK[n]` marca la **mitad de mesa** (10
+  izquierda, 13 derecha), no la fila.
+- `fields.cfg` parseado bien (bloques cerrados por una separadora con la letra): dos filas
+  de cuatro campos de 1843×1555. **Sus coordenadas son de calibración y difieren entre sí
+  por milímetros** — redondearlas rompe el byte-idéntico.
+
 ### 2026-08-10 — El primer ISO de la reinvestigación, y el sintetizador validado
 - **A2 cerrado casi entero.** Siete capturas nuevas: el panel **Pieza** (donde nace un
   programa) y la ventana **Parámetros de máquina**, que resultó ser la que faltaba. Entre
