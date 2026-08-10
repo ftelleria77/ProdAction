@@ -61,11 +61,11 @@ Los dos directorios traen el mismo juego de binarios (`pp.dll`, `GEA.dll`,
 
 ### El XConverter es una CLI que convierte entre formatos de ENTRADA
 
-> ⚠️ **El XConverter NO produce ISO.** Tiene varios modos de conversión y **ninguno**
-> emite `.iso` (dato de Fermín, 2026-08-10). Convierte archivos de un formato de entrada
-> a otro —`.xcs` → `.pgmx`, `.csv` → `.mixx`— y ahí termina su trabajo. **El `.iso` lo
-> produce únicamente el postprocesador de Maestro.** No hay nada en el circuito que haga
-> lo que tiene que hacer nuestro converter; lo único aprovechable de acá es la **forma**
+> ⚠️ **El XConverter NO produce ISO.** Dato de Fermín (2026-08-10), **verificado contra
+> la ayuda de la propia herramienta**: tiene **doce** modalidades de trabajo y ninguna
+> emite `.iso`. Convierte entre formatos de entrada de Maestro (`.xcs`, `.xxl`, `.pgm`,
+> `.csv` → `.pgmx`/`.mixx`), importa, optimiza y prepara chapado. **El `.iso` lo produce
+> únicamente el postprocesador de Maestro.** Lo único aprovechable de acá es la **forma**
 > de la CLI, no su función.
 
 Los `.bat` que quedan en `Tmp\` muestran cómo se lo invoca:
@@ -80,19 +80,65 @@ chcp 850
 -t "S:\Maestro\Tlgx\def.tlgx"
 ```
 
+La ayuda de la propia herramienta (captura de Fermín, 2026-08-10, en el repo Nora:
+`skills/cnc-scm-maestro/references/pantallas/xconverter-ayuda-linea-de-comando-20260810.png`)
+da la sintaxis completa:
+
+```
+XConverter -s -i FILES [-t FILE] [-e FILE] [-o FILES] [-m N] [-r]
+```
+
 | Flag | Qué es |
 |---|---|
-| `-s` | silencioso (sin UI) |
-| `-m` | modo de conversión. Vistos en los `.bat`: `0` = `.xcs` → `.pgmx` · `11` = `.csv` → `.mixx`. **Hay más modos; ninguno produce `.iso`.** |
-| `-i` | entrada, **repetible** |
-| `-o` | salida, **repetible**, pareada por orden con las `-i` |
-| `-t` | catálogo de herramientas (`def.tlgx`) |
+| `-s` | sin interfaz gráfica. **«Por el momento es la única modalidad de trabajo soportada»** |
+| `-i` | ficheros de entrada (lista) |
+| `-t` | fichero de **herramientas** (`def.tlgx`) |
+| `-e` | fichero de **cantos** (el `.edgx` de `EdgxDir`) |
+| `-o` | ficheros de salida. **Si se omite, convierte igual**: un solo producto se llama `Output`; varios, el nombre de cada entrada con sufijo `_Output` |
+| `-m N` | modalidad de trabajo (ver tabla). **Si no se especifica, usa `-m 1`** |
+| `-c` | configuración a escribir en las opciones de Maestro. **Sólo se interpreta en `-m 9`** |
+| `-r` | aparece en la sintaxis y **no está explicado** en la ayuda |
+
+### Las doce modalidades — **ninguna produce `.iso`**
+
+| `-m` | Qué hace |
+|---|---|
+| 0 | **`.xcs` → `.pgmx`** (con el fichero de herramientas indicado) |
+| 1 | **Importación piezas**: crea **UN** `.pgmx` con todas las piezas de los `.pgmx` de entrada. A las variables duplicadas les pone `variable` + índice incremental |
+| 2 | **Optimización**: los `.pgmx` de entrada se optimizan «con la optimización del recorrido herramienta habilitada» |
+| 3 | Todas las anteriores juntas: `.xcs` → `.pgmx` → importados en uno solo → optimizado (los intermedios van a una carpeta temporal que se borra) |
+| 4 | `.xxl` → `.pgmx` |
+| 5 | **`.pgm` → `.pgmx`** |
+| 6 | Optimización de `.xxl` para chapado |
+| 7 | Simulación de `.xxl` para chapado (emite un `.txt` con posibles choques) |
+| 8 | Generación de trayectoria de chapado y trabajos accesorios (refilado, retestado, raspado) |
+| 9 | **Cambio de configuración**: «la configuración de la máquina predefinida indicada en las opciones de Maestro se sustituye por la especificada en la línea de comando» (con `-c`) |
+| 10 | `.pgmx` → `.xxl` |
+| 11 | Proyecto `.mixx` a partir de una lista `.csv` |
 
 De acá se puede tomar **la forma de invocación**, que es la que va a necesitar la app de
 conversión por lotes: *N* entradas y *N* salidas pareadas en una sola llamada, el catálogo
-como parámetro explícito, y la escritura directa dentro del proyecto
-(`S:\Maestro\Projects\<proyecto>\`). **La función es otra**: el XConverter alimenta a
-Maestro, no lo reemplaza.
+como parámetro explícito, un default sensato para las salidas, y la escritura directa
+dentro del proyecto. **La función es otra**: el XConverter alimenta a Maestro, no lo
+reemplaza.
+
+### Cuatro modos que tocan de cerca a nuestro trabajo
+
+- **`-m 9` (cambio de configuración)** — hay un mecanismo **programático** para sustituir
+  la configuración de máquina que Maestro tiene en sus Opciones. Es el tercer origen, y se
+  puede escribir por línea de comando. Relevante para el ciclo de refresco de config
+  (rama E) y para el experimento de las dos PCs: permitiría igualar configuraciones sin
+  tocar la UI. Ver `experiments/configuracion_aplicacion.md`.
+- **`-m 2` (optimización)** — reordena el recorrido de herramienta y **guarda el resultado
+  en el `.pgmx`**. Si un archivo pasó por acá, su orden de operaciones no es el que dibujó
+  nadie: lo decidió el optimizador. El converter lee lo que quedó escrito, pero conviene
+  saber que ese orden tiene autor.
+- **`-m 1` (importación de piezas)** — produce `.pgmx` **multi-pieza**, con renombrado
+  automático de variables duplicadas. Es el formato que el workstream multi-pieza va a
+  encontrarse.
+- **`-m 5` (`.pgm` → `.pgmx`)** — existe el camino inverso, pero para **PGM**, que es el
+  otro formato de salida de Maestro (`PostFileFormat`: XXL / PGM / ISO). **No hay
+  equivalente para ISO** en ninguna dirección.
 
 El ejecutable vive en la carpeta de Maestro: `XConverter.exe` (52 KB, **2013**). Al lado
 hay un **`Xconverter.exe.new`** (449 KB, 2023) que **no está en uso** — una versión más
