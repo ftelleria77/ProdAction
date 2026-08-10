@@ -11,7 +11,8 @@ aceptarlos a todos (o rechazarlos fail-loud, nunca convertirlos mal en silencio)
 |---|---|---|---|
 | 1 | **Maestro, a mano** | Fermín dibuja en el Editor y guarda | vigente |
 | 2 | **Nuestro sintetizador** (`pgmx/synthesis`) | fixtures de la serie R | vigente (sólo investigación) |
-| 3 | **X-CAB → XConverter** | X-CAB/EasyNest emite `.xcs` (scripting) y el XConverter lo convierte a `.pgmx` | **a confirmar si sigue en uso** |
+| 3 | **X-CAB → XConverter** | X-CAB emite `.xcs` (scripting) y el XConverter lo convierte a `.pgmx` | **VIVO** (último lote 2026-07-10) |
+| 3b | **EasyNest → XConverter** | ídem, por el camino del nesting | dormido (último 2024-03-25) |
 
 ### 1. Maestro a mano
 
@@ -31,22 +32,60 @@ Dato de Fermín (2026-08-10). **X-CAB** (de SPAI, el mismo software cuyos módul
 en **Xilog Maestro Scripting Language (MSL)**, y una herramienta llamada **XConverter**
 los convierte a `.pgmx`.
 
-**Dónde vive** (unidad `X:`, el share de X-CAB):
+**Dónde vive** (corrección de Fermín, 2026-08-10: son rutas **locales**; la unidad `X:`
+es una copia **no funcional**, no mirar ahí):
 
 ```
-X:\EASYNEST\PP\MSLPGMX\          el conversor: pp.dll, GEA.dll, Geniout32.dll,
-                                 EditTools.exe, TTF16.ocx, SpreadsheetGear.dll
-X:\EASYNEST\PP\MSLPGMX\Tmp\      ~140 archivos .xcs (los generados)
-X:\EASYNEST\Job\                 los .pgmx resultantes
+C:\SPAI\X-CAB\PP\MSLPGMX\        el postprocesador de X-CAB — EN USO
+C:\SPAI\X-CAB\PP\MSLPGMX\Tmp\    326 .xcs + los .bat de lote (último 2026-07-10)
+C:\SPAI\EASYNEST\PP\MSLPGMX\     el de EasyNest (nesting) — 58 .xcs, último 2024-03-25
 ```
 
-Su configuración son tres `.ini` chicos:
+Los dos directorios traen el mismo juego de binarios (`pp.dll`, `GEA.dll`,
+`Geniout32.dll`, `EditTools.exe`, `TTF16.ocx`, `SpreadsheetGear.dll`) y tres `.ini`:
 
-- **`xconverter.ini`** — cuatro líneas: la carpeta de Maestro
-  (`C:\Program Files (x86)\SCM Group\Maestro`), la ruta del `def.tlgx` que usa, y dos
-  flags (`0`, `1`).
+- **`xconverter.ini`** — la instalación de Maestro, el `def.tlgx` a usar y dos flags.
+  **Los dos no apuntan al mismo catálogo**:
+
+  | | Maestro | `def.tlgx` | flags |
+  |---|---|---|---|
+  | X-CAB | `C:\Program Files (x86)\SCM Group\Maestro` | **`S:\Maestro\Tlgx\def.tlgx`** (el de red) | `0`, `0` |
+  | EasyNest | ídem | `…\Maestro\Tlgx\def.tlgx` (el local) | `0`, `1` |
+
 - **`PPMode.ini`** — `ExportCreateIsoCenterMilling=0`, `ToolFormat=0`, `Feeler=0`.
 - **`cfg.ini`** — `ToolsNumCol=4`.
+
+### El XConverter es una CLI, y ya convierte por lotes
+
+Los `.bat` que quedan en `Tmp\` muestran cómo se lo invoca:
+
+```bat
+chcp 850
+"C:\Program Files (x86)\SCM Group\Maestro\Xconverter.exe" -s -m 0 ^
+-i "C:\SPAI\X-CAB\PP\MSLPGMX\Tmp\Lateral_IzqN1.xcs" ^
+-i "…\TapaN1.xcs" ^                       (24 entradas en el lote real)
+-o "S:\Maestro\Projects\BM-3C-PC-800\Lateral_IzqN1.pgmx" ^
+-o "S:\Maestro\Projects\BM-3C-PC-800\TapaN1.pgmx" ^
+-t "S:\Maestro\Tlgx\def.tlgx"
+```
+
+| Flag | Qué es |
+|---|---|
+| `-s` | silencioso (sin UI) |
+| `-m` | modo: `0` = `.xcs` → `.pgmx` · `11` = `.csv` → `.mixx` (el otro `.bat` del directorio) |
+| `-i` | entrada, **repetible** |
+| `-o` | salida, **repetible**, pareada por orden con las `-i` |
+| `-t` | catálogo de herramientas (`def.tlgx`) |
+
+**Esto es un precedente directo del objetivo final del converter** (una app que convierta
+proyectos enteros, carpetas y múltiples piezas): la herramienta que ya está en el circuito
+resuelve el lote con *N* entradas y *N* salidas en una sola invocación, y escribe
+directo dentro del proyecto en `S:\Maestro\Projects\<proyecto>\`.
+
+El ejecutable vive en la carpeta de Maestro: `XConverter.exe` (52 KB, **2013**). Al lado
+hay un **`Xconverter.exe.new`** (449 KB, 2023) que **no está en uso** — una versión más
+nueva sin activar. Anotarlo antes de sacar conclusiones sobre el comportamiento del
+conversor: puede que la que corre no sea la última.
 
 **Qué es un `.xcs`**: código MSL plano, una llamada por línea, del mismo lenguaje que
 documenta `pgmx/docs/maestro_scripting/`. Ejemplo real (`Tmp\test1.xcs`, placa de
@@ -74,25 +113,34 @@ en hipótesis o en desconocido. Ver `experiments/anatomia_iso.md`.
 
 **Observaciones sobre el flujo:**
 
-- Es el camino del **nesting**: piezas del tamaño de la placa entera (2600×1500×18) y
+- **X-CAB emite piezas de mueble, una por archivo.** Los nombres del último lote lo
+  dicen: `Lateral_Izq`, `Lateral_Der`, `Tapa`, `Fondo`, `Trasera`, `Faja frontal`,
+  `Fren_Cajon_Sup`, `Tras_Cajon_Inf`… Salen a
+  `S:\Maestro\Projects\<proyecto>\<pieza>.pgmx`.
+- El sufijo `F6` de algunos archivos (`FondoN1F6.xcs`, `Lat_Izq_Cajon_SupN0F6.xcs`)
+  aparea con el campo `f6_source` que la app ya maneja por pieza — **son la segunda cara**
+  (el `.pgmx` de la vuelta), no una variante.
+- **EasyNest** es el camino del nesting: placas enteras (2600×1500×18) con
   `SetWorkpieceSetupPosition(…, 9.000, …)` — origen Z a media placa.
-- `SetMachiningParameters("A", …)` fija el **área "A"**, no `HG`. Un `.pgmx` de esta
-  fuente trae otro campo de ejecución que los que venimos mirando.
-- El XConverter apunta a **su propio `def.tlgx`** y a **su propia instalación de
-  Maestro** (`C:\Program Files (x86)\…`, o sea 64 bits: no es la del CNC, que es XP 32
-  bits). Es decir: **una cuarta instalación de Maestro en el circuito**, con su propio
-  `UI00.exe.Config`. Ver `experiments/configuracion_aplicacion.md`.
-- Los `.xcs` de `Tmp\` son de **2022** (abril a agosto). Eso no prueba que el flujo esté
-  muerto —`Tmp` puede limpiarse—, pero tampoco que esté vivo.
+- `SetMachiningParameters("A", …)` fija el **área "A"**, no `HG`: los `.pgmx` de esta
+  fuente traen otro campo de ejecución que los que venimos mirando.
+- El XConverter corre contra la instalación de Maestro de **64 bits** de esta PC — no la
+  del CNC (XP 32 bits). Con su propio `UI00.exe.Config`, que es un origen más de
+  configuración en el circuito. Ver `experiments/configuracion_aplicacion.md`.
 
 ## Preguntas abiertas
 
-1. **¿El flujo X-CAB → XConverter sigue en uso?** Decide si sus `.pgmx` son alcance del
-   converter o historia. Los `.xcs` que quedaron son de 2022.
-2. Si está en uso: ¿esas piezas se postprocesan en la PC del CNC como todas las demás?
-3. ¿El `.pgmx` que emite el XConverter tiene una forma propia de serializar (una tercera,
-   además de la de Maestro y la nuestra)? Se responde abriendo uno de `X:\EASYNEST\Job\`.
-4. ¿Hay otros orígenes que todavía no estén en esta lista?
+1. ~~¿El flujo sigue en uso?~~ **RESPONDIDA (2026-08-10): X-CAB SÍ** (326 `.xcs`, último
+   lote el 2026-07-10); **EasyNest parece dormido** (58 `.xcs`, último 2024-03-25).
+   ⇒ Los `.pgmx` de X-CAB **son alcance del converter**.
+2. ¿El `.pgmx` que emite el XConverter serializa de una **tercera** forma, distinta de
+   la de Maestro y de la nuestra? Se responde abriendo uno de los que salieron a
+   `S:\Maestro\Projects\BM-3C-PC-800\`.
+3. ¿Un `.pgmx` de X-CAB abierto y re-guardado en Maestro cambia de forma? (Si el operario
+   los toca antes de postprocesar, el converter ve la forma re-guardada, no la original.)
+4. ¿`Xconverter.exe.new` (2023) reemplaza al `XConverter.exe` (2013) en algún momento?
+   Un cambio de versión del emisor cambia lo que hay que reproducir.
+5. ¿Hay otros orígenes que todavía no estén en esta lista?
 
 ## Por qué importa
 
