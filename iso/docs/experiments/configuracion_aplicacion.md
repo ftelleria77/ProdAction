@@ -8,16 +8,30 @@ Vive en **`<Maestro>\UI00.exe.Config`**, un `.config` de .NET con ~170 claves en
 `<appSettings>`. Mapeo UI↔clave y transcripción de la ventana en el repo Nora:
 `skills/cnc-scm-maestro/references/opciones-de-maestro.md`.
 
-## Las dos instalaciones NO están configuradas igual (2026-08-10)
+## Hay TRES instalaciones de Maestro, y no están configuradas igual
 
-Fermín extrajo el `UI00.exe.Config` de la **PC del CNC** (la que postprocesa) y se
-comparó contra el de la **PC de oficina técnica** (donde se crean los programas).
+Dato de Fermín (2026-08-10). No son dos: son tres, y sólo una postprocesa.
+
+| # | Instalación | Sistema | Rutas | Rol |
+|---|---|---|---|---|
+| 1 | **PC del CNC** | **Windows XP 32 bits**, en español | `C:\Archivos de programa\Scm Group\…` (sin `(x86)`: en 32 bits no existe esa separación) · salida a `C:\PrgMaestro\USBMIX` | **la que postprocesa** |
+| 2 | **Oficina técnica** | Windows 64 bits | `S:\Maestro\…` y `P:\USBMIX` — **unidades de red** | donde se crean los programas |
+| 3 | **PC de casa** | Windows 64 bits | `C:\Program Files (x86)\Scm Group\…`, defaults de fábrica | copia de trabajo; **de acá salieron las capturas del 2026-08-09** |
+
+Que el CNC corra **Windows XP de 32 bits** no es un detalle de color: explica la forma de
+sus rutas y acota qué puede correr en esa máquina. (El repo ya tenía un precedente: el
+visor de `cnc_traceability/` está escrito para XP 32 bits.)
+
+## El config del CNC contra el de oficina técnica (2026-08-10)
+
+Fermín extrajo el `UI00.exe.Config` de la **PC del CNC** y se comparó contra el de la
+**PC de oficina técnica**.
 
 |  | PC del CNC | Oficina técnica |
 |---|---|---|
 | claves | 172 | 170 |
 | bytes | 11.815 | 10.778 |
-| rutas | `C:\Archivos de programa\Scm Group\…` (Windows en español) | `S:\Maestro\…` + `C:\Program Files (x86)\…` |
+| rutas | `C:\Archivos de programa\Scm Group\…` | `S:\Maestro\…` + `C:\Program Files (x86)\…` |
 | salida del post | `C:\PrgMaestro\USBMIX` | `P:\USBMIX` |
 
 **25 claves con valor distinto**, y de ellas **dos tocan directamente la traza**:
@@ -87,14 +101,19 @@ comparativo y queda documentado acá.
 
 ## Nota sobre las capturas del 2026-08-09
 
-La ventana Opciones relevada ese día mostraba **todas** las rutas en
-`C:\Program Files (x86)\Scm Group\Maestro\…`. Con los dos configs a la vista se puede
-cerrar la duda que quedó anotada: era la **PC de oficina técnica**, con las rutas
-todavía en el default de fábrica — entre el 09 y el 10 se reapuntaron a `S:` y `P:`
-(el archivo local se reescribió el 10 a las 11:18). No era, ni podía ser, la del CNC:
-esa usa `C:\Archivos de programa\…`, la ruta de un Windows en español.
+La ventana Opciones relevada ese día mostraba todas las rutas en
+`C:\Program Files (x86)\Scm Group\Maestro\…`. **Salió de la PC de casa** (dato de
+Fermín, 2026-08-10), una copia con los defaults de fábrica. Queda confirmada la
+advertencia que se anotó aquel día: **esos valores no son los de ninguna de las dos
+máquinas de trabajo**, y menos los del CNC.
+
+⇒ Como **oficio** (qué campos tiene la ventana, cómo se llama cada uno, qué ofrece cada
+control) esa transcripción sigue valiendo entera. Como **configuración**, no describe
+nada de producción.
 
 Queda en pie la contradicción anotada aquel día: la UI mostraba «Estacionamiento
 automático finalizada la ejecución» **marcado** y el archivo dice `IsFinalPark=False`
-— y ahora se sabe que **las dos** PCs tienen `False`. O el checkbox no corresponde a
-esa clave, o la captura y el archivo no son del mismo momento.
+— y ahora se sabe que **el CNC y la oficina** también tienen `False`. Con la captura
+viniendo de una tercera máquina, la explicación más simple es que en la PC de casa esa
+opción esté marcada; pero eso no está verificado, y tampoco descarta que el checkbox
+corresponda a otra clave.
