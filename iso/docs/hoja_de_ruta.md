@@ -31,8 +31,10 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 - A4. Fases (workplans) y orígenes múltiples — 🔮
 
 ### B. Anatomía del ISO — ⬜ (transversal, arranca con el primer ISO de R001)
-- B1. Partes del archivo del programa vacío: atribuir CADA línea a configuración de programa
-  o de máquina — ⬜
+- B1. Partes del archivo del programa vacío: atribuir CADA línea a **uno de TRES** orígenes —
+  configuración de programa (`.pgmx`), configuración de máquina (snapshot del CNC) o
+  **configuración global de la aplicación (ventana Opciones)**. El tercero apareció el
+  2026-08-09 y no estaba previsto — ⬜
 - B2. Con cada operación nueva: qué líneas agrega, origen de cada parámetro y valor — 🔮
 - B3. Ruido del emisor (milésimas, case, f32): re-derivar con evidencia R propia — 🔮
 
@@ -49,6 +51,10 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 ### E. Configuración de máquina — 🔮
 - Ciclo de refresco del snapshot (requisito 2026-08-04: siempre de los archivos extraídos de
   la PC del CNC, refresco = sobreescribir carpeta) — formalizar como spec — 🔮
+- E1. **Ampliar el alcance del snapshot** (2026-08-09): hoy son 3 archivos; una instalación
+  real tiene 83 sólo en `<Xilog Plus>\Cfg\`, más todo el lado Maestro
+  (`UI00.exe.Config` = la ventana Opciones, `Settings\`, `Cfgx\`, `Tlgx\`). Lista de
+  extracción en `experiments/programa_vacio.md` — ⏸ esperando la extracción de la PC del CNC
 
 ### Cierre — 🔮
 1. Repaso del plan (`plan_cierre_converter.md`, untracked) con las specs de la reinvestigación
@@ -90,3 +96,21 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
   configuración de programa del `.pgmx`.
 - CLAUDE.md regla 2 actualizada a la época nueva (aprobado por Fermín).
 - Esta hoja de ruta creada.
+
+### 2026-08-09 — Arrancan las capturas de la UI (A2) y aparece un tercer origen
+- Definido dónde viven las capturas: **repo Nora**, partidas por la regla del propio repo
+  («datos por máquina = memoria; oficio = skills»). La VENTANA va a
+  `skills/cnc-scm-maestro/references/pantallas/`; los VALORES de la Pratix, a
+  `memory/machines/pratix-s15/pantallas/`. Se llaman **pantallas**, no fotos ni capturas
+  («captura» ya significa snapshot de config en `iso/data/`). Hasta hoy no se había guardado
+  ni una imagen: las 7 de Vaciado del 29-jul se perdieron, sobrevive sólo su prosa.
+- 20 capturas: el Editor en frío + la ventana **Opciones** completa, nodo por nodo.
+  Transcripción en `cnc-scm-maestro/references/opciones-de-maestro.md`.
+- **Hallazgo que cambia B1**: la dicotomía programa/máquina no alcanza. La ventana Opciones
+  es un TERCER origen — global de la aplicación, fuera del `.pgmx` — y de ahí salen el
+  formato de salida (ISO vs PGM), el tope de referencia, la notación de Z negativa, el
+  «Paso de retroacción en los fresados» (10) y el estacionamiento automático al terminar.
+  Detalle y consecuencias en `experiments/programa_vacio.md`.
+- Respondida una fila del inventario: `IsMM` = Opciones → Idioma → «Unidad de medida».
+- Abierto: si la instalación capturada es la que postprocesa de verdad (sus rutas son las de
+  fábrica, no `S:`), o si es una copia de escritorio.

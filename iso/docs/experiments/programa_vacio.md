@@ -34,7 +34,7 @@ Fuente: plantilla baseline `pgmx/data/maestro_baselines/Pieza.xml` (capturada de
 | `…/TableOptions` + `UseDefaultForTableOptions` | opciones de mesa (default 0/false) | **no** | a confirmar |
 | `…/MechanicalOptions` | opciones mecánicas (default 0) | **no** | a confirmar |
 | `…/IsRelatedToOppositeSideStop` | tope del lado opuesto (default false) | **no** | a confirmar |
-| `IsMM` | unidades en milímetros (true) | no (fijo) | ¿configurable en la UI? |
+| `IsMM` | unidades en milímetros (true) | no (fijo) | **Opciones → Idioma → «Unidad de medida»** (Milímetros/Pulgadas). Es global de la aplicación, no del programa ✓ |
 | `Variables` (más allá de `dx1/dy1/dz1`) | variables de usuario (Double/Integer/Boolean; UnitLess/Length/Speed) | sí (`parametric_variables`) | a confirmar |
 | `Planes` (Top/Bottom/Left/Right/Front/Back) | las 6 caras, derivadas de las dimensiones | automático (plantilla) | — (no editable directo) |
 | `MainWorkplan/Elements` | mecanizados y operaciones de máquina (`Xn`/`Xmsg`/`Park`/`Iso`) | sí | lista de operaciones |
@@ -69,7 +69,75 @@ observar con al menos N operaciones").
 
 ## Derivado
 
-(nada aún — a la espera del postproceso del lote)
+### 2026-08-09 — Hay un TERCER origen: la ventana Opciones de Maestro
+
+Capturas de Fermín (19), transcriptas en el repo Nora:
+`skills/cnc-scm-maestro/references/opciones-de-maestro.md` + las imágenes en
+`references/pantallas/opciones-*-20260809.png`.
+
+La premisa de esta etapa era que cada línea del ISO vacío se atribuye a la
+configuración del **PROGRAMA** (el `.pgmx`) o a la de la **MÁQUINA** (snapshot de
+la PC del CNC). **La dicotomía no alcanza.** La ventana Opciones (Home →
+Visualización → Opciones, se abre sin ningún programa abierto) es configuración
+**global de la aplicación**, no viaja en el `.pgmx`, y decide cosas que cambian
+el ISO entero:
+
+| Opción (nodo `Post`) | Valor visto | Qué decide |
+|---|---|---|
+| Formato de salida | XXL / PGM / **ISO** | que el postproceso emita ISO y no PGM |
+| Configuraciones del tope de referencia | **Scm (anterior)** / Morbidelli (posterior) | desde qué tope se mide |
+| Notación de profundidad de trabajo | **Scm (Z negativa)** / Morbidelli (Z positiva) | el SIGNO de todas las profundidades |
+
+Y en el nodo `Parámetros` (raíz), valores que hasta ahora se habrían tomado por
+constantes: `Distancia de seguridad desde la mesa de trabajo` = 20 ·
+**`Paso de retroacción en los fresados` = 10** · `Multiplicador del radio en
+aproximaciones/alejamientos` = 1,2 · `Velocidad rápida en los desplazamientos`
+= 50. Y en `Funciones CN`: **`Estacionamiento automático finalizada la
+ejecución`, MARCADO**, con `Modalidad de estacionamiento finalizada la ejecución`
+= «Ningún paro».
+
+Consecuencia para la regla 4 del `CLAUDE.md` («el convertidor no puede tener
+constantes internas… todo sale de la config»): **una parte de esa config no está
+ni en el `.pgmx` ni en los archivos de máquina, está acá.** El converter va a
+necesitar leerla, y el snapshot de máquina (rama E) tiene que incluirla.
+
+Derivado también, de `Idioma`: **`IsMM` es global de la aplicación**
+(«Unidad de medida»: Milímetros / Pulgadas), no una propiedad elegible por
+programa. Y de `Pieza`: las dimensiones por defecto de una pieza nueva son
+1600 × 1200 × 18, con los nombres de UI **Longitud / Anchura / Espesor**.
+
+**Hipótesis, no derivada** (la confirma o la mata el primer ISO de R001): si
+«Estacionamiento automático finalizada la ejecución» está marcado, el
+postprocesador podría agregar un park que el `.pgmx` NO pide. Si el ISO de
+`R_PV_base` —un programa sin una sola operación— trae un park, viene de acá.
+
+**El tercer origen tiene archivo**: `<Maestro>\UI00.exe.Config`, un `.config` de
+.NET con ~175 claves en `<appSettings>`. Toda la ventana Opciones está ahí —
+`PostFileFormat=ISO`, `IsZetaScm=True`, `IsAreaScm=True`, `SecurityDistance=20`,
+`MillingRetractDistance=10`, `RadiusMultiplier=1,2`, `RapidFeed=50`, `IsMM=true`
+— más claves sin UI conocida. La plantilla de fábrica es
+`<Maestro>\Settings\default.settingsx`. Nada en `%APPDATA%` ni en el
+`VirtualStore` de UAC. Mapeo UI↔clave y advertencias en el repo Nora:
+`skills/cnc-scm-maestro/references/opciones-de-maestro.md`.
+
+⚠️ Una contradicción sin resolver: la captura muestra «Estacionamiento automático
+finalizada la ejecución» MARCADO y el archivo dice `IsFinalPark=False`. La
+hipótesis del park automático depende de eso, así que **queda en suspenso hasta
+saldarla**.
+
+**Consecuencia para la rama E (snapshot de máquina)**: hoy
+`iso/data/machine_config/` tiene 3 archivos (`NCI.CFG`, `NCI_ORI.CFG`,
+`pheads.cfg`). La carpeta `<Xilog Plus>\Cfg\` de una instalación real tiene **83**.
+Y falta por completo el lado Maestro (`UI00.exe.Config`, `Settings\`, `Cfgx\`,
+`Tlgx\`). El snapshot actual es un recorte, no una copia.
+
+**Pregunta abierta que bloquea el uso de los VALORES**: las rutas de `Carpetas`
+apuntan todas a `C:\Program Files (x86)\Scm Group\...` y `Preferencias` está en
+default de fábrica (nombre de proyecto `Progetto`, en italiano; los cinco
+archivos por defecto vacíos). Eso no coincide con las rutas de producción
+(`S:\Maestro\...`, salida `C:\PrgMaestro\USBMIX`). Hasta saber si esta
+instalación es la que postprocesa de verdad, los valores de arriba valen como
+«lo que mostraba esta instalación», no como la configuración del CNC.
 
 ## Pendiente
 
