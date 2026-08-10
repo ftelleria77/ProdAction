@@ -75,17 +75,43 @@ y el bloque 22–29. La 43 (`M2`) lleva **dos**. No es adorno: es parte del byte
 
 ### Desglose del header `;H` (línea 2)
 
+**Resuelto por la documentación de SCM** (2026-08-10), no por fixtures: la firma de
+`SetMachiningParameters` del lenguaje de scripting (`pgmx/docs/maestro_scripting/
+04_tools_workpiece.md`) dice, parámetro por parámetro, **a qué letra del header `;H`
+corresponde cada uno**:
+
+```
+SetMachiningParameters(
+    string executionFields,   // «same as - in the Xilog H header instruction»
+    int    repetitions,       // «same as R …»
+    long   tableOptions,      // «same as V …»
+    long   mechanicalOptions, // «same as T …»
+    bool   continuousCycle    // «same as C …»
+)
+```
+
 | Campo | Valor | Origen | Confianza |
 |---|---|---|---|
 | `DX` `DY` `DZ` | 400.000 / 400.000 / 18.000 | **Programa** — dimensiones de la pieza | DERIVADO (coinciden exacto) |
 | `BX` `BY` `BZ` | 0.000 / 0.000 / 0.000 | **Programa** — origen de la fase **o** `WorkpieceOffset`; los dos valen 0 acá | HIPÓTESIS — lo separa `R_PV_origen_x100_y50` |
-| `-HG` | | **Programa** — el «Área» de Parámetros de máquina (`ExecutionFields`) | DERIVADO |
-| `V=0` | | ? | DESCONOCIDO |
+| `-HG` | | **Programa** — `executionFields`, el «Área» de Parámetros de máquina | **DERIVADO** (doc SCM) |
+| `V=0` | | **Programa** — `tableOptions`, el «Bloqueo» de Parámetros de máquina | **DERIVADO** (doc SCM) |
+| `T=0` | | **Programa** — `mechanicalOptions`, las «Opciones mecánicas» | **DERIVADO** (doc SCM) |
+| `C=0` | | **Programa** — `continuousCycle` | **DERIVADO** (doc SCM) |
 | `*MM` | | **Aplicación** — unidad de medida (`IsMM`) | HIPÓTESIS |
-| `C=0` | | **Programa** — `ContinuousCycle=false` | HIPÓTESIS — sin fixture (el synth no lo varía) |
-| `T=0` | | **Programa** — `IsTechnologicalMirror=false` | HIPÓTESIS — sin fixture |
 
-`Repetitions=1` **no aparece** en el header. Dónde va (o si no va) queda abierto.
+> ⚠️ **Corrección.** La primera versión de esta tabla atribuía `T=0` a
+> `IsTechnologicalMirror` por parecido de inicial. Es **`mechanicalOptions`**. El
+> espejo tecnológico **no** está en el header, o está en otro lado. Caso de manual de
+> la regla 2: la definición ya estaba escrita y contradecía lo que uno supondría.
+
+**`R` (repeticiones) no aparece** en este header, y el programa tiene `Repetitions=1`:
+la lectura natural es que el emisor **omite la letra cuando vale el default**. Sin
+fixture todavía — lo confirma un programa con repeticiones ≠ 1.
+
+Y queda a la vista que **`V` y `T` son enteros que agregan varias opciones cada uno**
+(«Bloqueo» y «Opciones mecánicas» tienen su panel de sub-opciones en la UI), lo que
+refuerza la hipótesis del bitmask anotada en `programa_vacio.md`.
 
 ### El origen sale de `fields.cfg`
 
