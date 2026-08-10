@@ -116,29 +116,33 @@ XConverter -s -i FILES [-t FILE] [-e FILE] [-o FILES] [-m N] [-r]
 | 10 | `.pgmx` → `.xxl` |
 | 11 | Proyecto `.mixx` a partir de una lista `.csv` |
 
-De acá se puede tomar **la forma de invocación**, que es la que va a necesitar la app de
-conversión por lotes: *N* entradas y *N* salidas pareadas en una sola llamada, el catálogo
-como parámetro explícito, un default sensato para las salidas, y la escritura directa
-dentro del proyecto. **La función es otra**: el XConverter alimenta a Maestro, no lo
-reemplaza.
+Como **referencia de interfaz** —no como herramienta a invocar— la forma sirve de espejo
+para la app de conversión por lotes: *N* entradas y *N* salidas pareadas en una sola
+llamada, el catálogo como parámetro explícito, un default sensato cuando no se nombran las
+salidas, y escritura directa dentro del proyecto. **La función es otra**: el XConverter
+alimenta a Maestro, no lo reemplaza.
 
-### Cuatro modos que tocan de cerca a nuestro trabajo
+### Qué nos enseña (aunque no lo usemos)
 
-- **`-m 9` (cambio de configuración)** — hay un mecanismo **programático** para sustituir
-  la configuración de máquina que Maestro tiene en sus Opciones. Es el tercer origen, y se
-  puede escribir por línea de comando. Relevante para el ciclo de refresco de config
-  (rama E) y para el experimento de las dos PCs: permitiría igualar configuraciones sin
-  tocar la UI. Ver `experiments/configuracion_aplicacion.md`.
+> **No vamos a usar el XConverter** (decisión de Fermín, 2026-08-10). Está acá porque
+> hay que conocerlo: explica **de dónde salen** ciertos `.pgmx` del taller y **con qué
+> forma llegan**. Nada de lo de abajo es una herramienta de nuestro flujo.
+
 - **`-m 2` (optimización)** — reordena el recorrido de herramienta y **guarda el resultado
-  en el `.pgmx`**. Si un archivo pasó por acá, su orden de operaciones no es el que dibujó
-  nadie: lo decidió el optimizador. El converter lee lo que quedó escrito, pero conviene
-  saber que ese orden tiene autor.
+  en el `.pgmx`**. Si un archivo pasó por acá, su orden de operaciones no lo dibujó nadie:
+  lo decidió el optimizador. El converter lee lo que quedó escrito; saber que ese orden
+  tiene autor evita buscarle una intención que no tiene.
 - **`-m 1` (importación de piezas)** — produce `.pgmx` **multi-pieza**, con renombrado
-  automático de variables duplicadas. Es el formato que el workstream multi-pieza va a
-  encontrarse.
+  automático de variables duplicadas (`variable` + índice). Es una de las formas en que
+  puede llegar un multi-pieza cuando ese workstream arranque.
+- **`-m 9` (cambio de configuración)** — existe un mecanismo programático para sustituir
+  la configuración de máquina de las Opciones de Maestro. Dato del ecosistema: **el tercer
+  origen es escribible desde afuera de la UI**, así que un valor puede haber cambiado sin
+  que nadie haya tocado una ventana. Ver `experiments/configuracion_aplicacion.md`.
 - **`-m 5` (`.pgm` → `.pgmx`)** — existe el camino inverso, pero para **PGM**, que es el
   otro formato de salida de Maestro (`PostFileFormat`: XXL / PGM / ISO). **No hay
-  equivalente para ISO** en ninguna dirección.
+  equivalente para ISO** en ninguna dirección: por eso el converter no tiene con qué
+  compararse ni de dónde copiar.
 
 El ejecutable vive en la carpeta de Maestro: `XConverter.exe` (52 KB, **2013**). Al lado
 hay un **`Xconverter.exe.new`** (449 KB, 2023) que **no está en uso** — una versión más
