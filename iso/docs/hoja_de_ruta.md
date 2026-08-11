@@ -42,12 +42,25 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
   (`Combiflex`). **Todas las diferencias caen en la línea del header**, ninguna toca el
   resto del esqueleto. Resultados en `experiments/parametros_de_maquina.md`. Falta sólo
   `Repeticiones`, que quedó fuera del barrido.
-- A6. **Opciones de la aplicación** (serie R_OPC, el TERCER origen) — ⏸ barrido sobre el
-  MISMO `.pgmx` base: el archivo no cambia, cambia la máquina. Prioridad 1: `IsAreaScm` e
-  `IsZetaScm`, que pueden tocar la fórmula del origen ya derivada. Su **paso 0**
-  (postprocesar el base sin cambiar nada en la PC de oficina técnica) cierra de paso el
-  experimento de las dos PCs para el programa vacío.
-  Lista y flujo en `experiments/opciones_de_aplicacion.md`.
+- A6. **Opciones de la aplicación** (serie R_OPC, el TERCER origen) — 🔄 **13 fixtures
+  manuales (2026-08-10)**. Una sola opción cambia el ISO de un programa vacío: el
+  **estacionamiento automático al terminar**, que le agrega dos líneas. El resto no llega
+  —las cuatro de acercamiento y alejamiento, la compatibilidad tecnológica, y el
+  estacionamiento por cambio de fase (probado con 2 y 3 fases). Resultados en
+  `experiments/opciones_de_aplicacion.md`.
+
+> ⏭️ **PRÓXIMO PASO (2026-08-11)**: quedan las dos opciones de **`Parámetros → Post`**
+> que más pueden mover, y que **no necesitan trayectoria** para manifestarse porque el
+> esqueleto ya tiene `%Or` y `SHF[Z]`:
+>
+> - **`Configuraciones del tope de referencia`** (Scm anterior ↔ Morbidelli posterior,
+>   `IsAreaScm`) — puede **cambiar la fórmula del origen** cerrada en B1c. Si al invertirlo
+>   los `%Or`/`SHF` se mueven, lo derivado vale sólo para este tope.
+> - **`Notación de profundidad de trabajo`** (Scm Z negativa ↔ Morbidelli Z positiva,
+>   `IsZetaScm`) — el **signo** de `ofZ`, `SHF[Z]` y el `DZ` del header.
+>
+> Sigue pendiente también el **paso 0** de la serie: postprocesar el base sin cambiar nada
+> en la PC de oficina técnica, que cierra el experimento de las dos PCs para el vacío.
 
 ### B. Anatomía del ISO — 🔄 ARRANCÓ (2026-08-10, doc `anatomia_iso.md`)
 - B1. Partes del archivo del programa vacío: atribuir CADA línea a **uno de TRES** orígenes —
@@ -112,6 +125,29 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-08-10 (noche) — Los dos barridos de configuración
+- **Parámetros de máquina, 29 fixtures manuales.** 16 llegan al ISO (14 mueven `V`, 2
+  mueven `T`), 12 no llegan y 1 rompe el postproceso (`Combiflex`, con un error de Winxiso
+  que habla del **área**). **Todas las diferencias caen en la línea del header.** Dos
+  patrones: el número del `.pgmx` y el del ISO **no son el mismo** (traducción en el
+  medio), y **el modo se pierde** — manual/automático/semiautomático de cada familia dan
+  el mismo `V`.
+- **Ventana Opciones, 13 fixtures.** Una sola opción cambia el ISO de un programa vacío:
+  el **estacionamiento automático al terminar**, que agrega dos líneas entre el `G40` y el
+  `SYN` — el mismo lugar donde el `Xn` mete su bloque. Confirma la hipótesis del 09 que
+  estaba en suspenso. Y otra vez **el modo de paro no llega**: los tres dan ISOs
+  idénticos.
+- ⇒ **El esqueleto de 43 líneas no es «el esqueleto»**: es el esqueleto con esta
+  configuración de aplicación. El converter no puede tratarlo como plantilla fija.
+- **Las fases vacías no dejan rastro**: 2 y 3 fases emiten lo mismo que 1.
+- **Relevamiento de los manuales de SCM** (191 hallazgos, sin interpretar): el preámbulo y
+  el cierre del ISO están **escritos literalmente** en `NCI.CFG`, un archivo que ya está en
+  nuestro snapshot (`$GEN_INIT` y `$GEN_END`).
+- **Bug nuestro encontrado por el lote**: el sintetizador escribía el `Name` de una
+  variable en el namespace equivocado y Maestro no podía abrir el archivo. Arreglado, con
+  test que compara el namespace resuelto. El test viejo usaba un comodín y por eso daba
+  verde con el XML roto.
 
 ### 2026-08-10 (tarde) — R001 y R002 postprocesados: el origen queda derivado
 - **Un bug NUESTRO, encontrado por el lote**: Maestro no pudo abrir
