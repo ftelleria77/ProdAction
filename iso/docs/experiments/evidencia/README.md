@@ -30,5 +30,18 @@ Fixture del barrido de la ventana Opciones (`experiments/opciones_de_aplicacion.
 | `r_pv_manual_base_dsdmt_25.iso` | su ISO; difiere del base **sólo en la línea 1** |
 | `r_pv_manual_base_dsdmt_25.png` | la ventana Opciones del CNC con la opción alterada |
 
-Se versiona porque el paso siguiente —reabrir y volver a guardar **sin renombrar**, para
-ver si el nombre interno del ZIP se unifica— sobreescribe los tres.
+Se versionó porque el paso siguiente —reabrir y volver a guardar **sin renombrar**, para
+ver si el nombre interno del ZIP se unifica— sobreescribía los tres.
+
+**El `.pgmx` de esta carpeta es el de DESPUÉS del reguardado.** La versión previa (con el
+miembro llamándose `R_PV_manual_base_.xml`) está en el commit `f5febc4`:
+
+```
+git show f5febc4:iso/docs/experiments/evidencia/opciones_dsdmt_25/R_PV_manual_base_DSDMT_25.pgmx
+```
+
+### `opciones_prf_15/`
+
+«Paso de retroacción en los fresados» = 15, contra el 10 del CNC
+(`MillingRetractDistance`). Mismo resultado que el anterior: XML byte-idéntico al base,
+ISO distinto sólo en la línea 1.

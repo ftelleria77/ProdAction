@@ -159,6 +159,39 @@ Dos cosas que esto cierra:
 | Opciones → Parámetros | «áreas **perpendiculares** en X o Y» | global de la aplicación |
 | Parámetros de máquina | «áreas **especulares** en X o Y» | del programa (`IsTechnologicalMirror`) |
 
+### El reguardado: qué hace Maestro al «Guardar» sin renombrar
+
+Fermín reabrió ese mismo archivo, lo guardó **sin cambiarle el nombre** y volvió a
+postprocesar. Comparado contra la versión versionada (commit `f5febc4`):
+
+| | antes | después de guardar |
+|---|---|---|
+| miembro XML del ZIP | `R_PV_manual_base_.xml` | **`R_PV_manual_base_DSDMT_25.xml`** |
+| miembro `.epl` | `R_PV_manual_base_.epl` | **`R_PV_manual_base_DSDMT_25.epl`** |
+| CRC del XML | `9c64dcab` | **`9c64dcab`** |
+| tamaño del XML | 18.567 | 18.567 |
+| el ISO | 675 bytes | **idéntico** |
+
+⇒ **Guardar renombra los miembros del ZIP para que sigan al nombre del archivo, y no toca
+el contenido.** El XML queda byte-idéntico (mismo CRC) y el ISO también. El nombre interno
+se unifica solo; no hace falta hacer nada para arreglarlo.
+
+### `Paso de retroacción en los fresados` = 15 (default: 10)
+
+`MillingRetractDistance` · fixture `r_pv_manual_base_prf_15.pgmx`.
+
+Mismo resultado que `SecurityDistance`: **XML byte-idéntico al base** (otra vez el CRC
+`9c64dcab`) y **el ISO difiere sólo en la línea 1**.
+
+⇒ Segunda confirmación de la prioridad 4: **necesita trayectoria para manifestarse.**
+
+### El CRC que se repite
+
+Los cuatro `.pgmx` mirados hasta ahora —el base, el `DSDMT_25` antes y después del
+reguardado, y el `PRF_15`— tienen **el mismo CRC de XML: `9c64dcab`**. Ninguna de estas
+opciones de la ventana Opciones deja rastro en el archivo: son de la aplicación, no del
+programa, y eso queda probado por identidad de bytes y no por lectura de campos.
+
 ### De yapa: qué nombre usa el ISO, con los tres separados
 
 En este fixture conviven **tres nombres distintos** (aclaración de Fermín): guardó desde
