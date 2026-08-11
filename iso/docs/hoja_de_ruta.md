@@ -50,7 +50,19 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 ### C. Operaciones de máquina — 🔮 (Xn · Xmsg · Park · Iso)
 - El lab de la época anterior queda congelado; la instancia nueva se crea oportunamente.
 
+### A5. Parámetros de máquina — ⏸ (serie R_PM, fixtures manuales de Fermín)
+- Barrido de `Bloqueo` (V), `Opciones mecánicas` (T), `Repeticiones` (R) y el espejo
+  tecnológico, uno por archivo, partiendo del gemelo manual. Lista en
+  `experiments/parametros_de_maquina.md`; el diff lo saca
+  `iso/machining_lab/comparar_variantes.py`.
+
 ### D. Mecanizados — 🔮 (una operación por vez, cada parámetro variado de forma controlada)
+
+> **RUTINA PERMANENTE (Fermín, 2026-08-10)**: el barrido de parámetros de máquina **no se
+> hace una vez y se archiva**. Se repite sobre **cada mecanizado básico** a medida que se
+> estudian, porque la sospecha es que esos parámetros no sólo mueven líneas del esqueleto
+> sino que **cambian el comportamiento de los mecanizados**. Cada etapa de D incluye su
+> pasada de A5.
 - Perforado (vertical, lateral, patrones) — 🔮
 - Fresados (línea, arco, círculo, polilínea, contorno) — 🔮
 - Canal (sierra) — 🔮
