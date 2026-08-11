@@ -106,6 +106,95 @@ que cambian. Con un parámetro por archivo, esa lista de líneas ES la respuesta
 py -m iso.machining_lab.comparar_variantes "P:\USBMIX\ProdAction\Programas Manuales\Reinvestigación" r_pv_manual_base.iso
 ```
 
-## Resultados
+## Resultados — 29 fixtures manuales de Fermín (2026-08-10)
 
-(a la espera de los fixtures)
+Fermín barrió bastante más de lo que pedía la lista: las nueve combinaciones de bloqueo
+(tres familias de dispositivo × tres modos), las quince sub-opciones mecánicas y el
+espejo tecnológico. Postprocesó 28; uno dio error.
+
+Carpetas: `S:\…\Programas Manuales\Reinvestigación\Parámetros de Máquina\` y su simétrica
+en `P:`. Referencia: el ISO del gemelo manual.
+
+**Todas las diferencias, sin excepción, están en la línea del header `;H`.** Ninguna
+tocó el resto del esqueleto.
+
+### Grupo 1 — llegan al ISO (16 fixtures)
+
+**Mueven el campo `V`** (los que tocan «Bloqueo»):
+
+| Opción de la UI | `TableOptions` en el `.pgmx` | `V` en el ISO |
+|---|---|---|
+| Vacuostatos, manual | 10 | **2** |
+| Vacuostatos, automático | 11 | **2** |
+| Vacuostatos, semiautomático | 12 | **2** |
+| Presostatos, manual | 20 | **1** |
+| Presostatos, automático | 21 | **1** |
+| Presostatos, semiautomático | 22 | **1** |
+| Vacuostatos + presostatos | 30 | **3** |
+| Vac. + pres., automático | 31 | **3** |
+| Vac. + pres., manual | 30 | **3** |
+| Equipamiento | 40 | **4** |
+| Bornes, manual | 60 | **10** |
+| Bornes, automático | 61 | **10** |
+| Bornes, semiautomático | 62 | **10** |
+| checkbox «predefinido» | 0 (+ `UseDefaultForTableOptions=true`) | **9** |
+
+**Mueven el campo `T`** (los que tocan «Opciones mecánicas»):
+
+| Opción | `MechanicalOptions` | `T` en el ISO |
+|---|---|---|
+| Elevadores | 1 | **1** |
+| Láser | 10 | **10** |
+
+### Grupo 2 — NO llegan al ISO (12 fixtures)
+
+El ISO sale idéntico al base salvo el nombre del archivo. `T` queda en `0`.
+
+| Opción | `MechanicalOptions` | potencia de 2 |
+|---|---|---|
+| Fila 1 de topes | 65 536 | 2¹⁶ |
+| Fila 2 de topes | 131 072 | 2¹⁷ |
+| Fila 3 de topes | 262 144 | 2¹⁸ |
+| Fila 4 de topes | 524 288 | 2¹⁹ |
+| Fila 5 de topes | 1 048 576 | 2²⁰ |
+| Áreas combinadas | 16 777 216 | 2²⁴ |
+| Controlar posición de las ventosas | 33 554 432 | 2²⁵ |
+| Deshabilita C.U. enmascarado | 67 108 864 | 2²⁶ |
+| Adquisición BZ y DZ de palpadura | 134 217 728 | 2²⁷ |
+| Habilitación vacío suplementario | 8 589 934 592 | 2³³ |
+| Preparado para FX | 34 359 738 368 | 2³⁵ |
+| **Compatibilidad tecnológica** (`IsTechnologicalMirror=true`) | — | — |
+
+### Grupo 3 — no se pudo postprocesar (1 fixture)
+
+**`Preparado para Combiflex`** (`MechanicalOptions = 17 179 869 184` = 2³⁴). El
+postprocesador aborta:
+
+```
+Winxiso
+[16,133] - xMETADb: (Línea 1) Área de trabajo inválida
+```
+
+Captura: `R_PV_manual_base_Combiflex.bmp`, en la carpeta de los ISO. El error es de
+**Winxiso** (el postprocesador), no de Maestro al abrir: el `.pgmx` se abre bien. Y la
+línea que declara inválida es la 1, donde está el área — con el área en `HG`, la misma
+que funciona en los otros 28.
+
+### Observaciones para estudiar juntos
+
+Estas son cosas que la tabla muestra, no interpretaciones de qué significan:
+
+1. **El valor del `.pgmx` y el del ISO no son el mismo número.** `TableOptions=60` sale
+   como `V=10`; `20` sale como `1`; `10` sale como `2`. Hay una traducción en el medio.
+2. **El modo (manual / automático / semiautomático) no sobrevive al ISO.** Los tres
+   valores de cada familia —60/61/62, 20/21/22, 10/11/12— dan el **mismo** `V`. Lo que
+   llega es la familia de dispositivo, no el modo.
+3. **Los valores del `.pgmx` que no llegan al ISO son potencias de 2**, de 2¹⁶ para
+   arriba. Los dos que sí llegan (elevadores = 1, láser = 10) coinciden exactamente con
+   la tabla decimal del campo `T` del manual (`0/1/10/11/100/101/110/111`).
+4. **El espejo tecnológico no deja ningún rastro** en el ISO.
+5. El manual declara `V=11` como «no admitido», pero acá `TableOptions=11` (vacuostatos
+   automático) **se postprocesó sin problema** y salió como `V=2`. Los números del `.pgmx`
+   y los del manual del header no están en la misma escala.
+6. El único que rompe el postproceso es Combiflex, y el mensaje habla del **área**, no de
+   la opción mecánica.

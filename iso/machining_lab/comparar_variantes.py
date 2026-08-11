@@ -41,9 +41,11 @@ def comparar(referencia: Path, variante: Path) -> tuple[str, list[str]]:
             continue
         diff.append(linea)
 
-    # ¿todo lo que cambió es la línea del nombre?
-    reales = [d for d in diff
-              if not (d[:1] in "-+" and d[1:].lstrip().startswith("%"))]
+    # ¿todo lo que cambió es la línea del nombre? Sólo cuentan las líneas AGREGADAS o
+    # QUITADAS: las de contexto empiezan con espacio y no son diferencias (si se las
+    # contara, ningún archivo daría nunca "SOLO NOMBRE").
+    cambios = [d for d in diff if d[:1] in "-+"]
+    reales = [d for d in cambios if not d[1:].lstrip().startswith("%")]
     if not reales:
         return "SOLO NOMBRE", []
     return "DIFIERE", diff
