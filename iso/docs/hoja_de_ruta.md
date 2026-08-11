@@ -37,6 +37,17 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 - A3. Opciones que el synth no varía (offset de pieza, repeticiones, ciclo continuo, espejo
   tecnológico, opciones de mesa/mecánica) → gemelos manuales, una opción por archivo — ⬜
 - A4. Fases (workplans) y orígenes múltiples — 🔮
+- A5. **Parámetros de máquina** (serie R_PM) — ✅ **29 fixtures manuales (2026-08-10)**:
+  16 llegan al ISO (14 mueven `V`, 2 mueven `T`), 12 no llegan y 1 rompe el postproceso
+  (`Combiflex`). **Todas las diferencias caen en la línea del header**, ninguna toca el
+  resto del esqueleto. Resultados en `experiments/parametros_de_maquina.md`. Falta sólo
+  `Repeticiones`, que quedó fuera del barrido.
+- A6. **Opciones de la aplicación** (serie R_OPC, el TERCER origen) — ⏸ barrido sobre el
+  MISMO `.pgmx` base: el archivo no cambia, cambia la máquina. Prioridad 1: `IsAreaScm` e
+  `IsZetaScm`, que pueden tocar la fórmula del origen ya derivada. Su **paso 0**
+  (postprocesar el base sin cambiar nada en la PC de oficina técnica) cierra de paso el
+  experimento de las dos PCs para el programa vacío.
+  Lista y flujo en `experiments/opciones_de_aplicacion.md`.
 
 ### B. Anatomía del ISO — 🔄 ARRANCÓ (2026-08-10, doc `anatomia_iso.md`)
 - B1. Partes del archivo del programa vacío: atribuir CADA línea a **uno de TRES** orígenes —
@@ -50,11 +61,6 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 ### C. Operaciones de máquina — 🔮 (Xn · Xmsg · Park · Iso)
 - El lab de la época anterior queda congelado; la instancia nueva se crea oportunamente.
 
-### A5. Parámetros de máquina — ⏸ (serie R_PM, fixtures manuales de Fermín)
-- Barrido de `Bloqueo` (V), `Opciones mecánicas` (T), `Repeticiones` (R) y el espejo
-  tecnológico, uno por archivo, partiendo del gemelo manual. Lista en
-  `experiments/parametros_de_maquina.md`; el diff lo saca
-  `iso/machining_lab/comparar_variantes.py`.
 
 ### D. Mecanizados — 🔮 (una operación por vez, cada parámetro variado de forma controlada)
 

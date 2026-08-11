@@ -372,6 +372,11 @@ una variable de usuario sin uso deja rastro en el ISO.
 ## Pendiente
 
 - **Re-postprocesar `R_PV_variable_usuario.pgmx`** (regenerado con el fix del namespace).
+- **`Palpación`** (5ª Función C.N.): el CNC **no tiene palpador** — mide la longitud de
+  las fresas antes de fresar (dato de Fermín, 2026-08-10). No se puede ejecutar, pero
+  **sí estudiar su estructura**: el byte-idéntico se valida contra lo que emite Maestro,
+  no contra lo que la máquina corre. Primero hay que saber si Maestro deja dibujarla en
+  una máquina sin palpador.
 - **El experimento que falta**: postprocesar el MISMO `.pgmx` en las dos PCs
   (oficina técnica y CNC) y comparar los ISO. Es lo único que separa «el tercer origen
   se lee al postprocesar» de «se congela al autorar».
