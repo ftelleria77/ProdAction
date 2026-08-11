@@ -315,6 +315,36 @@ también (−1515.25 contra −1515.60/−1515.75). No es ruido del emisor: **so
 calibración, distintos por campo**, y salen del archivo tal cual. Un converter que
 promedie o redondee ahí rompe el byte-idéntico.
 
+## B1d · El esqueleto no es fijo: la aplicación le puede AGREGAR líneas (2026-08-10)
+
+Del barrido de la ventana Opciones (`opciones_de_aplicacion.md`) salió algo que cambia
+cómo hay que leer todo lo anterior.
+
+Con **«Estacionamiento automático finalizada la ejecución»** marcado, el ISO del mismo
+programa vacío pasa de **44 a 46 líneas**. Se insertan dos **entre el `G40` (21) y el
+`SYN` (22)**:
+
+```
+G0G53 X%ax0.pa21/1000 Y%ax1.pa22/1000
+_paras( 0x00, X, 3, %ax[0].pa[21]/1000, %ETK[500] )
+```
+
+⇒ **El esqueleto de 43 líneas no es «el esqueleto»: es el esqueleto con esta
+configuración de aplicación.** Un programa idéntico, en una máquina con esa opción
+marcada, emite 45. El converter no puede tratar el preámbulo y el cierre como plantilla
+fija.
+
+Detalles que importan para el byte:
+
+- La segunda línea es **la misma instrucción que la línea 5** del preámbulo, pero **con
+  dos espacios finales** (la del preámbulo no tiene ninguno).
+- La primera usa la notación **sin corchetes** (`%ax0.pa21`), que no aparecía en el
+  esqueleto. Las dos formas conviven en un mismo archivo.
+- **El modo de paro no llega**: los tres valores de `FinalParkStopType` dan ISOs
+  idénticos entre sí.
+- Es **el mismo lugar** donde el `Xn` inserta su bloque de ocho líneas (B1b). Ese punto
+  del archivo —entre el `G40` y el `SYN`— es donde van las operaciones de máquina.
+
 ## Preguntas que abre el esqueleto
 
 - ¿Qué es `V=0` del header? ¿Y `Repetitions`, que no aparece?

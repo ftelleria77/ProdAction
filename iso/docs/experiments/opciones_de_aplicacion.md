@@ -204,10 +204,70 @@ clave necesita sí o sí un fresado con acercamiento o alejamiento automático.
 | Distancia de seguridad desde la mesa de trabajo | `SecurityDistance` | 25 (def. 20) | idéntico | sólo el nombre |
 | Paso de retroacción en los fresados | `MillingRetractDistance` | 15 (def. 10) | idéntico | sólo el nombre |
 | Multiplicador del radio en aprox./alejamientos | `RadiusMultiplier` | 3 (def. 4) | idéntico | sólo el nombre |
-| Velocidad rápida en los desplazamientos | `RapidFeed` | — | — | — |
+| Velocidad rápida en los desplazamientos | `RapidFeed` | 40 (def. 50) | idéntico | sólo el nombre |
 
-Tres de cuatro dan lo mismo. La familia entera gobierna **trazas**, así que su lugar de
+**Las cuatro dan lo mismo.** La familia entera gobierna **trazas**, así que su lugar de
 prueba es un programa con mecanizado, no éste.
+
+### ⭐ `Estacionamiento automático finalizada la ejecución` — SÍ llega al ISO
+
+`IsFinalPark` + `FinalParkStopType` · fixtures `eafe_np`, `eafe_pdes`, `eafe_pes`.
+
+**El primer parámetro de la ventana Opciones que cambia el ISO de un programa vacío.**
+Con el checkbox marcado, el ISO pasa de 44 a **46 líneas**: se insertan dos, **entre el
+`G40` (línea 21) y el `SYN`**, exactamente donde el `Xn` mete su bloque de ocho.
+
+```
+ SHF[Z]=18.000+%ETK[114]/1000
+ ?%ETK[8]=1
+ G40
++G0G53 X%ax0.pa21/1000 Y%ax1.pa22/1000
++_paras( 0x00, X, 3, %ax[0].pa[21]/1000, %ETK[500] )
+ SYN
+```
+
+Esto **confirma la hipótesis que quedó anotada el 2026-08-09** y estaba en suspenso: sí,
+el postprocesador agrega un estacionamiento que el `.pgmx` **no pide**, y sale de la
+ventana Opciones. Un programa sin una sola operación termina con dos líneas de
+movimiento a coordenadas de máquina.
+
+**Los tres modos de paro dan el MISMO ISO.** `Ningún paro`, `Paro con espera de start` y
+`Paro con desbloqueo y espera de start` producen archivos idénticos entre sí (salvo el
+nombre). ⇒ **`FinalParkStopType` no llega al ISO**; sólo llega el hecho de que el
+estacionamiento esté activo.
+
+> Es el mismo patrón que en los parámetros de máquina, donde manual / automático /
+> semiautomático de cada familia de bloqueo daban todos el mismo `V`: **el modo se
+> pierde, la función llega.** Dos familias distintas, misma forma.
+
+Dos observaciones sobre las líneas agregadas:
+
+- La segunda es **idéntica a la línea 5 del preámbulo**
+  (`_paras( 0x00, X, 3, %ax[0].pa[21]/1000, %ETK[500] )`), pero **con dos espacios
+  finales**, mientras la del preámbulo no tiene ninguno. La misma instrucción se escribe
+  distinto según dónde aparece — importa para el byte-idéntico.
+- La primera usa la notación **sin corchetes** (`%ax0.pa21` en vez de `%ax[0].pa[21]`), que
+  hasta ahora no habíamos visto en el esqueleto. Las dos formas conviven en el mismo
+  archivo.
+- El relevamiento de manuales ya había traído estas dos líneas casi iguales desde la macro
+  `Fxc\Mbd\Park.pgm`, con el comentario italiano *«Ripristino corsa totale asse X»*. Ahí
+  la primera usaba `pa31` y la segunda cerraba con `%ax[0].pa[22]/1000` en vez de
+  `%ETK[500]`: son variantes de la misma macro.
+
+### Las otras tres del lote
+
+| Fixture | Opción | ISO |
+|---|---|---|
+| `ecfmm` | Estacionamiento en cada cambio fase con mesa manual (`IsParkOnWorkplanChange`) | sólo el nombre |
+| `hctapXY` | Habilitar compatibilidad tecnológica en áreas **perpendiculares** en X o Y | sólo el nombre |
+| `VRD_40` | Velocidad rápida en los desplazamientos = 40 (def. 50) (`RapidFeed`) | sólo el nombre |
+
+El de `ecfmm` **no es concluyente**: el programa tiene **una sola fase**, así que un
+estacionamiento «en cada cambio de fase» no tiene cambio donde manifestarse. Queda
+pendiente para cuando haya un programa con dos fases (rama A4).
+
+Con `VRD_40` se completa la familia «Acercamiento y alejamiento»: **las cuatro no llegan
+al ISO de un programa vacío.**
 
 ### El CRC que se repite
 
