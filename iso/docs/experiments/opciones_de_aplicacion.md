@@ -87,6 +87,81 @@ Igual que el barrido anterior, con la referencia apuntando al control:
 py -m iso.machining_lab.comparar_variantes <carpeta_de_los_iso> r_pv_opc_control.iso
 ```
 
+## El método que quedó (Fermín, 2026-08-10)
+
+Mejor que el que se había propuesto arriba, en un punto que importa: **el `.pgmx` se
+guarda con nombre propio**, así que el archivo queda como registro de qué opción estaba
+activa, el ISO sale con su nombre sin pisarse, y —sobre todo— **se puede chequear si el
+`.pgmx` cambió**, que es una pregunta que el flujo original no permitía hacer.
+
+1. Partir del archivo base manual.
+2. Cambiar **una** opción en la ventana Opciones.
+3. Guardar el `.pgmx` con nombre propio en
+   `S:\…\Programas Manuales\Reinvestigación\Opciones de Maestro\`.
+4. Postprocesar.
+5. **Devolver la opción a su valor original.**
+
+Más una captura de la ventana con la opción alterada, guardada junto al ISO: deja
+registrado el valor exacto y en qué máquina se hizo.
+
 ## Resultados
 
-(a la espera de los fixtures)
+### `Distancia de seguridad desde la mesa de trabajo` = 25 (default del CNC: 20)
+
+`SecurityDistance` · fixture `R_PV_manual_base_DSDMT_25.pgmx` · captura
+`r_pv_manual_base_dsdmt_25.bmp`.
+
+**El `.pgmx` es byte-idéntico al base.** XML de 18.567 bytes en los dos, sin una sola
+diferencia; lo único que cambia en el ZIP son los nombres internos. ⇒ **La opción no se
+escribe en el archivo**: no viaja con el programa.
+
+> Matiz, para no leer de más: este programa **no tiene operaciones**, y la cota de
+> seguridad es un parámetro de operación. Que no se congele acá prueba que no se guarda a
+> nivel de PROGRAMA — no dice nada todavía sobre si se congela dentro de una operación al
+> crearla. Eso lo responde el mismo experimento sobre un programa con un mecanizado.
+
+**El ISO no cambia**: difiere sólo en la línea 1, que es el nombre del archivo.
+
+⇒ Confirma la predicción de la prioridad 4: **`SecurityDistance` necesita trayectoria para
+manifestarse.** Es un resultado con valor —acota dónde buscar— y no un experimento
+fallido.
+
+### Lo que la captura deja fijado, de yapa
+
+La ventana muestra el nodo `Parámetros` (raíz) de la **PC del CNC**:
+
+| Campo | Valor |
+|---|---|
+| Distancia de seguridad desde la mesa de trabajo | **25** (alterado; original 20) |
+| Paso de retroacción en los fresados | 10 |
+| Multiplicador del radio en aproximaciones/alejamientos | **4** |
+| Velocidad rápida en los desplazamientos | 50 |
+| Habilitar compatibilidad tecnológica en áreas **perpendiculares** en X o Y | desmarcado |
+| **Estacionamiento automático finalizada la ejecución** | **DESMARCADO** |
+| Modalidad de estacionamiento finalizada la ejecución | «Ningún paro» (en gris) |
+| Estacionamiento en cada cambio fase con mesa manual | desmarcado |
+
+Dos cosas que esto cierra:
+
+1. **Se resuelve la contradicción del 2026-08-09.** Aquella captura mostraba
+   «Estacionamiento automático finalizada la ejecución» **marcado** mientras el archivo
+   decía `IsFinalPark=False`, y quedó anotada como inconsistencia sin saldar. No lo era:
+   aquella captura era de la **PC de casa** y ésta es la del **CNC**, donde el checkbox
+   está desmarcado y el config dice `False`. **Coherentes.** La UI y el archivo nunca se
+   contradijeron; eran dos máquinas distintas.
+2. Confirma en pantalla el `RadiusMultiplier = 4` del CNC (contra `2` en oficina técnica),
+   que hasta ahora sólo se había leído del `UI00.exe.Config`.
+
+⚠️ **Ojo con dos nombres casi iguales**, que son opciones distintas:
+
+| Dónde | Texto | Alcance |
+|---|---|---|
+| Opciones → Parámetros | «áreas **perpendiculares** en X o Y» | global de la aplicación |
+| Parámetros de máquina | «áreas **especulares** en X o Y» | del programa (`IsTechnologicalMirror`) |
+
+### Nota menor
+
+El XML dentro del `.pgmx` de la variante se llama `R_PV_manual_base_.xml` —con un guión
+bajo de más— mientras el del base es `R_PV_manual_base.xml`. No afecta al contenido (los
+dos XML son idénticos) ni al ISO, pero conviene tenerlo presente: el nombre del miembro
+del ZIP no siempre sigue al nombre del archivo.

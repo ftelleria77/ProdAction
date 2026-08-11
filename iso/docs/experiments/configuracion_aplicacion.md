@@ -111,9 +111,9 @@ máquinas de trabajo**, y menos los del CNC.
 control) esa transcripción sigue valiendo entera. Como **configuración**, no describe
 nada de producción.
 
-Queda en pie la contradicción anotada aquel día: la UI mostraba «Estacionamiento
-automático finalizada la ejecución» **marcado** y el archivo dice `IsFinalPark=False`
-— y ahora se sabe que **el CNC y la oficina** también tienen `False`. Con la captura
-viniendo de una tercera máquina, la explicación más simple es que en la PC de casa esa
-opción esté marcada; pero eso no está verificado, y tampoco descarta que el checkbox
-corresponda a otra clave.
+~~Queda en pie la contradicción anotada aquel día~~ — **RESUELTA el 2026-08-10.** Aquella
+captura mostraba «Estacionamiento automático finalizada la ejecución» **marcado** mientras
+el archivo decía `IsFinalPark=False`. La captura de la ventana Opciones **de la PC del
+CNC** (fixture `dsdmt_25`) muestra ese checkbox **DESMARCADO**, y el `UI00.exe.Config` del
+CNC dice `False`: **coherentes**. La UI y el archivo nunca se contradijeron — eran dos
+máquinas distintas, y la del 09 era la de casa, que lo tiene marcado.
