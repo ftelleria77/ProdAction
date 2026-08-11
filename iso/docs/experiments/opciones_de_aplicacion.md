@@ -262,9 +262,37 @@ Dos observaciones sobre las líneas agregadas:
 | `hctapXY` | Habilitar compatibilidad tecnológica en áreas **perpendiculares** en X o Y | sólo el nombre |
 | `VRD_40` | Velocidad rápida en los desplazamientos = 40 (def. 50) (`RapidFeed`) | sólo el nombre |
 
-El de `ecfmm` **no es concluyente**: el programa tiene **una sola fase**, así que un
-estacionamiento «en cada cambio de fase» no tiene cambio donde manifestarse. Queda
-pendiente para cuando haya un programa con dos fases (rama A4).
+El de `ecfmm` no era concluyente con una sola fase — **se resolvió abajo**.
+
+### `Estacionamiento en cada cambio fase con mesa manual`, con fases de verdad
+
+`IsParkOnWorkplanChange` · fixtures `2fases`, `2fases_ecfmm`, `3fases`, `3fases_ecfmm`.
+
+Fermín armó programas con **dos y tres fases** (`Fase1`, `Fase2`, `Fase3`) y postprocesó
+cada uno **con y sin** la opción activada. Los `.pgmx` traen las fases de verdad: 2 y 3
+`MainWorkplan` con su `Setup` propio, contra 1 del base.
+
+**Los cuatro ISO son idénticos al base**: 44 líneas, sin una sola diferencia fuera del
+nombre del archivo. Y el cruce lo confirma por partida doble:
+
+| Comparación | Resultado |
+|---|---|
+| `2fases` vs `2fases_ecfmm` | idénticos |
+| `3fases` vs `3fases_ecfmm` | idénticos |
+| `2fases` vs `3fases` | idénticos |
+
+⇒ Dos cosas, y conviene no mezclarlas:
+
+1. **Las fases VACÍAS no dejan ningún rastro en el ISO.** Un programa con tres fases sin
+   operaciones emite exactamente lo mismo que uno con una. El ISO no lleva marca de fase
+   por el solo hecho de que la fase exista.
+2. **`IsParkOnWorkplanChange` no llegó**, ni con dos fases ni con tres.
+
+⚠️ **Lo segundo todavía no está cerrado.** Las fases están vacías, y un «estacionamiento
+en cada cambio de fase» bien puede necesitar que haya **algo que ejecutar** en cada una
+para que el cambio ocurra. El fixture prueba que la opción no se manifiesta con fases
+vacías; no prueba que no se manifieste nunca. Se cierra con un programa de dos fases
+**con un mecanizado en cada una** (rama D).
 
 Con `VRD_40` se completa la familia «Acercamiento y alejamiento»: **las cuatro no llegan
 al ISO de un programa vacío.**

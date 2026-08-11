@@ -345,6 +345,21 @@ Detalles que importan para el byte:
 - Es **el mismo lugar** donde el `Xn` inserta su bloque de ocho líneas (B1b). Ese punto
   del archivo —entre el `G40` y el `SYN`— es donde van las operaciones de máquina.
 
+## B1e · Las fases vacías no dejan rastro (2026-08-10)
+
+Fixtures de Fermín con **dos y tres fases** (`Fase1`, `Fase2`, `Fase3`), postprocesados
+con y sin `IsParkOnWorkplanChange`. Los `.pgmx` traen las fases de verdad —2 y 3
+`MainWorkplan` con su `Setup`, contra 1 del base— y los **cuatro ISO salen idénticos al
+base**: 44 líneas, sin una diferencia.
+
+⇒ **El ISO no lleva marca de fase por el solo hecho de que la fase exista.** Un programa
+con tres fases sin operaciones emite lo mismo que uno con una.
+
+Queda abierto qué pasa con fases **que tengan contenido**: ahí es donde puede aparecer una
+separación entre fases, y donde el «estacionamiento en cada cambio de fase» tendría un
+cambio real donde manifestarse. Se cierra con un programa de dos fases con un mecanizado
+en cada una.
+
 ## Preguntas que abre el esqueleto
 
 - ¿Qué es `V=0` del header? ¿Y `Repetitions`, que no aparece?
