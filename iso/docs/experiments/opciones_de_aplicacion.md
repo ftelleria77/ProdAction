@@ -185,12 +185,48 @@ Mismo resultado que `SecurityDistance`: **XML byte-idéntico al base** (otra vez
 
 ⇒ Segunda confirmación de la prioridad 4: **necesita trayectoria para manifestarse.**
 
+### `Multiplicador del radio en aproximaciones/alejamientos` = 3 (default del CNC: 4)
+
+`RadiusMultiplier` · fixture `R_PV_manual_base_mrapal_3.pgmx`.
+
+Tercer resultado igual: **XML byte-idéntico** e **ISO distinto sólo en la línea 1**.
+
+Vale la pena que se haya probado igual, aunque estuviera anotado como «probablemente no se
+vea sin operaciones»: **`RadiusMultiplier` es una de las dos claves en las que difieren el
+CNC y la oficina técnica** (4 contra 2). Ahora está registrado que esa diferencia **no
+puede manifestarse en un programa vacío**, y que el experimento de las dos PCs para esta
+clave necesita sí o sí un fresado con acercamiento o alejamiento automático.
+
+### Tabla de la familia «Acercamiento y alejamiento»
+
+| Opción | Clave | Probado | XML | ISO |
+|---|---|---|---|---|
+| Distancia de seguridad desde la mesa de trabajo | `SecurityDistance` | 25 (def. 20) | idéntico | sólo el nombre |
+| Paso de retroacción en los fresados | `MillingRetractDistance` | 15 (def. 10) | idéntico | sólo el nombre |
+| Multiplicador del radio en aprox./alejamientos | `RadiusMultiplier` | 3 (def. 4) | idéntico | sólo el nombre |
+| Velocidad rápida en los desplazamientos | `RapidFeed` | — | — | — |
+
+Tres de cuatro dan lo mismo. La familia entera gobierna **trazas**, así que su lugar de
+prueba es un programa con mecanizado, no éste.
+
 ### El CRC que se repite
 
-Los cuatro `.pgmx` mirados hasta ahora —el base, el `DSDMT_25` antes y después del
-reguardado, y el `PRF_15`— tienen **el mismo CRC de XML: `9c64dcab`**. Ninguna de estas
-opciones de la ventana Opciones deja rastro en el archivo: son de la aplicación, no del
-programa, y eso queda probado por identidad de bytes y no por lectura de campos.
+Los cinco `.pgmx` mirados hasta ahora —el base, el `DSDMT_25` antes y después del
+reguardado, el `PRF_15` y el `mrapal_3`— tienen **el mismo CRC de XML: `9c64dcab`**.
+Ninguna de estas opciones de la ventana Opciones deja rastro en el archivo: son de la
+aplicación, no del programa, y eso queda probado por identidad de bytes y no por lectura
+de campos.
+
+## Cómo se procesa la serie
+
+`iso/machining_lab/procesar_opciones.py` recorre la carpeta entera y contesta las dos
+preguntas por fixture —¿cambió el `.pgmx`? ¿cambió el `.iso`?—, que son independientes:
+una opción puede no estar en el archivo y aun así decidir el ISO, que es justamente lo que
+se busca.
+
+```
+py -m iso.machining_lab.procesar_opciones
+```
 
 ### De yapa: qué nombre usa el ISO, con los tres separados
 
