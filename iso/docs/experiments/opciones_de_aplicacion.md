@@ -159,9 +159,25 @@ Dos cosas que esto cierra:
 | Opciones → Parámetros | «áreas **perpendiculares** en X o Y» | global de la aplicación |
 | Parámetros de máquina | «áreas **especulares** en X o Y» | del programa (`IsTechnologicalMirror`) |
 
-### Nota menor
+### De yapa: qué nombre usa el ISO, con los tres separados
 
-El XML dentro del `.pgmx` de la variante se llama `R_PV_manual_base_.xml` —con un guión
-bajo de más— mientras el del base es `R_PV_manual_base.xml`. No afecta al contenido (los
-dos XML son idénticos) ni al ISO, pero conviene tenerlo presente: el nombre del miembro
-del ZIP no siempre sigue al nombre del archivo.
+En este fixture conviven **tres nombres distintos** (aclaración de Fermín): guardó desde
+Maestro como `R_PV_manual_base_` y **después renombró el archivo desde el explorador de
+Windows**.
+
+| Qué | Nombre |
+|---|---|
+| el archivo `.pgmx` (renombrado en Windows) | `r_pv_manual_base_dsdmt_25` |
+| el miembro `.xml` dentro del ZIP (el «Guardar como» de Maestro) | `R_PV_manual_base_` |
+| la pieza (panel Pieza) | `R_PV_manual_base` |
+
+Y el ISO emitió **`% r_pv_manual_base_dsdmt_25.pgm`**: el del **archivo**. Los otros dos
+no aparecen en ninguna línea.
+
+⇒ **La línea 1 sale del nombre del ARCHIVO**, no del XML interno ni del nombre de la
+pieza. Ya se había derivado del par `manual_base` / `manual_base_CNC`, pero ahí los tres
+nombres coincidían; acá están separados y se ve cuál gana.
+
+⇒ Y **renombrar un `.pgmx` desde el explorador no lo rompe**: Maestro lo abrió y lo
+postprocesó con el miembro del ZIP llamándose distinto. El nombre interno es
+independiente del nombre del archivo.

@@ -45,7 +45,7 @@ y el bloque 22–29. La 43 (`M2`) lleva **dos**. No es adorno: es parte del byte
 
 | # | Línea | Origen | Confianza |
 |---|---|---|---|
-| 1 | `% r_pv_manual_base.pgm` | **Programa** — nombre del ARCHIVO, en minúsculas, extensión `.pgm` | DERIVADO (el par `_cnc` lo prueba: cambió el nombre del archivo y cambió sólo esta línea) |
+| 1 | `% r_pv_manual_base.pgm` | **Programa** — nombre del ARCHIVO, en minúsculas, extensión `.pgm` | **DERIVADO** — el fixture `dsdmt_25` lo prueba con los tres nombres separados: archivo `r_pv_manual_base_dsdmt_25`, miembro del ZIP `R_PV_manual_base_`, pieza `R_PV_manual_base`; el ISO emitió el del **archivo** |
 | 2 | `;H DX=400.000 DY=400.000 DZ=18.000 BX=0.000 BY=0.000 BZ=0.000 -HG V=0 *MM C=0 T=0 ` | ver desglose abajo — **ojo: `DX/DY/DZ` son dimensión + origen**, ver B1b | mixto |
 | 3 | `?%ETK[500]=100` | ? | DESCONOCIDO |
 | 5 | `_paras( 0x00, X, 3, %ax[0].pa[21]/1000, %ETK[500] )` | **Máquina** — parámetro 21 del eje 0 | DERIVADO (referencia explícita a `%ax`) |
