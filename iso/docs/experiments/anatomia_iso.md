@@ -550,16 +550,79 @@ plantilla, que se emite entera.
   comentario y esta máquina no tiene ese dispositivo: **no alcanza para atribuirla.** Sigue
   DESCONOCIDA.
 
+## B1h · Qué consulta el emisor, y qué no encuentra (2026-08-12)
+
+Pregunta de Fermín, en el momento justo: *si estos DLL acceden a algún otro archivo, podrían
+estar transcribiendo de una fuente que todavía no miramos.* La respuesta corta es que no hay
+ninguna fuente escondida. La larga es más interesante.
+
+### Los archivos que los DLL nombran
+
+| Archivo | ¿Existe en la instalación? | ¿En el snapshot? |
+|---|---|---|
+| `axis.cfg` · `params.cfg` (`nci32.dll`, `PlPathFilter32.dll`) | sí | **sí** ✅ |
+| `PviBeR.msg` (`PlPathFilter32.dll`) | sí | **falta** — es de mensajes |
+| `PostISO.cfg` · `Script.cfg` (`PostISO.dll`) | **no existe** | — |
+| `Motorplid.cfg` (`PlPathFilter32.dll`) | **no existe** | — |
+
+Los tres que no existen hay que buscarlos **en la PC del CNC**: si allá están y acá no, son
+fuente y no los estamos mirando. `PostISO.dll` construye su ruta como `..\CFG\` + nombre.
+
+### Treinta claves de configuración que el emisor busca y NADIE define
+
+Esto es lo que apareció de fondo. Los binarios consultan claves `$…` —el mismo mecanismo de
+`$GEN_INIT` y `$GEN_END`— que **ningún archivo de la instalación define**. Verificado: sólo
+existen dentro de los propios DLL.
+
+| Familia | Cuántas | Qué gobiernan |
+|---|---|---|
+| `$MA_*` (`MA_XY_Z`, `MA_SET_POSITION`, `MA_UP3`, `MA_DOWN5`, `MA_FEEDRATE_XY`, `MA_RESTORE_END`…) | 16 | los movimientos de la **mesa** — el mismo módulo que emite nuestro teardown |
+| `$PM_*` (`PM_INIT_FILE_MAC_%d`, `PM_END_BLK_MAC_%d`, `PM_END_CYC_MAC_%d`…) | 9 | macros de inicio y fin de archivo, bloque, ciclo y secuencia |
+| `$KEY_G%d` · `$KEY_M%d` (`$KEY_G80`, `$KEY_G100`, `$KEY_M59`) | por código | **la traducción de cada código G y M** |
+
+Y el emisor tiene su propio fail-loud: junto a `$KEY_G%d` está la plantilla
+`;G%d: CORRISPONDENZA NON TROVATA!` — cuando no encuentra la clave de un código, **escribe un
+comentario en el ISO diciéndolo**. Si esa línea aparece alguna vez en un ISO de referencia,
+ya sabemos qué significa.
+
+⇒ **Son puntos de extensión vacíos.** El esqueleto es fijo **porque nuestra configuración no
+define esas claves**, no porque el emisor no pueda emitir otra cosa. Definir `$MA_XY_Z` en el
+`.CFG` de otra máquina cambiaría líneas que hoy leemos como constantes.
+
+### El reencuadre de la pregunta abierta
+
+Esto **achica el «cuarto origen» en vez de agrandarlo**, y conviene decirlo con precisión:
+casi todo lo que parecía constante del binario es en realidad **el valor por defecto de una
+clave de configuración que nadie escribió**. No es «el emisor decide», es «la configuración
+está vacía y el emisor tiene un default». Sigue siendo el binario el que lo aporta —la
+pregunta de los tres o cuatro orígenes no se cierra sola—, pero el mecanismo es el mismo que
+`NCI.CFG`, no uno nuevo.
+
+### El generador está configurado igual en las dos PCs
+
+`Nci.ini` —diez claves que gobiernan al generador: `[PLANE] enable=1`, `[DISC] enable=0`,
+`[MACHINEFAMILY] version=2`, `[G0WITHSPINDLES] enable=0`, `[TESTMODE] enable=1`— y `NCI.CFG`
+son **byte-idénticos entre la PC del CNC y la de oficina técnica**.
+
+Vale para el experimento de las dos PCs: lo que difiere entre las máquinas es la
+configuración de la **aplicación** (`UI00.exe.Config`), no la del **generador**. Refuerza la
+expectativa de que el paso 0 dé un ISO idéntico.
+
+`Nci.ini` ya estaba en el snapshot y no lo habíamos mirado nunca. `[DISC] enable=0` merece un
+segundo vistazo cuando llegue el canal con sierra.
+
 ## Preguntas que abre el esqueleto
 
 - ⚠️ **¿Los orígenes son tres, o cuatro?** Líneas como `SYN`, `MLV=0` o `G71` no salen del
   programa, ni del snapshot de máquina, ni de la ventana Opciones: **las escribe el binario
   del emisor, siempre igual**. La taxonomía de tres orígenes no tiene casillero para eso, y
-  hoy caen todas en «Emisor», que es un cuarto de hecho. No es teórico: `NCI.CFG` mostró que
-  una parte del preámbulo es configuración, y otra versión del generador ISO cambiaría el
-  resto. **Es una decisión de Fermín**, y cambia cómo se escribe el converter: con tres
-  orígenes, esas líneas son literales legítimos; con cuatro, son «lo que emite ESTA versión»
-  y hay que registrar cuál es.
+  hoy caen todas en «Emisor», que es un cuarto de hecho. **Es una decisión de Fermín**, y
+  cambia cómo se escribe el converter: con tres orígenes, esas líneas son literales
+  legítimos; con cuatro, son «lo que emite ESTA versión» y hay que registrar cuál es.
+  B1h le puso el marco correcto: la mayoría de esas líneas son **el default de una clave de
+  configuración que nadie definió**, no una decisión del binario. La pregunta práctica que
+  queda es si el snapshot tiene que incluir al emisor —y como los DLL **no tienen número de
+  versión**, sería por hash, igual que el `manifest.csv`.
 - ¿Qué es `V=0` del header? ¿Y `Repetitions`, que no aparece?
 - ~~¿Por qué el reset toca justo los registros `ETK[0,1,2,13,17,18,19]`?~~ **RESPONDIDA
   (2026-08-12, B1f): porque están escritos en `$GEN_END` de `NCI.CFG`.** Es configuración

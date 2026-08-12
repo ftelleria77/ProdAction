@@ -103,6 +103,10 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
   YA tenía 91 archivos (los 82 de `<Xilog Plus>\Cfg\` + `Cfgx\` + `Tlgx\` + manifest con
   sha256). ✅ **`UI00.exe.Config` de la PC del CNC incorporado** (2026-08-10, en
   `maestro_ui/`, con su línea de manifest). Falta `Settings\` — ⬜
+- E3. **Lo que pide el emisor y no tenemos** (2026-08-12, B1h): traer del CNC —si existen
+  allá, acá no— `PostISO.cfg`, `Script.cfg` y `Motorplid.cfg`, que los DLL nombran; más
+  `PviBeR.msg`, que existe y no está en el snapshot. Y decidir si los **binarios del emisor**
+  entran al snapshot por hash (no tienen número de versión) — ⬜
 - E2. **Separar «default al crear» de «lectura al postprocesar»**, clave por clave: las dos
   PCs difieren en `RadiusMultiplier` (4 vs 2) y `SecurityDistance` (20 vs 30). Doc:
   `experiments/configuracion_aplicacion.md` — ⏸ necesita el experimento de las dos PCs
@@ -153,6 +157,16 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 - ⚠️ **Queda planteada una pregunta de fondo: ¿los orígenes son tres o cuatro?** Estas
   líneas no salen del programa, ni de la máquina, ni de la aplicación: las escribe el
   **binario del emisor**. Decisión pendiente de Fermín; cambia cómo se escribe el converter.
+- **¿Los DLL leen alguna fuente que no miramos?** (pregunta de Fermín). No hay fuente
+  escondida, pero sí **30 claves `$…` que el emisor consulta y que ningún archivo define**:
+  `$MA_*` (mesa), `$PM_*` (macros de archivo/bloque/ciclo) y `$KEY_G%d`/`$KEY_M%d` (**la
+  traducción de cada código G y M**). Son puntos de extensión vacíos ⇒ **el esqueleto es
+  fijo porque nuestra config no los define**, no porque el emisor no pueda emitir otra cosa.
+  El emisor hasta tiene su propio fail-loud: `;G%d: CORRISPONDENZA NON TROVATA!`.
+- Tres archivos que los DLL nombran **no existen en esta PC** (`PostISO.cfg`, `Script.cfg`,
+  `Motorplid.cfg`): hay que ver si están en el CNC. Y `Nci.ini` —config del generador, que ya
+  estaba en el snapshot y nunca miramos— es **byte-idéntico entre las dos PCs**, igual que
+  `NCI.CFG`: lo que difiere entre máquinas es la **aplicación**, no el **generador**.
 
 ### 2026-08-12 — Trece líneas del esqueleto estaban escritas en un archivo que ya teníamos
 - **El preámbulo (3–8) y el reset de registros (23–29) salen LITERALES de `NCI.CFG`**, un
