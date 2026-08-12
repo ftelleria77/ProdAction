@@ -40,6 +40,21 @@ miembro llamándose `R_PV_manual_base_.xml`) está en el commit `f5febc4`:
 git show f5febc4:iso/docs/experiments/evidencia/opciones_dsdmt_25/R_PV_manual_base_DSDMT_25.pgmx
 ```
 
+### `paso0_oficina_tecnica/`
+
+El paso 0 de la serie R_OPC: el programa base postprocesado en la **PC de oficina técnica**,
+sin tocar ninguna opción. **No produjo `.iso`** — produjo los tres archivos de la etapa
+intermedia, que es justamente el hallazgo (ver `emisor_iso.md`).
+
+| Archivo | Qué es |
+|---|---|
+| `R_PV_manual_base_Of_Tec.xxl` | el programa en XXL, **texto legible**: el paso del medio |
+| `R_PV_manual_base_Of_Tec.pgm` | el mismo, compilado a binario |
+| `R_PV_manual_base_Of_Tec.inf` | log del compilador: `[LINES]=16`, `[ERRORS]=0` |
+
+Se versionaron porque el próximo intento en esa PC los sobreescribe, y porque el `.xxl` es
+la única muestra que tenemos de la etapa intermedia.
+
 ### `opciones_prf_15/`
 
 «Paso de retroacción en los fresados» = 15, contra el 10 del CNC

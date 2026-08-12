@@ -8,7 +8,16 @@ rumbo se anotan como decisiones con fecha). La vista visual se republica en cada
 
 Estados: ✅ hecho · 🔄 en curso · ⏸ esperando a Fermín · ⬜ pendiente · 🔮 futuro (sin fecha)
 
-## Estado actual (2026-08-12)
+## Estado actual (2026-08-12, cierre del día)
+
+> ⭐ **Lo más importante que pasó hoy**: el postproceso **tiene dos etapas**
+> (`.pgmx` → XXL → PGM → ISO) y casi todo lo que veníamos investigando ocurre en la
+> **segunda**, que la hace el generador de Xilog y no Maestro. Con eso encajan de golpe el
+> preámbulo que sale de `NCI.CFG`, el origen que se resuelve contra `fields.cfg`, y el
+> resultado más repetido del barrido: 16 de 17 opciones de la ventana Opciones no llegan al
+> ISO porque actúan en la etapa 1. Detalle en `experiments/emisor_iso.md`.
+
+## El estado anterior (2026-08-12, tarde)
 
 La etapa 1 ya tiene su ISO de referencia y dos barridos de configuración completos (A5
 parámetros de máquina, A6 ventana Opciones). El hallazgo que ordena todo lo demás: **el
@@ -59,14 +68,11 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 > origen de B1c no depende del tope de referencia; la notación de Z necesita una
 > profundidad de trabajo, que un programa sin operaciones no tiene.
 >
-> ⏭️ **PRÓXIMO PASO**: el **paso 0** de la serie R_OPC — postprocesar el base **sin tocar
-> ninguna opción, en la PC de oficina técnica**, y guardar el ISO aparte. Compararlo contra
-> `r_pv_manual_base.iso` (que salió del CNC) responde, para el programa vacío, el
-> experimento de las dos PCs. Si da idéntico, **el resto del barrido se puede hacer en
-> oficina técnica sin tocar la configuración de producción** — que es lo que lo hace valer
-> la pena. Las dos claves en que las PCs difieren (`RadiusMultiplier`, `SecurityDistance`)
-> ya se sabe que no se manifiestan sin trayectoria, así que la expectativa es que dé igual;
-> lo que se está probando es justamente eso.
+> ✅ **PASO 0 HECHO el 2026-08-12, con un resultado que nadie esperaba.** Oficina técnica
+> **no genera ISO**: genera XXL + PGM + INF, y ahí apareció que el postproceso tiene **dos
+> etapas** (`emisor_iso.md`). Respuestas: el barrido **no** se puede mudar a oficina técnica
+> —sigue en el CNC—, y el experimento de las dos PCs hay que replantearlo, porque si una de
+> las dos no emite ISO no hay dos ISO que comparar. La comparación posible es **en XXL**.
 
 ### B. Anatomía del ISO — 🔄 ARRANCÓ (2026-08-10, doc `anatomia_iso.md`)
 - B1. Partes del archivo del programa vacío: atribuir CADA línea a **uno de TRES** orígenes —
@@ -147,6 +153,30 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-08-12 (cierre) — El paso 0 no dio ISO, y por eso mostró la etapa intermedia
+Fermín postprocesó el programa base en la PC de **oficina técnica**. No salió ningún `.iso`:
+salieron un `.xxl`, un `.pgm` y un `.inf`. El «fallo» resultó ser el hallazgo estructural
+más grande de la etapa.
+
+- ⭐⭐ **El postproceso tiene DOS etapas**: `.pgmx` → **XXL** → PGM → **ISO**. Maestro produce
+  el XXL (16 líneas, texto legible); el **generador de Xilog** lo traduce a ISO (43 líneas).
+- **El origen se resuelve en la SEGUNDA etapa**: Maestro escribe `O X=0 Y=0 Z=0` —el origen
+  del programa tal cual— y los `−400.000` / `−1515.600` de `fields.cfg` los pone el
+  generador. Toda la fórmula de B1c pertenece a esa etapa, no a Maestro.
+- ✅ **Confirmada la hipótesis de `R`**: el XXL escribe `R=1` y el ISO no lo lleva. La
+  omisión de las repeticiones ocurre en el paso a ISO. Ídem `/"def"`, el equipamiento. Y el
+  **orden de los campos del header cambia** entre los dos formatos.
+- ⇒ **Explica el resultado que más se repitió en el barrido**: las opciones de la ventana
+  Opciones actúan en la etapa 1, y sólo llegan al ISO las que Maestro alcanza a escribir en
+  el XXL. Por eso 16 de 17 no llegaron.
+- ⇒ **El XXL es un intermedio observable**: cuando una línea del ISO no se entienda, se puede
+  preguntar si ya estaba en el XXL, y eso dice en qué etapa nace.
+- **Consecuencia práctica**: el barrido **no se puede mudar a oficina técnica** —esa
+  instalación no genera ISO, y no es de hoy: hay temporales de marzo de 2025 con el mismo
+  patrón—. Sigue haciéndose en el CNC. Y el experimento de las dos PCs para las claves de
+  traza hay que replantearlo: si una no emite ISO, habría que comparar en XXL.
+- Evidencia versionada en `evidencia/paso0_oficina_tecnica/`. Doc: `emisor_iso.md`.
 
 ### 2026-08-12 (noche) — La copia completa del CNC: el emisor es un origen
 Fermín copió a `S:\Copia CNC` las carpetas enteras de `C:\Archivos de programa\SCM Group`

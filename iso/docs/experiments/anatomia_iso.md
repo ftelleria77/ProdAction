@@ -12,6 +12,13 @@ Los tres orígenes (ver `programa_vacio.md`):
 | 2 | **Máquina** | snapshot de la PC del CNC (`iso/data/machine_config/snapshot/`) |
 | 3 | **Aplicación** | `<Maestro>\UI00.exe.Config` (ventana Opciones) |
 
+> ⭐ **El postproceso tiene dos etapas** (2026-08-12, ver `emisor_iso.md`):
+> `.pgmx` → **XXL** → PGM → **ISO**. Maestro produce el XXL —donde actúan los orígenes 1 y
+> 3—; el generador de Xilog lo traduce a ISO, y ahí actúan el origen 2 y el emisor. **El
+> origen de la pieza se resuelve en la segunda etapa**: Maestro escribe `O X=0 Y=0 Z=0` y
+> los `−400.000` de `fields.cfg` los pone el generador. Casi todo lo mapeado abajo pertenece
+> a esa segunda etapa.
+
 Niveles de confianza, explícitos en cada fila:
 
 - **DERIVADO** — la evidencia lo prueba (un fixture que varía esa cosa y sólo esa).
@@ -127,9 +134,15 @@ esqueleto emite todos salvo `R`. Y las tres variables de posición quedan defini
 con que R001 los haya dejado en cero al mover el origen. Sale de DESCONOCIDO. El fixture
 que lo confirma es uno con `WorkpieceOffset` ≠ 0, que el sintetizador todavía no varía.
 
-**`R` (repeticiones) no aparece** en este header, y el programa tiene `Repetitions=1`:
-la lectura natural es que el emisor **omite la letra cuando vale el default**. Sin
-fixture todavía — lo confirma un programa con repeticiones ≠ 1.
+✅ **`R` (repeticiones) no aparece en este header, y ya se sabe por qué** (2026-08-12): el
+XXL que produce Maestro **sí lo escribe** —`R=1`— y el ISO no lo lleva. La omisión ocurre
+en el paso XXL → ISO, no en Maestro. Lo mismo con `/"def"`, el nombre del equipamiento, que
+está en el XXL y no en el ISO. Ver `emisor_iso.md`.
+
+> Y el **orden de los campos cambia** entre los dos: el XXL escribe
+> `DX DY DZ -HG C T R *MM /"def" BX BY BZ V` y el ISO,
+> `DX DY DZ BX BY BZ -HG V *MM C T`. El header del ISO no es el del programa reordenado por
+> casualidad: lo reescribe la segunda etapa.
 
 Y queda a la vista que **`V` y `T` son enteros que agregan varias opciones cada uno**
 («Bloqueo» y «Opciones mecánicas» tienen su panel de sub-opciones en la UI), lo que
