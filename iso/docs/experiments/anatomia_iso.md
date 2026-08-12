@@ -613,16 +613,15 @@ segundo vistazo cuando llegue el canal con sierra.
 
 ## Preguntas que abre el esqueleto
 
-- ⚠️ **¿Los orígenes son tres, o cuatro?** Líneas como `SYN`, `MLV=0` o `G71` no salen del
-  programa, ni del snapshot de máquina, ni de la ventana Opciones: **las escribe el binario
-  del emisor, siempre igual**. La taxonomía de tres orígenes no tiene casillero para eso, y
-  hoy caen todas en «Emisor», que es un cuarto de hecho. **Es una decisión de Fermín**, y
-  cambia cómo se escribe el converter: con tres orígenes, esas líneas son literales
-  legítimos; con cuatro, son «lo que emite ESTA versión» y hay que registrar cuál es.
-  B1h le puso el marco correcto: la mayoría de esas líneas son **el default de una clave de
-  configuración que nadie definió**, no una decisión del binario. La pregunta práctica que
-  queda es si el snapshot tiene que incluir al emisor —y como los DLL **no tienen número de
-  versión**, sería por hash, igual que el `manifest.csv`.
+- ⚠️ ~~**¿Los orígenes son tres, o cuatro?**~~ **Respondida en los hechos el 2026-08-12**: los
+  seis binarios del emisor **difieren entre la PC del CNC y la de oficina técnica** (el CNC
+  tiene la build de 2011-11-18; oficina, la de 2011-10-14), y `nci32.dll` difiere hasta en
+  tamaño y en plantillas de emisión. **No es «el binario hace siempre lo mismo»: hay dos
+  emisores conviviendo**, así que el emisor es un origen. Detalle en `emisor_iso.md`.
+  Con el marco de B1h: la mayoría de esas líneas son **el default de una clave de
+  configuración que nadie definió**, no una decisión del binario. Lo que queda para decidir
+  es más acotado — **si el snapshot registra al emisor**, y como los DLL no tienen número de
+  versión, sería por hash, igual que el `manifest.csv`.
 - ¿Qué es `V=0` del header? ¿Y `Repetitions`, que no aparece?
 - ~~¿Por qué el reset toca justo los registros `ETK[0,1,2,13,17,18,19]`?~~ **RESPONDIDA
   (2026-08-12, B1f): porque están escritos en `$GEN_END` de `NCI.CFG`.** Es configuración

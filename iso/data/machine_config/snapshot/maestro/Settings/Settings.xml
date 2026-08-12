@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+L'attributo "Type" deve esistere sempre per poter individuare il tipo
+dell'elemento macchina.
+I seguenti attributi sono facoltativi e se non sono presenti
+assumono per default il valore "False":
+- HasLinearAxis
+- HasLinearAxisDiscrete
+- HasCircularAxis
+- HasCircularAxisDiscrete
+- HasModel3D
+
+USO DELL'ATTRIBUTO Number NELLA LIBRERIA
+L'attributo "Number" si usa per specificare il numero di elementi
+dello stesso tipo che possono esistere come figli di un altro
+elemento. Se non indicato, assume per default il valore 1.
+
+USO DELL'ATTRIBUTO Number NELLA CONFIGURAZIONE
+Quando presente, l'attributo "Number" limita il numero di elementi
+dello stesso tipo che possono esistere come figli di un altro
+elemento. Se non indicato, non ci sono limiti.
+-->
+<Projects>
+	<LibraryProject>
+		<Element HasModel3D="True" Type="ShortPieceStop" />
+		<Element Type="Clamp">
+			<Element HasModel3D="True" Type="Joint">
+				<Element HasModel3D="True" Type="Basis">
+					<Element HasLinearAxis="True" HasModel3D="True" Type="Stem">
+						<Element HasModel3D="True" Type="Disk" />
+					</Element>
+				</Element>
+			</Element>
+		</Element>
+		<Element Type="HorizontalClamp">
+			<Element HasModel3D="True" Type="Joint">
+				<Element HasModel3D="True" Type="Basis">
+					<Element HasLinearAxis="True" HasModel3D="True" Type="Body" />
+				</Element>
+			</Element>
+		</Element>
+		<Element Type="SuctionCup">
+			<Element HasModel3D="True" Type="Joint">
+				<Element HasModel3D="True" Type="Basis">
+					<Element HasCircularAxis="True" HasModel3D="True" Number="2" Type="Backing" />
+				</Element>
+			</Element>
+		</Element>
+		<Element HasModel3D="True" Type="FixedReferencePieceBar" />
+		<Element HasModel3D="True" Type="MobileReferencePieceBar" />
+		<Element HasModel3D="True" Type="LockingPieceBar" />
+		<Element HasModel3D="True" Type="LiftingBar" />
+		<Element HasModel3D="True" Type="SideStop" />
+		<Element HasModel3D="True" Type="SupportBase" />
+		<Element HasModel3D="True" Type="Basement" />
+		<Element HasModel3D="False" Type="BoringHead">
+			<Element HasModel3D="False" Type="StandardBoringHead" />
+			<Element HasModel3D="False" Type="BrcBoringHead" />
+		</Element>
+		<Element HasModel3D="False" Type="StandardBoringHead" />
+		<Element HasModel3D="False" Type="BrcBoringHead" />
+		<Element HasModel3D="False" Type="LabelingHead">
+			<Element HasModel3D="False" Type="StandardLabelingHead" />
+		</Element>
+		<Element HasModel3D="False" Type="StandardLabelingHead" />
+		<Element HasModel3D="False" Type="ProbingHead">
+			<Element HasModel3D="False" Type="StandardProbingHead" />
+		</Element>
+		<Element HasModel3D="False" Type="StandardProbingHead" />
+		<Element HasModel3D="False" Type="NailingHead">
+			<Element HasModel3D="False" Type="SCMNailingHead" />
+			<Element HasModel3D="False" Type="SencoNailingHead" />
+		</Element>
+		<Element HasModel3D="False" Type="SCMNailingHead" />
+		<Element HasModel3D="False" Type="SencoNailingHead" />
+		<Element HasModel3D="False" Type="EdgingHead" />
+		<Element HasModel3D="False" Type="MillingHead">
+			<Element HasModel3D="False" Type="ThreeAxisMillingHead" />
+			<Element HasModel3D="False" Type="FourAxisMillingHead" />
+			<Element HasModel3D="False" Type="FiveAxisMillingHead" />
+			<Element HasModel3D="False" Type="UniversalMillingHead" />
+		</Element>
+		<Element HasModel3D="False" Type="ThreeAxisMillingHead" />
+		<Element HasModel3D="False" Type="FourAxisMillingHead" />
+		<Element HasModel3D="False" Type="FiveAxisMillingHead" />
+		<Element HasModel3D="False" Type="UniversalMillingHead" />
+		<Element HasModel3D="False" Type="Spindle" />
+		<Element HasModel3D="True" Type="MLTFPlane" />
+		<Element HasModel3D="True" Type="CombiflexPlane" />
+		<Element HasModel3D="True" Type="CombiflexCarriage" />
+		<Element HasModel3D="False" Type="CombiflexExclusionClamp">
+			<Element HasCircularAxis="True" HasModel3D="True" Type="Joint">
+				<Element HasModel3D="True" Type="Basis">
+					<Element HasLinearAxis="True" HasModel3D="True" Type="Stem">
+						<Element HasModel3D="True" Type="Disk" />
+					</Element>
+				</Element>
+			</Element>
+		</Element>
+		<Element HasModel3D="False" Type="CombiflexFixedClamp">
+			<Element HasModel3D="True" Type="Joint">
+				<Element HasModel3D="True" Type="Basis">
+					<Element HasLinearAxis="True" HasModel3D="True" Type="Stem">
+						<Element HasModel3D="True" Type="Disk" />
+					</Element>
+				</Element>
+			</Element>
+		</Element>
+		<Element HasModel3D="True" Type="LoadUnitCarriage" />
+		<Element HasModel3D="True" Type="LoadUnit" />
+		<Element HasModel3D="False" Type="LoadUnitClamp">
+			<Element HasModel3D="True" Type="Joint">
+				<Element HasModel3D="True" Type="Basis">
+					<Element HasLinearAxis="True" HasModel3D="True" Type="Body" />
+				</Element>
+			</Element>
+		</Element>
+		<Element HasModel3D="False" Type="Hood">
+			<Element HasModel3D="False" Type="PrimaryPneumaticHood" />
+			<Element HasModel3D="False" Type="SupplementaryPneumaticHood" />
+		</Element>
+		<Element HasModel3D="False" Type="PrimaryPneumaticHood" />
+		<Element HasModel3D="False" Type="SupplementaryPneumaticHood" />
+		<Element HasModel3D="False" Type="Dustpan">
+			<Element HasModel3D="False" Type="PneumaticDustpan" />
+		</Element>
+		<Element HasModel3D="False" Type="PneumaticDustpan" />
+		<Element HasModel3D="False" Type="ChainToolStore">
+			<Element HasModel3D="False" Type="StandardChainToolStore" />
+		</Element>
+		<Element HasModel3D="False" Type="StandardChainToolStore" />
+		<Element HasModel3D="False" Type="CircularToolStore">
+			<Element HasModel3D="False" Type="StandardCircularToolStore" />
+		</Element>
+		<Element HasModel3D="False" Type="StandardCircularToolStore" />
+		<Element HasModel3D="False" Type="LinearToolStore">
+			<Element HasModel3D="False" Type="StandardLinearToolStore" />
+		</Element>
+		<Element HasModel3D="False" Type="StandardLinearToolStore" />
+		<Element HasModel3D="False" Type="HighSpeedToolStore">
+			<Element HasModel3D="False" Type="StandardHighSpeedToolStore" />
+		</Element>
+		<Element HasModel3D="False" Type="StandardHighSpeedToolStore" />
+		<Element HasModel3D="False" Type="EdgesStore" />
+		<Element HasModel3D="False" Type="Roller" />
+	</LibraryProject>
+
+	<ConfigurationProject>
+		<Element Type="ShortPieceStop" />
+		<Element Type="Clamp" />
+		<Element Type="HorizontalClamp" />
+		<Element Type="SuctionCup" />
+		<Element Type="FixedReferencePieceBar">
+			<Element HasLinearAxisDiscrete="True" Type="SideStop" />
+		</Element>
+		<Element Type="MobileReferencePieceBar">
+			<Element HasLinearAxisDiscrete="True" Type="SideStop" />
+		</Element>
+		<Element Type="LockingPieceBar">
+			<Element HasLinearAxisDiscrete="True" Type="SideStop" />
+			<Element HasLinearAxisDiscrete="True" Type="LiftingBar" />
+			<Element HasLinearAxis="True" Type="SupportBase" />
+		</Element>
+		<Element Type="LiftingBar" />
+		<Element Type="SideStop" />
+		<Element Type="SupportBase" />
+		<Element Type="HeadCollection">
+			<Element HasModel3D="False" Type="BrcBoringHead" />
+			<Element HasModel3D="False" Type="StandardBoringHead" />
+			<Element HasModel3D="False" Type="StandardLabelingHead" />
+			<Element HasModel3D="False" Type="StandardProbingHead" />
+			<Element HasModel3D="False" Type="SCMNailingHead" />
+			<Element HasModel3D="False" Type="SencoNailingHead" />
+			<Element HasModel3D="False" Type="ThreeAxisMillingHead" />
+			<Element HasModel3D="False" Type="FourAxisMillingHead" />
+			<Element HasModel3D="False" Type="FiveAxisMillingHead" />
+			<Element HasModel3D="False" Type="UniversalMillingHead" />
+			<Element HasModel3D="False" Type="EdgingHead" />
+		</Element>
+		<Element Type="UniversalMillingHead">
+		</Element>
+		<Element Type="FiveAxisMillingHead">
+			<Element HasModel3D="False" Number="1" Type="PrimaryPneumaticHood" />
+			<Element HasModel3D="False" Number="1" Type="SupplementaryPneumaticHood" />
+			<Element HasModel3D="False" Number="1" Type="PneumaticDustpan" />
+		</Element>
+		<Element Type="FourAxisMillingHead">
+			<Element HasModel3D="False" Number="1" Type="PrimaryPneumaticHood" />
+			<Element HasModel3D="False" Number="1" Type="PneumaticDustpan" />
+		</Element>
+		<Element Type="ThreeAxisMillingHead">
+			<Element HasModel3D="False" Number="1" Type="PrimaryPneumaticHood" />
+			<Element HasModel3D="False" Number="1" Type="PneumaticDustpan" />
+		</Element>
+		<Element Type="SencoNailingHead">
+		</Element>
+		<Element Type="SCMNailingHead">
+		</Element>
+		<Element Type="StandardProbingHead">
+		</Element>
+		<Element Type="StandardLabelingHead">
+		</Element>
+		<Element Type="BrcBoringHead">
+			<Element HasModel3D="False" Type="Spindle" />
+			<Element Type="SpindleCollection" />
+		</Element>
+		<Element Type="StandardBoringHead">
+			<Element HasModel3D="False" Type="Spindle" />
+			<Element Type="SpindleCollection" />
+		</Element>
+		<Element Type="EdgingHead">
+			<Element HasModel3D="False" Type="Roller" />
+		</Element>		
+		<Element Type="SpindleCollection">
+			<Element HasModel3D="False" Type="Spindle" />
+		</Element>
+		<Element HasModel3D="False" Type="Spindle" />
+		<Element Type="Basement">
+			<Element Number="1" Type="BarCollection" />
+			<Element Number="1" Type="WorkingAreaCollection" />
+			<Element Number="1" Type="MLTFPlaneCollection" />
+			<Element Number="1" Type="HeadCollection" />
+			<Element Number="1" Type="CombiflexPlaneCollection" />
+			<Element Number="1" Type="CnAxisCollection" />
+			<Element Number="1" HasLinearAxis="True" Type="LoadUnitCarriage" />
+			<Element Number="1" Type="ToolStoreCollection" />
+		</Element>
+		<Element Type="MLTFPlaneCollection">
+			<Element Type="MLTFPlane" />
+		</Element>
+		<Element Type="MLTFPlane">
+			<Element HasLinearAxisDiscrete="True" Type="SideStop" />
+		</Element>
+		<Element Type="CombiflexPlaneCollection">
+			<Element Type="CombiflexPlane" />
+		</Element>
+		<Element Type="CombiflexPlane">
+			<Element HasLinearAxis="True" Type="CombiflexCarriage" />
+		</Element>
+		<Element Type="CombiflexCarriage">
+			<Element Type="CombiflexWorkField" />
+		</Element>
+		<Element Type="CombiflexWorkField">
+			<Element Type="CombiflexExclusionClamp" />
+			<Element Type="CombiflexFixedClamp" />
+		</Element>
+		<Element Type="LoadUnitCarriage">
+			<Element HasLinearAxis="True" Type="LoadUnit" />
+		</Element>
+		<Element Type="LoadUnit">
+			<Element HasLinearAxis="True" Type="LoadUnitClamp" />
+		</Element>
+		<Element Type="LoadUnitClamp" />
+		<Element Type="BarCollection">
+			<Element Type="FixedReferencePieceBar" />
+			<Element HasLinearAxis="True" HasLinearAxisDiscrete="True" Type="MobileReferencePieceBar" />
+			<Element HasLinearAxis="True" Type="LockingPieceBar" />
+		</Element>
+		<Element Type="WorkingArea" />
+		<Element Type="Machine">
+			<Element Number="1" Type="Basement" />
+			<Element Number="1" Type="GeneralData" />
+		</Element>
+		<Element Type="WorkingAreaCollection">
+			<Element Number="16" Type="WorkingArea" />
+		</Element>
+		<Element Type="CnAxisCollection">
+			<Element Type="CnAxis" />
+		</Element>
+		<Element HasModel3D="False" Type="CnAxis" />
+		<Element HasModel3D="False" Type="PrimaryPneumaticHood" />
+		<Element HasModel3D="False" Type="SupplementaryPneumaticHood" />
+		<Element HasModel3D="False" Type="PneumaticDustpan" />
+		<Element Type="ToolStoreCollection">
+			<Element HasModel3D="False" Type="StandardChainToolStore" />
+			<Element HasModel3D="False" Type="StandardCircularToolStore" />
+			<Element HasModel3D="False" Type="StandardLinearToolStore" />
+			<Element HasModel3D="False" Type="StandardHighSpeedToolStore" />
+			<Element HasModel3D="False" Type="EdgesStore" />
+		</Element>
+		<Element HasModel3D="False" Type="StandardChainToolStore" />
+		<Element HasModel3D="False" Type="StandardCircularToolStore" />
+		<Element HasModel3D="False" Type="StandardLinearToolStore" />
+		<Element HasModel3D="False" Type="StandardHighSpeedToolStore" />
+	</ConfigurationProject>
+</Projects>

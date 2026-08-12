@@ -15,8 +15,17 @@ iso/
                   se refresca sobreescribiendo la carpeta tras cada calibración.
   docs/           Documentación de la investigación.
     experiments/  Un doc por experimento: mapa UI → .pgmx → ISO, derivado y pendiente.
+  machine_config.py  Refresco y verificación del snapshot contra una copia del CNC.
   machining_lab/  Laboratorio de fixtures controlados (serie R).
   paths.py        Rutas raíz S:/P: de los pares PGMX/ISO.
+```
+
+El snapshot **no se copia a mano**: qué archivos entran está escrito en la tabla
+`SELECCION` de `machine_config.py`, y el manifest declara de dónde salió cada uno.
+
+```
+py -m iso.machine_config verificar --fuente "S:\Copia CNC"   # no escribe nada
+py -m iso.machine_config refrescar --fuente "S:\Copia CNC"
 ```
 
 ## Método

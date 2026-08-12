@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AutomaticSetupData xmlns:i="http://www.w3.org/2001/XMLSchema-instance"
+					xmlns="http://schemas.datacontract.org/2004/07/ScmGroup.XCam.WorkPlaneManager.SetupGenerator.DataModel.SuctionCupSetup">
+	<ShowAgain>
+		true
+	</ShowAgain>
+	<SuctionCups />
+	<XMargin>
+		15
+	</XMargin>
+	<YMargin>
+		15
+	</YMargin>
+</AutomaticSetupData>

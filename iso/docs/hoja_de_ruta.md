@@ -96,17 +96,27 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 - Vaciado — 🔮 (el lab pgmx congelado se recrea oportunamente)
 - El ORDEN de estas ramas se define por hallazgos, no está prefijado.
 
-### E. Configuración de máquina — 🔮
-- Ciclo de refresco del snapshot (requisito 2026-08-04: siempre de los archivos extraídos de
-  la PC del CNC, refresco = sobreescribir carpeta) — formalizar como spec — 🔮
-- E1. **Sumar el tercer origen al snapshot** (2026-08-09, corregido el 08-10): el snapshot
-  YA tenía 91 archivos (los 82 de `<Xilog Plus>\Cfg\` + `Cfgx\` + `Tlgx\` + manifest con
-  sha256). ✅ **`UI00.exe.Config` de la PC del CNC incorporado** (2026-08-10, en
-  `maestro_ui/`, con su línea de manifest). Falta `Settings\` — ⬜
-- E3. **Lo que pide el emisor y no tenemos** (2026-08-12, B1h): traer del CNC —si existen
-  allá, acá no— `PostISO.cfg`, `Script.cfg` y `Motorplid.cfg`, que los DLL nombran; más
-  `PviBeR.msg`, que existe y no está en el snapshot. Y decidir si los **binarios del emisor**
-  entran al snapshot por hash (no tienen número de versión) — ⬜
+### E. Configuración de máquina — 🔄
+- ✅ **Ciclo de refresco del snapshot** (requisito 2026-08-04) — **hecho el 2026-08-12**:
+  `iso/machine_config.py` con `verificar` y `refrescar`, y la selección de qué entra al
+  snapshot escrita en una tabla, no en la memoria de quien copie. Verificado contra una copia
+  completa de la PC del CNC: **93 de 93 archivos coinciden**.
+- E1. ✅ **CERRADO 2026-08-12.** El `UI00.exe.Config` del CNC estaba desde el 08-10 y ahora
+  se sumó `Maestro\Settings\` (3 archivos, incluida la plantilla de fábrica
+  `default.settingsx`). El snapshot quedó en **93 archivos, todos verificados contra la
+  copia real del CNC**.
+- E2b. ⚠️ **Procedencia corregida** (2026-08-12): dos archivos del snapshot venían de la PC de
+  **oficina técnica**, no del CNC — `Maestro.rel` (decía `…1010`; el CNC tiene `…1009`) y
+  `LXLVIEW.INI` (que en el CNC no existe). No fue descuido: el snapshot se armaba desde los
+  shares `S:\Xilog Plus` y `S:\Maestro`, y el primero **sí** refleja al CNC (81 de 82
+  byte-idénticos) pero el segundo no. Ahora hay herramienta y el manifest declara la fuente
+  real.
+- E3. ✅ **Lo que pide el emisor y no tenemos** (2026-08-12): `PostISO.cfg`, `Script.cfg` y
+  `Motorplid.cfg` **tampoco existen en el CNC** — no son fuente, cerrado. `PviBeR.msg` es un
+  archivo de mensajes por idioma, no de emisión.
+- E4. **¿El snapshot registra al emisor?** — ⏸ **decisión de Fermín**. Los seis binarios del
+  generador difieren entre las dos PCs (`emisor_iso.md`) y no tienen número de versión: si se
+  registran, sería por hash en el mismo manifest — ⬜
 - E2. **Separar «default al crear» de «lectura al postprocesar»**, clave por clave: las dos
   PCs difieren en `RadiusMultiplier` (4 vs 2) y `SecurityDistance` (20 vs 30). Doc:
   `experiments/configuracion_aplicacion.md` — ⏸ necesita el experimento de las dos PCs
@@ -137,6 +147,32 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-08-12 (noche) — La copia completa del CNC: el emisor es un origen
+Fermín copió a `S:\Copia CNC` las carpetas enteras de `C:\Archivos de programa\SCM Group`
+de la PC del CNC. Cuatro cosas salieron de ahí.
+
+- ⭐ **Los seis binarios del generador ISO DIFIEREN entre las dos PCs.** El CNC tiene la
+  build del **2011-11-18**; oficina técnica, la del **2011-10-14**. `nci32.dll` además pesa
+  4 KB más y su tabla de cadenas cambió: **las plantillas del header en formato PGM están
+  sólo en la versión de oficina técnica**. ⇒ La pregunta de «tres o cuatro orígenes» queda
+  respondida en los hechos: **hay dos emisores conviviendo**, y la evidencia de un ISO vale
+  contra la build que lo produjo. Doc nuevo: `experiments/emisor_iso.md`. Sube el valor del
+  paso 0, que ahora tiene un motivo concreto para poder dar distinto.
+- ⚠️ **El snapshot tenía procedencia mezclada**, y lo delató el archivo que declara la
+  versión: `Maestro.rel` decía `1.00.006.1010` (oficina técnica) cuando el CNC tiene
+  `1.00.006.1009`. También `LXLVIEW.INI`, que en el CNC no existe. Causa: el snapshot se
+  armaba desde los shares, y `S:\Xilog Plus` **sí** refleja al CNC (81 de 82 byte-idénticos)
+  pero `S:\Maestro` no. Corregido, y ahora hay herramienta: **`iso/machine_config.py`** con
+  `verificar` y `refrescar`, y la selección escrita en una tabla. **93 de 93 verificados.**
+- ✅ **E1 cerrado**: `Maestro\Settings\` incorporado (3 archivos, con la plantilla de fábrica
+  `default.settingsx`).
+- ✅ **El barrido de opciones no dejó rastro en producción** — la verificación que el propio
+  método pedía. De 172 claves del `UI00.exe.Config` cambiaron 11, y diez son el historial de
+  archivos recientes; la única real es `IsCamViewEnabled`, que no toca el ISO. **Las 17
+  opciones del barrido volvieron todas a su valor.**
+- ✅ `PostISO.cfg`, `Script.cfg` y `Motorplid.cfg` **tampoco existen en el CNC**: no son
+  fuente. E3 cerrado.
 
 ### 2026-08-12 (tarde) — Las dos de prioridad 1 no llegan, y el resto del esqueleto tiene emisor
 - **`IsAreaScm` e `IsZetaScm` no cambian el ISO del vacío** (fixtures `ctr_scm`, `npt_scm`;

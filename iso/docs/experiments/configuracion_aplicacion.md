@@ -89,12 +89,34 @@ postprocesar y el converter necesita el config del CNC.
 > operaciones no hay leads ni cotas de seguridad, así que ninguna de las dos claves
 > tiene dónde manifestarse. Por eso sus dos ISO salieron iguales.
 
+## ✅ El barrido no dejó rastro en producción (verificado 2026-08-12)
+
+El método del barrido de la ventana Opciones (`opciones_de_aplicacion.md`) abre con una
+advertencia de Fermín: *si alguna opción queda sin restaurar, los programas de producción
+salen distintos sin aviso; al terminar hay que comparar el archivo contra la copia.*
+
+**Esa verificación se hizo, y da bien.** Contra el `UI00.exe.Config` del CNC de hoy, después
+de los 17 fixtures del barrido: de **172 claves, cambiaron 11**, y diez son `RecentFile1..10`
+—el historial de archivos abiertos, puro estado de la UI—. La única real:
+
+| Clave | Antes (08-10) | Ahora (08-12) | ¿Toca el ISO? |
+|---|---|---|---|
+| `IsCamViewEnabled` | `False` | `True` | no — es la vista de cámara |
+
+⇒ **Las 17 opciones que tocó el barrido volvieron todas a su valor.** `IsFinalPark`,
+`IsAreaScm`, `IsZetaScm`, `SecurityDistance`, `RadiusMultiplier`, `MillingRetractDistance`,
+`RapidFeed` y las demás están como estaban. La configuración de producción quedó intacta.
+
 ## En el snapshot
 
 `iso/data/machine_config/snapshot/maestro_ui/UI00.exe.Config` — el de la **PC del CNC**,
 registrado en `manifest.csv` con su origen (`C:\Archivos de programa\Scm Group\Maestro`)
 y su sha256. Es el que vale: el converter reproduce lo que emite la máquina que
 postprocesa.
+
+> Actualizado el 2026-08-12 desde la copia completa del CNC, con la única diferencia real
+> siendo `IsCamViewEnabled` (ver arriba). El refresco se hace con
+> `py -m iso.machine_config refrescar --fuente "<copia del CNC>"`.
 
 El de oficina técnica **no** se guarda: no es la máquina que postprocesa. Su interés es
 comparativo y queda documentado acá.
