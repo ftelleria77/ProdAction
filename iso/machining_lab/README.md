@@ -21,6 +21,7 @@ módulos, que viven acá porque son del laboratorio, no del converter.
 | `comparar_variantes.py` | Un lote de ISO contra una referencia: qué cambió y dónde. |
 | `procesar_opciones.py` | Serie R_OPC: por fixture, ¿cambió el `.pgmx`? ¿y el `.iso`? (son preguntas distintas). |
 | `verificar_nci.py` | Qué líneas del ISO salen literales de `NCI.CFG` y cuáles pone el emisor. |
+| `buscar_en_binarios.py` | Qué módulo del emisor escribe una línea, y qué cadenas la rodean en el binario. Necesita Xilog Plus y Maestro instalados. |
 
 ## Regla de promoción
 

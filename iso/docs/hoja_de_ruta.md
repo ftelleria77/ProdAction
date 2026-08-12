@@ -16,13 +16,15 @@ esqueleto del ISO no es una plantilla fija**. Lo pueden reescribir dos de los tr
 —la ventana Opciones le agrega líneas (B1d) y `NCI.CFG` le define el preámbulo entero
 (B1f)—, así que ninguna de esas líneas puede vivir escrita dentro del converter.
 
-**B1 va por 35 de 43 líneas atribuidas.** Las 8 que faltan están todas en el bloque de
-origen (`MLV`, `EDK[0/1]`, `ETK[8]`, `SYN`) y en el teardown (`VL6`, `VL7`).
+**B1: las 43 líneas tienen origen identificado salvo `?%ETK[8]=1`.** De las que no salen del
+`.pgmx` ni de un `.cfg`, ahora se sabe **qué binario las escribe** (B1g). Lo que sigue
+abierto no es de dónde vienen sino **qué significan** (`MLV`, `VL6`, `VL7`, `EDK[0/1]`,
+`SYN`) — y una pregunta de método: si «el emisor» es un **cuarto origen**.
 
-Frentes abiertos: el barrido de `Parámetros → Post` (las dos opciones que pueden mover la
-fórmula del origen y el signo de Z), el paso 0 de la serie R_OPC en oficina técnica, y el
-experimento de las dos PCs, que necesita un programa **con mecanizado** — los tres
-dependen de fixtures que hace Fermín en Maestro. Suite: 291 passed, 100% offline.
+A5/A6 quedaron cerrados para el programa vacío: de todo el barrido de configuración, **una
+sola opción cambia el ISO de un programa sin operaciones** (el estacionamiento automático).
+Frentes abiertos: el paso 0 de la serie R_OPC en oficina técnica y el experimento de las dos
+PCs, que necesita un programa **con mecanizado**. Suite: 291 passed, 100% offline.
 
 ## El mapa: troncos y ramificaciones
 
@@ -42,26 +44,29 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
   (`Combiflex`). **Todas las diferencias caen en la línea del header**, ninguna toca el
   resto del esqueleto. Resultados en `experiments/parametros_de_maquina.md`. Falta sólo
   `Repeticiones`, que quedó fuera del barrido.
-- A6. **Opciones de la aplicación** (serie R_OPC, el TERCER origen) — 🔄 **13 fixtures
-  manuales (2026-08-10)**. Una sola opción cambia el ISO de un programa vacío: el
+- A6. **Opciones de la aplicación** (serie R_OPC, el TERCER origen) — ✅ **17 fixtures
+  manuales (2026-08-10/12)** para el programa vacío. **Una sola opción cambia el ISO**: el
   **estacionamiento automático al terminar**, que le agrega dos líneas. El resto no llega
-  —las cuatro de acercamiento y alejamiento, la compatibilidad tecnológica, y el
-  estacionamiento por cambio de fase (probado con 2 y 3 fases). Resultados en
-  `experiments/opciones_de_aplicacion.md`.
+  —las cuatro de acercamiento y alejamiento, la compatibilidad tecnológica, el
+  estacionamiento por cambio de fase (probado con 2 y 3 fases) y, el 08-12, las **dos de
+  prioridad 1** (`IsAreaScm`, `IsZetaScm`) más `IsBottomPlaneMachining` y
+  `IsCheckCollisionEnabled`. Resultados en `experiments/opciones_de_aplicacion.md`.
+  Quedan para cuando haya mecanizado: la familia que gobierna trazas, `PostFileFormat` e
+  `IsMM`.
 
-> ⏭️ **PRÓXIMO PASO (anotado el 2026-08-11, sigue pendiente)**: quedan las dos opciones de
-> **`Parámetros → Post`**
-> que más pueden mover, y que **no necesitan trayectoria** para manifestarse porque el
-> esqueleto ya tiene `%Or` y `SHF[Z]`:
+> ✅ **CUMPLIDO el 2026-08-12**: las dos opciones de `Parámetros → Post` (`IsAreaScm`,
+> `IsZetaScm`) se barrieron y **ninguna llega al ISO del programa vacío**. La fórmula del
+> origen de B1c no depende del tope de referencia; la notación de Z necesita una
+> profundidad de trabajo, que un programa sin operaciones no tiene.
 >
-> - **`Configuraciones del tope de referencia`** (Scm anterior ↔ Morbidelli posterior,
->   `IsAreaScm`) — puede **cambiar la fórmula del origen** cerrada en B1c. Si al invertirlo
->   los `%Or`/`SHF` se mueven, lo derivado vale sólo para este tope.
-> - **`Notación de profundidad de trabajo`** (Scm Z negativa ↔ Morbidelli Z positiva,
->   `IsZetaScm`) — el **signo** de `ofZ`, `SHF[Z]` y el `DZ` del header.
->
-> Sigue pendiente también el **paso 0** de la serie: postprocesar el base sin cambiar nada
-> en la PC de oficina técnica, que cierra el experimento de las dos PCs para el vacío.
+> ⏭️ **PRÓXIMO PASO**: el **paso 0** de la serie R_OPC — postprocesar el base **sin tocar
+> ninguna opción, en la PC de oficina técnica**, y guardar el ISO aparte. Compararlo contra
+> `r_pv_manual_base.iso` (que salió del CNC) responde, para el programa vacío, el
+> experimento de las dos PCs. Si da idéntico, **el resto del barrido se puede hacer en
+> oficina técnica sin tocar la configuración de producción** — que es lo que lo hace valer
+> la pena. Las dos claves en que las PCs difieren (`RadiusMultiplier`, `SecurityDistance`)
+> ya se sabe que no se manifiestan sin trayectoria, así que la expectativa es que dé igual;
+> lo que se está probando es justamente eso.
 
 ### B. Anatomía del ISO — 🔄 ARRANCÓ (2026-08-10, doc `anatomia_iso.md`)
 - B1. Partes del archivo del programa vacío: atribuir CADA línea a **uno de TRES** orígenes —
@@ -128,6 +133,26 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-08-12 (tarde) — Las dos de prioridad 1 no llegan, y el resto del esqueleto tiene emisor
+- **`IsAreaScm` e `IsZetaScm` no cambian el ISO del vacío** (fixtures `ctr_scm`, `npt_scm`;
+  las dos claves valían `False` en el CNC, así que el cambio fue real). El de `IsAreaScm` es
+  el resultado fuerte: el origen está en el vacío y **no se movió** ⇒ la fórmula de B1c no
+  depende del tope de referencia. El de `IsZetaScm` es débil: gobierna la **profundidad de
+  trabajo**, y sin operaciones no hay ninguna — `SHF[Z]` es el origen, no una profundidad.
+  Tampoco llegan `IsBottomPlaneMachining` ni `IsCheckCollisionEnabled`.
+- **Barrido de los 7.683 archivos de las dos instalaciones** (ASCII + UTF-16) buscando las
+  plantillas `printf` de las líneas sin origen. Resultado en `anatomia_iso.md` B1g:
+  - el **teardown (30–42) es del módulo de MESA** (`PlPathFilter32.dll`, entre travesaños y
+    ventosas) y se emite entero — por eso aparece el `MLV=2` de un nivel que nunca se usó;
+  - el bloque de puesta a punto y el `SYN` los escribe **`PostISO.dll`**, con **dos
+    plantillas distintas de `EDK`**: una de índice fijo (líneas 14–15) y otra de índice
+    variable (líneas 30 y 42) — que hasta hoy se leían como la misma cosa;
+  - **`%Or[0].of*` no existe como literal en ningún archivo**: se compone en runtime;
+  - **no existe `G70`** en ningún emisor, sólo `G71` ⇒ se debilita la hipótesis `IsMM`.
+- ⚠️ **Queda planteada una pregunta de fondo: ¿los orígenes son tres o cuatro?** Estas
+  líneas no salen del programa, ni de la máquina, ni de la aplicación: las escribe el
+  **binario del emisor**. Decisión pendiente de Fermín; cambia cómo se escribe el converter.
 
 ### 2026-08-12 — Trece líneas del esqueleto estaban escritas en un archivo que ya teníamos
 - **El preámbulo (3–8) y el reset de registros (23–29) salen LITERALES de `NCI.CFG`**, un

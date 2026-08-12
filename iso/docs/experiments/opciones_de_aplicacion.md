@@ -297,6 +297,38 @@ vacías; no prueba que no se manifieste nunca. Se cierra con un programa de dos 
 Con `VRD_40` se completa la familia «Acercamiento y alejamiento»: **las cuatro no llegan
 al ISO de un programa vacío.**
 
+### ⭐ Las dos de `Parámetros → Post`: la prioridad 1 no llega (2026-08-12)
+
+`IsAreaScm` e `IsZetaScm` · fixtures `ctr_scm` y `npt_scm`. **Las dos claves valen `False`
+en el CNC**, así que ponerlas en «Scm» es un cambio real, no un no-op.
+
+| Fixture | Opción | Clave | XML | ISO |
+|---|---|---|---|---|
+| `ctr_scm` | Configuraciones del tope de referencia = **Scm (anterior)** | `IsAreaScm` | idéntico | **sólo el nombre** |
+| `npt_scm` | Notación de profundidad de trabajo = **Scm (Z negativa)** | `IsZetaScm` | idéntico | **sólo el nombre** |
+| `htcivp` | Habilitar trabajos en cara inferior con volcado de pieza | `IsBottomPlaneMachining` | idéntico | sólo el nombre |
+| `acccgt` | Habilitar control de colisión del cabezal al generar traza | `IsCheckCollisionEnabled` | idéntico | sólo el nombre |
+
+**Ninguna de las cuatro llega al ISO de un programa vacío.** Las dos primeras eran las de
+prioridad 1 —las que podían invalidar lo derivado—, así que el resultado hay que leerlo
+con precisión, porque las dos no dicen lo mismo:
+
+- **`IsAreaScm` (el tope de referencia) es el resultado fuerte.** El origen SÍ está en el
+  vacío (`%Or[0].of*`, `SHF[*]`) y **no se movió ni un micrón**. La advertencia que estaba
+  escrita en B1c —«lo derivado vale sólo para este tope»— se relaja: la fórmula del origen
+  **no depende de esta opción**. Tiene explicación, además: el origen sale de `fields.cfg`,
+  que es configuración de **máquina**, y esta opción es de **aplicación**.
+- **`IsZetaScm` (la notación de Z) es un resultado débil**, y conviene no cobrarlo de más.
+  Lo que la opción gobierna es la **profundidad de trabajo**, y un programa sin operaciones
+  no tiene ninguna: `SHF[Z]` y `ofZ` son el ORIGEN, no una profundidad. Es el mismo caso
+  que la familia de acercamiento y alejamiento — **necesita trayectoria para manifestarse**,
+  y su lugar de prueba es un mecanizado con profundidad.
+
+⚠️ **Estos cuatro fixtures no traen captura de la ventana.** Los anteriores sí. Para los
+que dan negativo la captura es la única prueba de que la opción estaba efectivamente
+alterada al postprocesar; sin ella, el resultado se apoya en el procedimiento y no en el
+archivo. Vale la pena para `ctr_scm`, que es el que sostiene una afirmación fuerte.
+
 ### El CRC que se repite
 
 Los cinco `.pgmx` mirados hasta ahora —el base, el `DSDMT_25` antes y después del

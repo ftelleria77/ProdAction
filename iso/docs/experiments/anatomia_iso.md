@@ -53,25 +53,25 @@ y el bloque 22–29. La 43 (`M2`) lleva **dos**. No es adorno: es parte del byte
 | 6 | *(vacía)* | **Máquina** — el `;` suelto del `.CFG` | **DERIVADO** (B1f) |
 | 7 | `G0 G53 Z %ax[2].pa[22]/1000` | **Máquina** — `$GEN_INIT`; parámetro 22 del eje 2, en coordenadas de máquina (`G53`) | **DERIVADO** |
 | 8 | `M58 ` | **Máquina** — `$GEN_INIT`; **habilita el bloqueo de la pieza** (`;abilita controllo vuoto`). El espacio final es el que separaba el comentario | **DERIVADO** (B1f) |
-| 9 | `G71 ` | **Aplicación** — G71 es «medidas en mm» | HIPÓTESIS (lo confirma cambiar `IsMM`, que es global) |
-| 10 | `MLV=0 ` | ? — abre el bloque de origen | DESCONOCIDO |
+| 9 | `G71 ` | **Aplicación** — G71 es «medidas en mm» | HIPÓTESIS **debilitada** (B1g: no existe `G70` en ningún emisor); la decide el fixture `IsMM`=Pulgadas |
+| 10 | `MLV=0 ` | **Emisor** (`PlPathFilter32.dll`) — abre el bloque de origen | origen del binario DERIVADO (B1g); qué significa, DESCONOCIDO |
 | 11 | `%Or[0].ofX=-400000.000 ` | **Máquina** (campo del área) **+ Programa** (`DX`, sólo si el campo vale 0) — µm | **DERIVADO** (fórmula en B1c, 11/11) |
 | 12 | `%Or[0].ofY=-1515599.976 ` | ídem sobre el eje Y — µm | **DERIVADO** (misma fórmula) |
 | 13 | `%Or[0].ofZ=18000.000 ` | **Programa** — µm; `= DZ` (o sea `depth + origin_z`) | DERIVADO (ver B1b) |
-| 14–15 | `?%EDK[0].0=0 ` · `?%EDK[1].0=0 ` | ? | DESCONOCIDO |
-| 16 | `MLV=1 ` | ? | DESCONOCIDO |
+| 14–15 | `?%EDK[0].0=0 ` · `?%EDK[1].0=0 ` | **Emisor** (`PostISO.dll`) — plantilla de **índice fijo**, distinta de la de la línea 30 | origen DERIVADO (B1g); qué son, DESCONOCIDO |
+| 16 | `MLV=1 ` | **Emisor** (`PlPathFilter32.dll`) | ídem línea 10 |
 | 17 | `SHF[X]=-400.000 ` | ídem 11, en mm | **DERIVADO** (B1c) |
 | 18 | `SHF[Y]=-1515.600 ` | ídem 12, en mm | **DERIVADO** (B1c) |
 | 19 | `SHF[Z]=18.000+%ETK[114]/1000 ` | **Programa** (`DZ`) **+ Máquina** (corrección en runtime) | DERIVADO sobre `DZ` |
-| 20 | `?%ETK[8]=1 ` | ? | DESCONOCIDO |
+| 20 | `?%ETK[8]=1 ` | ? — la única plantilla `ETK[8]` del barrido está en el bloque del láser de cruce, que esta máquina no tiene | DESCONOCIDO (B1g) |
 | 21 | `G40 ` | cancelación de compensación — constante del protocolo | DERIVADO por contexto |
 | 22 | `SYN` | **Emisor** — sincronización; en los ISO de referencia de SCM precede a cada `M06` y al bloque de reset | HIPÓTESIS de función; el origen (no es `NCI.CFG`) es **DERIVADO** |
 | 23–29 | `?%ETK[0]=0` `[1]` `[2]` `[13]` `[17]` `[18]` `[19]` | **Máquina** — `NCI.CFG`, `$GEN_END`, copia literal | **DERIVADO** (B1f): son esos siete **porque están escritos ahí** |
 | 30 | `?%EDK[13].0=1 ` | **Programa** (el área) — el índice depende de la MITAD de mesa: 10 izquierda, 13 derecha | **DERIVADO** (B1c) |
-| 31–34 | `MLV=1 ` + `SHF[X]=0 ` `SHF[Y]=0 ` `SHF[Z]=0 ` | teardown: anula el SHF del nivel 1 | DERIVADO por contexto |
-| 35–38 | `MLV=2 ` + `SHF` en cero | ídem nivel 2 — **aparece aunque el nivel 2 nunca se usó** | DERIVADO por contexto |
+| 31–34 | `MLV=1 ` + `SHF[X]=0 ` `SHF[Y]=0 ` `SHF[Z]=0 ` | **Emisor** (`PlPathFilter32.dll`) — teardown: anula el SHF del nivel 1 | **DERIVADO** (B1g: el bloque está literal, con su par de apertura) |
+| 35–38 | `MLV=2 ` + `SHF` en cero | ídem nivel 2 — aparece aunque el nivel 2 nunca se usó **porque la plantilla se emite entera** | **DERIVADO** (B1g) |
 | 39 | `MLV=0 ` | vuelve al nivel 0 | DERIVADO por contexto |
-| 40–41 | `VL6=0 ` · `VL7=0 ` | ? | DESCONOCIDO |
+| 40–41 | `VL6=0 ` · `VL7=0 ` | **Emisor** (`PlPathFilter32.dll`), en el bloque de **mesa** (travesaños y ventosas) | origen DERIVADO (B1g); qué son, DESCONOCIDO |
 | 42 | `?%EDK[13].0=0 ` | cierra lo que abrió la 30 | DERIVADO por contexto |
 | 43 | `M2  ` (dos espacios) | fin de programa | DERIVADO por contexto |
 
@@ -484,8 +484,82 @@ binario, y contiguas, están `M58/M28/M38/M39/M59` con sus `E30xxx` — lo que s
 `EDK[n].0` es la habilitación de bloqueo **por zona**. Es contigüidad en una tabla de
 strings: **HIPÓTESIS**, no prueba.
 
+## B1g · Qué binario escribe cada línea que no sale de `NCI.CFG` (2026-08-12)
+
+Barrido de las plantillas `printf` de los **7.683 archivos** de las dos instalaciones
+(`Xilog Plus` y `Maestro`), en ASCII y en UTF-16. Las cadenas vecinas en la tabla de un
+binario son casi siempre las del mismo bloque de emisión: por eso se mira el contexto.
+
+> ⚠️ **Esto es otra dimensión, no un cuarto origen.** «Qué binario la escribe» no reemplaza
+> a «de dónde sale el valor». Una línea emitida por el generador con valor fijo es una
+> constante **del emisor** — y `NCI.CFG` acaba de mostrar que lo que parece fijo puede ser
+> configuración. Sirve para saber **dónde mirar**, no para dar nada por cerrado.
+
+| Líneas del ISO | Binario | Plantilla encontrada |
+|---|---|---|
+| 14–15 `?%EDK[0].0=0` `?%EDK[1].0=0` | `PostISO.dll` | `?%%EDK[1].0=%d` · `?%%EDK[0].0=%d` — **índice FIJO**, valor variable |
+| 19 (el `%ETK[114]`) | `PostISO.dll` | `%%ETK[114]`, junto a la plantilla `G161 … Z((…)+(%%ETK[114]/1000))` |
+| 22 `SYN` | `PostISO.dll` | contigua a `G64`, `G40` y `?%%EDK[%d].0=1` |
+| 30 · 42 `?%EDK[13].0=1/0` | `PostISO.dll` | `?%%EDK[%d].0=1` · `=0` — **índice VARIABLE**, valor fijo |
+| 9 `G71` | `PostISO.dll`, `nci32.dll`, `VtGenIso.dll` | en la tabla de códigos G, junto a `G80`, `G162`, `G4 F%.1f` |
+| 10 · 16 · 31–39 `MLV=n` + `SHF[*]` | `PlPathFilter32.dll`, `VtGenIso.dll` | `MLV=0/1/2`, `SHF[X]=%.3f` |
+| 40–41 `VL6=0` `VL7=0` | `PlPathFilter32.dll` | literales, dentro del bloque de teardown |
+
+### Dos plantillas distintas para el mismo registro `EDK`
+
+Es un detalle fino y separa dos filas que estaban juntas como «?»:
+
+- `?%%EDK[0].0=%d` y `?%%EDK[1].0=%d` — **el índice está fijo en la plantilla** (0 y 1) y lo
+  que varía es el valor. Son las líneas 14–15.
+- `?%%EDK[%d].0=1` y `?%%EDK[%d].0=0` — **el índice es el parámetro** y el valor está fijo.
+  Son las líneas 30 y 42, donde el índice es la mitad de mesa (10 ó 13, ver B1c).
+
+⇒ `EDK[0]`/`EDK[1]` **no son «el área con otro índice»**: los escribe otra plantilla, con
+otra forma. Qué son sigue siendo DESCONOCIDO, pero ya no se confunden con la línea 30.
+
+### El teardown es del subsistema de MESA
+
+El bloque completo de las líneas 30–42 está en `PlPathFilter32.dll`, **contiguo y con su
+par de apertura**, y las cadenas que lo rodean dicen de qué se trata:
+
+```
+;Barre di appoggio · ;Quote di parcheggio · ;Limiti area di lavoro
+;Posizionamento Ventosa %d della Traversa %d
+;Cancellazione Ventosa %d della Traversa %d · ;Trascinamento Ventose della Traversa %d
+?%%EDK[%d].0=0 · VL6=0 · VL7=0 · MLV=2 · SHF[X]=0 · SHF[Y]=0 · SHF[Z]=0
+MLV=1 · SHF[X]=0 · SHF[Y]=0 · SHF[Z]=0 · ?%%EDK[%d].0=1
+```
+
+⇒ El teardown pertenece al módulo de la **mesa de trabajo** (travesaños y ventosas), no al
+programa de la pieza. Eso **responde una de las preguntas abiertas**: el `MLV=2` que
+aparece «aunque el nivel 2 nunca se usó» viene de ahí — el par de niveles es de esa
+plantilla, que se emite entera.
+
+### Lo que el barrido descartó, que también es resultado
+
+- **`%Or[0].of*` no existe como plantilla literal en ningún archivo de las dos
+  instalaciones.** Aparece únicamente en los ISO de salida ⇒ la línea se **compone en
+  runtime** por concatenación. No hay dónde seguir buscándola; el valor ya está derivado
+  por fixtures (B1c), que es lo que importa.
+- **No existe `G70` en ningún emisor**, sólo `G71`. Eso **debilita la hipótesis** de que la
+  línea 9 sea la unidad de medida (`IsMM`): si el ISO pudiera declarar pulgadas, tendría
+  que existir el código contrario. Lo decide un fixture barato —`IsMM` = Pulgadas— que ya
+  está en la lista de prioridad 3 del barrido.
+- `?%%ETK[8]=%ld` aparece **una sola vez**, en `VtGenIso.dll`, dentro del bloque del **láser
+  de cruce** (rodeada de `;Motore=%d,Strobe=%u` y `;Angolo=%.3f`). Nuestra línea 20 no lleva
+  comentario y esta máquina no tiene ese dispositivo: **no alcanza para atribuirla.** Sigue
+  DESCONOCIDA.
+
 ## Preguntas que abre el esqueleto
 
+- ⚠️ **¿Los orígenes son tres, o cuatro?** Líneas como `SYN`, `MLV=0` o `G71` no salen del
+  programa, ni del snapshot de máquina, ni de la ventana Opciones: **las escribe el binario
+  del emisor, siempre igual**. La taxonomía de tres orígenes no tiene casillero para eso, y
+  hoy caen todas en «Emisor», que es un cuarto de hecho. No es teórico: `NCI.CFG` mostró que
+  una parte del preámbulo es configuración, y otra versión del generador ISO cambiaría el
+  resto. **Es una decisión de Fermín**, y cambia cómo se escribe el converter: con tres
+  orígenes, esas líneas son literales legítimos; con cuatro, son «lo que emite ESTA versión»
+  y hay que registrar cuál es.
 - ¿Qué es `V=0` del header? ¿Y `Repetitions`, que no aparece?
 - ~~¿Por qué el reset toca justo los registros `ETK[0,1,2,13,17,18,19]`?~~ **RESPONDIDA
   (2026-08-12, B1f): porque están escritos en `$GEN_END` de `NCI.CFG`.** Es configuración
@@ -493,10 +567,11 @@ strings: **HIPÓTESIS**, no prueba.
 - ~~¿Qué es `M58`?~~ **RESPONDIDA (B1f): habilita el bloqueo de la pieza (vacío).**
 - ¿Qué son `SYN`, `VL6`, `VL7`, `EDK[13].0`, `ETK[8]`, `ETK[500]`? De `SYN` se sabe que lo
   pone el emisor (no `NCI.CFG`) y que precede a cada `M06` en los ISO de SCM.
-- El teardown escribe `MLV=2` aunque el nivel 2 nunca se usó: ¿es fijo o depende de la
-  máquina? Pista del relevamiento: en `VtGenIso.dll`, `MLV=n` viaja siempre junto a `VL5=n`
-  y a un par `SHF[X]`/`SHF[Y]` — o sea que **`MLV` selecciona un nivel y `VLn`/`SHF` son
-  sus registros**. Con `VL6`/`VL7` del teardown todavía no cierra.
+- ~~El teardown escribe `MLV=2` aunque el nivel 2 nunca se usó: ¿es fijo o depende de la
+  máquina?~~ **RESPONDIDA (2026-08-12, B1g): es una plantilla del módulo de mesa**
+  (`PlPathFilter32.dll`), que se emite entera con sus dos niveles. Queda abierto qué
+  **significan** los niveles: en los tres binarios, `MLV=n` viaja junto a `VLn` y a un par
+  `SHF[X]`/`SHF[Y]`, o sea que `MLV` selecciona un nivel y `VLn`/`SHF` son sus registros.
 - `%ETK[114]` de la línea 19: ¿qué corrección es, y de dónde sale? Aparece en `PostISO.dll`
   dentro de la plantilla `G161 … Z((…)+(%ETK[114]/1000))`, junto al bloque de palpado.
 
