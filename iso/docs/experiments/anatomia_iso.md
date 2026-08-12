@@ -47,10 +47,12 @@ y el bloque 22–29. La 43 (`M2`) lleva **dos**. No es adorno: es parte del byte
 |---|---|---|---|
 | 1 | `% r_pv_manual_base.pgm` | **Programa** — nombre del ARCHIVO, en minúsculas, extensión `.pgm` | **DERIVADO** — el fixture `dsdmt_25` lo prueba con los tres nombres separados: archivo `r_pv_manual_base_dsdmt_25`, miembro del ZIP `R_PV_manual_base_`, pieza `R_PV_manual_base`; el ISO emitió el del **archivo** |
 | 2 | `;H DX=400.000 DY=400.000 DZ=18.000 BX=0.000 BY=0.000 BZ=0.000 -HG V=0 *MM C=0 T=0 ` | ver desglose abajo — **ojo: `DX/DY/DZ` son dimensión + origen**, ver B1b | mixto |
-| 3 | `?%ETK[500]=100` | ? | DESCONOCIDO |
-| 5 | `_paras( 0x00, X, 3, %ax[0].pa[21]/1000, %ETK[500] )` | **Máquina** — parámetro 21 del eje 0 | DERIVADO (referencia explícita a `%ax`) |
-| 7 | `G0 G53 Z %ax[2].pa[22]/1000` | **Máquina** — parámetro 22 del eje 2, en coordenadas de máquina (`G53`) | DERIVADO |
-| 8 | `M58 ` | ? | DESCONOCIDO |
+| 3 | `?%ETK[500]=100` | **Máquina** — `NCI.CFG`, `$GEN_INIT` | **DERIVADO** (B1f: copia literal) |
+| 4 | *(vacía)* | **Máquina** — la línea que el `.CFG` tiene comentada entera | **DERIVADO** (B1f) |
+| 5 | `_paras( 0x00, X, 3, %ax[0].pa[21]/1000, %ETK[500] )` | **Máquina** — `$GEN_INIT`; parámetro 21 del eje 0 | **DERIVADO** (literal + referencia a `%ax`) |
+| 6 | *(vacía)* | **Máquina** — el `;` suelto del `.CFG` | **DERIVADO** (B1f) |
+| 7 | `G0 G53 Z %ax[2].pa[22]/1000` | **Máquina** — `$GEN_INIT`; parámetro 22 del eje 2, en coordenadas de máquina (`G53`) | **DERIVADO** |
+| 8 | `M58 ` | **Máquina** — `$GEN_INIT`; **habilita el bloqueo de la pieza** (`;abilita controllo vuoto`). El espacio final es el que separaba el comentario | **DERIVADO** (B1f) |
 | 9 | `G71 ` | **Aplicación** — G71 es «medidas en mm» | HIPÓTESIS (lo confirma cambiar `IsMM`, que es global) |
 | 10 | `MLV=0 ` | ? — abre el bloque de origen | DESCONOCIDO |
 | 11 | `%Or[0].ofX=-400000.000 ` | **Máquina** (campo del área) **+ Programa** (`DX`, sólo si el campo vale 0) — µm | **DERIVADO** (fórmula en B1c, 11/11) |
@@ -63,8 +65,8 @@ y el bloque 22–29. La 43 (`M2`) lleva **dos**. No es adorno: es parte del byte
 | 19 | `SHF[Z]=18.000+%ETK[114]/1000 ` | **Programa** (`DZ`) **+ Máquina** (corrección en runtime) | DERIVADO sobre `DZ` |
 | 20 | `?%ETK[8]=1 ` | ? | DESCONOCIDO |
 | 21 | `G40 ` | cancelación de compensación — constante del protocolo | DERIVADO por contexto |
-| 22 | `SYN` | ? | DESCONOCIDO |
-| 23–29 | `?%ETK[0]=0` `[1]` `[2]` `[13]` `[17]` `[18]` `[19]` | reset de registros; el CONJUNTO de índices es fijo | DESCONOCIDO (por qué esos siete) |
+| 22 | `SYN` | **Emisor** — sincronización; en los ISO de referencia de SCM precede a cada `M06` y al bloque de reset | HIPÓTESIS de función; el origen (no es `NCI.CFG`) es **DERIVADO** |
+| 23–29 | `?%ETK[0]=0` `[1]` `[2]` `[13]` `[17]` `[18]` `[19]` | **Máquina** — `NCI.CFG`, `$GEN_END`, copia literal | **DERIVADO** (B1f): son esos siete **porque están escritos ahí** |
 | 30 | `?%EDK[13].0=1 ` | **Programa** (el área) — el índice depende de la MITAD de mesa: 10 izquierda, 13 derecha | **DERIVADO** (B1c) |
 | 31–34 | `MLV=1 ` + `SHF[X]=0 ` `SHF[Y]=0 ` `SHF[Z]=0 ` | teardown: anula el SHF del nivel 1 | DERIVADO por contexto |
 | 35–38 | `MLV=2 ` + `SHF` en cero | ídem nivel 2 — **aparece aunque el nivel 2 nunca se usó** | DERIVADO por contexto |
@@ -93,7 +95,7 @@ SetMachiningParameters(
 | Campo | Valor | Origen | Confianza |
 |---|---|---|---|
 | `DX` `DY` `DZ` | 400.000 / 400.000 / 18.000 | **Programa** — **dimensión + origen** de cada eje, no la dimensión sola | DERIVADO (ver B1b) |
-| `BX` `BY` `BZ` | 0.000 / 0.000 / 0.000 | ? — **no es el origen** (con origen 100/50/5 siguen en cero); queda `WorkpieceOffset` como candidato | DESCONOCIDO (ver B1b) |
+| `BX` `BY` `BZ` | 0.000 / 0.000 / 0.000 | **Programa** — **traslación de la pieza respecto al TOPE**, por eje | **DERIVADO por doc** (Apéndice B de Xilog, ver abajo); falta el fixture que lo mueva |
 | `-HG` | | **Programa** — `executionFields`, el «Área» de Parámetros de máquina | **DERIVADO** (doc SCM) |
 | `V=0` | | **Programa** — `tableOptions`, el «Bloqueo» de Parámetros de máquina | **DERIVADO** (doc SCM) |
 | `T=0` | | **Programa** — `mechanicalOptions`, las «Opciones mecánicas» | **DERIVADO** (doc SCM) |
@@ -104,6 +106,26 @@ SetMachiningParameters(
 > `IsTechnologicalMirror` por parecido de inicial. Es **`mechanicalOptions`**. El
 > espejo tecnológico **no** está en el header, o está en otro lado. Caso de manual de
 > la regla 2: la definición ya estaba escrita y contradecía lo que uno supondría.
+
+### El header, completo, según el manual de Xilog
+
+El **Apéndice B** del manual (`pgmx/docs/xilog_plus_pgm/09_13_reglas_estacionamiento.md`,
+que contiene los apéndices) define las **variables predefinidas** del lenguaje y el
+operador `HEADER(n)`, que devuelve cada campo del encabezamiento por índice:
+
+| `HEADER(n)` | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Campo | `DX` | `DY` | `DZ` | `-` | `C` | `T` | `R` | `*` | `V` | reservado | `BX` | `BY` | `BZ` |
+
+⇒ **El juego de letras del header está cerrado**: son doce campos más un reservado, y el
+esqueleto emite todos salvo `R`. Y las tres variables de posición quedan definidas:
+
+> `DX` Dimensión en X · `DY` Dimensión en Y · `DZ` Dimensión en Z
+> `BX` *Traslazione in X del pezzo rispetto alla battuta* (ídem `BY`, `BZ`)
+
+⇒ **`BX/BY/BZ` es la traslación de la pieza respecto al TOPE**, no el origen — coherente
+con que R001 los haya dejado en cero al mover el origen. Sale de DESCONOCIDO. El fixture
+que lo confirma es uno con `WorkpieceOffset` ≠ 0, que el sintetizador todavía no varía.
 
 **`R` (repeticiones) no aparece** en este header, y el programa tiene `Repetitions=1`:
 la lectura natural es que el emisor **omite la letra cuando vale el default**. Sin
@@ -296,6 +318,14 @@ cada uno **cerrado** por una línea separadora rellena de `0x03` que lleva la le
 primer bloque no trae letra: no es un campo.) Los valores 15 y 16 del bloque son X e Y;
 el 18 y 19, ancho y alto.
 
+> **El manual confirma qué hay en cada posición** (Apéndice B, operador `FIELD(a,n)`):
+> `FIELD(a,5)` = origen X del campo · `FIELD(a,6)` = origen Y · `FIELD(a,7)` = origen Z ·
+> `FIELD(a,8)` = dimensión X · `FIELD(a,9)` = dimensión Y. El orden coincide con el que
+> se había leído posicionalmente, y **agrega un origen Z por campo** que todavía no
+> miramos. El mismo apéndice define `FLD`, la codificación numérica del área: `1=A`…
+> `12=AB`, `21=BA`, `101=E`… `112=EF` — o sea que **el par ordenado también es un
+> número**, y el orden de las letras está codificado ahí (`AB`=12 contra `BA`=21).
+
 | Campo | X | Y | ancho | alto |
 |---|---|---|---|---|
 | A | −3685.85 | 0.00 | 1843 | 1555 |
@@ -360,14 +390,115 @@ separación entre fases, y donde el «estacionamiento en cada cambio de fase» t
 cambio real donde manifestarse. Se cierra con un programa de dos fases con un mecanizado
 en cada una.
 
+## B1f · El preámbulo y el cierre están ESCRITOS en `NCI.CFG` (2026-08-12)
+
+**Trece de las cuarenta y tres líneas del esqueleto no las inventa el emisor: las copia
+de un archivo de configuración de la máquina que ya está en nuestro snapshot.**
+
+`iso/data/machine_config/snapshot/xilog_plus/Cfg/NCI.CFG` tiene dos bloques que aparecen
+**literales y en orden** en el ISO:
+
+| Bloque del `.CFG` | Líneas del ISO | Qué es |
+|---|---|---|
+| `$GEN_INIT` | **3–8** | el preámbulo entero |
+| `$GEN_END` | **23–29** | el reset de los siete registros |
+
+Verificable en cualquier momento, contra cualquier ISO:
+
+```
+py -m iso.machining_lab.verificar_nci
+```
+
+y fijado como regresión offline en `tests/test_iso_nci_skeleton.py`.
+
+### La regla de emisión: una sola, dos pasos
+
+Lo que separa el `.CFG` del ISO son dos transformaciones, y con eso alcanza para los seis
+casos del `$GEN_INIT`:
+
+1. **se corta la línea en el primer `;`** — el comentario no se emite, pero lo que quedó
+   antes sí, **con sus espacios**;
+2. **`%%` se desdobla a `%`**.
+
+| En `NCI.CFG` | En el ISO |
+|---|---|
+| `?%%ETK[500]=100` | `?%ETK[500]=100` |
+| `;?%%ETK[500]=%%ax[0].pa[22]/1000 ;solo per zone` | *(línea vacía)* |
+| `_paras( 0x00, X, 3, %%ax[0].pa[21]/1000, %%ETK[500] )` | `_paras( 0x00, X, 3, %ax[0].pa[21]/1000, %ETK[500] )` |
+| `;` | *(línea vacía)* |
+| `G0 G53 Z %%ax[2].pa[22]/1000` | `G0 G53 Z %ax[2].pa[22]/1000` |
+| `M58 ;abilita controllo vuoto` | `M58 ` |
+
+Dos cosas que esto explica y que estaban sin explicación:
+
+- **Las líneas 4 y 6 del ISO están vacías** porque en el `.CFG` son comentarios enteros.
+  Una línea comentada **no desaparece: deja su lugar.**
+- **El espacio final de `M58 `** es el que separaba el comentario en el `.CFG`. No es
+  adorno del emisor ni un capricho: viene del archivo, carácter por carácter. Para el
+  byte-idéntico esto importa más que la instrucción misma.
+
+### Qué queda respondido
+
+- **`M58` es la habilitación del bloqueo de la pieza** — el comentario italiano dice
+  `abilita controllo vuoto` («habilita el control de vacío») y el Apéndice I del manual de
+  Xilog lo confirma: `M28`/`M38`/`M39`/`M58` son las peticiones de bloqueo, y la selección
+  del tipo va **antes** de ellas.
+- **Por qué el reset toca justo `ETK[0,1,2,13,17,18,19]`**: porque esos siete están
+  escritos en `$GEN_END`. No es un conjunto canónico del lenguaje — es **configuración**.
+- **`$GEN_END` no es el final del archivo**: quedan catorce líneas después (30–43). El
+  emisor **inserta** el bloque configurable en un punto intermedio de su propio cierre.
+
+### El corolario, que es el que pega fuerte
+
+`NCI_ORI.CFG` —la versión de fábrica del mismo archivo, también en el snapshot— tiene
+**otro preámbulo y otro cierre**:
+
+| | `NCI.CFG` (instalado) | `NCI_ORI.CFG` (fábrica) |
+|---|---|---|
+| `$GEN_INIT` | seis líneas (`ETK[500]`, `_paras`, `G0 G53 Z`, `M58`) | **`M150`**, una línea |
+| `$GEN_END` | los siete `ETK` | los siete `ETK` **+ `SYN JSR 8900`** |
+
+⇒ **El preámbulo del ISO es configuración de la instalación, no protocolo.** Otra máquina
+—u otra revisión de la misma— emite otro preámbulo, y el converter que lo lleve escrito
+adentro produce un archivo que no es de esa máquina.
+
+Esto es **B1d por un segundo camino**. Ahí el esqueleto cambiaba por la ventana Opciones
+(configuración de la aplicación); acá cambia por `NCI.CFG` (configuración de la máquina).
+Dos de los tres orígenes pueden reescribirlo. **La regla 4 en su forma más concreta: estas
+trece líneas salen del snapshot, nunca de una constante del converter.**
+
+De yapa, la primera línea del archivo: `$GEN_ISO_FOR_EXTERNAL_APP` vale **1** — la clave
+que habilita a una aplicación externa (Maestro) a generar el ISO con este generador.
+
+### Lo que quedó a la vista, y sigue abierto
+
+Las líneas que **no** salen de `NCI.CFG` las pone el emisor, y el verificador ahora las
+lista de una: la cabecera (1–2), el bloque de origen (9–21), el `SYN` (22) y el teardown
+(30–43).
+
+Sobre `?%EDK[n].0` hay un dato nuevo del relevamiento: las cadenas `?%%EDK[%d].0=1` y
+`?%%EDK[%d].0=0` son **literales de `PostISO.dll`**, el generador ISO de Xilog Plus, con el
+índice parametrizado. ⇒ El origen de esas líneas es el **emisor**, no un `.cfg`; el valor
+del índice ya estaba derivado (la mitad de mesa, B1c). En la misma tabla de cadenas del
+binario, y contiguas, están `M58/M28/M38/M39/M59` con sus `E30xxx` — lo que sugiere que
+`EDK[n].0` es la habilitación de bloqueo **por zona**. Es contigüidad en una tabla de
+strings: **HIPÓTESIS**, no prueba.
+
 ## Preguntas que abre el esqueleto
 
 - ¿Qué es `V=0` del header? ¿Y `Repetitions`, que no aparece?
-- ¿Por qué el reset toca justo los registros `ETK[0,1,2,13,17,18,19]`?
-- ¿Qué son `M58`, `SYN`, `VL6`, `VL7`, `EDK[13].0`, `ETK[8]`, `ETK[500]`?
+- ~~¿Por qué el reset toca justo los registros `ETK[0,1,2,13,17,18,19]`?~~ **RESPONDIDA
+  (2026-08-12, B1f): porque están escritos en `$GEN_END` de `NCI.CFG`.** Es configuración
+  de la máquina, no una constante del lenguaje.
+- ~~¿Qué es `M58`?~~ **RESPONDIDA (B1f): habilita el bloqueo de la pieza (vacío).**
+- ¿Qué son `SYN`, `VL6`, `VL7`, `EDK[13].0`, `ETK[8]`, `ETK[500]`? De `SYN` se sabe que lo
+  pone el emisor (no `NCI.CFG`) y que precede a cada `M06` en los ISO de SCM.
 - El teardown escribe `MLV=2` aunque el nivel 2 nunca se usó: ¿es fijo o depende de la
-  máquina?
-- `%ETK[114]` de la línea 19: ¿qué corrección es, y de dónde sale?
+  máquina? Pista del relevamiento: en `VtGenIso.dll`, `MLV=n` viaja siempre junto a `VL5=n`
+  y a un par `SHF[X]`/`SHF[Y]` — o sea que **`MLV` selecciona un nivel y `VLn`/`SHF` son
+  sus registros**. Con `VL6`/`VL7` del teardown todavía no cierra.
+- `%ETK[114]` de la línea 19: ¿qué corrección es, y de dónde sale? Aparece en `PostISO.dll`
+  dentro de la plantilla `G161 … Z((…)+(%ETK[114]/1000))`, junto al bloque de palpado.
 
 Las responden los `.cfg` del snapshot, el manual de Xilog (`pgmx/docs/xilog_plus_pgm/`) y
 los fixtures de R001 — en ese orden: primero leer, después preguntar (regla 2).

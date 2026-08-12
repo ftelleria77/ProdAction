@@ -8,21 +8,21 @@ rumbo se anotan como decisiones con fecha). La vista visual se republica en cada
 
 Estados: ✅ hecho · 🔄 en curso · ⏸ esperando a Fermín · ⬜ pendiente · 🔮 futuro (sin fecha)
 
-## Estado actual (2026-08-09)
+## Estado actual (2026-08-12)
 
-La limpieza está hecha: rama `reinvestigacion` desde `main`, época anterior congelada fuera
-del árbol (ramas `iso_converter` y `respaldo/ejecucion-plan-f0-f3`), suite 282 passed 100%
-offline.
+La etapa 1 ya tiene su ISO de referencia y dos barridos de configuración completos (A5
+parámetros de máquina, A6 ventana Opciones). El hallazgo que ordena todo lo demás: **el
+esqueleto del ISO no es una plantilla fija**. Lo pueden reescribir dos de los tres orígenes
+—la ventana Opciones le agrega líneas (B1d) y `NCI.CFG` le define el preámbulo entero
+(B1f)—, así que ninguna de esas líneas puede vivir escrita dentro del converter.
 
-En la etapa 1 hay dos frentes abiertos. **A1**: los 7 fixtures de R001 están en S: esperando
-el postproceso; sin ese ISO no arranca B1. **A2**: el repaso de la UI empezó por la ventana
-**Opciones** (20 pantallas, transcriptas) y de ahí salió el hallazgo que reordenó la etapa —
-hay un TERCER origen del ISO, global de la aplicación, que no viaja en el `.pgmx`. Falta la
-ventana de propiedades del programa/pieza, que es la que responde el inventario.
+**B1 va por 35 de 43 líneas atribuidas.** Las 8 que faltan están todas en el bloque de
+origen (`MLV`, `EDK[0/1]`, `ETK[8]`, `SYN`) y en el teardown (`VL6`, `VL7`).
 
-Consecuencias del tercer origen, ya volcadas al mapa: **B1** pasa de atribuir cada línea a
-dos orígenes a atribuirla a tres, y **E1** aparece como rama nueva — el snapshot de máquina
-que hoy tiene 3 archivos se queda corto frente a una instalación real.
+Frentes abiertos: el barrido de `Parámetros → Post` (las dos opciones que pueden mover la
+fórmula del origen y el signo de Z), el paso 0 de la serie R_OPC en oficina técnica, y el
+experimento de las dos PCs, que necesita un programa **con mecanizado** — los tres
+dependen de fixtures que hace Fermín en Maestro. Suite: 291 passed, 100% offline.
 
 ## El mapa: troncos y ramificaciones
 
@@ -49,7 +49,8 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
   estacionamiento por cambio de fase (probado con 2 y 3 fases). Resultados en
   `experiments/opciones_de_aplicacion.md`.
 
-> ⏭️ **PRÓXIMO PASO (2026-08-11)**: quedan las dos opciones de **`Parámetros → Post`**
+> ⏭️ **PRÓXIMO PASO (anotado el 2026-08-11, sigue pendiente)**: quedan las dos opciones de
+> **`Parámetros → Post`**
 > que más pueden mover, y que **no necesitan trayectoria** para manifestarse porque el
 > esqueleto ya tiene `%Or` y `SHF[Z]`:
 >
@@ -67,7 +68,9 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
   configuración de programa (`.pgmx`), configuración de máquina (snapshot del CNC) o
   **configuración global de la aplicación (ventana Opciones)**. El tercero apareció el
   2026-08-09 y no estaba previsto — 🔄 **esqueleto de 43 líneas ya mapeado** (gemelo manual);
-  quedan ~15 líneas en DESCONOCIDO y varias HIPÓTESIS que cierran los fixtures de R001
+  **13 de ellas quedaron atribuidas a `NCI.CFG` el 2026-08-12** (B1f: el preámbulo y el reset
+  se copian literales del archivo de máquina). Quedan ~8 líneas en DESCONOCIDO, todas del
+  bloque de origen y del teardown
 - B2. Con cada operación nueva: qué líneas agrega, origen de cada parámetro y valor — 🔮
 - B3. Ruido del emisor (milésimas, case, f32): re-derivar con evidencia R propia — 🔮
 
@@ -125,6 +128,25 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-08-12 — Trece líneas del esqueleto estaban escritas en un archivo que ya teníamos
+- **El preámbulo (3–8) y el reset de registros (23–29) salen LITERALES de `NCI.CFG`**, un
+  archivo del snapshot de la máquina, en sus bloques `$GEN_INIT` y `$GEN_END`. Verificado con
+  `iso/machining_lab/verificar_nci.py` y fijado offline en `tests/test_iso_nci_skeleton.py`.
+- **La regla de emisión es una sola, de dos pasos**: cortar la línea en el primer `;` y
+  desdoblar `%%`→`%`. Con eso quedan explicadas **las dos líneas vacías** del preámbulo (son
+  comentarios enteros: una línea comentada no desaparece, deja su lugar) y **el espacio final
+  de `M58 `**, que es el que separaba el comentario en el `.CFG`.
+- **`NCI_ORI.CFG` (la versión de fábrica) trae otro preámbulo** (`M150`) y un `$GEN_END` con
+  una línea más ⇒ **el preámbulo es configuración de la instalación, no protocolo**. Es B1d
+  por un segundo camino: el esqueleto lo pueden reescribir DOS de los tres orígenes.
+- `$GEN_END` **no** cierra el archivo: quedan 14 líneas después. El emisor lo inserta en el
+  medio de su propio cierre.
+- Del manual de Xilog (Apéndice B, regla 2: estaba escrito): **`BX/BY/BZ` es la traslación de
+  la pieza respecto al TOPE** —sale de DESCONOCIDO—, `HEADER(n)` cierra el juego de letras
+  del header, y `FIELD(a,n)` confirma posición por posición la lectura de `fields.cfg`
+  (y agrega un **origen Z por campo** que todavía no miramos).
+- `M58` queda con significado: **habilita el bloqueo de la pieza** (`abilita controllo vuoto`).
 
 ### 2026-08-10 (noche) — Los dos barridos de configuración
 - **Parámetros de máquina, 29 fixtures manuales.** 16 llegan al ISO (14 mueven `V`, 2
