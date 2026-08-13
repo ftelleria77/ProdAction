@@ -1,0 +1,16 @@
+H DX=400.000 DY=400.000 DZ=18.000 -HG C=0 T=0 R=1 *MM /"def" BX=0.000 BY=0.000 BZ=0.000 V=0
+;**********************************************************
+; >> Post P. Release...
+;Versione : 1.00.006.1009;
+; >> Descrizione del programma...
+; Data di creazione: 8/13/2026 8:59:48 AM
+;
+; >> Utensili utilizzati...
+;
+; >> Inizio Programma...
+;**********************************************************
+.END
+;**********************************************************
+F=1
+O X=0 Y=0 Z=0 F=1 ;ChangePlane
+;FINEPROG

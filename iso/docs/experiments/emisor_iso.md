@@ -75,6 +75,58 @@ en la **etapa 1**, y sólo llegan al ISO las que Maestro alcanza a escribir en e
 estacionamiento automático llega porque Maestro lo escribe; las de traza no llegan **en un
 programa vacío** porque no hay trayectoria que escribir.
 
+### ⭐ Las dos PCs producen el MISMO intermedio (2026-08-13)
+
+El CNC postprocesó el mismo programa base y esta vez se guardaron **los cuatro** archivos.
+Comparados contra los de oficina técnica:
+
+| | Diferencias |
+|---|---|
+| `.xxl` (522 bytes en los dos) | **dos líneas**: `;Versione : 1.00.006.1009;` contra `…1010`, y la fecha de creación |
+| `.pgm` (1.655 bytes en los dos) | **catorce bytes**, todos dentro de esas mismas dos cadenas |
+| `.inf` | idéntico (`[LINES]=16`, `[ERRORS]=0`) |
+
+⇒ **La etapa 1 es idéntica entre las dos máquinas.** Maestro produce exactamente el mismo
+intermedio en las dos, salvo su firma de versión y el momento en que se corrió.
+
+⇒ Y por lo tanto: **toda la diferencia entre las dos PCs vive en la etapa 2** — justamente
+la que oficina técnica no puede completar. Para el programa vacío, el experimento de las
+dos PCs queda respondido: **la máquina donde se prepara el programa no cambia nada**; lo que
+manda es la que hace la segunda etapa.
+
+### El postproceso es repetible, y el ISO no firma quién lo hizo
+
+Dos cosas más de este juego de archivos:
+
+- **El ISO del CNC de hoy es idéntico al del 2026-08-10**, salvo la línea 1 (el nombre del
+  archivo). Tres días, y **los 17 fixtures del barrido de opciones en el medio**: el
+  postproceso es repetible y la configuración volvió intacta. Es la misma conclusión que dio
+  el `UI00.exe.Config`, ahora por el lado de la salida.
+- ⚠️ **La versión de Maestro se pierde en el paso a ISO.** El XXL la escribe
+  (`;Versione : 1.00.006.1009;`) y el ISO **no la lleva en ninguna línea**. Mirando un ISO
+  no hay forma de saber con qué versión se generó.
+
+  > Consecuencia para el método: **conviene guardar el `.xxl` junto a cada ISO de
+  > referencia.** Es el único archivo de la cadena que registra qué Maestro lo produjo, y
+  > pesa medio kilobyte. Con el emisor todavía sin registrar (E4), es la trazabilidad más
+  > barata que tenemos.
+
+### Qué del XXL sobrevive al ISO
+
+De las **16 líneas** del XXL, al ISO llegan **dos cosas**:
+
+| Del XXL | En el ISO |
+|---|---|
+| `H DX=… R=1 … /"def" …` | la línea 2, reescrita: otro orden, sin `R`, sin `/"def"`, y como comentario |
+| `O X=0 Y=0 Z=0 F=1` | las seis líneas de origen (`%Or[0].of*` y `SHF[*]`), **resueltas contra `fields.cfg`** |
+
+**El resto no llega**: las once líneas de comentario del encabezado (release, versión, fecha,
+«Utensili utilizzati»), y las marcas `.END`, `F=1` y `;FINEPROG`.
+
+⇒ **De las 43 líneas del ISO, sólo dos tienen antecedente en el XXL. Las otras 41 nacen en
+la segunda etapa.** Para un programa vacío, el ISO es casi por completo un producto de la
+configuración de máquina y del emisor — el programa aporta sus medidas y su origen.
+
 ### El XXL como intermedio observable
 
 Hasta hoy la investigación tenía dos puntos: el `.pgmx` (entrada) y el `.iso` (salida). El

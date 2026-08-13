@@ -40,7 +40,17 @@ miembro llamándose `R_PV_manual_base_.xml`) está en el commit `f5febc4`:
 git show f5febc4:iso/docs/experiments/evidencia/opciones_dsdmt_25/R_PV_manual_base_DSDMT_25.pgmx
 ```
 
-### `paso0_oficina_tecnica/`
+### `paso0_oficina_tecnica/` y `paso0_cnc/`
+
+**Las dos mitades del mismo experimento**: el programa base postprocesado en cada PC, con
+todos los archivos de la cadena. Comparados, muestran que **la etapa 1 es idéntica en las
+dos máquinas** (dos líneas de diferencia en el XXL: versión de Maestro y fecha) y que la
+etapa 2 sólo la completa el CNC.
+
+`paso0_cnc/` incluye además el `.iso`, que es la referencia del esqueleto y **ya se pisó una
+vez** (el del 2026-08-10 fue sobreescrito por el de hoy; son idénticos salvo la línea 1).
+
+
 
 El paso 0 de la serie R_OPC: el programa base postprocesado en la **PC de oficina técnica**,
 sin tocar ninguna opción. **No produjo `.iso`** — produjo los tres archivos de la etapa

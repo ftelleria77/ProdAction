@@ -8,14 +8,18 @@ rumbo se anotan como decisiones con fecha). La vista visual se republica en cada
 
 Estados: ✅ hecho · 🔄 en curso · ⏸ esperando a Fermín · ⬜ pendiente · 🔮 futuro (sin fecha)
 
-## Estado actual (2026-08-12, cierre del día)
+## Estado actual (2026-08-13)
 
-> ⭐ **Lo más importante que pasó hoy**: el postproceso **tiene dos etapas**
+> ⭐ **Lo más importante de estos dos días**: el postproceso **tiene dos etapas**
 > (`.pgmx` → XXL → PGM → ISO) y casi todo lo que veníamos investigando ocurre en la
 > **segunda**, que la hace el generador de Xilog y no Maestro. Con eso encajan de golpe el
 > preámbulo que sale de `NCI.CFG`, el origen que se resuelve contra `fields.cfg`, y el
 > resultado más repetido del barrido: 16 de 17 opciones de la ventana Opciones no llegan al
-> ISO porque actúan en la etapa 1. Detalle en `experiments/emisor_iso.md`.
+> ISO porque actúan en la etapa 1. Y las dos PCs producen el **mismo** XXL, así que toda la
+> diferencia entre máquinas vive en la etapa 2. Detalle en `experiments/emisor_iso.md`.
+>
+> **De las 43 líneas del ISO del programa vacío, sólo dos vienen del XXL.** Las otras 41 las
+> pone la segunda etapa — configuración de máquina y emisor.
 
 ## El estado anterior (2026-08-12, tarde)
 
@@ -153,6 +157,25 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-08-13 — Las dos PCs producen el MISMO intermedio
+El CNC postprocesó el mismo programa base guardando los cuatro archivos de la cadena.
+
+- ⭐ **La etapa 1 es idéntica entre las dos máquinas.** Los `.xxl` (522 bytes cada uno)
+  difieren en **dos líneas** —la versión de Maestro (`1009` en el CNC, `1010` en oficina) y
+  la fecha— y los `.pgm` (1.655 bytes) en **catorce bytes**, todos dentro de esas mismas dos
+  cadenas. ⇒ **Toda la diferencia entre las dos PCs vive en la etapa 2**, la que oficina
+  técnica no puede completar. Para el programa vacío, el experimento de las dos PCs queda
+  respondido: **la máquina donde se prepara el programa no cambia nada.**
+- ✅ **El postproceso es repetible**: el ISO del CNC de hoy es idéntico al del 08-10 salvo la
+  línea 1, con los 17 fixtures del barrido de opciones en el medio.
+- ⚠️ **La versión de Maestro se pierde en el paso a ISO**: el XXL la escribe, el ISO no la
+  lleva en ninguna línea. ⇒ **Conviene guardar el `.xxl` junto a cada ISO de referencia**: es
+  el único archivo de la cadena que registra qué Maestro lo produjo, y pesa medio kilobyte.
+- **De las 43 líneas del ISO, sólo dos tienen antecedente en el XXL** (el header y el
+  origen). Las otras 41 nacen en la segunda etapa. Para un programa vacío, el ISO es casi por
+  completo producto de la configuración de máquina y del emisor.
+- Evidencia en `evidencia/paso0_cnc/`, junto a `paso0_oficina_tecnica/`.
 
 ### 2026-08-12 (cierre) — El paso 0 no dio ISO, y por eso mostró la etapa intermedia
 Fermín postprocesó el programa base en la PC de **oficina técnica**. No salió ningún `.iso`:
