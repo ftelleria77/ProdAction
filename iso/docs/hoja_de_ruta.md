@@ -78,6 +78,15 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 > —sigue en el CNC—, y el experimento de las dos PCs hay que replantearlo, porque si una de
 > las dos no emite ISO no hay dos ISO que comparar. La comparación posible es **en XXL**.
 
+- A7. **Parámetros de usuario y dimensiones paramétricas** (Fermín, 2026-08-13) — ⏸ el
+  fixture lo arma él, incorporando las dos cosas al `manual_base`. Es el paso previo a las
+  operaciones de máquina. Preguntas que abre: ¿un parámetro sin usar deja rastro? (R001 lo
+  dejó abierto); ¿una dimensión definida por expresión llega al ISO **resuelta** o como
+  expresión?; ¿en qué etapa se resuelve — Maestro o el generador?
+  > Pista ya en mano: el `.pgm` del programa vacío declara `aDXV`, `aDYVa`, `aDZVb` y
+  > `aFLDVc`, o sea que **el intermedio ya tiene variables para DX, DY, DZ y el área**
+  > aunque el programa no las use. Es el primer lugar donde mirar.
+
 ### B. Anatomía del ISO — 🔄 ARRANCÓ (2026-08-10, doc `anatomia_iso.md`)
 - B1. Partes del archivo del programa vacío: atribuir CADA línea a **uno de TRES** orígenes —
   configuración de programa (`.pgmx`), configuración de máquina (snapshot del CNC) o
@@ -89,8 +98,16 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 - B2. Con cada operación nueva: qué líneas agrega, origen de cada parámetro y valor — 🔮
 - B3. Ruido del emisor (milésimas, case, f32): re-derivar con evidencia R propia — 🔮
 
-### C. Operaciones de máquina — 🔮 (Xn · Xmsg · Park · Iso)
-- El lab de la época anterior queda congelado; la instancia nueva se crea oportunamente.
+### C. Operaciones de máquina — ⏭️ **SIGUE DESPUÉS DE A7** (Xn · Xmsg · Park · Iso)
+Orden fijado por Fermín el 2026-08-13: primero A7 (parámetros de usuario y dimensiones
+paramétricas), después estas, y recién después los mecanizados. El lab de la época anterior
+queda congelado; la instancia nueva se crea oportunamente.
+
+Lo que ya se sabe sin haber empezado: el `Xn` mete **ocho líneas** entre el `G40` y el `SYN`
+(B1b), en el mismo punto donde el estacionamiento automático mete las suyas (B1d). Ese punto
+del archivo es donde van las operaciones de máquina. Y las cinco Funciones C.N. de la UI ya
+están mapeadas: `Xn` = «Operación nula», `Xmsg` = «Impresión mensaje», `Park` =
+«Aparcamiento», más **Palpación** y **Corte con cuchilla**, que no modelamos.
 
 
 ### D. Mecanizados — 🔮 (una operación por vez, cada parámetro variado de forma controlada)
@@ -169,9 +186,10 @@ El CNC postprocesó el mismo programa base guardando los cuatro archivos de la c
   respondido: **la máquina donde se prepara el programa no cambia nada.**
 - ✅ **El postproceso es repetible**: el ISO del CNC de hoy es idéntico al del 08-10 salvo la
   línea 1, con los 17 fixtures del barrido de opciones en el medio.
-- ⚠️ **La versión de Maestro se pierde en el paso a ISO**: el XXL la escribe, el ISO no la
-  lleva en ninguna línea. ⇒ **Conviene guardar el `.xxl` junto a cada ISO de referencia**: es
-  el único archivo de la cadena que registra qué Maestro lo produjo, y pesa medio kilobyte.
+- **La versión de Maestro se pierde en el paso a ISO**: el XXL la escribe, el ISO no la lleva
+  en ninguna línea. Se propuso guardar el `.xxl` junto a cada ISO para conservar esa firma y
+  **Fermín lo descartó (2026-08-13)**: la trazabilidad de los ISO y los XXL quedan fuera del
+  método.
 - **De las 43 líneas del ISO, sólo dos tienen antecedente en el XXL** (el header y el
   origen). Las otras 41 nacen en la segunda etapa. Para un programa vacío, el ISO es casi por
   completo producto de la configuración de máquina y del emisor.

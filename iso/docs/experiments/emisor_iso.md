@@ -102,14 +102,14 @@ Dos cosas más de este juego de archivos:
   archivo). Tres días, y **los 17 fixtures del barrido de opciones en el medio**: el
   postproceso es repetible y la configuración volvió intacta. Es la misma conclusión que dio
   el `UI00.exe.Config`, ahora por el lado de la salida.
-- ⚠️ **La versión de Maestro se pierde en el paso a ISO.** El XXL la escribe
-  (`;Versione : 1.00.006.1009;`) y el ISO **no la lleva en ninguna línea**. Mirando un ISO
-  no hay forma de saber con qué versión se generó.
+- **La versión de Maestro se pierde en el paso a ISO.** El XXL la escribe
+  (`;Versione : 1.00.006.1009;`) y el ISO **no la lleva en ninguna línea**.
 
-  > Consecuencia para el método: **conviene guardar el `.xxl` junto a cada ISO de
-  > referencia.** Es el único archivo de la cadena que registra qué Maestro lo produjo, y
-  > pesa medio kilobyte. Con el emisor todavía sin registrar (E4), es la trazabilidad más
-  > barata que tenemos.
+  > ❌ **Descartado (Fermín, 2026-08-13)**: se había propuesto guardar el `.xxl` junto a cada
+  > ISO de referencia para conservar esa firma. **No se hace.** La trazabilidad de los ISO y
+  > los archivos XXL quedan fuera del método; el XXL se usó para entender la cadena y ahí
+  > termina su rol. Los del paso 0 quedan versionados como evidencia de este hallazgo, no
+  > como práctica.
 
 ### Qué del XXL sobrevive al ISO
 
