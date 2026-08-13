@@ -4,13 +4,18 @@
 orígenes; lo que no se pueda atribuir queda escrito como desconocido, nunca como
 supuesto. Crece con cada operación nueva.
 
-Los tres orígenes (ver `programa_vacio.md`):
+Los **cuatro** orígenes (los tres primeros, en `programa_vacio.md`):
 
 | # | Origen | Dónde vive |
 |---|---|---|
 | 1 | **Programa** | el `.pgmx` |
 | 2 | **Máquina** | snapshot de la PC del CNC (`iso/data/machine_config/snapshot/`) |
 | 3 | **Aplicación** | `<Maestro>\UI00.exe.Config` (ventana Opciones) |
+| 4 | **Emisor** | `iso/data/machine_config/emisor_iso.cfg` — **archivo nuestro** (2026-08-13) |
+
+> El cuarto son las líneas que pone el generador ISO de Xilog y que no salen de ningún
+> archivo de la instalación. Decisión de Fermín: **no se escriben dentro del converter**,
+> se guardan como un origen más y se leen. Ver `emisor_iso.md`.
 
 > ⭐ **El postproceso tiene dos etapas** (2026-08-12, ver `emisor_iso.md`):
 > `.pgmx` → **XXL** → PGM → **ISO**. Maestro produce el XXL —donde actúan los orígenes 1 y

@@ -141,9 +141,14 @@ están mapeadas: `Xn` = «Operación nula», `Xmsg` = «Impresión mensaje», `P
 - E3. ✅ **Lo que pide el emisor y no tenemos** (2026-08-12): `PostISO.cfg`, `Script.cfg` y
   `Motorplid.cfg` **tampoco existen en el CNC** — no son fuente, cerrado. `PviBeR.msg` es un
   archivo de mensajes por idioma, no de emisión.
-- E4. **¿El snapshot registra al emisor?** — ⏸ **decisión de Fermín**. Los seis binarios del
-  generador difieren entre las dos PCs (`emisor_iso.md`) y no tienen número de versión: si se
-  registran, sería por hash en el mismo manifest — ⬜
+- E4. ✅ **El cuarto origen, hecho archivo** (decisión de Fermín, 2026-08-13): las líneas que
+  pone el emisor **no se escriben dentro del converter**, viven en
+  `data/machine_config/emisor_iso.cfg` —el esqueleto completo con `<marcadores>`, en el
+  formato `$CLAVE … $` de los `.cfg` de Xilog— y las lee `iso/emisor.py`. Verificado
+  byte a byte contra el ISO de referencia (`tests/test_iso_emisor.py`).
+- E5. **¿Se registran también los binarios del emisor?** — ⏸ decisión pendiente. El archivo
+  dice *qué* emite; su encabezado dice *quién* en prosa. Formalizarlo sería sumar el sha256
+  de los cuatro DLL al manifest — ⬜
 - E2. **Separar «default al crear» de «lectura al postprocesar»**, clave por clave: las dos
   PCs difieren en `RadiusMultiplier` (4 vs 2) y `SecurityDistance` (20 vs 30). Doc:
   `experiments/configuracion_aplicacion.md` — ⏸ necesita el experimento de las dos PCs
@@ -174,6 +179,24 @@ están mapeadas: `Xn` = «Operación nula», `Xmsg` = «Impresión mensaje», `P
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-08-13 (tarde) — El cuarto origen deja de ser una pregunta y pasa a ser un archivo
+Tres definiciones de Fermín, y la construcción de la segunda.
+
+- ❌ **Descartada la trazabilidad de los ISO y los archivos XXL.** El XXL sirvió para
+  entender la cadena y ahí termina su rol; no se guarda por fixture.
+- ✅ **El cuarto origen es un archivo nuestro**: `data/machine_config/emisor_iso.cfg`, con el
+  **esqueleto completo** del ISO y `<marcadores>` donde entran el header, el origen, los
+  bloques de `NCI.CFG` y el cuerpo. Formato `$CLAVE … $`, el de los `.cfg` de Xilog, con
+  prefijo `$EMI_` para no confundirse nunca con las claves de SCM.
+  - **La regla del `;` prestada del `NCI.CFG` resuelve el problema de los espacios finales**:
+    `G71 ;` → `"G71 "`. Escritos al desnudo, el primer editor que recorte espacios rompería
+    el byte-idéntico en silencio; así quedan visibles y a prueba de editor.
+  - `tests/test_iso_emisor.py` rearma el ISO del programa vacío desde el archivo y lo compara
+    **byte a byte** con el de referencia. Y comprueba que un valor faltante **explota** en vez
+    de completarse solo: la regla 4 en código. Suite **302**.
+- ⏭️ **Orden fijado**: A7 (parámetros de usuario y dimensiones paramétricas) → C (operaciones
+  de máquina) → D (mecanizados).
 
 ### 2026-08-13 — Las dos PCs producen el MISMO intermedio
 El CNC postprocesó el mismo programa base guardando los cuatro archivos de la cadena.

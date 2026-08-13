@@ -235,16 +235,64 @@ uno nuevo: el emisor lee configuración, y cuando no la encuentra tiene un defau
 El emisor incluso trae su propio fail-loud: si no encuentra la clave de un código G escribe
 `;G%d: CORRISPONDENZA NON TROVATA!` **dentro del ISO**.
 
+## ✅ El cuarto origen, hecho archivo (Fermín, 2026-08-13)
+
+**Decisión**: las líneas que pone el emisor no se escriben dentro del converter — se
+guardan en un archivo de configuración más, al lado del snapshot de la máquina, y el
+converter lo lee como cuarto origen.
+
+`iso/data/machine_config/emisor_iso.cfg`, leído por `iso/emisor.py`.
+
+| | |
+|---|---|
+| **Alcance** | el **esqueleto completo**, con `<marcadores>` donde se insertan el header, el origen, los bloques de `NCI.CFG` y el cuerpo |
+| **Formato** | el de los `.cfg` de Xilog: `$CLAVE` … `$`; fuera de los bloques, todo es comentario |
+| **Prefijo** | `$EMI_`, nunca `$GEN_`/`$MA_`/`$KEY_`, que son claves reales de SCM |
+
+### La regla prestada, y por qué
+
+Dentro de los bloques rige **la misma regla de emisión que el emisor aplica al `NCI.CFG`**:
+la línea se corta en el primer `;` y lo anterior se emite tal cual. No es por simetría
+estética — es por los **espacios finales**:
+
+```
+G71 ;   ->  "G71 "     M2  ;   ->  "M2  "     SYN   ->  "SYN"
+```
+
+Las líneas 9 a 43 del ISO llevan un espacio al final, la 22 ninguno y la 43 dos. Escritos
+al desnudo, el primer editor con «quitar espacios finales» los borraría en silencio y el
+byte-idéntico se rompería sin que nadie lo note. Con el `;` que los cierra, **son visibles
+y a prueba de editor**. Un `;` literal —lo necesita la línea del header— se escribe `;;`.
+
+Dos diferencias deliberadas con el `NCI.CFG`, escritas en el propio archivo: acá el `%`
+**no** se duplica (nuestras líneas no pasan por ningún printf) y el archivo va en **UTF-8**,
+porque es nuestro y tiene acentos.
+
+### Cómo se verifica que sirve
+
+`tests/test_iso_emisor.py` rearma el ISO del programa vacío desde el archivo y lo compara
+**byte a byte** contra el de referencia (`evidencia/paso0_cnc/`). Si alguien toca un espacio,
+el test cae. También comprueba que un valor faltante **explota con `KeyError`** en vez de
+completarse solo: regla 4, en código.
+
+### Lo que el archivo declara que NO sabe
+
+Escrito en su propio encabezado, para que el hueco viaje con el dato:
+
+- `*MM` y `G71` están literales porque toda la evidencia se derivó con `IsMM=true`. **Hasta
+  que haya un fixture en pulgadas, el converter no puede emitir en pulgadas.**
+- El bloque de ocho líneas del `Xn` no está: su `Z201.000` todavía no tiene origen (rama C).
+- `?%EDK[0].0` y `?%EDK[1].0` van con valor 0, el único observado.
+
 ## Decisión pendiente
 
-**¿El snapshot incluye al emisor?** Hoy el snapshot guarda configuración (93 archivos) y no
-guarda los binarios que la consumen. Con dos emisores distintos en el taller, la opción
-conservadora es registrar al menos **su identidad** (nombre, tamaño, fecha y sha256) junto
-al resto del manifest, sin necesariamente versionar 1 MB de DLL.
+**¿El snapshot incluye también los binarios del emisor?** El archivo de arriba registra
+*qué* emite; no registra *quién* lo emitió. Hoy `emisor_iso.cfg` lo dice en prosa en su
+encabezado (Maestro 1.00.006.1009, binarios del 2011-11-18). Formalizarlo sería sumar su
+sha256 al manifest, sin necesariamente versionar 1 MB de DLL.
 
-Es decisión de Fermín. Lo que cambia: con el emisor registrado, el converter puede declarar
-contra qué build se derivó cada regla y **fallar ruidosamente** si el ISO de referencia
-salió de otra. Sin registrarlo, esa diferencia es invisible.
+Lo que cambia: con el emisor registrado, el converter puede fallar ruidosamente si el ISO de
+referencia salió de otra build. Sin registrarlo, esa diferencia es invisible.
 
 ## Herramienta
 

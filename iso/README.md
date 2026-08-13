@@ -16,6 +16,8 @@ iso/
   docs/           Documentación de la investigación.
     experiments/  Un doc por experimento: mapa UI → .pgmx → ISO, derivado y pendiente.
   machine_config.py  Refresco y verificación del snapshot contra una copia del CNC.
+  emisor.py       El CUARTO origen: el esqueleto que pone el generador ISO, leído de
+                  data/machine_config/emisor_iso.cfg (no escrito en el código).
   machining_lab/  Laboratorio de fixtures controlados (serie R).
   paths.py        Rutas raíz S:/P: de los pares PGMX/ISO.
 ```
