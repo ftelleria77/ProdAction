@@ -64,26 +64,26 @@ y el bloque 22–29. La 43 (`M2`) lleva **dos**. No es adorno: es parte del byte
 | 5 | `_paras( 0x00, X, 3, %ax[0].pa[21]/1000, %ETK[500] )` | **Máquina** — `$GEN_INIT`; parámetro 21 del eje 0 | **DERIVADO** (literal + referencia a `%ax`) |
 | 6 | *(vacía)* | **Máquina** — el `;` suelto del `.CFG` | **DERIVADO** (B1f) |
 | 7 | `G0 G53 Z %ax[2].pa[22]/1000` | **Máquina** — `$GEN_INIT`; parámetro 22 del eje 2, en coordenadas de máquina (`G53`) | **DERIVADO** |
-| 8 | `M58 ` | **Máquina** — `$GEN_INIT`; **habilita el bloqueo de la pieza** (`;abilita controllo vuoto`). El espacio final es el que separaba el comentario | **DERIVADO** (B1f) |
+| 8 | `M58 ` | **Máquina** — `$GEN_INIT`; **habilita el bloqueo de la pieza** (`;abilita controllo vuoto`). El espacio final es el que separaba el comentario | **DERIVADO** (B1f), y confirmado por el fabricante: «M58: LLAMADA VACÍO GENERAL» (B1i) |
 | 9 | `G71 ` | **Aplicación** — G71 es «medidas en mm» | HIPÓTESIS **debilitada** (B1g: no existe `G70` en ningún emisor); la decide el fixture `IsMM`=Pulgadas |
-| 10 | `MLV=0 ` | **Emisor** (`PlPathFilter32.dll`) — abre el bloque de origen | origen del binario DERIVADO (B1g); qué significa, DESCONOCIDO |
+| 10 | `MLV=0 ` | **Emisor** (`PlPathFilter32.dll`) — selecciona el **nivel de transformación de coordenadas** al que se escribe; el nivel 0 es el que lleva el `%Or` | origen DERIVADO (B1g); el significado, **HIPÓTESIS fundada** (B1i) |
 | 11 | `%Or[0].ofX=-400000.000 ` | **Máquina** (campo del área) **+ Programa** (`DX`, sólo si el campo vale 0) — µm | **DERIVADO** (fórmula en B1c, 11/11) |
 | 12 | `%Or[0].ofY=-1515599.976 ` | ídem sobre el eje Y — µm | **DERIVADO** (misma fórmula) |
 | 13 | `%Or[0].ofZ=18000.000 ` | **Programa** — µm; `= DZ` (o sea `depth + origin_z`) | DERIVADO (ver B1b) |
-| 14–15 | `?%EDK[0].0=0 ` · `?%EDK[1].0=0 ` | **Emisor** (`PostISO.dll`) — plantilla de **índice fijo**, distinta de la de la línea 30 | origen DERIVADO (B1g); qué son, DESCONOCIDO |
+| 14–15 | `?%EDK[0].0=0 ` · `?%EDK[1].0=0 ` | **Emisor** (`PostISO.dll`) — plantilla de **índice fijo**, distinta de la de la línea 30. `EDK` = **bit de intercambio del CNC al PLC**; el `.0` es el bit. Banda `EDK 0–5` | origen DERIVADO (B1g); la familia y la banda, **DERIVADAS** del manual de SCM (B1i); qué gobierna cada bit, DESCONOCIDO |
 | 16 | `MLV=1 ` | **Emisor** (`PlPathFilter32.dll`) | ídem línea 10 |
 | 17 | `SHF[X]=-400.000 ` | ídem 11, en mm | **DERIVADO** (B1c) |
 | 18 | `SHF[Y]=-1515.600 ` | ídem 12, en mm | **DERIVADO** (B1c) |
 | 19 | `SHF[Z]=18.000+%ETK[114]/1000 ` | **Programa** (`DZ`) **+ Máquina** (corrección en runtime) | DERIVADO sobre `DZ` |
-| 20 | `?%ETK[8]=1 ` | ? — la única plantilla `ETK[8]` del barrido está en el bloque del láser de cruce, que esta máquina no tiene | DESCONOCIDO (B1g) |
+| 20 | `?%ETK[8]=1 ` | **Emisor** — `ETK 6–12` es la banda del **cambio de herramienta y la animación gráfica** | banda **DERIVADA** del manual de SCM (B1i). ⚠️ **El valor NO es constante**: en los ISO con mecanizado alterna 1 y 2, y la plantilla del láser lo pone en 0. Acá vale 1 sólo porque no hay operaciones |
 | 21 | `G40 ` | cancelación de compensación — constante del protocolo | DERIVADO por contexto |
-| 22 | `SYN` | **Emisor** — sincronización; en los ISO de referencia de SCM precede a cada `M06` y al bloque de reset | HIPÓTESIS de función; el origen (no es `NCI.CFG`) es **DERIVADO** |
+| 22 | `SYN` | **Emisor** — barrera de sincronización: el CNC calcula bloques por delante de la ejecución, y `SYN` obliga a esperar a que el anterior se haya ejecutado de verdad. En los ISO de SCM precede a cada `M06` y al bloque de reset | HIPÓTESIS **con mecanismo** (B1i); el origen (no es `NCI.CFG`) es **DERIVADO** |
 | 23–29 | `?%ETK[0]=0` `[1]` `[2]` `[13]` `[17]` `[18]` `[19]` | **Máquina** — `NCI.CFG`, `$GEN_END`, copia literal | **DERIVADO** (B1f): son esos siete **porque están escritos ahí** |
 | 30 | `?%EDK[13].0=1 ` | **Programa** (el área) — el índice depende de la MITAD de mesa: 10 izquierda, 13 derecha | **DERIVADO** (B1c) |
 | 31–34 | `MLV=1 ` + `SHF[X]=0 ` `SHF[Y]=0 ` `SHF[Z]=0 ` | **Emisor** (`PlPathFilter32.dll`) — teardown: anula el SHF del nivel 1 | **DERIVADO** (B1g: el bloque está literal, con su par de apertura) |
 | 35–38 | `MLV=2 ` + `SHF` en cero | ídem nivel 2 — aparece aunque el nivel 2 nunca se usó **porque la plantilla se emite entera** | **DERIVADO** (B1g) |
 | 39 | `MLV=0 ` | vuelve al nivel 0 | DERIVADO por contexto |
-| 40–41 | `VL6=0 ` · `VL7=0 ` | **Emisor** (`PlPathFilter32.dll`), en el bloque de **mesa** (travesaños y ventosas) | origen DERIVADO (B1g); qué son, DESCONOCIDO |
+| 40–41 | `VL6=0 ` · `VL7=0 ` | **Emisor** (`PlPathFilter32.dll`), en el bloque de **mesa** (travesaños y ventosas). Son los registros donde el emisor deja la **longitud** y el **radio** de la herramienta activa; acá en cero porque el programa no usó ninguna | origen DERIVADO (B1g); el contenido, **DERIVADO** contra el catálogo (B1i) |
 | 42 | `?%EDK[13].0=0 ` | cierra lo que abrió la 30 | DERIVADO por contexto |
 | 43 | `M2  ` (dos espacios) | fin de programa | DERIVADO por contexto |
 
@@ -629,6 +629,155 @@ expectativa de que el paso 0 dé un ISO idéntico.
 `Nci.ini` ya estaba en el snapshot y no lo habíamos mirado nunca. `[DISC] enable=0` merece un
 segundo vistazo cuando llegue el canal con sierra.
 
+## B1i · El control es **ESA-GV**, y con eso `EDK`/`ETK` tienen diccionario (2026-08-14)
+
+**Fuente**: *Nueva Guía de Diagnóstico para Fresadoras con Control Numérico + Lista códigos
+M*, **SCM Group S.p.A.**, código **`9031191610B`**, versión 4.2 (2004), 395 páginas, en
+castellano. Capítulos 7, 23, 32 y 12.
+
+> ⚠️ El documento lleva impresa la reserva de propiedad de SCM y la prohibición de
+> divulgarlo. **No se copia al repo, ni el PDF ni su texto.** Acá van los hechos sobre
+> NUESTRA máquina, citando capítulo y código, como cualquier referencia externa.
+
+### La cadena que identifica el control
+
+1. El manual (cap. 7): *«Para las variables E.., relativas a los CNC **ESA-GV**, se
+   transformarán en **ETK**..»*, y el capítulo 32 se titula «Parámetros ETK.. para máquinas
+   con CNC ESA-GV».
+2. Nuestro ISO usa `ETK` y `EDK`, no `E30000`.
+3. El manual agrupa explícitamente `RD110s-TV-**Pratix**` (cap. 1) y documenta `ETK103` como
+   parámetro «en RD110 (**CNC ESA-GV**)», cuyo equivalente NUM es `E30012` (cap. 14).
+
+⇒ **La Pratix tiene CNC ESA-GV.** De los cuatro dialectos que declara `PostISO.dll`
+(`ISO-OSAI(2)`, `ISO-ESAGV(2)`, `ISO-NUM`, `ISO-ORCHESTRA`, ver `emisor_iso.md`), **el
+nuestro es `ISO-ESAGV(2)`**. Esto no es una hipótesis de estilo: cambia qué manual aplica a
+cada línea del esqueleto.
+
+### `EDK` — bit de intercambio del CNC al PLC
+
+Capítulo 32, textual, con sus bandas — y familias hermanas del mismo rol (`EOK`, `EVK`,
+`EQK`, `ESK`):
+
+```
+EDK 0 - EDK 5      EDK 10 - EDK 13      EDK 20 - EDK 21
+```
+
+| Nuestro | Banda | Lo que ya habíamos derivado por fixtures |
+|---|---|---|
+| `?%EDK[0].0` · `?%EDK[1].0` | 0–5 | — |
+| `?%EDK[13].0` | 10–13 | B1c: **10 = mitad izquierda · 13 = mitad derecha** |
+
+La banda 10–13 es exactamente el juego de mitades de mesa que R002 dedujo sin conocer el
+manual. Y el `.0` deja de ser un misterio: **`EDK` es un registro de bits**, y `.0` es el bit.
+
+### `ETK` — bandas por función
+
+| Banda | Función (manual, cap. 32) | Los nuestros |
+|---|---|---|
+| `ETK 0–5` | mandos de salida ejes / mandriles de la taladradora | `ETK[0] [1] [2]` — el reset del `$GEN_END` |
+| **`ETK 6–12`** | **cambio de herramienta y animación gráfica** | **`ETK[7]` · `ETK[8]`** |
+| `ETK 13–101` | configuración de motorizaciones de ejes, mandriles y electromandriles | `ETK[13] [17] [18] [19]` |
+| `ETK 16` | gestión Up-Down grupo hoja | — |
+| `ETK 31–32` | tipo de bloqueo (bornes / vacío) | — |
+| `ETK 102` · `ETK 103` | cabezales bajos · cambio de herramienta neumático RD110 | — |
+| **> 103** | **no documentado** (ver abajo) | `ETK[114]` · `[500]` · `[903]` · `[904]` |
+
+⭐ **`?%ETK[8]` es de la banda del cambio de herramienta.** Eso explica lo observado: alterna
+1 y 2 dentro de un mismo programa con mecanizado, y la plantilla del láser de cruce lo pone
+en 0. En el esqueleto vale 1 **porque no hay operaciones**, no porque sea constante.
+
+### Por qué los índices altos no van a aparecer en ningún manual
+
+El capítulo 33 —«Parámetros ETK.. para operaciones especiales (CNC ESA-GV)»— **está en blanco
+a propósito**: *«Capítulo en blanco… Deberá rellenarse vez por vez al definir el tipo de
+operación especial. Fecha ___ referencia nº de serie ___ Modelo máquina ___»*.
+
+⇒ Los índices altos son **por máquina**, los completa el técnico en la puesta en marcha. El
+documento que falta no es un manual genérico: es **el capítulo 33 rellenado para el número de
+serie de nuestra Pratix**, y lo tiene el servicio técnico de SCM.
+
+Lo poco que hay de esos índices sale de comentarios del propio fabricante, no del manual:
+
+| Registro | Comentario | Dónde |
+|---|---|---|
+| `?%ETK[903]=%d` | `;traverse` (travesaños) | `PlPathFilter32.dll` |
+| `?%ETK[904]=%d` | `;utensile` (herramienta) | `PlPathFilter32.dll` |
+| `?%ETK[500]=%ax[0].pa[22]/1000` | `;solo per zone` | `NCI.CFG`, línea comentada |
+
+### `VL6` / `VL7` — la longitud y el radio de la herramienta
+
+En los ISO **con** mecanizado, `VL6` y `VL7` copian a las instrucciones `SVL` y `SVR`, que se
+cargan con `D1` (corrector activo) y se anulan con `D0`:
+
+```
+T1 · S18000M3 · D1 · SVL 125.400 · VL6=125.400 · SVR 9.180 · VL7=9.180
+      …
+D0 · SVL 0.000 · VL6=0.000 · SVR 0.000 · VL7=0.000
+```
+
+Cruzados contra `pgmx/data/tool_catalog.csv` sobre ~2.000 ISO del taller, **`SVL` y `SVR` se
+emiten siempre en pareja y coinciden al centésimo con el catálogo**:
+
+| `SVR` | `SVL` | Catálogo | Herramienta |
+|---|---|---|---|
+| 9.180 | 125.400 | r 9.18 · L 125.4 | E001 Widea 18 mm |
+| 2.000 | 107.200 | r 2.0 · L 107.2 | E004 Fresa 4 mm |
+| 4.760 | 111.500 | r 4.76 · L 111.5 | E003 Fresa Violeta |
+| 40.000 | 120.870 | r 40.0 · L 120.87 | E006 Rectificado |
+| 38.000 | 145.900 | r 38.0 · L 145.9 | E005 Fresa 45º |
+| 8.860 | 152.100 | r 8.86 · L 152.1 | E007 Recta 50mm |
+| 50.000 | 107.000 | r 50.0 · L 107 | E002 Sierra Horizontal |
+| **1.900** | 60.000 | r **60.0** · L 60 | 082 Sierra Vertical X ⚠️ |
+
+⇒ `SVL` = `tool_offset_length` · `SVR` = `diameter / 2`. **DERIVADO**, y con consecuencia
+directa: cuando la rama D emita mecanizados, estas dos líneas **salen del catálogo**, no de
+una constante (regla 4).
+
+⚠️ **La excepción, sin resolver**: la Sierra Vertical X recibe `SVR 1.900` cuando el radio de
+su disco es 60. El 1,9 es la mitad de los 3,8 mm de corte de una sierra que el catálogo llama
+«4 mm». La Sierra **Horizontal**, en cambio, sí recibe el radio del disco (50). Las dos
+sierras se tratan distinto y **no sabemos por qué**: lo resuelve la rama D (canal).
+
+> **Ojo con el nombre.** `SVL`/`SVR` se leen como *sovrametallo* (sobrematerial) en italiano,
+> y esa es una lectura razonable de la instrucción. Pero los **valores** que SCM escribe ahí
+> son la longitud y el radio de la herramienta. Si alguna vez modelamos este campo, se llama
+> por lo que lleva, no por lo que sugiere la sigla (regla 1).
+
+### `MLV` — nivel de transformación de coordenadas
+
+**HIPÓTESIS fundada**, no derivado. Es la única lectura que explica el propio esqueleto:
+
+```
+MLV=0  →  %Or[0].ofX/Y/Z    (el origen, en µm)
+MLV=1  →  SHF[X]/[Y]/[Z]    (el mismo origen, en mm)
+```
+
+y el teardown, que recorre los niveles 1 y 2 poniéndolos en cero antes de volver al 0 — o
+sea, **limpia la pila entera**, se haya usado o no. Eso explica de paso el `MLV=2` «de un
+nivel que nunca se usó» (B1g).
+
+Lo que **no** pude corroborar: se le atribuyen registros hermanos (`MIR`, `SYS`) y un rango
+`0…5`. Barridos los 382 binarios, **no existe `MIR[`, `SYS[` ni `MLV=3/4/5` como literal**.
+Nuestro emisor sólo escribe `SHF` y sólo usa 0, 1 y 2. No lo refuta; tampoco lo confirma.
+
+### `SYN` — barrera de sincronización
+
+**HIPÓTESIS con mecanismo**: el CNC calcula bloques por delante de la ejecución física, y
+`SYN` obliga al intérprete a esperar a que el bloque anterior se haya ejecutado de verdad.
+Encaja con su posición —antes de tocar offsets y antes del cierre—, pero **no tiene evidencia
+propia**: el manual de programación de OSAI (482 páginas, procesado entero) no lo documenta,
+y el de SCM tampoco.
+
+### Códigos M, de paso
+
+- **`M58` = «LLAMADA VACÍO GENERAL (ZONA A-B)»** (cap. 12) — confirma por el fabricante lo
+  que el comentario del `NCI.CFG` decía en italiano.
+- **`M20` = «ningún cambio para el modo pasante (no se cierra al final del programa)»**
+  (cap. 23) — es el `M20` del bloque del láser.
+- ⚠️ El capítulo 23 lista los códigos M que siguen valiendo en máquinas ESA-GV
+  (`M0 M3 M5 M6 M12 M15 M20 M31/32/33 M51 M110–114`…) y **`M58` no está en esa lista**. El
+  documento es de 2004 y la máquina de 2011: no concluyo nada, queda anotado para mirar.
+
 ## Preguntas que abre el esqueleto
 
 - ⚠️ ~~**¿Los orígenes son tres, o cuatro?**~~ **Respondida en los hechos el 2026-08-12**: los
@@ -645,13 +794,17 @@ segundo vistazo cuando llegue el canal con sierra.
   (2026-08-12, B1f): porque están escritos en `$GEN_END` de `NCI.CFG`.** Es configuración
   de la máquina, no una constante del lenguaje.
 - ~~¿Qué es `M58`?~~ **RESPONDIDA (B1f): habilita el bloqueo de la pieza (vacío).**
-- ¿Qué son `SYN`, `VL6`, `VL7`, `EDK[13].0`, `ETK[8]`, `ETK[500]`? De `SYN` se sabe que lo
-  pone el emisor (no `NCI.CFG`) y que precede a cada `M06` en los ISO de SCM.
+- ~~¿Qué son `SYN`, `VL6`, `VL7`, `EDK[13].0`, `ETK[8]`, `ETK[500]`?~~ **RESPONDIDA en gran
+  parte (2026-08-14, B1i)**: `VL6`/`VL7` llevan longitud y radio de la herramienta (derivado
+  contra el catálogo); `EDK` es un bit de intercambio CNC→PLC y su índice el dispositivo;
+  `ETK[8]` es de la banda del cambio de herramienta **y no es constante**. Siguen abiertos el
+  **significado de `SYN`** (hipótesis con mecanismo) y los **índices `ETK` altos**
+  (`114`, `500`, `903`, `904`), que son por máquina y viven en el capítulo 33 rellenado.
 - ~~El teardown escribe `MLV=2` aunque el nivel 2 nunca se usó: ¿es fijo o depende de la
   máquina?~~ **RESPONDIDA (2026-08-12, B1g): es una plantilla del módulo de mesa**
-  (`PlPathFilter32.dll`), que se emite entera con sus dos niveles. Queda abierto qué
-  **significan** los niveles: en los tres binarios, `MLV=n` viaja junto a `VLn` y a un par
-  `SHF[X]`/`SHF[Y]`, o sea que `MLV` selecciona un nivel y `VLn`/`SHF` son sus registros.
+  (`PlPathFilter32.dll`), que se emite entera con sus dos niveles. **Y el 2026-08-14 (B1i) el
+  significado pasa a hipótesis fundada**: `MLV` selecciona el **nivel de transformación de
+  coordenadas** —el 0 lleva el `%Or`, el 1 el `SHF`— y el teardown limpia la pila entera.
 - `%ETK[114]` de la línea 19: ¿qué corrección es, y de dónde sale? Aparece en `PostISO.dll`
   dentro de la plantilla `G161 … Z((…)+(%ETK[114]/1000))`, junto al bloque de palpado.
 

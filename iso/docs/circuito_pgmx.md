@@ -144,10 +144,26 @@ alimenta a Maestro, no lo reemplaza.
   equivalente para ISO** en ninguna dirección: por eso el converter no tiene con qué
   compararse ni de dónde copiar.
 
-El ejecutable vive en la carpeta de Maestro: `XConverter.exe` (52 KB, **2013**). Al lado
-hay un **`Xconverter.exe.new`** (449 KB, 2023) que **no está en uso** — una versión más
-nueva sin activar. Anotarlo antes de sacar conclusiones sobre el comportamiento del
-conversor: puede que la que corre no sea la última.
+El ejecutable vive en la carpeta de Maestro: `XConverter.exe` (52 KB, **2013**), escrito en
+.NET/WPF (`/XConverter;component/app.xaml`).
+
+> ✅ **`Xconverter.exe.new` NO es un XConverter más nuevo** (resuelto 2026-08-14, ver
+> pregunta 4). Los 449 KB del 2023 son un **lanzador hecho en el taller**: mensajes en
+> castellano con erratas (`archvos`, `Comiezno`, `Finalziacion`), un `ShellExecute` de
+> **`XXL2.bat`**, cronómetro del proceso y renombrado de originales a `.old`. El formato de
+> hora `hh:nn:ss:zzz` es de Delphi, no de .NET. Y el `XConvert.exe` que invocan los
+> `_nuevo.bat` **no existe** en la carpeta: quedó sólo su `.config`. No hay ningún cambio de
+> versión del conversor esperando a entrar.
+
+**Un detalle de nomenclatura que conviene tener escrito**: los lotes se llaman **`XXL2.bat`**
+pero la modalidad que invocan es `-m 0`, que lee **`.xcs`** — no `.xxl`. En los directorios de
+trabajo hay 326 `.xcs` y **cero** `.xxl`. El nombre quedó de cuando X-CAB emitía XXL; el paso
+se sigue llamando así en el taller aunque el archivo ya no lo sea.
+
+Pista abierta, sin confirmar: dentro de `XConverter.exe` la cadena `\temp.xxl` está pegada a
+las del progreso de la conversión (`Start Esporta` · `Carica Configurazione macchina` ·
+`Crea xcs file` · `Fine Genera pgmx`), lo que sugiere que el camino `.xcs` → `.pgmx` arma un
+**XXL temporal** por dentro. Contigüidad no es prueba.
 
 **Qué es un `.xcs`**: código MSL plano, una llamada por línea, del mismo lenguaje que
 documenta `pgmx/docs/maestro_scripting/`. Ejemplo real (`Tmp\test1.xcs`, placa de
@@ -206,8 +222,10 @@ como el registro de lo que hay que retomar, no como un frente activo.
 3. ⏳ ¿Un `.pgmx` de X-CAB abierto y re-guardado en Maestro cambia de forma? (Si el
    operario los toca antes de postprocesar, el converter ve la forma re-guardada, no la
    original.)
-4. ⏳ ¿`Xconverter.exe.new` (2023) reemplaza al `XConverter.exe` (2013) en algún momento?
-   Un cambio de versión del emisor cambia lo que hay que reproducir.
+4. ~~¿`Xconverter.exe.new` (2023) reemplaza al `XConverter.exe` (2013) en algún momento?~~
+   **RESPONDIDA (2026-08-14): NO.** No es un XConverter: es un lanzador Delphi hecho en el
+   taller que corre `XXL2.bat` y renombra archivos. Su binario objetivo (`XConvert.exe`) ni
+   siquiera está instalado. Detalle arriba.
 5. ⏳ ¿Hay otros orígenes que todavía no estén en esta lista?
 
 ## Por qué importa

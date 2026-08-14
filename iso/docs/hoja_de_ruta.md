@@ -8,9 +8,29 @@ rumbo se anotan como decisiones con fecha). La vista visual se republica en cada
 
 Estados: ✅ hecho · 🔄 en curso · ⏸ esperando a Fermín · ⬜ pendiente · 🔮 futuro (sin fecha)
 
-## Estado actual (2026-08-13)
+## Estado actual (2026-08-14)
 
-> ⭐ **Lo más importante de estos dos días**: el postproceso **tiene dos etapas**
+> ⭐⭐ **El esqueleto es UN DIALECTO ENTRE CUATRO, y ahora sabemos cuál.** `PostISO.dll` sabe
+> emitir `ISO-OSAI(2)`, `ISO-ESAGV(2)`, `ISO-NUM` e `ISO-ORCHESTRA`; la clave que elige
+> (`[CNCNAME]` de `Nci.ini`) está **vacía** en esta máquina. La guía de diagnóstico de SCM
+> (`9031191610B` v4.2) cierra cuál es: en los CNC **ESA-GV** las variables `E..` «se
+> transformarán en `ETK..`», y nuestro ISO usa `ETK`/`EDK` ⇒ **la Pratix es CNC ESA-GV**.
+>
+> Con eso, tres de los cinco tokens sin significado salen de DESCONOCIDO: **`EDK` es un bit de
+> intercambio CNC→PLC** (y sus bandas confirman lo que R002 había derivado a ciegas),
+> **`ETK` tiene bandas por función** —y `ETK[8]` es del **cambio de herramienta**—, y
+> **`VL6`/`VL7` llevan la longitud y el radio de la herramienta**, derivados contra el
+> catálogo sobre ~2.000 ISO. Detalle en `experiments/anatomia_iso.md`, B1i.
+>
+> ⚠️ **Primer defecto real encontrado en `emisor_iso.cfg`**: tenía `?%ETK[8]=1` congelado sin
+> salvedad. No es constante. Ya está anotado en el archivo.
+>
+> **A7 sigue bloqueado**: los fixtures de parámetros de usuario y dimensiones paramétricas no
+> están en S: ni en P: (lo más nuevo es del 08-13 08:59).
+
+## El estado anterior (2026-08-13)
+
+> ⭐ **Lo más importante de esos dos días**: el postproceso **tiene dos etapas**
 > (`.pgmx` → XXL → PGM → ISO) y casi todo lo que veníamos investigando ocurre en la
 > **segunda**, que la hace el generador de Xilog y no Maestro. Con eso encajan de golpe el
 > preámbulo que sale de `NCI.CFG`, el origen que se resuelve contra `fields.cfg`, y el
@@ -21,7 +41,7 @@ Estados: ✅ hecho · 🔄 en curso · ⏸ esperando a Fermín · ⬜ pendiente 
 > **De las 43 líneas del ISO del programa vacío, sólo dos vienen del XXL.** Las otras 41 las
 > pone la segunda etapa — configuración de máquina y emisor.
 
-## El estado anterior (2026-08-12, tarde)
+## El estado del 2026-08-12 (tarde)
 
 La etapa 1 ya tiene su ISO de referencia y dos barridos de configuración completos (A5
 parámetros de máquina, A6 ventana Opciones). El hallazgo que ordena todo lo demás: **el
@@ -64,8 +84,12 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
   estacionamiento por cambio de fase (probado con 2 y 3 fases) y, el 08-12, las **dos de
   prioridad 1** (`IsAreaScm`, `IsZetaScm`) más `IsBottomPlaneMachining` y
   `IsCheckCollisionEnabled`. Resultados en `experiments/opciones_de_aplicacion.md`.
-  Quedan para cuando haya mecanizado: la familia que gobierna trazas, `PostFileFormat` e
-  `IsMM`.
+  Quedan para cuando haya mecanizado: la familia que gobierna trazas e `IsMM`.
+  > ⬇️ **`PostFileFormat`, de baja prioridad (2026-08-14).** Se había propuesto un fixture
+  > barato (postprocesar el vacío con `XXL` y con `PGM`) para confirmar que la cadena es una
+  > sola y el selector sólo decide dónde se detiene. **Confirmaría un modelo que ya no nos
+  > importa**: el converter va de `.pgmx` a `.iso` y no emite ninguno de los otros dos
+  > formatos. Queda anotado, no priorizado.
 
 > ✅ **CUMPLIDO el 2026-08-12**: las dos opciones de `Parámetros → Post` (`IsAreaScm`,
 > `IsZetaScm`) se barrieron y **ninguna llega al ISO del programa vacío**. La fórmula del
@@ -82,10 +106,38 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
   fixture lo arma él, incorporando las dos cosas al `manual_base`. Es el paso previo a las
   operaciones de máquina. Preguntas que abre: ¿un parámetro sin usar deja rastro? (R001 lo
   dejó abierto); ¿una dimensión definida por expresión llega al ISO **resuelta** o como
-  expresión?; ¿en qué etapa se resuelve — Maestro o el generador?
-  > Pista ya en mano: el `.pgm` del programa vacío declara `aDXV`, `aDYVa`, `aDZVb` y
-  > `aFLDVc`, o sea que **el intermedio ya tiene variables para DX, DY, DZ y el área**
-  > aunque el programa no las use. Es el primer lugar donde mirar.
+  expresión? ~~¿en qué etapa se resuelve — Maestro o el generador?~~ **RETIRADA (2026-08-14):
+  no es relevante para el converter.** Si el ISO trae un número, el converter lo calcula
+  desde el `.pgmx`; si trae una expresión, la copia. La etapa donde ocurra no cambia ni una
+  línea de lo que hay que emitir — y era la única de las tres que necesitaba el XXL.
+  > **La pista, leída (2026-08-14).** `aDXV`/`aDYVa`/`aDZVb`/`aFLDVc` no son cuatro nombres:
+  > son dos opcodes pegados —`a` = cadena con byte de longitud, `V` = referencia a variable
+  > con byte de índice—. Leído bien: **`DX`→slot 0x60, `DY`→0x61, `DZ`→0x62, `FLD`→0x63**, y
+  > el DWORD en `0x78` de la cabecera vale **4**. Idéntico en los `.pgm` de las dos PCs.
+  >
+  > Y **no las pone Maestro**: el `.xxl` (16 líneas) no declara ninguna variable, así que las
+  > **inyecta el compilador XXL/PGM** — etapa 2. El manual ya lo tenía escrito
+  > (`09_13_reglas_estacionamiento.md`, Apéndice B): son las **variables predefinidas de sólo
+  > lectura** del lenguaje (`DX DY DZ BX BY BZ FLD` + pi). Curiosidad: materializa cuatro de
+  > las siete — `BX/BY/BZ` no aparecen.
+  >
+  > **Predicción falsable para cuando lleguen los fixtures**: el vocabulario de Xilog son tres
+  > cosas distintas (`PAR` = parámetro, `L` = variable con expresión, `D` = alias), los `PAR`
+  > van **detrás** del encabezamiento y `DX/DY/DZ` son de **sólo lectura** ⇒ el `H DX=` del
+  > XXL **no puede** llevar una expresión, y la dimensión tendría que llegar **resuelta en la
+  > etapa 1**. El discriminador es una sola línea: qué dice `H DX=` en el `.xxl`.
+  >
+  > ⚠️ **Incongruencia a resolver antes de modelar** (regla 1): «parámetro» significa tres
+  > cosas — el panel **«Parámetros»** de Maestro, el tag `parametric_variables` / namespace
+  > `Parametrics` del `.pgmx`, y las instrucciones `PAR`/`L`/`D` de Xilog. Cuál emite Maestro
+  > cambia qué tiene que preservar el converter.
+  >
+  > Qué hace falta: los `.pgmx` y sus `.iso`, nada más. Al 08-14 no están en S: ni en P:.
+  >
+  > ⚠️ **Corrección (2026-08-14)**: acá decía que hacían falta también los `.xxl`. Contradecía
+  > la decisión de Fermín del 08-13 —«la trazabilidad de los ISO y los archivos XXL quedan
+  > fuera del método»— y era innecesario: las dos preguntas que sí importan se contestan
+  > mirando el `.pgmx` y el `.iso`. La tercera, la que necesitaba el XXL, quedó retirada.
 
 ### B. Anatomía del ISO — 🔄 ARRANCÓ (2026-08-10, doc `anatomia_iso.md`)
 - B1. Partes del archivo del programa vacío: atribuir CADA línea a **uno de TRES** orígenes —
@@ -146,6 +198,10 @@ están mapeadas: `Xn` = «Operación nula», `Xmsg` = «Impresión mensaje», `P
   `data/machine_config/emisor_iso.cfg` —el esqueleto completo con `<marcadores>`, en el
   formato `$CLAVE … $` de los `.cfg` de Xilog— y las lee `iso/emisor.py`. Verificado
   byte a byte contra el ISO de referencia (`tests/test_iso_emisor.py`).
+- E6. ✅ **El dialecto del control, identificado** (2026-08-14): el esqueleto es uno de los
+  **cuatro** que sabe emitir `PostISO.dll`, y el nuestro es **`ISO-ESAGV(2)`** — la Pratix
+  tiene **CNC ESA-GV**. La clave que lo elige (`[CNCNAME]` de `Nci.ini`) está vacía: se emite
+  el default. Anotado en la procedencia de `emisor_iso.cfg`. Detalle en `emisor_iso.md`.
 - E5. **¿Se registran también los binarios del emisor?** — ⏸ decisión pendiente. El archivo
   dice *qué* emite; su encabezado dice *quién* en prosa. Formalizarlo sería sumar el sha256
   de los cuatro DLL al manifest — ⬜
@@ -179,6 +235,64 @@ están mapeadas: `Xn` = «Operación nula», `Xmsg` = «Impresión mensaje», `P
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-08-14 — El control tiene nombre, y con eso `EDK`/`ETK` tienen diccionario
+Día sin fixtures nuevos: A7 quedó bloqueado y el trabajo se fue a cerrar significados.
+
+- ⭐⭐ **La Pratix es CNC ESA-GV, y el esqueleto es el dialecto `ISO-ESAGV(2)`.** `PostISO.dll`
+  declara **cuatro** dialectos y `Nci.ini` tiene la clave que los elige (`[CNCNAME]`) **vacía**.
+  Lo resuelve la *Guía de Diagnóstico* de SCM `9031191610B` v4.2: en los CNC ESA-GV las
+  variables `E..` «se transformarán en `ETK..`», agrupa `RD110s-TV-Pratix`, y documenta
+  `ETK103` como parámetro de RD110 con CNC ESA-GV. Nuestro ISO usa `ETK`/`EDK`.
+- ✅ **`EDK` = bit de intercambio del CNC al PLC**, bandas `0-5` / `10-13` / `20-21`. La banda
+  10-13 es **exactamente** el juego de mitades de mesa que R002 había derivado sin el manual —
+  la evidencia propia y la documentación se confirman entre sí. Y el `.0` es el **bit**.
+- ✅ **`ETK` tiene bandas por función**, y `?%ETK[8]` cae en la del **cambio de herramienta**
+  (`ETK 6-12`). Eso explica que alterne 1 y 2 en los ISO con mecanizado. ⚠️ **Estaba congelado
+  en 1 en `emisor_iso.cfg`**: primer defecto real encontrado en el archivo del cuarto origen.
+- ✅ **`VL6`/`VL7` son la longitud y el radio de la herramienta.** Copian a `SVL`/`SVR`, que se
+  cargan con `D1` y se anulan con `D0`. Cruzados contra `tool_catalog.csv` sobre ~2.000 ISO
+  del taller: **ocho herramientas, coincidencias al centésimo en los dos campos**. Cuando la
+  rama D emita mecanizados, esas dos líneas salen del catálogo (regla 4). Excepción anotada:
+  la Sierra Vertical X recibe `SVR 1.900` y no el radio de su disco.
+- `MLV` pasa a **hipótesis fundada** (nivel de transformación: el 0 lleva el `%Or`, el 1 el
+  `SHF`, y el teardown limpia la pila). `SYN` queda como hipótesis **con mecanismo**.
+- ✅ **`M58` = «LLAMADA VACÍO GENERAL»**, confirmado por el fabricante — coincide con el
+  comentario italiano del `NCI.CFG`.
+- ✅ **El XConverter no tiene NADA del esqueleto**: 28 binarios barridos (incluidos los de
+  `C:\SPAI` y `Xconverter.exe.new`, que el barrido de B1g no alcanzaba), 20 patrones, cero
+  coincidencias, con control positivo de 9/20 en `PlPathFilter32.dll`. El cuarto origen se
+  sostiene. Y `Xconverter.exe.new` resultó ser un **lanzador hecho en el taller**, no una
+  versión nueva: cierra la pregunta 4 de `circuito_pgmx.md`.
+- **Método**: dos respuestas de IA externas se contrastaron contra la evidencia. La primera
+  daba expansiones inventadas para las cinco siglas y quedó refutada en tres. La segunda
+  acertó `EDK`/`ETK`/`MLV`/`SYN` y erró `SVL`/`SVR` (los llamó sobrematerial), lo que se
+  detectó **porque el catálogo dice otra cosa**. Los números del taller mandan sobre cualquier
+  prosa; los ejemplos que una IA «cita» hay que verificar que existan.
+- ⚠️ El manual de SCM lleva prohibición de divulgación: **no se copia al repo**, se cita por
+  código y capítulo.
+- ⛔ **DECISIÓN DE ALCANCE (Fermín, 2026-08-14): el XXL y el PGM se cierran como línea de
+  trabajo.** El converter va de `.pgmx` a `.iso` **directamente**; no usa Winxiso ni el
+  XConverter, y no emite ninguno de esos dos formatos. Lo que sigue en pie es **qué emite**
+  el emisor (rama B) — eso es lo que hay que reproducir byte a byte. Lo que se cierra es el
+  estudio de los formatos intermedios, de cómo se invoca Winxiso, y del XConverter salvo por
+  el único costado que importa: **produce `.pgmx` de entrada** (rama F, diferida).
+  - Se retira la regla «si estaba en el XXL, nace en la etapa 1»: razona a través de un
+    intermedio que no emitimos y **evita el fixture**, que es el método.
+  - Auditado hallazgo por hallazgo: **ninguno de los que sostienen el converter salió del
+    XXL/PGM**. La fórmula del origen es de R002, el dialecto y las plantillas de los binarios
+    del emisor, `VL6`/`VL7` del catálogo, `EDK`/`ETK` del manual de SCM. El XXL aportó
+    relato, no evidencia.
+  - Corregida de paso una contradicción propia: A7 pedía «los `.pgmx` **y sus `.xxl`**», en
+    contra de la decisión del 08-13. Arranca con `.pgmx` + `.iso`.
+- 🔍 **La cadena de dos etapas, re-verificada a pedido de Fermín.** Objetó —con razón— que
+  `.iso`/`.xxl`/`.pgm` son los tres valores de `PostFileFormat`, o sea formatos de salida
+  elegibles, y que el tramo `PGM → ISO` estaba **inferido** de que los archivos aparecieran
+  juntos. Al ir a verificarlo apareció evidencia dura: `Winxiso.exe` trae su propia ayuda de
+  línea de comando con una modalidad por tramo —**`-c [PGM -> ISO]`**, `-o [XXL -> PGM]`—.
+  La cadena queda DERIVADA y las dos lecturas se unifican: **es una sola cadena y el selector
+  decide dónde se detiene**. Queda el fixture que lo confirma (`PostFileFormat` = XXL / PGM),
+  barato y sin necesidad de mecanizado.
 
 ### 2026-08-13 (tarde) — El cuarto origen deja de ser una pregunta y pasa a ser un archivo
 Tres definiciones de Fermín, y la construcción de la segunda.
@@ -234,8 +348,10 @@ más grande de la etapa.
 - ⇒ **Explica el resultado que más se repitió en el barrido**: las opciones de la ventana
   Opciones actúan en la etapa 1, y sólo llegan al ISO las que Maestro alcanza a escribir en
   el XXL. Por eso 16 de 17 no llegaron.
-- ⇒ **El XXL es un intermedio observable**: cuando una línea del ISO no se entienda, se puede
-  preguntar si ya estaba en el XXL, y eso dice en qué etapa nace.
+- ⇒ ~~**El XXL es un intermedio observable**: cuando una línea del ISO no se entienda, se
+  puede preguntar si ya estaba en el XXL, y eso dice en qué etapa nace.~~ **RETIRADA COMO
+  MÉTODO el 2026-08-14** (decisión de Fermín): razona a través de un intermedio que no
+  emitimos, y evita el fixture. Ver `experiments/emisor_iso.md`.
 - **Consecuencia práctica**: el barrido **no se puede mudar a oficina técnica** —esa
   instalación no genera ISO, y no es de hoy: hay temporales de marzo de 2025 con el mismo
   patrón—. Sigue haciéndose en el CNC. Y el experimento de las dos PCs para las claves de

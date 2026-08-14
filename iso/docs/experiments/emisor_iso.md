@@ -20,6 +20,46 @@ produjo ningún `.iso`. Produjo **otros tres archivos**, y ahí estaba el hallaz
 ⇒ La cadena es **`.pgmx` → XXL → PGM → ISO**, y lo que se detuvo fue el último tramo. Los
 tres archivos están versionados en `evidencia/paso0_oficina_tecnica/`.
 
+### El binario lo dice, tramo por tramo (2026-08-14)
+
+> **Cómo se llegó a esto, y por qué hubo que volver.** La cadena se había inferido de que
+> los tres archivos aparecieran juntos y de que el ISO nombre un `.pgm` en su línea 1.
+> **Eso no alcanzaba**: coocurrencia no es dirección. Fermín lo cuestionó con un argumento
+> correcto —`.iso`, `.xxl` y `.pgm` son los tres valores de `PostFileFormat`, o sea
+> **formatos de salida elegibles**—, y al ir a verificarlo apareció la evidencia dura.
+
+`Winxiso.exe` (`<Xilog Plus>\Bin\`) trae en su tabla de cadenas **su propia ayuda de línea
+de comando**, con una modalidad por tramo:
+
+```
+Options:
+  -o    [XXL -> PGM]
+  -f    [XXL+BMP -> PGM]
+  -c    [PGM -> ISO]
+  -t    [symbol map]
+```
+
+⇒ **`-c [PGM -> ISO]` es literal**: el ISO se genera **desde el PGM**. El tramo que estaba
+inferido queda DERIVADO. Y los tres tramos tienen ahora evidencia independiente:
+
+| Tramo | Evidencia |
+|---|---|
+| `.pgmx` → XXL | el XXL lleva la versión de Maestro (`;Versione : 1.00.006.1009;`) y la fecha de creación |
+| XXL → PGM | el `.inf` (`XXL/PGM Compiler Version 9.0`, `[LINES]=16` = las 16 líneas del XXL) **y** `-o [XXL -> PGM]` |
+| PGM → ISO | **`-c [PGM -> ISO]`** |
+
+### Y las dos lecturas se unifican
+
+`PostFileFormat` **sí** es un selector de formato (`XXL` / `PGM` / `ISO`; en esta máquina
+vale `ISO`). Las dos cosas son ciertas a la vez, y encajan: **la cadena es una sola, y el
+selector decide dónde se detiene.** Con `ISO` se recorre entera, y por eso el postproceso
+deja los cuatro archivos.
+
+> **Predicción falsable, y fixture barato**: postprocesar el programa base con
+> `PostFileFormat` = **XXL** debería dejar sólo el `.xxl`; con **PGM**, el `.xxl` + `.pgm` +
+> `.inf`. Si cada valor deja **sólo** su propio archivo, la unificación es falsa y hay que
+> volver a mirar. No necesita trayectoria: se puede hacer con el programa vacío, hoy.
+
 ### El XXL del programa vacío, entero
 
 ```
@@ -127,11 +167,29 @@ De las **16 líneas** del XXL, al ISO llegan **dos cosas**:
 la segunda etapa.** Para un programa vacío, el ISO es casi por completo un producto de la
 configuración de máquina y del emisor — el programa aporta sus medidas y su origen.
 
-### El XXL como intermedio observable
+### ~~El XXL como intermedio observable~~ — RETIRADA COMO MÉTODO (2026-08-14)
 
-Hasta hoy la investigación tenía dos puntos: el `.pgmx` (entrada) y el `.iso` (salida). El
-XXL es **el paso del medio, en texto legible**. Cuando una línea del ISO no se entienda, se
-puede preguntar si ya estaba en el XXL — y eso dice en cuál de las dos etapas nace.
+> ❌ **Esta regla se dio de baja.** Decía: «cuando una línea del ISO no se entienda, se puede
+> preguntar si ya estaba en el XXL, y eso dice en cuál de las dos etapas nace». Queda escrita
+> como historia, **no se usa**.
+>
+> **Por qué.** Razona sobre el ISO **a través de un intermedio que no controlamos, no
+> emitimos y no vamos a convertir**. El método de la época separa programa de máquina de una
+> sola manera: **variando una cosa y viendo qué se mueve** (fixtures de variación controlada).
+> El XXL es un atajo que evita el fixture, y evitar el fixture es exactamente lo que las
+> reglas 4 y 5 del `CLAUDE.md` advierten — es una forma de equivocarse a distancia.
+>
+> **Y no hacía falta.** Ninguno de los hallazgos que sostienen el converter salió de acá: la
+> fórmula del origen es de R002 (11 fixtures), el dialecto y las plantillas son de los
+> binarios del emisor, `VL6`/`VL7` del catálogo de herramientas, y `EDK`/`ETK` del manual de
+> SCM. Lo que el XXL aportó fue **relato**: por qué pasan cosas que los fixtures ya habían
+> mostrado.
+>
+> **Alcance de la rama B, para que no se vuelva a mezclar**: se estudia **qué emite** el
+> emisor (`PostISO.dll`, `nci32.dll`, `VtGenIso.dll`, `PlPathFilter32.dll`) — eso es lo que
+> hay que reproducir byte a byte. **No** se estudian los formatos XXL y PGM, ni cómo se
+> invoca `Winxiso`, ni el XConverter (que es del lado de la **entrada**: produce algunos de
+> los `.pgmx` que habrá que convertir, y eso es la rama F).
 
 ## Por qué oficina técnica no llega al ISO
 
@@ -182,6 +240,78 @@ Los módulos que aportan las líneas del esqueleto (`anatomia_iso.md`, B1g) son:
 | `PlPathFilter32.dll` | el teardown (`MLV`/`SHF`/`VL6`/`VL7`), dentro de su bloque de **mesa** |
 | `VtGenIso.dll` | plantillas de `MLV`/`SHF` y el bloque del láser de cruce |
 | `nci32.dll` | códigos G y las plantillas del header |
+
+## ⭐⭐ El esqueleto es UN DIALECTO ENTRE CUATRO, y el nuestro es ESA-GV (2026-08-14)
+
+`PostISO.dll` no emite «el ISO»: emite el ISO **de un control concreto**. Su tabla de cadenas
+trae la lista de dialectos, contigua a las plantillas de nuestro propio esqueleto
+(`?%%EDK[1].0=%d`, `%%ETK[114]`, `G64`, `SYN`, `G40`, `G168`, `G169`):
+
+```
+ISO-OSAI(2)          ISO-ESAGV(2)        ISO-NUM ERGON
+ISO-OSAI(2) LUA      ISO-ESAGV(2) LUA    ISO-ORCHESTRA
+ISO-ORCHESTRA LUA    ISO-NUM LUA
+```
+
+Y `VtGenIso.dll` trae dos clases hermanas del mismo bloque: `VtGenIso_CrossLaserOsai` y
+`VtGenIso_CrossLaserKvara`.
+
+⇒ Es un hallazgo del mismo tipo que B1d —el esqueleto no es plantilla fija— pero un nivel más
+arriba: **no cambia una línea, cambia el lenguaje entero**.
+
+### Dónde se elige, y por qué no está escrito
+
+`Nci.ini`, la configuración del generador que ya estaba en el snapshot, tiene la clave:
+
+```
+[CNCNAME]
+name=
+```
+
+**Vacía.** Es otra vez el mecanismo de B1h: la clave existe, ningún archivo la define, y el
+emisor usa su default. Nuestro ISO es el dialecto **por defecto**.
+
+### Cuál es, resuelto por el manual del fabricante
+
+No por el default, sino por el lado del contenido (`anatomia_iso.md`, B1i). La *Guía de
+Diagnóstico* de SCM `9031191610B` v4.2 dice que en los CNC **ESA-GV** las variables `E..`
+«se transformarán en **ETK**..», agrupa `RD110s-TV-**Pratix**` y documenta `ETK103` como
+parámetro de RD110 con CNC ESA-GV. Nuestro ISO usa `ETK` y `EDK`.
+
+⇒ **La Pratix es CNC ESA-GV, y el dialecto emitido es `ISO-ESAGV(2)`.**
+
+### Qué cambia para el converter
+
+`emisor_iso.cfg` guarda el esqueleto de **un** dialecto. Su encabezado declaraba la versión de
+Maestro y la fecha de los binarios, pero no **para qué control** vale. Si `[CNCNAME]` dejara
+de estar vacío, o si el archivo se usara contra una máquina con otro control, el esqueleto
+entero es otro y nada lo advertía. Queda anotado en la procedencia del archivo.
+
+## El XConverter no tiene nada del esqueleto (2026-08-14)
+
+Pregunta de Fermín: ¿el XConverter revela de dónde salen las líneas que pusimos en
+`emisor_iso.cfg`, o las tiene también en el código?
+
+**Barrido de 28 archivos** —los cuatro `XConverter*` de la carpeta de Maestro y los 12+12 de
+`C:\SPAI\X-CAB` y `C:\SPAI\EASYNEST`—, en ASCII y UTF-16, contra 20 patrones que cubren todo
+lo que hoy vive en `emisor_iso.cfg`: `MLV`, `SHF[*]`, `VL6/VL7`, `EDK[`, `ETK[`, `%Or[`,
+`SYN`, `_paras(`, `%ax[n].pa`, `G0G53`, `H DX=`, `G71/G70`, `G40`, `M2/M58`, `$GEN_`, `$MA_`,
+`$PM_`, `$KEY_`, `NCI.CFG`.
+
+**Cero coincidencias.** Lo único que aparece son extensiones de archivo (`\temp.xxl`, `.xcs`).
+
+Control positivo, para que el negativo valga: los mismos 20 patrones contra los binarios que
+B1g ya atribuyó aciertan **9/20** en `PlPathFilter32.dll`, **8/20** en `PostISO.dll`, 7/20 en
+`VtGenIso.dll` y 3/20 en `nci32.dll`.
+
+⇒ **El cuarto origen se sostiene**: esas líneas no tienen otra fuente que los binarios del
+emisor. Y queda reconfirmado por una segunda vía que el XConverter no produce ISO — no es que
+le falte la modalidad, **no tiene el vocabulario**.
+
+> El barrido de B1g no podía llegar acá por dos límites de `buscar_en_binarios.py`: las raíces
+> están fijas en las dos instalaciones de SCM (`C:\SPAI` queda afuera) y el filtro sólo toma
+> `.dll`/`.exe` (así que `Xconverter.exe.new` nunca se miró). Son puntos ciegos de la
+> herramienta, no del método.
 
 ## ⭐ Las dos PCs NO tienen el mismo emisor (2026-08-12)
 
@@ -283,6 +413,12 @@ Escrito en su propio encabezado, para que el hueco viaje con el dato:
   que haya un fixture en pulgadas, el converter no puede emitir en pulgadas.**
 - El bloque de ocho líneas del `Xn` no está: su `Z201.000` todavía no tiene origen (rama C).
 - `?%EDK[0].0` y `?%EDK[1].0` van con valor 0, el único observado.
+- ⚠️ **`?%ETK[8]=1` NO es constante** (agregado 2026-08-14, B1i): pertenece a la banda del
+  **cambio de herramienta** (`ETK 6–12`), y en los ISO con mecanizado alterna 1 y 2. Vale 1
+  acá sólo porque el programa vacío no cambia de herramienta. **En cuanto haya mecanizado con
+  más de una, este valor es incorrecto.**
+- El esqueleto es el del dialecto **`ISO-ESAGV(2)`**; hay otros tres, y la clave que los
+  elige (`[CNCNAME]` de `Nci.ini`) está vacía en esta máquina.
 
 ## Decisión pendiente
 
