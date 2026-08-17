@@ -8,7 +8,52 @@ rumbo se anotan como decisiones con fecha). La vista visual se republica en cada
 
 Estados: ✅ hecho · 🔄 en curso · ⏸ esperando a Fermín · ⬜ pendiente · 🔮 futuro (sin fecha)
 
-## Estado actual (2026-08-14)
+## Estado actual (2026-08-17)
+
+> ⭐⭐ **A7 CERRADO ENTERO, y con una respuesta negativa que vale tanto como una positiva:
+> ni un parámetro sin usar ni una geometría sin mecanizado dejan rastro en el ISO.** Los
+> ocho fixtures postprocesados en el CNC dan ISO **idénticos al del programa vacío** salvo
+> la línea 1, que lleva el nombre del archivo. Control cruzado: la diferencia de bytes de
+> cada uno es exactamente el largo de más del nombre.
+>
+> ⇒ **El converter puede ignorar los parámetros y las geometrías que nadie usa.** Y todo
+> lo derivado sobre la ventana «Parámetro» no sirve para *emitir* ISO: sirve para que el
+> **sintetizador** fabrique `.pgmx` válidos, que es de donde salen los fixtures.
+>
+> ⚠️ Vale para el caso **sin uso**. Un parámetro que alimenta una cota, o una geometría
+> que un mecanizado toma, es la rama **D** y no está derivado.
+>
+> ⏭️ Con A7 cerrado, el orden que fijó Fermín el 2026-08-13 pone **C (operaciones de
+> máquina: Xn · Xmsg · Park)** como lo que sigue. La rama de dibujos quedó abierta con la
+> línea derivada y siete geometrías más sin barrer.
+
+## El estado del 2026-08-16
+
+> ⭐⭐ **A7 se destrabó y su etapa 1 quedó CERRADA.** Los fixtures llegaron: seis `.pgmx`
+> manuales de Fermín cerraron **toda la ventana «Parámetro»** —los tres tipos, las tres
+> unidades, el signo, el separador decimal y la precisión— y dos más abrieron la rama de
+> **dibujos** con la línea. Docs nuevos: `experiments/parametros.md` y
+> `experiments/dibujos.md`.
+>
+> ⚖️ **DECISIÓN DE MÉTODO (Fermín, 2026-08-16): el `.pgmx` que produce nuestro
+> sintetizador tiene que ser FUNCIONALMENTE idéntico al de Maestro, no byte-idéntico.**
+> El byte-idéntico sigue rigiendo donde importa —el `.iso`, que es el producto del
+> converter (regla 4 del CLAUDE.md)—; el `.pgmx` es la herramienta con la que fabricamos
+> fixtures, y una diferencia que no cambia la pieza no es un defecto. Con esa vara:
+> - el decimal truncado **SÍ** era defecto (cambia el valor) → corregido;
+> - la dirección con 1 ULP **NO** lo es (5·10⁻¹⁴ mm) → documentada, no se toca.
+>
+> ⏭️ **Modo de trabajo en curso**: juntar la evidencia primero y hacer **todas** las
+> modificaciones después, en una sola pasada.
+>
+> **A7 corrigió su propio planteo**: «parámetros de usuario **y** dimensiones
+> paramétricas» son **un solo mecanismo** — `dx1`/`dy1`/`dz1` son parámetros comunes, y lo
+> que los ata a la pieza es un `Parametrics.Expression` aparte.
+>
+> **Sigue pendiente el postproceso**: si un parámetro sin uso —o una geometría sin
+> mecanizado— deja rastro en el ISO. Es lo único que falta para cerrar A7 entero.
+
+## El estado del 2026-08-14
 
 > ⭐⭐ **El esqueleto es UN DIALECTO ENTRE CUATRO, y ahora sabemos cuál.** `PostISO.dll` sabe
 > emitir `ISO-OSAI(2)`, `ISO-ESAGV(2)`, `ISO-NUM` e `ISO-ORCHESTRA`; la clave que elige
@@ -102,8 +147,13 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 > —sigue en el CNC—, y el experimento de las dos PCs hay que replantearlo, porque si una de
 > las dos no emite ISO no hay dos ISO que comparar. La comparación posible es **en XXL**.
 
-- A7. **Parámetros de usuario y dimensiones paramétricas** (Fermín, 2026-08-13) — ⏸ el
-  fixture lo arma él, incorporando las dos cosas al `manual_base`. Es el paso previo a las
+- A7. **Parámetros de usuario y dimensiones paramétricas** (Fermín, 2026-08-13) —
+  ✅ **ETAPA 1 CERRADA el 2026-08-16** con seis fixtures manuales: la ventana «Parámetro»
+  quedó mapeada entera a `.pgmx` y fijada offline en
+  `tests/test_pgmx_parametric_variables.py`. Detalle en `experiments/parametros.md`.
+  Queda abierta sólo la etapa 2 (si deja rastro en el ISO). Lo de abajo es el planteo
+  original, que la evidencia corrigió: son **un solo mecanismo**, no dos temas.
+  ⏸ el fixture lo arma él, incorporando las dos cosas al `manual_base`. Es el paso previo a las
   operaciones de máquina. Preguntas que abre: ¿un parámetro sin usar deja rastro? (R001 lo
   dejó abierto); ¿una dimensión definida por expresión llega al ISO **resuelta** o como
   expresión? ~~¿en qué etapa se resuelve — Maestro o el generador?~~ **RETIRADA (2026-08-14):
@@ -138,6 +188,18 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
   > la decisión de Fermín del 08-13 —«la trazabilidad de los ISO y los archivos XXL quedan
   > fuera del método»— y era innecesario: las dos preguntas que sí importan se contestan
   > mirando el `.pgmx` y el `.iso`. La tercera, la que necesitaba el XXL, quedó retirada.
+
+### G. Dibujos (geometrías) — 🔄 ARRANCÓ (2026-08-16, doc `dibujos.md`)
+Rama nueva, abierta por los fixtures de línea. Un dibujo es **geometría sin `Feature`**: no
+crea mecanizado y **no deja rastro en el ISO** hasta que un mecanizado la toma.
+- G1. **Línea** — ✅ derivada: nodo `GeomTrimmedCurve`, `_serializationGeometryDescription`
+  decodificado (tipo · intervalo · curva base · punto · dirección, en `.17g`), los dos
+  caminos de cálculo de la dirección, y la geometría **paramétrica** vía
+  `Parametrics.Expression`. 11 fixtures.
+- G2. Las otras **siete geometrías** de la pestaña Dibujar (arco, círculo, elipse,
+  polilínea, rectángulo, punto, texto) — ⬜
+- G3. Los otros **métodos** de la barra contextual, el checkbox «Coordenadas absolutas» en
+  `true`, y qué otras propiedades admiten expresión — ⬜
 
 ### B. Anatomía del ISO — 🔄 ARRANCÓ (2026-08-10, doc `anatomia_iso.md`)
 - B1. Partes del archivo del programa vacío: atribuir CADA línea a **uno de TRES** orígenes —
@@ -231,10 +293,108 @@ están mapeadas: `Xn` = «Operación nula», `Xmsg` = «Impresión mensaje», `P
   el experimento que separa «default al crear» de «lectura al postprocesar»: un `.pgmx` con
   UNA operación de fresado con lead automático, postprocesado en las dos PCs.
 - ¿El origen de la pieza aparece en el ISO vacío? ¿Dónde?
-- ¿Una variable de usuario sin uso deja rastro en el ISO?
+- ~~¿Una variable de usuario sin uso deja rastro en el ISO?~~ **RESPONDIDA (2026-08-17):
+  NO.** Los cinco ISO de parámetros y los tres de líneas son idénticos al del programa
+  vacío salvo la línea 1 (el nombre del archivo). Ni un parámetro sin usar ni una
+  geometría sin mecanizado llegan al ISO ⇒ el converter puede ignorarlos.
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-08-17 — El postproceso contesta que NO, y eso cierra A7
+Fermín postprocesó en el CNC las dos tandas: cinco fixtures de parámetros y tres de líneas.
+
+- ⭐⭐ **Los ocho ISO son idénticos al del programa vacío**, salvo la línea 1 con el nombre
+  del archivo. 43 líneas, mismo contenido. **Ni un parámetro sin usar ni una geometría sin
+  mecanizado dejan rastro en el ISO.**
+- ✅ **Control cruzado independiente del diff**: la diferencia de **bytes** de cada ISO
+  contra el del vacío es **exactamente** el largo de más del nombre. Ni un byte suelto.
+- ⇒ **Consecuencia para el converter**: puede ignorar parámetros y geometrías sin uso.
+- ⇒ **Consecuencia metodológica**: lo derivado sobre la ventana «Parámetro» no alimenta la
+  emisión de ISO; alimenta al **sintetizador**, que es la fábrica de fixtures. El trabajo
+  vale por eso, no por el ISO.
+- ⚠️ **Sólo vale para el caso sin uso.** El parámetro que alimenta una cota y la geometría
+  que un mecanizado toma son rama D, y no están derivados.
+- **Tercera línea** (`linea_3`): la 2 con X e Y intercambiadas — (50,50)→(220,350),
+  60,461°. Mismos cosenos directores dados vuelta; `d/|d|` la reproduce igual.
+
+**Y a la tarde, la geometría paramétrica** (ocho fixtures más, `dibujos.md` §7):
+
+- ⭐ **`Parametrics.Expression` es el mecanismo general de Maestro**, no algo de la pieza:
+  `GeomTrimmedCurve#1927.EndY = 'dx1 - Distancia'` tiene la misma forma que
+  `WorkPiece#1917.Length = 'dx1'`. Ata **(objeto, propiedad) → fórmula de texto**. Mapeo
+  del panel: `Xi`→`StartX`, `Yi`→`StartY`, `Xf`→`EndX`, `Yf`→`EndY`.
+- ⭐⭐ **La geometría se guarda RESUELTA y la fórmula vive aparte** ⇒ **el converter lee el
+  número y NO necesita evaluar expresiones nunca.** Cierra la pregunta que A7 tenía
+  retirada.
+- ⚠️ **Maestro escribe con ruido de ~10⁻¹³**, y no es nuestro: lo confirma su propia UI (el
+  tooltip de un campo que muestra `50,000` dice `Value: 49,9999999999997`). Entra **al
+  escribir** —con el modelo limpio en `50` exacto, el archivo salió con
+  `49.99999999999996`— y **también por el teclado**: tipear `50` dio tres valores distintos
+  en tres intentos. ⇒ **El byte-idéntico en el `.pgmx` no es caro: es inalcanzable**, y
+  Maestro no lo alcanza consigo mismo. La decisión del 08-16 queda blindada.
+- ⇒ **Aviso para el converter**: nunca comparar coordenadas por igualdad ni asumir números
+  redondos. Pendiente de verificar si los seis usos de tolerancia `1e-15` reciben valores
+  leídos de un `.pgmx` (el ruido los desborda 300 veces) o sólo calculados por nosotros.
+- 🔍 **DOS reglas propias refutadas por el fixture siguiente, en el mismo día**:
+  1. «Maestro calcula la dirección con una sola redondeada y nuestro `dx/double(L)` está 1
+     ULP corrido» → **falso**: tiene **dos caminos** —uno al dibujar, otro al editar o
+     resolver fórmulas— y **el nuestro es el segundo**. Se retira el «defecto de 1 ULP» y
+     la lista de siete lugares a corregir: no hay nada que corregir.
+  2. «El ruido está compensado: el extremo restringido sale exacto» → **falso**: los
+     triángulos 3-4-5 lo rompen con las cuatro fórmulas puestas. Los casos exactos fueron
+     suerte del redondeo. En ese fixture **nuestro sintetizador es más exacto que Maestro**.
+  📌 Con punto flotante, tres observaciones no hacen una regla: hay que ir a buscar el caso
+  que *debería* romperla.
+- ⚠️ Corregida además una **mala lectura mía**: se había escrito que `linea` y `linea_2` se
+  hicieron igual. No: la primera se **dibujó** y la segunda salió de **editarla**, y Fermín
+  lo había dicho desde el primer mensaje. Esa diferencia es justamente la de los dos
+  caminos.
+
+### 2026-08-16 — A7 se destraba, y el `.pgmx` deja de perseguir el byte
+Los shares volvieron y Fermín hizo los fixtures en Maestro, mirando yo la ventana en vivo
+(capturas de la UI disparadas contra la ventana de Maestro, `PrintWindow`).
+
+- ⚖️ **DECISIÓN DE MÉTODO: el `.pgmx` del sintetizador va FUNCIONALMENTE idéntico, no
+  byte-idéntico.** El byte a byte queda donde es el producto: el `.iso`. Reclasifica lo
+  encontrado hoy en defecto real (el decimal) y cosmético (el ULP de la dirección).
+- ⏭️ **Modo de trabajo**: juntar toda la evidencia y hacer las modificaciones después.
+- ✅ **La ventana «Parámetro» quedó mapeada entera**: `Decimal`→`Double`/`b:double`,
+  `Entero`→`Integer`/`b:int`, `Booleano`→`Boolean`/`b:boolean` (valor en **minúscula**);
+  `Longitud`→`Lenght` (**con el typo de SCM**), `Velocidad`→`Speed`,
+  `Adimensional`→`UnitLess`. Punto decimal, signo, y **sin redondear**.
+- ⭐ **A7 era un solo tema, no dos.** Las dimensiones de la pieza YA son parámetros
+  (`dx1`/`dy1`/`dz1`, misma tabla, misma estructura); lo que las ata a la pieza es un
+  `Parametrics.Expression` que apunta a `WorkPiece.Length` con la expresión `dx1`.
+- 🐛 **Un defecto real del sintetizador, encontrado por un fixture**: `_compact_number`
+  redondea a 6 decimales y Maestro **no redondea** (`12,3456789` quedó `12.3456789`).
+  Corregido **sólo** en el `Value` del parámetro (`_parameter_value_text`), que es donde
+  hay evidencia; los otros **153 usos** quedan como deuda anotada. Nadie había derivado
+  nunca ese truncado: era un predefinido de la época anterior, igual que `Integer` y
+  `Speed` — que sí resultaron correctos.
+- ⚠️ **El corpus no podía delatarlo**: de los 55 `.pgmx` de autoría de Maestro que
+  tenemos, el **único** número con 7+ decimales es el que se tipeó para el fixture.
+  Punto ciego de la regla 5, otra vez.
+- ✅ **Los `ID`**: arrancan en el primer libre **del archivo** al abrirlo y avanzan dentro
+  de la sesión; un `ID` liberado **se reutiliza** al reabrir. Nuestro `_reserve_ids`
+  coincide partiendo de un archivo recién abierto.
+- ✅ **Nomenclatura**: Maestro usa **las dos** palabras — panel y diálogo dicen
+  «Parámetro», el tooltip del botón dice «Crear una nueva variable». No hay bando que
+  elegir, hay sinónimo que documentar. «Variable de usuario» sí es nombre nuestro.
+- ⭐ **Arrancó la rama de dibujos** (`experiments/dibujos.md`): una línea es un
+  `GeomTrimmedCurve` en `<Geometries>` y **no crea `Feature`**. Decodificado el
+  `_serializationGeometryDescription` (tipo · intervalo · curva base · punto · dirección
+  unitaria, todo en `.17g`), y derivada la regla de la dirección: `d/|d|` con **una sola
+  redondeada**. El sintetizador reproduce la línea byte a byte salvo 1 ULP cuando el
+  ángulo es notable.
+- 🔍 **Dos hipótesis mías refutadas por evidencia, en el día**: que Maestro sacaba la
+  dirección de `cos`/`sin` del ángulo (era un artefacto de mirar sólo el caso de 45°), y
+  que el default de Unidad física era `Adimensional` (es **`Longitud`**; el
+  `Adimensional` se había visto con el Tipo ya en Booleano).
+- 🧰 **Herramienta**: la suite pasó a correrse con **pytest**, declarado en
+  `requirements-dev.txt` + `pytest.ini`. El comando que documentaba `docs/` —
+  `unittest discover`— **daba falso verde**: no recolecta los 11 tests escritos como
+  funciones sueltas de `test_pgmx_reader.py`. Suite: **319 passed, 306 subtests**.
 
 ### 2026-08-14 — El control tiene nombre, y con eso `EDK`/`ETK` tienen diccionario
 Día sin fixtures nuevos: A7 quedó bloqueado y el trabajo se fue a cerrar significados.
