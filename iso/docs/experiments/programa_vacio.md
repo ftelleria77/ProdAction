@@ -36,7 +36,7 @@ Fuente: plantilla baseline `pgmx/data/maestro_baselines/Pieza.xml` (capturada de
 | `…/MechanicalOptions` | opciones mecánicas (default 0) | **no** | **Parámetros de máquina → «Opciones mecánicas»** (valor + 15 sub-desplegables) ✓ |
 | `…/IsRelatedToOppositeSideStop` | tope del lado opuesto (default false) | **no** | **no está** en Parámetros de máquina — sigue sin ubicar (en Opciones existe el global `EnableOppositeSideStop`) |
 | `IsMM` | unidades en milímetros (true) | no (fijo) | **Opciones → Idioma → «Unidad de medida»** (Milímetros/Pulgadas). Es global de la aplicación, no del programa ✓ |
-| `Variables` (más allá de `dx1/dy1/dz1`) | variables de usuario (Double/Integer/Boolean; UnitLess/Length/Speed) | sí (`parametric_variables`) | **panel «Parámetros»** (abajo izq.; al aplicar muestra `dx1`/`dy1`/`dz1`; su barra de iconos agrega/importa/borra) ✓ |
+| `Variables` (más allá de `dx1/dy1/dz1`) | **parámetros** del programa (`Double`/`Integer`/`Boolean`; `UnitLess`/`Lenght`/`Speed` — `Lenght` con el typo de SCM) | sí (`parametric_variables`) | **panel «Parámetros»** (abajo izq.; al aplicar muestra `dx1`/`dy1`/`dz1`; su barra de iconos agrega/**edita**/borra — el del medio es «Editar parámetro», no importar) ✓ — derivado en `parametros.md` (2026-08-16) |
 | `Planes` (Top/Bottom/Left/Right/Front/Back) | las 6 caras, derivadas de las dimensiones | automático (plantilla) | — (no editable directo) |
 | `MainWorkplan/Elements` | mecanizados y operaciones de máquina (`Xn`/`Xmsg`/`Park`/`Iso`) | sí | lista de operaciones |
 | `CurrentWorkplanIndex` | fase activa | sí (`current_workplan_index`) | **panel Pieza → «Posicionamiento» → desplegable «Fases de trabajo»** (`Setup`); también pestaña `Fases` del árbol Proyecto ✓ |

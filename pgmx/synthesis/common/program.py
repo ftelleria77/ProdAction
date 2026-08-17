@@ -379,6 +379,33 @@ def _normalize_physical_unit(value: Optional[str]) -> str:
     return result
 
 
+def _parameter_value_text(value: Union[float, int, bool], variable_type: str) -> str:
+    """El texto del `<a:Value>` de un parametro, como lo escribe Maestro.
+
+    NO usa `_compact_number` a proposito. Aquel formatea con `f"{n:.6f}"` y Maestro
+    guarda TODOS los decimales que le dieron: el parametro `Presicion`, cargado como
+    `12,3456789`, quedo `12.3456789` en el `.pgmx` (fixture del 2026-08-16). Con
+    `_compact_number` habriamos emitido `12.345679`.
+
+    Se usa la representacion mas corta que round-trippea -- lo que hace el `ToString()`
+    de .NET -- y reproduce los cinco valores derivados: `400`, `18`, `10`, `-12.5` y
+    `12.3456789`.
+
+    El alcance es DELIBERADAMENTE este campo (decision de Fermin, 2026-08-16). La
+    evidencia sale de un parametro; extender la regla a los 153 usos de
+    `_compact_number` seria aplicar una hipotesis donde no se derivo, que es lo que la
+    regla 4 prohibe. Ademas el redondeo a 6 absorbe el ruido binario del float
+    (`0.1 + 0.2` -> `0.3`), y perderlo en las coordenadas calculadas seria un cambio con
+    su propio riesgo. Detalle en `iso/docs/experiments/parametros.md`.
+    """
+    if variable_type == "Boolean":
+        return "true" if value else "false"
+    if variable_type == "Integer":
+        return str(int(value))
+    numero = float(value)
+    return str(int(numero)) if numero.is_integer() else repr(numero)
+
+
 def _build_variable_node(var: ParametricVariableSpec, var_id: str) -> ET.Element:
     variable = ET.Element(_qname(PARAMETRIC_NS, "Variable"))
     _append_key(variable, var_id, "ScmGroup.XCam.MachiningDataModel.Parametrics.Variable")
@@ -402,12 +429,7 @@ def _build_variable_node(var: ParametricVariableSpec, var_id: str) -> ET.Element
         attrib={f"{{{XSI_NS}}}type": xsd_type_map[var.variable_type]},
     )
     _set_xmlns(value_node, "b", XSD_NS)
-    if var.variable_type == "Double":
-        value_node.text = _compact_number(float(var.value))
-    elif var.variable_type == "Integer":
-        value_node.text = str(int(var.value))
-    else:
-        value_node.text = "true" if var.value else "false"
+    value_node.text = _parameter_value_text(var.value, var.variable_type)
     return variable
 
 
@@ -437,12 +459,9 @@ def _apply_parametric_variables(
             value_node = existing_node.find("./{*}Value")
             if value_node is not None:
                 _set_xmlns(value_node, "b", XSD_NS)
-                if normalized.variable_type == "Double":
-                    value_node.text = _compact_number(float(normalized.value))
-                elif normalized.variable_type == "Integer":
-                    value_node.text = str(int(normalized.value))
-                else:
-                    value_node.text = "true" if normalized.value else "false"
+                value_node.text = _parameter_value_text(
+                    normalized.value, normalized.variable_type
+                )
         else:
             [var_id] = _reserve_ids(root, 1)
             new_node = _build_variable_node(normalized, var_id)

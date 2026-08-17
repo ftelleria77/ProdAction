@@ -998,6 +998,61 @@ Caso usado como referencia:
 - `Pieza_005.pgmx` extiende el intento a `Front`, `Back`, `Left` y `Right`
   con patrones `3 x 1`, `D8`, no pasantes, separados `32`
 
+### `build_parametric_variable_spec(...) -> ParametricVariableSpec`
+
+Construye un **parametro** del programa: una fila del panel «Parametros» de Maestro.
+Se pasan por `parametric_variables` a `build_synthesis_request(...)`.
+
+Firma simplificada:
+
+```python
+build_parametric_variable_spec(
+    *,
+    name,
+    value,
+    description="",
+    variable_type=None,   # default Double
+    physical_unit=None,   # default UnitLess
+)
+```
+
+Nomenclatura: en la UI de Maestro esto se llama **«Parametro»** (panel «Parametros»,
+dialogo «Parametro»), pero el tooltip del boton de alta dice «Crear una nueva variable» y
+el `.pgmx` lo serializa como `Parametrics.Variable`. Maestro usa las dos palabras.
+
+Los dos desplegables de la ventana tienen dominio cerrado de tres, y `build_*` admite tanto
+el termino de la UI en castellano como el valor del XML:
+
+| UI «Tipo» | `variable_type` admite | `<a:Type>` | atributo del valor |
+|---|---|---|---|
+| Decimal | `Decimal`, `Double`, `Float`, `Real` | `Double` | `i:type="b:double"` |
+| Entero | `Entero`, `Integer`, `Int` | `Integer` | `i:type="b:int"` |
+| Booleano | `Booleano`, `Boolean`, `Bool`, `Logico` | `Boolean` | `i:type="b:boolean"` |
+
+| UI «Unidad fisica» | `physical_unit` admite | `<a:FisicalUnitType>` |
+|---|---|---|
+| Longitud | `Longitud`, `Length`, `Lenght` | `Lenght` |
+| Velocidad | `Velocidad`, `Speed` | `Speed` |
+| Adimensional | `Adimensional`, `UnitLess`, `Sin unidades` | `UnitLess` |
+
+Notas:
+- `Lenght` lleva **el typo de SCM**, a proposito: es el nombre del tag en el `.pgmx`. En el
+  mismo archivo el `Description` de `dx1` dice `Length` bien escrito. Intocable.
+- el booleano se serializa en **minuscula** (`true`/`false`), aunque la UI acepte `True`
+- el decimal usa **punto**; la coma que muestra la grilla de Maestro es presentacion
+- `Description` vacia se serializa como `<a:Description/>`, no se omite
+- `IsReadOnly=false` y `Scope=Local` son fijos: la UI no los expone
+- `Key` y `Name` se escriben en el namespace `Utility`, el resto en `Parametrics`. Al reves
+  Maestro deserializa `Name` nulo y **no puede abrir el archivo** (bug de R001, 2026-08-10)
+- los nombres `dx1`/`dy1`/`dz1` estan **reservados**: son las dimensiones de la pieza, que
+  las referencia por nombre via `Parametrics.Expression`. Pisarlos rompe esa expresion
+- el `ID` lo asigna el sintetizador tomando el primer libre del documento. Maestro usa un
+  contador de **sesion**, asi que los ID no coinciden y no deben compararse
+
+Derivado contra cuatro fixtures manuales de Maestro (2026-08-15/16). El mapa completo
+UI -> `.pgmx`, los fixtures y lo que sigue abierto estan en
+`iso/docs/experiments/parametros.md`.
+
 ### `build_synthesis_request(...) -> PgmxSynthesisRequest`
 
 Es el ensamblador del pedido completo.
