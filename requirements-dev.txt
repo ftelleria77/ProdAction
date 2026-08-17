@@ -1,0 +1,13 @@
+# Dependencias de DESARROLLO. La aplicacion no las necesita para correr; las
+# necesita quien verifica la suite.
+#
+#   pip install -r requirements-dev.txt
+#   py -3 -m pytest -q
+#
+# pytest no es una alternativa comoda a `unittest discover`: es EL runner. Once
+# tests de `tests/test_pgmx_reader.py` estan escritos como funciones sueltas y
+# `unittest` no los recolecta -- da verde sin correrlos. El conteo de la suite
+# que registra la bitacora (`iso/docs/hoja_de_ruta.md`) es siempre el de pytest.
+#
+# Verificado el 2026-08-15 con pytest 9.1.1: 302 passed, 284 subtests.
+pytest

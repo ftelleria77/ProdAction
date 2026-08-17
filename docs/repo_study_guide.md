@@ -211,7 +211,7 @@ Estado actual documentado:
 
 ```powershell
 py -3 -m compileall -q main.py app core pgmx iso_state_synthesis cnc_traceability tools tests
-py -3 -m unittest discover -s tests -p "test*.py"
+py -3 -m pytest -q
 py -3 -m iso_state_synthesis --help
 py -3 -m pgmx.synthesis --help
 py -3 -m pgmx.snapshot --help
@@ -219,6 +219,12 @@ py -3 -m pgmx.adapters --help
 py -3 -m tools.studies.iso.minimal_fixtures_2026_05_03 --output-dir tmp/iso_minimal_fixtures
 py -3 -m tools.studies.cut_diagrams.ordering_lab --help
 ```
+
+El runner de la suite es `pytest` (`pip install -r requirements-dev.txt`), no
+`unittest discover`, que era lo que decia este bloque hasta el 2026-08-15. La
+correccion no es de estilo: `unittest` **no recolecta** los 11 tests escritos como
+funciones sueltas en `tests/test_pgmx_reader.py`, asi que corria 291 y daba verde
+sin ejecutarlos. Con pytest son 302 passed + 284 subtests.
 
 Prueba de humo PGMX recomendada:
 

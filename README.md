@@ -25,6 +25,18 @@ pip install -r requirements.txt
 py -3 main.py
 ```
 
+## Suite de tests
+
+```powershell
+pip install -r requirements-dev.txt
+py -3 -m pytest -q
+```
+
+**El runner es `pytest`, no `unittest`.** Once tests de `tests/test_pgmx_reader.py`
+están escritos como funciones sueltas y `unittest discover` **no los recolecta**:
+corre 291 y da verde sin haberlos ejecutado. El conteo de la suite que registra la
+bitácora de la reinvestigación (`iso/docs/hoja_de_ruta.md`) es siempre el de pytest.
+
 ## Orientacion rapida del repo
 - Indice ordenado de documentacion: `docs/README.md`
 - Cierre formal de auditoria general: `docs/general_audit_closure.md`
@@ -50,7 +62,7 @@ py -3 main.py
 - Baseline principal versionado: `pgmx/data/maestro_baselines/Pieza.xml` junto con `Pieza.epl` y `def.tlgx`
 - `build_synthesis_request(...)` y la CLI usan `pgmx/data/maestro_baselines` como baseline por defecto si no se indica otro
 - Ejemplos y estudios manuales para ingeniería inversa: `archive/maestro_examples/`
-- API programática para sintesis: `build_approach_spec(...)`, `build_retract_spec(...)`, `build_milling_depth_spec(...)`, `build_unidirectional_milling_strategy_spec(...)`, `build_bidirectional_milling_strategy_spec(...)`, `build_xn_spec(...)`, `build_line_spec(...)`, `build_channel_spec(...)`, `build_polyline_spec(...)`, `build_circle_spec(...)`, `build_contour_spec(...)`, `build_pocket_spec(...)`, `build_drill_spec(...)`, `build_drill_pattern_spec(...)`, `build_synthesis_request(...)` y `synthesize_request(...)` en `pgmx.synthesis`
+- API programática para sintesis: `build_approach_spec(...)`, `build_retract_spec(...)`, `build_milling_depth_spec(...)`, `build_unidirectional_milling_strategy_spec(...)`, `build_bidirectional_milling_strategy_spec(...)`, `build_xn_spec(...)`, `build_line_spec(...)`, `build_channel_spec(...)`, `build_polyline_spec(...)`, `build_circle_spec(...)`, `build_contour_spec(...)`, `build_pocket_spec(...)`, `build_drill_spec(...)`, `build_drill_pattern_spec(...)`, `build_parametric_variable_spec(...)`, `build_synthesis_request(...)` y `synthesize_request(...)` en `pgmx.synthesis`
 - API programatica para inspeccion/construccion geometrica: `read_pgmx_geometries(...)`, `build_point_geometry_profile(...)`, `build_line_geometry_profile(...)`, `build_circle_geometry_profile(...)`, `build_composite_geometry_profile(...)` y `build_compensated_toolpath_profile(...)`
 - API programatica para snapshot integral de un `.pgmx`: `read_pgmx_snapshot(...)`, `snapshot_to_dict(...)` y `write_pgmx_snapshot_json(...)` en `pgmx.snapshot`
 - API programatica para adaptar `.pgmx` existentes al subset publico del sintetizador: `adapt_pgmx_snapshot(...)`, `adapt_pgmx_path(...)`, `adaptation_to_dict(...)` y `write_pgmx_adaptation_json(...)` en `pgmx.adapters`
