@@ -755,7 +755,7 @@ def _build_maestro_arc_serialization(
     return (
         f"8 {_format_maestro_number(start_angle)} {_format_maestro_number(end_angle)}\n"
         f"2 {_format_maestro_number(center_point[0])} {_format_maestro_number(center_point[1])} {_format_maestro_number(z_value)} "
-        f"0 0 {_format_maestro_number(normal_z)} 1 0 0 0 {_format_maestro_number(normal_z)} 0 {_format_maestro_number(resolved_radius)} \n"
+        f"0 0 {_format_maestro_number(normal_z)} 1 0 0 0 {_format_maestro_number(normal_z)} 0 {_format_maestro_number(resolved_radius)}\n"
     )
 
 
@@ -777,7 +777,7 @@ def _build_oriented_maestro_arc_serialization(
         f"{_format_maestro_orientation_number(normal_vector[0])} {_format_maestro_orientation_number(normal_vector[1])} {_format_maestro_orientation_number(normal_vector[2])} "
         f"{_format_maestro_orientation_number(u_vector[0])} {_format_maestro_orientation_number(u_vector[1])} {_format_maestro_orientation_number(u_vector[2])} "
         f"{_format_maestro_orientation_number(v_vector[0])} {_format_maestro_orientation_number(v_vector[1])} {_format_maestro_orientation_number(v_vector[2])} "
-        f"{_format_maestro_number(radius)} \n"
+        f"{_format_maestro_number(radius)}\n"
     )
 
 

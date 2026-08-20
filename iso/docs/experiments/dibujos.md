@@ -364,16 +364,357 @@ de los parámetros sin uso (`parametros.md`, §8).
 ⚠️ Esto **no** dice qué pasa cuando un mecanizado sí la usa: ahí la línea se convierte en
 traza y es toda la rama D.
 
-## 9. Lo que queda abierto
+## 9. El sintetizador frente a las ocho geometrías — auditoría (2026-08-17)
+
+Pregunta de Fermín: *¿nuestro sintetizador puede generar todos los tipos de dibujos?* La
+respuesta corta es **no**, y hay **dos huecos distintos** que conviene no mezclar.
+
+### 9.1 · No sabe hacer «dibujos» — ninguno
+
+Un dibujo es geometría con `<Features/>` **vacío** (§1). La API pública
+`build_synthesis_request` (`pgmx/synthesis/common/program.py`) acepta sólo esto:
+
+```
+lines · channels · polylines · arcs · circles · contours · pockets
+drills · drill_patterns · ordered_machinings · xn · workplans
+parametric_variables · pieces
+```
+
+**Todos son mecanizados**: viven en `synthesis/milling/` y `synthesis/drilling/`, y cada uno
+produce un `Feature`. **No hay parámetro `geometries=` ni `drawings=`.**
+
+⇒ El sintetizador emite geometría **sólo como subproducto de una operación**; no puede
+dejarla suelta. De las ocho geometrías de la pestaña Dibujar sabe autorar **cero como
+dibujo**.
+
+### 9.2 · De los tipos de geometría, cubre cinco de ocho
+
+| UI «Dibujar» | Tipo / primitiva | Código de curva | Forma que emite |
+|---|---|---|---|
+| Línea | `GeomTrimmedCurve` + `Line` | `1` | `8 t0 t1` ⏎ `1 P D ` |
+| Arco | `GeomTrimmedCurve` + `Arc` | `2` | `8 a0 a1` ⏎ `2 C N̂ Û V̂ R ` |
+| Círculo | `GeomCircle` | `2` | `2 C N̂ Û V̂ R` — **sin** el envoltorio `8`, porque no está recortado |
+| Polilínea | `GeomCompositeCurve` | (por miembro) | una serialización por miembro |
+| Punto | `GeomCartesianPoint` | — | sin serialización de curva |
+| **Rectángulo** | — | — | no existe como tipo propio; componible con cuatro líneas, **sin fixture que lo confirme** |
+| **Elipse** | — | — | **no existe en el código** |
+| **Texto** | — | — | **no existe en el código** |
+
+Lo que sí está bien: `_primitive_to_serialization` levanta
+`ValueError("Tipo de primitiva no soportado: …")`. **Fail-loud, no aproxima en silencio** —
+regla 4 en código.
+
+### 9.3 · ⚠️ La evidencia detrás de cada una NO es equivalente
+
+Esto importa más que el conteo:
+
+| geometría | con qué está respaldada |
+|---|---|
+| **Línea** | ✅ **fixtures manuales de Maestro de la época nueva** (§3–§7); el sintetizador reproduce `linea_2` byte a byte |
+| **Arco** | ⚠️ **roundtrip contra nosotros mismos** (`tests/test_pgmx_arc_authoring.py`: sintetiza → lee → compara). Su propio docstring dice que «la validación final es **N040** postprocesado en Maestro» — **serie N, época congelada, declarada no-fuente** |
+| **Círculo · Polilínea** | ⚠️ ídem: se derivaron sirviendo mecanizados de la época anterior, no desde la pestaña Dibujar |
+| **Punto** | ⚠️ sin test propio |
+
+Verificado: **ningún test compara geometría sintetizada contra un `.pgmx` hecho a mano en
+Maestro**, y en el repo **no hay ningún fixture de dibujo**. La única geometría verificada
+así es la línea, y esa verificación vive en este documento, **no en la suite**.
+
+⇒ Es el punto ciego de la **regla 5** en su forma más pura: el arco y el círculo **se validan
+contra nuestra propia autoría**, y su única ancla externa es de una época que esta
+reinvestigación declaró no-fuente.
+
+### 9.4 · Dos asimetrías que sólo un fixture puede resolver
+
+> ⏭️ **La primera quedó resuelta el 2026-08-18 por el fixture del arco: ver §10.**
+
+1. **El espacio final.** El círculo cierra con `{radio}\n` y el arco con `{radio} \n`. En la
+   línea el espacio final está DERIVADO (§4); en las otras dos no lo verificó nadie.
+2. **La base del arco.** `_build_maestro_arc_serialization` fija la orientación en
+   `0 0 N̂z 1 0 0 0 N̂z 0` —una base constante—, mientras `_build_oriented_maestro_arc_serialization`
+   la recibe como parámetro. Cuál usa Maestro **al dibujar** un arco no está derivado.
+
+### 9.5 · Un pendiente de §7, cerrado leyendo código
+
+§7 dejó anotado verificar si los seis usos de tolerancia `1e-15` reciben valores **leídos**
+de un `.pgmx` o sólo calculados. Uno de ellos está en `_format_maestro_number`:
+
+```python
+if math.isclose(number, 0.0, abs_tol=1e-15):
+    return "0"
+```
+
+`pgmx/adapters.py` construye `GeometryPrimitiveSpec` **desde un snapshot leído** y arma con
+ellos un request de síntesis, que termina en `_primitive_to_serialization`. ⇒ **Sí llegan
+valores leídos de un `.pgmx`.**
+
+Consecuencia, con el ruido medido en §7 (~3·10⁻¹³): una coordenada que Maestro dejó en
+`3·10⁻¹³` en vez de `0` **no** se colapsa a `0`, porque la tolerancia es ~300 veces más
+chica que el ruido. Con la vara de «funcionalmente idéntico» eso **no es un defecto**
+(3·10⁻¹³ mm no mueve nada), pero explica por qué un archivo releído y re-sintetizado no da
+byte-idéntico — y refuerza §7: el byte-idéntico en el `.pgmx` no es caro, es inalcanzable.
+
+### 9.6 · Qué conviene corregir, y qué no
+
+- **Verificar arco, círculo, polilínea y punto contra fixtures manuales de la época nueva.**
+  Es el hueco real: hoy dependen de la época congelada.
+- **Elipse y texto**: no existen. Sólo hacen falta si algún `.pgmx` de entrada los trae —y
+  eso es del lado de la **lectura**, no de la síntesis.
+- **Dibujos sueltos** (geometría sin `Feature`): §8 derivó que **no llegan al ISO**, así que
+  el converter puede ignorarlos. Agregarlos al sintetizador sólo serviría para fabricar
+  fixtures que testeen que no pasa nada.
+- **Rectángulo**: antes de componerlo con cuatro líneas hay que ver si Maestro lo guarda así
+  o como otra cosa. Es una pregunta de fixture, no de código.
+
+## 10. El ARCO: primer fixture de la época nueva, y dos deltas contra el sintetizador (2026-08-18)
+
+> ⏭️ **Superado por §12** (2026-08-19). Esta sección se derivó con **un solo arco**. El lote
+> «Rama G» trajo 20 y resolvió las dos preguntas que quedaban abiertas acá: el espacio final
+> es **por código de curva** (§12.1) y la base fija del sintetizador **no es un defecto**
+> (§12.3). Queda como registro de cómo se llegó.
+
+Fixtures de Fermín en `…\Reinvestigación\Dibujos\`:
+
+| archivo | qué es |
+|---|---|
+| `R_PV_manual_param_radio_antes.pgmx` | el parámetro `radio` creado **antes** de dibujar; `<Geometries>` vacío |
+| `R_PV_manual_param_radio_antes_Arco.pgmx` | el arco dibujado sobre ese programa |
+
+`<Features/>` sigue vacío en los dos, como manda §1: dibujar no crea mecanizado.
+
+### Lo que escribe Maestro
+
+```
+8 3.1415926535897931 4.7123889803846897
+2 300 300 0 0 -0 1 1 0 0 -0 1 0 200
+```
+
+Decodificado con la gramática de §4:
+
+| campo | valor | qué es |
+|---|---|---|
+| `8` · `π` · `3π/2` | | curva recortada, intervalo angular — un cuarto de arco de 180° a 270° |
+| `2` | | código de la curva base: **círculo** |
+| `300 300 0` | | centro |
+| `0 -0 1` | | normal **N̂** |
+| `1 0 0` | | **Û** |
+| `-0 1 0` | | **V̂** |
+| `200` | | radio |
+
+⇒ El arco usa **el mismo envoltorio `8` que la línea** y una curva base de código **`2`**,
+con centro, base ortonormal orientada y radio. La forma que el sintetizador ya emitía es la
+correcta; las diferencias son dos, y finas.
+
+### ⚠️ Delta 1 — el espacio final: la línea SÍ, el arco NO
+
+Comparado byte a byte contra los fixtures:
+
+```
+LINEA  maestro: '8 0 424.26406871192853\n1 50 50 0 0.70710678118654757 0.70710678118654757 0 \n'
+ARCO   maestro: '8 3.1415926535897931 4.7123889803846897\n2 300 300 0 0 -0 1 1 0 0 -0 1 0 200\n'
+                                                                                        ↑ sin espacio
+```
+
+**El sintetizador le pone espacio final al arco** (`…200 \n`), porque aplica la regla que
+derivó de la línea. Es el único byte que separa nuestra salida de la de Maestro cuando se le
+pasa la base correcta.
+
+Y nuestro código es **inconsistente consigo mismo**: `_build_circle_geometry_serialization`
+cierra **sin** espacio y los dos builders de arco **con** espacio.
+
+### ⚠️ Delta 2 — el cero negativo
+
+Maestro escribe `-0` en **N̂y** y en **V̂x**. `_build_oriented_maestro_arc_serialization` lo
+reproduce si se le pasa `-0.0` (su `_format_maestro_orientation_number` ya distingue el signo
+del cero). Pero `_build_maestro_arc_serialization` —el de base FIJA, el que usa el vaciado—
+tiene la base hardcodeada como `0 0 N̂z 1 0 0 0 N̂z 0` y emite `0` donde Maestro emite `-0`.
+
+Numéricamente `-0.0 == 0.0`, así que con la vara del encabezado —funcionalmente idéntico— **no es un defecto funcional**. Lo que
+delata es otra cosa, y esa sí importa: **la base fija es una conjetura**. Maestro no la
+escribe así; la deriva, y el `-0` es la firma de ese cálculo.
+
+### ⛔ Por qué NO se corrige el código todavía
+
+**Es UNA observación.** §5 registra que este documento derivó dos reglas de tres o cuatro
+casos y **las dos cayeron con el fixture siguiente**. El espacio final del arco tiene hoy
+`n=1`, y encima la línea —la única otra geometría medida— se comporta al revés.
+
+Antes de tocar la serialización hay que saber si la regla es **por tipo de curva**, y para
+eso hacen falta los fixtures de §11. Cambiarla ahora movería los bytes de **todos** los arcos
+que emite el sintetizador —los de `leads.py` (×4) y los ocho del vaciado en `pocket.py`— sobre
+una sola medición.
+
+## 11. Plan de fixtures para cerrar el barrido de Dibujar
+
+> ✅ **EJECUTADO el 2026-08-19**: Fermín armó el lote «Rama G» con 88 fixtures y cubrió los
+> puntos 1 a 5 y el 8. Resultados en §12. Quedan sin fixture el **texto** (punto 7) y la
+> **elipse** quedó cubierta por el lote aunque estaba listada como opcional (punto 6).
+
+Uno por archivo, sobre `R_PV_manual_base`, en `…\Reinvestigación\Dibujos\`. Lo que decide
+cada uno:
+
+| # | fixture | qué decide |
+|---|---|---|
+| 1 | **segundo arco**, otro centro/radio/ángulos | si el «sin espacio final» es del tipo arco o de ese archivo. **Es el que desbloquea la corrección** |
+| 2 | **círculo** | su código de curva y si lleva o no envoltorio `8`; confirma o refuta nuestro `GeomCircle` |
+| 3 | **polilínea** de 3 segmentos | cómo se arma el `GeomCompositeCurve`: un miembro por segmento, y qué llevan `_serializingMembers` y `_serializingKeys` |
+| 4 | **rectángulo** | si Maestro lo guarda como composite de cuatro líneas o como otra cosa |
+| 5 | **punto** | la forma del `GeomCartesianPoint` |
+| 6 | **elipse** | el código de curva base; hoy el sintetizador no la tiene |
+| 7 | **texto** | qué guarda; hoy el sintetizador no lo tiene |
+| 8 | **arco por otro método** de la barra contextual | si el método de dibujo cambia el nodo, como pasó con dibujar-vs-editar en la línea (§5) |
+
+Con 1 a 5 alcanza para corregir el sintetizador. 6 y 7 son para saber si hay que rechazarlas
+fail-loud al **leer** un `.pgmx` ajeno — no para emitirlas.
+
+## 12. El lote «Rama G»: 88 fixtures, ocho familias (2026-08-19)
+
+Fermín armó `…\Reinvestigación\Dibujos\Rama G\` con **88 `.pgmx` manuales**, uno por dibujo,
+todos sobre `R_PV_manual_base`. `<Features/>` está vacío en los 88: son dibujos de verdad.
+
+| familia | n | tipo del nodo | serializaciones |
+|---|---|---|---|
+| línea | 10 | `GeomTrimmedCurve` | 1 |
+| arco | 20 | `GeomTrimmedCurve` | 1 |
+| círculo | 13 | `GeomCircle` | 1 |
+| **elipse** | 9 | **`GeomEllipse`** | 1 |
+| polilínea | 18 | `GeomCompositeCurve` | 0 (usa miembros) |
+| polígono | 6 | `GeomCompositeCurve` | 0 |
+| rectángulo | 8 | `GeomCompositeCurve` | 0 |
+| punto | 4 | `GeomCartesianPoint` | 0 (usa `_x/_y/_z`) |
+
+### 12.1 · ⭐ El espacio final es POR CÓDIGO DE CURVA
+
+Era el delta que §10 dejó sin decidir por tener `n=1`. Con el lote queda derivado:
+
+| código de curva | qué es | espacio final antes del `\n` | casos |
+|---|---|---|---|
+| `1` | recta | **SÍ** | **130** |
+| `2` | círculo / arco | **NO** | **44** |
+| `3` | elipse | **NO** | **9** |
+
+Vale **dentro y fuera** de los compuestos: un miembro recto de una polilínea también lo lleva.
+
+⇒ **La regla no es «la línea sí y el arco no»: es del código de la curva base.** Y confirma
+que al arco del sintetizador le sobra ese byte, mientras que su círculo estaba bien.
+
+### 12.2 · La forma de cada familia
+
+```
+línea    8 t0 t1                    ⏎  1 Px Py Pz  Dx Dy Dz ␣
+arco     8 ang0 ang1                ⏎  2 Cx Cy Cz  N̂  Û  V̂  R
+círculo  2 Cx Cy Cz  N̂  Û  V̂  R                    ← sin envoltorio 8: no está recortado
+elipse   3 Cx Cy Cz  N̂  Û  V̂  R_mayor R_menor      ← ídem, y DOS radios
+punto    (sin serialización)  <a:_x> <a:_y> <a:_z>
+```
+
+El compuesto no tiene serialización propia: lleva `_serializingKeys` —un `<b:unsignedInt>`
+por miembro, cada uno con **ID propio**— y `_serializingMembers` —un `<b:string>` por
+miembro, cada uno con la serialización completa de su curva—.
+
+### 12.3 · El arco: sentido derivado, y la base que no importa
+
+Fermín describió los primeros ocho (centro, sentido y ángulos). Con eso:
+
+⇒ **`N̂z = +1` para antihorario y `−1` para horario. 8 de 8.**
+
+Y sobre los 20: **el barrido angular es siempre positivo y ≤ 2π**. La base no es arbitraria,
+está al servicio de que el arco se recorra en sentido creciente. `Û` y `V̂` son siempre
+ejes-alineados.
+
+Reconstruí los extremos de cada arco desde el archivo, se los pasé a nuestro builder y comparé:
+
+| | |
+|---|---|
+| idéntico salvo el espacio final | 1 |
+| difiere **sólo en el signo del cero** (`-0` contra `0`) | 9 |
+| difiere en **1 ULP** en `t0` | 1 |
+| usa una **base espejada** | 9 |
+| **describen la misma curva** (14 puntos muestreados, tol. 1e-6) | **20 / 20** |
+
+> ⚠️ **Corrección de §10.** Ahí se dijo que la base fija del sintetizador era «una conjetura»
+> y que coincidía en 11 de 20. Es más preciso decir que **es una elección canónica válida**:
+> Maestro a veces usa la espejada —y con los ocho descriptos no se pudo derivar qué la
+> decide—, pero las dos parametrizan **la misma curva, con el mismo sentido y los mismos
+> extremos**. Verificado a mano en `arco_04`: Maestro usa `Û=(−1,0,0)` con `t ∈ [π, 2.5π]`,
+> nosotros `Û=(1,0,0)` con `t ∈ [0, 1.5π]`.
+>
+> ⇒ Con la vara del encabezado —funcionalmente idéntico— **el arco necesita UN arreglo, no
+> una reescritura de la base: sacarle el espacio final.** Los `-0` y el ULP no son defectos.
+
+### 12.4 · ⭐ Polígono, polilínea y rectángulo son EL MISMO nodo
+
+Pregunta de Fermín, y la respuesta es tajante. Comparé la firma estructural de los **32**
+compuestos —y el esqueleto del XML **completo**, no sólo `<Geometries>`—:
+
+- **una sola firma** para las tres familias;
+- `ObjectType` = `…Geometry.GeomCompositeCurve` en los 32;
+- **ninguna** sección, tag ni atributo presente en una familia y ausente en otra.
+
+⇒ **La herramienta de la UI se pierde en el archivo.** Un rectángulo es un compuesto cerrado
+de cuatro rectas; un polígono, uno cerrado de N; una polilínea, uno abierto o cerrado de N.
+Nada dice qué botón lo hizo.
+
+Es el mismo patrón que ya apareció dos veces —**el modo se pierde**: los tres modos de los
+parámetros de máquina daban el mismo `V`, y los tres modos de paro daban ISOs idénticos—,
+ahora un nivel más arriba.
+
+⇒ **El sintetizador necesita UN builder, no tres.** Rectángulo y polígono no son tipos: son
+casos de uso.
+
+### 12.5 · Lo que se derivó de los compuestos
+
+- **Los 32 están encadenados**: el fin de cada miembro es el inicio del siguiente.
+- **No hay flag de «cerrado»** — el cierre es geométrico. Polilíneas: 4 abiertas, 7 cerradas
+  (más 7 con arcos). Polígonos: 6/6 cerrados. Rectángulos: 8/8.
+  > ⚠️ **Para el converter**: el cierre hay que **calcularlo**, y con el ruido de punto
+  > flotante de §7 (~3·10⁻¹³) **no se puede comparar por igualdad exacta**. Necesita
+  > tolerancia, y la tolerancia hay que justificarla con evidencia.
+- ⭐ **Siete polilíneas mezclan rectas y arcos en el mismo compuesto.** El sintetizador ya lo
+  soporta: `build_polyline_spec` acepta `(end)` para recta y `(end, center, winding)` para arco.
+- **El lado partido**: cuando el trazo arranca en medio de un lado, ese lado se guarda en
+  **dos miembros colineales que comparten la misma recta base** —uno al principio y otro al
+  final—. Pasa en `rectangulo_02/07/07+`, `poligono_04` y `polilinea_15`: exactamente los
+  cinco que tienen un par colineal.
+- **Los ángulos no se normalizan**: se observó `t1 = 8.019 rad`, mayor que 2π.
+
+> 📌 **Error de lectura, y la regla que lo evita.** Al principio leí `P` como punto inicial y
+> `t1` como longitud, y concluí que a tres rectángulos les sobraba un segmento. **Falso**: el
+> segmento va de `P + t0·D` a `P + t1·D`, y en los miembros de un compuesto `t0` rara vez es
+> 0 —se vio uno con `t0 = 44.4`—. En la línea de §4 valía 0 y por eso la lectura simplificada
+> funcionaba. Lo corrigió Fermín.
+
+### 12.6 · Lo que el lote NO puede derivar
+
+Cinco propiedades **no varían en ninguno de los 88 archivos**:
+
+| propiedad | valor único | qué queda sin saber |
+|---|---|---|
+| `IsAbsolute` | `false` | el checkbox «Coordenadas absolutas» nunca se marcó |
+| `PlaneID` | `1918` | **una sola cara**; los otros cinco planos sin tocar |
+| `Name` | vacío | si una geometría se puede nombrar |
+| `Z` | `0` | nada fuera del plano |
+| fórmulas | **cero** | cómo se parametriza un radio, un centro o un eje |
+
+Los dos que pesan para el converter son **el plano** —un dibujo en otra cara apunta a otro
+`Plane` y no hay ni un caso— y **las fórmulas** —§7 derivó cómo se ata una coordenada de
+línea, pero no los nombres de las propiedades del arco, el círculo ni la elipse—.
+
+Y dos familias fuera de lugar:
+
+- **Falta `texto`**, la octava de la lista de la UI de §2.
+- **Aparece `polígono`, que no está en esa lista.** Con §12.4 deja de importar para el modelo
+  —es el mismo nodo— pero la lista de §2 hay que revisarla igual, porque `texto` **sí** podría
+  ser otro nodo.
+
+## 13. Lo que queda abierto
 
 - ⏸ **Postprocesar los tres fixtures paramétricos de §7.**
   > **Predicción falsable**: los tres ISO van a dar **idénticos al del programa vacío**,
   > incluido el de `Distancia=130` con la línea corrida, porque sigue sin haber mecanizado
   > y §8 derivó que la geometría no llega al ISO. **Si alguno diera distinto, se cae §8** —
   > y sería el hallazgo más grande de estos días.
-- Las otras **siete geometrías** de la pestaña Dibujar (arco, círculo, elipse, polilínea,
-  rectángulo, punto, texto): qué código de curva base usa cada una y qué lleva su
-  `_serializationGeometryDescription`.
+- ~~Las otras **siete geometrías** de la pestaña Dibujar~~ → el **arco** quedó derivado
+  (§10) y el resto tiene plan de fixtures en **§11**. Quedan seis.
 - Los otros **métodos** de la barra contextual de Línea (además de `2 Puntos`), y qué
   significan `Secuencia Simple` y `Coordenadas Cartesianas`.
 - Definir una línea **por `Longitud` y `Ángulo`** en vez de por dos puntos: ¿queda el mismo

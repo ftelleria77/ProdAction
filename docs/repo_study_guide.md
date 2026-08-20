@@ -16,7 +16,7 @@ estos frentes grandes:
 - estudios reproducibles archivados bajo `tools/studies/`.
 
 El sintetizador PGMX real vive en `pgmx.synthesis` y expone
-`SYNTHESIZER_VERSION = "1.6"`.
+`SYNTHESIZER_VERSION = "1.7"`.
 
 ## Estructura principal
 

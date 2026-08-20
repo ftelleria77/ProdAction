@@ -23,9 +23,16 @@ Estados: ✅ hecho · 🔄 en curso · ⏸ esperando a Fermín · ⬜ pendiente 
 > ⚠️ Vale para el caso **sin uso**. Un parámetro que alimenta una cota, o una geometría
 > que un mecanizado toma, es la rama **D** y no está derivado.
 >
-> ⏭️ Con A7 cerrado, el orden que fijó Fermín el 2026-08-13 pone **C (operaciones de
-> máquina: Xn · Xmsg · Park)** como lo que sigue. La rama de dibujos quedó abierta con la
-> línea derivada y siete geometrías más sin barrer.
+> ⏭️ **CAMBIO DE ORDEN (Fermín, 2026-08-18): se antepone la rama G — dibujos y
+> sintetizador — a C.** La pregunta «¿el sintetizador puede generar todos los tipos de
+> dibujos?» dio **no**, y la auditoría destapó algo más serio que el conteo: de las cinco
+> geometrías que sabe emitir, **sólo la línea está respaldada por fixtures de la época
+> nueva**. El arco, el círculo y la polilínea se validan por roundtrip contra nosotros
+> mismos, y su única ancla externa es de la **serie N, época congelada**.
+>
+> Como el sintetizador es la **fábrica de fixtures** de toda la reinvestigación, esa duda se
+> hereda a todo lo que produzca — incluidos C y D. Detalle en `experiments/dibujos.md` §9,
+> plan de fixtures en §11.
 
 ## El estado del 2026-08-16
 
@@ -189,17 +196,80 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
   > fuera del método»— y era innecesario: las dos preguntas que sí importan se contestan
   > mirando el `.pgmx` y el `.iso`. La tercera, la que necesitaba el XXL, quedó retirada.
 
-### G. Dibujos (geometrías) — 🔄 ARRANCÓ (2026-08-16, doc `dibujos.md`)
-Rama nueva, abierta por los fixtures de línea. Un dibujo es **geometría sin `Feature`**: no
-crea mecanizado y **no deja rastro en el ISO** hasta que un mecanizado la toma.
-- G1. **Línea** — ✅ derivada: nodo `GeomTrimmedCurve`, `_serializationGeometryDescription`
-  decodificado (tipo · intervalo · curva base · punto · dirección, en `.17g`), los dos
-  caminos de cálculo de la dirección, y la geometría **paramétrica** vía
-  `Parametrics.Expression`. 11 fixtures.
-- G2. Las otras **siete geometrías** de la pestaña Dibujar (arco, círculo, elipse,
-  polilínea, rectángulo, punto, texto) — ⬜
-- G3. Los otros **métodos** de la barra contextual, el checkbox «Coordenadas absolutas» en
-  `true`, y qué otras propiedades admiten expresión — ⬜
+### G. Dibujos (geometrías) — 🔄 **SE ANTEPONE A C** (decisión de Fermín, 2026-08-18)
+Rama abierta el 2026-08-16 por los fixtures de línea. Un dibujo es **geometría sin
+`Feature`**: no crea mecanizado y **no deja rastro en el ISO** hasta que un mecanizado la toma.
+
+> **Por qué se antepone a C**: el sintetizador es la **fábrica de fixtures** de toda la
+> reinvestigación, y la auditoría mostró que de las geometrías que sabe emitir **sólo la línea
+> estaba respaldada por fixtures de la época nueva**. El arco, el círculo y la polilínea se
+> validaban por *roundtrip contra nosotros mismos*, ancladas en la serie N — época congelada,
+> declarada no-fuente. Esa duda se hereda a todo lo que el sintetizador produzca, C y D
+> incluidos.
+
+- G1. **Línea** — ✅ derivada (11 fixtures): nodo `GeomTrimmedCurve`,
+  `_serializationGeometryDescription` decodificado (tipo · intervalo · curva base · punto ·
+  dirección, en `.17g`), los dos caminos de cálculo de la dirección, y la geometría
+  **paramétrica** vía `Parametrics.Expression`
+- G2. **Lote «Rama G»: 88 fixtures manuales, ocho familias** (2026-08-19) — ✅ estructura
+  derivada (`dibujos.md`). Lo principal:
+  - los tipos: `GeomTrimmedCurve` (línea y arco), `GeomCircle`, **`GeomEllipse`** —que no
+    teníamos—, `GeomCompositeCurve` y `GeomCartesianPoint`
+  - **el espacio final es por código de curva**, dentro y fuera de compuestos: recta `1`
+    **con** (130 casos), cónicas `2` y `3` **sin** (53)
+  - **`N̂z = +1` antihorario · `−1` horario** (8/8) y barrido angular siempre positivo (20/20)
+  - **polígono, polilínea y rectángulo son EL MISMO nodo**: una sola firma estructural en los
+    32 compuestos ⇒ la herramienta de la UI **se pierde** en el archivo
+- G3. **Auditoría del sintetizador** — ✅ (`dibujos.md` §9): **no sabe hacer dibujos** —la API
+  sólo acepta mecanizados, no hay `geometries=`— y cubre **cinco de ocho** tipos
+- G4. **Texto** — ⬜ sin fixture; es la única familia de la UI que falta
+- G5. **Corrección del sintetizador** — 🔄 **primera pasada hecha (2026-08-19)**: sacado el
+  espacio final sobrante de los dos builders de arco, y **fijada la regla contra archivos de
+  Maestro** en `tests/test_pgmx_dibujos_geometria.py` (11 fixtures versionados en
+  `evidencia/dibujos_rama_g/`, suite sigue offline). La línea, el arco y el círculo ahora
+  reproducen a Maestro **byte a byte**. Queda: `GeomEllipse` y decidir si el punto y los
+  compuestos entran por una API de dibujos o siguen colgando de mecanizados
+- G6. **Lo que el lote NO puede derivar** — ⏸ cinco propiedades no varían en los 88:
+  `IsAbsolute` (siempre `false`), `PlaneID` (**una sola cara**), `Name` (vacío), `Z` (0) y
+  **cero fórmulas** —o sea, no sabemos cómo se parametriza un radio—. Más los otros métodos
+  de la barra contextual
+
+### H. Importación DXF — 🔮 futuro (idea de Fermín, 2026-08-19)
+
+Entre las herramientas de dibujo de Maestro está la **importación de archivos `.dxf`**. Abre
+un camino que vale estudiar: **dibujar en AutoCAD y salir a la máquina**. Son dos mitades
+distintas y conviene no mezclarlas.
+
+- H1. **¿Qué hace la importación DXF de Maestro?** — ⬜ Si importa geometrías, el resultado
+  cae en `<Geometries>`: exactamente lo que la rama G está derivando. Lo decide un fixture
+  barato — el mismo dibujo hecho a mano y importado de un DXF, y comparar los nodos.
+  > ⇒ Si Maestro lo hace, **es un origen más de `.pgmx`**, como X-CAB (`circuito_pgmx.md`):
+  > archivos de otra autoría que el converter va a tener que aceptar. Eso lo vuelve alcance,
+  > no sólo comodidad.
+- H2. **¿Puede nuestro sintetizador leer DXF directamente?** — ⬜ `.dxf` → `.pgmx` sin pasar
+  por Maestro. Valor doble: una fábrica de fixtures mucho más rápida que dibujar a mano, y un
+  camino de producción real.
+
+**Lo que ya está en el repo y nunca se miró:**
+
+| | |
+|---|---|
+| `pgmx/docs/xilog_plus_pgm/06_6_importacion_dxf.md` | 396 líneas. Documenta la importación DXF **del editor de Xilog Plus**, que produce **PGM**, no `.pgmx` ⇒ **fuera de alcance** por la decisión del 08-14. Sirve como **referencia de qué necesita una importación**, no como camino |
+| `iso/data/machine_config/snapshot/xilog_plus/Cfg/cad.cfg` | **está en el snapshot**, 116 líneas de valores posicionales. Es la config de esa importación, con los valores de esta instalación |
+| `pgmx/docs/maestro_scripting/` | **no menciona DXF** — el camino de Maestro no está documentado en lo que tenemos |
+| nuestro código | **no toca DXF** en ningún lado |
+
+Un dato del manual de Xilog que sirve para las dos mitades: la importación necesita
+**auto-join con tolerancia** (default 0,01 mm) para decidir si dos elementos que casi se
+tocan pertenecen al mismo perfil. *«Si su valor es demasiado pequeño, la importación se
+produce de modo errado, generando demasiados perfiles disjuntos… si es demasiado grande,
+perfiles que deben quedar diferentes podrían ser encolados.»* Es **el mismo problema de
+tolerancia** que la rama G encontró al decidir si un compuesto está cerrado — y ahí también
+hay que justificar el número con evidencia, no elegirlo.
+
+> **Prerrequisito: la rama G.** Un DXF trae líneas, arcos, círculos, elipses y polilíneas —
+> justo las geometrías que G está derivando. Sin saber cómo las escribe Maestro no hay a qué
+> traducir.
 
 ### B. Anatomía del ISO — 🔄 ARRANCÓ (2026-08-10, doc `anatomia_iso.md`)
 - B1. Partes del archivo del programa vacío: atribuir CADA línea a **uno de TRES** orígenes —
@@ -300,6 +370,67 @@ están mapeadas: `Xn` = «Operación nula», `Xmsg` = «Impresión mensaje», `P
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-08-19 — El lote de dibujos, y la primera geometría validada contra Maestro
+Fermín armó `Dibujos\Rama G\` con **88 `.pgmx` manuales**, ocho familias, uno por dibujo.
+
+- ⭐ **El espacio final es POR CÓDIGO DE CURVA**, no por geometría: la recta `1` lo lleva
+  (130 casos), las cónicas `2` y `3` no (53). Vale dentro y fuera de los compuestos. Era el
+  delta que el 08-18 había quedado con `n=1` — y confirma que al arco del sintetizador le
+  sobraba ese byte mientras que a su círculo no.
+- ⭐ **Polígono, polilínea y rectángulo son EL MISMO nodo.** Una sola firma estructural en los
+  32 compuestos, y ninguna diferencia en el XML completo ⇒ **la herramienta de la UI se pierde
+  en el archivo**. Es el patrón de siempre —el modo se pierde—, un nivel más arriba. El
+  sintetizador necesita **un** builder, no tres.
+- ✅ **`N̂z = +1` antihorario, `−1` horario** (8/8, con la descripción de Fermín), y barrido
+  angular siempre positivo (20/20).
+- ⚠️ **Retractada una acusación mía**: había dicho que la base fija del sintetizador era una
+  conjetura que fallaba en 9 de 20 arcos. Es **una elección canónica válida**: los 20
+  describen la misma curva, con el mismo sentido y los mismos extremos, muestreados a
+  tolerancia 1e-6. Lo único que había que arreglar era el espacio.
+- 🐛 **Y un error de lectura mío, corregido por Fermín**: leí `P` como punto inicial y `t1`
+  como longitud, ignorando `t0`, y concluí que a tres rectángulos les sobraba un segmento. El
+  segmento va de `P + t0·D` a `P + t1·D`; en los compuestos `t0` rara vez es 0. No sobraba
+  nada: **cuando el trazo arranca en medio de un lado, ese lado va partido en dos miembros
+  colineales** que comparten la recta base.
+- ✅ **Código corregido y, por primera vez, geometría fijada contra Maestro.** Hasta hoy el
+  arco, el círculo y la polilínea se validaban por roundtrip contra nosotros mismos, anclados
+  en la serie N (época congelada). `tests/test_pgmx_dibujos_geometria.py` compara ahora contra
+  11 fixtures versionados: **línea, arco y círculo salen byte a byte**. Suite **332**.
+- 🔮 **Rama H abierta** (idea de Fermín): la **importación DXF** de Maestro — dibujar en
+  AutoCAD y salir a la máquina. Con G como prerrequisito.
+- **Falta**: el `texto` (única familia de la UI sin fixture), `GeomEllipse` en el sintetizador,
+  y las cinco propiedades que el lote no puede derivar (plano, `IsAbsolute`, `Name`, `Z` y las
+  fórmulas sobre geometría).
+
+### 2026-08-18 — El sintetizador no sabe dibujar, y su geometría está anclada en la época congelada
+Pregunta de Fermín: *¿nuestro sintetizador puede generar todos los tipos de dibujos?*
+
+- ❌ **No, y de dos maneras.** La API pública sólo acepta **mecanizados** —no hay
+  `geometries=`—, así que no puede dejar geometría suelta: de los ocho dibujos de la pestaña
+  Dibujar sabe autorar **cero como dibujo**. Y de los tipos de geometría cubre **cinco de
+  ocho**: faltan elipse y texto, y el rectángulo no existe como tipo propio.
+- ⚠️ **El hallazgo de fondo no es el conteo, es la evidencia.** Sólo la **línea** tiene
+  fixtures manuales de la época nueva. El arco, el círculo y la polilínea se validan por
+  **roundtrip contra nosotros mismos**, y el docstring de `test_pgmx_arc_authoring.py`
+  declara que su validación final fue **N040 — serie N, época congelada, no-fuente**.
+  Verificado: **ningún test compara geometría sintetizada contra un `.pgmx` de Maestro**, y
+  en el repo no hay ningún fixture de dibujo. Regla 5 en su forma más pura.
+- ⭐ **Primer fixture de arco de la época nueva** (Fermín, 08-18), y da **dos deltas**: al
+  arco le sobra el **espacio final** —la línea lo lleva, el arco no— y el builder de base
+  fija emite `0` donde Maestro escribe `-0`. El `-0` no es un defecto funcional, pero delata
+  que **la base fija es una conjetura**: Maestro la deriva.
+- ⛔ **El código NO se tocó.** Es una sola observación, y este mismo doc registra dos reglas
+  derivadas de tres o cuatro casos que **cayeron con el fixture siguiente**. Cambiar la
+  serialización movería los bytes de todos los arcos —`leads.py` y los ocho del vaciado— sobre
+  una sola medición. Hace falta un segundo arco.
+- ✅ **Cerrado de paso un pendiente de `dibujos.md` §7**: los seis usos de tolerancia `1e-15`
+  **sí** reciben valores leídos de un `.pgmx` (`adapters.py` arma specs desde un snapshot y
+  los manda a serializar). Con el ruido de ~3·10⁻¹³ medido, la tolerancia queda 300 veces
+  corta — no es defecto funcional, pero explica por qué releer y re-sintetizar no da
+  byte-idéntico.
+- ⏭️ **Se antepone la rama G a C**: el sintetizador es la fábrica de fixtures de toda la
+  reinvestigación.
 
 ### 2026-08-17 — El postproceso contesta que NO, y eso cierra A7
 Fermín postprocesó en el CNC las dos tandas: cinco fixtures de parámetros y tres de líneas.

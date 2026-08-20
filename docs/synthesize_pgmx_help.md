@@ -5,7 +5,7 @@ orden conviene llamarla y que reglas de trabajo seguimos para no perder el hilo
 de lo ya validado en Maestro.
 
 Estado de hito actual:
-- sintetizador Maestro `v1.6`
+- sintetizador Maestro `v1.7`
 - constante publica de version: `pgmx.synthesis.SYNTHESIZER_VERSION`
 
 ## 1. Alcance actual
@@ -44,6 +44,10 @@ Casos publicos soportados hoy:
 - `Approach` y `Retract` con reglas ya volcadas desde Maestro y ya unificadas
   sobre la tangente de entrada/salida del toolpath efectivo
 - `Area` de Parametros de Maquina, con `HG` por defecto
+- **dibujos**: geometria de la pieza SIN mecanizado (`DrawingSpec`), en las cuatro
+  formas que escribe Maestro — `GeomTrimmedCurve` (recta y arco), `GeomCircle`,
+  `GeomCompositeCurve` (polilinea, poligono y rectangulo son el MISMO nodo) y
+  `GeomCartesianPoint`
 
 Casos que no deben asumirse como API publica estable si no estan documentados aqui:
 - familias de feature distintas de `GeneralProfileFeature`, `SlotSide`,
@@ -997,6 +1001,77 @@ Caso usado como referencia:
   horizontal `3 x 1` y otro vertical `1 x 3`, ambos con separacion `32`
 - `Pieza_005.pgmx` extiende el intento a `Front`, `Back`, `Left` y `Right`
   con patrones `3 x 1`, `D8`, no pasantes, separados `32`
+
+### `build_drawing_spec(...) -> DrawingSpec`
+
+Construye un **dibujo**: geometria de la pieza **sin mecanizado**. Es lo que produce la
+pestana «Dibujar» de Maestro — un nodo en `<Geometries>` mientras `<Features/>` queda
+vacio. Se pasan por `drawings` a `build_synthesis_request(...)`, igual que las operaciones
+se pasan por `lines`, `circles`, `drills`, etc.
+
+```python
+build_drawing_spec(
+    *,
+    profile,              # GeometryProfileSpec
+    ref=None,             # etiqueta NUESTRA para reutilizarlo; no viaja al .pgmx
+    plane_name="Top",
+)
+```
+
+El `profile` sale de los builders de geometria que ya existian:
+
+| forma en la UI de Maestro | builder del perfil | nodo en el `.pgmx` |
+|---|---|---|
+| Linea | `build_line_geometry_profile(x0, y0, x1, y1)` | `GeomTrimmedCurve` |
+| Circulo | `build_circle_geometry_profile(cx, cy, r)` | `GeomCircle` |
+| Punto | `build_point_geometry_profile(x, y)` | `GeomCartesianPoint` |
+| Polilinea · Poligono · Rectangulo | `build_composite_geometry_profile([...])` | `GeomCompositeCurve` |
+| Arco (como miembro) | `build_arc_geometry_primitive(...)` | miembro con curva base `2` |
+
+Ejemplo:
+
+```python
+import pgmx.synthesis as sp
+
+dibujos = [
+    sp.build_drawing_spec(profile=sp.build_line_geometry_profile(50, 50, 350, 50), ref="base"),
+    sp.build_drawing_spec(profile=sp.build_circle_geometry_profile(150, 150, 100)),
+    sp.build_drawing_spec(profile=sp.build_composite_geometry_profile([
+        sp.build_line_geometry_primitive(0, 0, 100, 0),
+        sp.build_arc_geometry_primitive(100, 0, 150, 50, 100, 50),   # recta + arco, mezclados
+    ])),
+]
+sp.synthesize_request(sp.build_synthesis_request(
+    output_path=salida, piece_name="pieza", length=400, width=400, depth=18,
+    drawings=dibujos))
+```
+
+Notas, todas derivadas de 88 fixtures manuales (`iso/docs/experiments/dibujos.md`):
+
+- **Un dibujo no crea mecanizado**: `<Features/>` queda vacio, y **no deja rastro en el
+  ISO** hasta que un mecanizado lo tome.
+- **Poligono, polilinea y rectangulo son EL MISMO nodo** (`GeomCompositeCurve`): una sola
+  firma estructural en los 32 compuestos del lote. La herramienta de la UI se pierde en el
+  archivo, asi que hay **un** builder y no tres. Un rectangulo es un compuesto cerrado de
+  cuatro rectas; el cierre es geometrico, no hay flag.
+- **Un compuesto puede mezclar rectas y arcos** — 7 de las 18 polilineas del lote lo hacen.
+- **`ref` no viaja al `.pgmx`.** En los 88 fixtures Maestro deja `<Name/>` vacio; escribir
+  un nombre seria apartarse de lo que hace el. `ref` es una etiqueta nuestra para poder
+  referenciar el dibujo desde otra spec, y se resuelve al ID reservado en tiempo de sintesis.
+- **Un ID por miembro**: el compuesto reserva un ID propio para cada miembro en
+  `_serializingKeys`, ademas del suyo.
+- El espacio final de la serializacion es **por codigo de curva** — recta `1` lo lleva,
+  conicas `2` y `3` no—. Lo fija `tests/test_pgmx_dibujos_geometria.py` contra archivos de
+  Maestro.
+
+Lo que **todavia no** hace:
+
+- **`GeomEllipse`** (curva base `3`, con dos radios): existe en Maestro, esta derivado su
+  formato, y el sintetizador **la rechaza ruidosamente**. Falta decidir si entra.
+- **Reutilizar un dibujo desde una spec de mecanizado.** `_apply_drawings(...)` ya devuelve
+  el mapa `ref -> ID`, que es el enganche; falta la evidencia de **que hace Maestro** cuando
+  un mecanizado toma una geometria ya dibujada — si comparte el nodo o lo duplica. Sin un
+  fixture de eso, el contrato seria inventado.
 
 ### `build_parametric_variable_spec(...) -> ParametricVariableSpec`
 

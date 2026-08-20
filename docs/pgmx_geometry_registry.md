@@ -169,3 +169,43 @@ o polilinea abierta. A partir de ahora:
   - polilineas cerradas redondeadas y otras curvas compuestas tangentes
 - las reglas de `Approach` y `Retract` ya pueden colgar de esa misma capa porque
   se resuelven desde el punto y la tangente de entrada/salida del toolpath efectivo
+
+## Alta de geometria en la pieza (desde `SYNTHESIZER_VERSION = "1.7"`)
+
+Los builders de arriba producen la **forma**; para que esa forma entre en un `.pgmx` como
+**dibujo** —geometria sin mecanizado— se usa:
+
+- `DrawingSpec`
+- `build_drawing_spec(profile=..., ref=None, plane_name="Top")`
+- `build_synthesis_request(..., drawings=[...])`
+
+Un dibujo agrega su nodo a `<Geometries>` y **no toca `<Features>`**. Detalle y ejemplos en
+`docs/synthesize_pgmx_help.md`.
+
+## Lo derivado el 2026-08-19 contra 88 fixtures manuales
+
+El lote «Rama G» (`iso/docs/experiments/dibujos.md`) fijo por primera vez estas reglas
+contra archivos hechos en Maestro, no por roundtrip contra nosotros mismos:
+
+| regla | evidencia |
+|---|---|
+| el **espacio final** de la serializacion es por **codigo de curva**: recta `1` lo lleva, conicas `2` y `3` no | 130 + 53 curvas |
+| `N̂z = +1` antihorario · `−1` horario | 8/8 |
+| el barrido angular es siempre positivo y `<= 2π` | 20/20 |
+| **poligono, polilinea y rectangulo son el MISMO nodo** (`GeomCompositeCurve`) | 32/32, una sola firma estructural |
+| un compuesto puede **mezclar** rectas y arcos | 7 de 18 polilineas |
+| el compuesto reserva **un ID por miembro** en `_serializingKeys` | 32/32 |
+| Maestro deja `<Name/>` **vacio** en toda geometria dibujada | 88/88 |
+
+### `GeomEllipse` — quinta familia, conocida y NO soportada
+
+Maestro escribe la elipse como curva base **`3`**, con la misma forma que el circulo mas un
+segundo radio:
+
+```
+3 Cx Cy Cz  N̂  Û  V̂  R_mayor R_menor
+```
+
+El sintetizador **no la emite**: `_primitive_to_serialization` levanta `ValueError`. Es
+deliberado (regla 4 del CLAUDE.md): mientras no se decida si entra, tiene que explotar y no
+aproximar. Fijado en `tests/test_pgmx_dibujos_geometria.py`.

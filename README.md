@@ -70,6 +70,8 @@ bitácora de la reinvestigación (`iso/docs/hoja_de_ruta.md`) es siempre el de p
 - La sintesis de `.pgmx` permite fijar el area de `Parametros de Maquina` mediante `execution_fields` en la API o `--execution-fields/--area` en la CLI; si no se indica, usa `HG` por defecto.
 - La seguridad de profundidad usa `pgmx/data/tool_catalog.csv`: la profundidad total del fresado o del taladro no puede superar `sinking_length` de la herramienta cuando `ToolKey` queda resuelto.
 - Constante publica de version: `pgmx.synthesis.SYNTHESIZER_VERSION`
+- Desde `1.7`, la pieza acepta **dibujos**: geometria sin mecanizado, via
+  `build_drawing_spec(...)` y `build_synthesis_request(..., drawings=[...])`
 - Nueva helper publica de estrategias: `build_helical_milling_strategy_spec(...)`
 - `Helicoidal` queda soportada por ahora para circulos cerrados via `CircleSpec`
 - en `CircleSpec`, `SideOfFeature` conserva el circulo nominal y desplaza el radio efectivo del toolpath segun winding + `tool_width / 2`

@@ -70,6 +70,11 @@ from ..milling.contour import (
     _append_contour,
     _hydrate_contour_spec,
 )
+from .geometry import (
+    GeometryProfileSpec,
+    _build_geometry_from_curve_spec,
+    _curve_spec_from_profile_geometry,
+)
 from .hydration import _load_pgmx_container
 from .multi_piece import _active_workpiece_ctx, _add_piece_to_xml
 from .output import (
@@ -91,7 +96,9 @@ from .xml import (
     _append_key,
     _append_node,
     _append_object_ref,
+    _build_point_geometry,
     _compact_number,
+    _find_plane_ref,
     _qname,
     _reserve_ids,
     _safe_float,
@@ -104,6 +111,9 @@ from .xml import (
 
 __all__ = [
     "DEFAULT_BASELINE_DIR",
+    "DrawingSpec",
+    "build_drawing_spec",
+    "_apply_drawings",
     "DEFAULT_BASELINE_XML_PATH",
     "DEFAULT_MACHINING_ORDER",
     "HydratedMachiningSpec",
@@ -201,7 +211,7 @@ def _module_data_dir() -> Path:
 MODULE_DIR = _module_data_dir()
 DEFAULT_BASELINE_DIR = MODULE_DIR / "maestro_baselines"
 DEFAULT_BASELINE_XML_PATH = DEFAULT_BASELINE_DIR / "Pieza.xml"
-SYNTHESIZER_VERSION = "1.6"
+SYNTHESIZER_VERSION = "1.7"
 
 
 @dataclass(frozen=True)
@@ -431,6 +441,95 @@ def _build_variable_node(var: ParametricVariableSpec, var_id: str) -> ET.Element
     _set_xmlns(value_node, "b", XSD_NS)
     value_node.text = _parameter_value_text(var.value, var.variable_type)
     return variable
+
+
+@dataclass(frozen=True)
+class DrawingSpec:
+    """Un DIBUJO: geometria de la pieza SIN mecanizado.
+
+    Es lo que produce la pestana «Dibujar» de Maestro: un nodo en `<Geometries>` mientras
+    `<Features/>` queda vacio. Derivado de 88 fixtures manuales en
+    `iso/docs/experiments/dibujos.md`.
+
+    `ref` es una etiqueta NUESTRA para poder reutilizar el dibujo desde otra spec. **No
+    viaja al `.pgmx`**: en los 88 fixtures Maestro deja `<Name/>` vacio, y escribir un
+    nombre seria apartarse de lo que hace el.
+    """
+
+    profile: GeometryProfileSpec
+    ref: Optional[str] = None
+    plane_name: str = "Top"
+
+
+def build_drawing_spec(
+    *,
+    profile: GeometryProfileSpec,
+    ref: Optional[str] = None,
+    plane_name: str = "Top",
+) -> DrawingSpec:
+    """Construye un dibujo a partir de un perfil geometrico.
+
+    El perfil sale de los builders que ya existen: `build_line_geometry_profile`,
+    `build_circle_geometry_profile`, `build_point_geometry_profile` y
+    `build_composite_geometry_profile` (este ultimo acepta primitivas de recta Y de arco
+    en el mismo compuesto, que es lo que hace Maestro con una polilinea mixta).
+    """
+
+    if not isinstance(profile, GeometryProfileSpec):
+        raise ValueError("`profile` tiene que ser un GeometryProfileSpec.")
+    normalized_ref = None if ref is None else str(ref).strip()
+    if normalized_ref == "":
+        raise ValueError("`ref` no puede ser una cadena vacia; usar None si el dibujo no se reutiliza.")
+    return DrawingSpec(profile=profile, ref=normalized_ref, plane_name=str(plane_name))
+
+
+def _apply_drawings(
+    root: ET.Element,
+    drawings: Sequence[DrawingSpec],
+) -> dict:
+    """Agrega los dibujos a `<Geometries>` y devuelve el mapa `ref -> ID de geometria`.
+
+    No toca `<Features>`: un dibujo no es un mecanizado.
+    """
+
+    if not drawings:
+        return {}
+    geometries = root.find("./{*}Geometries")
+    if geometries is None:
+        raise ValueError("La plantilla no contiene Geometries para insertar dibujos.")
+
+    resolved: dict = {}
+    for drawing in drawings:
+        plane_id, plane_object_type = _find_plane_ref(root, drawing.plane_name)
+        profile = drawing.profile
+        if profile.geometry_type == "GeomCartesianPoint":
+            [geometry_id] = _reserve_ids(root, 1)
+            point = profile.primitives[0].start_point
+            node = _build_point_geometry(
+                geometry_id, plane_id, plane_object_type, point[0], point[1], point[2]
+            )
+        else:
+            curve = _curve_spec_from_profile_geometry(profile)
+            member_count = (
+                len(curve.member_serializations)
+                if curve.geometry_type == "GeomCompositeCurve" and not curve.member_keys
+                else 0
+            )
+            reserved = _reserve_ids(root, 1 + member_count)
+            geometry_id = reserved[0]
+            node = _build_geometry_from_curve_spec(
+                geometry_id,
+                plane_id,
+                plane_object_type,
+                curve,
+                generated_member_keys=tuple(reserved[1:]),
+            )
+        geometries.append(node)
+        if drawing.ref is not None:
+            if drawing.ref in resolved:
+                raise ValueError(f"Hay dos dibujos con el mismo `ref`: {drawing.ref!r}.")
+            resolved[drawing.ref] = geometry_id
+    return resolved
 
 
 def _apply_parametric_variables(
@@ -1228,6 +1327,7 @@ class PgmxSynthesisRequest:
     workplans: tuple[WorkplanSpec, ...] = ()
     current_workplan_index: int = 0
     parametric_variables: tuple[ParametricVariableSpec, ...] = ()
+    drawings: tuple[DrawingSpec, ...] = ()
     pieces: tuple[PieceSpec, ...] = ()
 
 
@@ -1920,6 +2020,7 @@ def build_synthesis_request(
     workplans: Optional[Sequence[WorkplanSpec]] = None,
     current_workplan_index: int = 0,
     parametric_variables: Optional[Sequence[ParametricVariableSpec]] = None,
+    drawings: Optional[Sequence[DrawingSpec]] = None,
     pieces: Optional[Sequence[PieceSpec]] = None,
 ) -> PgmxSynthesisRequest:
     """Arma una solicitud reusable de sintesis para el flujo principal.
@@ -1982,6 +2083,7 @@ def build_synthesis_request(
         workplans=_normalize_workplan_specs(tuple(workplans or ()), target_piece),
         current_workplan_index=max(0, int(current_workplan_index)),
         parametric_variables=tuple(parametric_variables or ()),
+        drawings=tuple(drawings or ()),
         pieces=tuple(pieces or ()),
     )
 
@@ -2157,6 +2259,9 @@ def synthesize_request(request: PgmxSynthesisRequest) -> PgmxSynthesisResult:
 
     _apply_piece_state(baseline_root, request.piece)
     _apply_parametric_variables(baseline_root, request.parametric_variables)
+    # Los dibujos van ANTES que los mecanizados: reservan sus ID primero y quedan
+    # primeros en `<Geometries>`, como cuando se dibuja antes de mecanizar.
+    drawing_ids = _apply_drawings(baseline_root, request.drawings)  # noqa: F841
     workplan_nodes: tuple[ET.Element, ...] = ()
     if normalized_workplans:
         workplan_nodes = _ensure_workplans(
