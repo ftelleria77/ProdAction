@@ -32,7 +32,7 @@ Una línea ya creada se edita en el panel **«Línea» → «Datos geométricos�
 
 | control | nota |
 |---|---|
-| checkbox **Coordenadas absolutas** | ↔ `<a:IsAbsolute>` del XML. Sin marcar = `false` |
+| checkbox **Coordenadas absolutas** | ⚠️ **NO es `<a:IsAbsolute>`, y no se guarda en el archivo** — ver §13.5. Es un modo de visualización |
 | `Xi` `Yi` `Zi` · `Xf` `Yf` `Zf` | `Zi`/`Zf` deshabilitados sobre un plano 2D |
 | **`Longitud`** y **`Ángulo`** | campos propios, editables — la recta se puede definir por ahí |
 
@@ -689,7 +689,7 @@ Cinco propiedades **no varían en ninguno de los 88 archivos**:
 
 | propiedad | valor único | qué queda sin saber |
 |---|---|---|
-| `IsAbsolute` | `false` | el checkbox «Coordenadas absolutas» nunca se marcó |
+| `IsAbsolute` | `false` | **no lo pone el checkbox** (§13.5): marcarlo no cambia el archivo. Qué lo pondría en `true`, DESCONOCIDO |
 | `PlaneID` | `1918` | **una sola cara**; los otros cinco planos sin tocar |
 | `Name` | vacío | si una geometría se puede nombrar |
 | `Z` | `0` | nada fuera del plano |
@@ -706,7 +706,268 @@ Y dos familias fuera de lugar:
   —es el mismo nodo— pero la lista de §2 hay que revisarla igual, porque `texto` **sí** podría
   ser otro nodo.
 
-## 13. Lo que queda abierto
+
+## 13. Bloque 3 (2026-08-22): la reutilización, el texto, el plano y el radio paramétrico
+
+Cinco fixtures pedidos, cuatro derivados y uno que no capturó lo que buscaba.
+
+### 13.1 · ⭐ Maestro REUTILIZA la geometría dibujada — no la duplica
+
+Era lo único que trababa la rama G, y `R_PV_manual_base_linea_01_fresada` lo cierra:
+
+| | `linea_01` | `linea_01_fresada` |
+|---|---|---|
+| geometrías | 1 (`GeomTrimmedCurve`, ID **1927**) | **1** (`GeomTrimmedCurve`, ID **1927**) |
+| serialización | `8 0 300` ⏎ `1 50 50 0 1 0 0 ` | **idéntica** |
+| `<Features>` | vacío | un `GeneralProfileFeature` llamado **«Fresado»** |
+
+Y el `Feature` apunta a la geometría del dibujo:
+
+```xml
+<ManufacturingFeature i:type="a:GeneralProfileFeature">
+  <Key><ID>2008</ID>…</Key>
+  <Name>Fresado</Name>
+  <GeometryID>
+    <b:ID>1927</b:ID>
+    <b:ObjectType>…Geometry.GeomTrimmedCurve</b:ObjectType>
+  </GeometryID>
+  <OperationIDs>… BottomAndSideFinishMilling (2007) …</OperationIDs>
+```
+
+El ID `1927` aparece **exactamente dos veces** en todo el archivo: la definición en
+`<Geometries>` y la referencia del `Feature`.
+
+⇒ **Un nodo, dos dueños.** Es la misma estructura que ya produce nuestro sintetizador —el
+`GeometryID` del `Feature` apunta al dibujo y la trayectoria vive en la `Operation`—; la
+diferencia es que el nuestro **siempre crea** la geometría junto con el mecanizado, y Maestro
+puede **apuntar a una que ya existe**.
+
+### ⚠️ Corrección de Fermín: la geometría es la REFERENCIA, no la traza
+
+Acá había escrito «una geometría que un mecanizado toma **sí llega al ISO**». **Está mal, y
+de un modo que importa.** Lo correcto es que **PUEDE llegar** — porque lo que el ISO lleva es
+la **traza**, y la traza se *calcula a partir de* la geometría:
+
+- la **corrección de fresa** y la **rebaba** generan recorridos **paralelos** a la geometría;
+- el **acercamiento** y el **alejamiento** de un fresado **agregan segmentos** al principio y
+  al final;
+- un **vaciado** produce una traza compleja a partir de **una o más** geometrías.
+
+Son operaciones donde el recorrido de la fresa **puede ser distinto** de la geometría, o que
+la usan como **referencia para calcular** el recorrido. Se estudian en la rama D.
+
+El propio fixture lo muestra, en el caso más simple posible. `linea_01_fresada` da **95
+líneas** contra las 44 del programa vacío, y su cuerpo es:
+
+```
+G0 X50.000 Y50.000        <- posicionamiento
+G0 Z145.400
+D1 · SVL 125.400 · SVR 9.180
+G1 Z-9.000 F2000.000      <- bajada en Z
+G1 X350.000 Z-9.000 F5000.000
+G0 Z20.000                <- salida
+D0 · SVL 0.000 · SVR 0.000
+```
+
+La geometría dibujada es `(50,50) → (350,50)`, y **el XY de la traza coincide** — pero
+coincide **porque la compensación está cancelada**: en todo el archivo sólo hay `G40`, ningún
+`G41`/`G42`. Y aun coincidiendo en XY, **la traza no es la geometría**: agrega el
+posicionamiento, la bajada en Z y la salida, que una geometría plana no tiene.
+
+⇒ La formulación correcta: **lo que llega al ISO es la traza; la geometría es de dónde se
+calcula.** Cuándo coinciden y cuándo no, lo decide la operación — y eso es la rama D.
+
+### De paso, dos predicciones del 2026-08-19 que se cumplen
+
+Es el primer fixture de la época nueva con traza de fresado real, y confirma lo que se había
+anticipado desde el lote de dibujos:
+
+| predicho | observado |
+|---|---|
+| `SVL`/`SVR` salen del catálogo de herramientas | `SVL 125.400` · `SVR 9.180` = `tool_offset_length` y `diameter/2` de **E001** |
+| `S…M3` sale de `spindle_speed_std` | `S18000M3`, y E001 tiene `spindle_speed_std = 18000` |
+
+### 13.2 · ⭐ El `Texto` NO es una familia nueva: son contornos
+
+`R_PV_manual_base_texto_01` no trae ningún `GeomText`. Trae **seis `GeomCompositeCurve`**.
+
+⇒ **Maestro convierte el texto a contornos al dibujarlo** — uno por glifo. Estructuralmente
+ya está cubierto por lo que sabemos; lo que haría falta para *generarlo* es tipografía, que es
+otro problema y no del formato.
+
+⇒ Con esto, **las ocho geometrías de la pestaña Dibujar caben en cinco tipos de nodo**:
+`GeomTrimmedCurve`, `GeomCircle`, `GeomEllipse`, `GeomCompositeCurve` y `GeomCartesianPoint`.
+El barrido de familias queda **cerrado**.
+
+### 13.3 · La geometría paramétrica del círculo: `Radius`
+
+`R_PV_manual_base_circulo_radio_param` tiene un parámetro `Radio = 90` y esta expresión:
+
+```
+ref=1951  GeomCircle   Property=Radius   Index=-1   Value=Radio
+```
+
+⇒ **`GeomCircle.Radius`**, mismo mecanismo `Parametrics.Expression` que el `EndY` de la línea
+(§7). Y la geometría se guarda **resuelta** (`… 0 90`), con la fórmula aparte — otra vez el
+patrón de §7.
+
+Mapa de propiedades conocido hasta hoy:
+
+| geometría | propiedades con expresión derivadas |
+|---|---|
+| `GeomTrimmedCurve` (línea) | `StartX` · `StartY` · `EndX` · `EndY` |
+| `GeomCircle` | `Radius` |
+| `WorkPiece` | `Length` · `Width` · `Depth` |
+
+### 13.4 · El plano: `PlaneID` cambia con la cara
+
+`R_PV_manual_base_linea_cara2` trae **`PlaneID = 1920`**, contra el `1918` de los 88 fixtures
+anteriores. ⇒ **Una geometría dibujada en otra cara apunta a otro `Plane`**, como se esperaba.
+El hueco «los 88 están en una sola cara» queda cubierto para el caso de una segunda.
+
+Quedan las otras cuatro caras, y saber si el `Plane` de un dibujo determina algo más.
+
+### 13.5 · ⭐ «Coordenadas absolutas» NO SE GUARDA en el archivo
+
+Y NO es el `<a:IsAbsolute>` del XML. Las dos cosas se creían lo mismo desde §2; las dos son
+falsas.
+
+**Lo que vio Fermín** (captura del 2026-08-24, `R_PV_manual_base_linea_01_abs.pgmx`):
+
+- la casilla **«Coordenadas absolutas» marcada**;
+- los campos `Xi Yi Zi Xf Yf Zf Longitud Ángulo` **en gris**, no editables;
+- **sin asterisco** en la barra de título ⇒ el archivo está **guardado**;
+- y al **cerrar y reabrir**, la casilla vuelve a aparecer **desmarcada**.
+
+**Lo que dice el archivo**, leído después de ese guardado:
+
+| | |
+|---|---|
+| `linea_01.pgmx` (19/08) vs `linea_01_abs.pgmx` (24/08, reguardado con la casilla marcada) | **XML byte a byte idéntico** |
+| `<a:IsAbsolute>` de la **geometría** | `false` en los **dos** |
+| los seis `IsAbsolute=true` que aparecen en el archivo | son de **`<Planes>`**, los seis planos de la pieza. Nada que ver con el dibujo |
+| diferencia de tamaño (5788 vs 5804 B) | sólo el **nombre más largo** de los miembros del ZIP |
+
+⇒ **DERIVADO: la casilla es un MODO DE VISUALIZACIÓN, no un dato del dibujo.** Que los campos
+queden **en gris** al marcarla lo dice por otro lado: en absolutas no se edita, se mira.
+
+⇒ ⚠️ **Queda REFUTADA la correspondencia que §2 daba por buena** —«checkbox Coordenadas
+absolutas ↔ `<a:IsAbsolute>` del XML»—. Nunca hubo evidencia de eso; era una lectura
+razonable que el fixture desarma. Es exactamente el patrón de la regla 1: un nombre igual en
+dos lados que resultó ser dos cosas.
+
+⇒ Y con eso, **`<a:IsAbsolute>` de la geometría vuelve a DESCONOCIDO**: vale `false` en los 89
+dibujos que tenemos y no sabemos qué lo pondría en `true`. Ya no alcanza con marcar la casilla.
+
+### Lo que la captura sí muestra de la referencia absoluta
+
+Con la casilla marcada, sobre la pieza base (400×400×18, origen 0/0/0):
+
+| campo | relativas | absolutas |
+|---|---|---|
+| `Xi` `Yi` | 50 · 50 | **50 · 50** |
+| `Xf` `Yf` | 350 · 50 | **350 · 50** |
+| **`Zi` `Zf`** | 0 · 0 | **18 · 18** |
+
+⇒ Lo único que cambia es la **Z**: 0 en relativas, 18 en absolutas. Coherente con que la
+referencia relativa mida desde la **cara superior** y la absoluta desde la **base** de la
+pieza — pero es **una pieza con origen 0/0/0**, así que en XY las dos referencias coinciden
+por construcción y no se pueden separar. Haría falta una pieza con origen XY distinto de cero.
+
+### 📌 Y una corrección mía
+
+El 22 escribí que este fixture «no capturó el cambio» y pedí rehacerlo verificando que la
+casilla quedara marcada. **El fixture estaba bien desde el principio**: no hay nada que
+capturar, porque Maestro no lo guarda. El error fue mío — di por sentada la correspondencia
+de §2 en vez de tratarla como lo que era, una hipótesis sin fixture.
+
+### 13.6 · El origen de la pieza: la geometría y la traza son RELATIVAS a él
+
+`R_PV_manual_base_origen_x100_y50_linea` y su versión fresada, en los dos campos. El origen
+de la pieza pasa de `(0,0)` a `(100,50)` y la línea se deja donde estaba.
+
+**Dónde vive el origen**: en el `<Workpiece>`, tags **`<b:_xP>`** y **`<b:_yP>`**. Es el único
+cambio del `.pgmx`:
+
+```
+-<b:_xP>0</b:_xP>      +<b:_xP>100</b:_xP>
+-<b:_yP>0</b:_yP>      +<b:_yP>50</b:_yP>
+```
+
+**La geometría no se mueve.** La serialización es **byte a byte idéntica** a la de
+`linea_01`: `8 0 300` ⏎ `1 50 50 0 1 0 0 `.
+
+⇒ **Las coordenadas de una geometría dibujada son relativas al origen de la pieza.**
+
+**La traza tampoco se mueve.** En el ISO del fresado, con origen `(0,0)` y con `(100,50)`:
+
+```
+G0 X50.000 Y50.000
+G1 X350.000 …
+```
+
+⇒ ⭐ **La traza se emite en coordenadas de PIEZA, no de máquina.** El origen entra por otro
+lado: el bloque `SHF`/`%Or`. Es exactamente lo que el converter necesita saber para mapear un
+dibujo a la traza — y con origen `(0,0)` las dos lecturas coincidían y no se podían separar.
+
+**Dónde sí se ve el origen**, en el ISO:
+
+| | origen (0,0) | origen (100,50) |
+|---|---|---|
+| header `;H` | `DX=400.000 DY=400.000` | **`DX=500.000 DY=450.000`** |
+| 1er bloque (esqueleto) | `SHF[X]=-3685.850` · `SHF[Y]=-400.000` | `SHF[X]=-3685.850` · **`SHF[Y]=-450.000`** |
+| 2º bloque (del mecanizado) | `SHF[X]=-3685.850` · `SHF[Y]=-400.000` | **`SHF[X]=-3585.850`** · `SHF[Y]=-450.000` |
+
+- El header confirma lo de R001: **`;H DX/DY` es dimensión + origen** (400+100=500,
+  400+50=450), la envolvente ocupada — no las medidas de la pieza.
+- Y aparece que **hay dos bloques de origen**: el del esqueleto y otro que abre el mecanizado,
+  y **no son iguales** cuando el origen no es cero. El segundo corre la `X` en +100.
+
+⚠️ **Caveat del fixture**: la profundidad del fresado difiere entre los dos archivos
+(`Z-9.000` contra `Z-5.000`), así que no son gemelos exactos. No afecta lo derivado arriba
+—que es sobre XY— pero sí impide comparar el eje Z.
+
+## 14. Bloque 4 (2026-08-22): dos negativos, uno con testigo y otro sin
+
+Fermín tuvo que **reiniciar Maestro** para que cada opción tomara efecto — dato que vale por
+sí solo: **son opciones que se leen al arrancar la aplicación**, no en cada postproceso.
+
+### 14.1 · `Repeticiones = 3` — no llega al ISO. Testigo interno ✅
+
+| | |
+|---|---|
+| `.pgmx` | `<a:Repetitions>1</a:Repetitions>` → **`3`** |
+| ISO | **idéntico** al base salvo el nombre del archivo |
+
+⇒ **DERIVADO**: las repeticiones no llegan al ISO. Cierra el último parámetro que había
+quedado fuera del barrido A5, y confirma por segunda vía lo que ya decía `emisor_iso.md`: el
+XXL escribe `R=…` y el paso a ISO lo descarta. Ahora con `R=3`, no sólo con el default.
+
+### 14.2 · `Pulgadas` — no llega tampoco, pero **el fixture no tiene testigo**
+
+| | |
+|---|---|
+| `.pgmx` | **byte a byte idéntico** al base |
+| ISO | **idéntico** salvo el nombre |
+
+⇒ Con la unidad en pulgadas, ni el `.pgmx` ni el ISO cambian. Para el converter eso significa
+que **`*MM` y `G71` literales son correctos**: la opción nunca los mueve.
+
+⚠️ **Pero este negativo es más débil que los otros**, y conviene decir por qué: como el
+`.pgmx` tampoco cambió, **el archivo no puede probar que la opción estaba puesta**. Es un
+negativo sin testigo interno — a diferencia de `Repeticiones`, donde el `.pgmx` muestra el 3.
+
+Lo que lo cerraría del todo: un fixture en pulgadas **con una cota tipeada**, o una captura de
+la ventana Opciones con la unidad en pulgadas junto al archivo. Fermín reinició Maestro dos
+veces a propósito, así que lo más probable es que el negativo sea real; queda anotado como
+«probable, sin testigo».
+
+> 📌 Y una consecuencia para `emisor_iso.cfg`: su encabezado declara que **el converter no
+> puede emitir en pulgadas** hasta tener este fixture. Con esto, la salvedad se puede
+> reformular: no es que no sepamos emitir pulgadas — es que **la opción no produce pulgadas
+> en el ISO**. Pendiente de actualizar cuando toquemos el archivo.
+
+## 15. Lo que queda abierto
 
 - ⏸ **Postprocesar los tres fixtures paramétricos de §7.**
   > **Predicción falsable**: los tres ISO van a dar **idénticos al del programa vacío**,
@@ -720,7 +981,7 @@ Y dos familias fuera de lugar:
 - Definir una línea **por `Longitud` y `Ángulo`** en vez de por dos puntos: ¿queda el mismo
   nodo? Era el discriminador de una hipótesis que ya se descartó por otro camino, pero
   sigue siendo una entrada de la UI que no se barrió.
-- El checkbox **«Coordenadas absolutas»** en `true`: qué cambia además de `IsAbsolute`.
+- ~~El checkbox **«Coordenadas absolutas»** en `true`~~ **RESUELTO (§13.5): no se guarda.** Queda abierto **qué pone `<a:IsAbsolute>` de una geometría en `true`**, que es otra cosa.
 - Qué otras **propiedades** de un `GeomTrimmedCurve` admiten expresión además de `EndY`
   (presumiblemente `StartX`/`StartY`/`EndX`, y quizá `Longitud` y `Ángulo`).
 - **Qué acción dispara el recálculo** que mete el ruido (§7): lo aíslan dos fixtures

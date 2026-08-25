@@ -8,7 +8,34 @@ rumbo se anotan como decisiones con fecha). La vista visual se republica en cada
 
 Estados: ✅ hecho · 🔄 en curso · ⏸ esperando a Fermín · ⬜ pendiente · 🔮 futuro (sin fecha)
 
-## Estado actual (2026-08-17)
+## Estado actual (2026-08-24)
+
+> ⭐⭐ **La reinvestigación terminó de rodear la traza y está por entrar en ella.** En una
+> semana se cerraron las dos ramas que faltaban antes de los mecanizados:
+>
+> - **G (dibujos)**: las ocho geometrías de la UI caben en **cinco tipos de nodo**, y
+>   polígono/polilínea/rectángulo son **el mismo**. Y lo que la trababa quedó resuelto:
+>   **Maestro REUTILIZA la geometría dibujada** cuando un mecanizado la toma — un nodo, dos
+>   dueños. El `Texto` tampoco es una familia nueva: son contornos.
+> - **C (operaciones de máquina)**: `Xn`, `Xmsg` y `Park` derivados de punta a punta, con
+>   `.pgmx` **y** `.iso` de cada caso — la primera rama con el par completo.
+>
+> ⭐ **Y la traza va en coordenadas de PIEZA**, no de máquina: con el origen movido a
+> (100,50), la geometría y la traza salen idénticas y el origen entra por el bloque
+> `SHF`/`%Or`. Con origen (0,0) las dos lecturas coincidían; ahora están separadas. Es lo que
+> el converter necesita para mapear un dibujo a la traza.
+>
+> ⚠️ **Lo que falta es la rama D — los mecanizados**, que es donde vive la mayor parte de un
+> ISO real. Y un hueco que la acompaña: el **número del `Xmsg`** resultó ser un **acumulador**
+> (`N = base + Σ costos`, con +13 por `Xmsg` y +45 por `Xn`, confirmados en los dos campos),
+> así que cada mecanizado que se estudie tiene que aportar **su costo** o no habrá
+> byte-idéntico en programas con mensaje.
+>
+> **El converter todavía no existe, y es a propósito**: `iso/` son 312 líneas —el archivo del
+> emisor, el snapshot y las rutas— y ninguna convierte. Se construye una vez, sobre evidencia.
+> Suite **339 passed**, 100% offline.
+
+## El estado del 2026-08-17
 
 > ⭐⭐ **A7 CERRADO ENTERO, y con una respuesta negativa que vale tanto como una positiva:
 > ni un parámetro sin usar ni una geometría sin mecanizado dejan rastro en el ISO.** Los
@@ -222,17 +249,28 @@ Rama abierta el 2026-08-16 por los fixtures de línea. Un dibujo es **geometría
     32 compuestos ⇒ la herramienta de la UI **se pierde** en el archivo
 - G3. **Auditoría del sintetizador** — ✅ (`dibujos.md` §9): **no sabe hacer dibujos** —la API
   sólo acepta mecanizados, no hay `geometries=`— y cubre **cinco de ocho** tipos
-- G4. **Texto** — ⬜ sin fixture; es la única familia de la UI que falta
+- G4. **Texto** — ✅ **NO es una familia nueva** (2026-08-22): son **seis
+  `GeomCompositeCurve`**, o sea Maestro convierte el texto a contornos. ⇒ las ocho geometrías
+  de la UI caben en **cinco tipos de nodo**, y el barrido de familias queda **cerrado**
+- G7. **La reutilización, resuelta** — ✅ (2026-08-22): `linea_01_fresada` tiene **una sola**
+  geometría y el `Feature` apunta a ella por ID. **Maestro comparte el nodo, no lo duplica** —
+  un dibujo, dos dueños. Es lo que trababa la rama
+- G8. **El origen de la pieza** — ✅ (2026-08-24): vive en `<b:_xP>`/`<b:_yP>`, y **la
+  geometría y la traza son relativas a él** — el origen entra por `SHF`/`%Or`. La traza va en
+  **coordenadas de pieza**
+- G9. **`GeomCircle.Radius`** — ✅ el radio se ata a un parámetro con el mismo
+  `Parametrics.Expression` que las coordenadas de la línea
+- G10. **`PlaneID`** — ✅ una geometría en otra cara apunta a otro `Plane` (1920 contra 1918)
 - G5. **Corrección del sintetizador** — 🔄 **primera pasada hecha (2026-08-19)**: sacado el
   espacio final sobrante de los dos builders de arco, y **fijada la regla contra archivos de
   Maestro** en `tests/test_pgmx_dibujos_geometria.py` (11 fixtures versionados en
   `evidencia/dibujos_rama_g/`, suite sigue offline). La línea, el arco y el círculo ahora
   reproducen a Maestro **byte a byte**. Queda: `GeomEllipse` y decidir si el punto y los
   compuestos entran por una API de dibujos o siguen colgando de mecanizados
-- G6. **Lo que el lote NO puede derivar** — ⏸ cinco propiedades no varían en los 88:
-  `IsAbsolute` (siempre `false`), `PlaneID` (**una sola cara**), `Name` (vacío), `Z` (0) y
-  **cero fórmulas** —o sea, no sabemos cómo se parametriza un radio—. Más los otros métodos
-  de la barra contextual
+- G6. **Lo que queda abierto** — ⏸ `<a:IsAbsolute>` en `true`: ⚠️ **NO lo pone el checkbox
+  «Coordenadas absolutas»**, que resultó ser un **modo de visualización que no se guarda**
+  (2026-08-24). Qué lo pondría en `true`, DESCONOCIDO. Más `Name`, la `Z` fuera del plano, las
+  otras cuatro caras y los otros métodos de la barra contextual
 
 ### H. Importación DXF — 🔮 futuro (idea de Fermín, 2026-08-19)
 
@@ -282,17 +320,39 @@ hay que justificar el número con evidencia, no elegirlo.
 - B2. Con cada operación nueva: qué líneas agrega, origen de cada parámetro y valor — 🔮
 - B3. Ruido del emisor (milésimas, case, f32): re-derivar con evidencia R propia — 🔮
 
-### C. Operaciones de máquina — ⏭️ **SIGUE DESPUÉS DE A7** (Xn · Xmsg · Park · Iso)
-Orden fijado por Fermín el 2026-08-13: primero A7 (parámetros de usuario y dimensiones
-paramétricas), después estas, y recién después los mecanizados. El lab de la época anterior
-queda congelado; la instancia nueva se crea oportunamente.
+### C. Operaciones de máquina — 🔄 **ARRANCÓ** (2026-08-20, doc `operaciones_maquina.md`)
+Las cinco Funciones C.N. de la UI: `Xn` = «Operación nula», `Xmsg` = «Impresión mensaje»,
+`Park` = «Aparcamiento», más **Palpación** y **Corte con cuchilla**, que no modelamos.
 
-Lo que ya se sabe sin haber empezado: el `Xn` mete **ocho líneas** entre el `G40` y el `SYN`
-(B1b), en el mismo punto donde el estacionamiento automático mete las suyas (B1d). Ese punto
-del archivo es donde van las operaciones de máquina. Y las cinco Funciones C.N. de la UI ya
-están mapeadas: `Xn` = «Operación nula», `Xmsg` = «Impresión mensaje», `Park` =
-«Aparcamiento», más **Palpación** y **Corte con cuchilla**, que no modelamos.
+⭐ **Primera rama con el par completo**: `.pgmx` **y** su `.iso`. Los dibujos no llegaban al
+ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a punta.
 
+- C1. **`Xn`** — 🔄 **28 fixtures manuales de Fermín (2026-08-20)** con sus 27 ISO. Derivado:
+  - el bloque va entre el `G40` y el `SYN` (confirma B1b): **ocho líneas sin herramienta,
+    quince con** —el cambio de herramienta agrega `T`, `SYN`, `M06` y un segundo cierre—
+  - **`Reference`**: `Absolute` va tal cual · `Relative` **suma el `SHF` del eje**
+  - **`Speed`**: `F = Speed × 1000`, y `Speed=0` cambia `G1` por `G0`
+  - **`Tool`**: `E00n` → `T n`, más el bloque de cambio
+  - **`Y`**: opcional —«sin `Y`» se escribe `<Y i:nil="true"/>`, distinto de `<Y>0</Y>`—, y
+    **el signo se invierte**, que no está explicado
+  - ⭐ **`Z201.000` ya tiene origen**: es `AP_PARKQTA` del eje Z en `Params.cfg`
+    (configuración de máquina, no constante). Cierra el hueco que `emisor_iso.cfg` declaraba
+  - y de paso queda explicado el número mágico `X_PARK = -3700.0` de la época anterior: el
+    `AP_MINQUOTA` del eje X es `-3702.000`, así que era **un valor tipeado dos milímetros
+    adentro del tope**, no algo derivable
+- C2. **`Xmsg`** — 🔄 derivado (2026-08-22/24): dos líneas, y **el texto NO viaja al ISO**.
+  Su número resultó ser un **acumulador** —`N = base + Σ costos`, +13 por `Xmsg`, +45 por
+  `Xn`, confirmados en los dos campos—. 🚧 **Sigue bloqueando el byte-idéntico** hasta tener
+  la tabla de costos de cada mecanizado
+- C3. **`Park`** — ✅ derivado (2026-08-22): **es lo mismo que el estacionamiento automático**
+  de la ventana Opciones, y **depende del campo** (`%ax0.pa21` en HG, `%ax0.pa31` en A). Su
+  campo `Stop` no llega al ISO
+- C4. **Varios `Xn` en un programa** — ✅ (2026-08-22): **sí se pueden**, cada uno emite su
+  cuerpo y el orden se respeta. El `?%ETK[8]=1` + `G40` son **preámbulo del bloque**, no del
+  `Xn`; el primero cuesta **seis** líneas y los siguientes **cinco**
+- C5. **Corrección del sintetizador** — ⬜ **cuando estén estudiados todos los tipos de
+  operación** (decisión de Fermín, 2026-08-20). `XnSpec` ya modela los seis campos; lo que
+  falta verificar es la emisión, y hay una divergencia anotada en el `GeometryID`
 
 ### D. Mecanizados — 🔮 (una operación por vez, cada parámetro variado de forma controlada)
 
@@ -370,6 +430,112 @@ están mapeadas: `Xn` = «Operación nula», `Xmsg` = «Impresión mensaje», `P
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-08-24 — El número del `Xmsg` deja de ser un misterio, y la traza va en coordenadas de pieza
+Tanda de Fermín con los fixtures pedidos, casi todos en **los dos campos** (A y HG) para poder
+separar lo que con un campo solo se confundía.
+
+- ⭐ **El número del `Xmsg` es un ACUMULADOR.** `N = base + Σ(costo de lo que lo precede)`,
+  con base **212** (campo A) / **213** (HG), **+13 por un `Xmsg`** y **+45 por un `Xn`** — los
+  dos costos confirmados **en los dos campos por separado**. Y quedaron descartadas las cuatro
+  hipótesis previas: no depende del texto, **es determinista** (repostprocesar da el mismo
+  número), no es offset de bytes ni número de línea.
+  - 🚧 Sigue bloqueando el byte-idéntico, pero **ya no es un misterio: es una tabla que se
+    llena midiendo.** Cada mecanizado de la rama D puede aportar su costo poniéndole un
+    `Xmsg` detrás. Hoy tenemos tres entradas.
+- ⭐ **La traza se emite en coordenadas de PIEZA.** Con el origen de la pieza movido a
+  (100,50) —vive en `<b:_xP>`/`<b:_yP>`—, la geometría sale **byte a byte idéntica** y la
+  traza del ISO también (`G0 X50 Y50` · `G1 X350`). El origen entra por el bloque
+  `SHF`/`%Or`. Con origen (0,0) las dos lecturas coincidían.
+  - Y de paso: el header confirma R001 (**`;H DX/DY` = dimensión + origen**: 400+100=500), y
+    aparece que **hay dos bloques de origen** en el ISO —el del esqueleto y el del
+    mecanizado— que **no son iguales** cuando el origen no es cero.
+- ⚠️ **«Coordenadas absolutas» NO se guarda en el archivo, y NO es `<a:IsAbsolute>`.** Fermín
+  lo vio en la UI —casilla marcada, campos en gris, archivo sin asterisco, y al reabrir
+  desmarcada— y el archivo lo confirma: reguardado con la casilla puesta, el XML queda **byte
+  a byte idéntico**. Los seis `IsAbsolute=true` del archivo son de `<Planes>`.
+  - ⇒ **Refutada** la correspondencia que `dibujos.md` §2 daba por buena. Era una lectura
+    razonable sin fixture — el patrón de la regla 1. Y `<a:IsAbsolute>` de la geometría vuelve
+    a **DESCONOCIDO**.
+  - 📌 Corrección mía: el 22 pedí rehacer ese fixture porque «no capturó el cambio». Estaba
+    bien desde el principio; no hay nada que capturar. Hice repetir trabajo por dar por
+    sentada una hipótesis.
+- 📌 **Corrección de Fermín**: había escrito «una geometría que un mecanizado toma **sí llega**
+  al ISO». Es **PUEDE llegar** — lo que llega es la **traza**, que se *calcula a partir de* la
+  geometría. La corrección de fresa y la rebaba dan recorridos paralelos, el acercamiento y el
+  alejamiento agregan segmentos, y el vaciado produce una traza compleja desde una o más
+  geometrías. El propio fixture lo muestra: el XY coincide **porque la compensación está
+  cancelada** (sólo hay `G40`), y aun así la traza agrega posicionamiento, bajada en Z y
+  salida.
+
+### 2026-08-22 — `Xmsg`, `Park`, y el segundo campo separando cosas
+64 `.pgmx` y 60 `.iso`. Fermín rehízo el lote en **campo HG** además del original en **campo
+A**, y eso resultó ser mucho más que una duplicación.
+
+- ⭐ **El `Park` es lo mismo que el estacionamiento automático** de la ventana Opciones: el
+  bloque en campo HG es exactamente el `$EMI_PARK_FINAL` que se había derivado de los fixtures
+  `eafe_*` (B1d). Uno puesto a mano en la lista, el otro agregado por la aplicación.
+  - Y **depende del campo**: HG usa `%ax0.pa21`, campo A usa **`%ax0.pa31`** y agrega un
+    `_paras` por delante. ⇒ corrige el alcance de `emisor_iso.cfg`: ese bloque **no es fijo**.
+- ⭐ **El texto del `Xmsg` NO viaja al ISO.** Dos textos distintos dan la misma línea. Sólo va
+  un número.
+- ⭐ **`?%ETK[8]=1` + `G40` son PREÁMBULO del bloque de operaciones**, no parte del `Xn`, y se
+  emiten una vez aunque haya varias. Lo destapó `XN_dos`: el cuerpo del `Xn` son **seis**
+  líneas y el del segundo `Xn` **cinco** —no repite el `MLV=0`—. Corrige lo escrito el 20.
+- ✅ **`Y_iso = −Y_pgmx`**, con cinco valores en dos campos. El signo se invierte y es
+  sistemático.
+- ✅ **`Relative`**: `X_iso = X + SHF[X]` · `Y_iso = Y − SHF[Y]`. Con un solo campo las dos
+  fórmulas daban lo mismo; con dos, no.
+- ❌ **Dos campos que no llegan al ISO**: `Park.Stop` y `Electromandril` (`SpindleEnable`).
+  Otra vez «el modo se pierde».
+- ❌ **`Repeticiones = 3` no llega** (con testigo interno: el `.pgmx` sí cambia). Cierra el
+  último parámetro que faltaba del barrido A5.
+- ❌ **`Pulgadas` tampoco llega**, pero el `.pgmx` queda idéntico ⇒ **negativo sin testigo**:
+  el archivo no puede probar que la opción estaba puesta. Anotado como «probable».
+  - Dato de método: Fermín tuvo que **reiniciar Maestro** para que cada opción tomara efecto
+    ⇒ **son opciones que se leen al arrancar la aplicación**, no en cada postproceso. Toca
+    directamente la pregunta E2.
+- ⚠️ **Un fixture que no postprocesa**: el `Xn` con la herramienta `082` da
+  `[23,5] - Bag.Oheads: Herramienta E82 no configurada`. ⇒ **el catálogo de Maestro y la tabla
+  de herramientas de la máquina son dos cosas distintas**, y la ambigüedad `holder_key` contra
+  `name` **no es resoluble en esta máquina**.
+
+### 2026-08-20 — El Xn, derivado de punta a punta, y el Z201 deja de ser un misterio
+Fermín armó `Reinvestigación\Operaciones\` con **28 `.pgmx` manuales y sus 27 ISO**. Primera
+rama con el **par completo**: los dibujos no llegaban al ISO, estas operaciones sí.
+
+- ⭐ **`Z201.000` sale de `Params.cfg`**: es el `AP_PARKQTA` del eje Z —«cota de
+  aparcamiento»—, `201000` micras. Cierra el hueco que `emisor_iso.cfg` declaraba desde el
+  08-13 y que era la razón de que el bloque del `Xn` no estuviera en ese archivo. **Es
+  configuración de máquina, no una constante.** (`AP_MAXQUOTA` del mismo eje vale igual, así
+  que la evidencia no las separa.)
+- ⭐ **Queda explicado el número mágico de la época anterior.** `X_PARK = -3700.0` era una
+  constante interna que el `CLAUDE.md` cita como caso testigo. El `AP_MINQUOTA` del eje X es
+  **`-3702.000`**: el −3700 era **un valor tipeado a mano dos milímetros adentro del tope
+  mecánico**. No salía de la config porque es una elección del operario — por eso nunca se
+  pudo derivar, y por eso estaba mal como default.
+- ✅ **`Reference`** (`Absolute`/`Relative`) decide si la coordenada va tal cual o **se le
+  suma el `SHF` del eje**: `-3700` relativo dio `X-7385.850`, y `-3700 + (-3685.850)` da
+  exactamente eso. Los dos nodos `Xn` son idénticos salvo ese campo.
+- ✅ **`Speed`**: `F = Speed × 1000`, y `Speed = 0` cambia el código de `G1` a **`G0`**. 8/8.
+- ✅ **`Tool`**: `E00n` → `T n`, y agrega `SYN` + `M06` + un segundo bloque de cierre. El
+  bloque pasa de **ocho a quince líneas**, y el orden de `G61` y `MLV=0` se invierte.
+- ⭐ **«Sin `Y`» y «`Y`=0» son casos distintos, y el archivo lo dice**: `<Y i:nil="true"/>`
+  contra `<Y>0</Y>`, y el ISO emite la `Y` sólo en el segundo. Es la evidencia directa de la
+  incongruencia que el `CLAUDE.md` cita como caso testigo (`xn=None` significando «el Xn por
+  defecto» en vez de «ninguno»).
+- ⚠️ **El signo de la `Y` se invierte** (`-1000` → `Y1000.000`) y la `X` no. Peor: con esa
+  inversión la posición cae **fuera del rango del eje Y**. Dos fixtures no alcanzan para
+  inventar una regla: queda anotado, sin resolver.
+- ⚠️ **El `T` no se puede separar**: en el catálogo `E001` tiene `holder_key=001`, así que
+  «puesto en el almacén» y «nombre» dan lo mismo para las siete herramientas del lote. Lo
+  decide un `Xn` con una herramienta numérica (`001` o `082`).
+- 🔍 **Divergencia anotada para la pasada de código**: `_build_xn_step` elige la forma del
+  `GeometryID` según `spec.y is None`, y la evidencia dice que **no depende de la `Y`** —
+  además, su rama «con Y» escribe una forma que Maestro no usa en ninguno de los 27. No
+  llega al ISO, pero está mal atado.
+- ⏭️ **El código no se toca hasta estudiar todos los tipos de operación** (decisión de
+  Fermín). Faltan `Xmsg`, `Park`, y el caso de varios `Xn` en un programa.
 
 ### 2026-08-19 — El lote de dibujos, y la primera geometría validada contra Maestro
 Fermín armó `Dibujos\Rama G\` con **88 `.pgmx` manuales**, ocho familias, uno por dibujo.
