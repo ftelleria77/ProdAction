@@ -232,7 +232,14 @@ class PgmxMachineOperationsTests(unittest.TestCase):
         self.assertEqual(explicit_y_xn.y, 0.0)
         self.assertIsNotNone(explicit_y_xn.geometry_ref)
         self.assertEqual(explicit_y_xn.geometry_ref.id, "0")
-        self.assertEqual(explicit_y_xn.geometry_ref.object_type, "System.Object")
+        # El `GeometryID` NO depende de la `Y`: derivado el 2026-08-20 sobre 73 nodos
+        # Xn/Xmsg/Park de Maestro (`operaciones_maquina.md`, seccion 7). Hasta entonces este
+        # test fijaba `System.Object` para el caso con `Y`, un valor que NO aparece en
+        # ninguno de los 73. Ahora las dos ramas emiten la forma mayoritaria.
+        self.assertEqual(explicit_y_xn.geometry_ref.object_type, "")
+        self.assertEqual(
+            null_y_xn.geometry_ref.object_type, explicit_y_xn.geometry_ref.object_type,
+            "con `Y` y sin `Y` el GeometryID tiene que salir igual")
         self.assertIsNotNone(explicit_y_xn.tool_ref)
         self.assertEqual(explicit_y_xn.tool_ref.id, "1900")
         self.assertEqual(explicit_y_xn.tool_ref.name, "E001")

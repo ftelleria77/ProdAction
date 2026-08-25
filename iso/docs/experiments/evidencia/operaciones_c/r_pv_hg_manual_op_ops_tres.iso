@@ -1,0 +1,55 @@
+% r_pv_hg_manual_op_ops_tres.pgm
+;H DX=400.000 DY=400.000 DZ=18.000 BX=0.000 BY=0.000 BZ=0.000 -HG V=0 *MM C=0 T=0 
+?%ETK[500]=100
+
+_paras( 0x00, X, 3, %ax[0].pa[21]/1000, %ETK[500] )
+
+G0 G53 Z %ax[2].pa[22]/1000
+M58 
+G71 
+MLV=0 
+%Or[0].ofX=-400000.000 
+%Or[0].ofY=-1515599.976 
+%Or[0].ofZ=18000.000 
+?%EDK[0].0=0 
+?%EDK[1].0=0 
+MLV=1 
+SHF[X]=-400.000 
+SHF[Y]=-1515.600 
+SHF[Z]=18.000+%ETK[114]/1000 
+?%ETK[8]=1 
+G40 
+?%ETK[8]=1 
+G40 
+G61 
+MLV=0 
+D0 
+G0 G53 Z201.000 
+G0 G53 X-3700.000 
+G64 
+$0?258S0I0D0? 
+G4 F0
+G0G53 X%ax0.pa21/1000 Y%ax1.pa22/1000  
+_paras( 0x00, X, 3, %ax[0].pa[21]/1000, %ETK[500] )  
+SYN
+?%ETK[0]=0
+?%ETK[1]=0
+?%ETK[2]=0
+?%ETK[13]=0
+?%ETK[17]=0
+?%ETK[18]=0
+?%ETK[19]=0
+?%EDK[13].0=1 
+MLV=1 
+SHF[X]=0 
+SHF[Y]=0 
+SHF[Z]=0 
+MLV=2 
+SHF[X]=0 
+SHF[Y]=0 
+SHF[Z]=0 
+MLV=0 
+VL6=0 
+VL7=0 
+?%EDK[13].0=0 
+M2  

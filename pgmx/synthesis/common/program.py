@@ -968,20 +968,16 @@ def _build_xn_step(
     _append_node(step, BASE_MODEL_NS, "IsEnabled", "true")
     _append_node(step, BASE_MODEL_NS, "Priority", "0")
 
-    if spec.y is None:
-        geometry_ref = _append_node(step, BASE_MODEL_NS, "GeometryID")
-        _append_node(geometry_ref, UTILITY_NS, "ID", "0")
-        _append_node(geometry_ref, UTILITY_NS, "ObjectType", attrib={f"{{{XSI_NS}}}nil": "true"})
-        _set_xmlns(geometry_ref, "a", UTILITY_NS)
-    else:
-        geometry_ref = _append_object_ref(
-            step,
-            BASE_MODEL_NS,
-            "GeometryID",
-            "0",
-            "System.Object",
-        )
-        _set_xmlns(geometry_ref, "a", UTILITY_NS)
+    # El `GeometryID` de una operacion de maquina NO depende de la `Y` (derivado el
+    # 2026-08-20 sobre 73 nodos Xn/Xmsg/Park: `x-2500_Ab_NT` y `x-3700_Ab_NT` difieren
+    # solo en la X y traen formas distintas). Maestro escribe dos formas indistintamente
+    # --`<GeometryID i:nil="true"/>` y esta-- y ninguna llega al ISO. Se emite siempre la
+    # mayoritaria (56 de 73). `ObjectType = System.Object`, que este codigo escribia
+    # cuando habia `Y`, NO aparece en ninguno de los 73.
+    geometry_ref = _append_node(step, BASE_MODEL_NS, "GeometryID")
+    _append_node(geometry_ref, UTILITY_NS, "ID", "0")
+    _append_node(geometry_ref, UTILITY_NS, "ObjectType", attrib={f"{{{XSI_NS}}}nil": "true"})
+    _set_xmlns(geometry_ref, "a", UTILITY_NS)
 
     workpiece_ref = _append_object_ref(
         step,
