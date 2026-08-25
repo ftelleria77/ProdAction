@@ -26,9 +26,9 @@ Estados: ✅ hecho · 🔄 en curso · ⏸ esperando a Fermín · ⬜ pendiente 
 > el converter necesita para mapear un dibujo a la traza.
 >
 > ⚠️ **Lo que falta es la rama D — los mecanizados**, que es donde vive la mayor parte de un
-> ISO real. Y un hueco que la acompaña: el **número del `Xmsg`** resultó ser un **acumulador**
-> (`N = base + Σ costos`, con +13 por `Xmsg` y +45 por `Xn`, confirmados en los dos campos),
-> así que cada mecanizado que se estudie tiene que aportar **su costo** o no habrá
+> ISO real. Y un hueco que la acompaña: el **número del `Xmsg`** resultó ser un **conteo**
+> (cada elemento anterior lo incrementa: +13 un `Xmsg`, +45 un `Xn`, confirmados en los dos
+> campos), así que cada mecanizado que se estudie tiene que aportar **su incremento** o no habrá
 > byte-idéntico en programas con mensaje.
 >
 > **El converter todavía no existe, y es a propósito**: `iso/` son 312 líneas —el archivo del
@@ -341,9 +341,9 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
     `AP_MINQUOTA` del eje X es `-3702.000`, así que era **un valor tipeado dos milímetros
     adentro del tope**, no algo derivable
 - C2. **`Xmsg`** — 🔄 derivado (2026-08-22/24): dos líneas, y **el texto NO viaja al ISO**.
-  Su número resultó ser un **acumulador** —`N = base + Σ costos`, +13 por `Xmsg`, +45 por
-  `Xn`, confirmados en los dos campos—. 🚧 **Sigue bloqueando el byte-idéntico** hasta tener
-  la tabla de costos de cada mecanizado
+  Su número resultó ser un **conteo** —cada elemento anterior lo incrementa: +13 un `Xmsg`,
+  +45 un `Xn`, confirmados en los dos campos—. 🚧 **Sigue bloqueando el byte-idéntico** hasta
+  tener la tabla de incrementos de cada mecanizado
 - C3. **`Park`** — ✅ derivado (2026-08-22): **es lo mismo que el estacionamiento automático**
   de la ventana Opciones, y **depende del campo** (`%ax0.pa21` en HG, `%ax0.pa31` en A). Su
   campo `Stop` no llega al ISO
@@ -435,13 +435,13 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 Tanda de Fermín con los fixtures pedidos, casi todos en **los dos campos** (A y HG) para poder
 separar lo que con un campo solo se confundía.
 
-- ⭐ **El número del `Xmsg` es un ACUMULADOR.** `N = base + Σ(costo de lo que lo precede)`,
+- ⭐ **El número del `Xmsg` es un CONTEO.** Cada elemento que lo precede lo incrementa,
   con base **212** (campo A) / **213** (HG), **+13 por un `Xmsg`** y **+45 por un `Xn`** — los
-  dos costos confirmados **en los dos campos por separado**. Y quedaron descartadas las cuatro
+  dos incrementos confirmados **en los dos campos por separado**. Y quedaron descartadas las cuatro
   hipótesis previas: no depende del texto, **es determinista** (repostprocesar da el mismo
   número), no es offset de bytes ni número de línea.
   - 🚧 Sigue bloqueando el byte-idéntico, pero **ya no es un misterio: es una tabla que se
-    llena midiendo.** Cada mecanizado de la rama D puede aportar su costo poniéndole un
+    llena midiendo.** Cada mecanizado de la rama D puede aportar su incremento poniéndole un
     `Xmsg` detrás. Hoy tenemos tres entradas.
 - ⭐ **La traza se emite en coordenadas de PIEZA.** Con el origen de la pieza movido a
   (100,50) —vive en `<b:_xP>`/`<b:_yP>`—, la geometría sale **byte a byte idéntica** y la

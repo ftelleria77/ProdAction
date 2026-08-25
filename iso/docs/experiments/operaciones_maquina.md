@@ -445,7 +445,7 @@ Tres cosas se siguen:
 | por qué la `Y` invierte | derivado el qué, no el porqué |
 | `holder_key` contra `name` | **no resoluble en esta máquina** (14) |
 
-## 17. El número del `Xmsg`: es un ACUMULADOR (2026-08-24)
+## 17. El número del `Xmsg`: es un CONTEO (2026-08-24)
 
 Era el hueco que bloqueaba el byte-idéntico de todo programa con mensaje. Cuatro fixtures
 nuevos —dos mensajes en un programa, el mismo programa repostprocesado, y un `Xmsg` detrás de
@@ -463,7 +463,7 @@ un fresado— lo acotan casi del todo.
 ### 17.2 · El modelo que sí encaja
 
 ```
-N = base + Σ(costo de cada elemento que lo precede)
+N = conteo inicial + Σ(en cuánto lo incrementa cada elemento que lo precede)
 ```
 
 | | campo A | campo HG |
@@ -482,24 +482,63 @@ Las cuatro medidas, en los dos campos:
 | `ops_tres` (`Xn` → `Xmsg` → `Park`) | **257** = 212 + 45 | **258** = 213 + 45 |
 | `linea_01_fresada_XMSG` | **418** = 212 + 206 | **419** = 213 + 206 |
 
-⇒ Los costos **+13** y **+45** se confirman **en los dos campos por separado**, que es lo que
+⇒ Los incrementos **+13** y **+45** se confirman **en los dos campos por separado**, que es lo que
 lo levanta de coincidencia a regla.
 
-⇒ Y el **+1 entre campo A y HG** es constante en los cuatro pares: la base cambia, los costos
+⇒ Y el **+1 entre campo A y HG** es constante en los cuatro pares: el conteo inicial cambia, los incrementos
 no.
 
 ### 17.3 · Lo que todavía no se puede predecir
 
-**La unidad.** El costo no es proporcional a las líneas del ISO: un `Xmsg` son 2 líneas y
+**Qué se cuenta.** El incremento no es proporcional a las líneas del ISO: un `Xmsg` son 2 líneas y
 cuesta 13; un `Xn` son 6 líneas y cuesta 45; el fresado son ~40 líneas y cuesta 206. Es un
 contador de **algo del programa compilado**, no del texto del ISO.
 
-⇒ Para emitir un ISO byte-idéntico con `Xmsg`, el converter necesitaría **la tabla de costos
+⇒ Para emitir un ISO byte-idéntico con `Xmsg`, el converter necesitaría **la tabla de incrementos
 de cada elemento** — y hoy tenemos tres entradas de esa tabla.
 
 ⇒ 🚧 Sigue bloqueando, pero ya no es un misterio: es una tabla que se llena midiendo. Cada
-mecanizado que se estudie en la rama D puede aportar su costo poniéndole un `Xmsg` detrás.
+mecanizado que se estudie en la rama D puede aportar su incremento poniéndole un `Xmsg` detrás.
 
 > **Fixture que más rinde ahora**: un programa con **tres o cuatro `Xmsg` seguidos**. Si los
-> saltos son 13, 13, 13, el costo del `Xmsg` queda cerrado y el modelo confirmado con más
-> puntos. Y uno con **dos `Xn` y un `Xmsg` al final** verificaría que los costos se suman.
+> saltos son 13, 13, 13, el incremento del `Xmsg` queda cerrado y el modelo confirmado con más
+> puntos. Y uno con **dos `Xn` y un `Xmsg` al final** verificaría que los incrementos se suman.
+
+### 17.4 · Qué se cuenta: NO es nada visible en el ISO
+
+Nomenclatura fijada con Fermín (2026-08-25): **conteo**, y **en cuánto lo incrementa cada
+elemento**. Se descartó «costo», que sugería gasto y no es eso.
+
+La pregunta que queda es **conteo de qué**. Se probaron cinco medidas del propio ISO, todas
+tomadas hasta la línea del mensaje:
+
+| N | líneas | bytes | caracteres sin espacios | tokens | números |
+|---|---|---|---|---|---|
+| 212 | 23 | 458 | 374 | 42 | 50 |
+| 225 | 25 | 478 | 388 | 45 | 57 |
+| 257 | 29 | 518 | 412 | 60 | 60 |
+| 418 | 66 | 1069 | 840 | 101 | 118 |
+
+**Ninguna da una relación lineal con N.** La más prometedora era *tokens* —dos programas con
+`N=212` tienen los dos 42 tokens— pero la pendiente no se sostiene: +3 tokens dan +13, +7 dan
++32 y +49 dan +161.
+
+⇒ **El conteo no cuenta nada del ISO.** Cuenta algo del programa compilado que el ISO no
+muestra. Y como el estudio del XXL/PGM está cerrado por decisión del 2026-08-14, no se va a
+buscar por ahí.
+
+### 17.5 · Por qué eso NO bloquea al converter
+
+Que no sepamos la unidad **no impide calcular N**, siempre que los incrementos sean estables
+por elemento. El converter puede llevar el conteo sumando incrementos de una tabla empírica,
+sin saber qué representa el número — igual que emite `Z201.000` sin saber qué es una «cota de
+aparcamiento».
+
+⚠️ **Lo que sí hay que verificar es que el incremento sea estable.** El del fresado (+206) es
+de **ese** fresado: uno más largo casi seguro incrementa más. O sea que el incremento
+probablemente **dependa del contenido** del elemento, no sólo de su tipo.
+
+> **El fixture que lo decide**: `xmsg_dos` pero con el **primer mensaje mucho más largo**. Si
+> el segundo sigue dando **+13**, el incremento del `Xmsg` es fijo y no depende del texto —
+> que es lo que se espera, porque el texto no viaja al ISO. Si cambia, el conteo depende del
+> contenido y la tabla se vuelve mucho más cara de llenar.
