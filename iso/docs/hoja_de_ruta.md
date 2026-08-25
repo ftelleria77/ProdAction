@@ -8,7 +8,7 @@ rumbo se anotan como decisiones con fecha). La vista visual se republica en cada
 
 Estados: ✅ hecho · 🔄 en curso · ⏸ esperando a Fermín · ⬜ pendiente · 🔮 futuro (sin fecha)
 
-## Estado actual (2026-08-24)
+## Estado actual (2026-08-25)
 
 > ⭐⭐ **La reinvestigación terminó de rodear la traza y está por entrar en ella.** En una
 > semana se cerraron las dos ramas que faltaban antes de los mecanizados:
@@ -26,14 +26,15 @@ Estados: ✅ hecho · 🔄 en curso · ⏸ esperando a Fermín · ⬜ pendiente 
 > el converter necesita para mapear un dibujo a la traza.
 >
 > ⚠️ **Lo que falta es la rama D — los mecanizados**, que es donde vive la mayor parte de un
-> ISO real. Y un hueco que la acompaña: el **número del `Xmsg`** resultó ser un **conteo**
-> (cada elemento anterior lo incrementa: +13 un `Xmsg`, +45 un `Xn`, confirmados en los dos
-> campos), así que cada mecanizado que se estudie tiene que aportar **su incremento** o no habrá
-> byte-idéntico en programas con mensaje.
+> ISO real. Y un hueco que la acompaña: el **número del `Xmsg`** resultó ser un **conteo** que
+> cada elemento anterior incrementa — y el 25 se derribó la parte cómoda de esa idea: el
+> incremento **no es un número por tipo de operación, es una fórmula por tipo**
+> (`Xmsg` = `largo(texto) + 7`). Así que cada mecanizado que se estudie tiene que aportar **su
+> fórmula** —no su número— o no habrá byte-idéntico en programas con mensaje.
 >
 > **El converter todavía no existe, y es a propósito**: `iso/` son 312 líneas —el archivo del
 > emisor, el snapshot y las rutas— y ninguna convierte. Se construye una vez, sobre evidencia.
-> Suite **339 passed**, 100% offline.
+> Suite **357 passed**, 100% offline.
 
 ## El estado del 2026-08-17
 
@@ -430,6 +431,34 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-08-25 — El incremento del `Xmsg` depende del contenido, y la tabla se vuelve fórmula
+Un solo fixture (`XMSG_dos_largo` = `xmsg_dos` con el primer mensaje más largo) y contesta lo
+que complica.
+
+- ⭐ **`incremento(Xmsg) = largo del texto + 7`.** El texto crece **+19** caracteres y el conteo
+  del segundo mensaje se corre **+19 exactos** (225 → 244). Pendiente 1 fijada por el delta,
+  ordenada 7 por los dos puntos.
+- ⭐ **El largo del propio mensaje NO mueve su propio `N`**: los dos primeros mensajes dan
+  **212** pese a medir 6 y 25 caracteres. ⇒ el conteo es la posición **al empezar** a emitir el
+  elemento, no al terminar.
+- ⭐ **El texto ocupa lugar en el conteo aunque NO aparezca en el ISO** ⇒ confirma que el conteo
+  cuenta algo del **programa compilado**, donde el texto sí está. Cierra el círculo con el 22
+  («el texto del `Xmsg` no viaja al ISO») y con el 24 («es determinista, no es offset de bytes»).
+- ⚠️ **Lo que le hace a la tabla de incrementos**: deja de ser «un número por tipo» y pasa a ser
+  **una fórmula por tipo**. El **+45 del `Xn` está medido una sola vez** (`ops_tres`, con
+  `x-3700`, sin herramienta ni `Y`) y ahora hay que sospechar que también depende del contenido.
+  ⇒ Fixtures que lo cierran: el mismo programa con `x-2500`, con `Y`, y con herramienta, cada
+  uno con un `Xmsg` detrás.
+- ⚠️ **¿Caracteres o bytes?** Los tres textos medidos son **ASCII puro**, así que las dos
+  lecturas no se distinguen. Un primer mensaje **con acentos** en `xmsg_dos` las separa.
+- ⛔ **`<a:IsAbsolute>` DESCARTADO** por decisión de Fermín: vale `false` en los 89 dibujos, no
+  llega al ISO y no bloquea nada. No se genera fixture. Si algún día aparece un `.pgmx` con
+  `true` —de X-CAB o de un DXF— se retoma con ese archivo como evidencia.
+- 📌 Corrección mía: un `git add -A iso/docs` se tragó `plan_cierre_converter.md`, que
+  está untracked a propósito desde el 08-06. Revertido en un commit aparte; el archivo sigue
+  intacto en el árbol.
+
 
 ### 2026-08-24 — El número del `Xmsg` deja de ser un misterio, y la traza va en coordenadas de pieza
 Tanda de Fermín con los fixtures pedidos, casi todos en **los dos campos** (A y HG) para poder
