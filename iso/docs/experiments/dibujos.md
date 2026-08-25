@@ -981,7 +981,11 @@ veces a propósito, así que lo más probable es que el negativo sea real; queda
 - Definir una línea **por `Longitud` y `Ángulo`** en vez de por dos puntos: ¿queda el mismo
   nodo? Era el discriminador de una hipótesis que ya se descartó por otro camino, pero
   sigue siendo una entrada de la UI que no se barrió.
-- ~~El checkbox **«Coordenadas absolutas»** en `true`~~ **RESUELTO (§13.5): no se guarda.** Queda abierto **qué pone `<a:IsAbsolute>` de una geometría en `true`**, que es otra cosa.
+- ~~El checkbox **«Coordenadas absolutas»** en `true`~~ **RESUELTO (§13.5): no se guarda.**
+- ⛔ ~~Qué pone `<a:IsAbsolute>` de una geometría en `true`~~ **DESCARTADO (Fermín, 2026-08-25):
+  no se genera fixture.** Vale `false` en los 89 dibujos, **no llega al ISO** y no bloquea
+  nada. Si algún día aparece un `.pgmx` con `true` —de X-CAB o de un DXF—, se retoma con
+  ese archivo como evidencia.
 - Qué otras **propiedades** de un `GeomTrimmedCurve` admiten expresión además de `EndY`
   (presumiblemente `StartX`/`StartY`/`EndX`, y quizá `Longitud` y `Ángulo`).
 - **Qué acción dispara el recálculo** que mete el ruido (§7): lo aíslan dos fixtures

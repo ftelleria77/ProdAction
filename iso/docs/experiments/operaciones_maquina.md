@@ -542,3 +542,51 @@ probablemente **dependa del contenido** del elemento, no sólo de su tipo.
 > el segundo sigue dando **+13**, el incremento del `Xmsg` es fijo y no depende del texto —
 > que es lo que se espera, porque el texto no viaja al ISO. Si cambia, el conteo depende del
 > contenido y la tabla se vuelve mucho más cara de llenar.
+
+### 17.6 · El incremento del `Xmsg` DEPENDE DEL CONTENIDO (2026-08-25)
+
+Era la pregunta que 17.5 dejaba planteada, y la respuesta es la que complica:
+`R_PV_manual_op_XMSG_dos_largo` es `xmsg_dos` con el **primer** mensaje más largo.
+
+| fixture | 1er mensaje | largo | 2º mensaje | incremento |
+|---|---|---|---|---|
+| `XMSG_dos` | `PRUEBA` → **212** | 6 | **225** | **+13** |
+| `XMSG_dos_largo` | `Mensaje largo al operador` → **212** | **25** | **244** | **+32** |
+
+El texto crece **+19** caracteres y el conteo se corre **+19** exactos.
+
+⇒ **`incremento(Xmsg) = largo del texto + 7`** — pendiente 1, fijada por el delta; ordenada 7,
+confirmada por los dos puntos.
+
+⇒ Y una consecuencia bonita: **el largo del propio mensaje NO mueve su propio `N`** (los dos
+primeros mensajes dan 212 pese a medir 6 y 25). El conteo es la posición **al empezar** a
+emitir el elemento.
+
+⇒ Y otra que cierra un círculo: **el texto ocupa lugar en el conteo aunque no aparezca en el
+ISO**. Confirma que el conteo cuenta algo del **programa compilado**, donde el texto sí está —
+coherente con 17.4, y con que el mensaje viaje como número.
+
+### ⚠️ Lo que esto le hace a la tabla
+
+La tabla de incrementos **no es «un número por tipo de operación»**: es **una fórmula por
+tipo**, y hay que derivar cada una. Para el `Xmsg` ya está; para todo lo demás, no.
+
+| elemento | incremento |
+|---|---|
+| `Xmsg` | **`largo(texto) + 7`** — derivado, 2 puntos con pendiente fijada |
+| `Xn` | `45` observado **una sola vez** (`ops_tres`, con `x-3700`, sin herramienta ni `Y`). ⚠️ Ahora hay que sospechar que **también depende del contenido**: los dígitos de la `X`, la `Y`, la herramienta, la velocidad |
+| fresado de `linea_01_fresada` | `206`, y casi seguro depende del largo de la traza |
+
+> **Lo que hay que medir para el `Xn`**: el mismo programa con `x-2500` en vez de `x-3700`
+> (mismo largo de texto, otro número), con `Y`, y con herramienta — cada uno con un `Xmsg`
+> detrás. Si el 45 se mueve, el `Xn` también tiene fórmula.
+
+### ⚠️ Y una que puede morder: ¿caracteres o bytes?
+
+Los tres textos medidos son **ASCII puro** (`PRUEBA`, `Otro texto`,
+`Mensaje largo al operador`), así que **no se puede distinguir si el conteo cuenta caracteres
+o bytes**. Con un acento las dos lecturas se separan: `Girá la pieza` son 13 caracteres pero
+14 bytes en UTF-8 y 13 en cp1252.
+
+⇒ Fixture barato que lo cierra: `xmsg_dos` con el primer mensaje **con acentos**. Hoy tenemos
+`XMSG_acentos`, pero ahí el mensaje acentuado es el **único**, así que no mueve nada medible.

@@ -68,6 +68,11 @@ def _cuerpo(nombre: str, base: str) -> list:
             if t == "+" and not l.startswith("% ")]
 
 
+def _enes(nombre: str) -> list:
+    """Los conteos `$0?N` que lleva el ISO, en orden."""
+    return [int(m) for m in re.findall(r"\$0\?(\d+)S", "\n".join(_iso(nombre)))]
+
+
 BASE_HG = "R_PV_HG_manual_op"
 
 
@@ -157,12 +162,25 @@ class XmsgTest(unittest.TestCase):
         self.assertEqual(cuerpo[3], "G4 F0")
 
     def test_el_conteo_lo_incrementa_cada_elemento_anterior(self):
-        """`N = conteo inicial + Σ incrementos`. Base 213 en HG, +13 por un `Xmsg`."""
-        def enes(nombre):
-            return [int(m) for m in re.findall(r"\$0\?(\d+)S", "\n".join(_iso(nombre)))]
-        self.assertEqual(enes("R_PV_HG_manual_op_XMSG_prueba"), [213])
-        self.assertEqual(enes("R_PV_HG_manual_op_XMSG_dos"), [213, 226])
-        self.assertEqual(enes("R_PV_HG_manual_op_OPS_tres"), [213 + 45], "un `Xn` antes")
+        """`N = conteo inicial + Σ incrementos`. Base 212 en AB, 213 en HG."""
+        self.assertEqual(_enes("R_PV_HG_manual_op_XMSG_prueba"), [213])
+        self.assertEqual(_enes("R_PV_HG_manual_op_XMSG_dos"), [213, 226])
+        self.assertEqual(_enes("R_PV_HG_manual_op_OPS_tres"), [213 + 45], "un `Xn` antes")
+
+    def test_el_incremento_de_un_xmsg_es_el_largo_del_texto_mas_siete(self):
+        """El incremento NO es fijo: depende del contenido (derivado 2026-08-25).
+
+        `xmsg_dos` y `xmsg_dos_largo` sólo difieren en el largo del PRIMER mensaje, y el
+        conteo del segundo se corre exactamente lo mismo que crece el texto: de 6 a 25
+        caracteres mueve el incremento de 13 a 32. La pendiente queda en 1 por el delta,
+        y la ordenada en 7 por los dos puntos.
+        """
+        for nombre in ("R_PV_manual_op_XMSG_dos", "R_PV_manual_op_XMSG_dos_largo"):
+            primero, segundo = _enes(nombre)
+            texto = _campo(_nodos(_pgmx(nombre), "Xmsg")[0], "Text")
+            with self.subTest(fixture=nombre):
+                self.assertEqual(primero, 212, "el largo del propio mensaje no mueve su N")
+                self.assertEqual(segundo - primero, len(texto) + 7)
 
 
 class ParkTest(unittest.TestCase):

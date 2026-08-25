@@ -267,10 +267,10 @@ Rama abierta el 2026-08-16 por los fixtures de línea. Un dibujo es **geometría
   `evidencia/dibujos_rama_g/`, suite sigue offline). La línea, el arco y el círculo ahora
   reproducen a Maestro **byte a byte**. Queda: `GeomEllipse` y decidir si el punto y los
   compuestos entran por una API de dibujos o siguen colgando de mecanizados
-- G6. **Lo que queda abierto** — ⏸ `<a:IsAbsolute>` en `true`: ⚠️ **NO lo pone el checkbox
-  «Coordenadas absolutas»**, que resultó ser un **modo de visualización que no se guarda**
-  (2026-08-24). Qué lo pondría en `true`, DESCONOCIDO. Más `Name`, la `Z` fuera del plano, las
-  otras cuatro caras y los otros métodos de la barra contextual
+- G6. **Lo que queda abierto** — ⏸ `Name`, la `Z` fuera del plano, las otras cuatro caras y
+  los otros métodos de la barra contextual. ⛔ **`<a:IsAbsolute>` queda DESCARTADO** (Fermín,
+  2026-08-25): el checkbox «Coordenadas absolutas» resultó ser un modo de visualización que no
+  se guarda, y el tag vale `false` en los 89 dibujos sin llegar al ISO. No se genera fixture
 
 ### H. Importación DXF — 🔮 futuro (idea de Fermín, 2026-08-19)
 
