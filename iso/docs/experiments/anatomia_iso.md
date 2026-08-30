@@ -307,6 +307,90 @@ Nótese que el eje Y obedece la misma regla, no otra: los campos A–D tienen `Y
 `SHF[Y] = −DY = −400`; los E–H tienen `Y ≈ −1515`, y ahí se usa tal cual. Lo que en R001
 parecía «X resta y el eje Y no» era, otra vez, la condición del cero.
 
+### ⛔ REFUTADA la condición del cero (lote D1 Grupo 0, 2026-08-27)
+
+La fórmula de arriba es correcta en su forma; **su condición no**. Los ocho campos sueltos y
+doce pares, con `.iso` de los veinte, dan esto:
+
+| campo | `fields.cfg` X | `SHF[X]` | ¿resta DX? |
+|---|---|---|---|
+| A | −3685.85 | −3685.850 | no |
+| **B** | **−1843.00** | **−2243.000** | **SÍ** ⇐ y X **no** vale cero |
+| C | −1843.00 | −1843.000 | no |
+| D | 0.00 | −400.000 | sí |
+| E | −3688.00 | −3688.000 | no |
+| **F** | **−1843.00** | **−2243.000** | **SÍ** |
+| G | −1843.00 | −1843.000 | no |
+| H | 0.00 | −400.000 | sí |
+
+**`B` y `F` son exactamente las dos letras que R002 nunca probó.** En los seis campos que sí
+tenía (A, C, D, E, G, H) «restar» y «valer cero» coincidían punto por punto, y la regla se
+ajustó a la variable equivocada. Vale como caso de la regla 1 del `CLAUDE.md`: la condición
+aguantó 17 días porque no había fixture que la separara.
+
+⭐⭐ **Y el remate: `B` y `C` tienen registros BYTE-IDÉNTICOS en `fields.cfg`** —los 29 valores
+iguales, X = −1843.00 los dos— **y producen orígenes distintos** (−2243.000 contra −1843.000).
+⇒ **La regla no puede salir de `fields.cfg`.** No hay nada en el archivo que separe a B de C.
+
+### ✅ Lo que sí predice los 20 casos: la posición de la letra en su par
+
+```
+SHF[eje] = campo(1ª letra del área, eje) − D_eje   SÓLO SI la letra es la SEGUNDA de su par
+```
+
+Los pares canónicos son **(A,B) (C,D) (E,F) (G,H)** —y siguen con (I,J), (K,L)…—, o sea las
+letras tomadas de a dos desde la `A`. **La primera de cada par no resta; la segunda sí.**
+
+Verificado en los veinte, incluidos los pares cruzados: `AD` → primera letra `A` → −3685.850 ·
+`DA` → `D` → −400.000 · `EH` → `E` → −3688.000 · `HE` → `H` → −400.000.
+
+Leído en castellano, es la misma imagen que ya estaba escrita —la coordenada marca el tope
+contra el que apoya la pieza— pero con el tope correcto: **cada mitad de mesa tiene DOS topes,
+y la letra dice cuál**. Contra el primero la esquina de la pieza *es* el tope; contra el
+segundo la pieza cuelga hacia el negativo y la esquina queda en `tope − D`.
+
+⚠️ **Pendiente para el converter**: el dato «primera o segunda del par» **no está en ninguna
+config que tengamos**. Se puede calcular de la letra (posición par o impar en el alfabeto),
+pero el *por qué* físico no está derivado, y la regla 4 del `CLAUDE.md` pide que nada de la
+traza salga de una constante interna. Decidir si se declara en `emisor_iso.cfg` (el cuarto
+origen) o si hay un archivo de máquina que todavía no miramos.
+
+### ⚠️ El eje Y tiene la misma ambigüedad, y NO es resoluble en esta máquina
+
+En Y, los cuatro campos de la fila delantera (A–D) valen `0.00` y **restan** `DY`; los cuatro
+de la trasera (E–H) valen ≈ −1515 y **no** restan. Encaja con la condición del cero — pero
+también con «la fila delantera resta». **Las dos lecturas están confundidas por construcción**:
+la fila delantera *se define* por `Y = 0`. Con dos filas no hay fixture que las separe.
+
+### ✅ La normalización la hace la ETAPA 2, y empareja de a dos
+
+El `.pgmx` guarda la letra sola (`<a:ExecutionFields>A`) y el ISO emite el par (`-AB`). ⇒ **la
+completa el generador de Xilog, no Maestro** — coherente con el modelo de dos etapas.
+
+| pedido | emitido | | pedido | emitido |
+|---|---|---|---|---|
+| A | `-AB` | | E | `-EF` |
+| B | `-BA` | | F | `-FE` |
+| C | `-CD` | | G | `-GH` |
+| D | `-DC` | | H | `-HG` |
+
+**La letra pedida va siempre primero**, y la acompaña su par. Vale incluso para los campos que
+no existen: `I` se normaliza a `IJ` y `J` a `JI` antes de que el postproceso los rechace.
+
+### ✅ Los campos I–P no existen, y el rechazo distingue dos cosas
+
+`fields.cfg` los tiene con el habilitado en `0`, y el postproceso los rechaza con **dos
+mensajes distintos**, los dos con código `[23,6]` y los dos de **`Winxiso`** (la etapa 2):
+
+| pedido | mensaje |
+|---|---|
+| `I` · `J` · `K` · `L` y sus pares | `Bag.  IJ: Área de trabajo no configurada` — **nombra el área**: la parseó y la normalizó, y falló el chequeo de habilitado |
+| `00` · `01` · `10` · `11` | `Bag.Fields: Área de trabajo no configurada` — **no nombra ninguna**: nunca la parseó |
+
+⇒ Confirma para qué sirve el flag de habilitado del registro, y que **el campo del área es de
+LETRAS**: la codificación numérica `FLD` del manual (`1=A`, `12=AB`) es del operador de macros,
+no algo que se pueda tipear acá.
+
 ### ✅ Manda la PRIMERA letra del área
 
 `CD` → −1843 (campo C) contra `DC` → −400 (campo D). Mismas dos letras, distinto orden,
@@ -328,6 +412,11 @@ Las áreas que arrancan en la mitad **izquierda** de la mesa (campos A/B y E/F, 
 más negativo) usan `EDK[10]`; las de la mitad **derecha** (C/D y G/H), `EDK[13]`. La fila
 (Y = 0 contra Y ≈ −1515) **no** influye. Con cuatro áreas por mitad no hay más casos que
 probar en esta máquina.
+
+> ✅ **CONFIRMADO con los ocho campos (2026-08-27).** El lote D1 Grupo 0 completa la tabla sin
+> corregirla: `EDK[10]` para **A, B, E, F** y `EDK[13]` para **C, D, G, H**, en los veinte ISO.
+> Y los pares cruzados agregan un dato: `AD` → **10** y `DA` → **13**, o sea que **lo decide la
+> PRIMERA letra**, no el par — igual que el origen.
 
 ### La tabla de campos de esta máquina
 
