@@ -147,7 +147,9 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 
 ### A. Configuración de programa — 🔄 en curso (etapa 1)
 - A1. Programa vacío, lote R001 (7 variaciones: base, dims, origen XY, origen Z, campo EF,
-  Xn, variable) — ✅ generado · ⏸ postproceso
+  Xn, variable) — ✅ **generado y postprocesado** (los seis ISO están en
+  `P:\USBMIX\ProdAction\R001_programa_vacio\`; B1b y B1c derivan de ellos). *El estado decía
+  «⏸ postproceso» desde el 08-10; corregido el 08-27.*
 - A2. Repaso opción por opción contra la UI de Maestro (capturas) — ⏸ capturas
 - A3. Opciones que el synth no varía (offset de pieza, repeticiones, ciclo continuo, espejo
   tecnológico, opciones de mesa/mecánica) → gemelos manuales, una opción por archivo — ⬜
@@ -155,8 +157,12 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
 - A5. **Parámetros de máquina** (serie R_PM) — ✅ **29 fixtures manuales (2026-08-10)**:
   16 llegan al ISO (14 mueven `V`, 2 mueven `T`), 12 no llegan y 1 rompe el postproceso
   (`Combiflex`). **Todas las diferencias caen en la línea del header**, ninguna toca el
-  resto del esqueleto. Resultados en `experiments/parametros_de_maquina.md`. Falta sólo
-  `Repeticiones`, que quedó fuera del barrido.
+  resto del esqueleto. Resultados en `experiments/parametros_de_maquina.md`.
+  ~~Falta sólo `Repeticiones`~~ — **cerrado el 2026-08-22**: no llega al ISO, con testigo
+  interno. El barrido A5 no tiene huecos.
+  > ⚠️ **Pero doce de sus resultados son negativos SIN testigo** (anotado el 08-27): los
+  > parámetros de máquina no viven en el `.pgmx`, y este lote no lleva capturas — 0 de 29.
+  > Se leen como **probables**. Ver `iso/docs/fixtures.md` §4.
 - A6. **Opciones de la aplicación** (serie R_OPC, el TERCER origen) — ✅ **17 fixtures
   manuales (2026-08-10/12)** para el programa vacío. **Una sola opción cambia el ISO**: el
   **estacionamiento automático al terminar**, que le agrega dos líneas. El resto no llega
@@ -164,7 +170,10 @@ controlada (serie R), byte-idéntico o fail-loud, nomenclatura genérica de Maes
   estacionamiento por cambio de fase (probado con 2 y 3 fases) y, el 08-12, las **dos de
   prioridad 1** (`IsAreaScm`, `IsZetaScm`) más `IsBottomPlaneMachining` y
   `IsCheckCollisionEnabled`. Resultados en `experiments/opciones_de_aplicacion.md`.
-  Quedan para cuando haya mecanizado: la familia que gobierna trazas e `IsMM`.
+  Queda para cuando haya mecanizado la familia que gobierna trazas. **`IsMM` ya se midió el
+  2026-08-22 — no llega**, pero es un negativo **sin testigo**: ni el `.pgmx` ni el ISO
+  cambian, así que ninguno prueba que la opción estaba puesta. Se lee como *probable*.
+  Nueve de los 17 fixtures del lote tienen captura de la ventana; los otros ocho, no.
   > ⬇️ **`PostFileFormat`, de baja prioridad (2026-08-14).** Se había propuesto un fixture
   > barato (postprocesar el vacío con `XXL` y con `PGM`) para confirmar que la cadena es una
   > sola y el selector sólo decide dónde se detiene. **Confirmaría un modelo que ya no nos
@@ -362,8 +371,20 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 > estudian, porque la sospecha es que esos parámetros no sólo mueven líneas del esqueleto
 > sino que **cambian el comportamiento de los mecanizados**. Cada etapa de D incluye su
 > pasada de A5.
-- Perforado (vertical, lateral, patrones) — 🔮
-- Fresados (línea, arco, círculo, polilínea, contorno) — 🔮
+> ⚠️ **La rama D ya tiene evidencia, archivada bajo otra rama** (anotado el 2026-08-27). La
+> primera traza de mecanizado de la época nueva —`linea_01_fresada`, 95 líneas contra las 44
+> del vacío— está documentada en **`dibujos.md` §13.1**, porque vino en el lote de dibujos:
+> el cuerpo del fresado, que la traza **no es** la geometría (agrega posicionamiento, bajada
+> en Z y salida), que `SVL`/`SVR` salen del catálogo y que `S…M3` sale de
+> `spindle_speed_std`. Y su incremento del conteo (`+206`) está en `operaciones_maquina.md`
+> §17.2. **Falta consolidarlo en un doc de la rama D y abrir el `B2` de `anatomia_iso.md`**,
+> que hoy no existe.
+
+- Perforado (vertical, lateral, patrones) — 🔄 **arrancando (2026-08-27)**: lote pedido,
+  partido en D1 (anatomía, un solo campo) y D2 (el campo, con mecanizado). Doc a crear:
+  `experiments/perforado.md`
+- Fresados (línea, arco, círculo, polilínea, contorno) — 🔮 · **hay un fixture ya derivado
+  parcialmente**, ver el aviso de arriba
 - Canal (sierra) — 🔮
 - Vaciado — 🔮 (el lab pgmx congelado se recrea oportunamente)
 - El ORDEN de estas ramas se define por hallazgos, no está prefijado.
@@ -423,7 +444,11 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
   `RadiusMultiplier` (CNC 4 · oficina 2) y `SecurityDistance` (CNC 20 · oficina 30). Falta
   el experimento que separa «default al crear» de «lectura al postprocesar»: un `.pgmx` con
   UNA operación de fresado con lead automático, postprocesado en las dos PCs.
-- ¿El origen de la pieza aparece en el ISO vacío? ¿Dónde?
+- ~~¿El origen de la pieza aparece en el ISO vacío? ¿Dónde?~~ **RESPONDIDA (2026-08-10),
+  anotada acá el 08-27.** Sí: en el bloque `%Or[0].of*` (micras) y `SHF[*]` (mm) de las
+  líneas 11–19. B1c dejó la fórmula verificada 11/11 con el lote R002:
+  `SHF[eje] = campo(primera letra del área, eje) − D_eje`, y la resta **sólo** cuando la
+  coordenada del campo vale cero.
 - ~~¿Una variable de usuario sin uso deja rastro en el ISO?~~ **RESPONDIDA (2026-08-17):
   NO.** Los cinco ISO de parámetros y los tres de líneas son idénticos al del programa
   vacío salvo la línea 1 (el nombre del archivo). Ni un parámetro sin usar ni una
@@ -431,6 +456,49 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-08-27 — El nombre de un fixture es una afirmación, y dos tercios del corpus no afirman nada
+Arrancaba la rama D y quedó en suspenso por un dato de Fermín: **los archivos manuales pueden
+tener errores, sobre todo en el nombre** — el caso concreto, un archivo con la marca `HG` que
+quedó guardado en campo `A` porque el cambio no se aceptó. Antes de pedir 40 fixtures nuevos se
+auditó el corpus entero.
+
+- ⭐ **Regla fijada (Fermín): el nombre nunca es evidencia; se cita el atributo leído del
+  `.pgmx`.** Y su consecuencia, que parece al revés: **conviene que el nombre afirme cuanto se
+  pueda**, porque un nombre que afirma se puede atrapar mintiendo y uno que no afirma nada no se
+  puede chequear.
+- ⭐ **Decisión (Fermín): todos los fixtures llevan el campo en el nombre**, con el string de
+  `ExecutionFields` tal cual (`A`…`H`, `AB`, `HG`, `EF`). La rama D necesita ejemplos en todos
+  los campos, y así el chequeo es igualdad exacta de strings.
+- ✅ **Auditoría de los 239 `.pgmx`**: **una sola contradicción**, y ya documentada
+  (`pulgadas` → `IsMM=true`). **La marca `HG` acertó 30 de 30.** El lote C está limpio: 278
+  afirmaciones verificadas, todas verdaderas.
+- ⚠️ **Lo que sí falta: 159 de 239 archivos no afirman nada verificable**, y **46 son
+  inverificables por construcción** — A5 (29) y A6 (17) varían cosas que viven en `Params.cfg` y
+  `UI00.exe.Config`, no en el `.pgmx`.
+  - ⇒ los negativos de esos lotes **no tienen testigo**: *«no llega al ISO»* y *«no lo puse»*
+    son indistinguibles. Se leen como **probables**. A6 pide captura en su protocolo y la tiene
+    en 9 de 17; **A5 no la pide y tiene 0 de 29**. La exigencia se generaliza.
+- 📌 **Corrección mía, del tipo que la regla 2 del `CLAUDE.md` describe.** Volví a derivar la
+  tabla de campos, la estructura de `fields.cfg`, la regla de la primera letra, la fórmula del
+  origen y el `EDK` — **todo eso ya estaba en `anatomia_iso.md` B1c desde el 2026-08-10**, y
+  mejor derivado (la primera letra sale de `CD` contra `DC`, no de dos puntos; el `EDK` es la
+  MITAD de la mesa, no el área). Leí el doc por grep y me detuve justo antes de la sección. El
+  costo: un lote de 12 fixtures propuesto que R002 ya había barrido.
+- 📌 **Hallazgos archivados por LOTE y no por rama** — el patrón que la auditoría destapó, y que
+  hace que un doc no sepa lo que ya se contestó:
+  - `Repeticiones` no llega (08-22) estaba en `dibujos.md` §14.1 y `parametros_de_maquina.md`
+    seguía listándolo como fixture a hacer → **registrado en A5**;
+  - `Pulgadas`/`IsMM` no llega (08-22) estaba en `dibujos.md` §14.2 y
+    `opciones_de_aplicacion.md` seguía diciendo «qué mirar» → **registrado en A6**;
+  - **la primera traza de fresado de la época nueva** vive en `dibujos.md` §13.1 mientras la
+    rama D figuraba como 🔮 sin arrancar → **avisado en el mapa**; falta consolidarla.
+- 🧹 **Estados obsoletos corregidos**: A1 decía «⏸ postproceso» (R001 está postprocesado desde
+  el 08-10), A5 decía que faltaba `Repeticiones`, y «¿el origen aparece en el ISO vacío?» seguía
+  como pregunta abierta con la fórmula derivada 11/11 desde el 08-10.
+- 📄 **Doc nuevo**: `iso/docs/fixtures.md` — dónde vive cada lote, la regla del nombre, la
+  auditoría y la clase de negativos sin testigo.
+
 
 ### 2026-08-25 — El incremento del `Xmsg` depende del contenido, y la tabla se vuelve fórmula
 Un solo fixture (`XMSG_dos_largo` = `xmsg_dos` con el primer mensaje más largo) y contesta lo
