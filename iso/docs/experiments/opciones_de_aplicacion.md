@@ -70,7 +70,7 @@ Guardar como `r_pv_opc_control.iso`.
 | Opción | Clave | Qué mirar |
 |---|---|---|
 | **Parámetros → Post → «Formato de salida»** (XXL / PGM / ISO) | `PostFileFormat` | el archivo entero: otra extensión y otro lenguaje. Sirve para saber qué son los otros dos formatos |
-| **Idioma → «Unidad de medida»** (Milímetros / Pulgadas) | `IsMM` | `*MM` → `*IN` y **todas** las medidas del esqueleto |
+| **Idioma → «Unidad de medida»** (Milímetros / Pulgadas) | `IsMM` | `*MM` → `*IN` y **todas** las medidas del esqueleto — ⚠️ **medido el 2026-08-22: NO llega**, ver abajo |
 
 ### Prioridad 4 — probablemente no se vean sin operaciones
 
@@ -370,3 +370,26 @@ nombres coincidían; acá están separados y se ve cuál gana.
 ⇒ Y **renombrar un `.pgmx` desde el explorador no lo rompe**: Maestro lo abrió y lo
 postprocesó con el miembro del ZIP llamándose distinto. El nombre interno es
 independiente del nombre del archivo.
+
+## `Pulgadas` (`IsMM`) — no llega, pero el fixture no tiene testigo (2026-08-22)
+
+Registrado acá el 2026-08-27. El fixture es `R_PV_manual_base_pulgadas`, de la tanda de
+dibujos; el detalle original está en `dibujos.md` §14.2, pero **la opción es de esta ventana
+y su casa es este doc**. Cierra la prioridad 3 de la lista de arriba.
+
+- **El ISO no cambia**: sigue diciendo `*MM` y todas las medidas quedan en milímetros.
+- **El `.pgmx` tampoco cambia**: `<IsMM>` sigue en `true`, y el XML queda byte-idéntico al
+  base.
+
+⚠️ **Y ahí está el problema: el archivo no puede probar que la opción estaba puesta.** Si
+`IsMM` no se escribe en el `.pgmx` y tampoco llega al ISO, entonces *«la opción no llega»* y
+*«la opción no quedó aplicada»* producen exactamente los mismos dos archivos.
+
+⇒ Se anota como **probable**, no como derivado. Es el caso testigo de toda la clase descrita
+en `iso/docs/fixtures.md` §4.
+
+> Dato de método que salió del mismo lote: Fermín tuvo que **reiniciar Maestro** para que cada
+> opción tomara efecto ⇒ **son opciones que se leen al arrancar la aplicación**, no en cada
+> postproceso. Toca directamente la pregunta E2 (separar «default al crear» de «lectura al
+> postprocesar»), y **agranda el riesgo del negativo sin testigo**: si el reinicio se saltea,
+> el fixture sale idéntico al base por una razón que no es la que se quería medir.

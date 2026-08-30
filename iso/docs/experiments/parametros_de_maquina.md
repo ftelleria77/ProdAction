@@ -36,7 +36,7 @@ de proyectos ni de fixtures (regla de nomenclatura de la época).
 
 ## Lista de variaciones
 
-### Repeticiones (`Repetitions` · campo `R` del header)
+### Repeticiones (`Repetitions` · campo `R` del header) — ✅ CERRADO 2026-08-22
 
 En el base vale `1` y **el header no emite la letra `R`**. Interesa ver si aparece.
 
@@ -44,6 +44,15 @@ En el base vale `1` y **el header no emite la letra `R`**. Interesa ver si apare
 |---|---|
 | `R_PM_repeticiones_2.pgmx` | Repeticiones = 2 |
 | `R_PM_repeticiones_10.pgmx` | Repeticiones = 10 |
+
+> ✅ **RESPONDIDO — no llega al ISO.** Lo cerró un fixture de otra tanda:
+> `R_PV_manual_base_repeticiones_3` (2026-08-22). El header sigue sin emitir `R` y el resto
+> del ISO no se mueve. **Con testigo interno**: el `.pgmx` sí guarda el `3` en
+> `<a:Repetitions>`, así que el negativo está probado, no supuesto.
+>
+> Detalle en `dibujos.md` §14.1 — quedó escrito ahí porque vino en el lote de dibujos, pero
+> **el parámetro es de A5 y su casa es este doc**. Con esto el barrido A5 queda completo: no
+> falta ningún parámetro.
 
 ### Bloqueo (`TableOptions` · campo `V`)
 
@@ -149,6 +158,15 @@ tocó el resto del esqueleto.
 ### Grupo 2 — NO llegan al ISO (12 fixtures)
 
 El ISO sale idéntico al base salvo el nombre del archivo. `T` queda en `0`.
+
+> ⚠️ **Estos doce son negativos SIN TESTIGO** (anotado el 2026-08-27, ver `iso/docs/fixtures.md`
+> §4). Los parámetros de máquina no se guardan en el `.pgmx`: viven en la configuración de la
+> máquina. Cuando el ISO **no** cambia, el par `.pgmx`+`.iso` no puede probar que el parámetro
+> estaba puesto — *«no llega»* y *«no lo puse»* son indistinguibles desde los archivos.
+>
+> A diferencia de A6, **este lote no lleva capturas de la ventana**: son 0 de 29. ⇒ los doce se
+> leen como **probables**, no como derivados, hasta que tengan testigo. La pasada de A5 sobre
+> cada mecanizado de la rama D va **con captura**, para no repetirlo.
 
 | Opción | `MechanicalOptions` | potencia de 2 |
 |---|---|---|

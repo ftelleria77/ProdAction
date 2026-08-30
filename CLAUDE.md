@@ -105,6 +105,20 @@ N001–N042 tienen todos `Xn` porque los escribía nuestro sintetizador; un `.pg
 Maestro no lo trae, y ahí el footer es otro. Antes de confiar en que "el corpus lo cubre",
 preguntate qué no puede contener por venir de nuestra propia autoría.
 
+### El nombre de un fixture no es evidencia (2026-08-27)
+
+Los archivos manuales pueden tener errores, **sobre todo en el nombre**: uno guardado con la
+marca `HG` puede haber quedado en campo `A` porque el cambio no se aceptó antes de guardar.
+
+- **Ninguna derivación cita un nombre de archivo. Cita el atributo leído del `.pgmx`.**
+- Y por eso mismo **el nombre tiene que afirmar cuanto se pueda** — un nombre que afirma se
+  puede atrapar mintiendo; `arco_07` no se puede chequear contra nada.
+- **Un negativo sin testigo se escribe «probable», no «derivado».** Si lo que se varió no vive
+  en el `.pgmx` (parámetros de máquina, ventana Opciones) y el ISO tampoco cambia, los archivos
+  no pueden probar que la variación estaba puesta ⇒ ese fixture va **con captura de la ventana**.
+
+Detalle, corpus y auditoría en `iso/docs/fixtures.md`.
+
 ## 6. Comunicación
 
 En **español rioplatense** ("vos"), siempre.
