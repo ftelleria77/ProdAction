@@ -408,15 +408,85 @@ constante del emisor de un parámetro de configuración que vale 1. Falta ubicar
 ### ⚠️ Con pasadas, el `.pgmx` guarda la trayectoria EXPANDIDA
 
 El `TrajectoryPath` deja de ser un `GeomTrimmedCurve` (una recta) y pasa a ser un
-**`GeomCompositeCurve`** con **10 claves de miembro**. ⇒ **el número de pasadas no se guarda
-como número: se guarda el recorrido ya calculado.**
+**`GeomCompositeCurve`** con **10 claves de miembro**: el recorrido queda **ya calculado** en el
+archivo.
+
+> 📌 **Corregido el 2026-08-30.** Acá decía además que «el número de pasadas no se guarda como
+> número». **Es falso**: el `.pgmx` guarda **las dos cosas**. El modelo tiene
+> `MultiStepDrilling` con `StepNumber`, `StepDepth` e **`IsStepDepth`** —el interruptor entre
+> las dos formas— y los fixtures lo confirman:
+>
+> | fixture | `IsStepDepth` | `StepNumber` | `StepDepth` |
+> |---|---|---|---|
+> | `pasadas_3` | `false` | **3** | 0 |
+> | `profpasada_2` | `true` | 1 | **2** |
+> | `profpasada_4` | `true` | 1 | **4** |
+>
+> Y confirma el `ceil`: `profpasada_4` guarda un `4` y el ISO emite **tres pasadas de 3.333**.
+> El redondeo lo hace quien expande la trayectoria, no está guardado.
 
 Es la regla 5 del `CLAUDE.md` en acción: si estos fixtures los generara nuestro sintetizador,
 Maestro postprocesaría **nuestra** hipótesis del ciclo de pecking y la derivación sería
 circular.
 
-⏸ Los miembros se referencian por clave y no están en línea, así que **desde estos archivos no
-se puede decidir si el `+1` ya viene guardado o lo agrega la etapa 2**.
+### ⭐⭐ RESUELTO (2026-08-30): el ISO NO sale de la trayectoria guardada
+
+`ScmGroup.XCam.MachiningDataModel`, decompilado, tiene el generador entero en
+`ToolpathGenerator`:
+
+```csharp
+if (multiStepDrilling.IsStepDepth)
+    paso = (StepDepth >= Precision.Technology() && StepDepth <= total) ? StepDepth : total;
+else
+    paso = (StepNumber > 1) ? (total / StepNumber) : total;
+
+while (acum < total) {
+    acum += paso;
+    if (acum > total) acum = total;        // el último se recorta
+    corte = origen + dir * acum;
+    if (acum >= total) retiro = origen;    // el último retira al origen
+    composite.AddSegment(anterior -> corte);
+    composite.AddSegment(corte -> retiro);
+    …
+}
+```
+
+Con `StepDepth = 4` sobre 10 mm, ese bucle guarda cortes en **4 · 8 · 10** — tres pasadas de
+**4, 4 y 2**. Y el ISO de ese mismo fixture emite **tres pasadas de 3.333**.
+
+⇒ **La trayectoria guardada no es la que llega al ISO.** Coincide el **número** de pasadas, no
+el reparto.
+
+Y el manual de Xilog cierra el círculo: el parámetro `G` de la instrucción `B` es el «**número
+de pasadas** (se divide en **partes iguales**)».
+
+**Tres fuentes independientes que coinciden:**
+
+| fuente | qué aporta |
+|---|---|
+| el código de Maestro | cuenta las pasadas: el bucle da **3** |
+| el manual de Xilog | lo que viaja es `G` = número de pasadas, repartidas **iguales** |
+| el ISO | tres pasadas de **3.333** ✓ |
+
+⇒ La fórmula que se había derivado del ISO —`n = ceil(prof / paso)`, partes iguales— **era
+correcta**, y ahora tiene mecanismo: el `ceil` sale del `while` que recorta la última pasada; el
+reparto igual, del `G` de Xilog.
+
+#### 📌 Y refina el alcance de la regla 5 para este caso
+
+El 28 se escribió que si el sintetizador generara estos fixtures, «Maestro postprocesaría
+**nuestra** hipótesis del ciclo de pecking». **Para el perforado, no**: lo que viaja a la etapa
+2 son `StepNumber`/`StepDepth`, no el recorrido. La trayectoria guardada es interna.
+
+La regla 5 sigue en pie —su ejemplo es la compensación con `ActivateCNCCorrection=false`, donde
+la trayectoria almacenada **sí** lleva el offset— pero **el perforado no es un caso de
+circularidad**. Hay que decidir caso por caso, no por familia.
+
+#### ⏸ Y el `+1` queda localizado, no resuelto
+
+No está en el generador de Maestro: el composite guardado son pares corte/retiro sin
+reposicionamiento. ⇒ **el `+1` lo agrega la etapa 2**, el emisor nativo. Sigue sin ubicarse su
+valor, pero ya se sabe de qué lado buscarlo.
 
 ## 6bis. Grupos 4 a 7 (2026-08-29)
 
