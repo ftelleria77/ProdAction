@@ -380,9 +380,10 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 > §17.2. **Falta consolidarlo en un doc de la rama D y abrir el `B2` de `anatomia_iso.md`**,
 > que hoy no existe.
 
-- Perforado (vertical, lateral, patrones) — 🔄 **arrancando (2026-08-27)**: lote pedido,
-  partido en D1 (anatomía, un solo campo) y D2 (el campo, con mecanizado). Doc a crear:
-  `experiments/perforado.md`
+- Perforado (vertical, lateral, patrones) — ✅ **DERIVADO (2026-09-03)**. Lote D1: **158
+  `.pgmx`** en doce grupos, del programa vacío en los ocho campos hasta la alternancia entre las
+  cinco caras. Cota, huso, orden, patrones, pasadas, transición entre caras y rechazos
+  predecibles. Detalle en `experiments/perforado.md`
 - Fresados (línea, arco, círculo, polilínea, contorno) — 🔮 · **hay un fixture ya derivado
   parcialmente**, ver el aviso de arriba
 - Canal (sierra) — 🔮
@@ -456,6 +457,38 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-09-03 — El perforado queda derivado, y el barrido del corpus corrige tres cosas
+Cierre de la rama D1 con los grupos 3 a 11 (158 `.pgmx`), más un repaso sistemático de todo el
+corpus pedido por Fermín.
+
+- ✅ **El perforado, entero**: la cota lleva el `ToolOffsetLength` del catálogo (77 vertical, 65
+  lateral); el huso sale de `spindles.cfg` y `?%ETK[0] = 2^(PLC−1)`; el patrón es azúcar en las
+  seis caras; el ISO **respeta el orden de creación**, también entre caras; y la transición entre
+  caras emite un `G53` que sigue **`DZ + 20 + max(77, seguridad + shf_z)`** con el **máximo de
+  los dos husos** — doce transiciones verificadas.
+- ⭐ **Dos rechazos resultaron predecibles desde la configuración** (la cónica y la broca `061`
+  en campo A se pasan del `AP_MINQUOTA` del eje X). El converter puede anticiparlos.
+- ⛔ **Pero la cara inferior NO se rechaza: se descarta en silencio.** No hay huso con `FACE=6`;
+  el `.pgmx` guarda el agujero y el ISO sale sin él. ⚖️ **Excepción declarada por Fermín**: cuando
+  el byte-idéntico y el fail-loud chocan, **gana el fail-loud**. Escrito en `CLAUDE.md` §4.
+- 🔎 **El Optimizador no cambia nada, y se sabe por qué**: agrupa por `HoleType` (diámetro +
+  profundidad + punta) y **ningún par de husos de esta máquina hace el mismo tipo de agujero**.
+  No es que sea flojo: no hay nada que agrupar. Explica que el taller nunca le viera diferencia.
+- 📌 **Tres correcciones que salieron del barrido del corpus** (1.679 claves aplanadas, pares que
+  difieren en UNA sola clave):
+  - la **herramienta elegida SÍ viaja al ISO** cuando contradice a la resolución automática (el
+    caso de la broca `007`). Lo que estaba escrito era falso;
+  - `WorkPiece/Name` **no** llega — nunca se había probado;
+  - la normalización del campo (`A`↔`AB`, …) da ISO **byte-idéntico**, no sólo el mismo header.
+- ⚠️ **Y el barrido destapó un punto ciego propio**: un par «aislado» no está aislado si la
+  variable vive fuera del `.pgmx`. Sin excluir A5/A6, tres claves aparecían como que llegan al
+  ISO y no llegan. Es la clase de los negativos sin testigo, vista desde el otro lado.
+- ⭐ **El orden de ejecución no está en `<Features>` ni en `<Operations>`**, que son catálogos:
+  vive en la **posición** de los `MachiningWorkingStep` del workplan. `Priority` existe y vale 0.
+- 🐞 **Un bug de Maestro, anotado** (lectura de Fermín): con `StepDepth` que no divide exacto,
+  Maestro guarda `4·4·2` y el CNC hace `3.33×3`. Se retoma con las estrategias de fresado.
+
 
 ### 2026-08-27 — El nombre de un fixture es una afirmación, y dos tercios del corpus no afirman nada
 Arrancaba la rama D y quedó en suspenso por un dato de Fermín: **los archivos manuales pueden

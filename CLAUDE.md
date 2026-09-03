@@ -93,6 +93,18 @@ Un default inventado es una hipótesis disfrazada: impide que el sistema note qu
 **El convertidor no puede tener constantes internas para el cálculo de trazas.** Todo sale de la
 config, del catálogo de herramientas o de la operación. Ver `converter_magic_numbers.md`.
 
+### Cuando el byte-idéntico y el fail-loud se contradicen, gana el fail-loud
+
+Excepción declarada por Fermín (2026-09-03), con un caso real: Maestro **descarta en silencio**
+los mecanizados en la cara inferior —no hay huso para esa cara— y emite un ISO sin ellos. El
+byte-idéntico pediría reproducir el silencio; el fail-loud, rechazar.
+
+**Rechaza.** Una pieza que sale sin un agujero y sin aviso es peor que un ISO que no coincide.
+El byte-idéntico sigue rigiendo **para los programas que Maestro resuelve bien**.
+
+Detalle y el arreglo previsto —girar la pieza con `Xn` + `Xmsg` y una fase nueva— en
+`iso/docs/experiments/perforado.md` §7quinquies.
+
 ## 5. Los fixtures: quién los hace, y por qué importa
 
 - **Los genera el sintetizador** cuando la traza NO es la incógnita (el ISO es lo que se deriva).
