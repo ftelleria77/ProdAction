@@ -386,7 +386,13 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
   predecibles. Detalle en `experiments/perforado.md`
 - Fresados (línea, arco, círculo, polilínea, contorno) — 🔮 · **hay un fixture ya derivado
   parcialmente**, ver el aviso de arriba
-- Canal (sierra) — 🔮
+- **Canal** (Sierra Vertical X) — 🔄 **ARRANCÓ (2026-09-03)**, doc `experiments/canal.md`. Va
+  detrás del perforado porque **es el mismo cabezal** (`def.tlgx` declara la `082` como
+  `XilogBoringUnitTool`). Nomenclatura fijada por Fermín: en la UI se llama **`Canal`**, y está
+  en el grupo `Fresado` de la cinta. Nueve predicciones falsables sacadas de la configuración
+  —huso, máscara en `ETK[1]`, `SHF`, `SVL`/`SVR`, cara única— y una que **cierra la excepción
+  del `SVR 1.900`** que `anatomia_iso.md` le había dejado a esta rama. ⏸ el lote D2 (23
+  archivos) espera a Fermín
 - Vaciado — 🔮 (el lab pgmx congelado se recrea oportunamente)
 - El ORDEN de estas ramas se define por hallazgos, no está prefijado.
 
@@ -457,6 +463,51 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-09-03 (tarde) — Arranca el Canal, y la configuración contesta antes que el primer fixture
+Decisión de Fermín: después del perforado va el **canal**, porque es un mecanizado distinto
+**del mismo cabezal**. Doc nuevo: `experiments/canal.md`.
+
+- ✅ **Lo confirma la máquina, no la intuición**: en `def.tlgx` la `082` es
+  `KindOfTool = XilogBoringUnitTool`, mientras la Sierra **Horizontal** (`E002`) es
+  `XilogSpindleUnitTool` con `shStorePos = 2` — ésa sí va al electromandril.
+- ⭐ **La nomenclatura queda fijada por la UI (regla 3): se llama `Canal`.** Fermín dejó la
+  captura de la ventana. Está en el grupo **`Fresado`** de la cinta, junto a `Corte con
+  cuchilla`, `Vaciado` y `Galceado` ⇒ **la UI agrupa por familia de operación, no por cabezal**.
+- 📌 **Y la ventana destapa tres incongruencias del `ChannelSpec`**: `Anchura` aparece en gris
+  (nuestro spec la toma como parámetro de entrada), `Inclinación °` vale 90 contra un
+  `slot_angle` en radianes, y `Corrección herramienta` tiene **cuatro** botones contra tres
+  valores nuestros. Todos los defaults del spec son de la época congelada: hipótesis, no
+  evidencia.
+- ⭐⭐ **Nueve predicciones falsables, todas sacadas de la configuración** —`def.tlgx` (que
+  viaja dentro del `.pgmx`) y el registro **82** de `spindles.cfg`—, contrastadas contra los
+  ISO de producción: `?%ETK[6]=82`, `SVL 60.000`, `S4000M3`, `SHF[X]=−96.000`,
+  `SHF[Z]=+22.150`, `?%ETK[7]=1` (el tipo de mecanizado del canal), y la cara **única**
+  (`st_OFace.Face1`).
+- ⭐⭐ **Dos que valen aparte.** (1) **`?%ETK[1] = 16`**: la sierra tiene `shPlcOut = 37` y
+  `2^(37−33) = 16` ⇒ `ETK[0]` lleva los bits de PLC 1-32 y **`ETK[1]` los 33-64**. Es la
+  extensión natural de la regla `?%ETK[0] = 2^(pos1 − 1)` que derivó el Grupo 6 del perforado.
+  (2) **`SVR 1.900` deja de ser una excepción**: `SVR` es el radio del *cuerpo* de la
+  herramienta, y la vertical es un `UniversalBlade` (`BladeThickness/2 = 1.9`) mientras la
+  horizontal está catalogada como `Endmill` (`Diameter/2 = 50`). Una sola regla, dos cuerpos —
+  cierra la pregunta que `anatomia_iso.md` le había dejado expresamente a esta rama.
+- ⚠️ **Una predicción se sale de la regla de D1**: `SHF[Y] = −pos24 − 1.9`. El espesor del
+  disco entra **dos veces**, en el `SVR` y en el `SHF[Y]`. Lo decide el Grupo 5 del lote.
+- ✅ **Y se descarta un riesgo, corrigiendo hacia atrás la rama C.** La `082` había sido
+  **rechazada** en el lote C (`Bag.Oheads: Herramienta E82 no configurada`), y sin embargo el
+  taller corta canales con ella desde 2023 — **3157 ISO** en `P:\USBMIX`. **Lectura de Fermín,
+  confirmada: el rechazo es del contexto `Xn`** —que la pide como herramienta de cabezal—, no
+  del mecanizado. ⇒ `operaciones_maquina.md` §14 decía que la `082` «no está configurada en la
+  máquina» y **es falso**: no lo está **en el cabezal que el `Xn` usa**. Para el converter la
+  regla cambia de forma: no es «¿existe la herramienta?» sino **«¿existe en el cabezal que
+  esta operación usa?»**. Y el punto 3 de ese §14 —la ambigüedad `holder_key`/`name`— se queda
+  sin premisa y hay que re-derivarlo.
+- 📄 **Lote D2 pedido**: `…\Mecanizados\Canal\INSTRUCCIONES.md`, 23 archivos en nueve grupos,
+  más cuatro capturas de las secciones plegadas de la ventana.
+- ⚠️ **Procedencia, dicha en el doc**: los ISO de producción **no son fixtures** —no se sabe de
+  qué `.pgmx` salieron, probablemente X-CAB (rama F, diferida)—. Sirven para formar hipótesis,
+  no para derivar.
+
 
 ### 2026-09-03 — El perforado queda derivado, y el barrido del corpus corrige tres cosas
 Cierre de la rama D1 con los grupos 3 a 11 (158 `.pgmx`), más un repaso sistemático de todo el

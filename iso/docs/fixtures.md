@@ -21,10 +21,15 @@ Rutas simétricas bajo `PGMX_ROOT` (`S:\Maestro\Projects\ProdAction`) e `ISO_ROO
 | A6 | `…\Reinvestigación\Opciones de Maestro\` | 17 | la ventana Opciones | `experiments/opciones_de_aplicacion.md` |
 | G | `…\Reinvestigación\Dibujos\` y `Dibujos\Rama G\` | 115 | las ocho geometrías de la pestaña Dibujar | `experiments/dibujos.md` |
 | C | `…\Reinvestigación\Operaciones\` | 68 | `Xn`, `Xmsg`, `Park` | `experiments/operaciones_maquina.md` |
-| D1 | `…\Reinvestigación\Mecanizados\Perforado\` | 72 | el perforado — 🔄 grupos 0, 1 y 2 hechos | `experiments/perforado.md` |
+| D1 | `…\Reinvestigación\Mecanizados\Perforado\` | 158 | el perforado — ✅ doce grupos, cerrado el 2026-09-03 (140 `.iso`) | `experiments/perforado.md` |
+| D2 | `…\Reinvestigación\Mecanizados\Canal\` | 23 | el canal (Sierra Vertical X) — ⏸ pedido, sin hacer | `experiments/canal.md` |
 
-R001, R002 y D1 llevan un `INSTRUCCIONES.md` en la carpeta del lote, con el pedido que les
-dio origen. Los lotes intermedios (Dibujos, Operaciones) no lo tienen: el pedido quedó en el
+R001, R002, D1 y D2 llevan un `INSTRUCCIONES.md` en la carpeta del lote, con el pedido que les
+dio origen.
+
+> 📌 **Ojo con la etiqueta `D2`.** `perforado.md` §7bis menciona «el lote D2» hablando de un
+> barrido de campos que **nunca existió**: el Grupo 2 de D1 lo contestó sin fixtures nuevos.
+> El `D2` de esta tabla es el del **Canal**, y es el único. Los lotes intermedios (Dibujos, Operaciones) no lo tienen: el pedido quedó en el
 doc de la rama (por ejemplo `dibujos.md` §11). **D1 vuelve al `INSTRUCCIONES.md` en la
 carpeta** — viaja con los archivos, se imprime para trabajar en la PC del CNC, y sobrevive a
 que el doc se reorganice.

@@ -423,6 +423,22 @@ Tres cosas se siguen:
 3. ⛔ **La ambigüedad `holder_key` contra `name` NO se puede resolver con esta máquina**: las
    únicas herramientas que las separarían son justamente las que no están configuradas.
 
+> 📌 **CORREGIDO el 2026-09-03 (lectura de Fermín, confirmada).** El punto 2 decía que la
+> `082` **«no está configurada en la máquina»**, y eso es falso: está en `spindles.cfg` como
+> registro **82** (con `shPlcOut = 37`, offsets propios y `Face1`), y el taller corta canales
+> con ella desde 2023 — **3157 ISO** en `P:\USBMIX`. Lo que no existe es la `082` **en la
+> tabla `Oheads`**, que es el cabezal al que apunta el `Xn`.
+>
+> ⇒ **El rechazo es del CONTEXTO, no de la herramienta.** El titular del punto 2 se sostiene
+> —el catálogo de Maestro y las tablas de la máquina son cosas distintas—, pero la
+> consecuencia para el converter se afina: una herramienta puede estar configurada **para un
+> cabezal y no para otro**, así que lo que hay que chequear no es «¿existe la herramienta?»
+> sino «¿existe en el cabezal que esta operación usa?».
+>
+> ⚠️ Y el punto 3 se queda **sin su premisa**: la `082` sí está configurada. Que la ambigüedad
+> `holder_key`/`name` siga sin resolverse hay que re-derivarlo, no darlo por dicho. Detalle en
+> `experiments/canal.md`.
+
 ## 15. Estado de los fixtures de esta tanda
 
 | | |
