@@ -50,8 +50,31 @@ Todo lo demás —diámetro, profundidad, punto, tipo de punta— es idéntico.
 **Y los ISO salen byte-idénticos salvo la línea 1**, en los cuatro pares comparables (el quinto
 par no era comparable, ver §7).
 
-⇒ ⭐ **La herramienta elegida NO viaja al ISO. El postprocesador la resuelve desde el diámetro
-y el tipo de punta.** Elegirla es una comodidad de la UI, no un dato del programa.
+⇒ ⭐ En estos casos la herramienta elegida **no cambia nada**: el postprocesador la resuelve
+desde el diámetro y el tipo de punta, y llega al mismo huso.
+
+> 📌 **CORREGIDO el 2026-09-03.** Acá decía que la herramienta elegida «NO viaja al ISO». **Es
+> falso**, y lo destapó el barrido del corpus entero (`fixtures.md` §6): de 34 pares que
+> difieren sólo en el `ToolKey`, **dos mueven el ISO**, y los dos son de la broca `007`.
+>
+> | fixture | diámetro | punta declarada | herramienta | huso emitido |
+> |---|---|---|---|---|
+> | `top_005` | 5 | Flat | `005` | **5** |
+> | `top_007` | 5 | **Flat** | `007` | **7** |
+> | `top_D5P` | 5 | Flat | (vacía) | **5** |
+> | `top_D5C` | 5 | Conical | (vacía) | **7** |
+>
+> `top_007` declara punta **plana** y herramienta **007**, y emite el huso **7**. Con el mismo
+> diámetro y la misma punta, elegir la herramienta cambia el resultado.
+>
+> ⇒ **La formulación correcta**: si NO elegís herramienta, el postprocesador la resuelve por
+> diámetro + punta; si la elegís, **manda la elegida**, aunque contradiga la punta del feature.
+> Los pares del Grupo 1 salían idénticos porque ahí las dos vías **coinciden** (Ø8 plana → 001),
+> no porque la herramienta se ignore.
+>
+> Y de paso confirma con evidencia nueva algo que la doc del sintetizador traía de la época
+> congelada: al elegir la `007` sobre un agujero Ø5, **Maestro normaliza el `BottomCondition` a
+> `FlatHoleBottom`** y deja la familia cónica expresada sólo por el `ToolKey`.
 
 ⇒ Y confirma con evidencia de la época nueva una fila de la tabla `tool_resolution="Auto"` del
 sintetizador: **plana Ø8 → `001` / `1888`**.
@@ -624,6 +647,332 @@ Base del campo A: **212**.
 ⚠️ **Y el contenido pesa, pero al revés de lo esperado**: la coordenada `92.5` —un carácter más
 que `100`— **baja** el conteo en 1. Con el `Xmsg` el texto más largo lo subía. Medido, sin
 explicación.
+
+## 7ter. El Optimizador no cambia nada — y se sabe por qué (2026-09-01)
+
+Idea de Fermín: el botón `Optimizador` nunca se usó en el taller porque no se le veía
+diferencia en la ejecución. La sospecha era que la diferencia estaba en las sutilezas que este
+lote destapó — que Maestro no agrupa husos ni reordena.
+
+**Dato de método**: al activar la Optimización automática, **Maestro guarda el archivo solo**,
+agregándole `Opt` al final del nombre. Eso es el **testigo**: la opción estaba puesta, y lo
+prueba el software, no una etiqueta escrita a mano.
+
+### El resultado: nulo, en los dos lados
+
+| | |
+|---|---|
+| el `.pgmx` optimizado contra el original | **6 tags distintos**, todos de la `Key` del proyecto (`ID 1908` → `0`). El contenido —operaciones, coordenadas, orden— es idéntico |
+| los ISO | **idénticos línea por línea** en los seis casos: `dos_x32`, `dos_x50`, `fila5_x32`, `tres_orden_inverso`, `patron_8x5_32` (40 agujeros) y el par a 64 mm |
+
+⇒ **La optimización no se guarda en el `.pgmx` y no cambia el ISO.** El converter **no tiene que
+reproducirla**.
+
+### ⭐⭐ Y la razón no es que el optimizador sea flojo
+
+El decompilado dice que agrupa por **`HoleType` = diámetro + profundidad + tipo de punta**, y
+que un huso sólo toma un agujero si `IsCompatibleHole` e `IsCompatibleHolePosition`.
+
+Los siete husos verticales de esta máquina, según `def.tlgx`:
+
+| huso | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|
+| diámetro | 8 | 15 | 20 | 35 | 5 | 4 | 5 |
+| punta | plana | plana | plana | plana | plana | plana | **cónica** |
+
+**Ningún par de husos hace el mismo tipo de agujero.** Los dos de Ø5 se separan por la punta,
+que es parte del `HoleType`.
+
+⇒ **En esta máquina la perforación múltiple es imposible por construcción**: cada tipo de
+agujero tiene exactamente un huso capaz, así que no hay dos que puedan bajar juntos. El
+optimizador no tiene nada que agrupar — y por eso el taller nunca le vio diferencia.
+
+Lo confirma el fixture que Fermín agregó a propósito: **dos agujeros a 64 mm**, que es
+exactamente la distancia entre el huso 1 y el huso 5. Geométricamente los dos husos caen sobre
+los dos agujeros a la vez — pero son Ø8 y Ø5, o sea **dos `HoleType` distintos**, y no se
+agrupan.
+
+⚠️ **Alcance**: vale para **esta** máquina. En un cabezal con dos husos de la misma broca el
+optimizador sí agruparía, y ahí el converter tendría que reproducirlo. La conclusión es sobre
+la configuración, no sobre el algoritmo.
+
+## 7quater. Grupo 9 — la tecnología entre agujeros (2026-09-01)
+
+Cuatro fixtures con dos y tres brocas de distinta velocidad en el mismo programa. Contestan lo
+que el lote anterior no podía, porque las brocas `001` y `005` comparten las 6000 rpm.
+
+### ⭐ El `S` se re-emite sólo cuando CAMBIA el valor
+
+`001_002_003_velocidades` — brocas de 6000, 4000 y 4000 rpm:
+
+```
+?%ETK[6]=1 · S6000M3 · ?%ETK[0]=1 · … F2000.000
+?%ETK[6]=2 · S4000M3 · ?%ETK[0]=2 · … F1000.000
+?%ETK[6]=3 ·  (sin S) · ?%ETK[0]=4 · … F1000.000
+```
+
+El tercer huso **no repite el `S`** porque sigue en 4000. ⇒ no es «uno por cambio de huso»: es
+**uno por cambio de valor**. Y `002_001_velocidades` lo confirma al revés (4000 → 6000).
+
+### El `F` sí se emite en cada agujero, y sale del AVANCE
+
+| broca | penetración Std | avance Std | rotación Std | ISO |
+|---|---|---|---|---|
+| 001 | 2 | **2** | 6000 | `F2000` · `S6000` |
+| 002 | 2 | **1** | 4000 | `F1000` · `S4000` |
+| 003 | 2 | **1** | 4000 | `F1000` · sin `S` |
+
+⇒ **`F = avance Std × 1000`**. La broca `002` es la que lo separa: tiene la misma penetración
+que la `001` (2) y distinto avance (1), y el ISO sigue al avance.
+
+*(Corrige lo escrito en §5ter, que atribuía el `F2000` a la penetración — con la `001` sola las
+dos columnas valen 2 y no se distinguían.)*
+
+Y `001_002_avances`, con los avances puestos a mano, da `F3000` y `F1000`: **el programa pisa al
+catálogo, agujero por agujero**.
+
+### ❌ No hay pausa entre agujeros, ni al cambiar de huso
+
+Un solo `G4F1.200`, al cierre, en los cuatro — **incluso cuando el husillo pasa de 6000 a 4000
+rpm**. Negativo **con testigo**: el `S` sí cambia en el mismo archivo, así que la variación
+estaba puesta.
+
+## 7quinquies. Grupo 10 — varias caras (2026-09-02)
+
+Diecisiete fixtures de Fermín, con agregados propios: las laterales hechas **también por
+diámetro**, y las combinaciones entre caras que el lote no tenía.
+
+### ⭐⭐ La cara inferior se descarta EN SILENCIO
+
+`spindles.cfg` no tiene ningún huso con `FACE = 6`. La UI igual ofrece `Lado inferior`, y
+Maestro **acepta y guarda** el programa.
+
+| | |
+|---|---|
+| `bottom_D8P` solo | el ISO es el del **programa vacío** más dos líneas: `?%ETK[8]=1` y `G40` — el preámbulo del bloque de operaciones, abierto y vacío |
+| `bottom_D8P` + `top_D8P` | el `.pgmx` tiene **2 features**; el ISO emite **1 agujero** |
+
+⇒ **No hay error, no hay advertencia: el agujero desaparece.** La pieza saldría sin él y nada
+avisa.
+
+⚠️ **Y le plantea una decisión al converter**, porque las dos reglas del `CLAUDE.md` chocan:
+el byte-idéntico manda **reproducir el silencio**; el fail-loud manda **rechazar**.
+
+### ⚖️ DECISIÓN DE FERMÍN (2026-09-03): excepción, y fail-loud
+
+Cuando las dos reglas se contradicen, **gana el fail-loud**. Un agujero que desaparece sin aviso
+es peor que un ISO que no coincide byte a byte con el de Maestro.
+
+**Por ahora**: el converter **rechaza** un programa con mecanizados en la cara inferior, y dice
+por qué.
+
+**Más adelante, con el converter completo**, el arreglo no es emitir el silencio sino **resolver
+la pieza**: el sintetizador de `.pgmx` agrega
+
+1. un **`Xn`** y un **`Xmsg`** con el texto **«Girar Pieza»**,
+2. una **fase** nueva con origen en (0, 0),
+3. y **traslada la perforación a la cara superior**.
+
+Así se mecanizan primero la cara superior y las cuatro laterales, el operario gira la pieza, y
+la cara inferior se mecaniza **puesta hacia arriba** — que es como el taller lo haría a mano.
+
+⇒ Es la primera excepción declarada a la regla 4, y no debilita el byte-idéntico: lo que se
+emite sigue siendo verificable contra Maestro **para los programas que Maestro puede hacer
+bien**. Lo que se rechaza es un caso donde Maestro produce una pieza incorrecta en silencio.
+
+### ⛔ Pero una cara CON huso y un diámetro imposible sí falla
+
+`front_D15P` — Ø15 en la cara delantera, cuyo único huso lleva una broca Ø8:
+
+```
+[10,9] - BOopt: (Línea 21) No hay una broca para colocar en la repetición 0
+        por incompatibilidad geométrica o final de carrera ejes
+```
+
+⇒ **Dos comportamientos distintos ante la misma imposibilidad**: cara sin husos → silencio;
+cara con huso y diámetro incompatible → rechazo explícito. El converter tiene que distinguirlos.
+
+### ⭐⭐ El ISO NO reordena entre caras
+
+`top_front_top_alternado` —superior, delantera, superior, creados así— emite **en ese orden**,
+con el huso 1, después el 58, después el 1 **otra vez**. Su control `top_top_front_directo`
+emite los dos de arriba seguidos.
+
+⇒ La regla del orden de creación, ya derivada dentro de una cara, **vale también entre caras**.
+Maestro no agrupa por cara aunque volver salga caro.
+
+### ⭐⭐ La transición entre caras, y una fórmula de la época congelada que acierta
+
+Volver de una cara a otra emite un retiro absoluto de máquina:
+
+```
+?%ETK[6]=<huso nuevo>
+MLV=0
+G0 G53 Z124.500          <- el retiro
+…
+S<velocidad>M3           <- la velocidad va DESPUES del retiro
+```
+
+Aparece en **los siete** archivos que combinan dos caras y en **ninguno** de una sola —
+incluidos `front`+`back`, así que también hay transición entre dos laterales.
+
+Y el valor sale de la fórmula que la época congelada había derivado para el `TLC_LATERAL`:
+
+```
+g53_z = DZ + 20 + max(77, plano_de_seguridad + shf_z del huso)
+      = 18 + 20 + max(77, 20 + 66.50) = 124.500   ✓
+```
+
+⇒ **Re-derivada con evidencia de la época nueva.** Predicción falsable: volver de la cara
+**derecha** (huso 60, `shf_z` 66.45) daría **124.450**, y de la **izquierda** (66.30),
+**124.300**.
+
+### Lo demás que contestó el lote
+
+| | |
+|---|---|
+| costo por agujero extra en una lateral | **16 líneas** (contra 12 en la superior) |
+| el patrón en una lateral | **byte-idéntico** a los tres agujeros sueltos — sigue siendo azúcar |
+| por herramienta contra por diámetro | **el mismo ISO**, también en las laterales |
+| el `S` al cambiar de cara | **se re-emite**, en los dos sentidos (4000→6000 y 6000→4000) |
+
+> 📌 Dos de los pares por-diámetro daban diferencias, y **ninguna era de la herramienta**: en
+> uno cambió el **orden** de los agujeros y en otro la **profundidad** (`Y450` = prof 15 contra
+> `Y447` = prof 18). El par limpio —el patrón en la cara delantera— sale en cero.
+
+### 📌 Y el catálogo de mensajes queda direccionable
+
+El error del `D15P` destapó que el volcado del 30 estaba mal parseado: los `.msg` tienen
+**bloques `MODULE`** y la numeración `@NNN` **reinicia en cada uno** (32 veces sólo para `@009`
+en `Sys.msg`). Con el formato real —`MODULE <n>,<prefijo>: ,<cantidad>`— los tres rechazos que
+capturamos se resuelven exactos, prefijo incluido:
+
+| en pantalla | `MODULE` | mensaje |
+|---|---|---|
+| `[23,6] - Bag. IJ:` | 23 · `Bag.%s:` | Área de trabajo no configurada |
+| `[6,8] - ChkPgm línea 21:` | 6 · `ChkPgm línea %U:` | Microinterruptor- de tope eje X (T=%c%d) |
+| `[10,9] - BOopt:` | 10 · `BOopt:` | (Línea %D) No hay una broca para colocar… |
+
+⇒ El corchete es **(MODULE, @NNN)**, y el prefijo que se ve sale de la cabecera del módulo.
+3.083 mensajes en 55 módulos.
+
+## 7sexies. Grupo 11 — las cinco caras, en HG (2026-09-03)
+
+Diez pares en campo `HG`, el único donde entran las cinco caras (la broca `061` se pasa del
+tope del eje X en campo A).
+
+### ⭐⭐ El pecking, CERRADO
+
+`profpasada_7` era el fixture que separaba los dos modelos al máximo. Sobre el agujero de 10:
+
+| | cortes esperados | Z |
+|---|---|---|
+| «respeta el paso» | 7 · 10 | 88.000 · 85.000 |
+| «reparte iguales» | 5 · 10 | **90.000 · 85.000** |
+
+**El ISO emite `Z90.000` y `Z85.000`.** ⇒ **reparte en partes iguales**, sin margen.
+
+Y `profpasada_4_bis` —el mismo caso rehecho y repostprocesado— da otra vez `91.667 · 88.333 ·
+85.000`. ⇒ **el ISO anterior no era de una versión vieja del archivo**; la hipótesis del fixture
+desincronizado queda descartada.
+
+⇒ La regla queda firme: **`n = ceil(profundidad / paso)`, y después partes iguales.** La
+profundidad de pasada es un **máximo**, no un paso.
+
+> 🐞 **Lectura de Fermín (2026-09-03): es un bug de Maestro.** Lo que la UI ofrece como
+> «profundidad de pasada» y lo que la máquina ejecuta no coinciden cuando el paso no divide
+> exacto: Maestro guarda y muestra `4 · 4 · 2` y el CNC hace `3.33 · 3.33 · 3.33`. Con
+> `StepDepth = 2` coinciden por casualidad, y por eso pasa desapercibido.
+>
+> ⏸ **Se retoma al estudiar las estrategias de fresado y sus multipasadas**, donde el mismo
+> mecanismo vuelve a aparecer y con más variantes. Para el converter no cambia nada: lo que hay
+> que reproducir es lo que emite la máquina.
+
+### ⭐⭐ La fórmula del `G53` de transición, afinada
+
+Las tres predicciones aciertan —`124.450` desde la derecha, `124.300` desde la izquierda,
+`124.500` desde delantera y trasera— pero el lote muestra que **no es el huso del que se sale**:
+es el **máximo de los dos**.
+
+`cuatro_laterales` lo destapa: la transición **derecha → izquierda** emite `124.450`, no
+`124.300`.
+
+```
+G0 G53 Z = DZ + 20 + max( 77 , seguridad + shf_z(huso que sale) , seguridad + shf_z(huso que entra) )
+```
+
+| transición | shf_z en juego | emitido |
+|---|---|---|
+| sup → derecha · derecha → sup | 0 · 66.45 | **124.450** |
+| sup → izquierda · izquierda → sup | 0 · 66.30 | **124.300** |
+| derecha → izquierda | 66.45 · 66.30 | **124.450** (el mayor) |
+| izquierda → delantera | 66.30 · 66.50 | **124.500** (el mayor) |
+| sup → delantera / trasera | 0 · 66.50 | **124.500** |
+
+**Doce transiciones verificadas sobre las cuatro caras laterales.** Es la fórmula que la época
+congelada tenía para el `TLC_LATERAL` —con su `max` sobre los husos involucrados— re-derivada
+entera con evidencia de la época nueva.
+
+### ⭐ El orden se respeta con cinco caras y siete transiciones
+
+`cinco_caras_orden_alternado` emite **sup → DER → sup → IZQ → sup → DEL → sup → TRA**: cuatro
+oportunidades de agrupar los agujeros superiores, y **no agrupó ninguna**.
+
+El par estricto es `tres_caras_dos_agujeros` contra su alternado —**los mismos seis agujeros**—
+y también respeta el orden: tres bloques contra seis. El costo de no agrupar: **39 líneas más**
+(215 contra 176) por tres transiciones extra, o sea **13 líneas por transición**.
+
+### ⭐⭐ Y el orden de ejecución NO vive en `<Features>` ni en `<Operations>`
+
+Los dos archivos de `tres_caras` tienen **las mismas features y las mismas operaciones, en el
+mismo orden del documento**, y sus ISO son distintos. Lo que cambia son los
+**`MachiningWorkingStep`**, cada uno apuntando por ID a un feature y a una operación.
+
+⇒ `<Features>` y `<Operations>` son **catálogos sin orden significativo**; el plan de ejecución
+—y por lo tanto el orden que el ISO respeta— vive en los **working steps del workplan**.
+
+#### Y no hay clave de orden: el orden ES la posición (2026-09-03)
+
+Fermín aclara que en el alternado **sólo reordenó los perforados ya creados**, sin tocar nada
+más. Los seis `MachiningWorkingStep` son los mismos en los dos archivos —mismos `OperationID`,
+mismos `ManufacturingFeatureID`, mismos nombres— y **`Priority` vale `0` en los doce**.
+
+| archivo | orden de los working steps |
+|---|---|
+| `tres_caras_dos_agujeros` | `Taladrado` · `(1)` · `(2)` · `(3)` · `(4)` · `(5)` |
+| `…_alternados` | `Taladrado` · **`(2)`** · **`(4)`** · **`(1)`** · **`(3)`** · `(5)` |
+
+⭐ Los nombres los pone Maestro **al crear** cada paso, así que en el alternado quedan salteados:
+**el nombre conserva la historia de creación y la posición conserva el orden de ejecución.**
+
+⇒ **El converter lee `Workplans/MainWorkplan/Elements` en orden de documento.** `Priority`
+existe pero no ordena — con esta evidencia. Si alguna vez aparece distinto de `0` (fases, otros
+tipos de mecanizado), hay que volver acá.
+
+⚠️ El barrido del corpus (`fixtures.md` §6) **no vio esto**: aplana por rutas y los working
+steps quedaron fuera de su alcance. Punto ciego del barrido, no de los datos.
+
+### 🎁 Y la cara inferior, confirmada dos veces más
+
+Fermín agregó por su cuenta perforaciones en la **cara inferior**:
+
+| fixture | features en el `.pgmx` | agujeros en el ISO |
+|---|---|---|
+| `cinco_caras_orden_natural` | **6** | **5** |
+| `cinco_caras_orden_alternado` | **9** | **8** |
+
+⇒ El **descarte silencioso** de §7quinquies queda confirmado en un programa **multi-cara**,
+donde todo lo demás se emite normalmente. No es un caso de borde de un programa de un solo
+agujero.
+
+### El resto, confirmado
+
+- **La velocidad se re-emite por cambio de VALOR, no de huso ni de cara.**
+  `002_003_derecha_izquierda` (husos 2·3·60·61) emite el `S` **dos veces**: `4000` al empezar
+  —y no lo repite en el huso 3, que también es 4000— y `6000` al pasar a la derecha, sin
+  repetirlo en la izquierda. Su gemelo alternado lo emite las cuatro veces.
+- **El patrón sigue siendo azúcar en las cuatro laterales** (`cuatro_laterales_patron`, ocho
+  agujeros en cuatro patrones 2×1).
 
 ## 8. El fixture que mintió, y para qué sirvió
 

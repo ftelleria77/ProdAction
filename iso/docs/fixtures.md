@@ -119,3 +119,52 @@ dimensiones, origen de pieza, repeticiones, `IsMM`, geometrías, features y la l
 
 ⏸ **Pendiente de decisión (Fermín)**: llevarlo a `iso/` con tests, para que corra sobre cada
 lote nuevo antes de derivar nada.
+
+## 6. El barrido del corpus entero (2026-09-03)
+
+Pedido de Fermín: en vez de comparar pares elegidos a mano, **aplanar cada `.pgmx` a todas sus
+claves** y preguntar, para cada una, qué le hace a su `.iso`.
+
+**Método**: se aplana el XML a rutas `Nodo/Subnodo → valor`, se descartan los identificadores
+internos (`Key/ID`, `_serializingKeys`, …) que cambian en cada guardado, y se buscan en todo el
+corpus los **pares que difieren en UNA SOLA clave**. Es la variación controlada, pero encontrada
+automáticamente y sobre todos los pares posibles.
+
+387 `.pgmx` · **1.679 claves distintas** · 1.375 constantes · **304 que varían**.
+
+### ⚠️ Un punto ciego que el propio barrido destapó
+
+La primera corrida marcó `Repetitions`, `IsTechnologicalMirror` y `WorkPiece/Name` como que
+**sí** llegan al ISO. Es falso: todos esos pares involucraban archivos del lote **A6**, cuya
+variable —el estacionamiento automático— **no vive en el `.pgmx`**. Las dos líneas que aparecían
+eran justamente ese bloque.
+
+⇒ **Un par «aislado» no está aislado si la variable real vive fuera del archivo.** Es la clase
+de los negativos sin testigo (§4), vista desde el otro lado. El barrido excluye A5 y A6.
+
+### El inventario, sobre 218 pares limpios
+
+**Llegan al ISO (10):**
+
+| clave | aislada | mueve |
+|---|---|---|
+| `Features/…/Diameter` | 41 | 41 |
+| `MachiningParameters/ExecutionFields` | 307 | 297 |
+| `Operations/…/Technology/Feedrate` | 10 | 10 |
+| `Operations/…/Technology/Spindle` | 10 | 10 |
+| `Operations/…/ToolKey/Name` | 34 | **2** ⭐ |
+| `Setup/…/Placement/_zP` (origen Z) | 12 | 12 |
+| `Executable/Reference` · `Speed` · `Tool/Name` · `Y` (el `Xn`) | 2 · 24 · 58 · 21 | todas |
+
+**No llegan (4):** `Repetitions` · `WorkPiece/Name` · `Executable/SpindleEnable` ·
+`_serializationGeometryDescription` de una geometría sin mecanizado.
+
+### Lo que el barrido encontró que no sabíamos
+
+- ⭐⭐ **`ToolKey/Name` mueve el ISO en 2 de 34 pares** — y eso **refuta** la derivación de que
+  la herramienta elegida no viaja. Detalle en `perforado.md` §2.
+- ✅ **`WorkPiece/Name` no llega**, con 8 pares aislados. Nunca se había probado.
+- ✅ **La normalización del campo, confirmada en los ocho**: los 10 pares donde
+  `ExecutionFields` cambia y el ISO **no** se mueve son exactamente `A`↔`AB`, `B`↔`BA`,
+  `C`↔`CD`, `D`↔`DC`, `E`↔`EF`, `F`↔`FE`, `G`↔`GH`, `H`↔`HG`. Pedir la letra sola o su par
+  produce el ISO **byte-idéntico**, no sólo el mismo header.
