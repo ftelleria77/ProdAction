@@ -391,8 +391,10 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
   `XilogBoringUnitTool`). Nomenclatura fijada por Fermín: en la UI se llama **`Canal`**, y está
   en el grupo `Fresado` de la cinta. Nueve predicciones falsables sacadas de la configuración
   —huso, máscara en `ETK[1]`, `SHF`, `SVL`/`SVR`, cara única— y una que **cierra la excepción
-  del `SVR 1.900`** que `anatomia_iso.md` le había dejado a esta rama. ⏸ el lote D2 (23
-  archivos) espera a Fermín
+  del `SVR 1.900`** que `anatomia_iso.md` le había dejado a esta rama. ✅ **Grupo 1 hecho el
+  2026-09-03: el bloque son 52 líneas y las ocho predicciones comprobables aciertan**; el
+  sentido de corte lo pone el postproceso, no el `.pgmx`. ⏸ los grupos 2 a 10 esperan a
+  Fermín, **en campo `HG`** — en `A` la sierra se pasa del tope del eje X
 - Vaciado — 🔮 (el lab pgmx congelado se recrea oportunamente)
 - El ORDEN de estas ramas se define por hallazgos, no está prefijado.
 
@@ -463,6 +465,42 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-09-03 (noche) — El primer canal: 8 de 8 predicciones, y el sentido lo pone el postproceso
+Primer fixture del lote D2, hecho por Fermín. Dos archivos del mismo canal —campo `A`, que **no
+postprocesa**, y campo `HG`, que sí—, más cuatro capturas de la ventana con la herramienta puesta.
+
+- ⭐⭐ **El bloque del canal, derivado**: **52 líneas** insertadas de una sola vez en el programa
+  vacío, y **las ocho predicciones comprobables aciertan** —`?%ETK[6]=82`, `?%ETK[1]=16`,
+  `SVL 60.000`, `SVR 1.900`, `S4000M3`, los tres `SHF` del huso y `?%ETK[7]=1`—. La sierra queda
+  descrita **entera por la configuración**: `def.tlgx` y el registro 82 de `spindles.cfg`.
+- ⭐⭐ **El sentido de corte lo pone el POSTPROCESO.** El canal se creó de X=50 a X=350 y el ISO
+  posiciona en 350 y corta hacia 50; el `.pgmx` guarda el sentido nominal (`1 50 200 8 1 0 0`).
+  ⇒ el converter **no puede copiar el sentido del `.pgmx`**, tiene que aplicar la regla. Primera
+  confirmación con evidencia de la época nueva de lo que la doc congelada afirmaba.
+- ⭐ **La Z del canal no es la del taladro**: la cota es **la profundidad en negativo**
+  (`Z−10.000`) y el largo de la herramienta entra por el `SHF[Z]` del huso, no por la cota. En el
+  taladro era `espesor − prof + tool_offset`. Y el `SHF[Z]` del programa sale **sin** el término
+  `+%ETK[114]/1000`.
+- ⛔ **El rechazo en campo `A` era predecible — y mi predicción estaba mal.** `ChkPgm:
+  Microinterruptor- de tope eje X (T= 82)`: `50 − 3685.850 − 96 = −3731.850` contra `−3702.000`.
+  Yo había escrito que el canal no debía toparse porque la `082` comparte el offset X con la
+  broca `006`; **comparé herramientas en vez de coordenadas** — la `006` entra porque sus
+  fixtures están en X=100. En campo `A` la sierra no pasa de **X ≈ 79.85**. ⚖️ Decisión de
+  Fermín: **todo el lote D2 va en `HG`**.
+- ⭐ **Y el `.pgmx` de Maestro coincide con el de nuestro sintetizador**: las ocho geometrías
+  serializadas, idénticas carácter por carácter. 📌 Corrige mi propio planteo: yo había dicho que
+  «la traza ES la incógnita» porque un disco de Ø120 no puede entrar a pique. **Entra a pique**:
+  la trayectoria guardada es la línea nominal y una bajada vertical, y lo que el disco necesita
+  lo agrega el postproceso. Vale para el caso con defaults.
+- 📸 **La ventana cambia según la herramienta**: con la `082` puesta, `Anchura` muestra **3,8 en
+  gris** —el ancho sale del disco, no del usuario— y **desaparecen** la sección `Estrategia` y
+  los radios `Corrección C.N.`/`CAD`. `Acercamiento/Alejamiento` viene deshabilitado y trae
+  `Multipl. radio = 4`, que es el `RadiusMultiplier` del CNC. Y aparecen tres cosas que no
+  estaban en ningún grupo: `Invertir`, `Canto a canto` y `Condición` ⇒ **Grupo 10** agregado.
+- 🚧 Sin explicación: el **`0.75`** de la cola de cuatro movimientos —el mismo en producción y en
+  el fixture— y el `G0 Z80.000` de aproximación (hipótesis: radio del disco + plano de seguridad).
+
 
 ### 2026-09-03 (tarde) — Arranca el Canal, y la configuración contesta antes que el primer fixture
 Decisión de Fermín: después del perforado va el **canal**, porque es un mecanizado distinto

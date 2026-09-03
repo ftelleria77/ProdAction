@@ -15,9 +15,9 @@
 
 | | |
 |---|---|
-| ✅ derivado | nada todavía: **el lote no existe** |
-| 🔮 predicho desde la configuración | huso, máscara, `SHF`, `SVL`, `SVR`, `S`, cara única |
-| ⏸ esperando a Fermín | el lote D2, y las cuatro secciones plegadas de la ventana |
+| ✅ derivado | **el bloque del canal** (§8): 52 líneas, y 8 de 8 predicciones |
+| 🔮 predicho, sin confirmar | la cara única (Grupo 8) |
+| ⏸ esperando a Fermín | los grupos 2 a 10 del lote D2, **en campo `HG`** |
 | ✅ descartado | el rechazo de la `082` del lote C: era del contexto `Xn` (§7) |
 
 ## 1. La ventana, capturada (2026-09-03)
@@ -50,14 +50,12 @@ cabezal**: el canal está con los fresados aunque su herramienta esté en el per
 | **Datos tecnológicos** | `Información herramientas` | desplegable **vacío** + botón `Información completa` |
 | | `Avanz.` · `Rotación (rpm)` | vacíos |
 
-**Plegadas, sin capturar**: `Estrategia` · `Acercamiento/Alejamiento` · `Datos avanzados` ·
-`Datos máquina`. Es el mismo agujero que tuvo el perforado con el plano de seguridad: los
-defaults que no se ven llegan igual al ISO. **Faltan esas cuatro capturas.**
+**Plegadas en esta captura**: `Estrategia` · `Acercamiento/Alejamiento` · `Datos avanzados` ·
+`Datos máquina`. ✅ **Capturadas el mismo día con la herramienta puesta: §9.**
 
-⚠️ **`Anchura` en gris no está explicado.** Dos lecturas, y cambian el modelo: puede estar
-deshabilitada **porque sale de la herramienta** (`BladeThickness = 3.8` del catálogo) o
-**porque todavía no hay herramienta elegida** en el desplegable, que en la captura está vacío.
-Lo decide un fixture con herramienta puesta.
+⚠️ **`Anchura` en gris** — dos lecturas posibles acá: que salga de la herramienta, o que esté
+deshabilitada porque el desplegable de herramientas está vacío. ✅ **Contestado en §9: sale
+de la herramienta.**
 
 ## 2. La nomenclatura queda fijada: **Canal**
 
@@ -81,10 +79,10 @@ Auditoría del `ChannelSpec` (`pgmx/synthesis/milling/channel.py`) contra la ven
 | `Referencias` = `Lado superior` | `plane_name="Top"` | ✅ |
 | `Profundidad` · `Pasante` | `target_depth` · `is_through` | ✅ |
 | `Acercamiento/Alejamiento` | `approach` / `retract` | ✅ |
-| **`Anchura`** (en gris) | `tool_width = 3.8` **como parámetro de entrada** | ⚠️ si la UI no lo deja poner, no es un parámetro nuestro: es un dato de la herramienta |
+| **`Anchura`** (en gris, `3,8`) | `tool_width = 3.8` **como parámetro de entrada** | ⛔ **CONFIRMADA (§9)**: la UI no lo deja poner, sale del disco. No es un parámetro nuestro |
 | **`Inclinación °`** = `90` | `slot_angle = 1.5707963267948966` | ⚠️ el nombre no dice inclinación, y va en radianes contra grados |
 | **`Corrección herramienta`**: **cuatro** botones | `side_of_feature`: **tres** valores (`Center`/`Right`/`Left`) | ⚠️ falta uno |
-| `Corrección C.N.` / `Corrección CAD` | — | ⚠️ es el interruptor de la regla 5 del `CLAUDE.md`: con CAD la traza guardada **ya trae el offset** |
+| `Corrección C.N.` / `Corrección CAD` | — | ✅ **con la sierra elegida no aparece (§9)**: no hay elección de corrector, así que el caso de la regla 5 no existe acá |
 | `Rebaba` | ¿`side_offset`? | ⚠️ sin verificar |
 | — | `end_radius = 60` · `material_position = "Left"` | ⚠️ no están en la parte visible de la ventana |
 
@@ -130,9 +128,11 @@ Mismo formato que los husos del perforado (1000 registros de 42 líneas):
 | 24 | −128.85 | ⇒ `SHF[Y] = +128.850` |
 | 25 | −22.15 | ⇒ `SHF[Z] = +22.150` |
 
-> 📌 La `082` tiene el **mismo offset X que la broca `006`** (96.00), que sí entra en campo `A`.
-> Las que se topaban con el `AP_MINQUOTA` eran la `007` (128) y la `061` (118) ⇒ **el canal en
-> campo A no debería toparse**. Predicción, no certeza.
+> 📌 ~~La `082` tiene el mismo offset X que la broca `006` (96.00), que sí entra en campo `A`
+> ⇒ el canal en campo A no debería toparse.~~
+> ⛔ **REFUTADA el 2026-09-03: el canal en campo `A` NO postprocesa** (§8). El error estaba en
+> comparar herramientas en vez de coordenadas — la `006` entra porque sus fixtures están en
+> X=100. Con el offset 96, en campo `A` el límite del eje X cae en **X ≈ 79.85** de la pieza.
 
 ## 4. Un canal real, leído de la producción
 
@@ -236,12 +236,188 @@ usa?»*. Anotado allá con fecha.
 > la herramienta se pueda usar lo sabemos por producción y por Fermín; qué emite el ISO para
 > un canal controlado lo dice el lote.
 
-## 8. Lo que queda abierto
+---
+
+## 8. Grupo 1 — el bloque del canal, derivado (2026-09-03)
+
+Primer fixture del lote D2, hecho por Fermín. **Dos archivos**: el mismo canal en campo `A`
+—que **no postprocesa**, y quedó guardado con la captura del error— y en campo `HG`, que sí.
+Canal de **(50, 200) a (350, 200)**, profundidad 10, herramienta `082`, pieza 400×400×18,
+origen 0/0/0.
+
+### ⛔ El rechazo en campo `A` era predecible, y mi predicción estaba mal
+
+```
+[6,8] - ChkPgm línea 29: Microinterruptor- de tope eje X (T= 82)
+```
+
+Es el mismo tope que rechazó la broca cónica y la `061` (`perforado.md` §Grupo 6). La cuenta:
+
+```
+50 − 3685.850 − 96 = −3731.850    contra AP_MINQUOTA del eje X = −3702.000   ⇒ se pasa 29.85
+```
+
+⇒ **En campo `A` la sierra no puede ir a la izquierda de X ≈ 79.85 mm de la pieza.**
+
+📌 **Corrección mía.** El §3 decía «el canal en campo A no debería toparse» porque la `082`
+comparte el offset X (96.00) con la broca `006`, que sí entra en `A`. **La comparación estaba
+mal planteada**: la `006` entra porque sus fixtures están en **X=100**, no porque su offset
+alcance. El límite no lo fija la herramienta sola, sino **la coordenada más a la izquierda que
+esa herramienta tiene que alcanzar** — y yo comparé herramientas en vez de coordenadas.
+
+⇒ Cuarta confirmación de que **el rechazo se anticipa desde la configuración**, y
+⚖️ **decisión de Fermín: de acá en adelante todo el lote D2 va en campo `HG`.**
+
+### El bloque: 52 líneas, insertadas de una
+
+El diff contra el programa vacío en `HG` (`perforado.md` Grupo 0, 43 líneas) es limpio: cambia
+la línea 1 (el nombre) y se insertan **52 líneas** después de la 21. El ISO queda en 95.
+
+```
+?%ETK[8]=1 · G40                    <- dos pares mas de preambulo de bloque
+?%ETK[8]=1 · G40
+?%ETK[6]=82
+G17
+MLV=2 · %Or[0].ofX/Y/Z              <- el segundo bloque de origen, como en el perforado
+MLV=1 · SHF[X]/[Y]/[Z]              <- ojo: SHF[Z]=18.000, SIN el +%ETK[114]/1000
+MLV=2
+?%ETK[17]=257
+S4000M3
+?%ETK[1]=16
+MLV=2 · SHF[X]=-96.000 · SHF[Y]=126.950 · SHF[Z]=22.150
+G0 X350.000 Y200.000
+G0 Z80.000
+D1 · SVL 60.000 · VL6=60.000 · SVR 1.900 · VL7=1.900
+G1 Z-10.000 F2000.000
+?%ETK[7]=1
+G1 X50.000 Z-10.000 F5000.000       <- el corte
+G1 Z20.000 F5000.000                <- y la cola de cuatro movimientos
+G1 X349.250 Z20.000 F5000.000
+G1 X350.000 Z20.000 F5000.000
+G1 Z20.000 F5000.000
+G1 Z-10.000 F5000.000
+G0 Z20.000
+D0 · SVL 0.000 · VL6=0.000 · SVR 0.000 · VL7=0.000
+?%ETK[7]=0 · G61 · MLV=0 · ?%ETK[1]=0 · ?%ETK[17]=0
+G4F1.200 · D0 · G0 G53 Z201.000 · G64
+```
+
+### Las predicciones: 8 de 8
+
+| | predicción | ISO | |
+|---|---|---|---|
+| P1 | `?%ETK[6] = 82` | `?%ETK[6]=82` | ✅ |
+| P2 | `?%ETK[1] = 16` | `?%ETK[1]=16` | ✅ |
+| P3 | `SVL 60.000` | idem | ✅ |
+| P4 | `SVR 1.900` = `BladeThickness/2` | idem | ✅ |
+| P5 | `S4000M3` | idem | ✅ |
+| P6 | `SHF[X] = −96.000` · `SHF[Z] = +22.150` | idem | ✅ |
+| P7 | `SHF[Y] = −pos24 − 1.9 = 126.950` | idem | ✅ |
+| P9 | `?%ETK[7] = 1` | idem | ✅ |
+| P8 | sólo cara superior | — | ⏸ Grupo 8 |
+
+⇒ **La sierra queda descrita entera por la configuración**: `def.tlgx` —que viaja dentro del
+`.pgmx`— y el registro 82 de `spindles.cfg`. Ni una constante interna (regla 4).
+
+📌 **Refinamiento de P2**: `?%ETK[0]` **no se emite** en el bloque del canal. En los ISO de
+producción aparecía un `?%ETK[0]=0` justo antes, pero era el cierre del bloque de taladrado
+anterior, no parte de éste.
+
+### ⭐⭐ El sentido de corte se NORMALIZA — y no está en el `.pgmx`
+
+El canal se creó de **(50,200) a (350,200)** —la ventana lo muestra así— y el ISO **posiciona
+en X=350 y corta hacia X=50**. Lo confirma el `.pgmx`: la trayectoria guardada es
+`1 50 200 8 1 0 0`, o sea arranca en 50 y va en **+X**.
+
+⇒ **La inversión la hace el postproceso, no el programa.** Es la primera confirmación con
+evidencia de la época nueva de lo que la doc congelada afirmaba: el recorrido se normaliza al
+único sentido compatible con la rotación del disco (`HandOfCut = Right` en el catálogo).
+
+⇒ **El converter no puede copiar el sentido del `.pgmx`: tiene que aplicar la regla.** Falta
+saber cuál es —¿siempre de X mayor a X menor, o depende de algo?—; lo contesta el Grupo 3, y
+el `Invertir` del Grupo 10 dice si el usuario puede forzarlo.
+
+### ⭐ La Z del canal no es la del taladro
+
+| | taladro | canal |
+|---|---|---|
+| `SHF[Z]` del bloque | **0** (contra la mesa) | **22.150** (offset del huso) |
+| `SHF[Z]` del programa | `18.000+%ETK[114]/1000` | **`18.000`**, sin el término |
+| cota de corte | `espesor − prof + tool_offset` = **85.000** | **`−10.000`** = −profundidad |
+| aproximación | `espesor + seguridad + tool_offset` = 115.000 | **`80.000`** |
+| retracción entre movimientos | `Z115.000` | **`Z20.000`** = el plano de seguridad |
+
+⇒ En el canal la Z va **desde la cara de la pieza y hacia abajo en negativo**, y el largo de la
+herramienta entra por el `SHF[Z]` del huso, no por la cota.
+
+🔮 **Hipótesis con mecanismo para el `G0 Z80.000`**: `60 + 20` = el **radio del disco** más el
+plano de seguridad. Un disco de Ø120 tiene que levantar su radio entero para despejar. La
+contesta el Grupo 4: con profundidad 5 el 80 se mueve o no.
+
+### La cola de cuatro movimientos, ahora con fixture
+
+Después de cortar sube a `Z20`, retrocede a `X349.250` —**0,75 mm** antes del punto de
+arranque—, vuelve a `X350.000`, y **baja otra vez a `Z−10` sin cortar** antes de subir.
+
+Es **el mismo 0,75 de los ISO de producción**, en otra pieza y otro campo ⇒ no es del programa,
+es del mecanizado. **Sigue sin explicación**: 0,75 no es ninguna cota del catálogo de la `082`
+(3,8 · 120 · 60 · 10). El Grupo 4 dice si escala con la profundidad.
+
+### ⭐ Y el `.pgmx` de Maestro coincide con el de nuestro sintetizador
+
+Las **ocho** geometrías serializadas son idénticas carácter por carácter:
+
+| | |
+|---|---|
+| geometría de la feature | `8 0 300 / 1 50 200 0 1 0 0` |
+| `Approach` | `8 0 30 / 1 50 200 38 0 0 -1` |
+| `TrajectoryPath` | `8 0 300 / 1 50 200 8 1 0 0` |
+| `Lift` | `8 0 30 / 1 350 200 8 0 0 1` |
+
+📌 **Corrección de mi propio planteo.** Yo había dicho que para el canal «la traza ES la
+incógnita» (regla 5), porque un disco de Ø120 no puede entrar a pique. **La evidencia dice que
+sí entra a pique**: ni Maestro ni nosotros guardamos geometría de disco — la trayectoria
+almacenada es la línea nominal más una bajada vertical, y todo lo que el disco necesita lo pone
+el postproceso.
+
+⚠️ Vale **para el caso con defaults**. `Rebaba`, la corrección de herramienta y `Canto a canto`
+todavía pueden cambiar lo que se guarda, y ahí la regla 5 vuelve a aplicar. El resto del lote
+se sigue haciendo a mano (decisión de Fermín), y con cada fixture se puede volver a chequear.
+
+## 9. La ventana con la herramienta puesta (2026-09-03)
+
+Cuatro capturas nuevas, con la `082` elegida. **La ventana cambia según la herramienta:**
+
+- ✅ **`Anchura` = `3,8`, en gris** ⇒ el ancho **sale del disco** (`BladeThickness`), no del
+  usuario. Cierra la duda del §1 y confirma la incongruencia del `ChannelSpec`: `tool_width`
+  **no es un parámetro de entrada**.
+- ⭐ **La sección `Estrategia` DESAPARECE**, y también los radios **`Corrección C.N.` /
+  `Corrección CAD`**. Con el desplegable de herramientas vacío estaban; con la sierra, no. La
+  sierra no tiene estrategia de fresado ni elección de corrector.
+- **`Acercamiento/Alejamiento`**: `Habilitar` **destildado** en los dos —confirma el default
+  del `ChannelSpec`—, y adentro `Entrada`/`Salir` = `Lineal`, `Acercamiento`/`Alejamiento` =
+  `En cota`, `Sobreposición` = 0 y **`Multipl. radio` = 4**, que es el `RadiusMultiplier` del
+  `UI00.exe.Config` del CNC (la PC de oficina técnica tiene 2 — ver la pregunta abierta de la
+  hoja de ruta).
+- **`Datos avanzados`**: `Invertir trabajo` → `Invertir`; `Canto a canto` → `Habilita canto a
+  canto` + `Extra dist. inicial` / `Extra dist. final`; y **`Condición` = `True`**, que es el
+  nodo `IF` del árbol del proyecto. **Ninguno estaba en el lote** ⇒ Grupo 10.
+- **`Datos máquina`** → `Funciones máquina`: `Jerk`, `Jerk3D`, `Campana neumática`, `Campana
+  auxiliar`, `Frenos ejes rotativos`, desenrollado del cabezal, `Soplador herramienta`,
+  `Palpador electrónico`, regulación de velocidad. **Todas con `Selecciona` destildado**, o sea
+  que ninguna interviene en lo derivado hasta acá. Son una familia de fixtures futura.
+- **`Información herramientas` muestra `082(082)`** — el par que separaría `name` de
+  `holder_key`, acá idénticos.
+
+## 10. Lo que queda abierto
 
 | | |
 |---|---|
 | `?%ETK[17]=257` | sale igual que en el perforado. Sigue sin variar |
-| la cola de 4 movimientos | aparece en unos ISO de producción y en otros no. Sin explicación |
+| **el `0.75` de la cola** | mismo valor en producción y en el fixture. No es ninguna cota del catálogo de la `082` |
 | `end_radius = 60` · `material_position` | del `ChannelSpec` congelado, sin campo visible en la UI |
-| las cuatro secciones plegadas | `Estrategia`, `Acercamiento/Alejamiento`, `Datos avanzados`, `Datos máquina` |
+| ~~las cuatro secciones plegadas~~ | ✅ capturadas el 2026-09-03 (§9). `Estrategia` no existe con la sierra |
+| **la regla del sentido de corte** | se normaliza (§8), pero no sabemos con qué criterio |
+| **el `G0 Z80.000`** | hipótesis: radio del disco + plano de seguridad |
+| las `Funciones máquina` | nueve interruptores por operación, todos apagados. Familia de fixtures futura |
 | el `Corte con cuchilla` | operación vecina en la cinta, sin estudiar |
