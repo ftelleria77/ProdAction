@@ -17,7 +17,8 @@
 |---|---|
 | ✅ derivado | **el bloque del canal** (§8): 52 líneas, y 8 de 8 predicciones |
 | 🔮 predicho, sin confirmar | la cara única (Grupo 8) |
-| ⏸ esperando a Fermín | los grupos 3 a 11 del lote D2, **en campo `HG`** |
+| ⛔ imposible | el canal en cualquier ángulo que no sea paralelo al eje X (§11) |
+| ⏸ esperando a Fermín | los `.iso` del Grupo 3, y los grupos 4 a 11 — **en campo `HG`** |
 | ✅ descartado | el rechazo de la `082` del lote C: era del contexto `Xn` (§7) |
 | ⛔ imposible | el Grupo 2 entero: sin herramienta no hay canal, y `Anchura` nunca se edita (§10) |
 
@@ -495,7 +496,58 @@ en la primera captura de todas —el panel recién abierto, sin operación— y 
 de las otras tres. **El disparador no es la herramienta y no sabemos cuál es.** Lo que sí es
 dato duro es el campo del `.pgmx`, que cambia con la herramienta (arriba).
 
-## 11. Lo que queda abierto
+## 11. Grupo 3 — la sierra sólo corta paralela al eje X (2026-09-04)
+
+Cinco `.pgmx` en campo `HG`, herramienta `082`, profundidad 10: el mínimo repetido como
+referencia del grupo, el mismo al revés, uno perpendicular, uno diagonal y uno que sale de la
+pieza por los dos lados.
+
+**Los cinco nombres dicen la verdad.** Verificado leyendo la geometría serializada de cada
+`.pgmx`, no el nombre (regla de `fixtures.md` §2):
+
+| archivo | punto de arranque | dirección | largo |
+|---|---|---|---|
+| `…_x50_x350_y200_prof10` | (50, 200) | `1 0 0` | 300 |
+| `…_x350_x50_y200_prof10` | (350, 200) | **`-1 0 0`** | 300 |
+| `…_y50_y350_x200_prof10` | (200, 50) | **`0 1 0`** | 300 |
+| `…_diagonal_prof10` | (50, 50) | **`0.7071 0.7071 0`** | 424.264 |
+| `…_x-20_x420_y200_prof10` | **(−20, 200)** | `1 0 0` | **440** |
+
+Y los cinco comparten campo `HG`, `082`, ancho 3.8, `WoodruffSlotEndType`,
+`ActivateCNCCorrection=false`, plano de seguridad 20 e `Angle` = π/2.
+
+### ⛔ Dos rechazos, el mismo mensaje
+
+El **perpendicular** y el **diagonal** no postprocesan:
+
+```
+[16,44] - xMETAdb: (Línea <= 29) Angulo no válido del perfil con herramienta de tipo fresa de disco
+```
+
+⇒ De los tres ángulos probados en el plano XY, **sólo el 0° pasa**: 45° y 90° se rechazan.
+La «Sierra Vertical **X**» corta **paralela al eje X y nada más**, y ahora está derivado con
+fixture, no leído del nombre de la herramienta.
+
+⭐ **Y el rechazo es de Winxiso, no de Maestro.** El editor deja crear el canal, lo dibuja en la
+pieza y lo guarda sin chistar; el que se planta es el **postproceso**. ⇒ **un `.pgmx` válido
+puede traer un canal imposible**, y el converter tiene que poder decir que no — es el caso de la
+regla 4 (fail-loud), y esta vez con un mensaje de la propia máquina para imitar.
+
+> 📌 **Nomenclatura**: la máquina llama a la `082` **«fresa de disco»**. Es el tercer nombre
+> para la misma herramienta —`Sierra Vertical X` en el catálogo, `UniversalBlade` en el tipo
+> del `.pgmx`, `fresa de disco` en el mensaje de Winxiso— y ninguno es nuestro.
+
+### ⏸ Faltan tres `.iso`
+
+Los tres que sí tenían que postprocesar —el mínimo, el reverso y el que sale de la pieza— no
+tienen `.iso` en `P:`. Sin ellos el grupo no contesta lo que venía a contestar:
+
+- si el **reverso** da un ISO **byte-idéntico** al del mínimo ⇒ el sentido está normalizado y el
+  converter tiene que aplicar la regla, no leerla del `.pgmx` (§8);
+- y cómo entra y sale el disco cuando el canal **excede la pieza**, que es lo que hace la
+  producción.
+
+## 12. Lo que queda abierto
 
 | | |
 |---|---|
