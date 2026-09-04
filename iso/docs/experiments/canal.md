@@ -18,7 +18,8 @@
 | ✅ derivado | **el bloque del canal** (§8): 52 líneas, y 8 de 8 predicciones |
 | 🔮 predicho, sin confirmar | la cara única (Grupo 8) |
 | ⛔ imposible | el canal en cualquier ángulo que no sea paralelo al eje X (§11) |
-| ⏸ esperando a Fermín | los `.iso` del Grupo 3, y los grupos 4 a 11 — **en campo `HG`** |
+| ✅ derivado | **el sentido de corte y la cola** (§11): corta de X mayor a menor, y vuelve al final geométrico |
+| ⏸ esperando a Fermín | los grupos 4 a 11 del lote D2 — **en campo `HG`** |
 | ✅ descartado | el rechazo de la `082` del lote C: era del contexto `Xn` (§7) |
 | ⛔ imposible | el Grupo 2 entero: sin herramienta no hay canal, y `Anchura` nunca se edita (§10) |
 
@@ -496,7 +497,7 @@ en la primera captura de todas —el panel recién abierto, sin operación— y 
 de las otras tres. **El disparador no es la herramienta y no sabemos cuál es.** Lo que sí es
 dato duro es el campo del `.pgmx`, que cambia con la herramienta (arriba).
 
-## 11. Grupo 3 — la sierra sólo corta paralela al eje X (2026-09-04)
+## 11. Grupo 3 — el sentido, la cola, y los dos ángulos que la sierra no hace (2026-09-04)
 
 Cinco `.pgmx` en campo `HG`, herramienta `082`, profundidad 10: el mínimo repetido como
 referencia del grupo, el mismo al revés, uno perpendicular, uno diagonal y uno que sale de la
@@ -537,25 +538,72 @@ regla 4 (fail-loud), y esta vez con un mensaje de la propia máquina para imitar
 > para la misma herramienta —`Sierra Vertical X` en el catálogo, `UniversalBlade` en el tipo
 > del `.pgmx`, `fresa de disco` en el mensaje de Winxiso— y ninguno es nuestro.
 
-### ⏸ Faltan tres `.iso`
+### ✅ Control: el fixture es reproducible
 
-Los tres que sí tenían que postprocesar —el mínimo, el reverso y el que sale de la pieza— no
-tienen `.iso` en `P:`. Sin ellos el grupo no contesta lo que venía a contestar:
+El mínimo de este grupo y el del Grupo 1 —hechos por separado, con nombres distintos— dan ISO
+**byte-idénticos salvo la línea 1**. El par es limpio.
 
-- si el **reverso** da un ISO **byte-idéntico** al del mínimo ⇒ el sentido está normalizado y el
-  converter tiene que aplicar la regla, no leerla del `.pgmx` (§8);
-- y cómo entra y sale el disco cuando el canal **excede la pieza**, que es lo que hace la
-  producción.
+### ⭐⭐ El corte va SIEMPRE de X mayor a X menor, y la cola es el REGRESO AL FINAL GEOMÉTRICO
+
+Los tres ISO comparten el mismo corte físico y difieren **sólo** en la cola:
+
+| creado | posiciona en | corta hacia | cola |
+|---|---|---|---|
+| 50 → 350 (**+X**) | `G0 X350.000` | `G1 X50.000` | **sí** — vuelve a 350 |
+| 350 → 50 (**−X**) | `G0 X350.000` | `G1 X50.000` | **no** |
+| −20 → 420 (**+X**) | `G0 X420.000` | `G1 X-20.000` | **sí** — vuelve a 420 |
+
+⇒ **El sentido de corte está normalizado**: los tres cortan de X mayor a X menor, sea cual sea
+el sentido en que se dibujó el canal. Confirma lo del §8 con tres casos en vez de uno.
+
+⇒ ⭐⭐ **Y la cola de cuatro movimientos queda explicada**: la máquina termina dejando la
+herramienta en el **punto final geométrico del canal**, bajada a la cota. Si el canal se dibujó
+en −X, el corte termina justo ahí y no hay nada que agregar; si se dibujó en +X, el corte
+termina en el extremo contrario y la máquina **vuelve** al punto final y vuelve a bajar.
+
+```
+G1 X50.000  Z-10.000 F5000     ← el corte, siempre de mayor a menor
+G1 Z20.000  F5000              ← sube al plano de seguridad
+G1 X349.250 Z20.000 F5000      ← vuelve, y se detiene 0,75 antes
+G1 X350.000 Z20.000 F5000      ← llega al punto final geométrico
+G1 Z20.000  F5000              ← (no mueve nada: ya está en 20)
+G1 Z-10.000 F5000              ← y baja a la cota
+G0 Z20.000
+```
+
+⇒ **Para el converter**: normalizar el sentido **no alcanza**. El `.pgmx` guarda el sentido
+dibujado (`1 0 0` contra `-1 0 0`) y ese dato **sí llega al ISO** — no como dirección de corte,
+sino decidiendo si hay cola. Hay que leerlo.
+
+⇒ Y explica los ISO de producción: `fondo.iso` tiene la cola y `lado_izquierdo.iso` no. No eran
+dos comportamientos: son dos canales dibujados en sentidos opuestos.
+
+### ⭐ Cuando el canal excede la pieza no pasa nada especial
+
+El de −20 a 420 da **el mismo ISO con otras coordenadas**: posiciona en `X420.000` —70 mm afuera
+de la pieza, sobre la mesa—, baja a pique y corta hasta `X-20.000`. **El postprocesador no
+agrega ninguna entrada ni salida**: escribe las coordenadas que le diste.
+
+⇒ Se cae la duda que traía el §8 («un disco de Ø120 no puede empezar la ranura a pique»): entra
+a pique, y **si querés que el disco entre desde afuera, extendés la línea vos**. Es exactamente
+lo que hace la producción, que corta de 891,55 a 7,55 o hasta −10.
+
+### 🚧 El `0,75`, acotado pero sin explicar
+
+Aparece en los dos que tienen cola, y **es el mismo número**: 350 → 349,250 y 420 → 419,250.
+No escala con el largo del canal (300 contra 440) ni con la posición, y en los ISO del taller es
+también 0,75. Queda como **constante del regreso**, sin procedencia. El Grupo 4 dice si se mueve
+con la profundidad.
 
 ## 12. Lo que queda abierto
 
 | | |
 |---|---|
 | `?%ETK[17]=257` | sale igual que en el perforado. Sigue sin variar |
-| **el `0.75` de la cola** | mismo valor en producción y en el fixture. No es ninguna cota del catálogo de la `082` |
+| **el `0.75` de la cola** | constante: no escala con el largo ni con la posición (§11). Sin procedencia |
 | `end_radius = 60` · `material_position` | del `ChannelSpec` congelado, sin campo visible en la UI |
 | ~~las cuatro secciones plegadas~~ | ✅ capturadas el 2026-09-03 (§9). `Estrategia` no existe con la sierra |
-| **la regla del sentido de corte** | se normaliza (§8), pero no sabemos con qué criterio |
+| ~~la regla del sentido de corte~~ | ✅ **RESUELTA (§11)**: siempre de X mayor a X menor |
 | **el `G0 Z80.000`** | hipótesis: radio del disco + plano de seguridad |
 | las `Funciones máquina` | nueve interruptores por operación, todos apagados. Familia de fixtures futura |
 | el `Corte con cuchilla` | operación vecina en la cinta, sin estudiar |
