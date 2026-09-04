@@ -17,9 +17,9 @@
 |---|---|
 | ✅ derivado | **el bloque del canal** (§8): 52 líneas, y 8 de 8 predicciones |
 | 🔮 predicho, sin confirmar | la cara única (Grupo 8) |
-| ⛔ imposible | el canal en cualquier ángulo que no sea paralelo al eje X (§11) |
+| ⛔ imposible | el canal en ángulo distinto de 0° (§11), y más profundo que 10 mm (§12) |
 | ✅ derivado | **el sentido de corte y la cola** (§11): corta de X mayor a menor, y vuelve al final geométrico |
-| ⏸ esperando a Fermín | los grupos 4 a 11 del lote D2 — **en campo `HG`** |
+| ⏸ esperando a Fermín | los grupos 5 a 11 del lote D2 — **en campo `HG`** |
 | ✅ descartado | el rechazo de la `082` del lote C: era del contexto `Xn` (§7) |
 | ⛔ imposible | el Grupo 2 entero: sin herramienta no hay canal, y `Anchura` nunca se edita (§10) |
 
@@ -80,7 +80,8 @@ Auditoría del `ChannelSpec` (`pgmx/synthesis/milling/channel.py`) contra la ven
 |---|---|---|
 | `X/Y punto inicio` · `X/Y punto final` | `start_x/start_y/end_x/end_y` | ✅ |
 | `Referencias` = `Lado superior` | `plane_name="Top"` | ✅ |
-| `Profundidad` · `Pasante` | `target_depth` · `is_through` | ✅ |
+| `Profundidad` · `Profundidad final` | `target_depth` · — | ⚠️ **son `StartDepth`/`EndDepth`, los dos extremos de una rampa (§12)**. Nuestro spec tiene una sola profundidad |
+| `Pasante` | `is_through` (booleano) | ⚠️ **Maestro lo escribe como expresión `dz1 / Sin(90)` + valor resuelto (§12)**, no como flag |
 | `Acercamiento/Alejamiento` | `approach` / `retract` | ✅ |
 | **`Anchura`** (en gris, `3,8`) | `tool_width = 3.8` **como parámetro de entrada** | ⛔ **CONFIRMADA (§9)**: la UI no lo deja poner, sale del disco. No es un parámetro nuestro |
 | **`Inclinación °`** = `90` | `slot_angle = 1.5707963267948966` | ⚠️ el nombre no dice inclinación, y va en radianes contra grados |
@@ -595,16 +596,99 @@ No escala con el largo del canal (300 contra 440) ni con la posición, y en los 
 también 0,75. Queda como **constante del regreso**, sin procedencia. El Grupo 4 dice si se mueve
 con la profundidad.
 
-## 12. Lo que queda abierto
+## 12. Grupo 4 — el canal puede ser una RAMPA, y el disco tiene un tope de 10 mm (2026-09-04)
+
+Seis `.pgmx`, cuatro con `.iso` y dos rechazados con captura. Fermín amplió el grupo por su
+cuenta cruzando `Profundidad` con `Profundidad final`, que es justo lo que hacía falta para
+separarlas.
+
+| archivo | `StartDepth` | `EndDepth` | |
+|---|---|---|---|
+| `…_prof10` | 10 | 10 | ✅ la base |
+| `…_prof5` | 5 | 5 | ✅ |
+| `…_prof10_pf5` | 10 | **5** | ✅ |
+| `…_prof5_pf10` | **5** | 10 | ✅ |
+| `…_pf15` | 10 | **15** | ⛔ rechazado |
+| `…_pasante` | **18** | **18** | ⛔ rechazado |
+
+### ⭐⭐ `Profundidad` y `Profundidad final` son los dos extremos de una rampa
+
+En el `.pgmx` son dos campos, `StartDepth` y `EndDepth`, y **la trayectoria guardada se
+inclina**: con 10 y 5 la dirección pasa de `1 0 0` a `0.99986 0 0.016664` y el largo de 300 a
+**300.0417** = √(300² + 5²).
+
+En el ISO, y recordando que el corte va del extremo geométrico FINAL al INICIAL:
+
+```
+G1 Z-5.000  F2000.000            ← baja en X=350 a −EndDepth
+G1 X50.000 Z-10.000 F5000.000    ← corta hasta X=50 bajando a −StartDepth (interpolado)
+…
+G1 Z-5.000  F5000.000            ← y la cola vuelve a X=350 y baja a −EndDepth
+```
+
+⇒ **`Profundidad` es la del punto de INICIO geométrico y `Profundidad final` la del FINAL.**
+Las dos lecturas —la del `.pgmx` y la del ISO— coinciden, y el par cruzado (10/5 y 5/10)
+descarta que sea al revés.
+
+⇒ Y refina la regla de la cola del §11: la máquina deja la herramienta en el punto final
+geométrico **bajada a la cota de ESE extremo**, no a la del corte.
+
+### ✅ Lo que la profundidad NO mueve
+
+Con 5 en vez de 10, el ISO cambia **sólo en las tres cotas Z** del bloque. Quedan iguales:
+
+- ⭐ **el `G0 Z80.000`** ⇒ **no depende de la profundidad**. Sobrevive la hipótesis del §8:
+  `60 + 20` = radio del disco más plano de seguridad;
+- ⭐ **el `0,75` del regreso** ⇒ ahora es invariante en **largo, posición y profundidad**. Es una
+  constante pura y sigue sin procedencia;
+- el `Z20.000` de retracción, que es el plano de seguridad.
+
+### ⛔ El tope: la longitud útil de la herramienta son 10 mm
+
+Los dos rechazos dan el mismo mensaje:
+
+```
+[16,61] - xMETAdb: (Línea 22) Mecanizado en Z superior a la longitud útil de la herramienta
+```
+
+`pasante` pide 18 y `pf15` pide 15; **el `SinkingLength` de la `082` en `def.tlgx` es 10**.
+
+⇒ **Quinto y sexto rechazo predecible desde la configuración**, y el primero que limita la
+*profundidad*. Y se aplica a las **dos** cotas: `pf15` tiene `StartDepth` 10, válido, y lo
+rechaza igual por el `EndDepth`.
+
+⇒ **Un canal pasante con la sierra es imposible en esta máquina** salvo que la pieza tenga
+10 mm o menos.
+
+### ⭐⭐ `Pasante` no es un booleano: es una expresión paramétrica
+
+El `.pgmx` del pasante no trae ningún flag. Trae una **`Parametrics.Expression`** que apunta al
+`SlotSide` y a la propiedad compuesta `Depth.StartDepth`, con valor:
+
+```
+dz1 / Sin(90)
+```
+
+y el número resuelto (18) materializado en `StartDepth`/`EndDepth`.
+
+⇒ **La `Inclinación` entra en la fórmula de la profundidad.** Con el disco a 90° el divisor es
+1; inclinado, un pasante necesitaría el camino oblicuo por la placa. Es la primera evidencia de
+que el campo `Inclinación °` **se usa** para algo más que validar el ángulo.
+
+⇒ Y es un aviso para el sintetizador: nuestro `ChannelSpec` modela `is_through` como un
+**booleano**, y Maestro lo escribe como expresión más valor resuelto. Hay que ver qué emite el
+nuestro antes de darlo por equivalente.
+
+## 13. Lo que queda abierto
 
 | | |
 |---|---|
 | `?%ETK[17]=257` | sale igual que en el perforado. Sigue sin variar |
-| **el `0.75` de la cola** | constante: no escala con el largo ni con la posición (§11). Sin procedencia |
+| **el `0.75` de la cola** | invariante en largo, posición **y profundidad** (§11, §12). Constante pura, sin procedencia |
 | `end_radius = 60` · `material_position` | del `ChannelSpec` congelado, sin campo visible en la UI |
 | ~~las cuatro secciones plegadas~~ | ✅ capturadas el 2026-09-03 (§9). `Estrategia` no existe con la sierra |
 | ~~la regla del sentido de corte~~ | ✅ **RESUELTA (§11)**: siempre de X mayor a X menor |
-| **el `G0 Z80.000`** | hipótesis: radio del disco + plano de seguridad |
+| **el `G0 Z80.000`** | hipótesis: radio del disco + plano de seguridad. **No depende de la profundidad** (§12) |
 | las `Funciones máquina` | nueve interruptores por operación, todos apagados. Familia de fixtures futura |
 | el `Corte con cuchilla` | operación vecina en la cinta, sin estudiar |
 | **qué muestra los radios `Corrección C.N.`/`CAD`** | están en una captura de cuatro y no es la herramienta lo que los saca |
