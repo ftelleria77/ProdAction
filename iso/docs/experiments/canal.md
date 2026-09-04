@@ -19,7 +19,7 @@
 | 🔮 predicho, sin confirmar | la cara única (Grupo 8) |
 | ⛔ imposible | el canal en ángulo distinto de 0° (§11), y más profundo que 10 mm (§12) |
 | ✅ derivado | **el sentido de corte y la cola** (§11): corta de X mayor a menor, y vuelve al final geométrico |
-| ⏸ esperando a Fermín | los grupos 5 a 11 del lote D2 — **en campo `HG`** |
+| ⏸ esperando a Fermín | los grupos 6 a 11 del lote D2 — **en campo `HG`** |
 | ✅ descartado | el rechazo de la `082` del lote C: era del contexto `Xn` (§7) |
 | ⛔ imposible | el Grupo 2 entero: sin herramienta no hay canal, y `Anchura` nunca se edita (§10) |
 
@@ -85,7 +85,7 @@ Auditoría del `ChannelSpec` (`pgmx/synthesis/milling/channel.py`) contra la ven
 | `Acercamiento/Alejamiento` | `approach` / `retract` | ✅ |
 | **`Anchura`** (en gris, `3,8`) | `tool_width = 3.8` **como parámetro de entrada** | ⛔ **CONFIRMADA (§9)**: la UI no lo deja poner, sale del disco. No es un parámetro nuestro |
 | **`Inclinación °`** = `90` | `slot_angle = 1.5707963267948966` | ⚠️ el nombre no dice inclinación, y va en radianes contra grados |
-| **`Corrección herramienta`**: **cuatro** botones | `side_of_feature`: **tres** valores (`Center`/`Right`/`Left`) | ⚠️ falta uno — Grupo 5 |
+| **`Corrección herramienta`**: cuatro botones | `side_of_feature`: `Center`/`Right`/`Left` | ✅ **RESUELTA (§13)**: son **tres valores + un interruptor**. El campo coincide; **falta modelar `IsPrecise`** |
 | `Corrección C.N.` / `Corrección CAD` | `ActivateCNCCorrection` del `.pgmx` | ⭐ **lo decide la HERRAMIENTA (§10)**: `false` con la sierra, `true` con una fresa. Los radios no siempre están en la ventana y no sabemos qué los muestra |
 | `Rebaba` | ¿`side_offset`? | ⚠️ sin verificar |
 | — | `end_radius = 60` | ✅ **RESUELTO (§10)**: no es parámetro, es el radio del disco — y el *tipo* de extremo lo elige la herramienta |
@@ -317,7 +317,7 @@ G4F1.200 · D0 · G0 G53 Z201.000 · G64
 | P4 | `SVR 1.900` = `BladeThickness/2` | idem | ✅ |
 | P5 | `S4000M3` | idem | ✅ |
 | P6 | `SHF[X] = −96.000` · `SHF[Z] = +22.150` | idem | ✅ |
-| P7 | `SHF[Y] = −pos24 − 1.9 = 126.950` | idem | ✅ |
+| P7 | `SHF[Y] = −pos24 − 1.9 = 126.950` | idem | ✅ · y §13 muestra que **el 1,9 de la corrección es otro**, en la traza |
 | P9 | `?%ETK[7] = 1` | idem | ✅ |
 | P8 | sólo cara superior | — | ⏸ Grupo 8 |
 
@@ -679,17 +679,108 @@ que el campo `Inclinación °` **se usa** para algo más que validar el ángulo.
 **booleano**, y Maestro lo escribe como expresión más valor resuelto. Hay que ver qué emite el
 nuestro antes de darlo por equivalente.
 
-## 13. Lo que queda abierto
+## 13. Grupo 5 — los cuatro botones son TRES más UNO, y el segundo 1,9 aparece (2026-09-04)
+
+Siete `.pgmx` con sus siete `.iso`. Fermín volvió a ampliar el grupo por su cuenta y esta vez
+fue decisivo: en vez de cuatro archivos hizo **los tres primeros botones y los tres otra vez
+combinados con el cuarto**, que es lo que destapó que el cuarto **no es un cuarto valor**.
+
+### ⭐⭐ `SideOfFeature` + `IsPrecise`
+
+Leído del `.pgmx`, no del ícono:
+
+| archivo | `SideOfFeature` | `IsPrecise` |
+|---|---|---|
+| `corr_1` | **`Left`** | false |
+| `corr_2` | **`Center`** | false ← el default |
+| `corr_3` | **`Right`** | false |
+| `corr_1+4` · `corr_2+4` · `corr_3+4` | ídem | **true** |
+
+⇒ **Resuelve la incongruencia del §2**: la ventana no tiene cuatro valores, tiene **tres más un
+interruptor**. Nuestro `side_of_feature` (`Center`/`Right`/`Left`) es exactamente el campo de
+Maestro ✅, y **lo que falta en el `ChannelSpec` es `IsPrecise`**.
+
+### ⭐ La corrección lateral mueve la Y de la TRAZA, y aparece el segundo 1,9
+
+| | `G0` del ISO |
+|---|---|
+| `Left` | `X350.000 Y`**`201.900`** |
+| `Center` | `X350.000 Y200.000` |
+| `Right` | `X350.000 Y`**`198.100`** |
+
+±1,9 = **`BladeThickness / 2`**, y **el `SHF[Y]=126.950` no se mueve**.
+
+⇒ **Los dos 1,9 son independientes**, que era la duda abierta de P7 (§5): el del huso está en el
+`SHF` y es fijo; el de la corrección va en la **coordenada Y del movimiento**. No se pisan.
+
+⇒ `Left` desplaza **+Y** y `Right` **−Y**, respecto del sentido en que se dibujó el canal
+(acá 50→350, o sea +X).
+
+### ⭐⭐ `IsPrecise` corrige la geometría del disco, con fórmula exacta
+
+Con el cuarto botón activo el canal **se acorta en los dos extremos**:
+
+```
+G0 X350.000 → X316.834      y      G1 X50.000 → X83.166
+```
+
+**33.166247903553995 en cada punta**, y el `.pgmx` lo guarda con todos sus decimales
+(`largo 233.66750419289201` contra 300).
+
+Ese número es exactamente el avance horizontal que un disco necesita para llegar a la
+profundidad:
+
+```
+√( p · (2r − p) )  =  √( 10 · (120 − 10) )  =  √1100  =  33.166247903553995
+```
+
+con **`p` = profundidad** y **`r` = `Diameter`/2 = 60** del catálogo. Coincidencia **a quince
+dígitos**, así que no es un ajuste: es la fórmula.
+
+⇒ **Qué significa**: sin `IsPrecise` la longitud pedida es la del **fondo** de la ranura —el
+disco arranca a cortar antes y sale después, así que en la superficie la ranura es más larga—;
+con `IsPrecise`, la longitud pedida es la de la **superficie**.
+
+⇒ Y la cola del §11 sigue al extremo corregido: `X316.084` = 316.834 − **0,75**, el mismo
+0,75 de siempre.
+
+🔮 **Predicción falsable, barata**: con profundidad 5 el acortamiento tendría que ser
+`√(5 · 115)` = **23.979**. Un solo fixture (`corr_2+4` con `prof5`) cierra la fórmula o la tira.
+
+⚠️ Y abre un rechazo previsible: si el canal es **más corto que 2 × 33.166**, con `IsPrecise` la
+trayectoria se daría vuelta. Sin fixture todavía.
+
+### ⭐⭐ La regla 5, ahora con evidencia
+
+Los seis llevan **`ActivateCNCCorrection = false`**, y **la trayectoria guardada YA trae la
+corrección**: el `Approach`, el `TrajectoryPath` y el `Lift` de `corr_1` arrancan en
+`Y 201.9`, y los de `+4` en `X 83.166`. La **geometría de la feature** —la línea nominal a
+Z=0— queda intacta al lado, sin corregir.
+
+⇒ Es exactamente el caso que describe la regla 5 del `CLAUDE.md`, y ahora está **medido**: si
+estos fixtures los autorara el sintetizador, Maestro postprocesaría nuestra hipótesis de dónde
+va el 1,9. Tienen que salir de Maestro, y salieron.
+
+⇒ Y para el converter, la regla operativa: **el ISO sale del `Toolpath`, no de la geometría de
+la feature.**
+
+> 📌 De paso aparecieron dos campos que todavía no tocamos: `OvercutLenghtInput` y
+> `OvercutLenghtOutput` —el typo *Lenght* es de Maestro—, los dos en 0. Son candidatos a las
+> `Extra dist. inicial` / `final` del `Canto a canto` (Grupo 10).
+
+## 14. Lo que queda abierto
 
 | | |
 |---|---|
 | `?%ETK[17]=257` | sale igual que en el perforado. Sigue sin variar |
-| **el `0.75` de la cola** | invariante en largo, posición **y profundidad** (§11, §12). Constante pura, sin procedencia |
+| **el `0.75` de la cola** | invariante en largo, posición, profundidad **y corrección** (§11, §12, §13). Constante pura, sin procedencia |
 | `end_radius = 60` · `material_position` | del `ChannelSpec` congelado, sin campo visible en la UI |
 | ~~las cuatro secciones plegadas~~ | ✅ capturadas el 2026-09-03 (§9). `Estrategia` no existe con la sierra |
 | ~~la regla del sentido de corte~~ | ✅ **RESUELTA (§11)**: siempre de X mayor a X menor |
 | **el `G0 Z80.000`** | hipótesis: radio del disco + plano de seguridad. **No depende de la profundidad** (§12) |
 | las `Funciones máquina` | nueve interruptores por operación, todos apagados. Familia de fixtures futura |
+| **el acortamiento con `IsPrecise` a otra profundidad** | la fórmula predice 23.979 con prof 5. Un fixture la cierra |
+| **un canal más corto que 2×33.166 con `IsPrecise`** | la trayectoria se daría vuelta. ¿Rechaza? |
 | el `Corte con cuchilla` | operación vecina en la cinta, sin estudiar |
 | **qué muestra los radios `Corrección C.N.`/`CAD`** | están en una captura de cuatro y no es la herramienta lo que los saca |
 | **el canal con herramienta de electromandril** | ocho herramientas en el desplegable; sólo derivamos la sierra. Grupo 11 |
