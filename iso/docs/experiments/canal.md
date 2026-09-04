@@ -17,9 +17,9 @@
 |---|---|
 | ✅ derivado | **el bloque del canal** (§8): 52 líneas, y 8 de 8 predicciones |
 | 🔮 predicho, sin confirmar | la cara única (Grupo 8) |
-| ⛔ imposible | el canal en ángulo distinto de 0° (§11), y más profundo que 10 mm (§12) |
+| ⛔ imposible | ángulo del perfil ≠ 0° (§11), profundidad > 10 mm (§12) e **inclinación ≠ 90°, que el postproceso NO rechaza** (§14) |
 | ✅ derivado | **el sentido de corte y la cola** (§11): corta de X mayor a menor, y vuelve al final geométrico |
-| ⏸ esperando a Fermín | los grupos 6 a 11 del lote D2 — **en campo `HG`** |
+| ⏸ esperando a Fermín | los grupos 7 a 12 del lote D2 — **en campo `HG`** |
 | ✅ descartado | el rechazo de la `082` del lote C: era del contexto `Xn` (§7) |
 | ⛔ imposible | el Grupo 2 entero: sin herramienta no hay canal, y `Anchura` nunca se edita (§10) |
 
@@ -84,7 +84,7 @@ Auditoría del `ChannelSpec` (`pgmx/synthesis/milling/channel.py`) contra la ven
 | `Pasante` | `is_through` (booleano) | ⚠️ **Maestro lo escribe como expresión `dz1 / Sin(90)` + valor resuelto (§12)**, no como flag |
 | `Acercamiento/Alejamiento` | `approach` / `retract` | ✅ |
 | **`Anchura`** (en gris, `3,8`) | `tool_width = 3.8` **como parámetro de entrada** | ⛔ **CONFIRMADA (§9)**: la UI no lo deja poner, sale del disco. No es un parámetro nuestro |
-| **`Inclinación °`** = `90` | `slot_angle = 1.5707963267948966` | ⚠️ el nombre no dice inclinación, y va en radianes contra grados |
+| **`Inclinación °`** = `90` | `slot_angle = 1.5707963267948966` | ⚠️ el nombre no dice inclinación, y va en radianes contra grados. **Único valor ejecutable en esta máquina: 90** (§14) |
 | **`Corrección herramienta`**: cuatro botones | `side_of_feature`: `Center`/`Right`/`Left` | ✅ **RESUELTA (§13)**: son **tres valores + un interruptor**. El campo coincide; **falta modelar `IsPrecise`** |
 | `Corrección C.N.` / `Corrección CAD` | `ActivateCNCCorrection` del `.pgmx` | ⭐ **lo decide la HERRAMIENTA (§10)**, no el usuario: la ventana no ofrece la opción (§9) |
 | `Rebaba` | `side_offset` ← `SideOffset` | ✅ **CONFIRMADO (§13)**. Ojo: sólo actúa si `SideOfFeature` no es `Center` |
@@ -818,7 +818,78 @@ de `SideOfFeature` + `SideOffset` termina en un único número.
 > `OvercutLenghtOutput` —el typo *Lenght* es de Maestro—, los dos en 0. Son candidatos a las
 > `Extra dist. inicial` / `final` del `Canto a canto` (Grupo 10).
 
-## 14. Lo que queda abierto
+## 14. Grupo 6 — la inclinación postprocesa, y no debería (2026-09-04)
+
+Un solo archivo: el canal del mínimo con **`Inclinación ° = 45`**. Maestro lo aceptó y
+**Winxiso lo postprocesó sin una queja**.
+
+> ⚠️ **Lectura de Fermín, que es quien opera la máquina: ese canal es imposible.** La `082`
+> tiene el **eje fijo**: no se inclina. La configuración lo dice también —`spindles.cfg`
+> registro 82, posición 22 = **90.00**—, y la ventana muestra ese 90 como valor inicial.
+
+### El `.pgmx` está bien
+
+Maestro modela el canal inclinado con coherencia: guarda `Angle = 0.78539816339744828` (π/4) y
+recalcula la trayectoria entera —el acercamiento baja en diagonal con vector
+`(0, −0.7071, −0.7071)` y el corte queda desplazado en Y y más alto en Z—:
+
+| | base (90°) | 45° |
+|---|---|---|
+| `Approach` | `1 50 200 38 · 0 0 -1` | `1 50 214.142 32.142 · 0 -0.7071 -0.7071` |
+| `TrajectoryPath` | `1 50 200 8 · 1 0 0` | `1 50 192.929 10.929 · 1 0 0` |
+
+Nada que objetarle a la etapa 1.
+
+### ⛔ El ISO NO es un canal
+
+El bloque que emite la etapa 2 pierde **todas** las marcas del canal:
+
+| | canal normal | a 45° |
+|---|---|---|
+| tipo de mecanizado | `?%ETK[7]=1` | **`?%ETK[7]=3`** y en la línea siguiente `?%ETK[7]=1` |
+| corrector | `D1` · `SVL 60.000` · `SVR 1.900` | **no está** |
+| `SHF[Z]` del programa | `18.000` | **`0.000`** (Z contra la mesa, como el taladro) |
+| `SHF[Y]` del huso | `126.950` | **`128.850`** — sin restar el medio ancho del disco |
+| traza | `X350 → X50`, `Y200` | **`X446 → X146`**, `Y69.250`, `Z98/68` |
+
+Tres cosas que no son opinables:
+
+1. **Escribe el tipo de mecanizado dos veces seguidas**, `3` y después `1`, sin nada en el
+   medio. El `3` es el del **taladrado** (`perforado.md` §4).
+2. **No carga el corrector de herramienta.** Sin `SVL` la máquina no tiene el largo de la
+   `082`.
+3. **La traza sale corrida +96 en X** —`446 = 350 + 96`, `146 = 50 + 96`— que es exactamente el
+   offset del huso… **y el `SHF[X]=-96.000` se sigue emitiendo igual**. El offset queda contado
+   dos veces.
+
+⇒ **Es un defecto del postprocesador**, y la lectura de Fermín queda confirmada desde el
+archivo: el `.pgmx` describe bien un mecanizado imposible, y el emisor lo traduce a un bloque
+que no corresponde ni al canal pedido ni a ninguna otra operación.
+
+### 🚨 Y no lo ejecutes
+
+El ISO no es «el canal, mal hecho»: son **coordenadas distintas de las pedidas**, con la sierra
+y sin corrector de largo. No hay que probarlo en la máquina para saber más — el archivo ya dice
+todo lo que hay que saber.
+
+### ⭐ El hueco es de validación, no de decisión
+
+Winxiso **sí valida ángulos**: el Grupo 3 fue rechazado con «Ángulo no válido del perfil con
+herramienta de tipo fresa de disco». Valida el ángulo del **perfil en XY** y **no valida la
+inclinación en Z**, aunque el dato esté en la configuración de la máquina (pos 22 del registro
+del huso).
+
+⇒ **Regla para el converter**: un canal con `Inclinación ≠ 90` con la `082` **se rechaza**.
+
+Es el **segundo caso** que cae bajo la excepción del `CLAUDE.md` §4 —cuando el byte-idéntico y
+el fail-loud se contradicen, gana el fail-loud—, y es más grave que el primero: con la cara
+inferior del perforado el ISO salía **sin** el agujero; acá sale **con coordenadas equivocadas**.
+
+📌 Y refuerza algo que ya sabíamos y ahora tiene un caso propio: **la `Inclinación` es un campo
+real que el `.pgmx` usa** —entra en la geometría de la trayectoria (acá) y en la fórmula del
+pasante, `dz1 / Sin(90)` (§12)—, pero en **esta** máquina el único valor ejecutable es 90.
+
+## 15. Lo que queda abierto
 
 | | |
 |---|---|
