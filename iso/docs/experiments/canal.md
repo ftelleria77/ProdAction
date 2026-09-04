@@ -47,8 +47,8 @@ cabezal**: el canal está con los fresados aunque su herramienta esté en el per
 | | `Inclinación °` | **`90`** |
 | | ☐ `Profundidad final` | sin marcar |
 | | ☐ `Pasante` | sin marcar |
-| **Corrección herramienta** | cuatro botones de ícono | el **segundo** aparece activo |
-| | ⦿ `Corrección C.N.` ○ `Corrección CAD` | C.N. |
+| **Corrección herramienta** | `Corrección izquierda` · `Corrección central` · `Corrección derecha` · `Corrección en longitud` | el **segundo** aparece activo |
+| | ⦿ `Corrección C.N.` ○ `Corrección CAD` | C.N. — ⚠️ ver abajo |
 | | ☐ `Rebaba` | `0,000`, en gris |
 | **Datos tecnológicos** | `Información herramientas` | desplegable **vacío** + botón `Información completa` |
 | | `Avanz.` · `Rotación (rpm)` | vacíos |
@@ -86,8 +86,9 @@ Auditoría del `ChannelSpec` (`pgmx/synthesis/milling/channel.py`) contra la ven
 | **`Anchura`** (en gris, `3,8`) | `tool_width = 3.8` **como parámetro de entrada** | ⛔ **CONFIRMADA (§9)**: la UI no lo deja poner, sale del disco. No es un parámetro nuestro |
 | **`Inclinación °`** = `90` | `slot_angle = 1.5707963267948966` | ⚠️ el nombre no dice inclinación, y va en radianes contra grados |
 | **`Corrección herramienta`**: cuatro botones | `side_of_feature`: `Center`/`Right`/`Left` | ✅ **RESUELTA (§13)**: son **tres valores + un interruptor**. El campo coincide; **falta modelar `IsPrecise`** |
-| `Corrección C.N.` / `Corrección CAD` | `ActivateCNCCorrection` del `.pgmx` | ⭐ **lo decide la HERRAMIENTA (§10)**: `false` con la sierra, `true` con una fresa. Los radios no siempre están en la ventana y no sabemos qué los muestra |
-| `Rebaba` | ¿`side_offset`? | ⚠️ sin verificar |
+| `Corrección C.N.` / `Corrección CAD` | `ActivateCNCCorrection` del `.pgmx` | ⭐ **lo decide la HERRAMIENTA (§10)**, no el usuario: la ventana no ofrece la opción (§9) |
+| `Rebaba` | `side_offset` ← `SideOffset` | ✅ **CONFIRMADO (§13)**. Ojo: sólo actúa si `SideOfFeature` no es `Center` |
+| `Corrección en longitud` | — | ⛔ **FALTA (§13)**: es `IsPrecise`, y el `ChannelSpec` no lo modela |
 | — | `end_radius = 60` | ✅ **RESUELTO (§10)**: no es parámetro, es el radio del disco — y el *tipo* de extremo lo elige la herramienta |
 | — | `material_position = "Left"` | ⚠️ no está en la parte visible de la ventana |
 
@@ -490,13 +491,17 @@ las herramientas del **electromandril**. Y eso abre dos cosas grandes:
 > su `<Description />` está vacía en `def.tlgx` — lo mismo que ya había pasado con las brocas
 > `058`/`059` en el perforado.
 
-### 📌 Una corrección al §9
+### 📌 El `Corrección C.N.` / `Corrección CAD`, cerrado
 
-Ahí escribí que los radios `Corrección C.N.` / `Corrección CAD` **desaparecen con la sierra
-elegida**. Las capturas de hoy lo desmienten: tampoco están **con el desplegable vacío**. Están
-en la primera captura de todas —el panel recién abierto, sin operación— y no están en ninguna
-de las otras tres. **El disparador no es la herramienta y no sabemos cuál es.** Lo que sí es
-dato duro es el campo del `.pgmx`, que cambia con la herramienta (arriba).
+Primero escribí que los radios desaparecen **con la sierra elegida**; después apareció que
+tampoco están **con el desplegable vacío**. Están en **una sola** de las cinco capturas: la
+primera de todas, el panel recién abierto, sin operación creada. Y **Fermín confirma que la
+ventana no ofrece esa opción** (2026-09-04).
+
+⇒ **Editando un canal, el usuario NO elige el tipo de corrección.** Qué estado del panel
+mostraba esos radios queda sin explicar, y da igual: lo que decide es la herramienta, y eso
+está medido en el `.pgmx` — `ActivateCNCCorrection` vale `false` con la sierra y `true` con una
+fresa (arriba).
 
 ## 11. Grupo 3 — el sentido, la cola, y los dos ángulos que la sierra no hace (2026-09-04)
 
@@ -687,7 +692,27 @@ combinados con el cuarto**, que es lo que destapó que el cuarto **no es un cuar
 
 ### ⭐⭐ `SideOfFeature` + `IsPrecise`
 
-Leído del `.pgmx`, no del ícono:
+**Los nombres de la UI** (Fermín, 2026-09-04, leídos de los tooltips):
+
+| botón | nombre en la UI | campo del `.pgmx` |
+|---|---|---|
+| 1 | **`Corrección izquierda`** | `SideOfFeature = Left` |
+| 2 | **`Corrección central`** | `SideOfFeature = Center` |
+| 3 | **`Corrección derecha`** | `SideOfFeature = Right` |
+| 4 | **`Corrección en longitud`** | `IsPrecise = true` |
+
+⭐ **El nombre del cuarto describe exactamente lo que medimos**: corrige *en longitud*, que es
+lo que hace — acorta el canal en las dos puntas. El campo del XML se llama `IsPrecise`, que no
+lo dice.
+
+> ⚠️ **Nomenclatura, para cuando se toque el `ChannelSpec`** (regla 1). Hay dos nombres
+> legítimos para lo mismo: la UI dice `Corrección en longitud` y el `.pgmx` dice `IsPrecise`.
+> El `ChannelSpec` ya viene nombrando sus campos por el **XML en snake_case**
+> (`side_of_feature` ← `SideOfFeature`, `side_offset` ← `SideOffset`), así que lo consistente
+> sería `is_precise`. **No lo cambio por mi cuenta**: queda anotado para decidirlo con Fermín
+> junto con el resto de la corrección del spec.
+
+Y lo que dice el archivo, leído del `.pgmx` y no del ícono:
 
 | archivo | `SideOfFeature` | `IsPrecise` |
 |---|---|---|
@@ -763,6 +788,27 @@ va el 1,9. Tienen que salir de Maestro, y salieron.
 
 ⇒ Y para el converter, la regla operativa: **el ISO sale del `Toolpath`, no de la geometría de
 la feature.**
+
+### ⭐ `Rebaba` es `SideOffset`, y sólo actúa si hay lado
+
+Tres fixtures más de Fermín, uno por cada corrección lateral, con **`Rebaba` = 10**:
+
+| | traza sin rebaba | con `Rebaba` 10 |
+|---|---|---|
+| `Corrección izquierda` | `Y 201.9` | **`Y 211.9`** (+10) |
+| `Corrección central` | `Y 200.0` | **`Y 200.0`** — no se mueve |
+| `Corrección derecha` | `Y 198.1` | **`Y 188.1`** (−10) |
+
+⇒ **`Rebaba` → `SideOffset`**, que es el campo que la auditoría del §2 tenía como «sin
+verificar» ✅. Se **suma al ±1,9** y lleva **el signo de la corrección lateral**.
+
+⇒ ⚠️ **Con `Corrección central` el valor se guarda pero no hace nada**: el `.pgmx` trae
+`SideOffset = 10` y la trayectoria es idéntica a la de `SideOffset = 0`. Para el converter:
+`SideOffset` se aplica **según el lado**, y con `Center` se ignora. Es un negativo **con
+testigo** —el valor está escrito en el archivo—, así que es derivado, no probable.
+
+⏸ **Faltan los tres `.iso`.** El `.pgmx` ya muestra el desplazamiento en la traza, pero el par
+completo confirma que llega al `G0` del bloque como los ±1,9 del Grupo 5.
 
 > 📌 De paso aparecieron dos campos que todavía no tocamos: `OvercutLenghtInput` y
 > `OvercutLenghtOutput` —el typo *Lenght* es de Maestro—, los dos en 0. Son candidatos a las
