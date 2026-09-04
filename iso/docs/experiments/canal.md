@@ -16,10 +16,10 @@
 | | |
 |---|---|
 | ✅ derivado | **el bloque del canal** (§8): 52 líneas, y 8 de 8 predicciones |
-| 🔮 predicho, sin confirmar | la cara única (Grupo 8) |
+| ✅ confirmado | **la cara única** (§15): con `Lado delantero` la `082` desaparece del desplegable |
 | ⛔ imposible | ángulo del perfil ≠ 0° (§11), profundidad > 10 mm (§12) e **inclinación ≠ 90°, que el postproceso NO rechaza** (§14) |
 | ✅ derivado | **el sentido de corte y la cola** (§11): corta de X mayor a menor, y vuelve al final geométrico |
-| ⏸ esperando a Fermín | los grupos 7 a 12 del lote D2 — **en campo `HG`** |
+| ⏸ esperando a Fermín | los grupos 7, 9, 10, 11 y 12 del lote D2 — **en campo `HG`** |
 | ✅ descartado | el rechazo de la `082` del lote C: era del contexto `Xn` (§7) |
 | ⛔ imposible | el Grupo 2 entero: sin herramienta no hay canal, y `Anchura` nunca se edita (§10) |
 
@@ -320,7 +320,7 @@ G4F1.200 · D0 · G0 G53 Z201.000 · G64
 | P6 | `SHF[X] = −96.000` · `SHF[Z] = +22.150` | idem | ✅ |
 | P7 | `SHF[Y] = −pos24 − 1.9 = 126.950` | idem | ✅ · y §13 muestra que **el 1,9 de la corrección es otro**, en la traza |
 | P9 | `?%ETK[7] = 1` | idem | ✅ |
-| P8 | sólo cara superior | — | ⏸ Grupo 8 |
+| P8 | sólo cara superior | la UI no ofrece la `082` en otra cara | ✅ (§15) |
 
 ⇒ **La sierra queda descrita entera por la configuración**: `def.tlgx` —que viaja dentro del
 `.pgmx`— y el registro 82 de `spindles.cfg`. Ni una constante interna (regla 4).
@@ -889,7 +889,62 @@ inferior del perforado el ISO salía **sin** el agujero; acá sale **con coorden
 real que el `.pgmx` usa** —entra en la geometría de la trayectoria (acá) y en la fórmula del
 pasante, `dz1 / Sin(90)` (§12)—, pero en **esta** máquina el único valor ejecutable es 90.
 
-## 15. Lo que queda abierto
+## 15. Grupo 8 — el canal es una operación de la cara superior (2026-09-04)
+
+Dos negativos, los dos con captura.
+
+### ✅ P8 confirmada, y la impone la UI
+
+Al poner `Referencias` = **`Lado delantero`**, la **`082` desaparece del desplegable de
+herramientas**: quedan sólo las `E001`…`E007`.
+
+⇒ Coincide exactamente con el catálogo: `st_OFace` de la `082` tiene **`Face1 = true`** y
+`Face2…Face5 = false` (§3). **La predicción P8 queda confirmada**, y de la mejor manera — no
+hace falta postprocesar nada porque **Maestro no deja llegar hasta ahí**.
+
+📌 **Y marca una diferencia con el perforado.** Allá la **cara inferior sí estaba** en el
+desplegable aunque no tuviera huso, y el mecanizado se **descartaba en silencio**
+(`perforado.md` §7quinquies, el caso que originó la excepción de fail-loud). Acá la UI filtra
+bien: lo que no se puede, no se ofrece.
+
+### ⛔ Y con la Sierra Horizontal en el canto tampoco
+
+Como la `E002` sí aparece en la lista de la cara delantera, Fermín la probó: canal en el canto,
+`y9` (la mitad del espesor), profundidad 10. **Winxiso lo rechaza:**
+
+```
+[6,3] - ChkPgm línea 21: Ninguna configuración compatible con la elaboración requerida (T= 102)
+```
+
+El `.pgmx` es coherente —campo `HG`, herramienta `E002`, `Width 100`, `Angle` π/2,
+`ActivateCNCCorrection = true`, `RadiusedSlotEndType`, y la trayectoria en la cara delantera con
+el acercamiento en `Y`—, así que no es un archivo mal armado: **la máquina no tiene con qué
+hacerlo**.
+
+⇒ **Tercera clase de rechazo**, distinta de las dos que ya teníamos:
+
+| | mensaje | qué falta |
+|---|---|---|
+| lote C, `Xn` con `082` | `Bag.Oheads: Herramienta E82 no configurada` | la herramienta, en ESE cabezal |
+| §8 y `perforado.md` | `Microinterruptor- de tope eje X` | recorrido: se pasa del tope |
+| **acá** | **`Ninguna configuración compatible con la elaboración requerida`** | **la combinación entera**: no hay cabezal que haga eso |
+
+⇒ **El canal es, en esta máquina, una operación de la cara superior.**
+
+📌 **Y de paso, el tercer punto del ancho**: con la `E002` el campo `Anchura` guarda **100** —el
+diámetro de esa fresa—, contra 3.8 de la sierra y 4 de la `E004`. La regla «el ancho sale de la
+herramienta» va **3 de 3**.
+
+🚧 **Un número nuevo, sin explicar**: el mensaje dice **`T= 102`**. La `E002` tiene
+`shStorePos = 2` en el catálogo, y `oheads.cfg` declara un `SPINDLE 100`. Si `T` fuera
+`100 + posición de almacén` cerraría, pero es **un solo dato** y no alcanza para derivarlo. Lo
+anoto porque contradice la lectura del lote C, donde `E001` → `E1` → `T1`.
+
+⏭ **Falta un archivo para cerrarlo del todo**: el mismo canal en el canto con una fresa común
+(`E004`). Si da el mismo mensaje, «no hay canal en los cantos» queda derivado para todas las
+herramientas y no sólo para la horizontal.
+
+## 16. Lo que queda abierto
 
 | | |
 |---|---|
@@ -900,6 +955,7 @@ pasante, `dz1 / Sin(90)` (§12)—, pero en **esta** máquina el único valor ej
 | ~~la regla del sentido de corte~~ | ✅ **RESUELTA (§11)**: siempre de X mayor a X menor |
 | **el `G0 Z80.000`** | hipótesis: radio del disco + plano de seguridad. **No depende de la profundidad** (§12) |
 | las `Funciones máquina` | nueve interruptores por operación, todos apagados. Familia de fixtures futura |
+| **el `T= 102` del rechazo** | contradice el `E001`→`T1` del lote C. Un solo dato (§15) |
 | **el acortamiento con `IsPrecise` a otra profundidad** | la fórmula predice 23.979 con prof 5. Un fixture la cierra |
 | **un canal más corto que 2×33.166 con `IsPrecise`** | la trayectoria se daría vuelta. ¿Rechaza? |
 | el `Corte con cuchilla` | operación vecina en la cinta, sin estudiar |
