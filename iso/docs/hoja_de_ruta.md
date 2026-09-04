@@ -393,8 +393,10 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
   —huso, máscara en `ETK[1]`, `SHF`, `SVL`/`SVR`, cara única— y una que **cierra la excepción
   del `SVR 1.900`** que `anatomia_iso.md` le había dejado a esta rama. ✅ **Grupo 1 hecho el
   2026-09-03: el bloque son 52 líneas y las ocho predicciones comprobables aciertan**; el
-  sentido de corte lo pone el postproceso, no el `.pgmx`. ⏸ los grupos 2 a 10 esperan a
-  Fermín, **en campo `HG`** — en `A` la sierra se pasa del tope del eje X
+  sentido de corte lo pone el postproceso, no el `.pgmx`. ⛔ el Grupo 2 resultó **imposible**
+  —sin herramienta no hay canal— y el desplegable destapó que **el canal acepta las siete
+  herramientas del electromandril**, o sea dos formas de bloque (Grupo 11). ⏸ los grupos 3 a
+  11 esperan a Fermín, **en campo `HG`** — en `A` la sierra se pasa del tope del eje X
 - Vaciado — 🔮 (el lab pgmx congelado se recrea oportunamente)
 - El ORDEN de estas ramas se define por hallazgos, no está prefijado.
 
@@ -465,6 +467,38 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-09-04 — El canal no es sólo de la sierra, y un fixture mal nombrado paga el día
+El Grupo 2 del lote D2 resultó **imposible entero**, y el archivo que quedó de intentarlo valió
+más que el grupo.
+
+- ⛔ **Sin herramienta no hay canal**: al vaciar el desplegable, **`Aplicar` se deshabilita**.
+  ⇒ un `Canal` **siempre** lleva `ToolKey` explícito, y **no hay resolución automática** como la
+  que hacía el perforado por diámetro + punta. Con captura, así que es derivado y no «probable».
+- ⛔ **`Anchura` no se edita nunca** —ni con el desplegable vacío, donde conserva el `3,8` de la
+  sierra—: no se puede pedir un canal «de tal ancho».
+- ⭐ **El archivo guardado como `…_NT_…` tiene la `E004` adentro** (ID 1903). El nombre afirma
+  una cosa y el `.pgmx` dice otra: **la regla del `fixtures.md` §2, atrapada por la auditoría**.
+  Y como el resto quedó igual, es **un par controlado sierra contra fresa** que da tres cosas:
+  - **`Width` sigue a la herramienta** (3.8 = `BladeThickness` del disco → 4 = diámetro de la
+    fresa) ⇒ `tool_width` no es parámetro de entrada nuestro;
+  - **`SlotEndType` también**: `WoodruffSlotEndType` con `Radius 60` para el disco,
+    `RadiusedSlotEndType` para la fresa ⇒ **`end_radius = 60` no es parámetro: es el radio del
+    disco**, y el tipo de extremo lo elige la herramienta;
+  - ⭐⭐ **`ActivateCNCCorrection` depende de la herramienta**: `false` con la sierra, `true` con
+    la fresa. Es el campo exacto de la **regla 5** del `CLAUDE.md` ⇒ matiza lo de anoche: la
+    traza del canal no era la incógnita **porque la corrección estaba en el medio y el offset
+    era cero**; en cuanto el Grupo 5 mueva la corrección, la traza guardada va a traer el ±1,9 y
+    esos fixtures los tiene que hacer Fermín.
+- ⭐⭐ **Y el desplegable ofrece OCHO herramientas**, no una: la `082` más las siete `E00x` del
+  electromandril. ⇒ el `Canal` produce **dos formas de bloque distintas** según el cabezal de su
+  herramienta, y sólo derivamos una. **Grupo 11** agregado, con un experimento que vale por
+  todos: la **`E002` (Sierra Horizontal)** falsa la regla del `SVR` —si es el radio del cuerpo,
+  una fresa de Ø100 tiene que dar `SVR 50.000`—.
+- 📌 **Corrección de ayer**: escribí que los radios `Corrección C.N.`/`CAD` desaparecen con la
+  sierra elegida. Tampoco están con el desplegable vacío ⇒ **el disparador no es la herramienta**
+  y no sabemos cuál es.
+
 
 ### 2026-09-03 (noche) — El primer canal: 8 de 8 predicciones, y el sentido lo pone el postproceso
 Primer fixture del lote D2, hecho por Fermín. Dos archivos del mismo canal —campo `A`, que **no

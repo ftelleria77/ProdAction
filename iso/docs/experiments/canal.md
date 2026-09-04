@@ -17,8 +17,9 @@
 |---|---|
 | ✅ derivado | **el bloque del canal** (§8): 52 líneas, y 8 de 8 predicciones |
 | 🔮 predicho, sin confirmar | la cara única (Grupo 8) |
-| ⏸ esperando a Fermín | los grupos 2 a 10 del lote D2, **en campo `HG`** |
+| ⏸ esperando a Fermín | los grupos 3 a 11 del lote D2, **en campo `HG`** |
 | ✅ descartado | el rechazo de la `082` del lote C: era del contexto `Xn` (§7) |
+| ⛔ imposible | el Grupo 2 entero: sin herramienta no hay canal, y `Anchura` nunca se edita (§10) |
 
 ## 1. La ventana, capturada (2026-09-03)
 
@@ -81,10 +82,11 @@ Auditoría del `ChannelSpec` (`pgmx/synthesis/milling/channel.py`) contra la ven
 | `Acercamiento/Alejamiento` | `approach` / `retract` | ✅ |
 | **`Anchura`** (en gris, `3,8`) | `tool_width = 3.8` **como parámetro de entrada** | ⛔ **CONFIRMADA (§9)**: la UI no lo deja poner, sale del disco. No es un parámetro nuestro |
 | **`Inclinación °`** = `90` | `slot_angle = 1.5707963267948966` | ⚠️ el nombre no dice inclinación, y va en radianes contra grados |
-| **`Corrección herramienta`**: **cuatro** botones | `side_of_feature`: **tres** valores (`Center`/`Right`/`Left`) | ⚠️ falta uno |
-| `Corrección C.N.` / `Corrección CAD` | — | ✅ **con la sierra elegida no aparece (§9)**: no hay elección de corrector, así que el caso de la regla 5 no existe acá |
+| **`Corrección herramienta`**: **cuatro** botones | `side_of_feature`: **tres** valores (`Center`/`Right`/`Left`) | ⚠️ falta uno — Grupo 5 |
+| `Corrección C.N.` / `Corrección CAD` | `ActivateCNCCorrection` del `.pgmx` | ⭐ **lo decide la HERRAMIENTA (§10)**: `false` con la sierra, `true` con una fresa. Los radios no siempre están en la ventana y no sabemos qué los muestra |
 | `Rebaba` | ¿`side_offset`? | ⚠️ sin verificar |
-| — | `end_radius = 60` · `material_position = "Left"` | ⚠️ no están en la parte visible de la ventana |
+| — | `end_radius = 60` | ✅ **RESUELTO (§10)**: no es parámetro, es el radio del disco — y el *tipo* de extremo lo elige la herramienta |
+| — | `material_position = "Left"` | ⚠️ no está en la parte visible de la ventana |
 
 ⚠️ **Y todos los defaults del `ChannelSpec` son de la época congelada.** Son hipótesis, no
 evidencia: el lote los re-deriva o los tira.
@@ -409,7 +411,91 @@ Cuatro capturas nuevas, con la `082` elegida. **La ventana cambia según la herr
 - **`Información herramientas` muestra `082(082)`** — el par que separaría `name` de
   `holder_key`, acá idénticos.
 
-## 10. Lo que queda abierto
+## 10. Grupo 2 — el canal SIEMPRE lleva herramienta, y la herramienta decide tres cosas (2026-09-04)
+
+El Grupo 2 pedía dos fixtures y **ninguno de los dos se puede hacer**. Los dos negativos vienen
+**con testigo** (capturas), así que se leen como derivados y no como probables.
+
+### ⛔ Sin herramienta no hay canal
+
+Al vaciar el desplegable `Información herramientas` **el botón `Aplicar` se deshabilita**: la
+modificación no se puede completar. ⇒ **un `Canal` siempre lleva una herramienta explícita.**
+
+⇒ Y con eso se cae la analogía con el perforado, donde el postprocesador **resolvía la broca
+solo** a partir del diámetro y la punta. Acá no hay resolución automática que derivar: **el
+converter puede contar con que el `.pgmx` trae el `ToolKey` del canal.**
+
+### ⛔ Y `Anchura` no es editable ni con el desplegable vacío
+
+Sigue en gris y **conserva el `3,8` de la sierra** aun después de sacar la herramienta. No hay
+forma de pedir un canal «de tal ancho» y que Maestro elija la herramienta.
+
+### ⭐ El par que salió por accidente: `082` contra `E004`
+
+El archivo guardado como `…_NT_…` **no quedó sin herramienta: quedó con la `E004` (Fresa 4 mm,
+ID 1903)**. El nombre afirma una cosa y el `.pgmx` dice otra — el caso que la regla del
+`fixtures.md` §2 describe, atrapado por la auditoría.
+
+Y como todo lo demás quedó igual, es **un par controlado**: dos canales idénticos que difieren
+sólo en la herramienta. El `.pgmx` cambia en **cuatro cosas**:
+
+| | `082` (Sierra Vertical X) | `E004` (Fresa 4 mm) |
+|---|---|---|
+| `ToolKey` | ID 1899 · `082` | ID 1903 · `E004` |
+| `Width` | **3.8** | **4** |
+| `SlotEndType` | `WoodruffSlotEndType` con `Radius` **60** | **`RadiusedSlotEndType`**, sin radio |
+| `ActivateCNCCorrection` | **false** | **true** |
+
+⇒ **Tres derivaciones**, y las tres tocan al `ChannelSpec`:
+
+1. ⭐ **`Anchura` sigue a la herramienta**: 3.8 es el `BladeThickness` del disco, 4 es el
+   diámetro de la fresa. Confirma lo del §9 desde el otro lado: **`tool_width` no es un
+   parámetro de entrada nuestro**, es un dato derivado del catálogo.
+2. ⭐ **`end_radius = 60` tampoco es un parámetro**: es el **radio del disco** (120/2), y el
+   *tipo* de extremo lo elige la herramienta — `Woodruff` es el corte curvo que deja un disco,
+   `Radiused` el extremo redondo de una fresa. Cierra la última fila abierta de la auditoría
+   del §2.
+3. ⭐⭐ **`ActivateCNCCorrection` depende de la herramienta**: `false` con la sierra, `true` con
+   la fresa. **Es el campo exacto de la regla 5 del `CLAUDE.md`.**
+
+> 📌 **Matiza el §8.** Ahí escribí que la traza del canal «no era la incógnita» porque el
+> `.pgmx` de Maestro y el nuestro guardaban las mismas ocho geometrías. Eso vale **porque la
+> corrección estaba en el botón del medio y el offset era cero**. Con `ActivateCNCCorrection`
+> en `false` —el caso de la sierra—, en cuanto el Grupo 5 mueva la corrección **la trayectoria
+> guardada va a traer el ±1,9 ya aplicado**, y ahí la regla 5 rige de lleno: esos fixtures los
+> tiene que hacer Fermín, no el sintetizador.
+
+### ⭐⭐ El desplegable ofrece OCHO herramientas, no una
+
+`082(082)` · `E001(Widea 18 mm)` · `E002(Sierra Horiz.)` · `E003(Fresa Violeta)` ·
+`E004(Fresa 4 mm)` · `E005(Fresa 45º)` · `E006(Rectificado)` · `E007(Recta 50mm)`
+
+⇒ **El canal no es «el mecanizado de la sierra vertical»**: es una operación que acepta también
+las herramientas del **electromandril**. Y eso abre dos cosas grandes:
+
+- un canal con `E00x` tiene que emitir un bloque **con cambio de herramienta** (`T`, `SYN`,
+  `M06`), como el fresado — o sea que el `Canal` produce **dos formas de bloque distintas**
+  según el cabezal de su herramienta;
+- ⭐ y la `E002` **falsa la regla del `SVR`** con un solo archivo: si `SVR` es el radio del
+  *cuerpo*, la Sierra Horizontal está catalogada como `Endmill` de Ø100 ⇒ tiene que dar
+  **`SVR 50.000`**, que es justo lo que muestran los ISO del taller. Si diera 1.9 o cualquier
+  otra cosa, la derivación P4 se cae.
+
+⇒ **Grupo 11** en el lote.
+
+> El formato del desplegable es `Key(Descripción-Key)`, y la `082` sale como `082(082)` porque
+> su `<Description />` está vacía en `def.tlgx` — lo mismo que ya había pasado con las brocas
+> `058`/`059` en el perforado.
+
+### 📌 Una corrección al §9
+
+Ahí escribí que los radios `Corrección C.N.` / `Corrección CAD` **desaparecen con la sierra
+elegida**. Las capturas de hoy lo desmienten: tampoco están **con el desplegable vacío**. Están
+en la primera captura de todas —el panel recién abierto, sin operación— y no están en ninguna
+de las otras tres. **El disparador no es la herramienta y no sabemos cuál es.** Lo que sí es
+dato duro es el campo del `.pgmx`, que cambia con la herramienta (arriba).
+
+## 11. Lo que queda abierto
 
 | | |
 |---|---|
@@ -421,3 +507,5 @@ Cuatro capturas nuevas, con la `082` elegida. **La ventana cambia según la herr
 | **el `G0 Z80.000`** | hipótesis: radio del disco + plano de seguridad |
 | las `Funciones máquina` | nueve interruptores por operación, todos apagados. Familia de fixtures futura |
 | el `Corte con cuchilla` | operación vecina en la cinta, sin estudiar |
+| **qué muestra los radios `Corrección C.N.`/`CAD`** | están en una captura de cuatro y no es la herramienta lo que los saca |
+| **el canal con herramienta de electromandril** | ocho herramientas en el desplegable; sólo derivamos la sierra. Grupo 11 |
