@@ -791,24 +791,28 @@ la feature.**
 
 ### ⭐ `Rebaba` es `SideOffset`, y sólo actúa si hay lado
 
-Tres fixtures más de Fermín, uno por cada corrección lateral, con **`Rebaba` = 10**:
+Tres fixtures más de Fermín, uno por cada corrección lateral, con **`Rebaba` = 10**, y con su
+`.iso`. El `.pgmx` y el ISO dicen lo mismo:
 
-| | traza sin rebaba | con `Rebaba` 10 |
+| | `.pgmx` (traza) | ISO (`G0` del bloque) |
 |---|---|---|
-| `Corrección izquierda` | `Y 201.9` | **`Y 211.9`** (+10) |
-| `Corrección central` | `Y 200.0` | **`Y 200.0`** — no se mueve |
-| `Corrección derecha` | `Y 198.1` | **`Y 188.1`** (−10) |
+| `Corrección izquierda` | `Y 201.9` → **`211.9`** | `Y201.900` → **`Y211.900`** |
+| `Corrección central` | `Y 200.0` → **`200.0`** | **ISO byte-idéntico** |
+| `Corrección derecha` | `Y 198.1` → **`188.1`** | `Y198.100` → **`Y188.100`** |
 
 ⇒ **`Rebaba` → `SideOffset`**, que es el campo que la auditoría del §2 tenía como «sin
 verificar» ✅. Se **suma al ±1,9** y lleva **el signo de la corrección lateral**.
 
-⇒ ⚠️ **Con `Corrección central` el valor se guarda pero no hace nada**: el `.pgmx` trae
-`SideOffset = 10` y la trayectoria es idéntica a la de `SideOffset = 0`. Para el converter:
-`SideOffset` se aplica **según el lado**, y con `Center` se ignora. Es un negativo **con
-testigo** —el valor está escrito en el archivo—, así que es derivado, no probable.
+⇒ ⭐ **Con `Corrección central` la rebaba NO llega al ISO**, y esta vez el negativo es del tipo
+más fuerte que hay: el `.pgmx` **prueba** que el valor estaba puesto (`SideOffset = 10`) y el
+ISO sale **byte-idéntico** al de `SideOffset = 0`. Testigo del lado del programa y testigo del
+lado del resultado ⇒ **derivado**, no «probable» (`fixtures.md` §4).
 
-⏸ **Faltan los tres `.iso`.** El `.pgmx` ya muestra el desplazamiento en la traza, pero el par
-completo confirma que llega al `G0` del bloque como los ±1,9 del Grupo 5.
+⇒ Para el converter: `SideOffset` se aplica **según el lado**, y con `Center` se ignora.
+
+⇒ Y **la posición lateral del canal vive en UNA sola línea del ISO**: el `G0` de
+posicionamiento. La línea del corte lleva sólo `X` y `Z` —hereda la `Y`—, así que todo el juego
+de `SideOfFeature` + `SideOffset` termina en un único número.
 
 > 📌 De paso aparecieron dos campos que todavía no tocamos: `OvercutLenghtInput` y
 > `OvercutLenghtOutput` —el typo *Lenght* es de Maestro—, los dos en 0. Son candidatos a las
