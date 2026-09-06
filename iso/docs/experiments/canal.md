@@ -15,11 +15,11 @@
 
 | | |
 |---|---|
-| ✅ derivado | **el bloque del canal** (§8): 52 líneas, y 8 de 8 predicciones |
+| ✅ derivado | **el canal entero, con las dos familias de herramienta** — el lote D2 cerrado |
 | ✅ confirmado | **la cara única** (§15): con `Lado delantero` la `082` desaparece del desplegable |
 | ⛔ imposible | ángulo del perfil ≠ 0° (§11), profundidad > 10 mm (§12) e **inclinación ≠ 90°, que el postproceso NO rechaza** (§14) |
 | ✅ derivado | **el sentido de corte y la cola** (§11): corta de X mayor a menor, y vuelve al final geométrico |
-| ⏸ esperando a Fermín | los grupos 7, 9, 10, 11 y 12 del lote D2 — **en campo `HG`** |
+| ✅ **lote D2 completo** | los trece grupos, 65 `.pgmx` y 45 `.iso` (2026-09-06) |
 | ✅ descartado | el rechazo de la `082` del lote C: era del contexto `Xn` (§7) |
 | ⛔ imposible | el Grupo 2 entero: sin herramienta no hay canal, y `Anchura` nunca se edita (§10) |
 
@@ -505,6 +505,9 @@ fresa (arriba).
 
 ## 11. Grupo 3 — el sentido, la cola, y los dos ángulos que la sierra no hace (2026-09-04)
 
+> 📌 **Leer junto con el §19**: las tres reglas de acá valen **para la sierra `082`**. Con
+> fresa, el canal en Y y en diagonal postprocesan sin problema.
+
 Cinco `.pgmx` en campo `HG`, herramienta `082`, profundidad 10: el mínimo repetido como
 referencia del grupo, el mismo al revés, uno perpendicular, uno diagonal y uno que sale de la
 pieza por los dos lados.
@@ -550,6 +553,9 @@ El mínimo de este grupo y el del Grupo 1 —hechos por separado, con nombres di
 **byte-idénticos salvo la línea 1**. El par es limpio.
 
 ### ⭐⭐ El corte va SIEMPRE de X mayor a X menor, y la cola es el REGRESO AL FINAL GEOMÉTRICO
+
+> ⚠️ **Acotado el 2026-09-06 (§19): todo lo de esta sección es de la SIERRA.** Con una
+> herramienta de electromandril el corte va en el sentido dibujado y no hay cola.
 
 Los tres ISO comparten el mismo corte físico y difieren **sólo** en la cola:
 
@@ -944,20 +950,235 @@ anoto porque contradice la lectura del lote C, donde `E001` → `E1` → `T1`.
 (`E004`). Si da el mismo mensaje, «no hay canal en los cantos» queda derivado para todas las
 herramientas y no sólo para la horizontal.
 
-## 16. Lo que queda abierto
+## 16. Grupo 7 — varios canales, el orden y la transición (2026-09-06)
+
+- **Cada canal extra cuesta 26 líneas** (95 → 121 con dos).
+- **Se re-emite el corrector por canal**: cada bloque repite `D1` · `SVL` · `SVR` · `D0`.
+- Entre canales van `?%ETK[8]=1` · `G40` · `G17` · `MLV=2` y **dos `G0 … Z80.000`**: el
+  reposicionamiento pasa por el plano de seguridad de los dos canales.
+- ⭐ **El ISO respeta el orden de creación.** `dos_paralelos` emite Y150 y después Y250;
+  `dos_paralelos_orden_inverso` emite Y250 y después Y150. Mismo resultado que en el perforado.
+
+### ⭐ La transición canal → taladro
+
+`y_taladro_001` (canal + un agujero con la broca `001`) agrega **24 líneas**, y entre los dos
+mecanizados aparece:
+
+```
+MLV=0 · G0 G53 Z201.000 · MLV=2      ← el mismo park del cierre
+?%ETK[1]=0                            ← apaga la máscara de la sierra
+MLV=1 · SHF[Z]=0.000+%ETK[114]/1000   ← la Z pasa a ir contra la MESA
+?%ETK[6]=1 · SHF[X/Y/Z]=0.000         ← el huso de la broca
+?%ETK[17]=257 · S6000M3 · ?%ETK[0]=1
+```
+
+⇒ **Aunque las dos herramientas viven en el mismo cabezal, la transición emite un
+`G0 G53 Z201.000`**, apaga la máscara de una familia y prende la de la otra, y **cambia la
+convención de la Z** (`SHF[Z]` de 18 a 0). El `S` se re-emite (4000 → 6000).
+
+## 17. Grupo 9 — el canal incrementa el conteo del `Xmsg` en 121 (2026-09-06)
+
+Un `Xmsg` con texto `PRUEBA` detrás del canal agrega tres líneas:
+
+```
+M5 ;(xISO382-> Spegne mandrino)
+$0?443S0I0D0?
+G4 F0
+```
+
+| | `xISO…` | `$0?…` |
+|---|---|---|
+| un canal | 382 | 443 |
+| dos canales | **503** | **564** |
+
+⇒ **Cada canal incrementa el conteo en 121**, en los dos números a la vez (y los dos números
+mantienen una diferencia fija de 61).
+
+⚠️ **Falta lo que el perforado sí midió**: si el incremento **depende del contenido**. Los dos
+canales de este par tienen coordenadas del mismo largo de texto (`Y150` y `Y250`), así que el
+121 puede ser una constante o una fórmula que acá no se movió. Un fixture con una coordenada
+más larga (`Y92,5`) lo separa.
+
+## 18. Grupo 10 — `Invertir`, `Canto a canto` y `Condición` (2026-09-06)
+
+### ⭐⭐ `Condición = False` borra el mecanizado del ISO
+
+El ISO sale de **43 líneas: el programa vacío**. No queda ni un rastro del canal.
+
+⇒ El nodo `IF` del árbol **gobierna la emisión**, y un canal deshabilitado es, para el ISO,
+como si no existiera. Para el converter: se evalúa antes de emitir.
+
+### ⭐⭐ `Invertir` hace exactamente una cosa: saca la cola
+
+| | líneas | cambio |
+|---|---|---|
+| `invertir` | 95 → **91** | desaparecen los cuatro movimientos de la cola |
+| `corr_izq_invertir` | 91 | ídem, y la `Y` sigue en **201.900** |
+| `corr_der_invertir` | 91 | ídem, `Y198.100` |
+
+⇒ **`Invertir` cambia cuál extremo es el punto final geométrico**, que es lo único que la cola
+mira (§11). El **sentido de corte no cambia** —sigue de X mayor a X menor— y **el lado de la
+corrección tampoco**: `Corrección izquierda` + `Invertir` sigue dando `+1,9`.
+
+⇒ Su efecto es **idéntico a dibujar el canal al revés**. Dos caminos, un solo resultado.
+
+### ⭐⭐ `Canto a canto` lleva el canal a los bordes de la pieza
+
+Con `Habilita canto a canto` el canal **ignora los 50 y 350 dibujados** y se extiende a los
+bordes (0 y 400 en una pieza de 400), y las dos distancias extra suman **más allá** del borde:
+
+| `Extra dist. inicial` | `Extra dist. final` | posiciona | corta hasta |
+|---|---|---|---|
+| 0 | 0 | `X400.000` | `X0.000` |
+| 0 | 10 | **`X410.000`** | `X0.000` |
+| 10 | 0 | `X400.000` | **`X-10.000`** |
+| 20 | 10 | **`X410.000`** | **`X-20.000`** |
+| −10 | −10 | **`X390.000`** | **`X10.000`** |
+
+⇒ **`Extra dist. inicial` alarga el extremo del punto de INICIO geométrico** (el X menor, donde
+el corte termina) y **`Extra dist. final` el del punto FINAL** (el X mayor, donde arranca).
+Misma convención que `Profundidad` / `Profundidad final` (§12). **Aceptan negativos**, y
+entonces recortan hacia adentro.
+
+⇒ Y explica los ISO de producción, que cortan de 891,55 a 7,55 o hasta −10: son canales
+`canto a canto` con distancias extra.
+
+## 19. Grupo 11 — con herramienta de electromandril el canal es OTRO bloque (2026-09-06)
+
+⚠️ **Dos de los seis nombres mienten.** Los archivos `…E001…` y `…E007…` **tienen la `E004`
+adentro** (`ToolKey` `E004`, ancho 4). Verificado leyendo el atributo. ⇒ de este grupo salen
+**dos herramientas reales, no cuatro**: `E002` y `E004`. La `E001` y la `E007` **no están
+probadas** acá — la `E001` sí aparece en el Grupo 13.
+
+### El bloque cambia de familia entera
+
+| | `082` (sierra) | `E00x` (electromandril) |
+|---|---|---|
+| cambio de herramienta | no | **`MLV=0` · `T n` · `SYN` · `M06`** |
+| selección | `?%ETK[6]=82` · `?%ETK[1]=16` | `?%ETK[6]=1` · `?%ETK[9]=n` · `?%ETK[13]=1` · `?%ETK[18]=1` |
+| tipo de mecanizado | `?%ETK[7]=1` | **`?%ETK[7]=4`** (fresado) |
+| `SHF` del cabezal | `-96.000 / 126.950 / 22.150` | **`32.050 / -246.650 / -125.300`** |
+| espera del cierre | `G4F1.200` | **no está** |
+| sentido de corte | siempre de X mayor a menor | **del inicio al final geométrico** |
+| cola de cuatro movimientos | sí | **no** |
+
+⇒ ⭐⭐ **El `?%ETK[7]` no es de la operación sino de la herramienta**: el mismo `Canal` se emite
+como `1` con la sierra y como `4` —fresado— con una fresa.
+
+### 📌 Y obliga a acotar tres reglas del §11
+
+Lo que ahí escribí como «del canal» es **de la sierra**:
+
+- el **sentido normalizado** (X mayor → X menor): con fresa el corte va `X50 → X350`, o sea en
+  el sentido dibujado;
+- la **cola de cuatro movimientos**: con fresa no existe;
+- el **ángulo**: la sierra sólo corta paralela al eje X, pero con la `E004` el canal **en Y** y
+  **en diagonal** postprocesan sin problema (`G1 Y350.000 Z-10.000` y
+  `G1 X350.000 Y350.000`). La restricción era del disco, no de la operación.
+
+### ⭐⭐ Y RESUELVE el `G0 Z80.000`
+
+| herramienta | `ToolOffsetLength` | aproximación |
+|---|---|---|
+| `082` | 60 | **80.000** |
+| `E002` | 107 | **127.000** |
+| `E004` | 107.2 | **127.200** |
+
+```
+Z de aproximación = ToolOffsetLength + plano de seguridad (20)
+```
+
+⇒ Tres puntos, tres aciertos. **Se cae mi hipótesis del §8** —«radio del disco + seguridad»—:
+daba el mismo número sólo porque el `ToolOffsetLength` de la sierra **también** vale 60.
+
+### ✅ Y confirma P4: la Sierra Horizontal da `SVR 50.000`
+
+`E002` emite `SVL 107.000` y **`SVR 50.000`** = `Diameter`/2. La regla queda cerrada:
+
+```
+SVR = radio del CUERPO de la herramienta
+      UniversalBlade → BladeThickness / 2     (082: 1.9)
+      Endmill        → Diameter / 2           (E002: 50 · E004: 2 · E001: 9.18)
+```
+
+⇒ Era la pregunta que `anatomia_iso.md` le había dejado expresamente a esta rama. **Cerrada.**
+
+## 20. Grupo 12 — la fórmula del acortamiento, confirmada (2026-09-06)
+
+Predicción del §13 para `Corrección en longitud` con profundidad 5: `√(5·115)` = **23.979**,
+o sea `G0 X326.021` y `G1 X73.979`.
+
+**El ISO da exactamente eso**, y la cola en `X325.271` (= 326.021 − 0,75).
+
+```
+acortamiento por punta = √( p · (2r − p) )      p = profundidad · r = Diameter/2
+```
+
+⇒ **DERIVADA** con dos profundidades. Y el `0,75` sigue firme.
+
+## 21. Grupo 13 — `Corrección C.N.` contra `Corrección CAD` (2026-09-06)
+
+⭐ **El misterio de los radios, resuelto por Fermín**: aparecen **cuando la herramienta es del
+electromandril**. Con la sierra no, y por eso las cuatro capturas anteriores no los mostraban.
+
+### ⭐⭐⭐ El `.pgmx` guarda SIEMPRE la traza corregida; el flag decide qué hace el ISO
+
+Los pares `_CN` y `_CAD` de cada corrección tienen **la misma trayectoria guardada** —
+`corr_izq` con `E004` guarda `Y 202` en los dos— y difieren **sólo** en
+`ActivateCNCCorrection`. Lo que cambia es el ISO:
+
+| | `.pgmx` (traza) | ISO |
+|---|---|---|
+| **CAD** (`false`) | `Y202` | `G0 … Y202.000` — **la copia** |
+| **C.N.** (`true`) | `Y202` | `G0 X49.000 Y200.000` + **`G41`** … **`G40`** `X351.000` |
+
+⇒ **Con `Corrección C.N.` el postprocesador DESHACE el desplazamiento** y emite la línea
+nominal más `G41`/`G42`, delegando la compensación al control. No es que «no la aplique»: la
+revierte.
+
+⇒ Por eso el `.pgmx` guarda **las dos geometrías** —la de la feature, nominal
+(`1 50 200 0 · 1 0 0`), y el toolpath, corregido—: **el converter usa una u otra según el
+flag**. Es la pieza que faltaba para emitir canales con fresa.
+
+- `G41` = corrección **izquierda** · `G42` = **derecha** · `Center` no emite ninguna y sale
+  **byte-idéntico** al base.
+- La compensación entra y sale con **1 mm** de sobre-recorrido: posiciona en `X49.000`, arranca
+  en `X50.000`, y termina en `X351.000`.
+
+### ⭐⭐ Y el desplazamiento lateral es ±`SVR`, en las tres herramientas
+
+| herramienta | `SVR` | desplazamiento de `Corrección izquierda` |
+|---|---|---|
+| `082` | 1.900 | `Y 201.900` |
+| `E004` | 2.000 | `Y 202.000` |
+| `E001` | 9.180 | **`Y 209.180`** |
+
+⇒ Unifica el §13: **`Corrección izquierda/derecha` desplaza la traza en ±`SVR`**, y `SVR` es el
+radio del cuerpo (§19). El ±1,9 de la sierra no era un caso especial.
+
+⇒ Y explica por qué la sierra tiene `ActivateCNCCorrection = false` siempre: **la sierra
+trabaja siempre en modo CAD**, con la corrección resuelta en el programa.
+
+📌 `E001` da un cuarto punto del ancho: `Anchura` = **18.36**, que es su diámetro real
+(`SVR 9.18 × 2`). El «18 mm» del nombre es sólo el nombre.
+
+## 22. Lo que queda abierto
 
 | | |
 |---|---|
 | `?%ETK[17]=257` | sale igual que en el perforado. Sigue sin variar |
-| **el `0.75` de la cola** | invariante en largo, posición, profundidad **y corrección** (§11, §12, §13). Constante pura, sin procedencia |
+| **el `0.75` de la cola** | invariante en largo, posición, profundidad, corrección **y acortamiento**. Constante pura, sin procedencia |
 | `end_radius = 60` · `material_position` | del `ChannelSpec` congelado, sin campo visible en la UI |
 | ~~las cuatro secciones plegadas~~ | ✅ capturadas el 2026-09-03 (§9). `Estrategia` no existe con la sierra |
 | ~~la regla del sentido de corte~~ | ✅ **RESUELTA (§11)**: siempre de X mayor a X menor |
-| **el `G0 Z80.000`** | hipótesis: radio del disco + plano de seguridad. **No depende de la profundidad** (§12) |
+| ~~el `G0 Z80.000`~~ | ✅ **RESUELTO (§19)**: `ToolOffsetLength` + plano de seguridad, tres herramientas |
 | las `Funciones máquina` | nueve interruptores por operación, todos apagados. Familia de fixtures futura |
-| **el `T= 102` del rechazo** | contradice el `E001`→`T1` del lote C. Un solo dato (§15) |
-| **el acortamiento con `IsPrecise` a otra profundidad** | la fórmula predice 23.979 con prof 5. Un fixture la cierra |
+| ~~el `T= 102` del rechazo~~ | 📌 el Grupo 13 muestra `E001` → **`T1`** y `E002` → `T2` (posición de almacén). El `102` sigue sin explicar, pero la regla `E00n` → `Tn` se confirma |
+| **el incremento del `Xmsg`** | +121 por canal, pero sin variar el largo de las coordenadas (§17) |
+| **el `1 mm` de entrada/salida del `G41`/`G42`** | constante en los tres casos de C.N. (§21). Sin procedencia |
+| **`E003`, `E005`, `E006`, `E007`** | sin probar: dos nombres del Grupo 11 mentían |
+| ~~el acortamiento con `IsPrecise`~~ | ✅ **DERIVADO (§20)**: `√(p·(2r−p))`, dos profundidades |
 | **un canal más corto que 2×33.166 con `IsPrecise`** | la trayectoria se daría vuelta. ¿Rechaza? |
 | el `Corte con cuchilla` | operación vecina en la cinta, sin estudiar |
-| **qué muestra los radios `Corrección C.N.`/`CAD`** | están en una captura de cuatro y no es la herramienta lo que los saca |
-| **el canal con herramienta de electromandril** | ocho herramientas en el desplegable; sólo derivamos la sierra. Grupo 11 |
+| ~~qué muestra los radios `Corrección C.N.`/`CAD`~~ | ✅ **RESUELTO (§21)**: aparecen con herramienta de electromandril |
+| ~~el canal con herramienta de electromandril~~ | ✅ **DERIVADO (§19, §21)** con `E002` y `E004`. Faltan `E003`, `E005`, `E006` y `E007` |
