@@ -386,7 +386,10 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
   predecibles. Detalle en `experiments/perforado.md`
 - Fresados (línea, arco, círculo, polilínea, contorno) — 🔮 · **hay un fixture ya derivado
   parcialmente**, ver el aviso de arriba
-- **Canal** (Sierra Vertical X) — 🔄 **ARRANCÓ (2026-09-03)**, doc `experiments/canal.md`. Va
+- **Canal** — ✅ **DERIVADO (2026-09-06)**, doc `experiments/canal.md`. ⏸ queda el lote de
+  cierre (14 archivos) y la pasada de A5. **Son dos bloques distintos según el cabezal de la
+  herramienta**, y el `.pgmx` guarda las dos geometrías —nominal y corregida— para que el
+  converter elija según `ActivateCNCCorrection`. Lo de abajo es cómo arrancó. Va
   detrás del perforado porque **es el mismo cabezal** (`def.tlgx` declara la `082` como
   `XilogBoringUnitTool`). Nomenclatura fijada por Fermín: en la UI se llama **`Canal`**, y está
   en el grupo `Fresado` de la cinta. Nueve predicciones falsables sacadas de la configuración
@@ -467,6 +470,51 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-09-06 — El canal queda derivado, y son DOS bloques según el cabezal
+Cierre del lote D2 con los grupos 7 a 13, más varios archivos que Fermín agregó por su cuenta y
+que resultaron decisivos. **65 `.pgmx` y 45 `.iso`.**
+
+- ⭐⭐ **El `Canal` emite dos bloques distintos según el cabezal de su herramienta.** Con la
+  sierra `082` (cabezal perforador) es el bloque derivado el 09-03; con una `E00x` del
+  electromandril hay **cambio de herramienta** (`T n` · `SYN` · `M06`), otro `SHF` de cabezal,
+  sin cola, el corte en el sentido dibujado, y **`?%ETK[7]=4` — el del fresado**. ⇒ **el tipo de
+  mecanizado no es de la operación sino de la herramienta.**
+- 📌 **Y obliga a acotar tres reglas del 09-03**, que eran de la sierra y no del canal: el
+  sentido normalizado, la cola de cuatro movimientos y la restricción de ángulo. **Con fresa el
+  canal en Y y en diagonal postprocesan sin problema.**
+- ⭐⭐ **El hallazgo más útil para el converter (Grupo 13, idea de Fermín)**: el `.pgmx` guarda
+  **siempre** la traza con la corrección aplicada, y `ActivateCNCCorrection` decide qué hace el
+  ISO — con **CAD la copia**, con **C.N. la DESHACE** y emite la línea nominal más `G41`/`G42`.
+  Por eso el archivo guarda **las dos geometrías**, la nominal de la feature y el toolpath
+  corregido: el converter usa una u otra según el flag. Los radios de la ventana aparecen sólo
+  con herramienta de electromandril, que era el misterio que quedaba.
+- ⭐ **El desplazamiento lateral es ±`SVR` en las tres herramientas** (1.9 · 2.0 · 9.18): el 1,9
+  de la sierra nunca fue un caso especial. Y la sierra trabaja **siempre en modo CAD**.
+- ✅ **Dos números dejan de ser hipótesis**: el `G0 Z80.000` es **`ToolOffsetLength` + plano de
+  seguridad** (tres herramientas), y el acortamiento de `Corrección en longitud` es
+  **`√(p·(2r−p))`**, que acertó exacto con profundidad 5. Mi lectura anterior del 80 —«radio del
+  disco + seguridad»— daba el mismo número sólo por casualidad.
+- ✅ **P4 CERRADA**: la Sierra Horizontal da `SVR 50.000` = `Diameter`/2. `SVR` es el radio del
+  **cuerpo** de la herramienta. Era la pregunta que `anatomia_iso.md` le había dejado a esta rama.
+- ✅ **`Condición = False` borra el mecanizado del ISO** (sale el programa vacío); **`Invertir`
+  sólo saca la cola**; y **`Canto a canto`** lleva el canal a los bordes con distancias extra que
+  aceptan negativos — que es lo que hacen los ISO de producción.
+- ⛔ **Segundo caso de la excepción de fail-loud** (`CLAUDE.md` §4): un canal con `Inclinación`
+  ≠ 90 **postprocesa** aunque la `082` tenga el eje fijo, y el ISO que sale no es un canal
+  —pierde el corrector, cambia la convención de la Z y cuenta el offset del huso dos veces—.
+  Peor que el caso de la cara inferior: allá faltaba una operación, acá salen **coordenadas
+  equivocadas**.
+- ⚠️ **Dos nombres de fixture mintieron** (archivos `E001` y `E007` con la `E004` adentro),
+  atrapados por la verificación por atributo. La regla de `fixtures.md` §2 pagó por segunda vez.
+- ⏸ **Lote de cierre pedido** (grupos 14 y 15, 14 archivos): las cuatro herramientas que faltan,
+  el canal más corto que el acortamiento, el conteo del `Xmsg` contra el contenido, y **la pasada
+  de A5 sobre el canal** — la rutina permanente, que no se había hecho sobre ningún mecanizado.
+- 🔎 **Pista abierta**: el `0,75` de la cola aparece **una sola vez en toda la configuración de
+  máquina**, en `gendata.cfg` (posición 30 del segundo registro), con dos `1.00` al lado que son
+  candidatos al milímetro del `G41`/`G42`. Si sale de ahí, dejan de ser constantes internas.
+  Decisión de Fermín: perseguirlo en los archivos de programa de SCM.
+
 
 ### 2026-09-04 — El canal no es sólo de la sierra, y un fixture mal nombrado paga el día
 El Grupo 2 del lote D2 resultó **imposible entero**, y el archivo que quedó de intentarlo valió
