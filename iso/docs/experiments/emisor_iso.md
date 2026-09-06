@@ -420,6 +420,128 @@ Escrito en su propio encabezado, para que el hueco viaje con el dato:
 - El esqueleto es el del dialecto **`ISO-ESAGV(2)`**; hay otros tres, y la clave que los
   elige (`[CNCNAME]` de `Nci.ini`) está vacía en esta máquina.
 
+## ⭐⭐ `isotrd.dll` es el traductor, y tiene la tabla de plantillas ENTERA (2026-09-06)
+
+Persiguiendo la procedencia del `0,75` del canal apareció algo más grande. **`isotrd.dll`**
+—«ISO traductor»— es el binario que escribe las líneas de movimiento y de herramienta, y lleva
+adentro **la tabla de plantillas completa, organizada por instrucción del PGM**:
+
+```
+;(*** F EF   ;(*** END    ;(*** TSET   ;(*** TSETM  ;(*** TSETS  ;(*** N
+;(*** G0     ;(*** G1     ;(*** G2     ;(*** G3     ;(*** G0R    ;(*** G2R
+;(*** BR     ;(*** BRS    ;(*** CUFFIA ;(*** ISO    ;(*** O      ;(*** SET
+;(*** JOBTAB ;(*** REF    ;(*** CURT   ;(*** MSG    ;(*** TA
+```
+
+⇒ **La segunda etapa traduce instrucción por instrucción**, y cada sección es la plantilla de
+una. Los comentarios están en italiano y llevan el marcador `xISO%d` que aparece en el ISO
+emitido.
+
+Ejemplos leídos literalmente del binario:
+
+| plantilla | dónde sale |
+|---|---|
+| `%sSVL %.*f` · `%sSVR %.*f` · `%sVL6=%.*f` · `%sVL7=%.*f` | sección `TA` |
+| `%sD%d ;(xISO%d-> Correttore utensile)` | ídem — el `D1`/`D0` |
+| `$0?%ldS%dI%dD%.*f?` | sección `MSG` |
+| `%sSHF[Z]= %.*f+%%ETK[114]/1000` · `%sMLV=1` | sección `TA` |
+| `%s?%%ETK[17]=0 ;(xISO%d-> salita testa pneumatica)` | ⭐ **le pone nombre al `ETK[17]`: subida del cabezal neumático** |
+
+⇒ ⭐ **`TA` es la sección del corrector de herramienta**, no del corte: ahí viven `SVL`/`SVR`.
+
+⇒ ⭐ **El `$0?…?` del `Xmsg` es `$0?<contador>S<d>I<d>D<f>?`**, y el `%ld` es el conteo que la
+rama C venía midiendo a ciegas. La forma queda confirmada desde el emisor.
+
+## ⭐ El modelo de clases de la configuración, en los símbolos exportados
+
+Los binarios de Xilog exportan símbolos C++ sin ofuscar, y ahí está el mapa de la
+configuración:
+
+| clase | struct | archivo |
+|---|---|---|
+| `clGenData` | `t_GenData` | `gendata.cfg` |
+| `clFields` | `t_Fields` · `t_FieldData` | `fields.cfg` |
+| `clOHeads` | `t_OHeads` · `t_PHeads` · `t_StoreData` | `oheads.cfg` · `pheads.cfg` |
+| `clConfig` | `t_Config` | — |
+| `clAxis` | `t_NCIAxis` | `axis.cfg` |
+| `clBag` | — | el objeto central («el equipamiento») |
+
+⇒ **`isotrd.dll` importa `?Get@clGenData@@QAEPAUt_GenData@@XZ`**: el traductor a ISO **lee
+`gendata.cfg`**. El canal existe.
+
+⚠️ Lo que **no** dan los símbolos son los **nombres de los campos** de `t_GenData`: sólo hay
+`Get`/`Put`, no getters por campo. Así que la posición 30 sigue sin nombre.
+
+📌 **Y de paso**: los archivos `.str` de `Cfg\` (`cnfge.str`, `parax.str`, `ut.str`…) son un
+**lenguaje de esquema** que declara estructuras con campos nombrados (`KEY_GEN { CN_NUMCHAN;
+CN_NUMAX; … }`). Describen los parámetros del **CNC**, no los `.cfg` de Xilog — pero es la
+llave para cualquier rama que necesite leer `par.dat` o los parámetros de eje.
+
+## El `0,75` del canal: hipótesis fuerte, sin derivar (2026-09-06)
+
+El retroceso de la cola del canal vale **0,75 mm** y no se mueve con nada: ni con el largo, ni
+la posición, ni la profundidad, ni la corrección, ni el acortamiento (`canal.md` §11, §12, §13).
+Sin procedencia, el converter tendría que hardcodearlo — y eso es lo que la regla 4 prohíbe.
+
+**Lo que se barrió:**
+
+| | resultado |
+|---|---|
+| `0.75` como `float32`/`double` **alineado** en los binarios de Xilog | **140 archivos, ninguno** |
+| ídem en el árbol de Maestro | **1096 archivos**: sólo OpenCascade (`TK*.dll`, el kernel geométrico) y `n32dll.dll` |
+| `0,75` en la documentación de SCM del repo | **ninguna** |
+| `0.75` en los archivos de configuración de máquina | **UNA sola vez: `gendata.cfg`, posición 30 del segundo registro** |
+
+⇒ **No es un literal del emisor.** Y el único lugar del sistema donde ese número existe es la
+configuración general — que el traductor a ISO **lee**.
+
+🔮 **Hipótesis**: `0,75` sale de `gendata.cfg`. Al lado, en las posiciones 18 y 19, hay dos
+**`1.00`**, que son los candidatos al milímetro de entrada/salida del `G41`/`G42`.
+
+⚠️ **No está derivado, y no se puede derivar sin tocar la configuración de la máquina.** Lo que
+lo cerraría, en orden de costo:
+
+1. **Un `.pgm` de un canal** (`PostFileFormat = PGM`, dos minutos): dice si la cola ya existe
+   antes del ISO. Si está en el PGM, la calcula Maestro y `isotrd.dll` sólo la traduce; si no
+   está, nace en la etapa 2 y el `gendata` es casi seguro.
+2. Cambiar la posición 30 de `gendata.cfg` y volver a postprocesar — decisión de Fermín, es
+   configuración de máquina.
+
+⇒ **Recomendación para el converter**: leer el valor de `gendata.cfg` posición 30 en vez de
+escribirlo. Da el mismo número, pero con procedencia declarada en vez de una constante muda.
+
+## ⭐ El manual confirma dos derivaciones del canal, y da un tercer nombre
+
+Buscando el `0,75` apareció que el manual de Xilog documenta la instrucción `C` (corrección del
+radio de la herramienta) con **exactamente** la estructura que los fixtures habían derivado:
+
+```
+C = 0    Corrección nula
+C = 1    Corrección derecha
+C = 2    Corrección izquierda
+C = 3    Corrección EN PROFUNDIDAD (sólo para fresas de disco)
+C = 13   Corrección 1 + corrección 3
+C = 23   Corrección 2 + corrección 3
+S        Cota de SOBREMETAL
+```
+
+⇒ **Los cuatro botones de la ventana son los valores de `C`**, y el cuarto **se combina** con
+los otros — que es justo lo que el Grupo 5 midió sin saberlo (`canal.md` §13).
+
+⇒ **`Rebaba` es la `S`, «cota de sobremetal»**.
+
+⇒ Y la regla del `SVR`, con las mismas palabras: *«si la fresa es de vela (tipo F), la
+corrección es igual al radio declarado; si es de disco (tipo D), la corrección es igual a la
+mitad del espesor de la hoja»*. **Derivación confirmada por el fabricante.**
+
+⚠️ **Tercer nombre para la misma cosa** (regla 1, para cuando se toque el `ChannelSpec`):
+
+| Maestro (UI) | Xilog (manual) | `.pgmx` |
+|---|---|---|
+| `Corrección en longitud` | **`Corrección en profundidad`** | `IsPrecise` |
+
+Ninguno es nuestro, y los tres son del mismo fabricante. La UI de Maestro manda (regla 3).
+
 ## Decisión pendiente
 
 **¿El snapshot incluye también los binarios del emisor?** El archivo de arriba registra
