@@ -122,6 +122,10 @@ class ChannelSpec:
     side_offset: float = 0.0
     end_radius: float = 0.0            # derivado: radio del disco
     activate_cnc_correction: bool = False  # derivado: `false` con disco, `true` con fresa
+    #: `Corrección en longitud` de la ventana (el cuarto botón de `Corrección
+    #: herramienta`, que **se combina** con los otros tres). El manual de Xilog la
+    #: llama «corrección en profundidad» y sólo la admite en fresas de disco.
+    is_precise: bool = False
     slot_angle: float = 1.5707963267948966
     is_enabled_expr: Optional[str] = None
 
@@ -218,12 +222,73 @@ class _HydratedChannelSpec:
         return self.spec.activate_cnc_correction
 
     @property
+    def is_precise(self) -> bool:
+        return self.spec.is_precise
+
+    @property
     def slot_angle(self) -> float:
         return self.spec.slot_angle
 
     @property
     def is_enabled_expr(self) -> Optional[str]:
         return self.spec.is_enabled_expr
+
+
+def _acortamiento_en_longitud(state, spec) -> float:
+    """El acortamiento por punta de `Corrección en longitud`, en mm.
+
+    ``√( p · (2r − p) )`` — el avance horizontal que un disco de radio ``r``
+    necesita para llegar a la profundidad ``p``. Derivado con dos profundidades
+    sobre los ISO del lote D2 (`iso/docs/experiments/canal.md` §13 y §20), con
+    coincidencia a quince dígitos.
+
+    Sin `is_precise` la longitud pedida es la del FONDO de la ranura; con él, la
+    de la superficie.
+    """
+
+    if not spec.is_precise:
+        return 0.0
+    radio = _tool_from_catalog(spec.tool_name).diameter / 2.0
+    profundidad = float(state.depth) - float(_toolpath_cut_z(state, spec))
+    if profundidad <= 0.0 or profundidad >= 2.0 * radio:
+        return 0.0
+    return math.sqrt(profundidad * (2.0 * radio - profundidad))
+
+
+def _spec_acortada(state, spec):
+    """La spec con los extremos corridos hacia adentro, para la TRAYECTORIA.
+
+    La geometría de la feature NO se toca: sigue siendo la línea pedida. Lo que
+    se acorta es el recorrido, que es lo que Maestro guarda acortado.
+    """
+
+    acortamiento = _acortamiento_en_longitud(state, spec)
+    if acortamiento <= 0.0:
+        return spec
+    dx = float(spec.end_x) - float(spec.start_x)
+    dy = float(spec.end_y) - float(spec.start_y)
+    largo = math.hypot(dx, dy)
+    if largo <= 2.0 * acortamiento:
+        # ⛔ Maestro NO rechaza este caso: cruza los extremos y emite un corte
+        # invertido de la longitud sobrante, en el lugar equivocado
+        # (`canal.md` §23). Es el tercer caso de la excepción de fail-loud del
+        # `CLAUDE.md` §4, y acá no se fabrica.
+        raise ValueError(
+            f"El canal mide {_compact_number(largo)} mm y `Corrección en longitud` "
+            f"acorta {_compact_number(2.0 * acortamiento)} mm en total: los extremos "
+            "se cruzarían. Maestro lo acepta y emite un corte invertido; no se sintetiza."
+        )
+    ux, uy = dx / largo, dy / largo
+    return replace(
+        spec,
+        spec=replace(
+            spec.spec,
+            start_x=float(spec.start_x) + acortamiento * ux,
+            start_y=float(spec.start_y) + acortamiento * uy,
+            end_x=float(spec.end_x) - acortamiento * ux,
+            end_y=float(spec.end_y) - acortamiento * uy,
+        ),
+    )
 
 
 def _normalize_channel_spec(slot_milling: ChannelSpec) -> ChannelSpec:
@@ -254,6 +319,7 @@ def _normalize_channel_spec(slot_milling: ChannelSpec) -> ChannelSpec:
         side_offset=float(slot_milling.side_offset),
         end_radius=tool.diameter / 2.0,
         activate_cnc_correction=tool.uses_cnc_correction,
+        is_precise=bool(slot_milling.is_precise),
         slot_angle=float(slot_milling.slot_angle),
     )
 
@@ -325,7 +391,7 @@ def _build_slot_side_feature(
         if es_disco:
             _append_node(slot_end, MILLING_NS, "Radius", _compact_number(spec.end_radius))
     _append_node(feature, PGMX_NS, "IsGeomSameDirection", "true")
-    _append_node(feature, PGMX_NS, "IsPrecise", "false")
+    _append_node(feature, PGMX_NS, "IsPrecise", "true" if spec.is_precise else "false")
     _append_node(feature, PGMX_NS, "MaterialPosition", spec.material_position)
     _append_node(feature, PGMX_NS, "OvercutLenghtInput", "0")
     _append_node(feature, PGMX_NS, "OvercutLenghtOutput", "0")
@@ -373,7 +439,10 @@ def _append_channel(root: ET.Element, state, spec: _HydratedChannelSpec) -> None
         start_expression_id = reserved_ids[i]; i += 1
         end_expression_id = reserved_ids[i]; i += 1
     enabled_expr_id = reserved_ids[i] if has_enabled_expr else None
-    generated_toolpath_profile = _build_line_toolpath_profile(float(state.depth), _toolpath_cut_z(state, spec), spec)
+    spec_trayectoria = _spec_acortada(state, spec)
+    generated_toolpath_profile = _build_line_toolpath_profile(
+        float(state.depth), _toolpath_cut_z(state, spec), spec_trayectoria
+    )
     toolpath_start, toolpath_end, _, _ = _profile_entry_exit_context(generated_toolpath_profile)
     approach_curve = spec.approach_curve
     if approach_curve is None:
@@ -461,6 +530,7 @@ def build_channel_spec(
     retract_overlap: Optional[float] = None,
     material_position: Optional[str] = None,
     side_offset: Optional[float] = None,
+    is_precise: Optional[bool] = None,
     slot_angle: Optional[float] = None,
     is_enabled_expr: Optional[str] = None,
 ) -> ChannelSpec:
@@ -502,6 +572,7 @@ def build_channel_spec(
             ),
             material_position=(material_position or "Left").strip() or "Left",
             side_offset=0.0 if side_offset is None else float(side_offset),
+            is_precise=bool(is_precise),
             slot_angle=1.5707963267948966 if slot_angle is None else float(slot_angle),
             is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,
         )

@@ -133,6 +133,59 @@ class TestLaHerramientaDecide(unittest.TestCase):
             )
 
 
+def _geometrias(xml: str) -> list[str]:
+    import re as _re
+
+    return [
+        g.strip().replace(chr(10), " | ")
+        for g in _re.findall(r"_serializationGeometryDescription>(.*?)</", xml, _re.S)
+        if g.strip()
+    ]
+
+
+class TestCorreccionEnLongitud(unittest.TestCase):
+    """`Corrección en longitud` (`IsPrecise`), medida contra el fixture del Grupo 5."""
+
+    def test_acorta_la_trayectoria_pero_no_la_geometria(self) -> None:
+        """Los cuatro valores son los del `.pgmx` que produjo Maestro (§13, §20)."""
+
+        geometrias = _geometrias(_sintetizar(is_precise=True))
+        self.assertEqual(
+            geometrias,
+            [
+                # la geometría de la feature NO se toca: sigue siendo 50 → 350
+                "8 0 300 | 1 50 200 0 1 0 0",
+                # el acercamiento baja en el extremo ya corregido
+                "8 0 30 | 1 83.166247903553995 200 38 0 0 -1",
+                # y el recorrido pierde √(p·(2r−p)) por punta: 300 − 2×33.166…
+                "8 0 233.66750419289201 | 1 83.166247903553995 200 8 1 0 0",
+                "8 0 30 | 1 316.83375209644601 200 8 0 0 1",
+            ],
+        )
+
+    def test_sin_la_correccion_la_trayectoria_es_la_pedida(self) -> None:
+        geometrias = _geometrias(_sintetizar())
+        self.assertIn("8 0 300 | 1 50 200 8 1 0 0", geometrias)
+
+    def test_el_acortamiento_sigue_a_la_profundidad(self) -> None:
+        """Con profundidad 5 son √(5·115) = 23.979 por punta (Grupo 12)."""
+
+        import math
+
+        esperado = math.sqrt(5.0 * (2.0 * 60.0 - 5.0))
+        geometrias = _geometrias(_sintetizar_en(target_depth=5.0, is_precise=True))
+        recorrido = [g for g in geometrias if g.startswith("8 0 ") and " 13 1 0 0" in g]
+        self.assertTrue(recorrido, geometrias)
+        largo = float(recorrido[0].split(" | ")[0].split()[-1])
+        self.assertAlmostEqual(largo, 300.0 - 2.0 * esperado, places=9)
+
+    def test_un_canal_mas_corto_que_el_acortamiento_se_rechaza(self) -> None:
+        """Maestro lo acepta y emite un corte invertido (§23). Acá no se fabrica."""
+
+        with self.assertRaisesRegex(ValueError, "se cruzarían"):
+            _sintetizar_en(start_x=180.0, end_x=230.0, is_precise=True)
+
+
 class TestLimitesDelDisco(unittest.TestCase):
     """Los límites son del DISCO, no del `Canal` — el lote D2 lo midió."""
 
