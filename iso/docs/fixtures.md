@@ -73,7 +73,17 @@ archivo y lo contrastó contra lo que afirma el nombre.
 |---|---|---|
 | `R_PV_manual_base_pulgadas` | pulgadas → `IsMM=false` | `IsMM=true` |
 
-Es el negativo sin testigo del 2026-08-22 (`dibujos.md` §14.2), no un hallazgo nuevo.
+Era el negativo sin testigo del 2026-08-22 (`dibujos.md` §14.2), no un hallazgo nuevo.
+
+> ✅ **Y dejó de serlo el 2026-09-07.** Al refrescar el snapshot apareció que `UI00.exe.Config`
+> tiene el `RapidFeed` en **164,042** — exactamente `50` convertido a unidades imperiales —, lo
+> que **prueba que la aplicación estuvo en pulgadas**. El testigo no estaba en el `.pgmx` ni en
+> el ISO: estaba en el tercer origen, y tardó dieciséis días en aparecer porque no lo
+> muestreábamos. Detalle en `experiments/opciones_de_aplicacion.md`.
+>
+> 📌 **Lección de método**: cuando la variable vive fuera del `.pgmx`, el testigo también puede
+> vivir fuera — y el archivo de configuración **queda escrito**. Antes de dar un negativo por
+> «sin testigo», conviene preguntarse qué archivo del tercer origen tocó esa opción.
 
 **La marca `HG` nunca mintió: 30 de 30** (5 en Rama G, 25 en Operaciones). El modo de falla
 que motiva esta sección no ocurrió en el corpus — donde el nombre lo afirma.

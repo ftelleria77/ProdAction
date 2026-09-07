@@ -70,7 +70,7 @@ Guardar como `r_pv_opc_control.iso`.
 | Opción | Clave | Qué mirar |
 |---|---|---|
 | **Parámetros → Post → «Formato de salida»** (XXL / PGM / ISO) | `PostFileFormat` | el archivo entero: otra extensión y otro lenguaje. Sirve para saber qué son los otros dos formatos |
-| **Idioma → «Unidad de medida»** (Milímetros / Pulgadas) | `IsMM` | `*MM` → `*IN` y **todas** las medidas del esqueleto — ⚠️ **medido el 2026-08-22: NO llega**, ver abajo |
+| **Idioma → «Unidad de medida»** (Milímetros / Pulgadas) | `IsMM` | `*MM` → `*IN` y **todas** las medidas del esqueleto — ✅ **NO llega, DERIVADO**: medido el 2026-08-22 y con testigo desde el 2026-09-07, ver abajo |
 
 ### Prioridad 4 — probablemente no se vean sin operaciones
 
@@ -385,8 +385,49 @@ y su casa es este doc**. Cierra la prioridad 3 de la lista de arriba.
 `IsMM` no se escribe en el `.pgmx` y tampoco llega al ISO, entonces *«la opción no llega»* y
 *«la opción no quedó aplicada»* producen exactamente los mismos dos archivos.
 
-⇒ Se anota como **probable**, no como derivado. Es el caso testigo de toda la clase descrita
+⇒ Se anotó como **probable**, no como derivado. Fue el caso testigo de toda la clase descrita
 en `iso/docs/fixtures.md` §4.
+
+### ✅ El testigo apareció, dieciséis días después (2026-09-07)
+
+Al refrescar el snapshot tras el cambio de la fresa `E004`, `UI00.exe.Config` mostró un cambio
+que no tenía nada que ver con la fresa:
+
+```
+<add key="RapidFeed" value="50" />        ← la copia del 2026-08-12
+<add key="RapidFeed" value="164,042" />   ← la máquina hoy
+```
+
+**164,042 es exactamente 50 convertido a unidades imperiales** (50 m/min = 164,042 ft/min).
+
+⇒ ⭐ **Eso prueba que la aplicación estuvo en pulgadas**, que es justo lo que el fixture no
+podía probar. **El negativo sube de «probable» a DERIVADO**: poner la aplicación en pulgadas
+**no cambia el `IsMM` del `.pgmx` ni el ISO**.
+
+⚠️ **El nivel, con precisión**: el config no está fechado, así que el testigo prueba que la
+aplicación estuvo en imperial **en algún momento entre el 2026-08-12** —la copia anterior— **y
+hoy**. La prueba de pulgadas cae en esa ventana y es la única ocasión conocida (Fermín,
+2026-09-07: *«hicimos la prueba de pasar el programa a pulgadas al inicio de esta nueva
+investigación»*). No es una cadena cerrada, pero es la que hay y apunta en un solo sentido.
+
+### 📌 Por qué recién ahora, y qué dice de Maestro
+
+**No es un defecto que se manifestó tarde: es la primera vez que muestreamos el archivo después
+de la prueba.** La copia del `UI00.exe.Config` que teníamos era del **2026-08-12** y el fixture
+de pulgadas es del **2026-08-22**. El valor convertido lleva en la máquina desde entonces.
+
+⇒ **Lectura de Fermín, y los indicios la acompañan: es un defecto de Maestro — convierte al
+entrar y no revierte al salir.** El segundo indicio está en el mismo archivo: la clave `IsMM`
+quedó reescrita como `True` en vez de `true`, o sea que **otro camino de código la escribió**.
+
+✅ **Y el daño está acotado**: entre las ~175 claves del config, el diff del 2026-08-12 a hoy
+muestra **una sola convertida**. Ninguna otra medida quedó en unidades imperiales.
+
+⇒ **Consecuencia práctica**: hoy la máquina tiene el `RapidFeed` en unidades imperiales
+mientras la aplicación trabaja en milímetros. **No llega al ISO** —chequeado el 2026-09-07
+sobre seis ISO de producción con traza: 1418 líneas `G0` y ninguna lleva `F`—, así que no
+contamina nada de lo derivado; pero es un valor de la aplicación que quedó mal y conviene
+devolverlo a 50.
 
 > Dato de método que salió del mismo lote: Fermín tuvo que **reiniciar Maestro** para que cada
 > opción tomara efecto ⇒ **son opciones que se leen al arrancar la aplicación**, no en cada
