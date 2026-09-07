@@ -27,6 +27,7 @@ from ..common.piece import (
     _plane_local_dimensions,
 )
 from ..common.tools import (
+    _catalog_row_for_spec,
     _load_tool_catalog,
     _normalize_tool_resolution,
     _resolve_drilling_tool,
@@ -755,7 +756,7 @@ def _validate_tool_sinking_length_for_drill_spec(
     if spec.tool_object_type == "System.Object":
         return
 
-    catalog_entry = tool_catalog.get(spec.tool_id)
+    catalog_entry = _catalog_row_for_spec(spec, tool_catalog)
     _validate_tool_sinking_length_for_total_depth(
         spec,
         catalog_entry,

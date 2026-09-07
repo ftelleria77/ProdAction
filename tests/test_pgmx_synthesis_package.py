@@ -296,7 +296,17 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertEqual(common_tools._normalize_tool_usage_group("Broca D5"), "drilling")
         self.assertEqual(common_tools._normalize_tool_usage_group("Fresa Helicoidal"), "milling")
         self.assertTrue(common_tools._is_vertical_x_saw("Sierra Vertical X"))
-        self.assertIn("1900", common_tools._load_tool_catalog())
+        # El catalogo sale de `def.tlgx` y se indexa por `tool_id`, pero **el id NO se
+        # afirma**: Maestro lo reasigna cada vez que regenera el catalogo (2026-09-07,
+        # corridos +40 y despues +60). Lo estable es el nombre.
+        catalogo = common_tools._load_tool_catalog()
+        nombres = {(fila.get("name") or "").strip() for fila in catalogo.values()}
+        self.assertIn("E001", nombres)
+        self.assertIn("082", nombres)
+        self.assertEqual(
+            {(fila.get("type") or "").strip() for fila in catalogo.values() if fila["name"] == "082"},
+            {"Sierra Vertical X"},
+        )
         self.assertIs(core_sp.DrillSpec, drilling_single.DrillSpec)
         self.assertIs(core_sp._HydratedDrillSpec, drilling_single._HydratedDrillSpec)
         self.assertIs(core_sp.build_drill_spec, drilling_single.build_drill_spec)
@@ -561,7 +571,18 @@ class PgmxSynthesisPackageTests(unittest.TestCase):
         self.assertIsInstance(slot, milling_channel.ChannelSpec)
         self.assertEqual(slot.feature_name, "Canal")
         self.assertEqual(slot.side_of_feature, "Right")
-        self.assertEqual(slot.tool_id, "1899")
+        # El `tool_id` es DERIVADO del catalogo, no un literal: se afirma que coincide
+        # con lo que `def.tlgx` dice hoy para la `082`, porque el numero cambia cada vez
+        # que Maestro regenera el catalogo.
+        from pgmx.tlgx import load_tlgx
+
+        self.assertEqual(slot.tool_name, "082")
+        self.assertEqual(slot.tool_id, load_tlgx()["082"].tool_id)
+        # Y el ancho y el radio de extremo tambien salen de ahi (la ventana los muestra
+        # en gris): `BladeThickness` y el radio del disco.
+        self.assertAlmostEqual(slot.tool_width, 3.8)
+        self.assertAlmostEqual(slot.end_radius, 60.0)
+        self.assertFalse(slot.activate_cnc_correction)
         self.assertEqual(slot.depth_spec.target_depth, 10.0)
         self.assertIsNone(slot.milling_strategy)
         with self.assertRaisesRegex(ValueError, "longitud cero"):

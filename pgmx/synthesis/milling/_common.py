@@ -16,6 +16,7 @@ from ..common.tools import (
     TOOL_CATALOG_PATH,
     _is_vertical_x_saw,
     _normalize_tool_usage_group,
+    _catalog_row_for_spec,
     _tool_catalog_label,
     _validate_tool_sinking_length_for_total_depth,
 )
@@ -200,7 +201,7 @@ def _validate_tool_sinking_length_for_spec(
 ) -> None:
     """Valida que la profundidad total no supere el `sinking_length` de la herramienta."""
 
-    catalog_entry = tool_catalog.get(spec.tool_id)
+    catalog_entry = _catalog_row_for_spec(spec, tool_catalog)
     _validate_tool_sinking_length_for_total_depth(
         spec,
         catalog_entry,
@@ -210,6 +211,13 @@ def _validate_tool_sinking_length_for_spec(
 
 
 def _validate_vertical_x_saw_for_milling_spec(spec, tool_type: str) -> None:
+    """Los limites del DISCO, medidos sobre fixtures (`iso/docs/experiments/canal.md`).
+
+    ⚠️ Valen para una herramienta de tipo disco, **no para el `Canal` en general**:
+    el lote D2 probo las ocho herramientas del desplegable y con una fresa el canal
+    admite Y y diagonal (§19, §23).
+    """
+
     if not _is_hydrated_line_or_slot_milling_spec(spec):
         raise ValueError(
             "La herramienta "
@@ -230,6 +238,8 @@ def _validate_vertical_x_saw_for_milling_spec(spec, tool_type: str) -> None:
         )
 
     if not math.isclose(float(spec.start_y), float(spec.end_y), abs_tol=1e-9):
+        # Winxiso: «Angulo no valido del perfil con herramienta de tipo fresa de
+        # disco». Medido con el perpendicular y el diagonal del Grupo 3.
         raise ValueError(
             "La herramienta "
             f"{_tool_catalog_label(spec)} ({tool_type}) solo permite líneas horizontales."
@@ -237,7 +247,7 @@ def _validate_vertical_x_saw_for_milling_spec(spec, tool_type: str) -> None:
 
 
 def _validate_tool_type_for_milling_spec(spec, tool_catalog: dict[str, dict[str, str]]) -> None:
-    catalog_entry = tool_catalog.get(spec.tool_id)
+    catalog_entry = _catalog_row_for_spec(spec, tool_catalog)
     if catalog_entry is None:
         raise ValueError(
             "No se pudo validar el tipo de la herramienta "
@@ -247,17 +257,18 @@ def _validate_tool_type_for_milling_spec(spec, tool_catalog: dict[str, dict[str,
     tool_type = (catalog_entry.get("type") or "").strip()
     # Fresado LINEAL: no se distingue el tipo de herramienta. Una sierra (p.ej. E002 Sierra
     # Horizontal) se programa igual que una fresa en una línea; el uso/recorrido es responsabilidad
-    # del programador de Maestro. (La ranura SlotSide sí exige Sierra Vertical X — se valida abajo.)
+    # del programador de Maestro.
     if _is_hydrated_line_milling_spec(spec):
         return
     usage_group = _normalize_tool_usage_group(tool_type)
     if _is_hydrated_slot_milling_spec(spec):
-        if not _is_vertical_x_saw(tool_type):
-            raise ValueError(
-                "La ranura `SlotSide` requiere una Sierra Vertical X compatible: "
-                f"{_tool_catalog_label(spec)} figura como '{tool_type or 'sin tipo'}'."
-            )
-        _validate_vertical_x_saw_for_milling_spec(spec, tool_type)
+        # ⚠️ CORREGIDO 2026-09-07 con el lote D2. Acá se exigía una Sierra Vertical X,
+        # y es FALSO: el desplegable de la ventana de Canal ofrece **las ocho**
+        # herramientas del catálogo, y las siete `E00x` postprocesan (`canal.md` §23).
+        # Lo que sí es del disco son sus límites —ángulo 0, cara superior y
+        # profundidad ≤ `SinkingLength`—, que se validan sólo para él.
+        if _is_vertical_x_saw(tool_type):
+            _validate_vertical_x_saw_for_milling_spec(spec, tool_type)
         return
     if usage_group == "milling":
         return

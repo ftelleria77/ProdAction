@@ -9,12 +9,15 @@ from typing import Optional, Protocol
 
 from .xml import _compact_number
 
+from ...tlgx import load_tlgx
+
 __all__ = [
     "TOOL_CATALOG_PATH",
     "_diameter_key",
     "_is_vertical_x_saw",
     "_load_tool_catalog",
     "_lookup_tool_catalog_entry",
+    "_catalog_row_for_spec",
     "_normalize_tool_resolution",
     "_normalize_tool_usage_group",
     "_resolve_drilling_tool",
@@ -74,30 +77,61 @@ def _normalize_tool_resolution(value: Optional[str]) -> str:
     return mapping[raw]
 
 
-def _load_tool_catalog() -> dict[str, dict[str, str]]:
-    """Carga el catalogo plano de herramientas indexado por `tool_id`."""
+def _tool_type_from_tlgx(tool) -> str:
+    """El `type` que el resto del codigo espera, derivado de `def.tlgx`.
 
-    if not TOOL_CATALOG_PATH.exists():
-        raise FileNotFoundError(
-            f"No existe el catalogo de herramientas '{TOOL_CATALOG_PATH}'."
-        )
-    with TOOL_CATALOG_PATH.open("r", encoding="utf-8-sig", newline="") as handle:
-        rows = tuple(csv.DictReader(handle))
+    Se conservan las familias que los validadores distinguen ("Broca", "Fresa",
+    "Sierra ..."), pero salen del catalogo de la maquina en vez de una columna
+    escrita a mano.
+    """
+
+    descripcion = (tool.description or "").strip().lower()
+    if "sierra" in descripcion:
+        return "Sierra Horizontal" if not tool.is_boring_unit else "Sierra Vertical X"
+    if tool.is_blade:
+        # Un disco en el cabezal perforador es la Sierra Vertical X; su
+        # `Description` viene vacia en el catalogo del taller.
+        return "Sierra Vertical X" if tool.is_boring_unit else "Sierra Horizontal"
+    if "drill" in (tool.body_type or "").lower():
+        return "Broca"
+    return "Fresa"
+
+
+def _load_tool_catalog() -> dict[str, dict[str, str]]:
+    """Carga el catalogo de herramientas indexado por `tool_id`.
+
+    ⚠️ **La fuente es `def.tlgx`**, el catalogo de la maquina, y no
+    `tool_catalog.csv` — que Fermin declaro el 2026-08-30 que NO es origen de
+    datos: lo derivo a mano con IA como resumen y tiene errores conocidos.
+    Ver `pgmx/tlgx.py` e `iso/docs/fixtures.md` §7.
+    """
+
+    catalogo = load_tlgx()
     return {
-        str((row.get("tool_id") or "").strip()): row
-        for row in rows
-        if (row.get("tool_id") or "").strip()
+        tool.tool_id: {
+            "tool_id": tool.tool_id,
+            "name": tool.name,
+            "type": _tool_type_from_tlgx(tool),
+            "sinking_length": _compact_number(tool.sinking_length),
+            "diameter": _compact_number(tool.diameter),
+            "tool_offset_length": _compact_number(tool.tool_offset_length),
+        }
+        for tool in catalogo.values()
+        if tool.tool_id
     }
 
 
-_AUTO_VERTICAL_DRILL_TOOLS: dict[tuple[str, str], tuple[str, str]] = {
-    ("Flat", "8"): ("1888", "001"),
-    ("Flat", "15"): ("1889", "002"),
-    ("Flat", "20"): ("1890", "003"),
-    ("Flat", "35"): ("1891", "004"),
-    ("Flat", "5"): ("1892", "005"),
-    ("Flat", "4"): ("1893", "006"),
-    ("Conical", "5"): ("1894", "007"),
+#: Resolucion automatica de la broca vertical por familia + diametro, **por NOMBRE**.
+#: Sin `tool_id`: Maestro reasigna todos los identificadores cada vez que regenera
+#: el catalogo (2026-09-07, corridos +40 y despues +60). El nombre es lo estable.
+_AUTO_VERTICAL_DRILL_TOOLS: dict[tuple[str, str], str] = {
+    ("Flat", "8"): "001",
+    ("Flat", "15"): "002",
+    ("Flat", "20"): "003",
+    ("Flat", "35"): "004",
+    ("Flat", "5"): "005",
+    ("Flat", "4"): "006",
+    ("Conical", "5"): "007",
 }
 
 
@@ -112,16 +146,17 @@ def _lookup_tool_catalog_entry(
     if normalized_tool_id == "0" and normalized_tool_name:
         normalized_tool_id = ""
 
-    if normalized_tool_id:
+    # ⚠️ EL NOMBRE MANDA SOBRE EL `tool_id`. Maestro reasigna todos los
+    # identificadores cada vez que regenera `def.tlgx` --se vio dos veces el mismo
+    # dia el 2026-09-07, corridos +40 y despues +60--, asi que un `tool_id` puede
+    # ser de una generacion anterior del catalogo y no significa nada fuera del
+    # `.pgmx` que lo lleva. Si vienen los dos, se resuelve por nombre.
+    if normalized_tool_id and not normalized_tool_name:
         row = tool_catalog.get(normalized_tool_id)
         if row is None:
             raise ValueError(
-                f"No existe la herramienta '{normalized_tool_id}' en '{TOOL_CATALOG_PATH.name}'."
-            )
-        if normalized_tool_name and (row.get("name") or "").strip() != normalized_tool_name:
-            raise ValueError(
-                "La herramienta explicita no coincide con el catalogo: "
-                f"id={normalized_tool_id} corresponde a '{(row.get('name') or '').strip()}'."
+                f"No existe la herramienta '{normalized_tool_id}' en 'def.tlgx'. "
+                "Los identificadores cambian al regenerar el catalogo: usar el nombre."
             )
         return row
 
@@ -130,10 +165,27 @@ def _lookup_tool_catalog_entry(
             if (row.get("name") or "").strip() == normalized_tool_name:
                 return row
         raise ValueError(
-            f"No existe la herramienta '{normalized_tool_name}' en '{TOOL_CATALOG_PATH.name}'."
+            f"No existe la herramienta '{normalized_tool_name}' en 'def.tlgx'."
         )
 
     raise ValueError("La resolucion explicita de herramienta requiere tool_id, tool_name o ambos.")
+
+
+def _catalog_row_for_spec(spec, tool_catalog: dict[str, dict[str, str]]):
+    """La fila del catalogo de una spec, **priorizando el nombre** sobre el id.
+
+    Misma razon que en `_lookup_tool_catalog_entry`: el `tool_id` no sobrevive a
+    una regeneracion del catalogo, el nombre si. Devuelve `None` si no hay
+    ninguna coincidencia, para que cada validador arme su propio mensaje.
+    """
+
+    nombre = (getattr(spec, "tool_name", "") or "").strip()
+    if nombre:
+        for row in tool_catalog.values():
+            if (row.get("name") or "").strip() == nombre:
+                return row
+    identificador = (getattr(spec, "tool_id", "") or "").strip()
+    return tool_catalog.get(identificador) if identificador else None
 
 
 def _tool_catalog_label(spec: _ToolSpec) -> str:
@@ -170,17 +222,13 @@ def _resolve_drilling_tool(
         return "0", "", "System.Object"
 
     diameter_key = _diameter_key(drilling.diameter)
-    tool_key = _AUTO_VERTICAL_DRILL_TOOLS.get((drilling.drill_family, diameter_key))
-    if tool_key is None:
+    tool_name = _AUTO_VERTICAL_DRILL_TOOLS.get((drilling.drill_family, diameter_key))
+    if tool_name is None:
         raise ValueError(
             "No hay una herramienta vertical auto-resoluble para ese diametro/familia en el toolset relevado."
         )
 
-    row = _lookup_tool_catalog_entry(
-        tool_catalog,
-        tool_id=tool_key[0],
-        tool_name=tool_key[1],
-    )
+    row = _lookup_tool_catalog_entry(tool_catalog, tool_name=tool_name)
     return (
         str((row.get("tool_id") or "").strip()),
         str((row.get("name") or "").strip()),
@@ -210,11 +258,11 @@ def _validate_tool_type_for_drilling_spec(
     if spec.tool_object_type == "System.Object":
         return
 
-    catalog_entry = tool_catalog.get(spec.tool_id)
+    catalog_entry = _catalog_row_for_spec(spec, tool_catalog)
     if catalog_entry is None:
         raise ValueError(
             "No se pudo validar el tipo de la herramienta "
-            f"{_tool_catalog_label(spec)} porque no existe en '{TOOL_CATALOG_PATH.name}'."
+            f"{_tool_catalog_label(spec)} porque no existe en 'def.tlgx'."
         )
 
     tool_type = (catalog_entry.get("type") or "").strip()
@@ -235,7 +283,7 @@ def _validate_tool_sinking_length_for_total_depth(
     if catalog_entry is None:
         raise ValueError(
             "No se pudo validar la seguridad de la herramienta "
-            f"{_tool_catalog_label(spec)} porque no existe en '{TOOL_CATALOG_PATH.name}'."
+            f"{_tool_catalog_label(spec)} porque no existe en 'def.tlgx'."
         )
 
     sinking_length_text = (catalog_entry.get("sinking_length") or "").strip()
@@ -243,7 +291,7 @@ def _validate_tool_sinking_length_for_total_depth(
     if sinking_length <= 0.0:
         raise ValueError(
             "La herramienta "
-            f"{_tool_catalog_label(spec)} no tiene un `sinking_length` valido en '{TOOL_CATALOG_PATH.name}'."
+            f"{_tool_catalog_label(spec)} no tiene un `sinking_length` valido en 'def.tlgx'."
         )
 
     if total_depth > sinking_length + 1e-9:

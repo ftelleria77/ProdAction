@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field, replace
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -56,6 +57,7 @@ from ._common import (
     _toolpath_cut_z,
     _uses_feature_depth_expressions,
 )
+from ...tlgx import TlgxTool, load_tlgx
 from .line import _build_line_geometry, _build_line_operation, _build_line_toolpath_profile
 
 __all__ = [
@@ -69,6 +71,26 @@ __all__ = [
 ]
 
 
+@lru_cache(maxsize=None)
+def _tool_from_catalog(tool_name: str) -> TlgxTool:
+    """La herramienta del catálogo `def.tlgx`, por NOMBRE.
+
+    Por nombre y no por `tool_id`: Maestro **reasigna todos los identificadores**
+    cada vez que regenera el catálogo (se vio dos veces el mismo día el
+    2026-09-07, corridos +40 y +60). El `ID` sólo es coherente dentro del `.pgmx`
+    que lleva su propio `def.tlgx` embebido. Ver `iso/docs/fixtures.md` §7.
+    """
+
+    catalogo = load_tlgx()
+    tool = catalogo.get(tool_name)
+    if tool is None:
+        raise ValueError(
+            f"La herramienta '{tool_name}' no existe en el catálogo de la máquina "
+            f"(def.tlgx). Disponibles: {', '.join(sorted(catalogo))}."
+        )
+    return tool
+
+
 @dataclass(frozen=True)
 class ChannelSpec:
     """Ranura lineal `SlotSide` validada para Sierra Vertical X sobre `Top`."""
@@ -80,9 +102,12 @@ class ChannelSpec:
     feature_name: str = "Canal"
     plane_name: str = "Top"
     side_of_feature: str = "Center"
-    tool_id: str = "1899"
     tool_name: str = "082"
-    tool_width: float = 3.8
+    # Derivados del catálogo en `_normalize_channel_spec`, NO son parámetros de
+    # entrada: la ventana de Canal muestra `Anchura` en gris y el radio de extremo
+    # no tiene campo. Ver `iso/docs/experiments/canal.md` §10 y §13.
+    tool_id: str = ""
+    tool_width: float = 0.0
     security_plane: float = 20.0
     depth_spec: MillingDepthSpec = field(
         default_factory=lambda: MillingDepthSpec(
@@ -95,7 +120,8 @@ class ChannelSpec:
     retract: RetractSpec = field(default_factory=RetractSpec)
     material_position: str = "Left"
     side_offset: float = 0.0
-    end_radius: float = 60.0
+    end_radius: float = 0.0            # derivado: radio del disco
+    activate_cnc_correction: bool = False  # derivado: `false` con disco, `true` con fresa
     slot_angle: float = 1.5707963267948966
     is_enabled_expr: Optional[str] = None
 
@@ -188,6 +214,10 @@ class _HydratedChannelSpec:
         return self.spec.end_radius
 
     @property
+    def activate_cnc_correction(self) -> bool:
+        return self.spec.activate_cnc_correction
+
+    @property
     def slot_angle(self) -> float:
         return self.spec.slot_angle
 
@@ -203,9 +233,8 @@ def _normalize_channel_spec(slot_milling: ChannelSpec) -> ChannelSpec:
         abs_tol=1e-9,
     ):
         raise ValueError("La ranura no puede tener longitud cero.")
-    end_radius = float(slot_milling.end_radius)
-    if end_radius < 0.0:
-        raise ValueError("El radio de extremo de la ranura no puede ser negativo.")
+    tool_name = (slot_milling.tool_name or "082").strip() or "082"
+    tool = _tool_from_catalog(tool_name)
     return replace(
         slot_milling,
         start_x=float(slot_milling.start_x),
@@ -214,16 +243,17 @@ def _normalize_channel_spec(slot_milling: ChannelSpec) -> ChannelSpec:
         end_y=float(slot_milling.end_y),
         plane_name=_normalize_plane_name(slot_milling.plane_name),
         side_of_feature=_normalize_side_of_feature(slot_milling.side_of_feature),
-        tool_id=(slot_milling.tool_id or "1899").strip() or "1899",
-        tool_name=(slot_milling.tool_name or "082").strip() or "082",
-        tool_width=float(slot_milling.tool_width),
+        tool_id=tool.tool_id,
+        tool_name=tool_name,
+        tool_width=tool.cutting_width,
         security_plane=float(slot_milling.security_plane),
         depth_spec=_normalize_milling_depth_spec(slot_milling.depth_spec),
         approach=_normalize_approach_spec(slot_milling.approach),
         retract=_normalize_retract_spec(slot_milling.retract),
         material_position=(slot_milling.material_position or "Left").strip() or "Left",
         side_offset=float(slot_milling.side_offset),
-        end_radius=end_radius,
+        end_radius=tool.diameter / 2.0,
+        activate_cnc_correction=tool.uses_cnc_correction,
         slot_angle=float(slot_milling.slot_angle),
     )
 
@@ -278,15 +308,22 @@ def _build_slot_side_feature(
     _append_node(depth, PGMX_NS, "EndDepth", depth_value)
     _append_node(depth, PGMX_NS, "StartDepth", depth_value)
     end_conditions = _append_node(feature, PGMX_NS, "EndConditions")
+    # El tipo de extremo lo elige la HERRAMIENTA: un disco deja el corte curvo de su
+    # radio (`Woodruff`) y una fresa el extremo redondo de su punta (`Radiused`).
+    # Medido sobre el par 082/E004 del Grupo 11 (`canal.md` §10).
+    es_disco = _tool_from_catalog(spec.tool_name).is_blade
     for _ in range(2):
         slot_end = _append_node(
             end_conditions,
             MILLING_NS,
             "SlotEndType",
-            attrib={f"{{{XSI_NS}}}type": "a:WoodruffSlotEndType"},
+            attrib={
+                f"{{{XSI_NS}}}type": "a:WoodruffSlotEndType" if es_disco else "a:RadiusedSlotEndType"
+            },
         )
         _set_xmlns(slot_end, "a", MILLING_NS)
-        _append_node(slot_end, MILLING_NS, "Radius", _compact_number(spec.end_radius))
+        if es_disco:
+            _append_node(slot_end, MILLING_NS, "Radius", _compact_number(spec.end_radius))
     _append_node(feature, PGMX_NS, "IsGeomSameDirection", "true")
     _append_node(feature, PGMX_NS, "IsPrecise", "false")
     _append_node(feature, PGMX_NS, "MaterialPosition", spec.material_position)
@@ -404,9 +441,7 @@ def build_channel_spec(
     feature_name: Optional[str] = None,
     plane_name: Optional[str] = None,
     side_of_feature: Optional[str] = None,
-    tool_id: Optional[str] = None,
     tool_name: Optional[str] = None,
-    tool_width: Optional[float] = None,
     security_plane: Optional[float] = None,
     is_through: Optional[bool] = None,
     target_depth: Optional[float] = None,
@@ -426,7 +461,6 @@ def build_channel_spec(
     retract_overlap: Optional[float] = None,
     material_position: Optional[str] = None,
     side_offset: Optional[float] = None,
-    end_radius: Optional[float] = None,
     slot_angle: Optional[float] = None,
     is_enabled_expr: Optional[str] = None,
 ) -> ChannelSpec:
@@ -446,9 +480,7 @@ def build_channel_spec(
             feature_name=(feature_name or "Canal").strip() or "Canal",
             plane_name=_normalize_plane_name(plane_name),
             side_of_feature=_normalize_side_of_feature(side_of_feature),
-            tool_id=(tool_id or "1899").strip() or "1899",
             tool_name=(tool_name or "082").strip() or "082",
-            tool_width=3.8 if tool_width is None else float(tool_width),
             security_plane=20.0 if security_plane is None else float(security_plane),
             depth_spec=depth_spec,
             approach=build_approach_spec(
@@ -470,7 +502,6 @@ def build_channel_spec(
             ),
             material_position=(material_position or "Left").strip() or "Left",
             side_offset=0.0 if side_offset is None else float(side_offset),
-            end_radius=60.0 if end_radius is None else float(end_radius),
             slot_angle=1.5707963267948966 if slot_angle is None else float(slot_angle),
             is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,
         )
