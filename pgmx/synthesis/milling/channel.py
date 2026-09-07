@@ -126,6 +126,17 @@ class ChannelSpec:
     #: herramienta`, que **se combina** con los otros tres). El manual de Xilog la
     #: llama «corrección en profundidad» y sólo la admite en fresas de disco.
     is_precise: bool = False
+    #: `Invertir` de `Datos avanzados`. Da vuelta el RECORRIDO —no la geometría— y
+    #: su único efecto en el ISO es que desaparece la cola del regreso, porque
+    #: cambia cuál extremo es el punto final geométrico (`canal.md` §18).
+    invert: bool = False
+    #: `Canto a canto` de `Datos avanzados`: el canal deja de medir lo dibujado y
+    #: cruza la pieza de borde a borde. El extremo pasa a `OpenSlotEndType`.
+    edge_to_edge: bool = False
+    #: `Extra dist. inicial` / `final`, que suman MAS ALLA del borde y aceptan
+    #: negativos (recortan hacia adentro). Solo tienen efecto con `edge_to_edge`.
+    overcut_length_input: float = 0.0
+    overcut_length_output: float = 0.0
     slot_angle: float = 1.5707963267948966
     is_enabled_expr: Optional[str] = None
 
@@ -226,6 +237,22 @@ class _HydratedChannelSpec:
         return self.spec.is_precise
 
     @property
+    def invert(self) -> bool:
+        return self.spec.invert
+
+    @property
+    def edge_to_edge(self) -> bool:
+        return self.spec.edge_to_edge
+
+    @property
+    def overcut_length_input(self) -> float:
+        return self.spec.overcut_length_input
+
+    @property
+    def overcut_length_output(self) -> float:
+        return self.spec.overcut_length_output
+
+    @property
     def slot_angle(self) -> float:
         return self.spec.slot_angle
 
@@ -291,6 +318,86 @@ def _spec_acortada(state, spec):
     )
 
 
+def _spec_canto_a_canto(state, spec):
+    """La spec extendida de borde a borde de la pieza, con las distancias extra.
+
+    Medido en el Grupo 10 (`canal.md` seccion 18): con `Canto a canto` el canal
+    **ignora los extremos dibujados** y cruza la pieza entera; `Extra dist.
+    inicial` corre el extremo del punto de INICIO geometrico y `Extra dist. final`
+    el del FINAL, los dos mas alla del borde, y **aceptan negativos** (recortan
+    hacia adentro).
+
+    📌 **Diferencia declarada con Maestro, funcionalmente identica.** Maestro
+    parametriza la geometria de la feature dejando el punto base en el borde y
+    corriendo el rango --`8 -20 410 | 1 0 200 0 1 0 0`--; nosotros dejamos el rango
+    en `[0, largo]` y movemos el punto base --`8 0 430 | 1 -20 200 0 1 0 0`--. Es
+    **el mismo segmento**, y es la forma que Maestro usa para las otras tres
+    curvas del mismo archivo. Vale la decision del 2026-08-16: el `.pgmx` se juzga
+    funcionalmente identico, no byte a byte.
+    """
+
+    if not spec.edge_to_edge:
+        return spec
+    dx = float(spec.end_x) - float(spec.start_x)
+    dy = float(spec.end_y) - float(spec.start_y)
+    horizontal = math.isclose(dy, 0.0, abs_tol=1e-9)
+    vertical = math.isclose(dx, 0.0, abs_tol=1e-9)
+    if not (horizontal or vertical):
+        # Los seis fixtures del Grupo 10 son horizontales. Una diagonal cortaria
+        # el rectangulo de la pieza en otros puntos y no hay evidencia de como lo
+        # resuelve Maestro: no se inventa.
+        raise ValueError(
+            "`Canto a canto` solo esta derivado para canales paralelos a un eje: "
+            "no hay fixture de una diagonal."
+        )
+    extension = float(state.length) if horizontal else float(state.width)
+    inicio = -float(spec.overcut_length_input) or 0.0  # sin cero negativo
+    fin = extension + float(spec.overcut_length_output)
+    if fin <= inicio:
+        raise ValueError("Las distancias extra dejan el canal de longitud nula o negativa.")
+    creciente = (dx > 0.0) if horizontal else (dy > 0.0)
+    primero, ultimo = (inicio, fin) if creciente else (fin, inicio)
+    nuevos = (
+        {"start_x": primero, "end_x": ultimo}
+        if horizontal
+        else {"start_y": primero, "end_y": ultimo}
+    )
+    return replace(spec, spec=replace(spec.spec, **nuevos))
+
+
+_LADO_OPUESTO = {"Left": "Right", "Right": "Left", "Center": "Center"}
+
+
+def _spec_invertida(spec):
+    """La spec con el recorrido dado vuelta, para la TRAYECTORIA.
+
+    ⚠️ **También se invierte `side_of_feature`, y no es un descuido.** Maestro
+    conserva el lado FÍSICO al invertir: `Corrección izquierda` + `Invertir` sigue
+    dando `Y 201.9`, no `198.1` (medido en el Grupo 10). Como la compensación se
+    calcula respecto de la dirección de recorrido, dar vuelta los extremos sin dar
+    vuelta el lado movería la ranura al otro lado de la línea. Las dos inversiones
+    juntas dejan el mismo desplazamiento con el recorrido al revés, que es lo que
+    el `.pgmx` de Maestro guarda.
+
+    El `SideOfFeature` que se SERIALIZA es el original: éste es un spec interno,
+    sólo para generar el perfil.
+    """
+
+    if not spec.invert:
+        return spec
+    return replace(
+        spec,
+        spec=replace(
+            spec.spec,
+            start_x=float(spec.end_x),
+            start_y=float(spec.end_y),
+            end_x=float(spec.start_x),
+            end_y=float(spec.start_y),
+            side_of_feature=_LADO_OPUESTO.get(spec.side_of_feature, spec.side_of_feature),
+        ),
+    )
+
+
 def _normalize_channel_spec(slot_milling: ChannelSpec) -> ChannelSpec:
     if math.isclose(float(slot_milling.start_x), float(slot_milling.end_x), abs_tol=1e-9) and math.isclose(
         float(slot_milling.start_y),
@@ -320,6 +427,10 @@ def _normalize_channel_spec(slot_milling: ChannelSpec) -> ChannelSpec:
         end_radius=tool.diameter / 2.0,
         activate_cnc_correction=tool.uses_cnc_correction,
         is_precise=bool(slot_milling.is_precise),
+        invert=bool(slot_milling.invert),
+        edge_to_edge=bool(slot_milling.edge_to_edge),
+        overcut_length_input=float(slot_milling.overcut_length_input),
+        overcut_length_output=float(slot_milling.overcut_length_output),
         slot_angle=float(slot_milling.slot_angle),
     )
 
@@ -384,17 +495,22 @@ def _build_slot_side_feature(
             MILLING_NS,
             "SlotEndType",
             attrib={
-                f"{{{XSI_NS}}}type": "a:WoodruffSlotEndType" if es_disco else "a:RadiusedSlotEndType"
+                f"{{{XSI_NS}}}type": (
+                    "a:OpenSlotEndType"
+                    if spec.edge_to_edge
+                    else ("a:WoodruffSlotEndType" if es_disco else "a:RadiusedSlotEndType")
+                )
             },
         )
         _set_xmlns(slot_end, "a", MILLING_NS)
-        if es_disco:
+        if es_disco and not spec.edge_to_edge:
             _append_node(slot_end, MILLING_NS, "Radius", _compact_number(spec.end_radius))
-    _append_node(feature, PGMX_NS, "IsGeomSameDirection", "true")
+    _append_node(feature, PGMX_NS, "IsGeomSameDirection", "false" if spec.invert else "true")
     _append_node(feature, PGMX_NS, "IsPrecise", "true" if spec.is_precise else "false")
     _append_node(feature, PGMX_NS, "MaterialPosition", spec.material_position)
-    _append_node(feature, PGMX_NS, "OvercutLenghtInput", "0")
-    _append_node(feature, PGMX_NS, "OvercutLenghtOutput", "0")
+    # El typo «Lenght» es de Maestro.
+    _append_node(feature, PGMX_NS, "OvercutLenghtInput", _compact_number(spec.overcut_length_input))
+    _append_node(feature, PGMX_NS, "OvercutLenghtOutput", _compact_number(spec.overcut_length_output))
     _append_node(feature, PGMX_NS, "SideOfFeature", spec.side_of_feature)
     _append_node(feature, PGMX_NS, "SideOffset", _compact_number(spec.side_offset))
     swept_shape = _append_node(
@@ -439,7 +555,8 @@ def _append_channel(root: ET.Element, state, spec: _HydratedChannelSpec) -> None
         start_expression_id = reserved_ids[i]; i += 1
         end_expression_id = reserved_ids[i]; i += 1
     enabled_expr_id = reserved_ids[i] if has_enabled_expr else None
-    spec_trayectoria = _spec_acortada(state, spec)
+    spec_extendida = _spec_canto_a_canto(state, spec)
+    spec_trayectoria = _spec_invertida(_spec_acortada(state, spec_extendida))
     generated_toolpath_profile = _build_line_toolpath_profile(
         float(state.depth), _toolpath_cut_z(state, spec), spec_trayectoria
     )
@@ -452,7 +569,7 @@ def _append_channel(root: ET.Element, state, spec: _HydratedChannelSpec) -> None
         lift_curve = _build_generated_lift_curve_for_profile(state, spec, generated_toolpath_profile)
     trajectory_curve = spec.trajectory_curve or _curve_spec_from_profile_geometry(generated_toolpath_profile)
 
-    geometries.append(_build_line_geometry(geometry_id, plane_id, plane_object_type, spec))
+    geometries.append(_build_line_geometry(geometry_id, plane_id, plane_object_type, spec_extendida))
     features.append(
         _build_slot_side_feature(
             state,
@@ -531,6 +648,10 @@ def build_channel_spec(
     material_position: Optional[str] = None,
     side_offset: Optional[float] = None,
     is_precise: Optional[bool] = None,
+    invert: Optional[bool] = None,
+    edge_to_edge: Optional[bool] = None,
+    overcut_length_input: Optional[float] = None,
+    overcut_length_output: Optional[float] = None,
     slot_angle: Optional[float] = None,
     is_enabled_expr: Optional[str] = None,
 ) -> ChannelSpec:
@@ -573,6 +694,10 @@ def build_channel_spec(
             material_position=(material_position or "Left").strip() or "Left",
             side_offset=0.0 if side_offset is None else float(side_offset),
             is_precise=bool(is_precise),
+            invert=bool(invert),
+            edge_to_edge=bool(edge_to_edge),
+            overcut_length_input=0.0 if overcut_length_input is None else float(overcut_length_input),
+            overcut_length_output=0.0 if overcut_length_output is None else float(overcut_length_output),
             slot_angle=1.5707963267948966 if slot_angle is None else float(slot_angle),
             is_enabled_expr=None if is_enabled_expr is None else str(is_enabled_expr).strip() or None,
         )

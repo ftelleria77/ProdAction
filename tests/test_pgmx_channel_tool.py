@@ -186,6 +186,79 @@ class TestCorreccionEnLongitud(unittest.TestCase):
             _sintetizar_en(start_x=180.0, end_x=230.0, is_precise=True)
 
 
+class TestInvertir(unittest.TestCase):
+    """`Invertir` da vuelta el RECORRIDO, no la geometría (Grupo 10)."""
+
+    def test_da_vuelta_la_trayectoria_y_deja_la_geometria(self) -> None:
+        geometrias = _geometrias(_sintetizar(invert=True))
+        self.assertEqual(
+            geometrias,
+            [
+                "8 0 300 | 1 50 200 0 1 0 0",       # la geometría NO se toca
+                "8 0 30 | 1 350 200 38 0 0 -1",     # ahora baja en el otro extremo
+                "8 0 300 | 1 350 200 8 -1 0 0",     # y el recorrido va al revés
+                "8 0 30 | 1 50 200 8 0 0 1",
+            ],
+        )
+
+    def test_escribe_IsGeomSameDirection(self) -> None:
+        self.assertEqual(_valores(_sintetizar(invert=True), "IsGeomSameDirection")[:1], ["false"])
+        self.assertEqual(_valores(_sintetizar(), "IsGeomSameDirection")[:1], ["true"])
+
+    def test_NO_cambia_el_lado_de_la_correccion(self) -> None:
+        """Maestro conserva el lado físico: `Left` + `Invertir` sigue en Y 201.9."""
+
+        for lado, y in (("Left", "201.90000000000001"), ("Right", "198.09999999999999")):
+            with self.subTest(lado=lado):
+                recorrido = [
+                    g for g in _geometrias(_sintetizar(side_of_feature=lado, invert=True))
+                    if g.endswith("-1 0 0")
+                ]
+                self.assertEqual(recorrido, [f"8 0 300 | 1 350 {y} 8 -1 0 0"])
+
+
+class TestCantoACanto(unittest.TestCase):
+    """`Canto a canto` cruza la pieza; las distancias extra corren los extremos."""
+
+    def test_ignora_lo_dibujado_y_cruza_la_pieza(self) -> None:
+        geometrias = _geometrias(_sintetizar(edge_to_edge=True))
+        self.assertEqual(geometrias[0], "8 0 400 | 1 0 200 0 1 0 0")
+        self.assertIn("8 0 400 | 1 0 200 8 1 0 0", geometrias)
+
+    def test_el_extremo_pasa_a_abierto_y_pierde_el_radio(self) -> None:
+        xml = _sintetizar(edge_to_edge=True)
+        self.assertEqual(_tipos_de_extremo(xml), {"OpenSlotEndType"})
+        self.assertEqual(_valores(xml, "Radius"), [])
+
+    def test_las_distancias_extra_corren_los_extremos(self) -> None:
+        """EDI corre el del INICIO geométrico y EDF el del FINAL (§18)."""
+
+        casos = {
+            (10.0, 0.0): "8 0 410 | 1 -10 200 8 1 0 0",
+            (0.0, 10.0): "8 0 410 | 1 0 200 8 1 0 0",
+            (20.0, 10.0): "8 0 430 | 1 -20 200 8 1 0 0",
+            (-10.0, -10.0): "8 0 380 | 1 10 200 8 1 0 0",
+        }
+        for (edi, edf), esperado in casos.items():
+            with self.subTest(edi=edi, edf=edf):
+                geometrias = _geometrias(_sintetizar(
+                    edge_to_edge=True, overcut_length_input=edi, overcut_length_output=edf
+                ))
+                self.assertIn(esperado, geometrias)
+
+    def test_se_escriben_con_el_typo_de_Maestro(self) -> None:
+        xml = _sintetizar(edge_to_edge=True, overcut_length_input=20.0, overcut_length_output=10.0)
+        self.assertEqual(_valores(xml, "OvercutLenghtInput")[:1], ["20"])
+        self.assertEqual(_valores(xml, "OvercutLenghtOutput")[:1], ["10"])
+
+    def test_una_diagonal_se_rechaza_por_falta_de_fixture(self) -> None:
+        with self.assertRaisesRegex(ValueError, "no hay fixture de una diagonal"):
+            _sintetizar_en(
+                start_x=50.0, start_y=50.0, end_x=350.0, end_y=350.0,
+                tool_name="E004", edge_to_edge=True,
+            )
+
+
 class TestLimitesDelDisco(unittest.TestCase):
     """Los límites son del DISCO, no del `Canal` — el lote D2 lo midió."""
 
