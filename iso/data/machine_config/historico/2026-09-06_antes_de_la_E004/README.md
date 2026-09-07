@@ -13,7 +13,7 @@ postprocesados **con esta configuración**, no con la que hay en `snapshot/`.
 |---|---|
 | `maestro/Tlgx/def.tlgx` | la `E004`: longitud **107,2 → 95**. Y **todos** los `tool_id` corridos |
 | `xilog_plus/Job/def.tlg` | la misma longitud, en los tres campos que la llevan |
-| `maestro_ui/UI00.exe.Config` | `RapidFeed` **50 → 164,042** · `IsMM` `true` → `True` (sólo el case) |
+| `maestro_ui/UI00.exe.Config` | `RapidFeed` **50 → 164,042** —✅ **devuelto a 50 el 2026-09-07**— · `IsMM` `true` → `True` (sólo el case) |
 | `xilog_plus/Cfg/Env.cfg` | `Path` de `…\Xilog Plus\Cfg` a `…\Xilog Plus\JOB` |
 
 ### ⚠️ Los `tool_id` NO son estables
@@ -29,9 +29,14 @@ Hacia afuera, la herramienta se identifica por **nombre** (`082`, `E004`).
 ### ⚠️ El `RapidFeed`, sin barrer
 
 `164,042` es `50` convertido a unidades imperiales (50 m/min = 164,042 ft/min): la aplicación
-estuvo en pulgadas y al volver quedó el valor convertido. **No sabemos si llega al ISO**: el
-barrido A6 midió la ventana Opciones sobre un programa vacío, y una velocidad de rápido sólo
-se ve con traza. Queda como diferencia conocida entre esta época y la siguiente.
+estuvo en pulgadas y al volver quedó el valor convertido.
+
+✅ **Cerrado el 2026-09-07, y por dos lados.** No llega al ISO —1418 líneas `G0` sobre seis ISO
+de producción con traza, ninguna lleva `F`— y Fermín lo devolvió a **50** en la máquina. ⇒ este
+valor **ya no es una diferencia** entre esta época y la actual.
+
+📌 Pero antes de corregirlo sirvió para algo: **fue el testigo** que le faltaba al negativo del
+`IsMM` del 2026-08-22. Ver `experiments/opciones_de_aplicacion.md`.
 
 ## Cómo usarlo
 

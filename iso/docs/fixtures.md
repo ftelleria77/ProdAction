@@ -220,9 +220,14 @@ en el converter.
 
 ### Y una diferencia conocida entre las dos épocas, sin barrer
 
-En el mismo refresco, `UI00.exe.Config` pasó de `RapidFeed` **50** a **164,042** —el mismo valor
+En el mismo refresco, `UI00.exe.Config` apareció con `RapidFeed` en **164,042** —el mismo valor
 convertido a unidades imperiales—. A6 lo había medido sobre un programa vacío, donde una
 velocidad de rápido no se ve.
+
+✅ **Corregido en la máquina el 2026-09-07**: Fermín lo devolvió a **50** y el snapshot se
+refrescó. ⇒ **entre la época de los fixtures y la actual ya no hay diferencia en este valor.**
+Las únicas que quedan son el case del `IsMM` (`true` → `True`) y el `IsCamViewEnabled`, que
+`configuracion_aplicacion.md` tiene documentado como la vista de cámara y no toca el ISO.
 
 ✅ **Chequeado el 2026-09-07 y no llega al ISO**: sobre seis ISO de producción con traza
 (`Prod 26-08-05 Magliochetti`), **1418 líneas `G0` y ninguna lleva `F`** — los rápidos no
