@@ -371,9 +371,13 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 > estudian, porque la sospecha es que esos parámetros no sólo mueven líneas del esqueleto
 > sino que **cambian el comportamiento de los mecanizados**. Cada etapa de D incluye su
 > pasada de A5.
+> ✅ **CUMPLIDO el 2026-09-07.** La traza de fresado quedó consolidada en
+> **`experiments/fresado.md`** y el **`B2` de `anatomia_iso.md` está abierto**, con las tres
+> familias de emisión comparadas. Lo de abajo es el aviso original.
+>
 > ⚠️ **La rama D ya tiene evidencia, archivada bajo otra rama** (anotado el 2026-08-27). La
-> primera traza de mecanizado de la época nueva —`linea_01_fresada`, 95 líneas contra las 44
-> del vacío— está documentada en **`dibujos.md` §13.1**, porque vino en el lote de dibujos:
+> primera traza de mecanizado de la época nueva —`linea_01_fresada`— está documentada en
+> **`dibujos.md` §13.1**, porque vino en el lote de dibujos:
 > el cuerpo del fresado, que la traza **no es** la geometría (agrega posicionamiento, bajada
 > en Z y salida), que `SVL`/`SVR` salen del catálogo y que `S…M3` sale de
 > `spindle_speed_std`. Y su incremento del conteo (`+206`) está en `operaciones_maquina.md`
@@ -384,10 +388,14 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
   `.pgmx`** en doce grupos, del programa vacío en los ocho campos hasta la alternancia entre las
   cinco caras. Cota, huso, orden, patrones, pasadas, transición entre caras y rechazos
   predecibles. Detalle en `experiments/perforado.md`
-- Fresados (línea, arco, círculo, polilínea, contorno) — 🔮 · **hay un fixture ya derivado
-  parcialmente**, ver el aviso de arriba
-- **Canal** — ✅ **DERIVADO (2026-09-06)**, doc `experiments/canal.md`. ⏸ queda el lote de
-  cierre (14 archivos) y la pasada de A5. **Son dos bloques distintos según el cabezal de la
+- Fresados (línea, arco, círculo, polilínea, contorno) — 🔄 **ABIERTO**, doc
+  `experiments/fresado.md` (2026-09-07). Tiene **un solo fixture**, heredado del lote de
+  dibujos: la línea con la `E001`. Y una derivación que vale: **su bloque es el MISMO que el
+  del canal con fresa** ⇒ la familia de emisión la decide la herramienta, no la operación.
+  **Es el lote grande que falta** — cuatro geometrías sin probar, más estrategia, acercamiento
+  y pasadas
+- **Canal** — ✅ **CERRADO (2026-09-07)**, doc `experiments/canal.md`. Quince grupos, 85
+  `.pgmx` y 65 `.iso`, con la pasada de A5 hecha **y con testigo**. **Son dos bloques distintos según el cabezal de la
   herramienta**, y el `.pgmx` guarda las dos geometrías —nominal y corregida— para que el
   converter elija según `ActivateCNCCorrection`. Lo de abajo es cómo arrancó. Va
   detrás del perforado porque **es el mismo cabezal** (`def.tlgx` declara la `082` como
@@ -470,6 +478,37 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 - ¿Qué opciones de programa muestra la UI que el XML de la plantilla no expone (o al revés)?
 
 ## Bitácora del trayecto
+
+### 2026-09-07 — Se cierra D2, y se tapan tres agujeros de método
+Día de cierre y de repaso. El lote D2 termina con los grupos 14 y 15, y Fermín preguntó si
+quedaba algún agujero antes de seguir: quedaban tres, y ninguno era del canal.
+
+- ✅ **D2 CERRADO**: quince grupos, **85 `.pgmx` y 65 `.iso`**. El Grupo 14 cerró las siete
+  herramientas (7 de 7 explicadas por el catálogo), y el Grupo 15 hizo **la pasada de A5 sobre
+  un mecanizado por primera vez** — ocho fixtures **con sus ocho capturas**, y **ningún
+  parámetro de máquina toca la traza**. El espejo tecnológico, que era el candidato, no espeja
+  nada, y esta vez el negativo **tiene testigo**.
+- ⭐⭐ **El conteo del `Xmsg` cuenta CARACTERES del texto emitido**, y eso resuelve la anomalía
+  que el perforado había dejado como *«al revés de lo esperado, sin explicación»*: `X92.500`
+  tiene un carácter **menos** que `X100.000`. Cambia la naturaleza del bloqueo del
+  byte-idéntico: no falta una tabla por tipo de operación, **falta contar la salida**.
+- ⭐ **El `Stop` del `Xmsg` llega al ISO** como el campo `S` (`Nothing`→`S0`, `NoUnlock`→`S1`,
+  `Unlock`→`S2`, los dos últimos con `M0`). Estaba listado como «sin barrer» en la rama C.
+- ⛔ **Tercer caso de fail-loud**: un canal más corto que el acortamiento de `Corrección en
+  longitud` **no se rechaza — se da vuelta**, y emite un corte invertido en el lugar equivocado.
+- 🧹 **Los tres agujeros, tapados**:
+  - **`B2` de `anatomia_iso.md`, abierto**: qué agrega cada operación al esqueleto. Y con un
+    hallazgo propio — **no hay un bloque por operación, hay uno por FAMILIA DE EMISIÓN**, y la
+    familia la decide la herramienta: el «Fresado» de una línea y el «Canal» con una `E004`
+    dan **el mismo bloque de 51 líneas**. `?%ETK[7]` la nombra: 3 taladrado, 1 disco, 4 fresado.
+  - **`experiments/fresado.md` creado**: la traza que vivía archivada en `dibujos.md` §13.1
+    queda consolidada en la rama D, con lo mucho que le falta escrito.
+  - **`perforado.md` §9 repasado**: cuatro de sus siete «abiertos» ya estaban cerrados por sus
+    propios grupos. Es el modo de falla que la auditoría del 08-27 describió, y que ya nos
+    costó un lote repetido.
+- 📌 **Y un off-by-one corregido**: el programa vacío son **43** líneas —los veinte campos, y
+  como `programa_vacio.md` decía— no 44; el taladro agrega **41**, no 40.
+
 
 ### 2026-09-06 — El canal queda derivado, y son DOS bloques según el cabezal
 Cierre del lote D2 con los grupos 7 a 13, más varios archivos que Fermín agregó por su cuenta y

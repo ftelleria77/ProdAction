@@ -899,3 +899,93 @@ y el de SCM tampoco.
 
 Las responden los `.cfg` del snapshot, el manual de Xilog (`pgmx/docs/xilog_plus_pgm/`) y
 los fixtures de R001 — en ese orden: primero leer, después preguntar (regla 2).
+
+---
+
+# B2 · Qué agrega cada operación al esqueleto (2026-09-07)
+
+`B1` atribuyó las 43 líneas del **programa vacío**. `B2` es la otra mitad: **qué le agrega cada
+operación**, y de dónde sale cada número.
+
+Se abre recién ahora, con dos mecanizados derivados —perforado (D1) y canal (D2)— más la única
+traza de fresado que existe. Hasta hoy cada bloque vivía sólo en el doc de su rama.
+
+> **Todas las cuentas de acá son contra el programa vacío del MISMO campo: 43 líneas.**
+> Verificado el 2026-09-07 sobre los veinte campos del Grupo 0 del perforado: **los veinte dan
+> 43**, así que el campo no cambia el largo del esqueleto.
+>
+> 📌 **Corrige un número que circulaba**: `perforado.md` §4 decía «sobre el ISO del programa
+> vacío (44 líneas), un taladro agrega 40». Son **43** —como `programa_vacio.md` lo tuvo
+> siempre— y el taladro agrega **41**.
+
+## ⭐⭐ No hay un bloque por operación: hay uno por FAMILIA DE EMISIÓN
+
+Y la familia la decide **la herramienta**, no la operación que elegiste en la UI. El registro
+que la nombra es **`?%ETK[7]`**:
+
+| `?%ETK[7]` | familia | cabezal | operaciones de la UI que la producen | líneas |
+|---|---|---|---|---|
+| **3** | taladrado | perforador | `Perforado` | **41** |
+| **1** | corte con disco | perforador | `Canal` con la sierra `082` | **52** |
+| **4** | fresado | electromandril | `Fresado` **y** `Canal` con una `E00x` | **51** |
+
+⇒ La prueba más fuerte de que la familia es de la herramienta y no de la operación: el
+**«Fresado» de una línea** y el **«Canal» hecho con la `E004`** dan **el mismo bloque de 51
+líneas**, línea por línea, y sólo difieren en los números de la herramienta y las coordenadas
+(`fresado.md` §4).
+
+## Qué tienen en común las tres
+
+```
+?%ETK[8]=1 · G40   ×2          <- preámbulo del bloque de operaciones
+…selección de herramienta…      <- lo que cambia por familia
+MLV=2 · %Or[0].ofX/Y/Z         <- el segundo bloque de origen, igual al del esqueleto
+MLV=1 · SHF[X]/[Y]/[Z]
+MLV=2 · SHF[X]/[Y]/[Z]         <- el offset del HUSO o del cabezal
+…el movimiento…
+```
+
+## Y en qué difieren
+
+| | taladrado (3) | disco (1) | fresado (4) |
+|---|---|---|---|
+| cambio de herramienta | **no** | **no** | `MLV=0` · `T n` · `SYN` · `M06` |
+| selección | `?%ETK[6]`=huso · `?%ETK[0]`=2^(plc−1) | `?%ETK[6]`=82 · `?%ETK[1]`=2^(plc−33) | `?%ETK[6]`=1 · `?%ETK[9]`=almacén · `?%ETK[13]` · `?%ETK[18]` |
+| corrector | **no lo carga** | `D1` · `SVL` · `SVR` · `VL6` · `VL7` | ídem |
+| `SHF` del programa | `SHF[Z]=0` — **Z contra la mesa** | `SHF[Z]`=espesor | `SHF[Z]`=espesor |
+| `SHF` del cabezal | del registro del huso | del registro 82 | `32.050 / −246.650 / −125.300` |
+| cota de corte | `espesor − prof + ToolOffsetLength` | **−profundidad** | **−profundidad** |
+| aproximación | `espesor + seguridad + ToolOffsetLength` | `ToolOffsetLength + seguridad` | ídem |
+| espera al cerrar | `G4F1.200` | `G4F1.200` | **no** |
+
+## De dónde sale cada número
+
+**Ninguno es una constante interna** (regla 4). Las fuentes, con su derivación:
+
+| en el ISO | sale de | dónde se derivó |
+|---|---|---|
+| `SVL` | `ToolOffsetLength` del catálogo | `canal.md` §19 · `perforado.md` Grupo 6 |
+| `SVR` | radio del **cuerpo**: `BladeThickness/2` (disco) o `Diameter/2` (fresa) | `canal.md` §19, y el manual de Xilog lo escribe igual |
+| `S…M3` | `SpindleSpeed.Standard` | `perforado.md` §7bis |
+| `F` del corte | `FeedRate.Standard × 1000` | `canal.md` §23 |
+| `F` de la bajada | `DescentSpeed.Standard × 1000` | ídem |
+| cota de aproximación | **`ToolOffsetLength` + plano de seguridad** | `canal.md` §19, tres herramientas |
+| `?%ETK[0]` / `?%ETK[1]` | `2^(shPlcOut−1)` y `2^(shPlcOut−33)` | `perforado.md` Grupo 6 · `canal.md` §8 |
+| `?%ETK[6]` | número de huso o de herramienta | ídem |
+| `T` y `?%ETK[9]` | `shStorePos` del catálogo | `canal.md` §23, 7/7 |
+| `SHF` del huso | `−pos23 / −pos24 / −pos25` de `spindles.cfg` | `perforado.md` §7 |
+| plano de seguridad | `ApproachSecurityPlane` del `.pgmx` | `canal.md` §10 |
+
+⚠️ **El catálogo es `def.tlgx`, que viaja dentro de cada `.pgmx`** — y sus valores de longitud
+son **resultados de calibración**, no geometría declarada (`fixtures.md` §7).
+
+## Lo que B2 todavía NO cubre
+
+| | |
+|---|---|
+| `?%ETK[17]=257` | igual en las tres familias, nunca varió |
+| `G4F1.200` | la espera del cierre en las familias del perforador |
+| el `0,75` de la cola del disco | un solo candidato, `gendata.cfg` (`emisor_iso.md`) |
+| el `1 mm` de entrada/salida del `G41`/`G42` | sin procedencia |
+| el conteo del `Xmsg` | **se cuenta**, no se tabula (`operaciones_maquina.md` §18); falta la base |
+| `Vaciado`, `Galceado`, `Corte con cuchilla` | operaciones sin estudiar: pueden abrir familias nuevas |

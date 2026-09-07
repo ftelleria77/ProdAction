@@ -97,7 +97,7 @@ el `F` y el `S` del ISO **no salen del programa**: salen del catálogo de herram
 
 ## 4. El bloque del taladrado en el ISO
 
-Sobre el ISO del programa vacío (44 líneas), un taladro agrega **40**. El cuerpo, con la broca
+Sobre el ISO del programa vacío (**43** líneas), un taladro agrega **41**. El cuerpo, con la broca
 `001` en (100,100) a profundidad 10:
 
 ```
@@ -1023,12 +1023,18 @@ diámetro**, que es lo que el nombre no alcanza a afirmar por sí solo.
 
 ## 9. Lo que queda abierto
 
+> 🧹 **Repasada el 2026-09-07.** La lista tenía cuatro entradas que sus propios grupos ya
+> habían cerrado — el mismo modo de falla que la auditoría del 08-27 documentó: los hallazgos
+> se archivan por lote y el doc de la rama no se entera. Quedan tachadas, con dónde se
+> contestaron.
+
 | | |
 |---|---|
-| `?%ETK[17]=257` | igual en los diez. Falta hacerlo variar |
-| `G4F1.200` | la espera del cierre: de dónde sale el 1.2 |
-| el plano de seguridad | vale 20 por defecto y no está en la parte visible de la ventana. Falta la captura de las secciones plegadas |
-| `Estrategia` en un taladro | sección sin capturar; ni siquiera sabemos qué ofrece |
-| pasadas / descarga de virutas | no aparecen en la ventana visible. Deciden el número mágico `peck+1` |
-| la posición 24 de `spindles.cfg` | ¿es la `Y` del huso? Lo contestan las brocas 002 y 003 |
-| el incremento del conteo del `Xmsg` | Grupo 7 |
+| `?%ETK[17]=257` | igual en los diez. **Sigue abierto**, y también en el canal |
+| `G4F1.200` | la espera del cierre: de dónde sale el 1.2. **Sigue abierto** |
+| ~~el plano de seguridad~~ | ✅ es **`ApproachSecurityPlane`** del `.pgmx`, vale 20 por defecto (`canal.md` §10) |
+| `Estrategia` en un taladro | sección sin capturar. **Sigue abierto** — dato nuevo: con la sierra esa sección **no existe** (`canal.md` §9) |
+| ~~pasadas / descarga de virutas~~ | ✅ medidas en el **Grupo 11** (`profpasada_*`), con el bug de `StepDepth` anotado |
+| ~~la posición 24 de `spindles.cfg`~~ | ✅ **es la `Y` del huso**, resuelto en el propio §7bis con 21 valores |
+| ~~el incremento del conteo del `Xmsg`~~ | ✅ el Grupo 7 lo midió, y el 2026-09-07 quedó la regla: **el conteo cuenta caracteres del texto emitido**, no hay tabla por tipo (`operaciones_maquina.md` §18) |
+| **la anatomía comparada** | ✅ el bloque del taladrado quedó consolidado en el **`B2`** de `anatomia_iso.md` (2026-09-07), junto al del canal y el del fresado |
