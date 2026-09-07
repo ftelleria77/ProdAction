@@ -360,7 +360,31 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 - C4. **Varios `Xn` en un programa** — ✅ (2026-08-22): **sí se pueden**, cada uno emite su
   cuerpo y el orden se respeta. El `?%ETK[8]=1` + `G40` son **preámbulo del bloque**, no del
   `Xn`; el primero cuesta **seis** líneas y los siguientes **cinco**
-- C5. **Corrección del sintetizador** — ⬜ **cuando estén estudiados todos los tipos de
+- C5. **Corrección del sintetizador** — 🔄 **PARCIAL (2026-09-07)**, y el resto **vuelve a
+  esperar a que estén estudiados todos los mecanizados** (Fermín, 2026-09-07 — misma decisión
+  que la de abajo, reafirmada).
+
+  **Hecho**, todo verificado contra los fixtures del lote D2:
+
+  | | |
+  |---|---|
+  | `pgmx/tlgx.py` | lector de `def.tlgx`, la fuente real de los datos de herramienta. Cierra la brecha F0.7 |
+  | el catálogo del sintetizador | deja de salir del CSV: **`def.tlgx`**, y la herramienta se resuelve **por nombre** |
+  | «la herramienta decide» | ancho, radio y tipo de extremo, y el modo de corrección |
+  | `Corrección en longitud` | con su acortamiento `√(p·(2r−p))` |
+  | `Invertir` · `Canto a canto` · `Extra dist.` | con su geometría |
+
+  **Dos defectos reales encontrados de paso**: el `tool_id` hardcodeado —en el `ChannelSpec` y
+  en el mapa de brocas, con IDs que ya no existen— y el `ActivateCNCCorrection` en `true`
+  cuando la sierra lo tiene en `false`. Suite 357 → 397.
+
+  ⏸ **Pendiente**: la **rampa** (`Profundidad final`) y el **`Pasante` como expresión**. La
+  rampa está bloqueada por un defecto latente de `build_line_geometry_profile` —con dos `Z`
+  distintas la dirección sale plana— que vive en código **compartido** con el fresado, el arco
+  y el círculo: el arreglo necesita fixtures de esos usos, y por eso espera a que la rama D
+  esté completa. Detalle en `experiments/canal.md`.
+
+- C5 (planteo original) — ⬜ **cuando estén estudiados todos los tipos de
   operación** (decisión de Fermín, 2026-08-20). `XnSpec` ya modela los seis campos; lo que
   falta verificar es la emisión, y hay una divergencia anotada en el `GeometryID`
 
