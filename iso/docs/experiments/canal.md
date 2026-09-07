@@ -17,7 +17,7 @@
 |---|---|
 | ✅ derivado | **el canal entero, con las dos familias de herramienta** — el lote D2 cerrado |
 | ✅ confirmado | **la cara única** (§15): con `Lado delantero` la `082` desaparece del desplegable |
-| ⛔ imposible | ángulo del perfil ≠ 0° (§11), profundidad > 10 mm (§12) e **inclinación ≠ 90°, que el postproceso NO rechaza** (§14) |
+| ⛔ imposible | ángulo ≠ 0° (§11), profundidad > 10 mm (§12), **inclinación ≠ 90°** (§14) y **canal más corto que el acortamiento** (§23) — los dos últimos el postproceso NO los rechaza |
 | ✅ derivado | **el sentido de corte y la cola** (§11): corta de X mayor a menor, y vuelve al final geométrico |
 | ✅ **lote D2 completo** | los trece grupos, 65 `.pgmx` y 45 `.iso` (2026-09-06) |
 | ✅ descartado | el rechazo de la `082` del lote C: era del contexto `Xn` (§7) |
@@ -1162,7 +1162,108 @@ trabaja siempre en modo CAD**, con la corrección resuelta en el programa.
 📌 `E001` da un cuarto punto del ancho: `Anchura` = **18.36**, que es su diámetro real
 (`SVR 9.18 × 2`). El «18 mm» del nombre es sólo el nombre.
 
-## 22. Lo que queda abierto
+## 23. Grupo 14 — las siete herramientas, el canal imposible y el conteo (2026-09-07)
+
+Doce pares `.pgmx` + `.iso`, **todos postprocesados con el catálogo nuevo** (la `E004`
+recalibrada a 95). Los doce nombres dicen la verdad, verificado por atributo.
+
+### ✅ El bloque del electromandril es UNO SOLO: 7 de 7
+
+Las siete `E00x`, ahora sí cada una con su herramienta. **Todo lo que el ISO emite sale del
+catálogo**, sin excepción:
+
+| | `T` | `?%ETK[9]` | `SVL` | `SVR` | `S` | `F` del corte | aproximación |
+|---|---|---|---|---|---|---|---|
+| `E001` | 1 | 1 | 125.400 | 9.180 | 18000 | 5000 | 145.400 |
+| `E002` | 2 | 2 | 107.000 | 50.000 | 6000 | 3000 | 127.000 |
+| `E003` | 3 | 3 | 111.500 | 4.760 | 18000 | **18000** | 131.500 |
+| `E004` | 4 | 4 | **95.000** | 2.000 | 18000 | 5000 | **115.000** |
+| `E005` | 5 | 5 | 145.900 | 38.000 | 18000 | 5000 | 165.900 |
+| `E006` | 6 | 6 | 120.870 | 40.000 | 18000 | **2000** | 140.870 |
+| `E007` | 7 | 7 | 152.100 | 8.860 | 18000 | 5000 | 172.100 |
+
+⇒ `SVL` = `ToolOffsetLength` · `SVR` = radio del cuerpo · `S` = `SpindleSpeed.Standard` ·
+`F` = `FeedRate.Standard × 1000` · **aproximación = `SVL` + 20** · **`T` = `?%ETK[9]` =
+`shStorePos`**. Las cuatro reglas y las dos identidades, **7 de 7**.
+
+⇒ **Ni la `E005` (45º) ni la `E006` (Rectificado) rompen el bloque**, que era la sospecha del
+§19. El canal con electromandril tiene **una sola forma**; lo que cambia son los números del
+catálogo.
+
+### ⭐ Y la recalibración de la `E004` llegó al ISO
+
+`SVL 95.000` y aproximación `Z115.000`, contra `107.200` / `127.200` de la época anterior.
+
+⇒ **Es la comprobación directa de que el `SVL` sale de la calibración** (`fixtures.md` §7),
+medida sobre el ISO y no inferida. El único cambio de máquina del 2026-09-07 se ve exactamente
+donde se esperaba, y en ningún otro lado.
+
+### ⛔ El canal más corto que el acortamiento NO se rechaza: se da vuelta
+
+Canal de **50 mm** —de (180,200) a (230,200)— con `Corrección en longitud`, que acorta
+**33,166 por punta**, o sea 66,33 en total: más que el canal entero.
+
+```
+G0 X213.166 Y200.000            ← 180 + 33,166  (el extremo de X MENOR, corregido)
+G1 X196.834 Z-10.000 F5000.000  ← 230 − 33,166  (el de X MAYOR, corregido)
+```
+
+**Los dos extremos se cruzaron.** El ISO emite un corte de **16,33 mm** —el sobrante,
+66,33 − 50— recorrido al revés y en el lugar equivocado. Y **sin cola**, que es lo correcto
+según la regla del §11: tras el cruce, el punto final geométrico quedó en el X menor.
+
+⇒ ⚠️ **Tercer caso de la excepción de fail-loud del `CLAUDE.md` §4.** El converter tiene que
+rechazar un canal cuya longitud sea menor que `2·√(p·(2r−p))` con la corrección activa.
+
+📌 La regla de la cola **sobrevive al caso degenerado**, lo cual la refuerza: no es una regla
+sobre «el extremo dibujado» sino sobre **dónde queda el final geométrico después de corregir**.
+
+### ⭐⭐ El conteo del `Xmsg` cuenta CARACTERES, y eso resuelve la anomalía del perforado
+
+El fixture pedía el canal arrancando en X = 92,5 para ver si el incremento del conteo dependía
+del contenido. **No se movió**: `x50` y `x92,5` dan los dos `xISO382` y `$0?443`.
+
+Y el perforado había medido lo contrario —`92.5` bajaba el conteo en 1 contra `100`— y lo
+anotó como *«al revés de lo esperado, sin explicación»*.
+
+**Las dos medidas son la misma regla**: el conteo mira el **texto emitido**, donde la
+coordenada siempre lleva tres decimales.
+
+| | tipeado | emitido | caracteres | conteo |
+|---|---|---|---|---|
+| perforado | `100` | `X100.000` | 8 | base |
+| perforado | `92.5` | `X92.500` | **7** | **−1** ✅ |
+| canal | `50` | `X50.000` | 7 | base |
+| canal | `92.5` | `X92.500` | **7** | **sin cambio** ✅ |
+
+⇒ Para el byte-idéntico cambia la naturaleza del problema: **no falta «la fórmula de cada
+mecanizado», falta contar el texto que el converter va a emitir**. Detalle en
+`operaciones_maquina.md` §18.
+
+### ⭐ Y los tres modos de paro del `Xmsg`, que estaban sin barrer
+
+Fermín los agregó por su cuenta —*«no recuerdo si habíamos hecho este estudio completo»*—, y
+no: la rama C los listaba como **sin barrer**.
+
+| opción de la UI | `.pgmx` | ISO |
+|---|---|---|
+| `Ningún Paro` | `Stop = Nothing` | `S0`, sin `M0` |
+| `Paro con Espera de Start` | `Stop = NoUnlock` | `S1` + **`M0`** |
+| `Paro con Desbloqueo y Espera de Start` | `Stop = Unlock` | `S2` + **`M0`** |
+
+Confirma la hipótesis de la rama C y encaja con la plantilla del emisor. Detalle en
+`operaciones_maquina.md` §18.
+
+### 📌 Y un nombre que afirma de más, por tercera vez en este lote
+
+El archivo base `…_prof10_XMSG` (sin sufijo) **no tiene `Xmsg`**: ni `Stop` ni `Text`, y su ISO
+son las 95 líneas del canal solo. Es el tercer nombre del lote D2 que afirma algo que el
+archivo no tiene (los otros dos fueron la `E001` y la `E007` del Grupo 11).
+
+⇒ Esta vez **no se perdió nada**: sin querer quedó el **control perfecto** del punto anterior
+—el canal en X=92,5 sin mensaje—, que es contra el que se comparan los tres con paro.
+
+## 24. Lo que queda abierto
 
 | | |
 |---|---|
@@ -1174,11 +1275,11 @@ trabaja siempre en modo CAD**, con la corrección resuelta en el programa.
 | ~~el `G0 Z80.000`~~ | ✅ **RESUELTO (§19)**: `ToolOffsetLength` + plano de seguridad, tres herramientas |
 | las `Funciones máquina` | nueve interruptores por operación, todos apagados. Familia de fixtures futura |
 | ~~el `T= 102` del rechazo~~ | 📌 el Grupo 13 muestra `E001` → **`T1`** y `E002` → `T2` (posición de almacén). El `102` sigue sin explicar, pero la regla `E00n` → `Tn` se confirma |
-| **el incremento del `Xmsg`** | +121 por canal, pero sin variar el largo de las coordenadas (§17) |
+| ~~el incremento del `Xmsg`~~ | ✅ **+121, constante** (§23): el conteo mira el texto emitido, no el valor tipeado |
 | **el `1 mm` de entrada/salida del `G41`/`G42`** | constante en los tres casos de C.N. (§21). Sin procedencia |
-| **`E003`, `E005`, `E006`, `E007`** | sin probar: dos nombres del Grupo 11 mentían |
+| ~~`E003`, `E005`, `E006`, `E007`~~ | ✅ **probadas (§23)**: 7 de 7, el bloque es uno solo |
 | ~~el acortamiento con `IsPrecise`~~ | ✅ **DERIVADO (§20)**: `√(p·(2r−p))`, dos profundidades |
-| **un canal más corto que 2×33.166 con `IsPrecise`** | la trayectoria se daría vuelta. ¿Rechaza? |
+| ~~un canal más corto que 2×33.166~~ | ✅ **(§23)**: no rechaza, **se da vuelta** — tercer caso de fail-loud |
 | el `Corte con cuchilla` | operación vecina en la cinta, sin estudiar |
 | ~~qué muestra los radios `Corrección C.N.`/`CAD`~~ | ✅ **RESUELTO (§21)**: aparecen con herramienta de electromandril |
 | ~~el canal con herramienta de electromandril~~ | ✅ **DERIVADO (§19, §21)** con `E002` y `E004`. Faltan `E003`, `E005`, `E006` y `E007` |

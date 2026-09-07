@@ -454,7 +454,7 @@ Tres cosas se siguen:
 | | |
 |---|---|
 | 🚧 **el número del `Xmsg`** | bloquea el byte-idéntico de todo programa con mensaje |
-| `Xmsg`: `IsInputEnable`, `Stop`, `Variable` | sin barrer; el `S0I0D0` sugiere que van ahí |
+| `Xmsg`: `IsInputEnable`, `Stop`, `Variable` | ✅ **`Stop` BARRIDO el 2026-09-07** (ver abajo): la hipótesis del `S0I0D0` era correcta. `IsInputEnable` y `Variable` siguen sin barrer |
 | `Park`: `Limit` | vale `Minimum` en los cuatro; sin barrer |
 | `Park` en otros campos | `pa21` (HG) y `pa31` (A); faltan los demás para saber la regla |
 | `Y` relativa | dos casos, dos campos; un tercero la cerraría |
@@ -606,3 +606,54 @@ o bytes**. Con un acento las dos lecturas se separan: `Girá la pieza` son 13 ca
 
 ⇒ Fixture barato que lo cierra: `xmsg_dos` con el primer mensaje **con acentos**. Hoy tenemos
 `XMSG_acentos`, pero ahí el mensaje acentuado es el **único**, así que no mueve nada medible.
+
+## 18. El `Stop` del `Xmsg` sí llega, y el conteo cuenta CARACTERES (2026-09-07)
+
+Tres fixtures que Fermín agregó al Grupo 14 del canal por su cuenta —*«no recuerdo si habíamos
+hecho este estudio completo»*—. No lo habíamos hecho: el §17 listaba `Stop` como **sin barrer**.
+
+### ⭐ Los tres modos de paro, de punta a punta
+
+| opción de la UI | `.pgmx` | ISO |
+|---|---|---|
+| **`Ningún Paro`** | `<Stop>Nothing</Stop>` | `$0?443`**`S0`**`I0D0?` |
+| **`Paro con Espera de Start`** | `<Stop>NoUnlock</Stop>` | `$0?443`**`S1`**`I0D0?` + **`M0`** |
+| **`Paro con Desbloqueo y Espera de Start`** | `<Stop>Unlock</Stop>` | `$0?443`**`S2`**`I0D0?` + **`M0`** |
+
+⇒ **La hipótesis del §17 era correcta**: el `S` de la instrucción es el campo `Stop`. Y encaja
+con la plantilla leída del emisor —`$0?%ld S%d I%d D%.*f?` en `isotrd.dll` (`emisor_iso.md`)—:
+el `%ld` es el conteo y el primer `%d` es el paro.
+
+⇒ Los dos modos con paro agregan además un **`M0`** (paro programado) después del `G4 F0`.
+
+⚠️ **Y contrasta con el `Park`**, cuyo campo `Stop` **no** llega al ISO (§14 bis). Mismo nombre
+de campo, dos operaciones, dos comportamientos. El converter no puede tratarlos igual.
+
+### ⭐⭐ El conteo cuenta el texto EMITIDO, no el valor tipeado
+
+El fixture pedía el canal arrancando en **X = 92,5** en vez de 50, para ver si el incremento
+—121 por canal— dependía del contenido, como pasaba en el perforado.
+
+**No se movió**: los dos dan `xISO382` y `$0?443`.
+
+Y ahí está la explicación de la anomalía que el perforado había dejado escrita como *«al revés
+de lo esperado, medido y sin explicación»*: allá `92.5` **bajaba** el conteo en 1 contra `100`,
+lo que parecía absurdo porque «92.5» tiene un carácter más que «100».
+
+**Pero el conteo no mira lo que uno tipea: mira lo que el ISO escribe.** Y el ISO escribe las
+coordenadas con tres decimales siempre:
+
+| | tipeado | emitido | caracteres |
+|---|---|---|---|
+| perforado | `100` | `X100.000` | **8** |
+| perforado | `92.5` | `X92.500` | **7** ⇒ uno menos, conteo −1 ✅ |
+| canal | `50` | `X50.000` | **7** |
+| canal | `92.5` | `X92.500` | **7** ⇒ igual, conteo sin cambio ✅ |
+
+⇒ **Las dos medidas encajan con la misma regla**, y la del perforado deja de ser una anomalía.
+
+⇒ Para el byte-idéntico esto cambia la naturaleza del problema: **no falta «la fórmula de cada
+mecanizado», falta contar el texto que el propio converter va a emitir.** Es un conteo sobre la
+salida, no una tabla de constantes por tipo de operación.
+
+📌 **Sigue faltando la base del conteo** —de dónde arranca— y qué son la `I` y la `D`.

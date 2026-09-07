@@ -648,6 +648,15 @@ Base del campo A: **212**.
 que `100`— **baja** el conteo en 1. Con el `Xmsg` el texto más largo lo subía. Medido, sin
 explicación.
 
+> ✅ **RESUELTO el 2026-09-07, y no era al revés: estábamos contando el número equivocado.**
+> El conteo mira el **texto EMITIDO**, no el valor tipeado. En el ISO la coordenada sale
+> siempre con tres decimales: `X100.000` son **ocho** caracteres y `X92.500` son **siete**. El
+> `92.5` no tiene un carácter más — tiene uno **menos**, y por eso baja el conteo en 1.
+> Exactamente lo esperado.
+>
+> Lo confirmó el canal desde el otro lado: `X50.000` y `X92.500` tienen **el mismo largo**, y
+> el conteo **no se mueve** (`canal.md` §23). Detalle en `operaciones_maquina.md`.
+
 ## 7ter. El Optimizador no cambia nada — y se sabe por qué (2026-09-01)
 
 Idea de Fermín: el botón `Optimizador` nunca se usó en el taller porque no se le veía
