@@ -43,7 +43,15 @@ Fermín extrajo el `UI00.exe.Config` de la **PC del CNC** y se comparó contra e
 
 El resto de las diferencias son rutas, historial (`RecentFile1..10`), parámetros de
 nesting (`SheetLenght`, `SheetWidth`, `TabThickness`), `OptimizationWaitingTime` y
-`IsCamViewEnabled` — ninguna afecta el ISO de una pieza.
+`IsCamViewEnabled` —el modo de representación de los mecanizados en la UI— : ninguna afecta el
+ISO de una pieza.
+
+> 📌 **`IsCamViewEnabled` se mueve solo.** El 2026-09-07, al abrir la ventana de Opciones para
+> corregir otra clave, Maestro lo reescribió sin que nadie lo tocara. Es la segunda vez que
+> guardar esa ventana cambia más de lo pedido —la primera fue el case del `IsMM`—, así que
+> **cada fixture de A6 puede traer cambios colaterales en claves que no son la que se varió**.
+> No contamina lo derivado (ninguna de las dos toca la emisión), pero conviene mirar el diff
+> completo del config, no sólo la clave del fixture.
 
 Dos claves existen **sólo en el CNC**: `EnvVarDir` y `TechnologiesDir`.
 
@@ -101,7 +109,7 @@ de los 17 fixtures del barrido: de **172 claves, cambiaron 11**, y diez son `Rec
 
 | Clave | Antes (08-10) | Ahora (08-12) | ¿Toca el ISO? |
 |---|---|---|---|
-| `IsCamViewEnabled` | `False` | `True` | no — es la vista de cámara |
+| `IsCamViewEnabled` | `False` | `True` | no — es el **modo de representación de los mecanizados en la UI** (Fermín, 2026-09-07). Irrelevante para la emisión |
 
 ⇒ **Las 17 opciones que tocó el barrido volvieron todas a su valor.** `IsFinalPark`,
 `IsAreaScm`, `IsZetaScm`, `SecurityDistance`, `RadiusMultiplier`, `MillingRetractDistance`,
