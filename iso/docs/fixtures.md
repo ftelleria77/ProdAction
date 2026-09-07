@@ -211,7 +211,26 @@ en el converter.
 ### Y una diferencia conocida entre las dos épocas, sin barrer
 
 En el mismo refresco, `UI00.exe.Config` pasó de `RapidFeed` **50** a **164,042** —el mismo valor
-convertido a unidades imperiales—. **No sabemos si llega al ISO**: A6 midió la ventana Opciones
-sobre un programa vacío, y una velocidad de rápido sólo se ve con traza. Queda anotado como
-diferencia entre épocas.
+convertido a unidades imperiales—. A6 lo había medido sobre un programa vacío, donde una
+velocidad de rápido no se ve.
+
+✅ **Chequeado el 2026-09-07 y no llega al ISO**: sobre seis ISO de producción con traza
+(`Prod 26-08-05 Magliochetti`), **1418 líneas `G0` y ninguna lleva `F`** — los rápidos no
+llevan velocidad, la pone el control. Los únicos avances que aparecen son 2000, 5000 y 1000,
+todos `feed_rate × 1000` del catálogo.
+
+> ⚠️ **Es un CHEQUEO, no una derivación** (decisión de Fermín): los archivos de producción **no
+> son parte de la reinvestigación**, se usaron sólo para ver si algo dado por derivado se había
+> movido. Si alguna vez hace falta afirmarlo, va con fixture propio.
+
+### De paso, el modelo se contrastó contra producción y aguantó
+
+Mismo chequeo, misma salvedad. Sobre esos seis ISO, que nunca habíamos mirado:
+
+| | |
+|---|---|
+| pares `SVL`/`SVR` | **44 de 44** explicados por el catálogo de la época |
+| máscara del huso `?%ETK[0] = 2^(plc−1)` | **6 de 6** (los `=0` son el cierre del bloque, no una selección) |
+
+⇒ Ninguna de las reglas derivadas se movió con el cambio de configuración.
 
