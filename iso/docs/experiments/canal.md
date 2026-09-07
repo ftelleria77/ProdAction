@@ -1349,5 +1349,6 @@ perforador y electromandril—, con la rutina de A5 cumplida y con testigo.
 | ~~el acortamiento con `IsPrecise`~~ | ✅ **DERIVADO (§20)**: `√(p·(2r−p))`, dos profundidades |
 | ~~un canal más corto que 2×33.166~~ | ✅ **(§23)**: no rechaza, **se da vuelta** — tercer caso de fail-loud |
 | el `Corte con cuchilla` | operación vecina en la cinta, sin estudiar |
+| ⚠️ **la rampa, en el sintetizador** | `build_line_geometry_profile` con dos `Z` distintas produce una serialización **inconsistente**: el largo sale en 3D (`√(L²+Δp²)`, correcto) pero la **dirección sale plana** (`1 0 0` en vez de `0.99986 0 0.016664`). Y la curva de salida arranca en la `Z` del inicio, no en la del final. Es código **compartido** con el fresado, el arco y el círculo, así que el arreglo necesita fixtures de esos usos antes de tocarlo. Detectado el 2026-09-07 al implementar `Profundidad final` |
 | ~~qué muestra los radios `Corrección C.N.`/`CAD`~~ | ✅ **RESUELTO (§21)**: aparecen con herramienta de electromandril |
 | ~~el canal con herramienta de electromandril~~ | ✅ **DERIVADO (§19, §21)** con `E002` y `E004`. Faltan `E003`, `E005`, `E006` y `E007` |
