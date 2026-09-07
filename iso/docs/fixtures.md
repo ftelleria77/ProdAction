@@ -22,7 +22,7 @@ Rutas simétricas bajo `PGMX_ROOT` (`S:\Maestro\Projects\ProdAction`) e `ISO_ROO
 | G | `…\Reinvestigación\Dibujos\` y `Dibujos\Rama G\` | 115 | las ocho geometrías de la pestaña Dibujar | `experiments/dibujos.md` |
 | C | `…\Reinvestigación\Operaciones\` | 68 | `Xn`, `Xmsg`, `Park` | `experiments/operaciones_maquina.md` |
 | D1 | `…\Reinvestigación\Mecanizados\Perforado\` | 158 | el perforado — ✅ doce grupos, cerrado el 2026-09-03 (140 `.iso`) | `experiments/perforado.md` |
-| D2 | `…\Reinvestigación\Mecanizados\Canal\` | 65 | el canal (Sierra Vertical X) — ✅ trece grupos, cerrado el 2026-09-06 (45 `.iso`); ⏸ lote de cierre de 14 | `experiments/canal.md` |
+| D2 | `…\Reinvestigación\Mecanizados\Canal\` | 85 | el canal (Sierra Vertical X) — ✅ **quince grupos, CERRADO** el 2026-09-07 (65 `.iso`) | `experiments/canal.md` |
 
 R001, R002, D1 y D2 llevan un `INSTRUCCIONES.md` en la carpeta del lote, con el pedido que les
 dio origen.
@@ -125,6 +125,11 @@ hizo»*. Lo que falta es cumplimiento y generalización:
 ⇒ **La exigencia de captura se generaliza a A5** y a cualquier lote futuro cuya variable no
 viva en el `.pgmx` — empezando por la pasada de A5 sobre cada mecanizado de la rama D, que es
 rutina permanente.
+
+> ✅ **Cumplida por primera vez el 2026-09-07**, en el Grupo 15 del canal: **ocho fixtures,
+> ocho capturas**. Y rindió — los dos negativos del grupo (`espejo_tecnologico` y
+> `repeticiones_3`) quedan **derivados** en vez de «probables», que es exactamente la
+> diferencia que esta sección pedía. Ver `experiments/canal.md` §24.
 
 ## 5. El verificador
 

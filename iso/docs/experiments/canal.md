@@ -19,7 +19,7 @@
 | ✅ confirmado | **la cara única** (§15): con `Lado delantero` la `082` desaparece del desplegable |
 | ⛔ imposible | ángulo ≠ 0° (§11), profundidad > 10 mm (§12), **inclinación ≠ 90°** (§14) y **canal más corto que el acortamiento** (§23) — los dos últimos el postproceso NO los rechaza |
 | ✅ derivado | **el sentido de corte y la cola** (§11): corta de X mayor a menor, y vuelve al final geométrico |
-| ✅ **lote D2 completo** | los trece grupos, 65 `.pgmx` y 45 `.iso` (2026-09-06) |
+| ✅ **lote D2 CERRADO** | quince grupos, 85 `.pgmx` y 65 `.iso` (2026-09-07), con la pasada de A5 hecha y con testigo |
 | ✅ descartado | el rechazo de la `082` del lote C: era del contexto `Xn` (§7) |
 | ⛔ imposible | el Grupo 2 entero: sin herramienta no hay canal, y `Anchura` nunca se edita (§10) |
 
@@ -1263,7 +1263,75 @@ archivo no tiene (los otros dos fueron la `E001` y la `E007` del Grupo 11).
 ⇒ Esta vez **no se perdió nada**: sin querer quedó el **control perfecto** del punto anterior
 —el canal en X=92,5 sin mensaje—, que es contra el que se comparan los tres con paro.
 
-## 24. Lo que queda abierto
+## 24. Grupo 15 — el barrido A5 sobre el canal: ningún parámetro toca la traza (2026-09-07)
+
+**La rutina permanente, cumplida por primera vez sobre un mecanizado.** Ocho fixtures, ocho
+ISO **y ocho capturas de la ventana** — el requisito que A5 no había cumplido y que dejó doce
+de sus resultados como «probables».
+
+### ✅ Siete de ocho: sólo la línea del header
+
+| fixture | qué cambia en el ISO |
+|---|---|
+| `A5_bloqueo_10` | `V=0` → **`V=2`** |
+| `A5_bloqueo_60` | `V=0` → **`V=10`** |
+| `A5_bloqueo_predefinido` | `V=0` → **`V=9`** |
+| `A5_mecanicas_elevadores` | `T=0` → **`T=1`** |
+| `A5_mecanicas_laser` | `T=0` → **`T=10`** |
+| `A5_espejo_tecnologico` | **nada** — ISO idéntico |
+| `A5_repeticiones_3` | **nada** — ISO idéntico |
+
+⇒ **Los cinco valores coinciden exactamente con lo que A5 midió sobre el programa vacío.** Un
+mecanizado en el medio no cambia lo que esos parámetros le hacen al header.
+
+⇒ ⭐⭐ **Y ninguno toca la traza.** Las 52 líneas del bloque del canal salen idénticas en los
+siete.
+
+### ⭐ El espejo tecnológico no espeja nada — y ahora con testigo
+
+Era **el único candidato por mecanismo** a mover una traza, y la razón de ser de la rutina: A5
+lo había medido sobre un programa vacío, donde no hay traza que espejar.
+
+Con un canal adentro, el ISO sale **idéntico**. Y esta vez el negativo **tiene testigo**: la
+captura de la ventana prueba que la opción estaba puesta.
+
+⇒ **DERIVADO, no «probable»** — a diferencia de los doce de A5 (`fixtures.md` §4). Lo mismo
+vale para `repeticiones_3`.
+
+### 📌 El octavo cambia dos cosas, y las dos están explicadas
+
+`A5_areas_combinadas` movió la traza (`G1 X50.000` → `G1 X100.000`), que sería el único
+resultado alarmante del grupo. **No lo movió el parámetro:** el `.pgmx` tiene el canal dibujado
+de **(100,200) a (350,200)**, largo 250 en vez de 300.
+
+Y hay una razón de máquina para que Fermín lo dibujara distinto: **activar «áreas combinadas»
+pone el programa en campo `EF`**, y ahí el canal en X=50 **no entra**:
+
+```
+50 − 3688.000 − 96 = −3734.000   contra el AP_MINQUOTA del eje X, −3702.000
+```
+
+⇒ **En campo `EF` la sierra no puede arrancar a la izquierda de X = 82.** Es el mismo tope que
+rechazó el canal en campo `A` (§8, donde el mínimo era 79,85), ahora confirmado en un **tercer
+campo**.
+
+Lo demás que difiere también está explicado y no necesita fixture nuevo:
+
+| diferencia | qué es |
+|---|---|
+| `-HG` → `-EF` en el header | el campo |
+| `%Or`/`SHF` = `−3688.000` / `−1515.250` | **exactamente los valores que R002 derivó para EF** (`anatomia_iso.md` B1c) |
+| `?%EDK[13]` → `?%EDK[10]` | la mitad de mesa que corresponde a EF |
+
+⇒ **`Áreas combinadas` no hace nada más que cambiar el campo**, y el campo ya está derivado.
+No queda parámetro sin aislar.
+
+### ⇒ La rama D2 queda cerrada
+
+Quince grupos, **85 `.pgmx` y 65 `.iso`**. El canal está derivado en sus dos formas —cabezal
+perforador y electromandril—, con la rutina de A5 cumplida y con testigo.
+
+## 25. Lo que queda abierto
 
 | | |
 |---|---|
