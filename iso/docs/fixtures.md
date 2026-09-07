@@ -22,7 +22,7 @@ Rutas simétricas bajo `PGMX_ROOT` (`S:\Maestro\Projects\ProdAction`) e `ISO_ROO
 | G | `…\Reinvestigación\Dibujos\` y `Dibujos\Rama G\` | 115 | las ocho geometrías de la pestaña Dibujar | `experiments/dibujos.md` |
 | C | `…\Reinvestigación\Operaciones\` | 68 | `Xn`, `Xmsg`, `Park` | `experiments/operaciones_maquina.md` |
 | D1 | `…\Reinvestigación\Mecanizados\Perforado\` | 158 | el perforado — ✅ doce grupos, cerrado el 2026-09-03 (140 `.iso`) | `experiments/perforado.md` |
-| D2 | `…\Reinvestigación\Mecanizados\Canal\` | 23 | el canal (Sierra Vertical X) — ⏸ pedido, sin hacer | `experiments/canal.md` |
+| D2 | `…\Reinvestigación\Mecanizados\Canal\` | 65 | el canal (Sierra Vertical X) — ✅ trece grupos, cerrado el 2026-09-06 (45 `.iso`); ⏸ lote de cierre de 14 | `experiments/canal.md` |
 
 R001, R002, D1 y D2 llevan un `INSTRUCCIONES.md` en la carpeta del lote, con el pedido que les
 dio origen.
@@ -173,3 +173,45 @@ de los negativos sin testigo (§4), vista desde el otro lado. El barrido excluye
   `ExecutionFields` cambia y el ISO **no** se mueve son exactamente `A`↔`AB`, `B`↔`BA`,
   `C`↔`CD`, `D`↔`DC`, `E`↔`EF`, `F`↔`FE`, `G`↔`GH`, `H`↔`HG`. Pedir la letra sola o su par
   produce el ISO **byte-idéntico**, no sólo el mismo header.
+
+## 7. ⚠️ Los fixtures están atados a una CALIBRACIÓN, no sólo a una versión de config
+
+**Corte de época: 2026-09-07.** Fermín cambió la fresa de 4 mm (`E004`) y tuvo que **rehacer su
+calibración**. Todo lo medido **hasta el 2026-09-06 inclusive** —ramas A, B, C, D1 y D2— se
+postprocesó con la configuración anterior, que quedó guardada en
+`iso/data/machine_config/historico/2026-09-06_antes_de_la_E004/` con su README.
+
+### Qué implica, y es más que un número que cambió
+
+El `SVL` que emite el ISO sale del `ToolOffsetLength` del catálogo, y **ese campo lo escribe la
+calibración**: es una **medición**, no geometría declarada. ⇒ el `77` de las brocas verticales,
+el `65` de las laterales y el `60` de la sierra —que `converter_magic_numbers.md` cuenta como
+«resueltos (catálogo)»— son resultados de calibración, y **cambian cada vez que se toca una
+herramienta**.
+
+⇒ **Cada fixture está atado al estado de calibración del día en que se postprocesó.** Si alguna
+vez un ISO viejo no reproduce, esto es lo primero que hay que mirar — antes de buscar un error
+en el converter.
+
+### Las tres reglas que salen de acá
+
+1. **Un valor medido se verifica contra el catálogo de SU época**, no contra el vigente.
+   `tests/test_pgmx_tlgx.py` está partido así a propósito: los números que salieron de un ISO
+   se chequean contra el `def.tlgx` histórico, y sólo las reglas estructurales —que no dependen
+   de una calibración— contra el vigente. Atarlos al catálogo de hoy convertiría cada cambio de
+   herramienta del taller en un test roto, y afirmaría algo falso.
+2. ⚠️ **El `tool_id` NO es estable.** Maestro **reasigna todos los identificadores** cada vez
+   que regenera el catálogo: el 2026-09-07 se vio dos veces el mismo día, corridos **+40** y
+   después **+60** (`001`: 1888 → 1928 → 1948). El `ID` sólo es coherente **dentro** de un
+   `.pgmx`, junto al `def.tlgx` que ese archivo trae embebido. **Hacia afuera, una herramienta
+   se identifica por nombre** (`082`, `E004`).
+3. **Lo más seguro para releer un fixture es su propio catálogo**: `load_tlgx_from_pgmx()` lee
+   el `def.tlgx` que viaja adentro del `.pgmx`, que siempre es el que le corresponde.
+
+### Y una diferencia conocida entre las dos épocas, sin barrer
+
+En el mismo refresco, `UI00.exe.Config` pasó de `RapidFeed` **50** a **164,042** —el mismo valor
+convertido a unidades imperiales—. **No sabemos si llega al ISO**: A6 midió la ventana Opciones
+sobre un programa vacío, y una velocidad de rápido sólo se ve con traza. Queda anotado como
+diferencia entre épocas.
+
