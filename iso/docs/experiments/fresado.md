@@ -14,6 +14,14 @@ del electromandril. Tercer mecanizado de la rama D, y el que menos evidencia pro
 > archivos heredados dieron **dos derivaciones y una corrección**, sin fixture nuevo: el «+20»
 > de la cota de aproximación **es el plano de seguridad** (§4bis), el campo **no mueve el
 > bloque** (§4ter), y los fixtures no eran uno sino **cinco**, en campo `A` y no `HG` (§1).
+>
+> ⭐⭐ **2026-09-08, mismo día: la tanda 1 está hecha — 35 pares y 12 capturas** (§9 a §14).
+> Se cerró lo que la rama debía: **la rampa son ATRIBUTOS de operación**, no un campo de la
+> ventana, y su serialización 3D **destraba el defecto que bloqueaba al sintetizador** (§10);
+> el bloque queda explicado por el catálogo en **7 de 7 herramientas**, con el avance de la
+> bajada derivado (§9); y de las geometrías salieron el `G2`/`G3` con centro absoluto, el
+> círculo en **dos medias vueltas**, y que **Maestro aproxima la elipse en 36 arcos dentro del
+> `.pgmx`** — el converter no tiene que saber aproximar (§12).
 
 ## 1. Los fixtures heredados
 
@@ -240,3 +248,347 @@ Las dos lecturas y lo que cambia según cuál valga:
 ⏸ **No se toca nada hasta que Fermín defina.** El sintetizador está congelado hasta que cierre
 la rama D (decisión del 2026-09-07, reafirma C5), así que la pregunta no bloquea el lote:
 bloquea la implementación, que es después.
+
+---
+
+# La tanda 1 del lote D3 (2026-09-08)
+
+**35 pares `.pgmx` + `.iso` y 12 capturas**, hechos por Fermín en un día. Auditoría por
+atributo: **35 de 35** en campo `A` y con la herramienta que afirma el nombre.
+
+Tres cosas del pedido cambiaron en la máquina, y las tres mejoran el lote:
+
+- **el Grupo 1 se hizo con las SIETE herramientas**, no con dos;
+- **la rampa no se pide en la ventana del `Fresado`**: se agregan **atributos de profundidad**
+  a un fresado existente (§10). Los `_pfN` que yo había pedido no existen;
+- **`_geometria_sin_dibujo` es imposible**: en Maestro **siempre** se dibuja primero y después
+  se aplica el fresado (§12.6).
+
+Y Fermín amplió tres grupos por su cuenta — el arco `_invertir`, los tres puntos de entrada del
+círculo y la elipse rotada —, que son justo los que cerraron el sentido de recorrido y el punto
+de entrada.
+
+## 9. Grupo 1 — las siete herramientas, y un nombre que miente
+
+Los siete ISO tienen **95 líneas** y difieren **sólo en los números del catálogo**:
+
+| | `T` = `?%ETK[9]` | `SVL` | `SVR` | `S` | `F` bajada | `F` corte | aproximación |
+|---|---|---|---|---|---|---|---|
+| `E001` | 1 | 125.400 | 9.180 | 18000 | 2000 | 5000 | 145.400 |
+| `E002` | 2 | 107.000 | 50.000 | **6000** | 2000 | **3000** | 127.000 |
+| `E003` | 3 | 111.500 | 4.760 | 18000 | **3000** | **18000** | 131.500 |
+| `E004` | 4 | 95.000 | 2.000 | 18000 | 2000 | 5000 | 115.000 |
+| `E005` | 5 | 145.900 | 38.000 | 18000 | 2000 | 5000 | 165.900 |
+| `E006` | 6 | 120.870 | 40.000 | 18000 | 2000 | **2000** | 140.870 |
+| `E007` | 7 | 152.100 | 8.860 | 18000 | 2000 | 5000 | 172.100 |
+
+⇒ **7 de 7 explicados por `def.tlgx`**, con las mismas reglas que el canal (`canal.md` §23):
+`SVL` = `ToolOffsetLength` · `SVR` = radio del cuerpo · `S` = `SpindleSpeed.Standard` ·
+`F` del corte = `FeedRate.Standard × 1000` · aproximación = `SVL` + cota de seguridad ·
+`T` = `?%ETK[9]` = `shStorePos`.
+
+### ⭐ Y una regla nueva: el avance de la BAJADA es `DescentSpeed`
+
+El canal no la pudo separar porque sus herramientas comparten el valor. Acá la `E003` tiene
+`DescentSpeed = 3` y su bajada sale **`F3000`** mientras las otras seis salen `F2000`.
+
+```
+G1 Z-<prof> F<DescentSpeed × 1000>       <- la bajada vertical
+G1 X…       F<FeedRate.Standard × 1000>  <- el corte
+```
+
+⇒ Dos velocidades distintas en el mismo bloque, las dos del catálogo. **Un número menos sin
+procedencia.**
+
+### ⚠️ El nombre del Grupo 1 dice `x50_x300_y150` y la traza es (50,200)→(350,200)
+
+Los siete archivos lo afirman y los siete lo contradicen: la geometría del `.pgmx` es
+`8 0 300` / `1 50 200 0 · 1 0 0`, y el ISO posiciona en `G0 X50.000 Y200.000` y corta hasta
+`X350.000`. Control cruzado: el ISO del `E004` del Grupo 1 es **byte-idéntico** al `prof10` del
+Grupo 2 salvo la línea del nombre — o sea, es exactamente el mínimo pedido.
+
+⇒ **Ninguna derivación se apoya en ese nombre**, y por eso no cambia nada: `fixtures.md` §2
+funcionando. Pero el corpus queda con siete nombres que mienten, y conviene renombrarlos a
+`…_x50_y200_x350_y200_prof10` antes de que alguien los lea al revés.
+
+## 10. ⭐⭐⭐ Grupo 2 — la rampa son ATRIBUTOS, y el defecto del sintetizador queda derivado
+
+**Es el hallazgo que la tanda tenía que traer, y vino más limpio de lo esperado.**
+
+### La UI: un atributo, no un campo
+
+La ventana del `Fresado` **no tiene «Profundidad final»**. La rampa se arma con
+`Operaciones > Atributos > Profundidad`, que abre una ventana propia de dos campos —
+**`Profundidad`** y **`Posición (%)`** — y cuelga un punto sobre la geometría. El tooltip de la
+cinta lo dice con todas las letras: *«permite crear un **atributo** de tipo profundidad»*.
+
+⇒ **La nomenclatura de la UI y la del XML coinciden**, que no es lo habitual:
+
+```xml
+<Attributes>
+  <b:OperationAttribute i:type="b:DepthAttribute">
+    <b:IsNormalized>true</b:IsNormalized>
+    <b:UPar>0.25</b:UPar>      <!-- Posicion (%) / 100 -->
+    <b:Depth>5</b:Depth>       <!-- Profundidad        -->
+  </b:OperationAttribute>
+</Attributes>
+```
+
+⇒ ⭐ **El nodo `<Attributes>` deja de estar vacío y tiene dueño.** Estaba en todos los `.pgmx`
+sin contenido desde el principio. Y sus hermanos en la cinta — **`Velocidad`** y
+**`Microuniones`** — son con toda probabilidad otros dos tipos de `OperationAttribute`:
+predicción falsable, barata de comprobar.
+
+⚠️ **`Depth.StartDepth`/`EndDepth` NO cambian**: siguen los dos en la profundidad base. El
+mecanismo del fresado **no es el del canal**, donde la rampa sí eran esos dos campos.
+
+### El ISO: la traza se parte en un segmento por tramo
+
+| archivo | atributos | el corte que emite |
+|---|---|---|
+| `prof10` | — | `G1 X350.000 Z-10.000` |
+| `prof10_p0_10_p100_5` | (0 %, 10) (100 %, 5) | `G1 X350.000 Z-5.000` |
+| `prof5_p0_5_p100_10` | (0 %, 5) (100 %, 10) | `G1 X350.000 Z-10.000` |
+| `prof10_p25_10_p75_5` | (25 %, 10) (75 %, 5) | `G1 X125.000 Z-10.000` · `G1 X275.000 Z-5.000` · `G1 X350.000 Z-5.000` |
+| `prof10_p25_5_p75_10` | (25 %, 5) (75 %, 10) | `G1 X125.000 Z-5.000` · `G1 X275.000 Z-10.000` · `G1 X350.000 Z-10.000` |
+
+⇒ **`Posición (%)` es la fracción del recorrido**: 25 % de (50→350) es `X125`, 75 % es `X275`.
+Y la `Z` **interpola linealmente entre atributos consecutivos**; antes del primero y después
+del último queda constante.
+
+### ⭐⭐ Y la serialización, que es lo que estaba trabado
+
+El defecto del 2026-09-07 — `build_line_geometry_profile` con dos `Z` distintas serializa el
+largo en 3D pero la **dirección plana**, y la curva de salida arranca en la `Z` del inicio —
+queda **derivado con fixture**, y la corrección que se había calculado a mano acierta a los
+diecisiete dígitos:
+
+```
+<d:string>8 0 300.04166377354994
+1 50 200 8 0.99986114003960003 0 0.016664352333993333 </d:string>
+```
+
+`√(300² + 5²)` = `300.04166377354994` y `(300, 0, 5)/L` = `(0.99986114…, 0, 0.016664352…)`.
+**Las dos en 3D.** La sesión anterior había anotado exactamente ese vector como el esperado.
+
+Las tres reglas, ahora con evidencia:
+
+1. **el largo y la dirección son 3D**, ambos;
+2. **cada tramo arranca en la `Z` donde terminó el anterior** — `1 125 200 13` sigue a un tramo
+   que terminó en 13;
+3. ⭐ **la curva `Lift` arranca en la `Z` del FINAL del recorrido y ajusta su largo**: con
+   `p0_10_p100_5` sale `8 0 25` desde `1 350 200 13` (25 = 38 − 13), no `8 0 30`. Era el
+   segundo síntoma del defecto y estaba sin confirmar.
+
+### ⭐ Y una regla de serialización que no se sabía
+
+Con atributos de profundidad, el `TrajectoryPath` **cambia de tipo**: pasa de
+`GeomTrimmedCurve` a **`GeomCompositeCurve`** — y lo hace **aunque tenga un solo miembro**
+(`p0_10_p100_5` es un compuesto de uno). El envoltorio no depende de la cantidad de tramos sino
+de que haya atributos.
+
+## 11. Grupo 2 — el pasante, que el canal no pudo hacer
+
+| archivo | corte |
+|---|---|
+| `pasante` | `G1 X350.000 Z-18.000` |
+| `pasante_extra0` | **byte-idéntico** al anterior |
+| `pasante_extra3` | `G1 X350.000 Z-21.000` |
+
+```
+cota del pasante = −(espesor + Extra)
+```
+
+⇒ Derivado con dos valores. El `Extra = 0` explícito **engorda el `.pgmx` en 28 bytes y no
+toca el ISO**: es la expresión paramétrica que el canal ya había visto (`canal.md` §12), que
+existe en el archivo aunque no cambie la salida.
+
+La `E004` tiene `SinkingLength = 22` y la placa 18, así que entra. Con la sierra `082` el
+pasante era imposible (entra 10 mm) y quedó como pregunta abierta de D2: **cerrada acá.**
+
+## 12. Grupo 3 — las geometrías
+
+Quince archivos. Todos con `E004`, cara superior, profundidad 10.
+
+### 12.1 ⭐ El costo en líneas es exacto: `50 + N segmentos`
+
+| geometría | segmentos | líneas que agrega |
+|---|---|---|
+| línea | 1 | **51** |
+| círculo | 2 | 52 |
+| polilínea abierta de 3 tramos | 3 | 53 |
+| rampa de 2 atributos | 3 | 53 |
+| rectángulo · contorno de la pieza | 4 | 54 |
+| hexágono | 6 | 56 |
+| elipse | 36 | 86 |
+
+⇒ **50 líneas de bloque más una por segmento**, sobre siete casos. Con **varias operaciones** no
+vale: `dos_fresados_una_geometria` (2 operaciones, 2 segmentos) agrega 71 y el texto (11
+operaciones, 315 segmentos) agrega 546. Queda para la tanda 2.
+
+### 12.2 ⭐⭐ El arco: `G3` antihorario, `G2` horario, y el centro va ABSOLUTO
+
+```
+G3 X200.000 Y300.000 I200.000 J200.000 F5000.000
+```
+
+`I`/`J` son el **centro en coordenadas absolutas de pieza** (200,200), no un incremento desde
+el punto de arranque como en el ISO de muchos controles. Y el punto de arranque lo pone el
+`G0 X…Y…` anterior.
+
+⭐ **`Invertir` invierte el sentido de recorrido**: el ISO de `arco_…_invertir` es
+**byte-idéntico** al de `arco_…_horario` salvo la línea del nombre. En el canal con sierra
+`Invertir` sólo sacaba la cola (`canal.md` §18) — porque el sentido de la sierra está
+normalizado. Con fresa, **el sentido es del programa y el casillero lo da vuelta**.
+
+### 12.3 ⭐⭐ El círculo son DOS medias vueltas, y el punto de entrada es el ángulo
+
+| archivo | entra en | emite |
+|---|---|---|
+| `circulo_…_r100` | `X300 Y200` (0°) | `G3` a `X100 Y200` · `G3` a `X300 Y200` |
+| `…_pi90` | `X200 Y300` | `G3` a `X200 Y100` · `G3` a `X200 Y300` |
+| `…_pi180` | `X100 Y200` | `G3` a `X300 Y200` · `G3` a `X100 Y200` |
+| `…_pi270` | `X200 Y100` | `G3` a `X200 Y300` · `G3` a `X200 Y100` |
+
+⇒ **Un círculo nunca se emite como un `G2`/`G3` de 360°**: siempre dos arcos de media vuelta,
+por el punto diametralmente opuesto. Y el punto de entrada es el que elige el usuario, con el
+centro `I`/`J` constante. Los cuatro van antihorario.
+
+### 12.4 ⭐⭐ La elipse: el `.pgmx` guarda las DOS cosas, y la aproximación la hace Maestro
+
+`GeomEllipse` **existe** — `dibujos.md` §12.2 había predicho su forma
+(`3 C N̂ Û V̂ R_may R_men`) sin fixture, y acierta — y el archivo la guarda entera en
+`<Geometries>`:
+
+```
+3 200 200 0  0 0 1  1 0 0  100 50
+```
+
+Pero el **toolpath** de esa misma operación es un `GeomCompositeCurve` de **36 arcos
+circulares** (código de curva `2`), y el ISO emite esos 36 `G3` con centros que cambian en cada
+uno.
+
+⇒ ⭐⭐⭐ **La aproximación la hace Maestro al construir la traza, no el postprocesador.** Es la
+misma lección que dio `ActivateCNCCorrection` en el canal, en su forma más fuerte: **la traza
+puede tener una familia de curva distinta de la geometría que la originó.**
+
+⇒ **El converter no tiene que saber aproximar una elipse.** Lee el toolpath y lo copia. Si
+tuviera que reproducir la aproximación de Maestro, el byte-idéntico sería inalcanzable.
+
+### 12.5 ⭐ El texto: once operaciones, un solo cambio de herramienta
+
+«PRUEBA» produce **once** `GeneralProfileFeature` + `BottomAndSideFinishMilling` — un contorno
+cerrado por cada uno: P(2) R(2) U(1) E(1) B(3) A(2). Confirma `dibujos.md` §13.2: el texto son
+contornos, no una familia nueva.
+
+En el ISO (589 líneas):
+
+| | |
+|---|---|
+| `T4` · `M06` | **1** — ⭐⭐ **el cambio de herramienta NO se repite** entre operaciones de la misma fresa |
+| `D1` · `SVL 95.000` · `G1 Z-10` · `?%ETK[7]=4` · `G0 Z20` | **11** — el corrector sí se re-emite por operación |
+| `G0 Z115.000` | **1** — la cota de aproximación se emite una vez |
+| `G2`/`G3` | **0** — ⭐ las curvas de las letras salen **poligonizadas**, 315 `G1` |
+
+⇒ Contesta por adelantado el Grupo 8 de la tanda 2 (`dos_paralelos`), y lo confirma
+`dos_fresados_una_geometria`: un solo `T4`/`SYN`/`M06`, y entre las dos operaciones un bloque de
+transición de `G17` + `MLV=2` + tres `G0` con **X, Y y Z combinados en una línea**.
+
+### 12.6 ⛔ Un fresado sobre un punto no existe, y un dibujo sin mecanizado no deja rastro
+
+El `.pgmx` de `punto_200_200` **no tiene feature, ni operación, ni herramienta**: sólo el
+`GeomCartesianPoint`. Maestro no deja crear el fresado (captura `fresado_sobre_punto`).
+
+Y su ISO es **idéntico al programa vacío salvo la línea del nombre** — 687 bytes contra 668, y
+la diferencia es exactamente el largo de más del nombre. Mismo control cruzado que cerró A7.
+
+⇒ Tercer testimonio de que **una geometría sin mecanizado no llega al ISO**, ahora con un
+mecanizado que se intentó y no se pudo crear.
+
+⛔ **Y `_geometria_sin_dibujo` es imposible por construcción** (dato de Fermín): en Maestro
+**siempre** se dibuja primero y después se aplica el fresado sobre el dibujo.
+
+⇒ ⭐ **Nuestro sintetizador hace lo contrario**: crea la geometría junto con el mecanizado.
+No es un defecto — el `.pgmx` resultante es válido — pero significa que **el camino de Maestro
+es uno solo y el nuestro es otro**, y que la reutilización de §2 no es un caso especial: **es la
+única forma que existe**.
+
+### 12.7 Las líneas y los compuestos: la coordenada que no cambia se omite
+
+```
+G1 X350.000 Z-10.000 F5000.000     <- polilínea, tramo 1: cambia X
+G1 Y350.000 Z-10.000 F5000.000     <- tramo 2: cambia Y, la X no se repite
+G1 X50.000  Z-10.000 F5000.000
+```
+
+Y en el hexágono, donde cambian los dos ejes:
+
+```
+G1 X150.000 Z-10.000 F5000.000     <- sólo cambia X  -> se completa con Z
+G1 X100.000 Y200.000 F5000.000     <- cambian X e Y  -> sin Z
+```
+
+⇒ **Regla de emisión (candidata, 6 casos): se emiten los ejes que cambian; si cambia uno solo,
+se agrega la `Z` aunque sea constante.** Vale también para la línea simple y la perpendicular
+(`G1 Y350.000 Z-10.000`). Le falta el caso de un tramo puramente vertical para cerrarla.
+
+Lo demás del grupo:
+
+- **rectángulo, hexágono y contorno de la pieza** cierran volviendo al punto de partida, con un
+  segmento por lado y **sin nada especial en las esquinas vivas** — la corrección está
+  cancelada (`G40`), así que la traza es la geometría;
+- el **contorno de la pieza** corta sobre el borde exacto (`X0`/`X400`), no afuera;
+- la línea que **sale de la pieza** (`x-20_x420`) no tiene tratamiento especial, igual que en el
+  canal;
+- la línea **perpendicular** (a lo largo de Y) postprocesa sin problema, lo que confirma que el
+  rechazo del canal era **del disco**, no de la operación.
+
+## 13. La ventana del `Fresado`, capturada (2026-09-08)
+
+| sección | qué tiene |
+|---|---|
+| **Datos fresado** | `Anchura` (en **gris**, = Ø de la herramienta) · `Profundidad` · `Pasante` |
+| **Corrección herramienta** | los cuatro botones · los radios **`Corrección C.N.` / `Corrección CAD`** · `Rebaba` |
+| **Datos tecnológicos** | el desplegable de herramienta · `Avanz.` y `Rotación (rpm)` **vacíos** ⇒ del catálogo (y por eso el XML guarda `Feedrate`/`Spindle` en `0`) |
+| **Estrategia** | desplegable con **Unidireccional · Bidireccional · Helicoidal · ZigZag** |
+| **Acercamiento/Alejamiento** | — |
+| **Datos avanzados** | `Invertir` · `Condición` · `Comentario` · ⭐ **`Cota de seguridad` = 20** |
+| **Datos máquina** | las nueve `Funciones máquina`, todas apagadas |
+
+### ⭐ Tres cosas que la ventana contesta sin fixture
+
+1. **La `Cota de seguridad` es UN campo, y vive en `Datos avanzados`.** Escribe los dos del XML
+   (`ApproachSecurityPlane` y `RetractSecurityPlane`) ⇒ **el fixture `secplane_ap30_ret10` del
+   Grupo 7 es IMPOSIBLE**: la UI no los separa. Cuál gobierna cada cota no se puede decidir con
+   archivos que Maestro produzca.
+2. ⛔ **No hay `Sobremedida`** en ninguna sección ⇒ `AllowanceBottom` y `AllowanceSide` son
+   campos del XML **sin campo en la ventana**, como `end_radius` y `material_position` en el
+   canal. **Los dos fixtures de sobremedida del Grupo 4 son imposibles.**
+3. ⛔ **No hay `Canto a canto`**: era del `Canal`. El fixture correspondiente del Grupo 10 se
+   cae.
+
+### ⚠️ Y una estrategia que no teníamos, y dos que no están
+
+El desplegable ofrece **cuatro**. Nuestro sintetizador tiene `Unidireccional`, `Bidireccional`,
+`Helicoidal` y `ContourParallel`:
+
+- ⭐ **`ZigZag` es nueva** — no existe en el sintetizador;
+- **`ContourParallel` no aparece** en el `Fresado`: es de vaciado;
+- las dos que declara el scripting (`PlaneCutterLocation`, `SectioningMilling`) **tampoco**.
+
+📌 Y la sección `Unidireccional` nombra las cosas distinto de nuestro código: **`Conexión entre
+huecos`** con dos opciones — `Salida a cota de seguridad` / `En la pieza`, **sin un tercero
+`Automatic`** —, y el par axial se llama **`Profundidad hueco`** y **`Último hueco`**, no
+«profundidad de pasada». Regla 3: manda la UI.
+
+## 14. Lo que la tanda 1 deja abierto
+
+| | |
+|---|---|
+| los siete nombres del Grupo 1 | afirman `x50_x300_y150` y la traza es (50,200)→(350,200). Conviene renombrar |
+| `Velocidad` y `Microuniones` | predicción: son `OperationAttribute` como `DepthAttribute` (§10). Sin fixture |
+| el costo en líneas con **varias** operaciones | la regla `50 + N` vale para una sola. Con dos, 71; con once, 546 |
+| la regla de emisión de ejes | 6 casos, le falta un tramo puramente vertical |
+| `secplane_ap30_ret10` · las dos sobremedidas · `canto_a_canto` | ⛔ **imposibles**: la ventana no ofrece el campo (§13) |
+| `ZigZag` | estrategia nueva, sin fixture y sin código |
+| el sentido de recorrido de un **contorno cerrado** | horario o antihorario, y si `Invertir` lo da vuelta como en el arco |

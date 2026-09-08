@@ -503,6 +503,59 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-08 (tarde) — La tanda 1 del fresado: la rampa son ATRIBUTOS, y el sintetizador se destraba
+El lote se pidió a la mañana y a la tarde ya estaban los grupos 1 a 3: **35 pares y 12
+capturas**. Auditoría por atributo, 35 de 35 en campo `A` con la herramienta del nombre.
+
+- ⭐⭐⭐ **La rampa no es un campo de la ventana: son ATRIBUTOS DE OPERACIÓN.** La UI no tiene
+  «Profundidad final» — se agregan puntos con `Operaciones > Atributos > Profundidad`
+  (`Profundidad` + `Posición (%)`), y en el XML son `OperationAttribute i:type="DepthAttribute"`
+  con `UPar` y `Depth`. ⇒ **el nodo `<Attributes>`, que estaba vacío en todos los `.pgmx` desde
+  el principio, tiene dueño**; y sus hermanos de la cinta (`Velocidad`, `Microuniones`) son con
+  toda probabilidad otros dos tipos. **El mecanismo NO es el del canal**, donde la rampa sí eran
+  `Depth.StartDepth`/`EndDepth`.
+- ⭐⭐ **Y con eso queda derivado el defecto que bloqueaba al sintetizador.**
+  `build_line_geometry_profile` con dos `Z` sacaba el largo en 3D y la dirección plana; Maestro
+  saca **las dos en 3D**, y el vector que la sesión del 09-07 había calculado a mano acierta a
+  los **diecisiete dígitos** (`8 0 300.04166377354994` / `1 50 200 8 0.99986114003960003 0
+  0.016664352333993333`). Los otros dos síntomas también: cada tramo arranca en la `Z` donde
+  terminó el anterior, y la curva `Lift` arranca en la `Z` del **final** y ajusta su largo.
+- ⭐ **7 de 7 herramientas explicadas por el catálogo** (Fermín hizo el Grupo 1 con las siete, no
+  con dos), y una regla nueva que el canal no pudo separar: **el avance de la bajada es
+  `DescentSpeed × 1000`** — la `E003` lo tiene en 3 y sale `F3000` mientras las otras seis dan
+  `F2000`. Dos velocidades del catálogo en el mismo bloque.
+- ⭐⭐ **Las geometrías**: `G3` antihorario / `G2` horario con **centro absoluto** en `I`/`J`; el
+  círculo sale en **dos medias vueltas** y el punto de entrada es el ángulo elegido; `Invertir`
+  **invierte el sentido de recorrido** (con la sierra sólo sacaba la cola); el costo en líneas es
+  **`50 + N segmentos`**, exacto en siete casos.
+- ⭐⭐⭐ **Maestro aproxima la elipse en 36 arcos DENTRO del `.pgmx`.** La geometría guarda
+  `GeomEllipse` —cuya forma `dibujos.md` §12.2 había predicho sin fixture, y acierta— y el
+  toolpath guarda los 36 arcos ya calculados. ⇒ **la traza puede tener una familia de curva
+  distinta de la geometría**, y **el converter no tiene que saber aproximar**: lee el toolpath.
+- ⭐⭐ **Un solo cambio de herramienta para N operaciones**: el `texto_PRUEBA` son **once**
+  fresados (un contorno cerrado por letra, con sus agujeros) y emite **un** `T4`/`SYN`/`M06`; el
+  corrector sí se re-emite once veces. Contesta por adelantado el Grupo 8 de la tanda 2.
+- ⛔ **Tres cosas resultaron imposibles, y las tres con testigo en las capturas**: la
+  `Sobremedida` no está en la ventana (`AllowanceBottom`/`Side` son campos sin UI), la `Cota de
+  seguridad` es **un** solo campo (así que no se puede separar cuál gobierna la aproximación y
+  cuál la salida), y `Canto a canto` es del `Canal`. Un fresado **sobre un punto** tampoco se
+  puede crear: el ISO sale idéntico al programa vacío salvo el nombre.
+- ⛔ **Y en Maestro siempre se dibuja primero** (dato de Fermín): la reutilización de geometría
+  no es un caso especial, **es la única forma que existe**. Nuestro sintetizador hace lo
+  contrario — crea la geometría con el mecanizado —, y eso queda escrito como divergencia
+  consciente.
+- 📌 **Nomenclatura para la tanda 2** (regla 3, la UI manda): la estrategia ofrece **cuatro** y
+  una es **`ZigZag`**, que no existe en el sintetizador; `ContourParallel` no aparece en el
+  `Fresado`. Y el multipaso se llama **`Conexión entre huecos`** (dos opciones, **sin
+  `Automatic`**), **`Profundidad hueco`** y **`Último hueco`**.
+- ⚠️ **Siete nombres que mienten**: los del Grupo 1 dicen `x50_x300_y150` y la traza es
+  (50,200)→(350,200). Ninguna derivación se apoyó en el nombre — `fixtures.md` §2 funcionando —,
+  queda anotado para renombrar.
+- ⏭️ **Tanda 2 replanteada**: 44 archivos, cuatro dados de baja por imposibles o ya contestados,
+  y un **Grupo 14** nuevo (el atributo `Velocidad`, el sentido de un contorno cerrado con
+  `Invertir`, y el tramo vertical que cierra la regla de emisión de ejes).
+
+
 ### 2026-09-08 — Arranca D3 (el fresado), y los archivos viejos pagan antes que los nuevos
 Se pidió el lote grande que faltaba. Pero antes de pedirlo se midió lo que ya había, y eso
 devolvió **dos derivaciones y una corrección** sin gastar un solo fixture.
