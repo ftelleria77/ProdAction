@@ -1027,9 +1027,18 @@ Acota lo que el canal había dejado como una constante en X.
 nombre, con `OverLap = 5` guardado en el `.pgmx`.
 
 ⇒ **Negativo con testigo interno**: el archivo prueba que la opción estaba puesta, así que
-esto es *derivado*, no *probable*. Sobre una línea abierta no hay nada que solapar; queda
-pendiente probarlo en un **contorno cerrado**, que es donde el solape tiene sentido (evitar la
-marca al salir).
+esto es *derivado*, no *probable*.
+
+⭐ **Y no es un negativo raro: es el esperado.** Dato de Fermín (2026-09-08): **el solape sirve
+en un fresado de trayectoria CERRADA — el trazo final se extiende más allá del punto final.**
+Sobre una línea abierta no hay adónde extenderse, porque el punto final es el fin del
+recorrido; en un contorno, el final coincide con el arranque y el solape lo pasa de largo para
+que no quede la marca del punto de cierre.
+
+⇒ **Predicción falsable para el fixture del contorno**: con `OverLap = 5` sobre el perímetro
+`(0,0)-(400,400)`, el último tramo tendría que pasarse **5 mm** del punto de cierre — o sea
+terminar en `X5.000` en vez de `X0.000` — y el ISO ganar cero líneas, porque es el mismo
+segmento más largo. Si en cambio agrega un segmento aparte, el modelo es otro.
 
 ### 21.7 El bloque se reordena cuando hay acercamiento
 
@@ -1061,6 +1070,6 @@ trabajo**, y el acercamiento forma parte de él.
 | ⭐ **el `10` del retorno «En la pieza»** | sigue siendo el pendiente caro: ¿profundidad o `MillingRetractDistance`? Grupo 15 |
 | ~~la profundidad 18 de los `corr_len`~~ | ✅ **cerrado**: era un cambio involuntario, ya rehechos a 10 |
 | ~~el `ActivateCNCCorrection` de los multipaso~~ | ✅ **cerrado**: lo fuerza la UI (§20) |
-| el `Solape` en un **contorno cerrado** | donde sí tiene sentido; sobre una línea no llega |
+| el `Solape` en un **contorno cerrado** | ⭐ Fermín explicó para qué es: **extiende el trazo final más allá del punto final**. Sobre una línea abierta no hay adónde extenderse ⇒ el negativo era el esperado. Fixture pedido con predicción (§21.6) |
 | el lado del arco con **corrección + `Izquierdo`/`Derecho` explícitos** | hoy el cruce se derivó con `Automático`; falta ver si el explícito ignora la corrección |
 | `Cutmode = Climb` | sigue sin campo identificado en la ventana |
