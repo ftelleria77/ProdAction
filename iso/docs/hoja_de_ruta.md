@@ -503,6 +503,35 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-08 (cierre) — Grupo 6: el acercamiento sale con fórmula, y la UI fuerza CAD con multipaso
+27 archivos más (se pidieron 6) y los dos `corr_len` rehechos. 28 de 28 verificados.
+
+- ⭐⭐ **El tamaño del acercamiento y del alejamiento es `RadiusMultiplier × SVR`**, exacto en
+  diez puntos (multiplicadores 1,5 · 2 · 4, en lineal y en arco, de entrada y de salida). Los
+  dos factores tienen procedencia —el `.pgmx` y el catálogo—: **ni una constante interna**.
+- ⭐⭐ **`Bajada`/`Subida` es una RAMPA y `Cota` son dos movimientos.** Con arco, la rampa es
+  una **hélice** (`G3 … Z-10 …` en un solo bloque). Una línea de diferencia en el ISO.
+- ⭐⭐ **El `Automático` del lado del arco va CRUZADO respecto de la corrección**: `Corrección
+  izquierda` produce el arco del lado `Derecho` y viceversa. Es físicamente correcto —el arco
+  entra por donde no está el material— y es una trampa de nomenclatura de manual: un converter
+  que asuma `Left → Left` **entra por el lado equivocado**.
+- ⭐ **El `1 mm` de `G41`/`G42` no es «en X»: se recorre por la TANGENTE del primer
+  movimiento.** Con arco de entrada sale en `Y`. Acota lo que el canal §21 había dejado como
+  constante.
+- ⛔ **El `Solape` no llega al ISO** sobre una línea abierta, con testigo interno. Queda
+  probarlo en un contorno cerrado, que es donde tiene sentido.
+- ⭐⭐ **Dato de Fermín: con multipaso, la UI FUERZA `Corrección CAD`** — al aceptar, cambia la
+  selección sola. Contesta la pregunta que habían dejado los grupos 4 y 5, y da tres reglas
+  duras: **multipaso ⇒ nunca `G41`/`G42`**, multipaso ⇒ siempre modo largo, y la combinación
+  «multipaso + C.N.» **no existe** (un `.pgmx` con las dos no lo produjo Maestro).
+- ✅ **El acortamiento de `Corrección en longitud` es el RADIO**, derivado ahora con dos
+  profundidades: los `corr_len` estaban a 18 por un cambio involuntario y rehechos a 10 dan lo
+  mismo. La fórmula del canal era del **disco**.
+- 📌 **Y dos números que el converter no tiene que ir a buscar al tercer origen**: el
+  `RadiusMultiplier` del `.pgmx` (default 1,2) no es el de `UI00.exe.Config`, y el `Speed = -1`
+  del acercamiento significa «del catálogo», como el `0` de `Technology/Feedrate`.
+
+
 ### 2026-09-08 (noche) — Grupos 4 y 5: aparece de dónde sale la línea que aborta la máquina
 26 pares más, y Fermín los armó **cruzando** en vez de barrer uno por uno — el cruce es lo que
 hizo hablar a los dos grupos. 26 de 26 verificados por atributo.

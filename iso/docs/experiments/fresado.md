@@ -31,6 +31,13 @@ del electromandril. Tercer mecanizado de la rama D, y el que menos evidencia pro
 > la fórmula del acortamiento del canal queda **refutada para el fresado**. Y un `10` que no se
 > puede escribir todavía: el retorno «En la pieza» está confundido entre la profundidad y
 > `MillingRetractDistance` (§16.3).
+>
+> ⭐⭐ **Y el cierre del día: el Grupo 6** (§19 a §22). El acercamiento y el alejamiento salen
+> con fórmula —**`RadiusMultiplier × SVR`**, diez puntos exactos—, `Bajada`/`Subida` resulta
+> ser una **rampa** contra los dos movimientos de `Cota`, y el `Automático` del lado del arco
+> **va cruzado** respecto de la corrección. Además **la UI fuerza CAD cuando hay multipaso**
+> (dato de Fermín) ⇒ multipaso y `G41`/`G42` no coexisten nunca. Y los `corr_len` rehechos
+> cierran el acortamiento: **es el radio, con dos profundidades**.
 
 ## 1. Los fixtures heredados
 
@@ -878,3 +885,182 @@ conviene volver a anclar.
 | `Cutmode = Climb` | aparece en los quince, nunca variado. Sin campo identificado en la ventana |
 | el modo largo con `Center` + `CAD` **sin** `IsPrecise` | el testigo directo de §15.3; hoy se deduce del par `corr_len` |
 | `%DONTCARESPEEDV=1` | derivado su origen; falta decidir **qué hace el converter con ella** (`CLAUDE.md` §4) |
+
+---
+
+# Grupo 6 y los dos cierres del Grupo 4 (2026-09-08, cierre del día)
+
+**27 archivos nuevos** —Fermín volvió a ampliar: pedí 6 y salieron 27, cruzando tipo × modo ×
+multiplicador × lado— más los dos `corr_len` rehechos. Auditoría por atributo: **28 de 28**.
+
+## 19. ✅ Los dos `corr_len`, ahora sí aislados
+
+Fermín los rehízo a **profundidad 10** (los primeros habían quedado en 18 sin querer). Y el
+resultado no se movió: la traza sigue yendo **de 52 a 348**.
+
+```
+acortamiento de «Corrección en longitud» = radio de la herramienta, por punta
+```
+
+⇒ **DERIVADO con dos profundidades** (10 y 18) y una herramienta. La fórmula del canal
+—`√(p·(2r−p))`, el avance que un **disco** necesita para llegar a la cota— **no es de la
+operación: era del disco.** Una fresa cilíndrica entra a pique y su borde llega hasta su
+propio radio, sin importar cuánto baje.
+
+Y de paso el par queda perfecto para §15.3: con la misma profundidad que el base,
+`corr_len_CAD` (Center, `false`) sale en **modo largo** y `corr_len_CN` (Center, `true`) en
+**modo corto**. El flag es lo único que cambia.
+
+## 20. ⭐⭐ Con multipaso, la UI FUERZA `Corrección CAD`
+
+**Dato de Fermín**: con el multipaso puesto, `Corrección C.N.` no se puede configurar — al
+aceptar, **la ventana selecciona CAD sola**.
+
+⇒ Contesta la pregunta que dejó §18: los diez archivos con multipaso tienen
+`ActivateCNCCorrection = false` **porque Maestro lo impone**, no porque se haya tocado. Y con
+testigo directo: la UI lo hace a la vista.
+
+Tres consecuencias, y las tres son reglas duras para el converter:
+
+1. **Multipaso ⇒ nunca hay `G41`/`G42`.** La compensación siempre queda resuelta en la traza.
+2. **Multipaso ⇒ siempre modo largo** (§15.3), porque el modo largo lo enciende `false`.
+3. **La combinación «multipaso + C.N.» no existe** y no hay que preverla — si un `.pgmx`
+   llegara con las dos, es un archivo que Maestro no pudo haber producido.
+
+## 21. Grupo 6 — el acercamiento y el alejamiento
+
+Veintisiete archivos: `acercamiento`/`alejamiento` × `lineal`/`arco` × `bajada|subida`/`cota`
+× multiplicador `1,5`/`2`/`4`, más el lado del arco (`automático`/`izquierdo`/`derecho`), el
+solape, y dos con corrección para ver qué hace el `automático`.
+
+### 21.1 ⭐⭐ El tamaño sale de `RadiusMultiplier × SVR` — diez puntos, exacto
+
+| multiplicador | largo (lineal) | radio (arco) |
+|---|---|---|
+| `1,5` | **3** (`X47` / `X353`) | **3** (centro en `J203`) |
+| `2` | **4** (`X46`) | **4** (`J204`) |
+| `4` | **8** (`X42` / `X358`) | **8** (`J208`) |
+
+```
+largo del acercamiento lineal = radio del arco = RadiusMultiplier × SVR
+```
+
+Con la `E004` (`SVR` = 2). Vale igual para el acercamiento y el alejamiento.
+
+⇒ **Los dos factores tienen procedencia**: `RadiusMultiplier` sale del `.pgmx` y `SVR` del
+catálogo. Ni una constante interna. Y ojo con el nombre: la UI lo llama *multiplicador del
+radio* y multiplica el **radio de la herramienta**, no el de un arco previo.
+
+### 21.2 ⭐⭐ `Bajada`/`Subida` es una RAMPA; `Cota` son dos movimientos
+
+| | acercamiento **lineal** | acercamiento **arco** |
+|---|---|---|
+| `Bajada` | `G1 X50.000 Z-10.000 F2000` — un solo movimiento **diagonal** | `G3 X50 Y200 **Z-10** I50 J208` — un solo movimiento **helicoidal** |
+| `Cota` | `G1 Z-10.000` **y después** `G1 X50.000 Z-10.000` | `G1 Z-10.000` **y después** `G3 X50 Y200 I50 J208` (plano) |
+
+Y el alejamiento, espejado:
+
+| | lineal | arco |
+|---|---|---|
+| `Subida` | `G1 X358.000 **Z20.000**` — rampa de salida | `G3 X358 Y208 **Z20** I350 J208` — hélice de salida |
+| `Cota` | `G1 X358.000 Z-10.000` y después `G1 Z20.000` | `G3 X358 Y208 I350 J208` y después `G1 Z20.000` |
+
+⇒ **`Bajada`/`Subida` entra y sale cortando en rampa; `Cota` baja (o sube) recto y entra (o
+sale) en el plano.** La diferencia en el ISO es exactamente **una línea**.
+
+### 21.3 El arco es un CUARTO de círculo tangente
+
+Para el acercamiento con `mr4`: arranca en `(42, 208)`, centro en `(50, 208)` —o sea `I`/`J` en
+el **punto de inicio del corte desplazado el radio**—, y termina en `(50, 200)`, que es el
+inicio. Noventa grados, tangente al recorrido.
+
+Para el alejamiento: centro en `(350, 208)`, del final del corte hacia afuera, terminando en
+`(358, 208)`.
+
+### 21.4 ⭐⭐ El lado del arco, y por qué `Automático` va CRUZADO con la corrección
+
+La UI ofrece **`Automático` · `Izquierdo` · `Derecho`** cuando el acercamiento es arco (dato de
+Fermín, y los fixtures lo miden):
+
+| | arco que emite | centro |
+|---|---|---|
+| `Derecho` | **`G3`** | `J208` (Y **+** radio) |
+| `Izquierdo` | **`G2`** | `J192` (Y **−** radio) |
+| `Automático` + `Center` | `G3` | `J208` |
+| `Automático` + **`Corrección izquierda`** | `G3` | `J208` |
+| `Automático` + **`Corrección derecha`** | `G2` | `J192` |
+
+⇒ ⚠️⚠️ **`Automático` sigue a la corrección, pero al REVÉS del nombre**: `Corrección
+izquierda` produce el arco del lado **`Derecho`**, y `Corrección derecha` el del
+**`Izquierdo`**.
+
+Físicamente es lo correcto —el arco tiene que entrar por el lado donde **no** está el material
+que la fresa va a compensar—, pero es una trampa de nomenclatura de las que la regla 1 del
+`CLAUDE.md` describe: **un converter que asuma `Left → Left` se equivoca de lado y la fresa
+entra por donde no debe.** Queda escrito acá para que nadie lo derive de memoria.
+
+Sin corrección, el default es el mismo que `Corrección izquierda`.
+
+### 21.5 ⭐ El milímetro de `G41`/`G42` se recorre por la TANGENTE del primer movimiento
+
+Con corrección **y** acercamiento, el ISO agrega un movimiento que sin acercamiento no está:
+
+```
+G0 X42.000 Y209.000                          <- posiciona 1 mm antes del arco
+?%ETK[7]=4
+G41
+G1 X42.000 Y208.000 Z20.000 F2000.000        <- el milímetro, en −Y
+G1 Z-10.000 F2000.000
+G3 X50.000 Y200.000 I50.000 J208.000 F2000.000
+```
+
+El arco arranca en `(42,208)` con tangente en **−Y**, y el milímetro de entrada se recorre
+**en esa misma dirección**. Sin acercamiento el arranque es en `+X` y el milímetro va en `X`
+(`X49 → X50`, canal §21).
+
+⇒ **El `1 mm` no es «en X»: es a lo largo de la tangente del primer movimiento del recorrido.**
+Acota lo que el canal había dejado como una constante en X.
+
+### 21.6 ⛔ El `Solape` no llega al ISO
+
+`alej_arco_mr4_cota_solape5` es **byte-idéntico** a `alej_arco_mr4_cota` salvo la línea del
+nombre, con `OverLap = 5` guardado en el `.pgmx`.
+
+⇒ **Negativo con testigo interno**: el archivo prueba que la opción estaba puesta, así que
+esto es *derivado*, no *probable*. Sobre una línea abierta no hay nada que solapar; queda
+pendiente probarlo en un **contorno cerrado**, que es donde el solape tiene sentido (evitar la
+marca al salir).
+
+### 21.7 El bloque se reordena cuando hay acercamiento
+
+Con acercamiento habilitado, el preámbulo pasa de `G40 · G40 · G40` a
+**`G40 · G40 · ?%ETK[7]=0 · G40`**, y el `?%ETK[7]=4` se emite **antes** de todo el descenso
+en vez de después de la bajada.
+
+⇒ Coherente con lo que el marcador significa: **`?%ETK[7]=4` delimita el recorrido de
+trabajo**, y el acercamiento forma parte de él.
+
+### 21.8 📌 Dos detalles del `.pgmx` que conviene tener anotados
+
+- **`Speed = -1`** en todos los acercamientos y alejamientos habilitados. Es el «sin
+  especificar» de este bloque, como el `0` de `Technology/Feedrate`: el avance sale del
+  catálogo. Y se ve en el ISO — el acercamiento usa `F2000` (`DescentSpeed`) y el alejamiento
+  `F5000` (avance de corte).
+- **`RadiusMultiplier = 1.2` es el default del archivo** cuando el bloque está deshabilitado.
+  No confundirlo con el `RadiusMultiplier` de `UI00.exe.Config`, que vale 4 en una máquina y 2
+  en otra: son claves distintas, y **la del `.pgmx` es la que manda** — de nuevo, un número que
+  el converter no necesita ir a buscar al tercer origen.
+- ⚠️ Los archivos `alej_*` conservan el bloque `Approach` del archivo del que partieron
+  (`Arc`/`Quote`/`Left`/`4`) con `IsEnabled = false`. **Los valores sobreviven al
+  deshabilitar**, y el ISO no los usa: buen control de que `IsEnabled` es lo que manda.
+
+## 22. Lo que queda abierto después del Grupo 6
+
+| | |
+|---|---|
+| ⭐ **el `10` del retorno «En la pieza»** | sigue siendo el pendiente caro: ¿profundidad o `MillingRetractDistance`? Grupo 15 |
+| ~~la profundidad 18 de los `corr_len`~~ | ✅ **cerrado**: era un cambio involuntario, ya rehechos a 10 |
+| ~~el `ActivateCNCCorrection` de los multipaso~~ | ✅ **cerrado**: lo fuerza la UI (§20) |
+| el `Solape` en un **contorno cerrado** | donde sí tiene sentido; sobre una línea no llega |
+| el lado del arco con **corrección + `Izquierdo`/`Derecho` explícitos** | hoy el cruce se derivó con `Automático`; falta ver si el explícito ignora la corrección |
+| `Cutmode = Climb` | sigue sin campo identificado en la ventana |
