@@ -67,6 +67,15 @@ están **iguales en las dos PCs**:
 
 ## Por qué importa: la regla 4 en un caso concreto
 
+> ✅ **RESUELTO para `RadiusMultiplier` y `SecurityDistance` (2026-09-08).** No hace falta el
+> experimento de las dos PCs: **las dos son DEFAULTS que Maestro congela en el `.pgmx`**.
+> `RadiusMultiplier` es el valor que aparece en `Multipl. de radio` **al activar** el
+> acercamiento o el alejamiento (dato de Fermín), y `SecurityDistance` es el que aparece como
+> `Cota de seguridad` en `Datos avanzados`. Los fixtures del lote de fresado los muestran
+> escritos en el archivo con tres valores distintos cada uno, y **el ISO sigue al archivo**.
+> ⇒ para estas dos, el tercer origen actúa en la **creación**, no en el postproceso, y el
+> converter no necesita leerlo. Detalle en `experiments/fresado.md` §21.8.
+
 `RadiusMultiplier` es el multiplicador del radio de los leads, y `SecurityDistance` es
 la cota de seguridad por defecto. Son **exactamente** el tipo de valor que un converter
 tomaría por constante interna — y la regla 4 lo prohíbe. Si hubiéramos cableado el 2 y

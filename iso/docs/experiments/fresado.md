@@ -789,8 +789,18 @@ no pudo ver nunca porque midió sobre programas vacíos, donde no hay recorrido.
 Si el retorno sube 10, es `MillingRetractDistance`; si sube 14, es la profundidad. Va al
 Grupo 15.
 
-⚠️ Hasta entonces, **el converter no puede escribir ese 10**: es exactamente lo que la regla 4
-prohíbe.
+> ⚠️ **ACOTADO el 2026-09-08, y cambia a quién le importa.** El toolpath del `.pgmx` de
+> `uni_EP_ph5` trae las pasadas **ya calculadas**, y el retorno está ahí adentro:
+> `8 0 10 | 1 350 200 13 0 0 1` — un tramo vertical de **10**, escrito por Maestro. Y el único
+> `10` del archivo entero es la `Depth`; **no hay ningún campo `MillingRetractDistance`**.
+>
+> ⇒ **El converter no tiene que escribir ese número: lo lee de la traza.** La regla 4 no está
+> en juego para él.
+>
+> ⇒ **La pregunta sigue viva, pero es del SINTETIZADOR**, que sí tiene que generar la traza. Y
+> la asimetría empuja hacia `MillingRetractDistance`: si el valor no vive en el `.pgmx` pero
+> aparece en la traza, lo puso Maestro al calcularla — igual que hace con los defaults de
+> `SecurityDistance` y `RadiusMultiplier` (§21.8). El fixture a profundidad 14 lo decide.
 
 ### 16.4 ⭐ El reparto de pasadas, y qué hace el `Último hueco`
 
@@ -1055,10 +1065,39 @@ trabajo**, y el acercamiento forma parte de él.
   especificar» de este bloque, como el `0` de `Technology/Feedrate`: el avance sale del
   catálogo. Y se ve en el ISO — el acercamiento usa `F2000` (`DescentSpeed`) y el alejamiento
   `F5000` (avance de corte).
-- **`RadiusMultiplier = 1.2` es el default del archivo** cuando el bloque está deshabilitado.
-  No confundirlo con el `RadiusMultiplier` de `UI00.exe.Config`, que vale 4 en una máquina y 2
-  en otra: son claves distintas, y **la del `.pgmx` es la que manda** — de nuevo, un número que
-  el converter no necesita ir a buscar al tercer origen.
+- **`RadiusMultiplier = 1.2` es lo que el archivo trae mientras el bloque está deshabilitado.**
+
+  > ⚠️ **CORREGIDO por Fermín (2026-09-08).** Acá decía que el `RadiusMultiplier` del `.pgmx`
+  > y el de `UI00.exe.Config` eran «claves distintas». **Es la misma cosa**: el de la ventana
+  > `Opciones` es **el valor que aparece por defecto en `Multipl. de radio` cuando se activan
+  > el acercamiento o el alejamiento**. En esta máquina vale **4** — que es justo uno de los
+  > tres multiplicadores del lote, seguramente el que quedó sin tocar.
+  >
+  > Lo que **sí** sigue en pie es la parte que le importa al converter: el valor **queda
+  > escrito en el `.pgmx`** al activar la casilla, y el ISO sigue al archivo, no a la
+  > configuración de la máquina que postprocesa.
+
+### ⭐⭐ Y eso destapa un patrón: la ventana `Opciones` da DEFAULTS que se congelan en el archivo
+
+Es el segundo caso, y con el mismo nombre de clave a los dos lados:
+
+| clave de `UI00.exe.Config` | valor en esta máquina | dónde aparece en el `.pgmx` |
+|---|---|---|
+| `SecurityDistance` | 20 | `ApproachSecurityPlane` / `RetractSecurityPlane` = 20 (§4bis) |
+| `RadiusMultiplier` | 4 | `Approach/RadiusMultiplier` al activar la casilla |
+
+⇒ **El tercer origen actúa en la CREACIÓN del programa, no en el postproceso** — al menos para
+las claves que tienen contraparte en el `.pgmx`. Con eso, la pregunta que A6 dejó abierta el
+2026-08-09 —*«¿esas opciones afectan al `.pgmx` o al postprocesado?»*— tiene respuesta para
+este par: **al `.pgmx`**.
+
+⇒ Y convierte en firme lo que §4bis anotaba como *hipótesis*: **el converter no necesita leer
+`UI00.exe.Config`** para emitir estos números. Los lee del archivo.
+
+⚠️ **No se generaliza a las 175 claves**: `PostFileFormat` sí actúa en el postproceso (decide
+el formato de salida), y de las 17 que A6 barrió, dieciséis no llegan al ISO por otra razón —
+actúan en la etapa 1. Lo derivado acá es el patrón de **las que tienen campo espejo en el
+`.pgmx`**.
 - ⚠️ Los archivos `alej_*` conservan el bloque `Approach` del archivo del que partieron
   (`Arc`/`Quote`/`Left`/`4`) con `IsEnabled = false`. **Los valores sobreviven al
   deshabilitar**, y el ISO no los usa: buen control de que `IsEnabled` es lo que manda.
