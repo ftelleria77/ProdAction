@@ -503,6 +503,55 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-08 (noche) — Grupos 4 y 5: aparece de dónde sale la línea que aborta la máquina
+26 pares más, y Fermín los armó **cruzando** en vez de barrer uno por uno — el cruce es lo que
+hizo hablar a los dos grupos. 26 de 26 verificados por atributo.
+
+- ⭐⭐⭐ **`%DONTCARESPEEDV=1` la emite «Salida a cota de seguridad» con multipaso.** Es la línea
+  que hace abortar el ISO de Maestro en el CNC (Alarma 67) y que el hito del 2026-08-03 había
+  encontrado sin saber su origen — el archivo de aquel día se llamaba `scs_mp5`, o sea
+  **S**alida a **C**ota de **S**eguridad, **m**ulti**p**aso **5**: era este mismo caso. Aparece
+  en los cinco archivos con `LiftShiftPlunge` + multipaso y en ninguno de los otros diez.
+- ⭐⭐ **`SVR` no es el radio del cuerpo: es el radio de COMPENSACIÓN** = cuerpo + `Rebaba`. Con
+  `Rebaba = 2` sale `SVR 4.000` / `VL7=4.000`, en CAD y en C.N. Acota `canal.md` §19, que se
+  derivó con `SideOffset = 0` en todos los casos. Y desmiente una sospecha: con C.N. la traza
+  no cambia con la rebaba, pero **no se pierde** — entra por el `SVR`.
+- ⭐⭐ **`ActivateCNCCorrection = false` cambia la ESTRUCTURA del bloque**: agrega tres
+  movimientos y **la bajada al material pasa de `DescentSpeed` a avance de corte**. Aislado con
+  el par `corr_len_CN`/`corr_len_CAD`, que difieren sólo en el flag. Con `true` **y** lado, el
+  bloque toma su tercera forma, la del `G41`/`G42`.
+- ⭐⭐ **La fórmula del acortamiento de `IsPrecise` era del DISCO**: con fresa el acortamiento es
+  el **radio** (2 mm por punta), y `√(p·(2r−p))` es directamente inaplicable — con `p=18` y
+  `r=2` el radicando es negativo.
+- ⭐ **El reparto de pasadas y el `Último hueco`**: sin `UH`, pasos de `PH` con el resto al
+  final; con `UH`, desbaste hasta `profundidad − UH` y una pasada final. Control fino: `ph4` y
+  `ph4_uh2` salen **byte-idénticos** porque el reparto ya coincidía ⇒ el `UH` **no agrega un
+  movimiento propio**.
+- ⭐⭐ **El `Bidireccional` no vuelve en vacío**: profundiza en el extremo y corta de vuelta. Y
+  por eso no tiene `Conexión entre huecos` — los cuatro guardan `Straghtline` sin que nadie lo
+  eligiera, que es **lo que el sintetizador ya hacía**, ahora verificado.
+- ✅ **`Conexión entre huecos` = `StrokeConnectionStrategy`** (`Salida a cota de seguridad` =
+  `LiftShiftPlunge`, `En la pieza` = `Straghtline`), y **el mapeo del sintetizador es
+  correcto**, verificado contra el código. Lo que no tiene respaldo es el `Automatic` que
+  usamos de default —**no existe en la ventana**— y que resolvemos como «perfil cerrado ⇒
+  `InPiece`»: es una regla heredada, sin fixture de esta época, y elige el modo que deja la
+  fresa volviendo a 2 mm de la superficie.
+- ✅ **La estrategia sin multipaso no llega al ISO** (negativo con testigo interno: los `.pgmx`
+  sí difieren). Y 🐞 **el bug de `StepDepth` no está en la cadena**: el ISO emite `4·4·2`, igual
+  que el archivo; la divergencia (`3,33 × 3`) es del control al ejecutar.
+- ⚠️ **Un `10` que el converter todavía NO puede escribir**: el retorno de «En la pieza» sube
+  10 mm, y 10 es a la vez la profundidad total del fixture y **`MillingRetractDistance` de la
+  ventana `Opciones`**. Si fuera lo segundo sería **la primera opción de la aplicación que llega
+  a la TRAZA** — A6 nunca pudo verlo porque midió sobre programas vacíos. Lo separa un fixture a
+  profundidad 14 (Grupo 15).
+- 📌 **Corrección de lo escrito a la tarde**: `ZigZag` **sí existe en el sintetizador**
+  (`ZigZagMillingStrategySpec`, con toolpath propio). Lo que le falta es estar en
+  `synthesize_pgmx_help.md` y, sobre todo, un ancla que no sea `N025` — serie N, época
+  congelada. El fixture sigue haciendo falta, pero para **re-anclar**.
+- ✅ **`AllowanceSide`/`AllowanceBottom` no tienen campo en la UI**, confirmado por Fermín (ayer
+  salía de leer las capturas).
+
+
 ### 2026-09-08 (tarde) — La tanda 1 del fresado: la rampa son ATRIBUTOS, y el sintetizador se destraba
 El lote se pidió a la mañana y a la tarde ya estaban los grupos 1 a 3: **35 pares y 12
 capturas**. Auditoría por atributo, 35 de 35 en campo `A` con la herramienta del nombre.

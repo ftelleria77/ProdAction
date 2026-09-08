@@ -22,6 +22,15 @@ del electromandril. Tercer mecanizado de la rama D, y el que menos evidencia pro
 > bajada derivado (§9); y de las geometrías salieron el `G2`/`G3` con centro absoluto, el
 > círculo en **dos medias vueltas**, y que **Maestro aproxima la elipse en 36 arcos dentro del
 > `.pgmx`** — el converter no tiene que saber aproximar (§12).
+>
+> ⭐⭐⭐ **2026-09-08, noche: grupos 4 y 5, 26 pares más** (§15 a §18). El de más peso:
+> **`%DONTCARESPEEDV=1` —la línea que hace abortar el ISO de Maestro en la máquina— la emite
+> «Salida a cota de seguridad» con multipaso**, y el fixture del hito del 2026-08-03 se llamaba
+> `scs_mp5` justamente por eso. Además: `SVR` resulta ser el **radio de compensación**
+> (cuerpo + `Rebaba`), `ActivateCNCCorrection = false` **cambia la estructura del bloque**, y
+> la fórmula del acortamiento del canal queda **refutada para el fresado**. Y un `10` que no se
+> puede escribir todavía: el retorno «En la pieza» está confundido entre la profundidad y
+> `MillingRetractDistance` (§16.3).
 
 ## 1. Los fixtures heredados
 
@@ -592,3 +601,280 @@ huecos`** con dos opciones — `Salida a cota de seguridad` / `En la pieza`, **s
 | `secplane_ap30_ret10` · las dos sobremedidas · `canto_a_canto` | ⛔ **imposibles**: la ventana no ofrece el campo (§13) |
 | `ZigZag` | estrategia nueva, sin fixture y sin código |
 | el sentido de recorrido de un **contorno cerrado** | horario o antihorario, y si `Invertir` lo da vuelta como en el arco |
+
+---
+
+# Grupos 4 y 5 (2026-09-08, noche)
+
+**26 pares más.** Fermín los armó **cruzando** en vez de barrer uno por uno, y el cruce es lo
+que hizo hablar a los dos grupos: la corrección lateral × el modo × la rebaba (Grupo 4), y las
+dos conexiones × dos profundidades de pasada × con y sin pasada final (Grupo 5).
+
+Auditoría por atributo: **26 de 26** en campo `A` con la `E004`, y cada nombre coincide con lo
+que el archivo dice.
+
+> ⚠️ **Dos archivos traen una variable de más**, y conviene tenerlo presente al leerlos:
+> los `corr_len_*` están a **profundidad 18**, no 10 (§15.4), y los diez del Grupo 5 con
+> multipaso tienen `ActivateCNCCorrection = false` mientras los dos sin multipaso lo tienen en
+> `true` (§16.5). Ninguna de las dos invalida nada — las derivaciones de abajo están aisladas
+> contra el archivo que corresponde —, pero las dos son preguntas.
+
+## 15. Grupo 4 — la corrección, la rebaba y el modo
+
+Once archivos: `izq`/`der` × `C.N.`/`CAD` × con y sin `rebaba_2`, más `corr_len` en los dos
+modos, más el base.
+
+### 15.1 ⭐ La `Rebaba` se SUMA al desplazamiento lateral
+
+| archivo | posiciona en |
+|---|---|
+| base (`Center`) | `Y200.000` |
+| `corr_izq_CAD` | `Y202.000` |
+| `corr_der_CAD` | `Y198.000` |
+| `corr_izq_CAD_rebaba_2` | **`Y204.000`** |
+| `corr_der_CAD_rebaba_2` | **`Y196.000`** |
+
+```
+desplazamiento = lado × (radio del cuerpo + Rebaba)      Left = +Y · Right = −Y
+```
+
+El canal (§13) había dejado la `Rebaba` como *«`SideOffset`, y sólo actúa si hay lado»*. Con el
+cruce queda la fórmula: **se suma al radio, en la misma dirección que la corrección.**
+
+### 15.2 ⭐⭐ Y `SVR` no es sólo el radio del cuerpo: es el radio de COMPENSACIÓN
+
+| | `SVR` / `VL7` |
+|---|---|
+| sin rebaba | `2.000` |
+| con `Rebaba = 2` | **`4.000`** |
+
+En los cuatro archivos con rebaba, en CAD y en C.N.
+
+```
+SVR = radio del cuerpo + Rebaba (SideOffset)
+```
+
+⇒ **Acota la regla del canal §19** (`SVR` = radio del cuerpo), que se derivó con `SideOffset = 0`
+en todos los casos.
+
+⇒ Y **desmiente una sospecha**: con `Corrección C.N.` la traza de `corr_der_CN_rebaba_2` es
+**idéntica** a la de `corr_der_CN` —la línea nominal, `Y200`—, lo que parecía una rebaba
+perdida en silencio. No lo es: **entra por el `SVR`**, que es el radio que se le pasa al
+control para que compense. El diff de los dos ISO son exactamente dos líneas, `SVR` y `VL7`.
+
+### 15.3 ⭐⭐ `ActivateCNCCorrection = false` cambia la ESTRUCTURA del bloque
+
+Y esto no estaba previsto por nadie. El mismo recorrido sale con dos formas distintas:
+
+| | modo corto | modo largo |
+|---|---|---|
+| | `G1 Z-10.000 F2000.000` | **`G1 Z20.000 F2000.000`** |
+| | `?%ETK[7]=4` | `?%ETK[7]=4` |
+| | | **`G1 Z-10.000 F5000.000`** |
+| | `G1 X350.000 Z-10.000 F5000.000` | `G1 X350.000 Z-10.000 F5000.000` |
+| | | **`G1 Z20.000 F5000.000`** |
+| | `G0 Z20.000` | `G0 Z20.000` |
+
+En el modo largo aparecen **tres movimientos** que en el corto no están, y —lo más importante
+para el converter— **la bajada al material cambia de velocidad**: de `F2000` (`DescentSpeed`) a
+`F5000` (el avance de corte). En el modo largo el `F2000` se gasta bajando al **plano de
+seguridad**, que en el corto ni se emite.
+
+**Qué lo enciende**, cruzando los cinco casos del grupo:
+
+| `SideOfFeature` | `ActivateCNCCorrection` | `IsPrecise` | forma |
+|---|---|---|---|
+| `Center` | `true` | no | corto (el base) |
+| `Center` | `true` | **sí** | **corto** (`corr_len_CN`) |
+| `Center` | **`false`** | sí | **largo** (`corr_len_CAD`) |
+| `Right`/`Left` | `false` | no | largo (`corr_*_CAD`) |
+| `Right`/`Left` | `true` | no | largo, y además `G41`/`G42` (`corr_*_CN`) |
+
+⇒ **Lo enciende el flag, no el lado ni `IsPrecise`**: el par `corr_len_CN` / `corr_len_CAD` lo
+aísla — misma traza guardada, mismo `Center`, mismo `IsPrecise`, y sólo cambia
+`ActivateCNCCorrection`. Uno sale corto y el otro largo.
+
+⇒ Con `true` **y** lado, el bloque toma su tercera forma, la del canal §21: posiciona 1 mm
+antes (`G0 X49.000`), emite `G42` (derecha) o `G41` (izquierda), recorre la línea **nominal**
+`Y200`, y sale con `G40` 1 mm después (`X351.000`). Confirmado en los cuatro `corr_*_CN`.
+
+### 15.4 ⭐⭐ `IsPrecise` con fresa acorta EL RADIO, y la fórmula del canal era del disco
+
+`corr_len_CAD` y `corr_len_CN` guardan la traza **de 52 a 348** — 2 mm menos por punta, que es
+exactamente el **radio de la `E004`**.
+
+⇒ La fórmula del canal, `√(p·(2r−p))`, **no aplica**: con `p = 18` y `r = 2` el radicando es
+negativo. Era la geometría de un **disco entrando en la placa**, no una regla de la operación.
+Con una fresa cilíndrica, que entra a pique, el borde llega hasta su propio radio.
+
+⚠️ **Un solo punto, y con una variable de más.** Los dos `corr_len` están a **profundidad 18**
+(`Depth.StartDepth = EndDepth = 18`, traza en `Z 0`), no a 10 como el resto del grupo. Con eso
+alcanza para **refutar** la fórmula del disco —que es imposible con esos números—, pero no para
+afirmar que el acortamiento es el radio *independientemente de la profundidad*. Falta un
+`corr_len` a otra profundidad.
+
+❓ **Pregunta para Fermín**: ¿la profundidad 18 de esos dos la pusiste vos, o `Corrección en
+longitud` la fuerza al espesor?
+
+## 16. Grupo 5 — la estrategia, y de dónde sale `%DONTCARESPEEDV=1`
+
+Quince archivos: `Unidireccional` × `SCS`/`EP` × {sin multipaso, `PH4`, `PH5`, `PH4+UH2`,
+`PH5+UH2`}, más `Bidireccional` × las mismas cuatro combinaciones de multipaso, más el base.
+
+### 16.1 ⭐⭐⭐ `%DONTCARESPEEDV=1` sale de «Salida a cota de seguridad»
+
+**Es el hallazgo del grupo, y cierra un pendiente de agosto.** El diff entre `uni_scs_ph5` y
+`uni_ep_ph5` son **tres líneas**, y una es:
+
+```
+%DONTCARESPEEDV=1
+```
+
+Está en el `_scs` y **no** en el `_ep`. Aparece en los cinco archivos con `LiftShiftPlunge`
+y multipaso, y en ninguno de los demás.
+
+⇒ ⭐⭐⭐ **Es la línea que hace abortar el ISO de Maestro en la máquina** (Alarma 67), la del
+hito del 2026-08-03 — donde el ISO que emitimos nosotros corrió y el de Maestro no. Y el
+archivo de aquel día se llamaba `scs_mp5`: **Salida a Cota de Seguridad, multipaso 5**. Es
+literalmente este mismo caso, y recién ahora sabemos qué lo dispara.
+
+⇒ Para el converter: **la línea existe, la emite Maestro, y el byte-idéntico la pide** — pero
+`CLAUDE.md` §4 ya tiene el precedente resuelto: *el byte-idéntico es el método, no el fin, y
+manda la máquina*. Queda como el caso más claro de esa excepción.
+
+### 16.2 ⭐⭐ Qué hace cada conexión, medido
+
+Con profundidad 10 y `PH = 5`, o sea dos pasadas:
+
+| | `Salida a cota de seguridad` (`LiftShiftPlunge`) | `En la pieza` (`Straghtline`) |
+|---|---|---|
+| pasada 1 | `G1 Z-5` · `G1 X350 Z-5` | ídem |
+| **el retorno** | `G1 Z20.000` · `G1 X50.000 Z20.000` | **`G1 Z5.000`** · `G1 X50.000 Z5.000` |
+| pasada 2 | `G1 Z-10` · `G1 X350 Z-10` | ídem |
+
+⇒ **`SCS` sube a la cota de seguridad** (20) y vuelve por arriba. **`EP` sube mucho menos** y
+vuelve casi rozando.
+
+Y la altura del retorno de `EP` sigue una regla exacta, sobre los seis retornos del grupo:
+
+| pasada | retorno |
+|---|---|
+| `Z-4` | `Z6` |
+| `Z-5` | `Z5` |
+| `Z-8` | `Z2` |
+
+```
+altura del retorno = cota de la pasada + 10        ⇒ SIEMPRE SUBE 10 mm
+```
+
+### 16.3 ⚠️ Pero ese 10 está CONFUNDIDO, y hace falta un fixture para separarlo
+
+Dos candidatos, y los dos valen 10 en este lote:
+
+1. **la profundidad total del fresado** (10 en todos estos archivos);
+2. **`MillingRetractDistance` = 10**, de la ventana `Opciones` — el tercer origen.
+
+El segundo encaja mejor por significado (*«cuánto se levanta la fresa entre pasadas»*), y si
+es ése, **sería la primera vez que una opción de la aplicación llega a la TRAZA** — algo que A6
+no pudo ver nunca porque midió sobre programas vacíos, donde no hay recorrido.
+
+⇒ **Lo separa un solo fixture**: el mismo multipaso `EP` con **profundidad 14** en vez de 10.
+Si el retorno sube 10, es `MillingRetractDistance`; si sube 14, es la profundidad. Va al
+Grupo 15.
+
+⚠️ Hasta entonces, **el converter no puede escribir ese 10**: es exactamente lo que la regla 4
+prohíbe.
+
+### 16.4 ⭐ El reparto de pasadas, y qué hace el `Último hueco`
+
+| archivo | pasadas |
+|---|---|
+| `PH5` | `−5` `−10` |
+| `PH4` | `−4` `−8` `−10` |
+| `PH5 + UH2` | `−5` `−8` `−10` |
+| `PH4 + UH2` | `−4` `−8` `−10` |
+
+```
+sin UH:  pasos de PH desde la superficie; la última pasada es el resto
+con UH:  el desbaste llega hasta (profundidad − UH) con pasos de PH,
+         y después una pasada final a la profundidad
+```
+
+⭐ **Control fino**: `uni_scs_ph4` y `uni_scs_ph4_uh2` son **byte-idénticos** salvo el nombre —
+y también `bi_ph4` con `bi_ph4_uh2`. Con `PH4` sobre 10 el reparto ya termina en `−8` y `−10`,
+así que pedir la pasada final no cambia nada. ⇒ **el `Último hueco` no agrega un movimiento
+propio: sólo cambia dónde caen las pasadas.**
+
+### 16.5 🐞 El bug de `StepDepth`: el ISO lleva `4·4·2`
+
+Con `PH = 4` sobre profundidad 10 el ISO emite `Z-4`, `Z-8`, `Z-10` — o sea **4 + 4 + 2**, con
+el resto en la última pasada. Es lo que decía la nota del 2026-09-03.
+
+⇒ **La cadena `.pgmx` → ISO es consistente**: lo que el archivo guarda es lo que el ISO emite.
+La divergencia que anotaste (`3,33 × 3`) es del **control al ejecutar**, no del postproceso.
+Para el converter no hay nada que reproducir: emite `4·4·2` como Maestro.
+
+### 16.6 ⭐⭐ El `Bidireccional` no vuelve en vacío
+
+```
+G1 Z-5.000   · G1 X350.000 Z-5.000      <- pasada 1, hacia +X
+G1 Z-10.000  · G1 X50.000  Z-10.000     <- baja EN EL EXTREMO y vuelve cortando
+```
+
+⇒ No hay retorno: profundiza donde terminó y corta de vuelta. Por eso `bi_ph5` son **98**
+líneas contra las 100/101 de los unidireccionales con las mismas pasadas.
+
+⇒ Y por eso **`Conexión entre huecos` no existe para el bidireccional**: los cuatro `bi_*`
+guardan `StrokeConnectionStrategy = Straghtline` sin que nadie lo haya elegido — es el valor
+que queda cuando la sección no ofrece la opción. **Lo que el sintetizador ya hacía es correcto**
+(fija `Straghtline` para bidireccional, helicoidal y contour-parallel), verificado contra los
+cuatro fixtures.
+
+### 16.7 ✅ La estrategia sin multipaso NO llega al ISO
+
+`uni_scs` y `uni_ep` son **byte-idénticos al base** salvo la línea del nombre. Sin pasadas no
+hay conexión que resolver, así que la elección no deja rastro.
+
+⇒ **Negativo con testigo interno**: los `.pgmx` sí difieren (`StrokeConnectionStrategy`
+`LiftShiftPlunge` contra `Straghtline`), así que esto no es un «no lo puse».
+
+### 16.8 ⭐⭐ `Conexión entre huecos` = `StrokeConnectionStrategy`, y el mapeo del sintetizador es correcto
+
+| la UI | el XML |
+|---|---|
+| `Salida a cota de seguridad` | **`LiftShiftPlunge`** |
+| `En la pieza` | **`Straghtline`** |
+
+Verificado contra el código: `_serialize_unidirectional_connection_mode` mapea
+`SafetyHeight → LiftShiftPlunge` e `InPiece → Straghtline`, y **eso coincide con los
+fixtures**. El default `Automatic` cae en `LiftShiftPlunge`, que es el modo seguro.
+
+⚠️ **Pero `Automatic` no existe en la ventana** —la UI tiene dos radios, no tres— y nuestro
+`_resolve_unidirectional_connection_mode` lo resuelve como *«perfil cerrado ⇒ `InPiece`»*. Esa
+regla **no tiene fixture de la época nueva**, y elige justo el modo que dejó a la fresa
+volviendo a 2 mm de la superficie. No es un defecto probado; es una decisión heredada que
+conviene volver a anclar.
+
+## 17. Correcciones a lo que escribí ayer
+
+- ⚠️ **`ZigZag` NO es una estrategia que falte en el sintetizador.** Ayer escribí que no
+  existía; **existe en el código** (`ZigZagMillingStrategySpec`, con toolpath propio que corta
+  en rampa alternando el sentido). Lo que falta es otra cosa, y sigue importando: **no está en
+  `docs/synthesize_pgmx_help.md`** —que documenta cuatro builders— y su única ancla es
+  **`N025`, serie N, época congelada**. El fixture del Grupo 5 sigue haciendo falta, pero para
+  **re-anclar**, no para agregar.
+- ✅ **`AllowanceSide` y `AllowanceBottom` no tienen campo en la UI** — ayer salía de leer las
+  capturas, hoy lo confirma Fermín directamente. Son campos del XML sin manera de tocarlos
+  desde Maestro.
+
+## 18. Lo que estos dos grupos dejan abierto
+
+| | |
+|---|---|
+| ⭐ **el `10` del retorno `En la pieza`** | ¿profundidad total o `MillingRetractDistance`? Un fixture a profundidad 14 lo separa (§16.3) |
+| el acortamiento de `IsPrecise` | derivado que **no** es la fórmula del disco; falta otra profundidad para afirmar que es el radio |
+| ❓ la profundidad 18 de los `corr_len` | ¿la puso Fermín o la fuerza `IsPrecise`? |
+| ❓ el `ActivateCNCCorrection = false` de los multipaso | 10 de 10 con multipaso en `false`, 2 de 2 sin multipaso en `true`. ¿Lo tocó Fermín o lo fuerza Maestro? |
+| `Cutmode = Climb` | aparece en los quince, nunca variado. Sin campo identificado en la ventana |
+| el modo largo con `Center` + `CAD` **sin** `IsPrecise` | el testigo directo de §15.3; hoy se deduce del par `corr_len` |
+| `%DONTCARESPEEDV=1` | derivado su origen; falta decidir **qué hace el converter con ella** (`CLAUDE.md` §4) |
