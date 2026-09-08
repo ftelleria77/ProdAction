@@ -503,6 +503,41 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-08 — Arranca D3 (el fresado), y los archivos viejos pagan antes que los nuevos
+Se pidió el lote grande que faltaba. Pero antes de pedirlo se midió lo que ya había, y eso
+devolvió **dos derivaciones y una corrección** sin gastar un solo fixture.
+
+- ⭐⭐ **El «+20» de la cota de aproximación NO es una constante: es el plano de seguridad de la
+  operación.** `canal.md` §19 la había cerrado como `ToolOffsetLength + 20` con tres
+  herramientas, las tres con el plano en 20. Un fixture heredado del lote de dibujos lo tiene
+  en **30** y su ISO aproxima en `Z155.400` en vez de `Z145.400`, y sale en `Z30.000` en vez de
+  `Z20.000`. **Es la regla 4 del `CLAUDE.md` en un caso concreto**: un converter con el `20`
+  adentro habría emitido la cota equivocada sin poder notar que no sabía. `fresado.md` §4bis.
+  - 📌 Y reabre —bien— una predicción de A6: `SecurityDistance` (20 en el CNC, 30 en otra PC)
+    se había medido sobre un programa vacío, donde no hay trayectoria. Si el `30` del archivo
+    es el default de la PC donde se creó, Maestro lo **congela en el `.pgmx`** ⇒ el converter
+    no necesita leer ese origen. Lo contesta una pregunta, no un fixture.
+- ✅ **El campo no mueve el bloque del fresado.** El mismo programa en `A` y en `HG` difiere en
+  seis líneas: los dos bloques de origen, el nombre, la marca del header y el índice del `EDK`.
+  Ni una del fresado. ⇒ el lote D3 **no lleva grupo de campos**.
+- 📌 **Y una corrección de `fresado.md` §1**, que es §2 de `fixtures.md` otra vez: decía «el
+  único fixture, campo `HG`». Son **cinco archivos**, en **dos campos**, y el que nombraba es
+  campo **`A`**. Salió de leer el atributo, no el nombre.
+- ⏸ **Lote D3 pedido**: 61 archivos y 5 capturas, trece grupos, campo `A`, herramienta base
+  `E004` (Ø4 — con la `E001` de Ø18,36 no hay círculo chico ni esquina viva, y el grupo grande
+  es el de geometrías). Dos tandas; la primera son los grupos 1 a 3, que **destraban el defecto
+  de `build_line_geometry_profile`** y abren las cuatro geometrías nunca probadas.
+  - Lo que sólo este lote puede contestar: las geometrías, la **estrategia** (con el par que
+    explica el **paro de máquina del 2026-07-30**), el **pasante** (que el canal no pudo: el
+    disco entra 10 mm), la **sobremedida** (no existe en el canal), las **microuniones** y la
+    **cara inferior**, que si se descarta en silencio es el cuarto caso de fail-loud.
+- ❓ **Una incongruencia de nomenclatura planteada, sin tocar código** (regla 1): las specs de
+  fresado se llaman por la **geometría** (`LineSpec`, `CircleSpec`, `PolylineSpec`,
+  `ContourSpec`) y la del canal por la **operación** (`ChannelSpec`). En la UI todas son
+  `Operaciones > Fresado`, y `LineSpec` compite con `DrawingSpec` por la palabra «línea».
+  `fresado.md` §8. No bloquea el lote: el sintetizador está congelado hasta que cierre la rama D.
+
+
 ### 2026-09-07 — Se cierra D2, y se tapan tres agujeros de método
 Día de cierre y de repaso. El lote D2 termina con los grupos 14 y 15, y Fermín preguntó si
 quedaba algún agujero antes de seguir: quedaban tres, y ninguno era del canal.

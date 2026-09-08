@@ -23,9 +23,16 @@ Rutas simétricas bajo `PGMX_ROOT` (`S:\Maestro\Projects\ProdAction`) e `ISO_ROO
 | C | `…\Reinvestigación\Operaciones\` | 68 | `Xn`, `Xmsg`, `Park` | `experiments/operaciones_maquina.md` |
 | D1 | `…\Reinvestigación\Mecanizados\Perforado\` | 158 | el perforado — ✅ doce grupos, cerrado el 2026-09-03 (140 `.iso`) | `experiments/perforado.md` |
 | D2 | `…\Reinvestigación\Mecanizados\Canal\` | 85 | el canal (Sierra Vertical X) — ✅ **quince grupos, CERRADO** el 2026-09-07 (65 `.iso`) | `experiments/canal.md` |
+| D3 | `…\Reinvestigación\Mecanizados\Fresado\` | 61 | el fresado — ⏸ **pedido el 2026-09-08**, trece grupos en dos tandas | `experiments/fresado.md` |
 
-R001, R002, D1 y D2 llevan un `INSTRUCCIONES.md` en la carpeta del lote, con el pedido que les
-dio origen.
+R001, R002, D1, D2 y D3 llevan un `INSTRUCCIONES.md` en la carpeta del lote, con el pedido que
+les dio origen.
+
+> 📌 **El fresado ya tenía cinco archivos antes de su lote**, heredados de `Dibujos\Rama G\`
+> (`…linea_01_fresada`, su `XMSG` y los `…origen_x100_y50_linea_fresada`, en campo `A` y `HG`).
+> No están contados en la fila D3 porque viven en la carpeta del lote G. `fresado.md` §1 los
+> listaba mal —«el único fixture, campo `HG`»— hasta que se leyó el atributo: son cinco y el
+> que nombraba es campo `A`. Otra vez §2 de este documento.
 
 > 📌 **Ojo con la etiqueta `D2`.** `perforado.md` §7bis menciona «el lote D2» hablando de un
 > barrido de campos que **nunca existió**: el Grupo 2 de D1 lo contestó sin fixtures nuevos.

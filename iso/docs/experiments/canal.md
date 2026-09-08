@@ -1088,6 +1088,12 @@ Lo que ahí escribí como «del canal» es **de la sierra**:
 Z de aproximación = ToolOffsetLength + plano de seguridad (20)
 ```
 
+> ⚠️ **ACOTADO el 2026-09-08: el `20` no es parte de la fórmula, es el valor que estos tres
+> fixtures tenían.** Los tres llevan el plano de seguridad en 20, así que acá no estaba
+> separado. Un fixture de fresado con el plano en **30** aproxima en `SVL + 30` y sale en
+> `Z30.000`. La fórmula es `ToolOffsetLength + plano de seguridad`, y el plano sale del
+> `.pgmx`. Ver `fresado.md` §4bis.
+
 ⇒ Tres puntos, tres aciertos. **Se cae mi hipótesis del §8** —«radio del disco + seguridad»—:
 daba el mismo número sólo porque el `ToolOffsetLength` de la sierra **también** vale 60.
 
@@ -1183,7 +1189,8 @@ catálogo**, sin excepción:
 | `E007` | 7 | 7 | 152.100 | 8.860 | 18000 | 5000 | 172.100 |
 
 ⇒ `SVL` = `ToolOffsetLength` · `SVR` = radio del cuerpo · `S` = `SpindleSpeed.Standard` ·
-`F` = `FeedRate.Standard × 1000` · **aproximación = `SVL` + 20** · **`T` = `?%ETK[9]` =
+`F` = `FeedRate.Standard × 1000` · **aproximación = `SVL` + plano de seguridad** (los doce con
+el plano en 20 ⇒ `SVL` + 20; ver el acotamiento del §19) · **`T` = `?%ETK[9]` =
 `shStorePos`**. Las cuatro reglas y las dos identidades, **7 de 7**.
 
 ⇒ **Ni la `E005` (45º) ni la `E006` (Rectificado) rompen el bloque**, que era la sospecha del
