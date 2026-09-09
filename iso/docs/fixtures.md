@@ -23,7 +23,7 @@ Rutas simétricas bajo `PGMX_ROOT` (`S:\Maestro\Projects\ProdAction`) e `ISO_ROO
 | C | `…\Reinvestigación\Operaciones\` | 68 | `Xn`, `Xmsg`, `Park` | `experiments/operaciones_maquina.md` |
 | D1 | `…\Reinvestigación\Mecanizados\Perforado\` | 158 | el perforado — ✅ doce grupos, cerrado el 2026-09-03 (140 `.iso`) | `experiments/perforado.md` |
 | D2 | `…\Reinvestigación\Mecanizados\Canal\` | 85 | el canal (Sierra Vertical X) — ✅ **quince grupos, CERRADO** el 2026-09-07 (65 `.iso`) | `experiments/canal.md` |
-| D3 | `…\Reinvestigación\Mecanizados\Fresado\` | 153 | el fresado — 🔄 **grupos 1 a 7 cerrados** (91 `.iso` y 14 capturas); el **Grupo 8** (56 `.pgmx`, la matriz 7×7 de fresas) auditado y **esperando postproceso**; grupos 9 a 16 pendientes | `experiments/fresado.md` |
+| D3 | `…\Reinvestigación\Mecanizados\Fresado\` | 151 | el fresado — 🔄 **grupos 1 a 8 cerrados** (145 `.iso` y 14 capturas); **Grupo 8 CERRADO** (la matriz 7×7 de fresas, 54 pares); grupos 9 a 16 pendientes | `experiments/fresado.md` |
 
 R001, R002, D1, D2 y D3 llevan un `INSTRUCCIONES.md` en la carpeta del lote, con el pedido que
 les dio origen.

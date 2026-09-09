@@ -49,6 +49,13 @@ del electromandril. Tercer mecanizado de la rama D, y el que menos evidencia pro
 > las siete, más canal y taladro—, **auditados 56 de 56 y todavía sin postprocesar**. Las
 > predicciones están escritas antes del ISO, y hay **tres cosas para arreglar primero**: el
 > canal quedó a profundidad 0 y dos pares de archivos son duplicados exactos.
+>
+> ✅ **Y el Grupo 8 cerró el mismo día** (§24.6): Fermín corrigió las tres cosas y postprocesó
+> los **54**. De las siete predicciones, **seis se cumplen** —incluido el `71` exacto de la
+> diagonal y los 98 bloques explicados por el catálogo— y **una se cae**: la matriz **no es
+> simétrica**, porque el bloque cambia de forma según vaya primero o segundo. Las **tres
+> transiciones** quedan medidas, y la de cabezal es **idéntica para el canal y para el
+> taladro**.
 
 ## 1. Los fixtures heredados
 
@@ -1367,3 +1374,120 @@ El canal con `082` va por el **cabezal perforador** y el fresado por el **electr
 - y el **costo en líneas de una segunda operación**, que hoy tiene un solo punto (71, de
   `dos_fresados_una_geometria`) y que la regla `50 + N segmentos` no cubre para varias
   operaciones (§12.1).
+
+## 24.6 ✅ Resultados — los 54 postprocesados (2026-09-09)
+
+Fermín corrigió la profundidad del canal y borró los dos duplicados: **54 pares**, todos con
+ISO. Contra las predicciones de §24.4, **seis de siete se cumplen y una se cae**.
+
+### ✅ El cambio de herramienta, cerrado con 49 combinaciones
+
+| | predicho | medido |
+|---|---|---|
+| diagonal (misma fresa): `T`/`SYN`/`M06` | **uno solo** | ✅ **7 de 7** |
+| diagonal: líneas que agrega | **71** | ✅ **71**, en las siete |
+| fuera de la diagonal: `T`/`SYN`/`M06` | **dos** | ✅ **42 de 42** |
+| fuera de la diagonal: líneas | — | **86**, en las 42 |
+| `D1` / corrector | uno por operación | ✅ **2** en las 49 |
+| `?%ETK[7]=4` | en los dos bloques | ✅ **42 de 42** |
+| todos los números, del catálogo | `T` · `SVL` · `S` · aproximación · `F` corte · `F` bajada | ✅ **98 bloques comprobados, 0 discrepancias** |
+
+⇒ **Ninguna de las 49 combinaciones introduce un número que no venga de `def.tlgx`.** El
+cambio de herramienta entre fresas queda cerrado; no hay que volver sobre él en los mecanizados
+que faltan.
+
+### ⭐⭐ El costo en líneas de una segunda operación, con fórmula
+
+```
+1 fresado                        51        (= 50 + 1 segmento)
++ 1 fresado con la MISMA fresa   +20   ->  71
++ 1 fresado con OTRA fresa       +35   ->  86
+                                  ⇒ el cambio de herramienta cuesta 15 líneas
+```
+
+El `71` coincide con `dos_fresados_una_geometria` (§12.1), que también son dos operaciones de
+un segmento con la misma fresa — pero sobre **una sola** geometría. ⇒ el costo **no depende de
+si comparten la geometría**.
+
+### ⭐⭐ Las tres transiciones, medidas
+
+**Misma fresa — 5 líneas.** No baja a la cota de cambio ni para el husillo: se mueve por
+arriba, a la cota de aproximación.
+
+```
+G17 · MLV=2
+G0 X350.000 Y150.000 Z145.400     <- desde donde terminó
+G0 X50.000  Y250.000 Z145.400     <- al inicio del siguiente
+G0 X50.000  Y250.000 Z145.400     <- ⚠️ REPETIDA, idéntica a la anterior
+```
+
+⚠️ **El tercer `G0` está repetido** — el mismo destino dos veces. Ya había aparecido en
+`dos_fresados_una_geometria` y ahora se confirma en las siete de la diagonal: **es sistemático,
+no un accidente**. El converter tiene que emitirlo para el byte-idéntico.
+
+**Otra fresa — 13 líneas.** Cierra el corrector, sube a la cota de cambio, **para el husillo**,
+vuelve a subir, y recién ahí cambia:
+
+```
+?%ETK[7]=0 · G0 Z20.000 · D0 · SVL 0 · VL6=0 · SVR 0 · VL7=0
+MLV=0 · G0 G53 Z201.000 · MLV=2 · ?%ETK[13]=0 · ?%ETK[18]=0
+M5                                 <- para el husillo
+MLV=0 · G0 G53 Z201.000            <- el G53 va DOS veces
+MLV=0 · T2 · SYN · M06 · ?%ETK[9]=2 · ?%ETK[18]=1 · S6000M3 · G17 · MLV=2 · ?%ETK[13]=1
+```
+
+**Otro cabezal — 15 líneas**, y ⭐⭐ **es IDÉNTICA para el canal y para el taladro**:
+
+```
+G0 Z20.000 · D0 · SVL 0 · VL6=0 · SVR 0 · VL7=0
+?%ETK[7]=0 · ?%ETK[8]=1 · G40
+MLV=0 · G0 G53 Z201.000 · MLV=2
+G61                                <- parada exacta
+MLV=0 · ?%ETK[13]=0 · ?%ETK[18]=0
+G0 G53 Z201.000
+G64                                <- vuelve a corte continuo
+```
+
+⇒ **La transición la decide el CABEZAL, no la operación que sigue.** Es la misma regla que
+`canal.md` §19 derivó para el bloque: **manda la herramienta**. Recién después de `G64` los dos
+divergen — el canal emite `?%ETK[6]=82` · `?%ETK[17]=257` · `S4000M3` · `?%ETK[1]=16` y el
+`SHF` de la sierra; el taladro, `MLV=1` · `SHF[Z]=0.000+%ETK[114]/1000`.
+
+📌 **Y la diferencia entre las dos**: entre fresas hay **`M5`** y no hay `G61`/`G64`; entre
+cabezales hay **`G61`/`G64`** y `?%ETK[8]=1`/`G40`, y **no hay `M5`**.
+
+### ❌ La predicción que se cae: la matriz NO es simétrica
+
+Predije que `EAAA_EBBB` y `EBBB_EAAA` darían **los mismos dos bloques en orden invertido**.
+**No pasa en ninguno de los 21 pares.** El bloque de una herramienta mide 48 líneas cuando va
+primero y 56 cuando va segundo.
+
+⇒ **La forma del bloque depende de la POSICIÓN**, no sólo de la herramienta:
+
+- el **primero** trae el preámbulo del programa — `?%ETK[6]=1` y los dos bloques de origen
+  (`%Or[0].of*` y `SHF`), que no se repiten;
+- el **segundo** trae la transición y una selección más corta: **no repite `?%ETK[6]`** ni el
+  origen.
+
+⇒ Para el converter: **no hay un «bloque por herramienta» reutilizable**. Hay un bloque de
+apertura y un bloque de continuación, y la herramienta sólo decide los números de adentro. Era
+lo que la predicción daba por sentado y el lote lo refuta.
+
+📌 **Mi error, para el registro**: la predicción salió de que los dos bloques tienen los mismos
+*números*, y confundí eso con que tuvieran las mismas *líneas*. Los 42 archivos lo dicen desde
+el largo total —86 en todos, no 84 ni 88—, que ya avisaba que hay algo fijo además de las dos
+operaciones.
+
+### 📌 Y el orden cuesta distinto cuando hay dos cabezales
+
+| | canal primero | fresado primero |
+|---|---|---|
+| con canal `082` | **94** | **95** |
+
+| | taladro primero | fresado primero |
+|---|---|---|
+| con taladro `D8P` | **84** | **82** |
+
+⇒ Los dos pares difieren, y **no en el mismo sentido**: con el canal empezar por la sierra sale
+una línea más corto, con el taladro empezar por la broca sale dos más largo. Sin explicación
+todavía; queda anotado como observación, no como regla.

@@ -527,8 +527,23 @@ configuración acertó ocho de ocho antes del primer ISO.
   del catálogo; la matriz **simétrica en contenido** (`A_B` y `B_A` con los mismos bloques
   invertidos); y las dos transiciones **entre cabezales** (canal `?%ETK[7]=1`, taladro `=3`)
   con `G0 G53 Z201.000` en el medio.
-- ⇒ Si se cumplen, **el cambio de herramienta queda cerrado con 49 casos** y no hay que volver
-  sobre él en ningún mecanizado posterior.
+- ✅ **CERRADO el mismo día**: Fermín corrigió las tres cosas y postprocesó los **54**. De las
+  siete predicciones, **seis se cumplen y una se cae**.
+  - ✅ **El cambio de herramienta queda cerrado con 49 combinaciones**: la diagonal con **un
+    solo** `T`/`M06` (7 de 7) y **71 líneas exactas**; las 42 restantes con **dos** cambios y
+    86 líneas; y **98 bloques comprobados contra `def.tlgx` con cero discrepancias**.
+  - ⭐⭐ **El costo de una segunda operación, con fórmula**: `+20` con la misma fresa, `+35` con
+    otra ⇒ **el cambio de herramienta cuesta 15 líneas**. Y no depende de si comparten la
+    geometría.
+  - ⭐⭐ **Las tres transiciones, medidas**: misma fresa **5 líneas** (por arriba, sin parar el
+    husillo, con un `G0` **repetido** que resulta sistemático); otra fresa **13** (con `M5` y
+    dos `G0 G53 Z201.000`); **otro cabezal 15** — y ésta es **idéntica para el canal y para el
+    taladro**, con `G61`/`G64` y sin `M5`. ⇒ **la transición la decide el CABEZAL**, no la
+    operación que sigue: la misma regla que el bloque.
+  - ❌ **La predicción que se cae: la matriz NO es simétrica.** El bloque de una herramienta
+    mide 48 líneas si va primero y 56 si va segundo — el primero trae el preámbulo de origen y
+    `?%ETK[6]`, el segundo la transición. ⇒ **no hay un «bloque por herramienta» reutilizable**:
+    hay uno de apertura y uno de continuación, y la herramienta sólo decide los números.
 
 
 ### 2026-09-09 — Grupo 7: el TERCER ORIGEN queda cerrado, con dos archivos
