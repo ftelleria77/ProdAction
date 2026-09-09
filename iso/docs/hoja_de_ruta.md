@@ -503,6 +503,31 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-09 — Grupo 9: el canto se fresa desde ARRIBA, y la cara inferior deja rastro
+Cuatro archivos, y el que más pesa lo agregó Fermín.
+
+- ⭐⭐⭐ **El surco en el canto NO se pide en el canto.** Los dos fixtures que lo piden ahí
+  —con fresa y con Sierra Horizontal— **no postprocesan**, igual que el canal (`canal.md` §15).
+  La forma real, y es aporte de oficio de Fermín: **una polilínea dibujada en la cara superior**
+  que entra y sale **fuera de la pieza**, dejando que el **diámetro** de la sierra haga el
+  trabajo lateral. Con la `E002` (Ø100): eje en `Y−60` ⇒ filo 10 mm **antes** del borde, la
+  bajada en Z es **al aire**; eje en `Y−40` ⇒ **penetra 10 mm**.
+  - ⭐⭐ **Y el ISO que sale es un fresado normal** (`?%ETK[7]=4`, `D1`/`SVL`/`SVR`, `50 + 3`
+    segmentos) ⇒ **el converter no necesita emitir nada nuevo**.
+  - ⚠️ **Pero no puede exigir que la traza caiga dentro de la pieza**: los tres tramos viven en
+    `Y` negativa. Una validación de ese tipo rechazaría un programa correcto y corriente.
+  - 📌 **Y la cara del mecanizado no se lee del plano**: este programa dice `Top` y produce un
+    surco en el **canto**. Lo decide la geometría más el diámetro de la herramienta.
+- 🚨 **Cuarto caso de fail-loud**: el fresado en la **cara inferior** postprocesa y **el
+  mecanizado no está** en el ISO — ni `T`, ni `M06`, ni un `G1` de corte. Igual que el
+  perforado.
+  - ⭐ **Con un matiz que el perforado no tenía**: quedan **dos líneas**, `?%ETK[8]=1` y `G40`
+    —el preámbulo del bloque de fresado—, así que **Maestro empieza a emitir y abandona**. El
+    descarte deja testigo en el ISO y se puede diagnosticar sin el `.pgmx` al lado.
+- 📌 **Y un testigo más del default congelado** (§23.2): los cuatro archivos, creados después de
+  poner la opción en 30, traen `Cota de seguridad = 30`, y el ISO emite `SVL + 30`.
+
+
 ### 2026-09-09 — Grupo 8: la matriz 7×7 de fresas, auditada y esperando ISO
 Fermín lo llevó mucho más lejos del pedido: **56 archivos**, con **las siete fresas contra las
 siete** más las combinaciones con canal y con taladro. Todavía **sin postprocesar**, así que

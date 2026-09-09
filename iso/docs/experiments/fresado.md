@@ -56,6 +56,14 @@ del electromandril. Tercer mecanizado de la rama D, y el que menos evidencia pro
 > simétrica**, porque el bloque cambia de forma según vaya primero o segundo. Las **tres
 > transiciones** quedan medidas, y la de cabezal es **idéntica para el canal y para el
 > taladro**.
+>
+> ⭐⭐⭐ **Grupo 9 — y una técnica de oficio que cambia el planteo** (§25): el fresado en el
+> canto **no se pide en el canto** (los dos `front` no postprocesan). Se dibuja una polilínea
+> en la cara **superior** que entra y sale **fuera de la pieza**, y el **diámetro** de la
+> Sierra Horizontal hace el surco lateral — con la bajada en Z siempre al aire. Y el ISO que
+> sale es **un fresado normal**: el converter no necesita nada nuevo, pero **no puede exigir
+> que la traza caiga dentro de la pieza**. Además, **cuarto caso de fail-loud**: la cara
+> inferior se descarta en silencio, aunque esta vez **deja dos líneas de rastro**.
 
 ## 1. Los fixtures heredados
 
@@ -1491,3 +1499,111 @@ operaciones.
 ⇒ Los dos pares difieren, y **no en el mismo sentido**: con el canal empezar por la sierra sale
 una línea más corto, con el taladro empezar por la broca sale dos más largo. Sin explicación
 todavía; queda anotado como observación, no como regla.
+
+---
+
+# 25. Grupo 9 — la cara, y la técnica para ranurar el canto (2026-09-09)
+
+Cuatro archivos: los tres del pedido —de los cuales **sólo el `bottom` postprocesó**— y **uno
+que agregó Fermín**, que es el que cambia el panorama.
+
+Los cuatro tienen la `Cota de seguridad` en **30**, porque se crearon después de poner la
+opción de Maestro en 30 (Grupo 7). 📌 Es un testigo más del patrón de §23.2: **el default de
+la ventana queda congelado en los archivos nuevos**, y se ve en el ISO (`G0 Z137.000` =
+`SVL 107` + 30, salida `G0 Z30.000`).
+
+## 25.1 ⛔ Cuarto caso de fail-loud: la cara inferior — pero deja rastro
+
+`bottom_E004` **sí postprocesa**, y el ISO son **45 líneas**. Contra el programa vacío (43):
+
+```
+1c1
+< % r_pv_a_manual_perf.pgm
+> % r_pv_a__fresado_bottom_e004.pgm
+19a20,21
+> ?%ETK[8]=1
+> G40
+```
+
+**El fresado no está**: ni `T`, ni `M06`, ni `SVL`, ni un solo `G1` de corte. Maestro **descarta
+en silencio** el mecanizado de la cara inferior, igual que con el perforado — el caso que hizo
+escribir la excepción de fail-loud del `CLAUDE.md` §4.
+
+⇒ 🚨 **Cuarto caso de fail-loud del converter**, y el segundo de esta clase (mecanizado que
+desaparece sin aviso). La pieza sale sin el surco y nadie se entera.
+
+### ⭐ Pero acá hay un matiz que el perforado no tenía
+
+En el perforado el ISO salía **idéntico** al vacío: el descarte era **indetectable** desde el
+archivo emitido. Acá quedan **dos líneas**, `?%ETK[8]=1` y `G40`, que son **el preámbulo del
+bloque de fresado** — el mismo que en un fresado normal aparece tres veces.
+
+⇒ **Maestro empieza a emitir el bloque y lo abandona.** Hay un testigo en el ISO: un preámbulo
+de fresado sin bloque detrás.
+
+⇒ Para el converter esto **no cambia la decisión** —rechaza igual, por la regla 4—, pero sí
+significa que un ISO de Maestro con ese patrón se puede **diagnosticar** sin tener el `.pgmx` al
+lado.
+
+## 25.2 ⛔ El fresado directo en el canto no postprocesa
+
+`front_E004` y `front_E002` piden el mismo recorrido sobre la **cara delantera** —una línea en
+`(50, 9) → (350, 9)`, o sea a media altura del canto— y **ninguno de los dos produce ISO**.
+
+⇒ Confirma para el fresado lo que `canal.md` §15 había derivado para el canal: **el canto no se
+mecaniza pidiéndolo en el canto**. Vale tanto para una fresa del electromandril como para la
+Sierra Horizontal.
+
+## 25.3 ⭐⭐⭐ La técnica que sí funciona: el surco en el canto se pide desde la cara SUPERIOR
+
+**Aporte de oficio de Fermín**, y es la forma real de hacerlo en producción.
+
+En vez de pedir el mecanizado en la cara delantera, se dibuja **a mano una polilínea en la cara
+superior** que entra y sale **fuera de la pieza**, y se deja que el **diámetro** de la sierra
+horizontal haga el trabajo lateral:
+
+```
+tramo 1:  (50, −60) → (50, −40)     entra 20 mm hacia la pieza, por afuera
+tramo 2:  (50, −40) → (350, −40)    el surco, a lo largo del canto
+tramo 3:  (350, −40) → (350, −60)   sale 20 mm, otra vez hacia afuera
+```
+
+Con la **`E002`** (Ø100, radio 50) y profundidad 7:
+
+| el eje de la sierra en | el filo llega a | qué pasa |
+|---|---|---|
+| `Y = −60` | `Y = −10` | **10 mm antes del borde**: la bajada vertical es **al aire** |
+| `Y = −40` | `Y = +10` | **penetra 10 mm** en el canto |
+
+⇒ **La bajada en Z ocurre siempre fuera de la pieza**, que es lo que hace la técnica viable: un
+disco de Ø100 no puede entrar a pique en el material.
+
+⇒ Y el ISO lo confirma línea por línea:
+
+```
+G0 X50.000 Y-60.000        <- posiciona AFUERA de la pieza
+G0 Z137.000                <- SVL 107 + cota 30
+G1 Z-7.000 F2000.000       <- baja al aire
+?%ETK[7]=4
+G1 Y-40.000 Z-7.000 F3000.000    <- penetra
+G1 X350.000 Z-7.000 F3000.000    <- el surco
+G1 Y-60.000 Z-7.000 F3000.000    <- sale
+G0 Z30.000                       <- sube afuera
+```
+
+### ⭐⭐ Y lo mejor para el converter: no hay nada nuevo que emitir
+
+El bloque es **un fresado normal**: `?%ETK[7]=4`, electromandril, `D1`/`SVL 107`/`SVR 50`, y
+**96 líneas = 43 + 53**, que es `50 + 3 segmentos` — la misma regla de §12.1.
+
+⇒ **El «surco en el canto» no es una familia de emisión ni una operación especial: es
+geometría.** Todo lo que el converter necesita ya está derivado.
+
+⚠️ **Con una condición que sí hay que respetar: la traza sale de la pieza.** Los tres tramos
+viven en `Y` **negativa**, fuera del borde. Un converter que valide «la traza tiene que caer
+dentro de la pieza» rechazaría un programa correcto y de uso corriente.
+
+📌 **Y una consecuencia de método**: la cara de un mecanizado **no se puede leer de la cara del
+plano**. Este programa dice `Top` y produce un surco en el **canto delantero**. Lo que decide
+qué superficie se trabaja es la **geometría más el diámetro de la herramienta**, no la
+declaración del plano.
