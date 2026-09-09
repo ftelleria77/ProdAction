@@ -38,6 +38,12 @@ del electromandril. Tercer mecanizado de la rama D, y el que menos evidencia pro
 > **va cruzado** respecto de la corrección. Además **la UI fuerza CAD cuando hay multipaso**
 > (dato de Fermín) ⇒ multipaso y `G41`/`G42` no coexisten nunca. Y los `corr_len` rehechos
 > cierran el acortamiento: **es el radio, con dos profundidades**.
+>
+> ⭐⭐⭐ **2026-09-09 — Grupo 7: el tercer origen queda cerrado** (§23). Dos archivos con la
+> `Cota de seguridad` **cruzada** contra la opción de Maestro, y captura de la ventana en cada
+> postproceso: **el ISO sigue al archivo en los dos casos** ⇒ `SecurityDistance` **no se lee al
+> postprocesar**, es sólo el default de creación. Con eso queda hecho el «experimento de las
+> dos PCs» que estaba abierto desde el 2026-08-09 — y sin necesitar una segunda máquina.
 
 ## 1. Los fixtures heredados
 
@@ -164,6 +170,12 @@ que **necesita trayectoria para verse**. Acá hay trayectoria y el valor aparece
 PC donde se crearon, entonces Maestro **congela el default en el `.pgmx`** al crear la
 operación ⇒ el converter **no necesita leer ese origen**. Lo contesta una pregunta, no un
 fixture: en qué máquina se hicieron.
+
+> ✅ **DERIVADO el 2026-09-09 (§23.2), y era exactamente ese mecanismo.** El Grupo 7 cruzó los
+> valores —archivo en 30 con la opción en 20, y archivo en 25 con la opción en 30— y **el ISO
+> siguió al archivo en los dos casos**, con captura de la ventana como testigo. La ventana
+> `Opciones` da el **default de creación**; no se lee al postprocesar. Y de paso la variación
+> aislada que esta sección le debía al Grupo 7 está hecha: tres cotas, 20 · 25 · 30.
 
 ## 4ter. ✅ El campo no mueve el bloque del fresado
 
@@ -1112,3 +1124,115 @@ actúan en la etapa 1. Lo derivado acá es el patrón de **las que tienen campo 
 | el `Solape` en un **contorno cerrado** | ⭐ Fermín explicó para qué es: **extiende el trazo final más allá del punto final**. Sobre una línea abierta no hay adónde extenderse ⇒ el negativo era el esperado. Fixture pedido con predicción (§21.6) |
 | el lado del arco con **corrección + `Izquierdo`/`Derecho` explícitos** | hoy el cruce se derivó con `Automático`; falta ver si el explícito ignora la corrección |
 | `Cutmode = Climb` | sigue sin campo identificado en la ventana |
+
+---
+
+# 23. Grupo 7 — la cota de seguridad, y el tercer origen queda cerrado (2026-09-09)
+
+**Dos archivos, y valen por dos experimentos.** Fermín no sólo varió la `Cota de seguridad` del
+programa: **cambió a la vez las Opciones de Maestro, y las cruzó**, dejando una captura de la
+ventana por cada postproceso.
+
+| archivo | `Cota de seguridad` (del programa) | `Distancia de seguridad` (Opciones) | `Paso de retroacción` (Opciones) |
+|---|---|---|---|
+| `cota_seguridad_30` | **30** | **20** | 10 |
+| `cota_seguridad_25` | **25** | **30** | 15 |
+
+Los dos valores van **al revés uno del otro**: el archivo que pide 30 se postprocesó con la
+opción en 20, y el que pide 25 con la opción en 30. Es exactamente lo que hace falta para
+separar quién manda.
+
+## 23.1 ✅ La cota de seguridad, derivada con variación aislada
+
+| archivo | `Cota` | aproximación | salida |
+|---|---|---|---|
+| base | 20 | `G0 Z115.000` | `G0 Z20.000` |
+| `_25` | 25 | `G0 Z120.000` | `G0 Z25.000` |
+| `_30` | 30 | `G0 Z125.000` | `G0 Z30.000` |
+
+```
+Z de aproximación = ToolOffsetLength + Cota de seguridad
+Z de salida       = Cota de seguridad
+```
+
+⇒ **Tres valores sobre la misma herramienta**, y el diff entre `_25` y `_30` son **exactamente
+dos líneas**: la cota de seguridad no toca nada más del bloque. Lo que §4bis había derivado con
+un par que movía tres cosas a la vez, ahora está aislado.
+
+Y el `.pgmx` lo confirma del otro lado: la curva `Approach` arranca en `espesor + cota`
+(`Z38`, `Z43`, `Z48`) y mide `cota + profundidad` (30, 35, 40).
+
+📌 **Un solo campo escribe los dos del XML.** `ApproachSecurityPlane` y `RetractSecurityPlane`
+valen lo mismo en los tres archivos, porque la ventana tiene **una** `Cota de seguridad` en
+`Datos avanzados` (§13). Cuál gobierna cada cota sigue sin poder separarse con archivos que
+Maestro produzca — y ya no importa: se mueven juntos siempre.
+
+## 23.2 ⭐⭐⭐ Y el cruce cierra el TERCER ORIGEN: la ventana `Opciones` NO se lee al postprocesar
+
+Esta es la parte grande, y contesta una pregunta abierta desde el 2026-08-09.
+
+- El archivo con `Cota de seguridad = 30` se postprocesó con `Distancia de seguridad = 20`
+  ⇒ el ISO emitió **`Z125` y `Z30`**: siguió al **archivo**.
+- El archivo con `25` se postprocesó con la opción en **30** ⇒ el ISO emitió **`Z120` y `Z25`**:
+  siguió al **archivo** otra vez, y esta vez el valor de la opción era **mayor**, así que no
+  hay forma de confundirlo con un mínimo o un tope.
+
+```
+Distancia de seguridad desde la mesa de trabajo  ->  SOLO el default al crear la operación
+Cota de seguridad (Datos avanzados del programa) ->  lo que el ISO usa
+```
+
+⇒ ⭐ **`SecurityDistance` no se lee al postprocesar.** Y con **testigo**: las dos capturas
+registran el valor exacto de la ventana en cada postproceso, así que este negativo es
+**derivado**, no «probable» (`fixtures.md` §4).
+
+### Qué pendientes cierra
+
+- ✅ **El «experimento de las dos PCs»** que `configuracion_aplicacion.md` tenía planteado desde
+  el 2026-08-09 —*«el mismo `.pgmx` postprocesado dos veces con una opción cambiada en el
+  medio; si el ISO difiere, es postproceso»*— **está hecho, y da que NO es postproceso.** Y
+  salió más barato de lo previsto: no hizo falta una segunda máquina.
+- ✅ **La hipótesis de §4bis pasa a derivada.** Ahí se suponía que el `30` de los fixtures
+  heredados venía de una PC con `SecurityDistance = 30` congelado en el archivo. Es
+  exactamente el mecanismo, ahora medido.
+- ✅ **Y confirma el patrón de §21.8** con su segundo caso probado: la ventana `Opciones` da
+  **defaults que Maestro congela en el `.pgmx`** al crear la operación. El tercer origen actúa
+  en la **creación**, no en la emisión.
+
+⇒ **Para el converter**: no necesita `UI00.exe.Config` para la cota de seguridad ni para el
+multiplicador del radio. Los lee del `.pgmx`. Es un origen menos que consultar en dos de los
+tres números que lo preocupaban.
+
+⚠️ **Sigue sin generalizarse a las 175 claves.** `PostFileFormat` decide el formato de salida y
+sí actúa en el postproceso. Lo derivado vale para **las claves con campo espejo en el `.pgmx`**.
+
+## 23.3 ⭐⭐ `MillingRetractDistance` tiene nombre en español, y el pendiente del `10` se abarata
+
+Las capturas dan la traducción de la ventana, que hasta hoy sólo teníamos como clave en inglés:
+
+| clave de `UI00.exe.Config` | en la ventana `Opciones > Parámetros` |
+|---|---|
+| `SecurityDistance` | **Distancia de seguridad desde la mesa de trabajo** |
+| `MillingRetractDistance` | **Paso de retroacción en los fresados** |
+| `RadiusMultiplier` | **Multiplicador del radio en aproximaciones/alejamientos** |
+| `RapidFeed` | **Velocidad rápida en los desplazamientos** |
+
+⇒ ⭐ **«Paso de retroacción en los fresados» describe literalmente el retorno entre pasadas**,
+que es donde apareció el `10` sin procedencia (§16.3). El nombre no lo prueba, pero apunta
+derecho.
+
+⚠️ **Y estos dos archivos NO lo contestan**: no tienen multipaso, así que no hay retorno donde
+se vea — aunque el valor pasó de 10 a 15 entre los dos postprocesos.
+
+⇒ **El fixture que lo resuelve cambia, y se vuelve más directo.** Si `MillingRetractDistance`
+se comporta como sus dos hermanas —default congelado al crear—, entonces **no alcanza con
+postprocesar de nuevo**: hay que **crear** el fresado con la opción ya cambiada.
+
+```
+Poner «Paso de retroacción en los fresados» = 15, y RECIÉN AHÍ crear un
+uni_EP_ph5 nuevo. Si la traza guardada trae «8 0 15» donde el actual trae
+«8 0 10», es MillingRetractDistance. Si sigue en 10, es la profundidad.
+```
+
+Y se ve **sin postprocesar**, leyendo el `.pgmx`. El fixture a profundidad 14 sigue valiendo
+como control cruzado, pero éste ataca la variable por su nombre.

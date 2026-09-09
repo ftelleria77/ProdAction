@@ -67,6 +67,21 @@ están **iguales en las dos PCs**:
 
 ## Por qué importa: la regla 4 en un caso concreto
 
+> ✅✅ **CERRADO el 2026-09-09 con el experimento cruzado (Grupo 7 del fresado).** El mismo
+> `.pgmx` no: **dos** programas con la `Cota de seguridad` puesta al revés de la opción — uno
+> con 30 en el archivo y 20 en la ventana, otro con 25 en el archivo y 30 en la ventana —,
+> cada uno con su **captura de la ventana** en el momento del postproceso. **El ISO siguió al
+> archivo en los dos casos** (`Z125`/`Z30` y `Z120`/`Z25`).
+>
+> ⇒ **`SecurityDistance` NO se lee al postprocesar.** El experimento de las dos PCs que esta
+> sección planteaba está hecho, y no hizo falta la segunda máquina: alcanzó con cambiar la
+> opción entre dos postprocesos. Detalle en `experiments/fresado.md` §23.2.
+>
+> 📌 Y las capturas dieron la traducción de las cuatro claves de esa sección de la ventana:
+> `SecurityDistance` = «Distancia de seguridad desde la mesa de trabajo», `MillingRetractDistance`
+> = «**Paso de retroacción en los fresados**», `RadiusMultiplier` = «Multiplicador del radio en
+> aproximaciones/alejamientos», `RapidFeed` = «Velocidad rápida en los desplazamientos».
+
 > ✅ **RESUELTO para `RadiusMultiplier` y `SecurityDistance` (2026-09-08).** No hace falta el
 > experimento de las dos PCs: **las dos son DEFAULTS que Maestro congela en el `.pgmx`**.
 > `RadiusMultiplier` es el valor que aparece en `Multipl. de radio` **al activar** el

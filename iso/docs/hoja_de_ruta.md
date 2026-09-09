@@ -503,6 +503,38 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-09 — Grupo 7: el TERCER ORIGEN queda cerrado, con dos archivos
+Dos archivos nada más, pero Fermín **cruzó** la `Cota de seguridad` del programa contra la
+`Distancia de seguridad` de la ventana `Opciones`, y dejó **una captura de la ventana por cada
+postproceso**.
+
+- ⭐⭐⭐ **La ventana `Opciones` NO se lee al postprocesar.** El archivo que pide `Cota de
+  seguridad = 30` se postprocesó con la opción en **20** y el ISO emitió `Z125`/`Z30`; el que
+  pide **25** se postprocesó con la opción en **30** y emitió `Z120`/`Z25`. **El ISO siguió al
+  archivo las dos veces**, y en el segundo caso el valor de la opción era *mayor*, así que no
+  se puede confundir con un mínimo o un tope.
+  - ✅ **Es el «experimento de las dos PCs»** que `configuracion_aplicacion.md` tenía planteado
+    desde el 2026-08-09, hecho — y **sin necesitar la segunda máquina**: alcanzó con cambiar la
+    opción entre dos postprocesos.
+  - ✅ **Negativo con testigo**: las capturas registran el valor exacto de la ventana en cada
+    corrida, así que es *derivado*, no *probable* (`fixtures.md` §4).
+  - ✅ **La hipótesis de `fresado.md` §4bis pasa a derivada**, y con ella el patrón del §21.8:
+    el tercer origen da **defaults que Maestro congela en el `.pgmx`** al crear la operación.
+  - ⇒ **El converter no necesita `UI00.exe.Config`** para la cota de seguridad ni para el
+    multiplicador del radio. ⚠️ Sin generalizar a las 175 claves: `PostFileFormat` sí actúa en
+    el postproceso.
+- ✅ **Y la cota de seguridad queda con variación aislada**: 20 · 25 · 30 sobre la misma
+  herramienta, `Z = ToolOffsetLength + cota` y salida `Z = cota`. El diff entre dos de ellos son
+  **exactamente dos líneas**. Lo que §4bis había derivado con un par que movía tres cosas.
+- ⭐ **Las capturas dieron la traducción de las cuatro claves** de `Opciones > Parámetros >
+  Acercamiento y alejamiento`. La que importa: `MillingRetractDistance` = **«Paso de
+  retroacción en los fresados»**, que describe literalmente el retorno entre pasadas donde
+  apareció el `10` sin procedencia.
+  - ⇒ **El fixture del pendiente se abarata y cambia de forma**: hay que **crear** un
+    `uni_EP_ph5` con esa opción en 15 (no postprocesar uno viejo, porque el valor se congela al
+    crear) y mirar si la traza guardada trae `8 0 15`. Se ve **sin postprocesar**.
+
+
 ### 2026-09-08 (cierre) — Grupo 6: el acercamiento sale con fórmula, y la UI fuerza CAD con multipaso
 27 archivos más (se pidieron 6) y los dos `corr_len` rehechos. 28 de 28 verificados.
 
