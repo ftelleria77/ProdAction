@@ -44,6 +44,11 @@ del electromandril. Tercer mecanizado de la rama D, y el que menos evidencia pro
 > postproceso: **el ISO sigue al archivo en los dos casos** ⇒ `SecurityDistance` **no se lee al
 > postprocesar**, es sólo el default de creación. Con eso queda hecho el «experimento de las
 > dos PCs» que estaba abierto desde el 2026-08-09 — y sin necesitar una segunda máquina.
+>
+> 🔄 **Grupo 8, la matriz de cambios de herramienta** (§24): 56 archivos —las siete fresas ×
+> las siete, más canal y taladro—, **auditados 56 de 56 y todavía sin postprocesar**. Las
+> predicciones están escritas antes del ISO, y hay **tres cosas para arreglar primero**: el
+> canal quedó a profundidad 0 y dos pares de archivos son duplicados exactos.
 
 ## 1. Los fixtures heredados
 
@@ -1236,3 +1241,129 @@ uni_EP_ph5 nuevo. Si la traza guardada trae «8 0 15» donde el actual trae
 
 Y se ve **sin postprocesar**, leyendo el `.pgmx`. El fixture a profundidad 14 sigue valiendo
 como control cruzado, pero éste ataca la variable por su nombre.
+
+---
+
+# 24. Grupo 8 — la matriz de cambios de herramienta (2026-09-09)
+
+**56 archivos, y todavía sin postprocesar.** Fermín lo llevó mucho más lejos de lo pedido: en
+vez de los cuatro casos del pedido, armó **la matriz 7×7 completa** de fresas más las
+combinaciones con canal y con taladro.
+
+⚠️ **Esta sección se escribe ANTES del ISO**, con la auditoría del `.pgmx` y las predicciones.
+Es el mismo orden que funcionó en el canal, donde la configuración dio nueve predicciones
+falsables y el primer archivo acertó ocho de ocho.
+
+## 24.1 Qué hay, leído del archivo
+
+Todos en campo `A`, pieza de siempre, dos fresados **paralelos** —`Y150` y `Y250`, de `X50` a
+`X350`, profundidad 10— salvo donde se diga.
+
+| bloque | n | qué es |
+|---|---|---|
+| **matriz de fresas** | **49** | las siete `E00x` × las siete, en orden: `Fresado 1 - EAAA` + `Fresado 2 - EBBB` |
+| — de esas, la **diagonal** | 7 | la misma fresa dos veces (`dos_paralelos`) |
+| — fuera de la diagonal | 42 | dos fresas distintas (`dos_fresas`) |
+| **con canal** | 2 | fresado `E001` en `Y150` + canal `082` en `Y250` (de `X100` a `X350`), en **los dos órdenes** |
+| **con taladro** | 3 | fresado `E001` + agujero **Ø8, profundidad 15, en (100,100)**, en los dos órdenes |
+| base | 1 | el mínimo del lote |
+
+⭐ **Y el `.pgmx` trae un dato que no habíamos usado**: Maestro **nombra y numera los pasos del
+workplan con su herramienta** — `Fresado 1 - E001`, `Canal 2 - 082`, `Taladrado 1 - D8P`. Es un
+segundo lugar donde el archivo afirma qué hace, y sirve para auditar sin leer el `ToolKey`.
+
+## 24.2 ✅ Auditoría: 56 de 56
+
+Leyendo el **orden del workplan** —no el de `<Operations>`, que es un catálogo (`perforado.md`)—
+los 56 nombres coinciden con lo que el archivo dice: herramientas correctas y en el orden que
+el nombre afirma. Con 49 combinaciones de dos herramientas hechas en una hora, era el lote con
+más riesgo de un «guardar como» pisado, y no ocurrió.
+
+## 24.3 ⚠️ Tres cosas para arreglar ANTES de postprocesar
+
+Son 56 postprocesos; conviene no gastarlos en balde.
+
+### ⛔ El canal quedó a profundidad 0
+
+Los dos archivos con canal tienen el `SlotSide` con `Depth.StartDepth = EndDepth = **0**`. En
+el lote D2 el canal mínimo llevaba **10**.
+
+El `0` es el **estado neutro** que Maestro guarda cuando la operación se creó y todavía no
+tiene profundidad efectiva. Un canal a profundidad 0 no corta nada, así que el ISO puede salir
+sin el bloque del canal — y entonces **estos dos fixtures no medirían la transición entre
+cabezales, que es justamente lo que el par tiene que decidir**.
+
+⇒ **Ponerle profundidad 10 al canal** en los dos archivos antes de postprocesar. (Y si se
+postprocesan igual, el resultado es dato de todos modos: diría qué hace Maestro con un
+mecanizado de profundidad nula.)
+
+### 📌 Dos pares de archivos son duplicados exactos
+
+Verificado comparando el XML entero, no el nombre:
+
+| | |
+|---|---|
+| `E001_D8P_fresado_taladro` | **XML idéntico** a `E001_top_D8P_fresado_taladro_top` (953 líneas, diff vacío) |
+| `E004_dos_paralelos` | **XML idéntico** a `E004_E004_dos_paralelos` (1008 líneas, diff vacío) |
+
+⇒ **Son 54 programas distintos, no 56.** No contamina nada —un duplicado no puede contradecir
+a nadie—, pero son dos postprocesos que no hacen falta. Si la intención del `_top_` era poner
+el taladro en una cara **distinta** de la superior, ese archivo está sin hacer.
+
+## 24.4 Las predicciones
+
+Todo lo de abajo sale de lo ya derivado, y cada línea es falsable.
+
+### La diagonal (misma fresa dos veces) — 7 archivos
+
+| | |
+|---|---|
+| `T n` · `SYN` · `M06` | **UNO solo** — el texto de once contornos (§12.5) y `dos_fresados_una_geometria` ya lo mostraron |
+| `D1` · `SVL` · `SVR` · `G1 Z-10` · `?%ETK[7]=4` · `G0 Z20` | **dos veces**, uno por operación |
+| `G0 Z<SVL+20>` | **una sola vez** |
+| entre las dos | `G17` · `MLV=2` · tres `G0` con **X, Y y Z combinados** |
+| líneas que agrega | **71** contra el programa vacío (lo que dio `dos_fresados_una_geometria`, que también son 2 operaciones y 2 segmentos) |
+
+### Fuera de la diagonal (dos fresas) — 42 archivos
+
+| | |
+|---|---|
+| `T` · `SYN` · `M06` | **DOS veces**, una por herramienta ⇒ el bloque de transición es más largo que en la diagonal |
+| los números de cada bloque | del catálogo, uno por fresa: `T` = `?%ETK[9]` = `shStorePos`, `SVL` = `ToolOffsetLength`, `SVR` = radio del cuerpo, `S` = `SpindleSpeed.Standard`, `F` = `FeedRate.Standard × 1000`, bajada = `DescentSpeed × 1000`, aproximación = `SVL` + 20 |
+| `?%ETK[7]` | **4 en los dos bloques** — las catorce herramientas son del electromandril |
+| la matriz | **simétrica en contenido**: `EAAA_EBBB` y `EBBB_EAAA` tienen que dar los mismos dos bloques **en orden invertido** |
+
+⇒ Si los 42 se explican con el catálogo, **el cambio de herramienta queda cerrado con 49
+casos** y no hará falta volver sobre él en ningún mecanizado posterior.
+
+### Con canal — 2 archivos
+
+El canal con `082` va por el **cabezal perforador** y el fresado por el **electromandril**
+(`canal.md` §19), así que este par es la **transición entre cabezales**:
+
+| | |
+|---|---|
+| bloque del canal | `?%ETK[6]=82` · `?%ETK[1]=16` · `?%ETK[7]=**1**` · **sin** `T`/`SYN`/`M06` · `SHF` `-96 / 126.95 / 22.15` · `S4000M3` · `G4F1.200` |
+| bloque del fresado | `T1` · `SYN` · `M06` · `?%ETK[7]=**4**` · `SHF` `32.05 / -246.65 / -125.30` |
+| entre los dos | **`G0 G53 Z201.000`**, como la transición canal → taladro del canal §16 — aunque acá las dos herramientas viven en cabezales distintos, no en el mismo |
+| el orden | el ISO respeta el **orden del workplan**, en los dos sentidos |
+
+⚠️ Con el canal en profundidad 0, es probable que no salga nada de esto.
+
+### Con taladro — 3 archivos (2 distintos)
+
+| | |
+|---|---|
+| bloque del taladro | `?%ETK[7]=**3**`, herramienta **resuelta automáticamente** por diámetro y punta — el `ToolKey` viene **vacío** en el archivo, como en el perforado |
+| Ø8 y profundidad 15 | el ISO tiene que bajar a `Z-15` |
+| la transición | `G0 G53 Z201.000` entre el electromandril y el cabezal perforador |
+| el orden | los dos sentidos están, y tienen que salir invertidos |
+
+## 24.5 Lo que este grupo cierra si las predicciones se cumplen
+
+- **el cambio de herramienta entre fresas**, con las 49 combinaciones;
+- **la transición entre cabezales** en los dos sentidos y con dos vecinos distintos (canal y
+  taladro);
+- y el **costo en líneas de una segunda operación**, que hoy tiene un solo punto (71, de
+  `dos_fresados_una_geometria`) y que la regla `50 + N segmentos` no cubre para varias
+  operaciones (§12.1).

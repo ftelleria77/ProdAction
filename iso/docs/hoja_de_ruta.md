@@ -503,6 +503,34 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-09 — Grupo 8: la matriz 7×7 de fresas, auditada y esperando ISO
+Fermín lo llevó mucho más lejos del pedido: **56 archivos**, con **las siete fresas contra las
+siete** más las combinaciones con canal y con taladro. Todavía **sin postprocesar**, así que
+esto es la auditoría y las predicciones — el mismo orden que en el canal, donde la
+configuración acertó ocho de ocho antes del primer ISO.
+
+- ✅ **56 de 56 verificados**, leyendo el **orden del workplan** y no el de `<Operations>`, que
+  es un catálogo. Con 49 combinaciones de dos herramientas hechas en una hora, era el lote con
+  más riesgo de un «guardar como» pisado.
+- ⭐ **Y aparece un segundo lugar donde el archivo se afirma a sí mismo**: Maestro **nombra y
+  numera los pasos del workplan con su herramienta** (`Fresado 1 - E001`, `Canal 2 - 082`,
+  `Taladrado 1 - D8P`). Sirve para auditar sin leer el `ToolKey`.
+- ⚠️ **Tres cosas para arreglar antes de gastar 56 postprocesos**:
+  - ⛔ **el canal quedó a profundidad 0** (`SlotSide.Depth = 0`, el estado neutro) en los dos
+    archivos que lo llevan ⇒ no corta, y **el par no mediría la transición entre cabezales**,
+    que es justamente lo que tiene que decidir;
+  - 📌 **dos pares son duplicados exactos**, verificado por XML completo:
+    `E001_D8P_fresado_taladro` = `E001_top_D8P_fresado_taladro_top` y `E004_dos_paralelos` =
+    `E004_E004_dos_paralelos` ⇒ son **54 programas distintos**, no 56.
+- 📋 **Predicciones escritas** (`fresado.md` §24.4): la diagonal con **un solo** `T`/`M06` y 71
+  líneas; los 42 fuera de la diagonal con **dos** cambios de herramienta y todos sus números
+  del catálogo; la matriz **simétrica en contenido** (`A_B` y `B_A` con los mismos bloques
+  invertidos); y las dos transiciones **entre cabezales** (canal `?%ETK[7]=1`, taladro `=3`)
+  con `G0 G53 Z201.000` en el medio.
+- ⇒ Si se cumplen, **el cambio de herramienta queda cerrado con 49 casos** y no hay que volver
+  sobre él en ningún mecanizado posterior.
+
+
 ### 2026-09-09 — Grupo 7: el TERCER ORIGEN queda cerrado, con dos archivos
 Dos archivos nada más, pero Fermín **cruzó** la `Cota de seguridad` del programa contra la
 `Distancia de seguridad` de la ventana `Opciones`, y dejó **una captura de la ventana por cada
