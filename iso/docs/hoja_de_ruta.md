@@ -503,6 +503,33 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-10 — `%DONTCARESPEEDV=1` es un bug de Maestro, y los dos incidentes eran el mismo
+⚖️ **Decisión de Fermín**: esa variable es un **bug de Maestro**, y **es la línea que paró el
+CNC** en las investigaciones anteriores. ⇒ **el converter la omite siempre** — la omisión
+deliberada ya existía (`DELIBERATE_OMISSIONS`), lo que faltaba era el gatillo, y hoy está
+derivado: «Salida a cota de seguridad» **con multipaso**.
+
+- ⭐⭐⭐ **Y con eso se unifican dos incidentes que figuraban separados**:
+  - el **2026-07-30** la máquina se detuvo con error a mitad del primer fresado y la causa
+    estaba en el segundo — un fresado **unidireccional** con `Conexión entre huecos` en
+    **«Salida a cota de seguridad»** (`incidentes.md` de la Pratix): **es exactamente la
+    configuración que emite la línea**;
+  - el **2026-08-03** el ISO de Maestro abortó con `Alarma 67` por `%DONTCARESPEEDV=1` y el
+    nuestro corrió (`iso_first_machine_run`): **es la misma línea**, identificada pero sin saber
+    qué la disparaba.
+  - 🔮 Y explica lo que el registro dejaba como raro —por qué frenó en el **primer** fresado si
+    la causa estaba en el segundo—: el control **pre-lee** el programa, así que el intérprete
+    llega a la línea inválida mientras la máquina sigue ejecutando el buffer. Hipótesis, no
+    derivación.
+- ⭐⭐ **Y aparece el primer beneficio concreto del converter SOBRE Maestro.** El workaround de
+  producción fue pasar ese fresado a «En la pieza», y eso **cambia la trayectoria**: el retorno
+  deja de ir a la cota de seguridad y sube sólo `MillingRetractDistance` (§31) — la fresa vuelve
+  casi rozando. **El converter puede tener las dos cosas**: «Salida a cota de seguridad» *sin*
+  la línea del bug. Traza segura **y** ejecutable, que es algo que Maestro no puede emitir.
+- ❓ Queda una pregunta chica: el registro del 07-30 no dice si ese segundo fresado tenía
+  **multipaso**. La línea aparece con SCS **y** multipaso, y no con SCS sin pasadas.
+
+
 ### 2026-09-10 — Grupos 15 y 16: se cierra el último número sin procedencia del fresado
 Diez archivos más, estudiados a fondo (pedido de Fermín: no por diff).
 

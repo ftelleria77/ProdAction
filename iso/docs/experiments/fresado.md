@@ -808,6 +808,42 @@ literalmente este mismo caso, y recién ahora sabemos qué lo dispara.
 `CLAUDE.md` §4 ya tiene el precedente resuelto: *el byte-idéntico es el método, no el fin, y
 manda la máquina*. Queda como el caso más claro de esa excepción.
 
+### ⚖️ DECIDIDO (Fermín, 2026-09-10): es un BUG de Maestro, y es la línea que paró el CNC
+
+⇒ **El converter la OMITE siempre**, y ahora **sabe exactamente cuándo Maestro la habría
+emitido** —«Salida a cota de seguridad» con multipaso— en vez de descubrirla comparando. La
+omisión deliberada ya existía (`DELIBERATE_OMISSIONS`); lo que faltaba era el gatillo.
+
+### ⭐⭐⭐ Y con eso se unifican los dos incidentes de julio y agosto
+
+Eran el mismo bug visto desde dos lados, y hasta hoy figuraban como cosas distintas:
+
+| | |
+|---|---|
+| **2026-07-30** — la máquina **se detuvo con error** a mitad del primer fresado, y la causa estaba en el **segundo**: un fresado lineal **unidireccional** con la `E004` y `Conexión entre huecos` en **«Salida a cota de seguridad»** (`incidentes.md` de la Pratix) | ⇒ **es exactamente la configuración que emite la línea** |
+| **2026-08-03** — el ISO de Maestro **aborta** con `Alarma 67: Assegnazione a registro inesistente` por `%DONTCARESPEEDV=1`, y el nuestro —que la omite— **corre** (`iso_first_machine_run`) | ⇒ **es la misma línea**, ya identificada pero sin saber qué la disparaba |
+
+⇒ Y explica el detalle que el registro del incidente dejó como raro: **por qué frenó en el
+PRIMER fresado si la causa estaba en el segundo**. 🔮 Hipótesis (no derivada): el control
+**pre-lee** el programa, así que el intérprete llega a la línea inválida mientras la máquina
+todavía está ejecutando movimientos anteriores del buffer.
+
+❓ **Una pregunta chica que cerraría el encaje**: el registro del 07-30 no dice si ese segundo
+fresado tenía **multipaso**. Los fixtures muestran que la línea aparece con SCS **y** multipaso,
+y **no** con SCS sin pasadas. Si tenía multipaso, el encaje es completo.
+
+### ⭐⭐ Y aparece un beneficio concreto del converter sobre Maestro
+
+El workaround que se usó en la máquina fue pasar ese fresado a **«En la pieza»** — y eso
+**cambia la trayectoria**: el retorno entre pasadas deja de ir a la cota de seguridad y sube
+sólo `MillingRetractDistance` (§31), o sea **la fresa vuelve mucho más abajo, casi rozando**.
+Se evitó el aborto a costa de un recorrido menos seguro.
+
+⇒ **El converter puede tener las dos cosas**: emitir el programa con «Salida a cota de
+seguridad» —el retorno alto, seguro— **y sin la línea del bug**. Es el primer caso donde el
+converter no sólo iguala a Maestro sino que **produce un programa mejor que el que Maestro
+puede producir**.
+
 ### 16.2 ⭐⭐ Qué hace cada conexión, medido
 
 Con profundidad 10 y `PH = 5`, o sea dos pasadas:
@@ -2284,7 +2320,7 @@ Ordenado por lo que cuesta si no se cierra.
 |---|---|
 | **1. ¿el espejo tecnológico ESPEJA o INVIERTE?** | §28.4. La línea del fixture está **centrada** en la pieza, así que las dos operaciones dan el mismo ISO. Es la diferencia entre **transformar coordenadas** o **dar vuelta el orden**. El fixture quedó pedido (Grupo 17) y **no está hecho** |
 | **2. la fórmula del conteo del `Xmsg`** | §27.3. Es acumulativo y posicional —eso está derivado—, pero **la unidad no es el carácter del ISO**. Sin fórmula, **el byte-idéntico de todo programa con mensaje sigue bloqueado**. ⚖️ Requiere una decisión tuya: mirar **un** `.pgm` (dos minutos) o dejarlo como rechazo del converter |
-| **3. `%DONTCARESPEEDV=1`** | §16.1. Su origen está derivado —«Salida a cota de seguridad» con multipaso— pero **qué hace el converter con ella** sigue sin decidir. Hay precedente (`CLAUDE.md` §4: omitirla), sólo falta declararlo para este caso |
+| ~~**3. `%DONTCARESPEEDV=1`**~~ | ✅ **CERRADO (Fermín, 2026-09-10)**: es un **bug de Maestro** y es la línea que paró el CNC. El converter **la omite siempre**, y ahora sabe cuándo Maestro la habría emitido. De paso **unifica los incidentes del 07-30 y del 08-03** — eran el mismo bug — y deja un beneficio concreto: el converter puede emitir «Salida a cota de seguridad» *sin* la línea, o sea la traza segura **y** ejecutable. Ver §16.1 |
 
 ### B. Podría romper una traza real
 
