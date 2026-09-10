@@ -503,6 +503,33 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-10 — Grupos 15 y 16: se cierra el último número sin procedencia del fresado
+Diez archivos más, estudiados a fondo (pedido de Fermín: no por diff).
+
+- ⭐⭐⭐ **El `10` del retorno «En la pieza» es `MillingRetractDistance`.** El diseño de Fermín
+  separó las dos cosas: un archivo **reguardado** con la opción en 15 sale **idéntico** al
+  original (⇒ la opción actúa **al crear**, no al guardar — el control que faltaba para el
+  patrón de §23.2), y uno **creado de cero** con la opción en 15 **y profundidad 12** sube
+  **15**, no 12. Si fuera la profundidad, subiría 12.
+  - La bajada al paso siguiente lo confirma dos veces: `20 = 15 + 5` y `17 = 15 + 2`.
+  - ⇒ **Para el converter, nada que hacer**: el número no es un campo del `.pgmx`, está **dentro
+    de la traza**, y la lee. Cierra la advertencia de §16.3. **Para el sintetizador sí**: es el
+    primer caso donde tiene que leer una opción de la aplicación para producir una traza válida.
+  - 📌 Y no necesitó `.iso`: se leyó del `.pgmx`, como estaba previsto.
+- ⭐⭐ **El `Solape`, derivado**: agrega un segmento que **prolonga el último tramo** en su propia
+  dirección (5 mm → `G1 Y205`; 20 → `G1 Y220`), y el arco de alejamiento se corre con él. Y el
+  cruce con el multiplicador de radio muestra que **son independientes**: el radio del lead
+  cambia (8 → 4) y el solape no.
+  - ❌ **Mi predicción falló en la forma**: dije que el ISO «no ganaría líneas»; gana una, porque
+    Maestro **no alarga el último `G1`, agrega uno nuevo**.
+- 📋 **Y queda hecho el inventario que pidió Fermín** (`fresado.md` §33): repaso de las cinco
+  secciones de pendientes contra lo que los grupos posteriores cerraron —quince cerrados—,
+  **catorce puntos abiertos** clasificados por costo, y un **grupo final de 9 archivos**.
+  - **Tres deciden código**: si el espejo tecnológico **espeja o invierte** (el fixture pedido
+    quedó sin hacer), la **fórmula del conteo del `Xmsg`** (⚖️ necesita una decisión de alcance
+    sobre mirar un `.pgm`), y qué hace el converter con **`%DONTCARESPEEDV=1`**.
+
+
 ### 2026-09-10 — Grupo 14: los atributos son un solo mecanismo, y el offset exterior redondea
 Diecisiete pares en vez de tres. Fermín agregó las correcciones y las inversiones sobre el
 **contorno cerrado** —el caso de producción— y rectángulos que arrancan en el **punto medio de

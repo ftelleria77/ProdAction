@@ -23,7 +23,7 @@ Rutas simétricas bajo `PGMX_ROOT` (`S:\Maestro\Projects\ProdAction`) e `ISO_ROO
 | C | `…\Reinvestigación\Operaciones\` | 68 | `Xn`, `Xmsg`, `Park` | `experiments/operaciones_maquina.md` |
 | D1 | `…\Reinvestigación\Mecanizados\Perforado\` | 158 | el perforado — ✅ doce grupos, cerrado el 2026-09-03 (140 `.iso`) | `experiments/perforado.md` |
 | D2 | `…\Reinvestigación\Mecanizados\Canal\` | 85 | el canal (Sierra Vertical X) — ✅ **quince grupos, CERRADO** el 2026-09-07 (65 `.iso`) | `experiments/canal.md` |
-| D3 | `…\Reinvestigación\Mecanizados\Fresado\` | 200 | el fresado — 🔄 **grupos 1 a 12 y 14 cerrados** (191 `.iso` y 23 capturas): las geometrías, la rampa, la estrategia, el acercamiento, la matriz 7×7 de herramientas, la cara, el cruce `Invertir` × corrección, el conteo del `Xmsg` y el barrido A5; el 13 (microuniones) **postergado**; grupos 15 a 17 pendientes | `experiments/fresado.md` |
+| D3 | `…\Reinvestigación\Mecanizados\Fresado\` | 210 | el fresado — 🔄 **grupos 1 a 12 y 14 a 16 cerrados** (198 `.iso` y 23 capturas): las geometrías, la rampa, la estrategia, el acercamiento, la matriz 7×7 de herramientas, la cara, el cruce `Invertir` × corrección, el conteo del `Xmsg` y el barrido A5; el 13 (microuniones) **postergado**; queda el **grupo final** de 9 archivos (§33.3) | `experiments/fresado.md` |
 
 R001, R002, D1, D2 y D3 llevan un `INSTRUCCIONES.md` en la carpeta del lote, con el pedido que
 les dio origen.

@@ -85,6 +85,12 @@ del electromandril. Tercer mecanizado de la rama D, y el que menos evidencia pro
 > toolpath tiene ocho elementos donde la geometría tiene cuatro. Además `Invertir` en un
 > cerrado invierte el **giro** conservando el arranque, y el **arranque en el punto medio de
 > un lado** (aporte de Fermín) cierra la regla de emisión de ejes con el caso que faltaba.
+>
+> ⭐⭐⭐ **Grupos 15 y 16** (§31-§32): **el `10` del retorno es `MillingRetractDistance`** — con
+> la opción en 15 y profundidad 12 sube **15**, y los dos candidatos quedan separados; el
+> **`Solape` prolonga el último tramo** en su dirección, independiente del radio del lead. Y
+> §33 hace el **inventario de lo que queda abierto**: catorce puntos, de los cuales **tres
+> deciden código** y el grupo final propuesto son **9 archivos**.
 
 ## 1. Los fixtures heredados
 
@@ -2084,3 +2090,269 @@ Ocho casos, incluidos dos verticales seguidos. Y su conteo: `50 + 6 = 56` (99 �
 | ~~el tramo puramente vertical~~ | ✅ **cerrado acá** (§30.5) |
 | ~~`Velocidad` como atributo~~ | ✅ **derivado acá** (§30.1) |
 | ~~el contorno cerrado con `Invertir`~~ | ✅ **derivado acá** (§30.3) |
+
+---
+
+# 31. ⭐⭐⭐ Grupo 15 — el `10` del retorno ES `MillingRetractDistance` (2026-09-10)
+
+**Tres archivos, sin `.iso` — y no hacen falta**: se lee del `.pgmx`, como estaba previsto. El
+diseño de Fermín separa las dos cosas que había que separar.
+
+| archivo | cómo se hizo | `Paso de retroacción` |
+|---|---|---|
+| `…_uni_EP_ph5` | el original del Grupo 5 | 10 |
+| `…_uni_EP_ph5_retroaccion_15` | **reguardado** con la opción en 15 | 15 |
+| `…_nuevo_…_retroaccion_15` | **creado de cero** con la opción en 15 | 15 |
+
+## 31.1 Reguardar no cambia nada
+
+El toolpath del **reguardado** es **idéntico** al original, tramo por tramo:
+
+```
+8 0 300  1 50 200 13   1 0 0     <- pasada 1 (prof 5)
+8 0 10   1 350 200 13  0 0 1     <- sube 10
+8 0 300  1 350 200 23 -1 0 0     <- retorno
+8 0 15   1 50 200 23   0 0 -1    <- baja 15
+8 0 300  1 50 200 8    1 0 0     <- pasada 2 (prof 10)
+```
+
+⇒ ✅ **Confirma el patrón de §23.2 en su forma más fuerte**: la opción actúa **al crear**, y una
+vez que la traza está calculada **no se recalcula al guardar**. Es el control que ninguna otra
+prueba podía dar.
+
+## 31.2 ⭐⭐⭐ Y el creado de cero lo resuelve: sube 15, no 12
+
+El tercero se hizo con la opción en **15** y —a propósito— con **profundidad 12**, para que el
+valor de la opción y la profundidad **no coincidan**:
+
+```
+8 0 250  1 50 150 13   1 0 0     <- pasada 1: Z13 = 18−5   (prof 5)
+8 0 15   1 300 150 13  0 0 1     <- SUBE 15  -> Z28
+8 0 250  1 300 150 28 -1 0 0     <- retorno
+8 0 20   1 50 150 28   0 0 -1    <- baja 20  -> Z8
+8 0 250  1 50 150 8    1 0 0     <- pasada 2: Z8  = 18−10  (prof 10)
+8 0 15   1 300 150 8   0 0 1     <- SUBE 15  -> Z23
+8 0 250  1 300 150 23 -1 0 0     <- retorno
+8 0 17   1 50 150 23   0 0 -1    <- baja 17  -> Z6
+8 0 250  1 50 150 6    1 0 0     <- pasada 3: Z6  = 18−12  (prof 12)
+```
+
+**Sube 15**, no 12.
+
+```
+altura del retorno «En la pieza» = MillingRetractDistance     («Paso de retroacción en los fresados»)
+bajada al siguiente paso         = MillingRetractDistance + el paso de esa pasada
+```
+
+La bajada lo confirma dos veces: `20 = 15 + 5` (paso completo) y `17 = 15 + 2` (el resto,
+12 − 10). Y el reparto `5 · 10 · 12` sigue la regla de §16.4: pasos de `PH` con el resto al
+final.
+
+⇒ **DERIVADO, y los dos candidatos de §16.3 quedan separados**: con la opción en 10 y
+profundidad 10 subía 10; con la opción en 15 y profundidad 12 sube **15**. Si fuera la
+profundidad, subiría 12.
+
+### Qué significa para cada lado
+
+- **Para el converter: nada que hacer, y era lo que faltaba confirmar.** El número **no es un
+  campo del `.pgmx`** —no existe ningún `MillingRetractDistance` ahí— sino que está **dentro de
+  la traza**, calculado por Maestro. El converter **lo lee**. La advertencia de §16.3 («el
+  converter no puede escribir ese 10») queda cerrada: nunca tuvo que escribirlo.
+- **Para el sintetizador: sí lo necesita**, y ahora sabe de dónde sale — el **tercer origen**,
+  `UI00.exe.Config`. Es el primer caso donde el sintetizador **tiene que leer** una opción de la
+  aplicación para producir una traza correcta.
+
+📌 De paso, el resto del archivo nuevo verifica tres reglas ya derivadas: `Approach` = `8 0 35`
+desde `Z48` = espesor + **cota 30** (§23.1), `Lift` = `8 0 42` hasta `Z48`, y las tres pasadas
+con su reparto.
+
+# 32. Grupo 16 — el solape, derivado (2026-09-10)
+
+Siete archivos que cruzan **lado × solape × multiplicador de radio**, sobre el perímetro de la
+pieza con acercamiento y alejamiento **en arco**. Y arrancan en el **punto medio de un lado**,
+la técnica del Grupo 14.
+
+## 32.1 ⭐⭐ El solape continúa el recorrido más allá del cierre — tal cual lo describiste
+
+Sin solape, el contorno cierra en su punto de arranque y sale por el arco:
+
+```
+G1 Y200.000 Z-18.000              <- cierra en (0,200), el punto medio del lado
+G3 X-8.000 Y208.000 I-8.000 J200.000
+```
+
+Con `Solape = 5`:
+
+```
+G1 Y200.000 Z-18.000              <- cierra
+G1 Y205.000 Z-18.000              <- ⭐ SIGUE 5 mm más allá
+G3 X-8.000 Y213.000 I-8.000 J205.000    <- y el arco de salida se corre con él
+```
+
+Con `Solape = 20` → `G1 Y220.000`, y el arco en `J220`.
+
+```
+el solape es el valor en mm, y agrega un segmento que PROLONGA el último tramo;
+el arco de alejamiento arranca del punto nuevo
+```
+
+⇒ **Dos valores (5 y 20) y el dato de oficio coinciden**: *«el trazo final se extiende más allá
+del punto final»*.
+
+## 32.2 ⭐ Es independiente del multiplicador de radio — y eso lo dio el cruce
+
+| | radio del arco | solape |
+|---|---|---|
+| `corr_izq_solape_5` (`mr4`) | 8 (`I-8`) | 5 |
+| `corr_izq_mr2_solape_5` (`mr2`) | **4** (`I-4`) | 5 |
+| `corr_izq_mr2_solape_20` | 4 | **20** |
+
+⇒ El radio del lead cambia con `RadiusMultiplier × SVR` (§21.1) y **el solape no se mueve**.
+Son dos parámetros independientes, y sin el cruce no se podía afirmar.
+
+## 32.3 Y sigue la dirección del último tramo, no un eje fijo
+
+Con `corr_der`, donde el contorno arranca en `(200, 0)` —el medio del lado **inferior**— el
+solape sale en **X**:
+
+```
+G1 X200.000 Z-18.000
+G1 X205.000 Z-18.000              <- los 5 mm, ahora en X
+G2 X213.000 Y-8.000 I205.000 J-8.000
+```
+
+⇒ **El solape prolonga el último tramo en su propia dirección.** Coherente con el `1 mm` de la
+compensación (§21.5), que también va por la tangente.
+
+## 32.4 ❌ Mi predicción falló en la forma (acertó en el valor)
+
+§21.6 predijo *«el ISO no gana líneas, porque es el mismo segmento más largo»*. **Gana una**
+(105 → 106): Maestro **no alarga el último `G1`, agrega uno nuevo** — emite `G1 Y200` y después
+`G1 Y205`.
+
+⇒ El valor de 5 mm estaba bien; la forma, no. Para el converter la diferencia importa: **el
+solape es un segmento propio de la traza**, no un ajuste de coordenada del anterior — y como
+el `.pgmx` guarda la traza entera, ya viene así.
+
+## 32.5 ⛔ Y el `Solape` sin corrección: el archivo quedó SIN OPERACIÓN
+
+`contorno_pieza_solape_5.pgmx` pesa 5770 bytes contra ~7500 de los otros, **no tiene ni
+`Operation` ni `ManufacturingFeature`**, y su ISO es **idéntico al programa vacío salvo el
+nombre**.
+
+⇒ El fresado no llegó a crearse. No alcanza para afirmar *por qué* —si la ventana no deja
+aplicar el solape sin corrección, o si quedó a medias por otro motivo— así que queda como
+**observación, no como derivación**. ❓ **Pregunta para Fermín**: ¿la ventana rechazó algo ahí,
+o el archivo quedó sin terminar?
+
+---
+
+# 33. Inventario de lo que queda abierto en el fresado (2026-09-10)
+
+**Repaso completo de las secciones de pendientes** —§14, §18, §22, §29, §30.6— contra lo que
+los grupos posteriores fueron cerrando. Se hace explícito porque es el modo de falla que la
+auditoría del 2026-08-27 describió: *un doc que no sabe lo que ya se contestó*, y que en
+`perforado.md` §9 dejó cuatro «abiertos» que estaban cerrados.
+
+## 33.1 ✅ Lo que se cerró, y dónde
+
+| pendiente | cerrado en |
+|---|---|
+| el defecto de `build_line_geometry_profile` (la rampa) | §10 — serialización 3D, a 17 dígitos |
+| el `10` del retorno «En la pieza» | **§31 — es `MillingRetractDistance`** |
+| `Velocidad` como atributo | §30.1 — `SpeedAttribute`, un solo mecanismo con la profundidad |
+| el costo en líneas con **varias** operaciones | §24.6 — `+20` misma fresa, `+35` con otra |
+| la regla de emisión de ejes | §30.5 — con dos verticales consecutivos, ocho casos |
+| el acortamiento de `IsPrecise` | §19 — es el radio, con dos profundidades |
+| la profundidad 18 de los `corr_len` | §19 — era involuntaria, rehechos |
+| el `ActivateCNCCorrection` de los multipaso | §20 — lo fuerza la UI |
+| el modo largo con `Center` + `CAD` | §30.4 — cuarto testigo, en cerrado |
+| el `Solape` en un contorno cerrado | **§32 — prolonga el último tramo, indep. del radio** |
+| el contorno cerrado con `Invertir` | §30.3 — invierte el giro, conserva el arranque |
+| el cambio de herramienta | §24.6 — 49 combinaciones, 98 bloques del catálogo |
+| las tres transiciones | §24.6 — 5 / 13 / 15 líneas, y la de cabezal es una sola |
+| la cota de seguridad | §23.1 — tres valores, y **§23.2** cierra el tercer origen |
+| el fresado en el canto | §25.3 — se pide desde arriba, y es un fresado normal |
+
+## 33.2 ⚠️ Lo que sigue abierto
+
+Ordenado por lo que cuesta si no se cierra.
+
+### A. Decide código del converter
+
+| | |
+|---|---|
+| **1. ¿el espejo tecnológico ESPEJA o INVIERTE?** | §28.4. La línea del fixture está **centrada** en la pieza, así que las dos operaciones dan el mismo ISO. Es la diferencia entre **transformar coordenadas** o **dar vuelta el orden**. El fixture quedó pedido (Grupo 17) y **no está hecho** |
+| **2. la fórmula del conteo del `Xmsg`** | §27.3. Es acumulativo y posicional —eso está derivado—, pero **la unidad no es el carácter del ISO**. Sin fórmula, **el byte-idéntico de todo programa con mensaje sigue bloqueado**. ⚖️ Requiere una decisión tuya: mirar **un** `.pgm` (dos minutos) o dejarlo como rechazo del converter |
+| **3. `%DONTCARESPEEDV=1`** | §16.1. Su origen está derivado —«Salida a cota de seguridad» con multipaso— pero **qué hace el converter con ella** sigue sin decidir. Hay precedente (`CLAUDE.md` §4: omitirla), sólo falta declararlo para este caso |
+
+### B. Podría romper una traza real
+
+| | |
+|---|---|
+| **4. el arco de esquina con otra herramienta** | §30.2. El offset exterior redondea con radio `SVR`, medido con la `E004` (radio 2). Con la `E001` (9,18) el arco es cinco veces mayor: **¿entra en un rectángulo chico, o Maestro lo resuelve de otra forma?** |
+| **5. el sentido de giro con corrección** | §30.6. Los ocho `contorno_corr_*` del Grupo 14 no lo separan porque **cada uno arranca en un punto distinto**, así que no son comparables. Falta el mismo contorno, mismo arranque, sólo cambiando el lado |
+| **6. el lado del arco EXPLÍCITO con corrección** | §22. El cruce de §21.4 se hizo con `Automático`; falta ver si `Izquierdo`/`Derecho` **ignoran** la corrección o la respetan |
+
+### C. Anotado, sin costo conocido
+
+| | |
+|---|---|
+| **7. `Cutmode = Climb`** | aparece en los quince archivos de estrategia, **nunca variado**, y sin campo identificado en la ventana |
+| **8. `ZigZag`** | la cuarta estrategia. **Existe en el sintetizador** (§17) pero su única ancla es `N025`, época congelada. Falta el fixture para **re-anclarla** |
+| **9. `Helicoidal` sobre una línea** | si el desplegable la deja aplicar a geometría abierta o sólo a cerrada |
+| **10. el `xISO` del comentario del `M5`** | segundo contador (362, 448, 503), se mueve con la posición pero su relación con el `$0?` no es constante |
+| **11. el orden con dos cabezales** | §24.6. Empezar por el cabezal perforador cambia el largo del ISO, y **no en el mismo sentido** con canal (94/95) que con taladro (84/82) |
+| **12. los siete nombres del Grupo 1** | dicen `x50_x300_y150` y la traza es (50,200)→(350,200). Ninguna derivación los usa; conviene renombrar |
+| **13. el `Solape` sin corrección** | §32.5. El archivo quedó **sin operación**: no se sabe si la ventana lo rechaza o quedó a medias |
+
+### D. En pausa por decisión
+
+| | |
+|---|---|
+| **14. las microuniones** | §29. No se pueden aplicar todavía; falta identificar la configuración que las habilita. **No bloquea al converter**: sin fixture no hay nada que emitir |
+
+## 33.3 El grupo final propuesto — 9 archivos
+
+Con esto el fresado quedaría cerrado. Están ordenados por lo que decide cada uno.
+
+### El espejo, que es el que decide código (2)
+
+- [ ] `R_PV_A_manual_fresado_top_E004_x50_x250_y200_prof10`
+- [ ] `R_PV_A_manual_fresado_top_E004_x50_x250_y200_espejo_tecnologico` (+ captura)
+      Línea **asimétrica**, de `X50` a `X250`. Si el ISO da `X350 → X150` **espeja**; si da
+      `X250 → X50` sólo **invierte**.
+
+### El arco de esquina con la fresa grande (2)
+
+- [ ] `R_PV_A_manual_fresado_top_E001_contorno_pieza_corr_der`
+      El perímetro con la **`E001`** (radio 9,18) y corrección **exterior**. El arco de esquina
+      tendría que salir de radio 9,18.
+- [ ] `R_PV_A_manual_fresado_top_E001_rectangulo_50_50_100_100_corr_der`
+      Un rectángulo **chico** (50×50) con la misma fresa: el arco de 9,18 en las esquinas de un
+      lado de 50 es el caso límite. **Si Maestro rechaza, el mensaje es la respuesta.**
+
+### El sentido de giro, comparable (2)
+
+- [ ] `R_PV_A_manual_fresado_top_E004_contorno_medio_izq_corr_izq`
+- [ ] `R_PV_A_manual_fresado_top_E004_contorno_medio_izq_corr_der`
+      **El mismo contorno, con el mismo arranque** (el punto medio del lado izquierdo), cambiando
+      **sólo** el lado de la corrección. Es lo que los ocho del Grupo 14 no pueden dar.
+
+### El lado del arco explícito contra la corrección (2)
+
+- [ ] `R_PV_A_manual_fresado_top_E004_corr_izq_acerc_arco_mr4_cota_lado_izq`
+- [ ] `R_PV_A_manual_fresado_top_E004_corr_der_acerc_arco_mr4_cota_lado_izq`
+      Los dos con el lado del arco en **`Izquierdo` explícito**. Si los dos dan el mismo arco,
+      el explícito **ignora** la corrección; si difieren, la respeta.
+
+### La estrategia que falta re-anclar (1)
+
+- [ ] `R_PV_A_manual_fresado_top_E004_estrategia_zigzag_ph5`
+      **`ZigZag`** con multipaso, sobre la línea del mínimo. Es la única de las cuatro sin
+      fixture de esta época, y el sintetizador la emite apoyado en `N025` — serie N, congelada.
+
+### Y una pregunta sin archivo
+
+❓ **El `Solape` sin corrección** (§32.5): ¿la ventana lo rechazó, o el archivo quedó a medias?
+Si lo rechaza, es un ⛔ derivado y no hay nada que hacer.
