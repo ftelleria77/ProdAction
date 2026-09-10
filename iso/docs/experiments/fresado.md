@@ -1844,6 +1844,13 @@ referencia**, así que el diff mide **sólo** el parámetro. Si hubieran quedado
 del campo se mezclaría con el del parámetro y el par no serviría. Lo que hay que corregir es el
 nombre.
 
+> ✅ **CORREGIDO por Fermín el 2026-09-10**, `.pgmx` y `.iso`. La auditoría vuelve a dar
+> limpio: los seis pasaron a `R_PV_A_fresado_A5_…` y **coinciden con su archivo**.
+>
+> ⚠️ **Quedó un huérfano**: `R_PV_EF_fresado_A5_repeticiones_3.pgmx` sigue en la carpeta, con
+> **XML idéntico** al renombrado y **sin `.iso`** (el suyo ya se renombró). Es una copia
+> muerta — se puede borrar. Verificado comparando el XML entero, no el nombre.
+
 📌 Los dos `areas_combinadas` **sí** están donde dicen (`EF` y `HG`), y por eso difieren en 18 y
 22 líneas: eso es **el campo**, ya derivado (R002 y §4ter). Valen como control, no como
 parámetro nuevo.
