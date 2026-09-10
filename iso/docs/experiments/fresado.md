@@ -78,6 +78,13 @@ del electromandril. Tercer mecanizado de la rama D, y el que menos evidencia pro
 > derivado. Y en el barrido A5 aparece el **primer parámetro de máquina que toca la traza**:
 > el **espejo tecnológico**, que con la sierra no se veía porque el disco normaliza el sentido.
 > Las microuniones quedan postergadas (no se pueden aplicar todavía).
+>
+> ⭐⭐⭐ **Grupo 14** (§30): los **tres atributos de la cinta son un solo mecanismo** —
+> `SpeedAttribute` tiene la forma exacta del de profundidad y parte la traza igual—, y el
+> **offset exterior de un contorno REDONDEA las esquinas** con el radio de la fresa: el
+> toolpath tiene ocho elementos donde la geometría tiene cuatro. Además `Invertir` en un
+> cerrado invierte el **giro** conservando el arranque, y el **arranque en el punto medio de
+> un lado** (aporte de Fermín) cierra la regla de emisión de ejes con el caso que faltaba.
 
 ## 1. Los fixtures heredados
 
@@ -1927,3 +1934,153 @@ El archivo que quedó es el **pasante limpio** (`ThroughMillingBottom`, profundi
 donde tiene que estar, y vacío, porque la operación no se pudo crear.
 
 ⏸ **Queda abierto** y no bloquea nada del converter: sin fixture no hay nada que emitir.
+
+---
+
+# 30. Grupo 14 — los atributos son un solo mecanismo, y el offset exterior redondea (2026-09-10)
+
+Diecisiete pares en vez de los tres del pedido: Fermín agregó **las correcciones y las
+inversiones sobre el contorno cerrado** —el caso de producción— y **rectángulos que arrancan en
+el punto medio de un lado**.
+
+## 30.1 ⭐⭐⭐ Los tres atributos de la cinta son UN SOLO mecanismo
+
+La predicción de §10 —que `Velocidad` sería otro `OperationAttribute` como el de la
+profundidad— **se cumple con la misma forma exacta**:
+
+```xml
+<b:OperationAttribute i:type="b:SpeedAttribute">
+  <b:IsNormalized>true</b:IsNormalized>
+  <b:UPar>0.5</b:UPar>      <!-- Posicion (%) / 100, igual que la profundidad -->
+  <b:Speed>3</b:Speed>
+</b:OperationAttribute>
+```
+
+Y en el ISO **parte la traza en el punto del atributo**, igual que la rampa:
+
+```
+G1 X200.000 Z-10.000 F5000.000     <- hasta el 50%: el avance del catálogo
+G1 X350.000 Z-10.000 F3000.000     <- desde ahí: F3000
+```
+
+`UPar = 0,5` → `X200` = `50 + 0,5 × 300` ✅ la misma fórmula del porcentaje. Y **`Speed = 3` →
+`F3000`**: ×1000, la misma escala que `FeedRate.Standard`.
+
+```
+OperationAttribute = { UPar , valor }   ->  parte la traza en ese punto
+   DepthAttribute  ->  cambia la Z desde ahí
+   SpeedAttribute  ->  cambia la F desde ahí
+   (microuniones)  ->  el tercero, sin fixture todavía (§29)
+```
+
+⇒ **Un solo modelo para los tres**, en el converter y en el sintetizador. Y el nodo
+`<Attributes>` —vacío en todo el corpus hasta el Grupo 2— queda explicado entero.
+
+## 30.2 ⭐⭐⭐ El offset EXTERIOR redondea las esquinas; el interior las deja vivas
+
+Sobre el perímetro de la pieza `(0,0)-(400,400)`, con la `E004` (radio 2):
+
+**`corr_izq_CAD`** — la traza va **hacia adentro**, rectángulo `(2,2)-(398,398)`, **cuatro `G1`
+y esquinas vivas**:
+
+```
+G0 X2.000 Y2.000 · G1 X398.000 · G1 Y398.000 · G1 X2.000 · G1 Y2.000
+```
+
+**`corr_der_CAD`** — la traza va **hacia afuera**, y **cada esquina es un arco de radio 2
+centrado en el vértice nominal**:
+
+```
+G0 X-2.000 Y0.000
+G3 X0.000   Y-2.000  I0.000   J0.000       <- esquina (0,0)
+G1 X400.000
+G3 X402.000 Y0.000   I400.000 J0.000       <- esquina (400,0)
+G1 Y400.000
+G3 X400.000 Y402.000 I400.000 J400.000     <- esquina (400,400)
+G1 X0.000
+G3 X-2.000  Y400.000 I0.000   J400.000     <- esquina (0,400)
+G1 Y0.000
+```
+
+⇒ Es geometría de offset pura: hacia afuera una esquina viva **dejaría material**, así que se
+redondea con el radio de la herramienta; hacia adentro los lados se cruzan y la esquina queda
+viva.
+
+⇒ ⭐⭐ **Y para el converter es una buena noticia con una advertencia**: el `.pgmx` **ya guarda
+esos arcos** en el toolpath —es la traza corregida (canal §21)—, así que **no hay que calcular
+ningún offset**. Pero **el toolpath tiene más elementos que la geometría**: ocho contra cuatro.
+Un converter que asuma «un segmento de traza por segmento de geometría» se rompe acá. Se ve
+hasta en el tamaño del archivo: 7397 bytes contra 7214 del interior.
+
+## 30.3 `Invertir` en un cerrado invierte el GIRO y conserva el arranque
+
+| | recorrido |
+|---|---|
+| `contorno_pieza` | `X400 · Y400 · X0 · Y0` — **antihorario** |
+| `contorno_pieza_invertir` | `Y400 · X400 · Y0 · X0` — **horario** |
+
+Los dos arrancan en `(0,0)`.
+
+⇒ Distinto de la línea abierta (§26.1), donde `Invertir` **cambiaba el punto de arranque** (de
+`X50` a `X350`). En un cerrado el arranque es el mismo nodo, así que lo único que se da vuelta
+es el **sentido de giro**. Es el dato que el Grupo 10 no podía dar.
+
+📌 **Y el sentido de giro importa en producción**: decide si la fresa trabaja a favor o en
+contra del avance. Con `Center` no hay corrección, pero el acabado cambia.
+
+## 30.4 ✅ Cuarto testigo del «modo largo», ahora en un cerrado
+
+Con `Center` sobre el contorno:
+
+| | `ActivateCNCCorrection` | ISO |
+|---|---|---|
+| `contorno_pieza_invertir` | `true` | modo corto |
+| `contorno_pieza_invertir_CN` | `true` | **byte-idéntico** al anterior |
+| `contorno_pieza_invertir_CAD` | **`false`** | **modo largo** (`G1 Z20 F2000` · `G1 Z-10 F5000` · `G1 Z20 F5000`) |
+
+⇒ Confirma §15.3 por cuarta vez, y ahora sobre geometría cerrada: **lo enciende el flag**, no
+el lado ni la forma.
+
+## 30.5 ⭐⭐ El arranque en el punto MEDIO de un lado — y cierra la regla de emisión de ejes
+
+Aporte de Fermín, y tiene razón de oficio: **arrancar en el medio de un lado evita empezar y
+terminar en una esquina**, que es donde la fresa deja marca.
+
+| archivo | arranca en | segmentos |
+|---|---|---|
+| `rectangulo_inicio_horizontal` | `(200, 50)` — medio del lado inferior | **5** |
+| `rectangulo_inicio_vertical` | `(350, 200)` — medio del lado derecho | **5** |
+| `rectangulo_solo_vertical` | `(200, 50)` | **6** |
+
+⇒ **El lado que contiene el arranque se recorre en dos tramos** —al principio y al final—, así
+que un rectángulo de cuatro lados sale en **cinco** segmentos. Y el conteo lo confirma:
+`50 + 5 = 55` líneas agregadas (98 − 43) ✅, contra las 54 del rectángulo que arranca en un
+vértice (§12.1).
+
+### ✅ Y `solo_vertical` cierra la regla que quedaba abierta
+
+Era el fixture que faltaba (§12.7): **dos tramos puramente verticales, consecutivos**.
+
+```
+G1 Y200.000 Z-10.000 F5000.000
+G1 Y350.000 Z-10.000 F5000.000
+```
+
+**Los dos emiten `Y` + `Z`.** ⇒ La regla queda **derivada**, con el caso que le faltaba:
+
+```
+se emiten los ejes que CAMBIAN;
+si cambia uno solo, se completa con la Z aunque sea constante.
+```
+
+Ocho casos, incluidos dos verticales seguidos. Y su conteo: `50 + 6 = 56` (99 − 43) ✅.
+
+## 30.6 Lo que este grupo deja abierto
+
+| | |
+|---|---|
+| el **sentido de giro** con corrección | los ocho `contorno_corr_*` cruzan lado × modo × inversión; falta ver si el giro por defecto (antihorario) cambia con la corrección o es siempre del programa |
+| el arco de esquina con **otra herramienta** | el radio es `SVR` en un caso (`E004`, radio 2); con la `E001` (9,18) el arco sería mucho mayor y podría no caber en un rectángulo chico |
+| ~~el tramo puramente vertical~~ | ✅ **cerrado acá** (§30.5) |
+| ~~`Velocidad` como atributo~~ | ✅ **derivado acá** (§30.1) |
+| ~~el contorno cerrado con `Invertir`~~ | ✅ **derivado acá** (§30.3) |

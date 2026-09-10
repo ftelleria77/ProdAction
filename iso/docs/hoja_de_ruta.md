@@ -503,6 +503,34 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-10 — Grupo 14: los atributos son un solo mecanismo, y el offset exterior redondea
+Diecisiete pares en vez de tres. Fermín agregó las correcciones y las inversiones sobre el
+**contorno cerrado** —el caso de producción— y rectángulos que arrancan en el **punto medio de
+un lado**.
+
+- ⭐⭐⭐ **Los tres atributos de la cinta son UN SOLO mecanismo.** La predicción se cumple con la
+  forma exacta: `SpeedAttribute` con `IsNormalized`/`UPar`/`Speed`, y en el ISO **parte la traza
+  en el punto del atributo** igual que la rampa (`G1 X200 F5000` · `G1 X350 F3000`). `Speed = 3`
+  → `F3000`, la misma escala ×1000 del catálogo. ⇒ **un solo modelo** para profundidad,
+  velocidad y microuniones, y el nodo `<Attributes>` queda explicado entero.
+- ⭐⭐⭐ **El offset EXTERIOR de un contorno redondea las esquinas** con un arco de radio `SVR`
+  centrado en el vértice nominal; el **interior** las deja vivas. ⇒ el `.pgmx` **ya guarda esos
+  arcos** (no hay que calcular offset), pero **el toolpath tiene ocho elementos donde la
+  geometría tiene cuatro**: un converter que asuma «un segmento de traza por segmento de
+  geometría» se rompe acá.
+- ⭐ **`Invertir` en un cerrado invierte el GIRO y conserva el arranque** (antihorario ↔
+  horario desde el mismo nodo) — distinto de la línea abierta, donde cambiaba el punto de
+  arranque. Era lo que el Grupo 10 no podía dar.
+- ⭐⭐ **El arranque en el punto MEDIO de un lado** (aporte de oficio: evita empezar y terminar
+  en una esquina, donde la fresa marca) parte ese lado en dos ⇒ **cinco** segmentos para cuatro
+  lados, y el conteo `50 + N` lo confirma.
+  - ✅ **Y `rectangulo_solo_vertical` cierra la regla de emisión de ejes** con el caso que
+    faltaba: **dos tramos verticales consecutivos**, y los dos emiten `Y` + `Z`. Ocho casos.
+- ✅ **Cuarto testigo del «modo largo»**, ahora en geometría cerrada: con `Center`,
+  `_invertir_CN` sale **byte-idéntico** a `_invertir` y `_invertir_CAD` agrega los tres
+  movimientos. Lo enciende el flag, no el lado ni la forma.
+
+
 ### 2026-09-10 — Grupos 11 a 13: el `Xmsg` posicional, y el primer parámetro de máquina que toca la traza
 Diecinueve archivos más, y dos hallazgos que cambian cosas ya escritas.
 
