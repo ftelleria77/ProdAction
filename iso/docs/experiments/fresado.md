@@ -64,6 +64,13 @@ del electromandril. Tercer mecanizado de la rama D, y el que menos evidencia pro
 > sale es **un fresado normal**: el converter no necesita nada nuevo, pero **no puede exigir
 > que la traza caiga dentro de la pieza**. Además, **cuarto caso de fail-loud**: la cara
 > inferior se descarta en silencio, aunque esta vez **deja dos líneas de rastro**.
+>
+> 🚨 **Grupo 10 — el `G41`/`G42` no sale de una tabla** (§26). Fermín cruzó `Invertir` con las
+> tres correcciones, y aparece que **el código de compensación se deriva de `SideOfFeature`
+> JUNTO CON el sentido de recorrido**: `Right` invertido emite `G41`, no `G42`. Un converter
+> que use una tabla fija desde el lado **come del lado equivocado en todo mecanizado
+> invertido**. Y los dos silencios resultan distinguibles: `Condición = False` no deja rastro,
+> el descarte de la cara inferior sí.
 
 ## 1. Los fixtures heredados
 
@@ -1607,3 +1614,108 @@ dentro de la pieza» rechazaría un programa correcto y de uso corriente.
 plano**. Este programa dice `Top` y produce un surco en el **canto delantero**. Lo que decide
 qué superficie se trabaja es la **geometría más el diámetro de la herramienta**, no la
 declaración del plano.
+
+---
+
+# 26. Grupo 10 — `Invertir`, `Condición`, y el `G41`/`G42` que no sale de una tabla (2026-09-10)
+
+Nueve archivos en vez de los tres del pedido: Fermín **cruzó la inversión con las tres
+correcciones** y extendió el cruce a los `condicion_false`. Y el cruce es lo que destapa el
+hallazgo — con los tres archivos sueltos no se veía.
+
+| | base | `_invertir` | `_condicion_false` |
+|---|---|---|---|
+| `corr_central` | ✅ | ✅ | ✅ |
+| `corr_derecha` | ✅ | ✅ | ✅ |
+| `corr_izquierda` | ✅ | ✅ | ✅ |
+
+## 26.1 `Invertir` es `IsGeomSameDirection = false`
+
+No es un campo aparte: el casillero de `Datos avanzados` escribe `IsGeomSameDirection` en
+`false`. Y la traza guardada se emite **al revés**, con la dirección negada:
+
+```
+base       8 0 300 | 1 50  200 8   1 0 0
+invertir   8 0 300 | 1 350 200 8  -1 0 0
+```
+
+En el ISO, el recorrido pasa de `X50 → X350` a `X350 → X50`. ⇒ Confirma en una línea recta lo
+que el arco había mostrado (§12.2), y **cierra el testigo que el Grupo 6 dejó pendiente**.
+
+## 26.2 ⭐⭐⭐ El `G41`/`G42` NO sale del `SideOfFeature`: sale de cruzarlo con el sentido
+
+| `SideOfFeature` | `IsGeomSameDirection` | ISO |
+|---|---|---|
+| `Right` | `true` | **`G42`** |
+| `Right` | **`false`** | **`G41`** |
+| `Left` | `true` | **`G41`** |
+| `Left` | **`false`** | **`G42`** |
+| `Center` | cualquiera | ninguno |
+
+```
+G41/G42 = f( SideOfFeature , IsGeomSameDirection )   -- no de SideOfFeature solo
+```
+
+### Por qué, y es lo que lo hace sólido
+
+Porque **la traza corregida NO cambia de lado al invertir**. `corr_derecha` guarda su traza en
+`Y198` —200 menos el `SVR`— y `corr_derecha_invertir` **también en `Y198`**: lo único que
+cambia es el sentido.
+
+⇒ El **lado físico** de la pieza es el mismo; lo que se dio vuelta es por dónde se lo recorre.
+Y como `G41`/`G42` se definen *respecto del sentido de avance*, para conservar de qué lado
+queda el material Maestro **tiene que cambiar el código**.
+
+⇒ 🚨 **Para el converter**: emitir `G41`/`G42` con una tabla fija desde `SideOfFeature` da el
+lado equivocado en **todos** los mecanizados invertidos, y la fresa come del lado que no debe.
+Lo seguro es lo que el canal §21 ya sugería: **el `.pgmx` guarda la traza corregida**, así que
+el código G se deriva de **qué lado cae la traza respecto del sentido de recorrido**, no de la
+etiqueta.
+
+📌 Y el milímetro de entrada/salida se invierte con todo lo demás: `G0 X49` → `G0 X351`, y la
+entrada `G1 X50` → `G1 X350`. Coherente con §21.5 — es «1 mm antes del arranque», y el arranque
+cambió de punta.
+
+## 26.3 `Condición` es `IsEnabled` del paso del workplan, y borra sin dejar rastro
+
+El diff del `.pgmx` entre el base y el `condicion_false` es **una línea**:
+
+```
+<IsEnabled>true</IsEnabled>   ->   <IsEnabled>false</IsEnabled>
+```
+
+Vive en el `MachiningWorkingStep` del workplan — no es un nodo `Condition` ni una expresión, y
+es lo que el árbol del proyecto muestra como el nodo `IF`.
+
+Y en el ISO:
+
+- **idéntico al programa vacío salvo la línea del nombre**, en los tres;
+- y **los tres son byte-idénticos entre sí** ⇒ **la corrección configurada no deja ningún
+  rastro** cuando el paso está deshabilitado.
+
+⇒ Confirma el canal §18 y lo extiende: `Condición = False` **borra el mecanizado entero**, con
+todo lo que se le haya puesto encima.
+
+## 26.4 ⭐⭐ Y los dos silencios resultan distinguibles
+
+Contrastando con el Grupo 9:
+
+| | qué queda en el ISO | |
+|---|---|---|
+| `Condición = False` | **nada** — idéntico al vacío | el usuario **lo pidió** |
+| cara inferior (§25.1) | **dos líneas**: `?%ETK[8]=1` · `G40` | el usuario **no lo pidió** |
+
+⇒ ⭐ **El rastro de dos líneas distingue un descarte involuntario de una deshabilitación
+deliberada.** Maestro empieza a emitir el bloque de la cara inferior y lo abandona; con la
+condición en falso no lo empieza nunca.
+
+⇒ Es una señal aprovechable: sirve para **diagnosticar** un ISO de Maestro sin tener el `.pgmx`
+al lado. No cambia la regla —el descarte silencioso se rechaza igual—, pero da una forma de
+detectarlo después.
+
+## 26.5 ✅ `Canto a canto` no existe en el fresado
+
+**Confirmado por Fermín**: es una opción **exclusiva del canal**. Ayer salía de leer las
+capturas de `Datos avanzados` (§13); hoy es dato directo.
+
+⇒ El fixture correspondiente del pedido queda **cerrado como imposible**, con testigo.

@@ -503,6 +503,39 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-10 — Grupo 10: el `G41`/`G42` no sale de una tabla
+Nueve archivos en vez de tres: Fermín **cruzó `Invertir` con las tres correcciones** y extendió
+el cruce a los `condicion_false`. Con los tres sueltos del pedido esto no se veía.
+
+- 🚨 **El código de compensación se deriva de `SideOfFeature` JUNTO CON el sentido de
+  recorrido**, no del lado solo:
+
+  | `SideOfFeature` | `IsGeomSameDirection` | ISO |
+  |---|---|---|
+  | `Right` | `true` / **`false`** | `G42` / **`G41`** |
+  | `Left` | `true` / **`false`** | `G41` / **`G42`** |
+
+  Y lo que lo hace sólido: **la traza corregida NO cambia de lado al invertir** — `corr_derecha`
+  guarda `Y198` con y sin inversión. El lado físico es el mismo y lo que se dio vuelta es por
+  dónde se lo recorre, así que para conservar de qué lado queda el material **el código tiene
+  que cambiar**.
+  - ⇒ **Un converter con una tabla fija desde el lado come del lado equivocado en TODO
+    mecanizado invertido.** Lo seguro: derivar el código de qué lado cae la traza respecto del
+    sentido, que el `.pgmx` ya guarda (canal §21).
+- ✅ **`Invertir` es `IsGeomSameDirection = false`**, y en una línea recta invierte el recorrido
+  (`X50→X350` pasa a `X350→X50`). Cierra el testigo que el Grupo 6 había dejado pendiente.
+- ✅ **`Condición` es `IsEnabled` del `MachiningWorkingStep`** — un booleano, diff de **una
+  línea** en el `.pgmx`, y es el nodo `IF` del árbol. Con `false`, el ISO queda **idéntico al
+  programa vacío** y los tres son **byte-idénticos entre sí**: la corrección configurada no deja
+  rastro.
+- ⭐⭐ **Y los dos silencios resultan distinguibles**: `Condición = False` no deja **nada**,
+  mientras el descarte de la cara inferior (§25.1) deja **dos líneas** — el preámbulo del bloque
+  que Maestro empieza y abandona. ⇒ sirve para **diagnosticar** un ISO sin el `.pgmx` al lado:
+  el rastro separa lo involuntario de lo deliberado.
+- ✅ **`Canto a canto` no existe en el fresado**, confirmado por Fermín: es exclusiva del canal.
+  El fixture queda cerrado como imposible, con testigo.
+
+
 ### 2026-09-09 — Grupo 9: el canto se fresa desde ARRIBA, y la cara inferior deja rastro
 Cuatro archivos, y el que más pesa lo agregó Fermín.
 
