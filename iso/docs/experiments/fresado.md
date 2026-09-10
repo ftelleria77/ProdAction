@@ -71,6 +71,13 @@ del electromandril. Tercer mecanizado de la rama D, y el que menos evidencia pro
 > que use una tabla fija desde el lado **come del lado equivocado en todo mecanizado
 > invertido**. Y los dos silencios resultan distinguibles: `Condición = False` no deja rastro,
 > el descarte de la cara inferior sí.
+>
+> ⭐⭐⭐ **Grupos 11 a 13** (§27-§29). El `Xmsg` movido de lugar prueba que **el conteo sólo
+> mira lo emitido ANTES** —intercalado y simple dan el mismo 422— y que el `M5` es
+> **condicional**; pero **la fórmula no sale del ISO**, lo que acota lo que el canal había
+> derivado. Y en el barrido A5 aparece el **primer parámetro de máquina que toca la traza**:
+> el **espejo tecnológico**, que con la sierra no se veía porque el disco normaliza el sentido.
+> Las microuniones quedan postergadas (no se pueden aplicar todavía).
 
 ## 1. Los fixtures heredados
 
@@ -1719,3 +1726,197 @@ detectarlo después.
 capturas de `Datos avanzados` (§13); hoy es dato directo.
 
 ⇒ El fixture correspondiente del pedido queda **cerrado como imposible**, con testigo.
+
+---
+
+# 27. Grupo 11 — el `Xmsg`: el conteo es POSICIONAL, y el `M5` es condicional (2026-09-10)
+
+Ocho archivos: el fresado simple, el círculo y los dos paralelos, cada uno con y sin `Xmsg`,
+**más el `Xmsg` movido de lugar** — al inicio del programa y **intercalado** entre los dos
+fresados. Esos dos últimos los agregó Fermín, y son los que rompen el problema.
+
+## 27.1 Lo que el `Xmsg` emite, y que el `M5` es CONDICIONAL
+
+| posición | qué agrega |
+|---|---|
+| **al final** | `M5 ;(xISO362-> Spegne mandrino)` · `$0?422S0I0D0?` · `G4 F0` → **3 líneas** |
+| **al inicio** | `$0?212S0I0D0?` · `G4 F0` → **2 líneas, sin `M5`** |
+| **intercalado** | `M5 ;(…)` · `$0?422S0I0D0?` · `G4 F0` · **`S18000M3`** → **4 líneas** |
+
+⇒ ⭐⭐ **El `M5` sólo se emite si el husillo está girando.** Al inicio del programa no hay nada
+en marcha, así que no hay nada que apagar — y el bloque sale de dos líneas.
+
+⇒ ⭐ **Y el intercalado agrega un `S18000M3`**: el `Xmsg` **corta el husillo y lo vuelve a
+arrancar** para seguir. El de al final no lo necesita porque el programa termina.
+
+Los largos cuadran exactos contra el mismo programa sin mensaje (114 líneas): **+2** al inicio,
+**+3** al final, **+4** intercalado.
+
+## 27.2 ⭐⭐⭐ El conteo depende SÓLO de lo emitido antes — con un control perfecto
+
+| caso | posición | `$0?N` |
+|---|---|---|
+| dos fresados | **al inicio** | **212** |
+| un fresado (línea) | al final | **422** |
+| dos fresados | **intercalado** (después del primero) | **422** |
+| un fresado (círculo) | al final | **533** |
+| dos fresados | al final | **563** |
+
+⇒ **`intercalado` y `un fresado` dan el MISMO número: 422.** Son programas distintos —uno tiene
+un segundo fresado después del mensaje— y coinciden porque **lo que se emitió antes del `Xmsg`
+es idéntico**.
+
+⇒ **DERIVADO: el conteo es acumulativo de lo emitido hasta ese punto, y no mira nada de lo que
+viene después.** Confirma el modelo del canal (`N = base + Σ incrementos`) con el control que
+faltaba, y lo hace **verificable**: mover el mensaje de lugar cambia el número de forma
+predecible.
+
+Y los incrementos quedan medidos:
+
+```
+base del programa (campo A)      212
++ un fresado de línea           +210   ->  422
++ un fresado de círculo         +321   ->  533
++ un SEGUNDO fresado de línea   +141   ->  563
+```
+
+📌 **El segundo fresado cuesta menos que el primero** (141 contra 210): la misma asimetría
+apertura/continuación que el Grupo 8 midió en líneas (§24.6). Los 69 de diferencia son el
+preámbulo.
+
+## 27.3 ⚠️ Pero la fórmula NO sale del ISO, y eso acota lo que el canal había derivado
+
+`canal.md` §23 concluyó que el conteo **cuenta caracteres del texto emitido**. Con estos cinco
+puntos se puede poner a prueba, y **ninguna forma de contar el ISO da el número**:
+
+| forma de contar el texto anterior al `Xmsg` | línea (N=422) | círculo (N=533) | dos (N=563) | inicio (N=212) |
+|---|---|---|---|---|
+| caracteres sin fin de línea | 917 | 986 | 1178 | 435 |
+| con `LF` | 982 | 1052 | 1263 | 458 |
+| con `CRLF` | 1047 | 1118 | 1348 | 481 |
+| sin espacios finales | 858 | 926 | 1103 | 418 |
+
+Ninguna proporción se mantiene: 865/422 = 2,05 pero 934/533 = 1,75 y 1127/563 = 2,00. Y **la
+cantidad de líneas tampoco sirve**: el círculo tiene *menos* líneas antes (66) que los dos
+fresados (85) y un `N` más alto respecto de ellas.
+
+⇒ ⭐ **Lo que el canal derivó sigue en pie en su parte cualitativa** —el conteo es sensible al
+*contenido*, no sólo al tipo de operación: por eso `X92.500` daba distinto que `X100.000`— pero
+**la unidad que cuenta no es el carácter del ISO.**
+
+### 🔮 El candidato, y el fixture de dos minutos que lo decide
+
+La cadena es `.pgmx` → **XXL** → **PGM** → ISO, y el conteo lo escribe el generador de Xilog en
+la segunda etapa. Si cuenta caracteres, lo más probable es que cuente **el PGM**, que tiene otro
+formato por instrucción.
+
+⇒ **Postprocesar uno solo de estos con `PostFileFormat = PGM`** y contar ahí. Es el mismo
+fixture barato que `canal.md` §25 pedía para el `0,75`, y ahora tiene un segundo motivo.
+
+⚠️ **Roza una decisión de alcance**: el XXL y el PGM se cerraron como línea de trabajo el
+2026-08-14 (`fixtures.md`). La decisión sigue valiendo para *derivar la traza*; esto es otra
+cosa — **un contador que el ISO no explica**, y que hoy bloquea el byte-idéntico de todo
+programa con mensaje. Queda planteado, no ejecutado.
+
+📌 **Y un segundo contador sin explicar**: el `xISO` del comentario del `M5` (362, 448, 503) se
+mueve con la posición igual que el `$0?`, pero su diferencia contra él no es constante (60, 85,
+60). Aparece sólo cuando hay `M5`.
+
+# 28. Grupo 12 — el barrido A5, y el espejo tecnológico SÍ toca la traza
+
+Diez archivos, **nueve con su captura de la ventana** (9 de 9: el protocolo cumplido, como en
+el canal §24). Todos dan **94 líneas**, igual que la referencia: **ningún parámetro de máquina
+agrega ni quita una línea**.
+
+## 28.1 ⚠️ Primero: seis nombres dicen `EF` y el archivo está en `A`
+
+| archivo | el nombre afirma | el `.pgmx` dice |
+|---|---|---|
+| `…_A5_bloqueo_10` · `_60` · `_predefinido` | `EF` | **`A`** |
+| `…_A5_mecanicas_laser` · `_elevadores` | `EF` | **`A`** |
+| `…_A5_repeticiones_3` | `EF` | **`A`** |
+
+Es exactamente el modo de falla que motivó la regla del 2026-08-27: el campo se cambia en la
+misma ventana que el parámetro que se está variando, y el cambio no quedó aplicado al programa.
+
+⇒ **No invalida nada, y de hecho conviene**: los seis están en campo `A`, **igual que la
+referencia**, así que el diff mide **sólo** el parámetro. Si hubieran quedado en `EF`, el efecto
+del campo se mezclaría con el del parámetro y el par no serviría. Lo que hay que corregir es el
+nombre.
+
+📌 Los dos `areas_combinadas` **sí** están donde dicen (`EF` y `HG`), y por eso difieren en 18 y
+22 líneas: eso es **el campo**, ya derivado (R002 y §4ter). Valen como control, no como
+parámetro nuevo.
+
+## 28.2 Cinco que sólo tocan el header
+
+| fixture | `.pgmx` | la línea del header |
+|---|---|---|
+| `bloqueo_10` | — | `V=0` → **`V=2`** |
+| `bloqueo_60` | — | `V=0` → **`V=10`** |
+| `bloqueo_predefinido` | — | `V=0` → **`V=9`** |
+| `mecanicas_elevadores` | `MechanicalOptions=1` | `T=0` → **`T=1`** |
+| `mecanicas_laser` | `MechanicalOptions=10` | `T=0` → **`T=10`** |
+
+⇒ Confirma el barrido A5 original (todas las diferencias caen en la línea del header: unas
+mueven `V`, otras `T`), y agrega una **correspondencia 1:1**: `MechanicalOptions` del `.pgmx` va
+directo al campo **`T`** del header. El bloqueo, en cambio, entra a `V` **como código** (10→2,
+60→10, predefinido→9), no como valor.
+
+## 28.3 ✅ `Repeticiones = 3` no llega — byte-idéntico, con testigo interno
+
+Cero líneas de diferencia contra la referencia. Y el `.pgmx` guarda `Repetitions = 3`, así que
+**el negativo tiene testigo**: no es un «no lo puse». Tercera vez que se mide (dibujos §14.1,
+canal §24, acá).
+
+## 28.4 ⭐⭐⭐ El espejo tecnológico SÍ llega al ISO — y contradice al canal
+
+```
+G0 X50.000  Y200.000        ->   G0 X350.000 Y200.000
+G1 X350.000 Z-10.000        ->   G1 X50.000  Z-10.000
+```
+
+**Dos líneas, y son de la TRAZA.** El recorrido pasa de `X50 → X350` a `X350 → X50`.
+
+⇒ `canal.md` §24 había derivado que *«el espejo tecnológico no espeja nada, y ahora con
+testigo»*. **Con la sierra era cierto** — y ahora se entiende por qué: la `082` **normaliza el
+sentido de corte** (siempre de X mayor a menor, §11 del canal), así que espejar no podía
+cambiar nada observable. **Con fresa el sentido es del programa, y el espejo se ve.**
+
+⇒ ⭐ **Es el primer parámetro de máquina que toca la traza** en toda la reinvestigación, y es
+justamente el que el canal había marcado como «el candidato».
+
+### ⚠️ Pero con esta geometría no se puede distinguir «espejar» de «invertir»
+
+La línea va de `X50` a `X350` sobre una pieza de 400: **está centrada**. Un espejo en X
+respecto del centro lleva `(50, 350)` a `(350, 50)` — que es **lo mismo** que invertir el
+sentido.
+
+⇒ **Hace falta una geometría asimétrica.** Con una línea de `X50` a `X250`:
+
+| | resultado |
+|---|---|
+| si **espeja** | `X350 → X150` |
+| si sólo **invierte el sentido** | `X250 → X50` |
+
+⇒ Es la diferencia entre que el converter tenga que **transformar coordenadas** o sólo **dar
+vuelta el orden**, y se decide con un archivo. Va al Grupo 17.
+
+📌 Y hay un tercer candidato a descartar de paso: que el espejo produzca lo mismo que
+`Invertir` (§26.1). Si el ISO del espejo sobre la línea centrada es **byte-idéntico** al del
+`corr_central_invertir`, son el mismo efecto por dos caminos.
+
+# 29. Grupo 13 — las microuniones quedan postergadas
+
+**Dato de Fermín**: **las microuniones no se pueden aplicar** sobre el fresado en esta pieza.
+Debe haber una configuración específica que las habilita, todavía sin identificar. Se retoman
+cuando aparezca.
+
+El archivo que quedó es el **pasante limpio** (`ThroughMillingBottom`, profundidad 18, ISO con
+`G1 Z-18.000`), y su `<Attributes/>` está **vacío**.
+
+⇒ ⭐ **Eso confirma indirectamente la predicción de §10**: si las microuniones fueran un
+`OperationAttribute` —como el `DepthAttribute` de la rampa—, vivirían en ese nodo. El nodo está
+donde tiene que estar, y vacío, porque la operación no se pudo crear.
+
+⏸ **Queda abierto** y no bloquea nada del converter: sin fixture no hay nada que emitir.

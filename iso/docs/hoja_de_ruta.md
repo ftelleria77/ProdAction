@@ -503,6 +503,45 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-10 — Grupos 11 a 13: el `Xmsg` posicional, y el primer parámetro de máquina que toca la traza
+Diecinueve archivos más, y dos hallazgos que cambian cosas ya escritas.
+
+- ⭐⭐⭐ **El conteo del `Xmsg` sólo mira lo emitido ANTES.** Fermín movió el mensaje de lugar —al
+  inicio, intercalado entre los dos fresados, y al final— y el **intercalado da el mismo 422
+  que el fresado simple**: dos programas distintos con el mismo prefijo emitido. Con eso el
+  modelo `N = base + Σ incrementos` queda **verificable**, y los incrementos medidos: base 212,
+  un fresado de línea +210, uno de círculo +321, un **segundo** fresado +141 (la misma
+  asimetría apertura/continuación del Grupo 8).
+  - ⚠️ **Pero la fórmula no sale del ISO**: ninguna forma de contar el texto anterior da el
+    número, y las proporciones no se mantienen (2,05 · 1,75 · 2,00). ⇒ **acota lo que
+    `canal.md` §23 derivó**: el conteo es sensible al *contenido* —por eso `X92.500` daba
+    distinto—, pero **la unidad no es el carácter del ISO**. Candidato: el **PGM** intermedio.
+    Lo decide un postproceso con `PostFileFormat = PGM`, el mismo fixture barato que el canal
+    §25 ya pedía. 🚧 Roza la decisión del 2026-08-14 de cerrar el XXL/PGM: queda planteado.
+  - ⭐ **Y el `M5` del `Xmsg` es condicional**: al inicio del programa no se emite (no hay
+    husillo girando), y **intercalado agrega un `S18000M3`** para volver a arrancarlo.
+- ⭐⭐⭐ **El espejo tecnológico SÍ toca la traza** — el **primer parámetro de máquina** que lo
+  hace en toda la reinvestigación. Invierte el recorrido (`X50→X350` pasa a `X350→X50`).
+  - ⇒ **Contradice a `canal.md` §24**, que lo había derivado como «no espeja nada, y con
+    testigo». **Con la sierra era cierto**: la `082` normaliza el sentido de corte, así que
+    espejar no podía verse. Con fresa el sentido es del programa.
+  - ⚠️ **Y con esta geometría no se puede separar «espejar» de «invertir»**: la línea está
+    centrada en la pieza, así que las dos operaciones dan el mismo resultado. Hace falta una
+    **línea asimétrica** (`X50`→`X250`), y es la diferencia entre que el converter transforme
+    coordenadas o sólo dé vuelta el orden. Va al Grupo 17.
+- ✅ **El resto del A5, como en el canal**: los cinco de bloqueo y mecánicas mueven **sólo la
+  línea del header** (`V` y `T`), con una correspondencia 1:1 nueva —`MechanicalOptions` del
+  `.pgmx` va directo a `T`—, y `Repeticiones = 3` sale **byte-idéntico** con testigo interno.
+  **9 de 9 con captura**: el protocolo cumplido.
+- ⚠️ **Seis nombres del A5 dicen `EF` y el archivo está en `A`** — el modo de falla literal de
+  `fixtures.md` §2. Esta vez **el error ayuda**: como quedaron en `A` igual que la referencia,
+  el diff mide sólo el parámetro. Hay que corregir el nombre, no los archivos.
+- ⏸ **Microuniones postergadas** (dato de Fermín): no se pueden aplicar sobre el fresado en
+  esta pieza; debe haber una configuración que las habilita, sin identificar. El `<Attributes/>`
+  del pasante quedó **vacío**, lo que confirma indirectamente que serían un `OperationAttribute`
+  como el de la rampa.
+
+
 ### 2026-09-10 — Grupo 10: el `G41`/`G42` no sale de una tabla
 Nueve archivos en vez de tres: Fermín **cruzó `Invertir` con las tres correcciones** y extendió
 el cruce a los `condicion_false`. Con los tres sueltos del pedido esto no se veía.
