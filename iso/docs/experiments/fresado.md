@@ -2333,7 +2333,7 @@ Ordenado por lo que cuesta si no se cierra.
 
 | | |
 |---|---|
-| ~~**4. el arco de esquina con otra herramienta**~~ | ✅ **CERRADO §34.2**: el radio es `SVR` y escala sin degenerar, ni con la `E001` en un rectángulo de 50×50. ⚠️ **El caso límite real es el offset INTERIOR** con fresa grande en geometría chica, y sigue sin probar |
+| ~~**4. el arco de esquina con otra herramienta**~~ | ✅ **CERRADO §34.2 y §35.1**: el radio es `SVR` y escala sin degenerar por afuera. **Y el offset INTERIOR imposible resultó el QUINTO FAIL-LOUD**: con la `E006` (radio 40) en un rectángulo de 50×50 Maestro **declara** que no puede calcular la traza y **emite igual**, delegando al CN. ⭐ La señal para el converter es limpia y está en el `.pgmx`: **`ToolpathList` vacío ⇒ rechazar** |
 | ~~**5. el sentido de giro con corrección**~~ | ✅ **CERRADO §34.3 y §34.6, y la respuesta es doble**: en **C.N.** el sentido **no cambia** (sólo el código G); en **CAD con multipaso** sí cambia. ⚠️ Y abre un hilo: Maestro tiene **dos formas** de resolver el lado —cambiar el offset o cambiar el sentido— y no está derivado qué elige cuál. No afecta al converter (lee la traza); sí al sintetizador |
 | ~~**6. el lado del arco EXPLÍCITO**~~ | ✅ **CERRADO §34.4: lo ignoran.** `Automático` es el único que sigue a la corrección. Y acota §21.5: el milímetro de `G41`/`G42` va por la tangente **sólo si el lado del arco es coherente** con la corrección |
 
@@ -2343,7 +2343,7 @@ Ordenado por lo que cuesta si no se cierra.
 |---|---|
 | **7. `Cutmode = Climb`** | aparece en los quince archivos de estrategia, **nunca variado**, y sin campo identificado en la ventana |
 | ~~**8. `ZigZag`**~~ | ✅ **RE-ANCLADO §34.5**: corta en rampa continua alternando el sentido, con **pasada final plana** y arranque en la superficie. Valida lo que el sintetizador ya tenía. ⏭️ Falta comparar el detalle contra el código |
-| **9. `Helicoidal` sobre una línea** | si el desplegable la deja aplicar a geometría abierta o sólo a cerrada |
+| ~~**9. `Helicoidal`**~~ | ✅ **DERIVADA §35.2**: cada media vuelta baja `PH/2` y el resto **se reparte en la última vuelta** (distinto del unidireccional); `Habilitar pasada final` agrega **una vuelta completa plana**. Se aplica a geometría **cerrada**, que es la única donde una hélice tiene sentido |
 | **10. el `xISO` del comentario del `M5`** | segundo contador (362, 448, 503), se mueve con la posición pero su relación con el `$0?` no es constante |
 | **11. el orden con dos cabezales** | §24.6. Empezar por el cabezal perforador cambia el largo del ISO, y **no en el mismo sentido** con canal (94/95) que con taladro (84/82) |
 | **12. los siete nombres del Grupo 1** | dicen `x50_x300_y150` y la traza es (50,200)→(350,200). Ninguna derivación los usa; conviene renombrar |
@@ -2611,3 +2611,140 @@ piezas independientes:
 - **`SideOfFeature`** da el lado de la herramienta respecto del avance ⇒ de ahí sale de qué lado
   cae el offset;
 - el **`G41`/`G42`** sale de cruzar lado × sentido (§26.2), y sólo en modo C.N.
+
+---
+
+# 35. Los cierres del 2026-09-11 (tarde, desde la PC del CNC)
+
+Cinco entregas: los siete del Grupo 1 re-postprocesados, la **helicoidal** sobre el círculo, el
+**`.pgm` y el `.xxl`** del `Xmsg`, y el offset **interior** con fresas grandes — que resultó ser
+**el quinto caso de fail-loud, y el primero con señal limpia en el `.pgmx`**.
+
+## 35.1 🚨 QUINTO FAIL-LOUD: el offset interior imposible — y Maestro lo declara
+
+Sobre el rectángulo de **50×50** con corrección **interior** (`G41`):
+
+| herramienta | radio (`SVR`) | `50 − 2·radio` | `TrajectoryPath` del `.pgmx` |
+|---|---|---|---|
+| `E004` | 2 | 46 | **8 miembros** (4 rectas + 4 arcos, offset exterior) |
+| `E001` | 9,18 | 31,64 | **4 miembros** (rectas, esquinas vivas) |
+| **`E006`** | **40** | **−30** ⛔ | **`[]` — NINGUNO** |
+
+### La advertencia, capturada
+
+> **Atención.** Imposible crear la trayectoria de la herramienta para el trabajo Fresado.
+> **El trabajo se ejecutará en la máquina aplicando la corrección definida por el CN.**
+
+⇒ **Maestro declara que no puede calcular la traza y delega al control.** No es un descarte
+silencioso como la cara inferior (§25.1): **avisa**. Pero el aviso queda en la pantalla.
+
+### ⚠️ Y el ISO sale igual, sin ninguna marca
+
+```
+G0 X49.000 Y50.000
+SVR 40.000            <- el radio real de la E006
+G41
+G1 X50.000 Y50.000 · G1 X100.000 · G1 Y100.000 · G1 X50.000 · G1 Y50.000
+```
+
+La **línea nominal** —el rectángulo exacto— más `G41` y `SVR 40.000`. ⇒ Le pide al control que
+meta una fresa de **Ø80 dentro de un rectángulo de 50×50**. El CN tampoco puede.
+
+⇒ 🚨 **Es el peor de los cinco casos de fail-loud**: los otros cuatro *descartan* algo; éste
+**emite un programa imposible**, con el radio correcto y la trayectoria que no se puede
+recorrer.
+
+### ⭐⭐⭐ Pero la señal para el converter es limpia, y está en el archivo
+
+```
+operación con ToolpathList VACÍO  ⇒  Maestro no pudo calcular la traza  ⇒  RECHAZAR
+```
+
+**No hace falta validar geometría**: el `.pgmx` lo dice. El `E006` no tiene ni `Approach`, ni
+`TrajectoryPath`, ni `Lift` — los otros dos sí. Es una comprobación de una línea.
+
+⇒ ⭐⭐ **Segundo beneficio concreto del converter sobre Maestro** (el primero fue
+`%DONTCARESPEEDV`, §16.1): Maestro avisa en pantalla y emite igual; el converter, por la
+regla 4, **se detiene**. Y con un mensaje que puede nombrar la causa —herramienta demasiado
+grande para el contorno— porque tiene el `SVR` y la geometría.
+
+📌 De paso, la `E006` confirma el catálogo una vez más: su corte sale en **`F2000`**
+(`FeedRate.Standard` = 2), contra los `F5000` de las otras.
+
+## 35.2 ⭐⭐ La estrategia `Helicoidal`, derivada
+
+Sobre el círculo de radio 100, pasante (18 mm), `PH = 5`:
+
+```
+G1 Z0.000                                    <- arranca en la SUPERFICIE
+G3 X100 Y200 Z-2.500  I200 J200              <- media vuelta, baja PH/2
+G3 X300 Y200 Z-5.000  I200 J200              <- media vuelta, baja PH/2  (vuelta completa: 5)
+…  Z-7.500 · Z-10.000 · Z-12.500 · Z-15.000
+G3 X100 Y200 Z-16.500 I200 J200              <- ⚠️ la última vuelta baja 1,5 por media
+G3 X300 Y200 Z-18.000 I200 J200
+```
+
+```
+cada media vuelta (G3 de 180°) baja PH/2
+el resto se REPARTE en la última vuelta, no se agrega una pasada
+```
+
+Con 18 y `PH=5`: tres vueltas completas (5+5+5 = 15) y la última baja **3**, o sea **1,5 por
+media vuelta**. ⇒ Es **distinto del unidireccional**, donde el resto era una pasada entera más
+(§16.4).
+
+### Y `Habilitar pasada final` agrega una vuelta completa PLANA
+
+El `_hpf` agrega **dos `G3` sin `Z`** al final — una vuelta entera a la cota final, sin bajar,
+para dejar la pared pareja. Dos líneas más (103 → 105).
+
+⇒ ✅ **Valida el `HelicalMillingStrategySpec` del sintetizador** en sus dos campos principales:
+`axial_cutting_depth` (`PH`) y `allows_finish_cutting` (`Habilitar pasada final`). El
+`axial_finish_cutting_depth` (`UH`) de la helicoidal sigue sin fixture.
+
+📌 Y contesta de hecho el pendiente «`Helicoidal` sobre una línea»: **se aplica a geometría
+cerrada**, que es la única donde una hélice tiene sentido.
+
+## 35.3 El `.pgm` y el `.xxl`: el conteo lo calcula la ETAPA 2
+
+Llegaron los dos intermedios del `..._prof10_XMSG` (conteo **422**):
+
+| | tamaño | qué es |
+|---|---|---|
+| `.xxl` | 1032 bytes | **texto legible**, 27 líneas |
+| `.pgm` | 2900 bytes | **binario** con el texto de cada instrucción embebido |
+
+### ⛔ Lo que queda descartado
+
+- **El conteo NO está en el XXL.** El XXL escribe `XMSG N="" Q=0 I=0` — sin ningún número.
+- **El conteo NO está en el PGM.** Buscado el `422` como entero de 2 y 4 bytes, en los dos
+  endianness, en los 2900 bytes: **cero apariciones**. Y el `362` del `xISO` tampoco.
+
+⇒ ⭐ **El conteo lo genera la etapa 2** —el generador de Xilog, al emitir el ISO— y no viaja en
+ningún intermedio. Cierra la pregunta de *dónde* se calcula.
+
+### 🔮 La hipótesis que queda, y el fixture que la cierra
+
+El `XMSG` está en el **offset 2488** del PGM (de 2900). Si `N` fuera un desplazamiento sobre el
+PGM, la constante sería `2488 − 422 = 2066`. **Con un solo PGM no se puede verificar.**
+
+⇒ **El fixture que lo decide es UNO, y el `.pgmx` ya existe**:
+
+```
+postprocesar a PGM el archivo  Operaciones\R_PV_manual_op_xmsg_dos_largo.pgmx
+```
+
+Tiene **dos mensajes en un mismo programa**, con conteos **212** y **244** (§17.6). ⇒ En un solo
+PGM hay **dos** `XMSG`, y la diferencia de sus offsets tiene que dar **32**. Si da, el conteo es
+un offset del PGM y queda derivado sin necesitar más archivos; si no da, la hipótesis se cae.
+
+📌 **Y encaja con el texto**: ese archivo tiene `Text = "Mensaje largo al operador"` (25) y
+`"Otro texto"`, mientras el del Grupo 11 tiene el texto **vacío** —por eso el XXL mostraba
+`N=""`, y no había contradicción con §17.6—. El PGM sí lleva el texto, así que el largo del
+primer mensaje **corre el offset del segundo**: exactamente el `+largo(texto)` medido.
+
+## 35.4 ✅ Los siete del Grupo 1, re-postprocesados
+
+Renombrados a `…_x50_x350_y200_prof10` —que es lo que la traza dice— y con sus ISO nuevos, así
+que **el par vuelve a ser consistente**: la línea 1 del ISO coincide con el nombre del archivo.
+El corpus queda sin nombres que mientan.
