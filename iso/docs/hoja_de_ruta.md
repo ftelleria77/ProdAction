@@ -503,6 +503,36 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-11 — El `Xmsg`, a fondo: el número no es un contador sino un PUNTERO
+⚖️ **Decisión de alcance de Fermín**: *el converter **no puede rechazar** los programas con
+mensaje.* El `Xmsg` es la **parada con espera de start** que le da al operario la oportunidad de
+**girar la pieza** — es decir, la solución al fail-loud de la cara inferior (`fresado.md` §25.1).
+Hay que resolverlo, no esquivarlo.
+
+Análisis sobre **28 mensajes en 25 archivos** de las ramas C, D1, D2 y D3
+(`operaciones_maquina.md` §19):
+
+- **Qué agrega al ISO**: entre 2 y 4 líneas — `M5` **condicional** (sólo si el husillo gira),
+  `$0?<N>S<stop>I0D0?`, `G4 F0`, más `M0` con paro y `S<vel>M3` si hay que rearrancar.
+  ⚠️ **Y NO agrega el texto del mensaje**: no aparece en ninguna parte del ISO.
+- ⭐⭐⭐ **De ahí sale la reinterpretación**: si el texto que el operario lee no viaja en el ISO y
+  lo único que va es el número, entonces **`N` es un PUNTERO al texto dentro del programa
+  compilado**, no un contador. Y eso explica de una vez todo lo medido por separado: que crezca
+  con lo emitido antes (es una posición), que el texto ocupe lugar sin salir en el ISO, el
+  `largo(texto) + 7` (texto + cabecera), que sea determinista, y que no se corresponda con nada
+  del ISO.
+- ⛔ **Y contesta si alcanza con contar líneas: no.** El `Xmsg` son 2 líneas y cuesta 13; el `Xn`
+  6 y cuesta 45; el perforado 41 y cuesta 137. El par que lo cierra: **el círculo agrega UNA
+  línea más que la recta y el conteo sube 111**. Tampoco son los caracteres del ISO — la
+  diferencia perforado→línea casi coincide (+71 contra +73) pero **el círculo la rompe** (+68
+  contra +111): un arco escribe menos en el ISO de lo que ocupa en el compilado.
+- ⇒ **Tres salidas, por costo**, y la recomendada es la más barata: **probar si el `N` hace
+  falta para EJECUTAR**. La parada la dan `M0` + `G4 F0`, que no dependen de él; un programa con
+  un solo `Xmsg` no mueve nada, así que es seguro. Si para igual con un `N` cambiado a mano, se
+  declara divergencia deliberada como `%DONTCARESPEEDV` y el tema se cierra **sin tocar la
+  decisión del XXL/PGM**.
+
+
 ### 2026-09-11 — Grupo 18: el lote del fresado queda cerrado
 15 pares sobre los 9 pedidos. Cinco puntos del inventario cerrados y dos hilos nuevos.
 

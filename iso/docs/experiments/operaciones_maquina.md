@@ -657,3 +657,111 @@ mecanizado», falta contar el texto que el propio converter va a emitir.** Es un
 salida, no una tabla de constantes por tipo de operación.
 
 📌 **Sigue faltando la base del conteo** —de dónde arranca— y qué son la `I` y la `D`.
+
+## 19. El `Xmsg` en el ISO, analizado a fondo (2026-09-11)
+
+**Decisión de alcance de Fermín**: *el converter **no puede rechazar** los programas con
+mensaje.* El `Xmsg` es la **parada con espera de start** que le da al operario la oportunidad
+de **girar la pieza** — o sea, es la pieza central de la técnica de mecanizado en las dos
+caras, que es justamente el caso que §25.1 dejó como fail-loud (la cara inferior se descarta en
+silencio).
+
+⇒ Hay que resolverlo. Esta sección es el análisis minucioso, sobre **28 mensajes en 25
+archivos** de todo el corpus (ramas C, D1, D2 y D3).
+
+### 19.1 Qué agrega exactamente un `Xmsg` al ISO
+
+Entre **dos y cuatro líneas**, según el contexto:
+
+| línea | cuándo aparece |
+|---|---|
+| `M5 ;(xISO<n>-> Spegne mandrino)` | **sólo si el husillo está girando**. Al inicio del programa no aparece |
+| `$0?<N>S<stop>I0D0?` | **siempre** — la instrucción del mensaje |
+| `G4 F0` | **siempre** |
+| `M0` | **sólo con `Paro con espera de start` o `con desbloqueo`** (`S1`/`S2`) |
+| `S<velocidad>M3` | **sólo si hay que rearrancar** el husillo: el `Xmsg` **intercalado** entre dos mecanizados lo agrega |
+
+Verificado con los tres modos de paro (canal, Grupo 14) y con las tres posiciones (fresado,
+Grupo 11).
+
+⚠️ **Y lo que NO agrega: el texto del mensaje.** No aparece en ninguna parte del ISO.
+
+### 19.2 ⭐⭐⭐ Entonces el `N` no es un «contador»: es un PUNTERO al texto
+
+Si el texto que el operario lee no viaja en el ISO, la máquina lo tiene que sacar de otro lado
+— y lo único que el ISO lleva es el número. ⇒ **`N` es un desplazamiento dentro del programa
+compilado**, donde el texto sí vive.
+
+Esa lectura explica de una sola vez todo lo que se había medido por separado:
+
+| observación | queda explicada |
+|---|---|
+| crece con **todo lo emitido antes** (§27.2: intercalado = simple) | es una **posición**, no una cuenta |
+| el **texto ocupa lugar** aunque no salga en el ISO (§17.6) | en el compilado el texto **sí está** |
+| `incremento(Xmsg) = largo(texto) + 7` | el texto **más 7 bytes de cabecera** |
+| es **determinista** (repostprocesar da lo mismo) | es una posición, no un contador de sesión |
+| **no se corresponde con nada del ISO** (§17.4) | el ISO es **otro formato** |
+| el **campo `S`** viaja al lado (§18) | son los campos de una misma instrucción, `$0?%ld S%d I%d D%.*f?` |
+
+### 19.3 ⛔ Y contesta la pregunta: contar líneas NO sirve
+
+| elemento | líneas que agrega al ISO | cuánto incrementa `N` |
+|---|---|---|
+| `Xmsg` | 2 | **13** |
+| `Xn` | 6 | **45** |
+| perforado de un agujero | 41 | **137** |
+| fresado de una línea | 51 | **210** |
+| **fresado de un círculo** | **52** | **321** |
+
+⇒ El par que lo cierra: **el círculo agrega UNA línea más que la línea recta y el conteo sube
+111.** No hay proporción posible.
+
+Y tampoco son los caracteres del ISO. Midiendo el bloque que cada mecanizado agrega:
+
+| caso | incremento | líneas | caracteres del bloque |
+|---|---|---|---|
+| perforado | 137 | 41 | 485 |
+| fresado línea | 210 | 51 | 556 |
+| fresado círculo | **321** | 52 | **624** |
+| fresado dos líneas | 351 | 71 | 824 |
+
+Entre el perforado y el fresado de línea la diferencia de caracteres (+71) casi coincide con la
+del conteo (+73) — pero **el círculo la rompe**: +68 caracteres contra **+111** de conteo. Un
+arco escribe menos en el ISO de lo que ocupa en el compilado.
+
+⇒ ✅ **Confirma §17.4 con dos medidas más**: el conteo no cuenta nada del ISO.
+
+### 19.4 Las tres salidas, por costo
+
+**A. ⭐ La más barata, y la que puede desbloquear todo: ¿el `N` hace falta para EJECUTAR?**
+
+La parada que le importa al operario la producen **`M0` + `G4 F0`**, que **no dependen del
+`N`**. Si el número está mal, lo peor que puede pasar es que el mensaje salga vacío o
+equivocado — **pero la pieza para igual**.
+
+⇒ Y es **seguro de probar**: un programa con **un solo `Xmsg`** con paro, sin ningún
+mecanizado, no mueve nada. Se ejecuta dos veces: con el `N` que emite Maestro y con uno
+**cambiado a mano**.
+
+| si | entonces |
+|---|---|
+| las dos paran y esperan start | el `N` **no bloquea**: se declara divergencia deliberada, como `%DONTCARESPEEDV` (`CLAUDE.md` §4), y el converter emite el que pueda |
+| la segunda falla o no muestra el mensaje | el `N` es esencial y hay que ir a B o C |
+
+**B. Un `.pgm` de dos minutos.** La cadena es `.pgmx → XXL → PGM → ISO`, y el contador lo
+escribe el generador de Xilog. Si `N` es un desplazamiento del compilado, el **PGM** es el
+formato donde el texto vive y las coordenadas ya están formateadas.
+
+⚖️ **Roza la decisión del 2026-08-14** de cerrar el XXL/PGM como línea de trabajo — y conviene
+decir por qué **no la contradice**: aquella decisión fue *no razonar la traza a través de un
+intermedio que no emitimos*, porque eso evita el fixture. Acá no se trata de derivar la traza,
+sino de **leer un contador que el ISO no muestra**. Es una excepción acotada, con un propósito
+único y verificable.
+
+**C. La tabla empírica por elemento.** Es lo que §17.5 proponía, y **hoy se sabe que es cara**:
+no es «un número por tipo» sino una **fórmula por tipo**, y el círculo muestra que hasta la
+familia de curva cambia el resultado. Habría que derivar una fórmula por cada geometría y por
+cada mecanizado. Es el camino de último recurso.
+
+⇒ **Recomendación: A primero.** Cuesta un programa inocuo y dos ejecuciones, y si sale bien
+cierra el tema sin tocar la decisión del XXL/PGM ni llenar ninguna tabla.
