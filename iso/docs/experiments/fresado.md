@@ -2849,9 +2849,9 @@ pieza con la `E001`, con lead en arco de radio 36,72 y coordenadas largas (`X163
 El `.pgmx` guarda `Y = -1000` y el ISO emite **`G0 G53 X-3700.000 Y1000.000`**. La `X` conserva
 el signo (`-2500` → `X-2500.000`) y la `Y` lo invierte.
 
-⚠️ Anotado como **observación**, no como derivación: es un solo caso, y el `Xn` es de la rama C
-— conviene cruzarlo contra `operaciones_maquina.md` antes de darlo por regla. Si se confirma,
-es una trampa de signo para el converter.
+> ✅ **Cruzado el mismo día**: `operaciones_maquina.md` §9.2 ya lo tenía **derivado**
+> (`Y_iso = −Y_pgmx`, 5 de 5). Y lo que este archivo agrega es **la consecuencia**, medida en
+> la máquina: **el CNC se planta**. Ver §37 — sexto caso de fail-loud.
 
 ## 36.4 ✅ Y el test de ejecución queda listo para correr
 
@@ -2872,3 +2872,81 @@ $0?212S1I0D0?      ->      $0?999S1I0D0?
 byte-idéntico** y se declara divergencia deliberada, como `%DONTCARESPEEDV` (`CLAUDE.md` §4).
 Si el falso da alarma o no para, el `N` es esencial y hay que ir al `.pgm` del
 `xmsg_dos_largo` (§35.3).
+
+---
+
+# 37. 🚨 SEXTO FAIL-LOUD: la `Y` del `Xn` sale fuera del recorrido, y el CNC se planta (2026-09-11)
+
+**Dato de Fermín, medido en la máquina**: ejecutando `xn_xmsg_xn_pes`, el CNC **se planta en el
+segundo `Xn` y no termina la ejecución**.
+
+Y es el primero de los seis casos de fail-loud **confirmado ejecutando**, no derivado del
+archivo.
+
+## 37.1 Los números
+
+| | |
+|---|---|
+| lo que el usuario puso | `Y = −1000` en el `.pgmx` |
+| lo que el ISO emite | **`G0 G53 X-3700.000 Y1000.000`** |
+| el rango del eje Y | **−1870 a +131 mm** (`Params.cfg`: `AP_MINQUOTA = -1870000`, `AP_MAXQUOTA = 131000`) |
+
+⇒ **`+1000` está fuera de recorrido**; el máximo del eje es **+131**. Por eso la máquina se
+planta.
+
+⇒ Y el valor que el usuario tipeó, `−1000`, **sí está dentro del rango físico**.
+
+## 37.2 ⭐ La inversión ya estaba derivada; lo nuevo es que nadie valida el rango
+
+`operaciones_maquina.md` §9.2 tiene **`Y_iso = −Y_pgmx`** con 5 de 5, y §6 lo había anotado
+como pendiente con una frase que hoy se vuelve profética: *«el signo de la `Y` — dos fixtures,
+y **el resultado cae fuera del rango del eje**»*. Estaba visto en el papel; **faltaba la
+máquina**.
+
+### ⚖️ Y precisa cuál es el error
+
+Si la inversión es la convención correcta —coherente con que el eje Y de la pieza y el de la
+máquina apunten al revés—, entonces el rango **útil en la UI** es el espejo del físico:
+**−131 a +1870**. Y `−1000` **no cae ahí dentro**.
+
+⇒ ⇒ **El error de Maestro no es invertir: es no validar.** Acepta un valor que su propia
+configuración declara inalcanzable, no avisa al tipearlo, y **postprocesa igual** emitiendo una
+cota fuera de recorrido.
+
+⇒ Es la misma clase que el offset interior imposible (§35.1) — pero **peor en un sentido**:
+allá al menos aparecía una advertencia en pantalla; acá **no hay ningún aviso**.
+
+## 37.3 ⭐⭐⭐ Y el converter puede cubrirlo, con lo que ya tiene
+
+Los límites de los tres ejes están en el snapshot y **ya se usaron**: el perforado predijo dos
+rechazos desde `AP_MINQUOTA` antes de postprocesar (`perforado.md`), y el canal en campo `A` se
+pasaba del tope del eje X.
+
+```
+antes de emitir una cota G53, verificar   AP_MINQUOTA ≤ valor ≤ AP_MAXQUOTA
+```
+
+| eje | mínimo | máximo |
+|---|---|---|
+| X | −3702 | +621 |
+| Y | **−1870** | **+131** |
+| Z | −53 | **+201** ( = `AP_PARKQTA`, el `Z201.000` ya derivado) |
+
+⇒ **Tercer beneficio concreto del converter sobre Maestro**, después de `%DONTCARESPEEDV`
+(§16.1) y del `ToolpathList` vacío (§35.1): **rechaza antes de emitir**, nombrando el eje, el
+valor y el límite.
+
+⇒ Y **no cuesta nada**: los tres pares de límites ya están en `Params.cfg` del snapshot, que el
+converter lee. Es la regla 4 del `CLAUDE.md` aplicada — fail-loud con un mensaje que dice qué
+falta.
+
+## 37.4 📌 Y de paso, este fixture cubre un pendiente viejo de la rama C
+
+§6 de `operaciones_maquina.md` listaba como no derivable: *«**varios `Xn` en un programa** —
+todos los fixtures tienen uno solo. La memoria del proyecto dice que el `Xn` es posicional y
+que puede haber varios (cara A → `Xn` + `Xmsg` girar → cara B → `Xn`); eso sigue sin
+fixture»*.
+
+⇒ ✅ **`xn_xmsg_xn_pes` y `fresado_xn_xmsg_taladro_xn` son ese fixture**, y muestran los dos
+`Xn` emitiendo su bloque completo cada uno, con el `Xmsg` en el medio. La secuencia de las dos
+caras está medida de punta a punta (§36.3).

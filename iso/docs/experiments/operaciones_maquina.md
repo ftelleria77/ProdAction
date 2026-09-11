@@ -303,6 +303,23 @@ Y con eso queda respondida la pregunta de la memoria del proyecto: **sí se pued
 Queda abierto **por qué**: la `X` conserva el signo y la `Y` no. Es coherente con que el eje Y
 de la pieza y el de la máquina apunten al revés, pero eso hoy es lectura, no evidencia.
 
+> 🚨 **2026-09-11 — y tiene consecuencia física, medida en la máquina.** Fermín ejecutó un
+> programa con `Y = −1000`: el ISO emite `Y1000.000` y **el CNC se planta sin terminar la
+> ejecución**. El eje Y va de **−1870 a +131 mm** (`Params.cfg`), así que `+1000` está **fuera
+> de recorrido** — mientras el `−1000` que se tipeó **sí** está dentro del rango físico.
+>
+> ⚖️ **Y precisa cuál es el error**: si la inversión es la convención correcta, el rango útil en
+> la UI es el espejo (`−131` a `+1870`) y `−1000` no cae ahí. ⇒ **el error de Maestro no es
+> invertir: es NO VALIDAR** — acepta un valor que su propia configuración declara inalcanzable,
+> no avisa al tipearlo, y postprocesa igual.
+>
+> ⇒ Es el **sexto caso de fail-loud** del converter, y el primero **confirmado ejecutando**. Se
+> cubre con lo que ya hay: `AP_MINQUOTA ≤ cota ≤ AP_MAXQUOTA` antes de emitir un `G53`.
+> Detalle en `fresado.md` §37.
+>
+> 📌 Y el pendiente de §6 —*«varios `Xn` en un programa … sigue sin fixture»*— queda **cubierto**
+> por los dos archivos del Grupo 19 del fresado.
+
 ### 9.3 · `Relative` — el segundo campo lo separó
 
 Con un solo campo las dos fórmulas posibles daban lo mismo. Con dos, no:

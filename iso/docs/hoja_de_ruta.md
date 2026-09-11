@@ -503,6 +503,44 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-11 (CNC) — SEXTO fail-loud, confirmado EJECUTANDO, y el programa de dos caras
+Día en la PC del CNC. Cinco entregas y un hallazgo que sólo la máquina podía dar.
+
+- 🚨 **La `Y` del `Xn` sale fuera del recorrido y el CNC SE PLANTA.** Con `Y = −1000` en el
+  `.pgmx`, el ISO emite `Y1000.000`, y el eje Y de esta máquina va de **−1870 a +131 mm**
+  (`Params.cfg`). La inversión `Y_iso = −Y_pgmx` **ya estaba derivada** (rama C §9.2, 5 de 5) y
+  §6 lo había anotado como *«el resultado cae fuera del rango del eje»* — **faltaba la máquina**.
+  - ⚖️ **Y precisa cuál es el error**: si la inversión es la convención, el rango útil en la UI
+    es el espejo (−131 a +1870) y `−1000` no cae ahí ⇒ **el error de Maestro no es invertir: es
+    NO VALIDAR**. Acepta un valor que su propia configuración declara inalcanzable y postprocesa
+    igual, **sin ningún aviso**.
+  - ⇒ **Sexto caso de fail-loud**, y el primero **confirmado ejecutando**. Se cubre con lo que ya
+    hay: `AP_MINQUOTA ≤ cota ≤ AP_MAXQUOTA` antes de emitir un `G53`. **Tercer beneficio
+    concreto del converter sobre Maestro.**
+- 🚨 **QUINTO fail-loud, el mismo día**: el offset **interior imposible** (la `E006`, radio 40,
+  en un rectángulo de 50×50). Maestro **declara** que no puede calcular la trayectoria y **emite
+  igual**, delegando al CN. ⭐ La señal para el converter es limpia y está en el `.pgmx`:
+  **`ToolpathList` vacío ⇒ rechazar**, sin validar geometría.
+- ⭐⭐⭐ **El programa de dos caras, completo y postprocesado** (fresado → `Xn` → `Xmsg` →
+  taladro → `Xn`): es el caso de uso que justifica todo el trabajo sobre el `Xmsg`, y da
+  **`787 = 212 + 530 + 45`** ⇒ **los incrementos se suman**. Además cubre el pendiente de la
+  rama C §6 («varios `Xn` en un programa, sin fixture»).
+- ⭐⭐ **El incremento del `Xn` no depende del valor**: `X = −2500` da el mismo **45** que
+  `X = −3700`. Mismo largo de texto emitido ⇒ confirma la regla general con el fixture que
+  §17.6 pedía.
+- ⭐ **Los tres modos de paro, aislados en un programa mínimo** (sólo el mensaje): `Nothing`→`S0`
+  sin `M0`, `NoUnlock`→`S1` y `Unlock`→`S2` con `M0`. El diff entre los dos con paro es **una
+  sola línea** ⇒ **el desbloqueo no agrega ninguna instrucción**: vive entero en el campo `S`.
+- ⭐⭐ **La `Helicoidal`, derivada**: cada media vuelta baja `PH/2` y el resto **se reparte en la
+  última vuelta**; `Habilitar pasada final` agrega **una vuelta completa plana**.
+- 📌 **El `.pgm` y el `.xxl`**: el conteo **no está en ninguno de los dos** ⇒ lo calcula la
+  **etapa 2** al emitir. Queda la hipótesis del offset sobre el PGM, y el fixture que la cierra
+  es postprocesar a PGM el `xmsg_dos_largo`, que tiene **dos** mensajes en un programa.
+- ⏳ **Y queda armado el test de ejecución del conteo**: los ISO `_nfalso` con el `N` cambiado
+  (mismo largo, ni un byte movido) del `xmsg_solo_pes` y del `xn_xmsg_xn_pes` — el segundo con
+  dos `Xn`, para ver que el programa **sigue ejecutando** después del start.
+
+
 ### 2026-09-11 — El `Xmsg`, a fondo: el número no es un contador sino un PUNTERO
 ⚖️ **Decisión de alcance de Fermín**: *el converter **no puede rechazar** los programas con
 mensaje.* El `Xmsg` es la **parada con espera de start** que le da al operario la oportunidad de
