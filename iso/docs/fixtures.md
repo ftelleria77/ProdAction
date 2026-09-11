@@ -49,7 +49,7 @@ les dio origen.
 > 📌 **Lección de método que deja el episodio**: cuando el parámetro que se varía vive en **la
 > misma ventana** que el campo, la marca del campo en el nombre es la que se cae — porque hay
 > que tocar dos cosas en un solo diálogo. Es el punto flaco de la convención de §2, y conviene
-> **verificar el campo por atributo en todo lote de A5**, no sólo por el nombre.1.
+> **verificar el campo por atributo en todo lote de A5**, no sólo por el nombre.
 
 > 📌 **El fresado ya tenía cinco archivos antes de su lote**, heredados de `Dibujos\Rama G\`
 > (`…linea_01_fresada`, su `XMSG` y los `…origen_x100_y50_linea_fresada`, en campo `A` y `HG`).
