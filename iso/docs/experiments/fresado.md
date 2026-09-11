@@ -2771,14 +2771,31 @@ con el `Xmsg` como único elemento del programa. Y el `?%ETK[8]=1` + `G40` que e
 archivos venían del preámbulo de un mecanizado, acá aparecen solos: **son del bloque, no del
 mecanizado**.
 
-### ⚠️ Y un nombre que miente, atrapado por el atributo
+### ⚠️ Un nombre que mintió, atrapado por el atributo — y corregido el mismo día
 
-`R_PV_A_manual_xmsg_solo_pdes` afirma `Paro con Desbloqueo` pero el `.pgmx` dice
-**`Stop = NoUnlock`** — el mismo que el `_pes`. Por eso los dos ISO son **idénticos** (723 y
-724 bytes, y la diferencia es el largo del nombre).
+`R_PV_A_manual_xmsg_solo_pdes` afirmaba `Paro con Desbloqueo` y el `.pgmx` decía
+**`Stop = NoUnlock`** — el mismo que el `_pes`, y por eso los dos ISO salían **idénticos**.
+`fixtures.md` §2 funcionando otra vez.
 
-⇒ ✅ **No contradice §18**: son el mismo caso medido dos veces. El `Unlock` → `S2` sigue
-derivado del canal (Grupo 14), y acá simplemente falta. `fixtures.md` §2 funcionando otra vez.
+> ✅ **Corregido por Fermín**: el `.pgmx` ahora dice `Stop = Unlock` y el ISO emite
+> **`$0?212S2I0D0?`**.
+
+### ⭐⭐ Con eso los tres modos de paro quedan derivados en un programa MÍNIMO
+
+| la UI | `.pgmx` | ISO | `M0` |
+|---|---|---|---|
+| `Ningún Paro` | `Nothing` | `$0?212`**`S0`**`I0D0?` | no |
+| `Paro con Espera de Start` | `NoUnlock` | `$0?212`**`S1`**`I0D0?` | **sí** |
+| `Paro con Desbloqueo y Espera de Start` | `Unlock` | `$0?212`**`S2`**`I0D0?` | **sí** |
+
+El diff entre el `pes` y el `pdes` es **UNA sola línea** — el `S1` contra el `S2`. Nada más.
+
+⇒ ⭐ **El desbloqueo no agrega ninguna instrucción al ISO**: la diferencia entre «espera de
+start» y «desbloqueo y espera de start» vive **entera en el campo `S`**, y el control decide
+qué hacer con ella. El `M0` es idéntico en los dos.
+
+⇒ Confirma §18 (canal, Grupo 14) y lo **mejora**: allá el programa llevaba un canal y había
+más ruido en el diff; acá el aislamiento es perfecto.
 
 ## 36.2 ⭐⭐ `Xn` → `Xmsg` → `Xn`: el incremento del `Xn` NO depende del valor
 
