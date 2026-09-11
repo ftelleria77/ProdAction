@@ -503,6 +503,36 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-11 (CNC) — ⭐⭐⭐ El conteo del `Xmsg` deja de bloquear: los `N` falsos CORRIERON
+Fermín ejecutó en la máquina los dos ISO con el conteo falseado (`$0?999` en vez del real) y
+**los dos corrieron bien**.
+
+| programa | `N` real | `N` falso | resultado |
+|---|---|---|---|
+| `xmsg_solo_pes` — sólo el mensaje | 212 | 999 | ✅ para y espera start |
+| `xn_xmsg_xn_pes` — `Xn` · `Xmsg` · `Xn` | 257 | 999 | ✅ para, y **al dar start ejecuta el segundo `Xn`** |
+
+El segundo es el que decide: tiene un movimiento **después** del mensaje, así que prueba que el
+programa **sigue corriendo**, no sólo que para.
+
+- ⭐⭐⭐ **El conteo deja de bloquear el byte-idéntico.** Era el último obstáculo duro del
+  converter, abierto desde el 2026-08-24. Pasa a **divergencia deliberada declarada**, como
+  `%DONTCARESPEEDV=1`.
+- ⭐⭐ **Y habilita la técnica de las dos caras**: el converter puede emitir programas con
+  `Xmsg`, que es la parada con espera de start para girar la pieza — justamente la solución al
+  fail-loud de la cara inferior. Ese era el motivo por el que **no se podía rechazar**.
+- ⇒ **Método**: es el tercer caso donde el byte-idéntico cede ante la máquina, y el primero que
+  se resuelve **preguntándole a la máquina en vez de seguir derivando**. Las otras dos salidas
+  —el `.pgm` y la tabla de incrementos— quedan **innecesarias**, y con ellas se evita tocar la
+  decisión del 2026-08-14 sobre el XXL/PGM.
+- ⚖️ **Dos decisiones para Fermín**: qué `N` emite el converter (el de la tabla donde alcance, o
+  uno fijo y determinista) y cómo lo descuenta el comparador — porque hoy `DELIBERATE_OMISSIONS`
+  trabaja con **líneas enteras** y esto es **un campo dentro de una línea**.
+- 📌 **Y la regla 4 acumula su tercera excepción** (`%DONTCARESPEEDV`, el ruido de milésimas, y
+  el conteo). La nota de `iso_first_machine_run` decía que *si aparecen más, conviene que Fermín
+  decida si la regla se reescribe*: **aparecieron**.
+
+
 ### 2026-09-11 (CNC) — SEXTO fail-loud, confirmado EJECUTANDO, y el programa de dos caras
 Día en la PC del CNC. Cinco entregas y un hallazgo que sólo la máquina podía dar.
 

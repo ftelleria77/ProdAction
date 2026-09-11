@@ -753,6 +753,42 @@ arco escribe menos en el ISO de lo que ocupa en el compilado.
 
 ### 19.4 Las tres salidas, por costo
 
+> # ✅✅✅ RESUELTO EN LA MÁQUINA (2026-09-11): el `N` NO hace falta para ejecutar
+>
+> **Fermín ejecutó los dos pares con el conteo falseado y corrieron bien.**
+>
+> | programa | `N` real | `N` falso | resultado |
+> |---|---|---|---|
+> | `xmsg_solo_pes` — sólo el mensaje | `212` | `999` | ✅ **para y espera start** |
+> | `xn_xmsg_xn_pes` — `Xn` · `Xmsg` · `Xn` | `257` | `999` | ✅ **para, y al dar start EJECUTA el segundo `Xn`** |
+>
+> El segundo es el que decide: tiene un movimiento **después** del mensaje, así que prueba que
+> **el programa sigue corriendo** con un conteo equivocado. No es sólo que pare.
+>
+> ⇒ ⭐⭐⭐ **El conteo deja de bloquear el byte-idéntico.** Pasa a ser una **divergencia
+> deliberada declarada**, igual que `%DONTCARESPEEDV=1` (`CLAUDE.md` §4: *el byte-idéntico es el
+> método, no el fin, y manda la máquina*).
+>
+> ⇒ ⭐⭐ **Y con eso el converter puede emitir programas con `Xmsg`** — o sea, **la técnica de
+> mecanizado en las dos caras queda habilitada**, que era el motivo por el que no se podía
+> rechazar (§19).
+>
+> ### Lo que queda por decidir (⚖️ de Fermín): qué `N` emite el converter
+>
+> | opción | |
+> |---|---|
+> | **el que salga de la tabla** (base + incrementos conocidos) | byte-idéntico donde se pueda; impredecible dónde sí y dónde no |
+> | **un valor fijo y determinista** | simple y auditable; nunca byte-idéntico en el campo `N` |
+>
+> En los dos casos **el comparador tiene que descontar el campo `N`**, como hace con las
+> omisiones deliberadas — pero descontando **un campo dentro de una línea**, que es nuevo:
+> `DELIBERATE_OMISSIONS` hoy trabaja con líneas enteras.
+>
+> 📌 **Y un apunte para la regla 4**: ya son **tres** los casos donde el byte-idéntico no es el
+> objetivo — `%DONTCARESPEEDV=1`, el ruido de milésimas de Maestro, y ahora el conteo del
+> `Xmsg`. La nota de `iso_first_machine_run` decía que *si aparecen más, conviene que Fermín
+> decida si la regla se reescribe*. **Aparecieron.**
+
 **A. ⭐ La más barata, y la que puede desbloquear todo: ¿el `N` hace falta para EJECUTAR?**
 
 La parada que le importa al operario la producen **`M0` + `G4 F0`**, que **no dependen del
