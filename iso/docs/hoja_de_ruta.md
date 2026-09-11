@@ -8,6 +8,43 @@ rumbo se anotan como decisiones con fecha). La vista visual se republica en cada
 
 Estados: ✅ hecho · 🔄 en curso · ⏸ esperando a Fermín · ⬜ pendiente · 🔮 futuro (sin fecha)
 
+## Estado actual (2026-09-11)
+
+> ⭐⭐⭐ **El fresado (D3) queda CERRADO, y con él caen los dos bloqueos duros que arrastraba la
+> reinvestigación.** Diecinueve grupos, **225 `.pgmx`, 213 `.iso` y 23 capturas** en cuatro días.
+> Sólo quedan las **microuniones**, en pausa porque todavía no se sabe qué configuración las
+> habilita.
+>
+> **Los dos bloqueos:**
+>
+> - ⭐ **El defecto que trababa al sintetizador** —`build_line_geometry_profile` con dos `Z`
+>   distintas— quedó derivado el primer día: la rampa son **atributos de operación**, y la
+>   serialización lleva largo **y** dirección en 3D. El vector que se había calculado a mano
+>   acierta a los diecisiete dígitos.
+> - ⭐ **El conteo del `Xmsg`**, abierto desde el 2026-08-24, **dejó de bloquear** el último día:
+>   los ISO con el conteo falseado **corrieron en la máquina**. Se resolvió preguntándole a la
+>   máquina en vez de seguir derivando, y sin tocar la decisión del XXL/PGM. Con eso **el
+>   converter puede emitir programas con mensaje**, o sea **la técnica de las dos caras**.
+>
+> **Y el saldo de método**: los casos de **fail-loud** pasaron de tres a **seis** —la cara
+> inferior, el offset interior imposible y la `Y` fuera de recorrido son nuevos—, y aparecieron
+> **tres beneficios concretos del converter SOBRE Maestro**: omitir la línea que para el CNC,
+> rechazar una operación sin toolpath, y validar el rango del eje antes de emitir. Es la primera
+> vez que el converter no sólo iguala a Maestro sino que **produce algo mejor de lo que Maestro
+> puede producir**.
+>
+> ⏭️ **Lo que sigue: el `Galceado` (D4)**, pedido el 2026-09-11 — el vecino del fresado en la
+> cinta, y por eso el lote es **mucho más chico**: casi todo lo que comparten ya está derivado, y
+> el Grupo 1 arranca con una **predicción que vale medio lote** (si la familia la decide la
+> herramienta, el Galceado con una `E00x` da el mismo bloque de 51 líneas). Después `Vaciado` y
+> `Corte con cuchilla`.
+>
+> ⚖️ **Y dos decisiones esperando a Fermín** (planteadas el 2026-09-11, sin resolver): hasta
+> dónde se levanta el congelamiento del **sintetizador**, y si el **converter** arranca ya con
+> los tres mecanizados derivados o espera a que cierre la rama D. Más la **nomenclatura** de las
+> specs de fresado, que la regla 1 manda resolver antes de tocar código (`fresado.md` §8) — y que
+> el Galceado vuelve a poner sobre la mesa con sus **tres nombres** para lo mismo.
+
 ## Estado actual (2026-08-25)
 
 > ⭐⭐ **La reinvestigación terminó de rodear la traza y está por entrar en ella.** En una
