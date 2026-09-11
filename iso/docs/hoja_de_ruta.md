@@ -503,6 +503,37 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
 
 ## Bitácora del trayecto
 
+### 2026-09-11 — Grupo 18: el lote del fresado queda cerrado
+15 pares sobre los 9 pedidos. Cinco puntos del inventario cerrados y dos hilos nuevos.
+
+- ⭐⭐⭐ **El espejo tecnológico NO espeja: invierte el sentido.** El cruce de cuatro archivos
+  sobre una línea **asimétrica** lo cierra — si espejara, `X50→X250` daría `X350→X150`; da
+  `X250→X50`. Y los dos controles son **byte-idénticos**: `_espejo` == `_invertir`, y
+  `espejo + invertir` == el base (se cancelan).
+  - 🚨 **Pero la traza guardada NO lo refleja**: el `.pgmx` del espejo guarda la misma traza que
+    el base y el ISO sale invertido ⇒ **lo aplica el postprocesador**. Es el primer caso donde el
+    ISO no copia la traza por una razón que no es `ActivateCNCCorrection`. **El converter tiene
+    que leer `IsTechnologicalMirror` y aplicar la inversión**, y el ISO **no deja marca**.
+- ✅ **El arco de esquina escala con `SVR` y no degenera**: radio 9,18 con la `E001` incluso en
+  un rectángulo de 50×50, y las rectas mantienen su largo. ⚠️ El caso límite real es el offset
+  **interior** con fresa grande, y sigue sin probar.
+- ✅ **El lado del arco explícito IGNORA la corrección** (`Automático` es el único que la sigue).
+  Y acota §21.5: el milímetro de `G41`/`G42` va por la tangente **sólo si el lado del arco es
+  coherente** con la corrección.
+- ✅ **El sentido de giro, con respuesta doble**: en **C.N.** no cambia con la corrección (sólo
+  el código G, y con eso la tabla del §26.2 queda verificada en los cuatro cuadrantes); en
+  **CAD con multipaso** sí cambia.
+- ✅ **`ZigZag` re-anclado** con un fixture de esta época: rampa continua alternando el sentido,
+  arranque en la superficie y **pasada final plana**. Su única ancla era `N025`, congelada.
+- ⭐⭐ **Y los dos extras** (escuadrado pasante + corrección + multipaso, 134 líneas) confirman
+  cinco reglas de una vez y traen una nueva: **en un contorno CERRADO no hay retorno entre
+  pasadas** — baja en el punto de cierre y sigue. ⇒ `Conexión entre huecos` y el
+  `MillingRetractDistance` **sólo actúan en geometría abierta**.
+- ⚠️ **Hilo nuevo**: Maestro tiene **dos formas** de resolver el lado de la corrección en CAD
+  —cambiar el lado del offset (§30.2) o cambiar el sentido de giro (§34.6)— y no está derivado
+  qué elige cuál. **No afecta al converter** (lee la traza); sí al **sintetizador**.
+
+
 ### 2026-09-10 — `%DONTCARESPEEDV=1` es un bug de Maestro, y los dos incidentes eran el mismo
 ⚖️ **Decisión de Fermín**: esa variable es un **bug de Maestro**, y **es la línea que paró el
 CNC** en las investigaciones anteriores. ⇒ **el converter la omite siempre** — la omisión

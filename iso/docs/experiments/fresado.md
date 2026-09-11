@@ -91,6 +91,13 @@ del electromandril. Tercer mecanizado de la rama D, y el que menos evidencia pro
 > **`Solape` prolonga el último tramo** en su dirección, independiente del radio del lead. Y
 > §33 hace el **inventario de lo que queda abierto**: catorce puntos, de los cuales **tres
 > deciden código** y el grupo final propuesto son **9 archivos**.
+>
+> ⭐⭐⭐ **2026-09-11 — Grupo 18, el final** (§34): **el espejo tecnológico NO espeja, invierte**
+> —byte-idéntico a `Invertir`— **pero la traza guardada no lo refleja**, así que el converter
+> tiene que aplicarlo él. El arco de esquina **escala con `SVR` sin degenerar** ni con la
+> `E001` en 50×50; el lado del arco **explícito ignora** la corrección; el `ZigZag` queda
+> **re-anclado**; y en un contorno **cerrado no hay retorno entre pasadas**. Cinco puntos del
+> inventario cerrados.
 
 ## 1. Los fixtures heredados
 
@@ -2318,7 +2325,7 @@ Ordenado por lo que cuesta si no se cierra.
 
 | | |
 |---|---|
-| **1. ¿el espejo tecnológico ESPEJA o INVIERTE?** | §28.4. La línea del fixture está **centrada** en la pieza, así que las dos operaciones dan el mismo ISO. Es la diferencia entre **transformar coordenadas** o **dar vuelta el orden**. El fixture quedó pedido (Grupo 17) y **no está hecho** |
+| ~~**1. ¿el espejo ESPEJA o INVIERTE?**~~ | ✅ **CERRADO §34.1: INVIERTE.** Byte-idéntico al de `Invertir`, y `espejo + invertir` vuelve al original. **Pero la traza guardada NO lo refleja** —lo aplica el postprocesador— así que el converter **tiene que leer `IsTechnologicalMirror` y aplicar la inversión**, y el ISO no deja marca |
 | **2. la fórmula del conteo del `Xmsg`** | §27.3. Es acumulativo y posicional —eso está derivado—, pero **la unidad no es el carácter del ISO**. Sin fórmula, **el byte-idéntico de todo programa con mensaje sigue bloqueado**. ⚖️ Requiere una decisión tuya: mirar **un** `.pgm` (dos minutos) o dejarlo como rechazo del converter |
 | ~~**3. `%DONTCARESPEEDV=1`**~~ | ✅ **CERRADO (Fermín, 2026-09-10)**: es un **bug de Maestro** y es la línea que paró el CNC. El converter **la omite siempre**, y ahora sabe cuándo Maestro la habría emitido. De paso **unifica los incidentes del 07-30 y del 08-03** — eran el mismo bug — y deja un beneficio concreto: el converter puede emitir «Salida a cota de seguridad» *sin* la línea, o sea la traza segura **y** ejecutable. Ver §16.1 |
 
@@ -2326,16 +2333,16 @@ Ordenado por lo que cuesta si no se cierra.
 
 | | |
 |---|---|
-| **4. el arco de esquina con otra herramienta** | §30.2. El offset exterior redondea con radio `SVR`, medido con la `E004` (radio 2). Con la `E001` (9,18) el arco es cinco veces mayor: **¿entra en un rectángulo chico, o Maestro lo resuelve de otra forma?** |
-| **5. el sentido de giro con corrección** | §30.6. Los ocho `contorno_corr_*` del Grupo 14 no lo separan porque **cada uno arranca en un punto distinto**, así que no son comparables. Falta el mismo contorno, mismo arranque, sólo cambiando el lado |
-| **6. el lado del arco EXPLÍCITO con corrección** | §22. El cruce de §21.4 se hizo con `Automático`; falta ver si `Izquierdo`/`Derecho` **ignoran** la corrección o la respetan |
+| ~~**4. el arco de esquina con otra herramienta**~~ | ✅ **CERRADO §34.2**: el radio es `SVR` y escala sin degenerar, ni con la `E001` en un rectángulo de 50×50. ⚠️ **El caso límite real es el offset INTERIOR** con fresa grande en geometría chica, y sigue sin probar |
+| ~~**5. el sentido de giro con corrección**~~ | ✅ **CERRADO §34.3 y §34.6, y la respuesta es doble**: en **C.N.** el sentido **no cambia** (sólo el código G); en **CAD con multipaso** sí cambia. ⚠️ Y abre un hilo: Maestro tiene **dos formas** de resolver el lado —cambiar el offset o cambiar el sentido— y no está derivado qué elige cuál. No afecta al converter (lee la traza); sí al sintetizador |
+| ~~**6. el lado del arco EXPLÍCITO**~~ | ✅ **CERRADO §34.4: lo ignoran.** `Automático` es el único que sigue a la corrección. Y acota §21.5: el milímetro de `G41`/`G42` va por la tangente **sólo si el lado del arco es coherente** con la corrección |
 
 ### C. Anotado, sin costo conocido
 
 | | |
 |---|---|
 | **7. `Cutmode = Climb`** | aparece en los quince archivos de estrategia, **nunca variado**, y sin campo identificado en la ventana |
-| **8. `ZigZag`** | la cuarta estrategia. **Existe en el sintetizador** (§17) pero su única ancla es `N025`, época congelada. Falta el fixture para **re-anclarla** |
+| ~~**8. `ZigZag`**~~ | ✅ **RE-ANCLADO §34.5**: corta en rampa continua alternando el sentido, con **pasada final plana** y arranque en la superficie. Valida lo que el sintetizador ya tenía. ⏭️ Falta comparar el detalle contra el código |
 | **9. `Helicoidal` sobre una línea** | si el desplegable la deja aplicar a geometría abierta o sólo a cerrada |
 | **10. el `xISO` del comentario del `M5`** | segundo contador (362, 448, 503), se mueve con la posición pero su relación con el `$0?` no es constante |
 | **11. el orden con dos cabezales** | §24.6. Empezar por el cabezal perforador cambia el largo del ISO, y **no en el mismo sentido** con canal (94/95) que con taladro (84/82) |
@@ -2392,3 +2399,187 @@ Con esto el fresado quedaría cerrado. Están ordenados por lo que decide cada u
 
 ❓ **El `Solape` sin corrección** (§32.5): ¿la ventana lo rechazó, o el archivo quedó a medias?
 Si lo rechaza, es un ⛔ derivado y no hay nada que hacer.
+
+---
+
+# 34. Grupo 18 — el grupo final (2026-09-11)
+
+**15 pares**, con extras sobre los 9 pedidos: el cruce completo del espejo, el control con `E004`
+de los dos casos de la `E001`, y **dos archivos que cruzan todo a la vez** (contorno cerrado +
+pasante + corrección + multipaso).
+
+## 34.1 ⭐⭐⭐ El espejo tecnológico NO espeja: invierte el sentido
+
+El cruce de cuatro archivos sobre la línea **asimétrica** `X50 → X250` lo cierra:
+
+| archivo | `IsTechnologicalMirror` | `IsGeomSameDirection` | ISO |
+|---|---|---|---|
+| base | `false` | `true` | `X50 → X250` |
+| `_invertir` | `false` | **`false`** | `X250 → X50` |
+| `_espejo_tecnologico` | **`true`** | `true` | **`X250 → X50`** |
+| `_espejo_tecnologico_invertir` | **`true`** | **`false`** | **`X50 → X250`** |
+
+Si espejara respecto del centro de la pieza, `X50→X250` daría `X350→X150`. **No pasa**: da las
+mismas coordenadas al revés.
+
+Y los dos controles son **byte-idénticos**, verificado sin la línea del nombre:
+
+- `_espejo_tecnologico` == `_invertir` ⇒ **el espejo produce exactamente el mismo ISO que
+  `Invertir`**;
+- `base` == `_espejo + _invertir` ⇒ **se cancelan**.
+
+```
+sentido del ISO = sentido de la traza guardada  XOR  IsTechnologicalMirror
+```
+
+⇒ **Para el converter: no hay que transformar coordenadas.** Y queda descartado el espejo
+respecto de la pieza y respecto del origen.
+
+### 🚨 Pero hay una trampa: la traza guardada NO refleja el espejo
+
+| | traza guardada (`TrajectoryPath`) |
+|---|---|
+| base | `1 50 150 8 · 1 0 0` |
+| `_espejo_tecnologico` | **`1 50 150 8 · 1 0 0`** — *la misma que el base* |
+| `_invertir` | `1 250 150 8 · -1 0 0` |
+
+⇒ **El espejo lo aplica el POSTPROCESADOR**, no el `.pgmx`. Es el primer caso donde el ISO no
+copia la traza guardada por una razón que **no** es `ActivateCNCCorrection`.
+
+⇒ 🚨 **El converter tiene que leer `IsTechnologicalMirror` y aplicar la inversión él mismo.**
+No puede confiar en la traza. Y **el ISO no deja marca**: el header sale idéntico, así que
+mirando sólo el ISO no hay forma de saber si el espejo estaba puesto.
+
+📌 **Nomenclatura, y no es nuestra**: «espejo tecnológico» **no espeja**. Un converter que lea
+el nombre y transforme coordenadas rompe todo. *(Con una línea, «invertir» y «espejar respecto
+del centro de la propia línea» coinciden; lo que importa es que el ISO es byte-idéntico al de
+`Invertir`, así que para emitir da igual. Separarlos del todo pediría una geometría asimétrica
+como la polilínea — hilo suelto de bajo costo.)*
+
+## 34.2 ✅ El arco de esquina con la `E001`: el offset exterior no degenera
+
+El radio del arco de esquina **es `SVR`**, y escala sin problema:
+
+| geometría | herramienta | radio del arco | rectas |
+|---|---|---|---|
+| perímetro 400×400 | `E004` | **2** | 400 (intactas) |
+| perímetro 400×400 | `E001` | **9,18** | 400 |
+| rectángulo **50×50** | `E004` | 2 | 50 |
+| rectángulo **50×50** | `E001` | **9,18** | 50 |
+
+⇒ **Ninguno se rechaza**, ni el caso límite (arco de 9,18 en esquinas de un lado de 50). Y las
+rectas **mantienen su largo**: en el offset exterior los arcos se agregan afuera, no recortan
+los lados.
+
+⇒ Geométricamente era esperable: **el offset exterior nunca degenera** — por chica que sea la
+pieza, afuera hay lugar. ⚠️ **El caso límite real es el offset INTERIOR** con una fresa grande
+en una geometría chica, y eso **sigue sin probar**.
+
+📌 Y de paso, el radio del **lead** con la `E001` da `mr4 × 9,18 = 36,72` ✅ — confirma §21.1 con
+una herramienta más y un radio grande.
+
+⚠️ **Estos cuatro archivos están en modo C.N.**, así que el ISO lleva la línea **nominal** y los
+arcos de esquina **no aparecen** ahí: están en la **traza guardada** del `.pgmx`, que es de
+donde se leyeron. El ISO sólo muestra los arcos del acercamiento.
+
+## 34.3 ✅ El sentido de giro NO cambia con la corrección — en C.N.
+
+`contorno_medio_izq_corr_izq` y `_corr_der`, mismo arranque `(0,200)`:
+
+```
+los dos:   G0 X0 Y201 · G1 X0 Y200 · G1 Y0 · G1 X400 · G1 Y400 · G1 X0 · G1 Y200
+difieren:  G41                      contra                      G42
+```
+
+⇒ **Mismo recorrido, mismo arranque, mismo milímetro de entrada. Sólo cambia el código G.**
+
+⇒ Con esto la tabla del §26.2 queda **verificada en los cuatro cuadrantes**: ayer el cruce fue
+*mismo lado × sentido distinto*, hoy es *mismo sentido × lado distinto*. La regla
+`G41/G42 = f(SideOfFeature, IsGeomSameDirection)` se sostiene en los dos ejes.
+
+## 34.4 El lado del arco explícito IGNORA la corrección
+
+Los dos con `lado_izq` **explícito** dan **el mismo arco**: `G3 X0 Y200 I8 J200`, arrancando en
+`(8,208)`, con `corr_izq` y con `corr_der`.
+
+⇒ **`Izquierdo`/`Derecho` explícitos mandan sobre la corrección**; `Automático` es el único que
+la sigue (§21.4).
+
+### 📌 Y acota §21.5: el milímetro no siempre va por la tangente
+
+| | posiciona en | entra a | dirección |
+|---|---|---|---|
+| `corr_izq` + `lado_izq` | `X9 Y208` | `X8 Y208` | **−X** = la tangente del arco |
+| `corr_der` + `lado_izq` | **`X7 Y208`** | `X8 Y208` | **+X** = *contra* la tangente |
+
+⇒ §21.5 derivó que el milímetro de `G41`/`G42` se recorre **por la tangente del primer
+movimiento**. Vale cuando el lado del arco es **coherente** con la corrección; cuando se fuerza
+el contrario —la combinación que `Automático` evita— entra **al revés**.
+
+## 34.5 ⭐⭐ El `ZigZag`, re-anclado con un fixture de esta época
+
+Con `PH = 3` sobre profundidad 15:
+
+```
+G1 Z0.000  F5000          <- arranca en la SUPERFICIE, no en la cota
+G1 X250 Z-3.000           <- baja 3 MIENTRAS avanza
+G1 X50  Z-6.000           <- vuelve, bajando 3 más
+G1 X250 Z-9.000
+G1 X50  Z-12.000
+G1 X250 Z-15.000
+G1 X50  Z-15.000          <- la última, PLANA: deja el fondo parejo
+```
+
+⇒ **Corta en rampa continua alternando el sentido**: la herramienta nunca sale del material y
+no hay retorno en vacío. Cinco rampas de 3 mm hasta la cota, más **una pasada plana de vuelta**.
+
+⇒ ✅ **Valida lo que el sintetizador ya tenía** (`ZigZagMillingStrategySpec`: «corta en rampa
+alternando el sentido»), cuya única ancla era **`N025`, serie N, época congelada**. Queda
+re-anclado. ⏭️ Falta comparar el detalle contra el código —el arranque en `Z0` y la pasada final
+plana—, que es trabajo de implementación.
+
+## 34.6 ⭐⭐⭐ Los dos extras: el escuadrado pasante con corrección y multipaso
+
+`contorno_medio_izq_pasante_corr_izq/der_uni_ep_ph5` — **134 líneas cada uno**, el caso más
+completo del lote. Confirma cinco reglas de una sola vez:
+
+| | |
+|---|---|
+| **CAD forzado** | no hay `G41`/`G42` y la traza va desplazada ⇒ ✅ **§20**: con multipaso la UI fuerza CAD |
+| **arcos de esquina** | 16 arcos = 4 esquinas × 4 pasadas, radio 2 ⇒ ✅ **§30.2** en CAD real y en cada pasada |
+| **el reparto** | `Z−5 · −10 · −15 · −18` con `PH=5` sobre 18 ⇒ ✅ **§16.4**, ahora sobre un pasante |
+| **el offset exterior** | `X−2` · `X402` · `Y402` · `Y−2`, rectas intactas ⇒ ✅ **§34.2** |
+| **la cota del pasante** | `Z−18` = espesor ⇒ ✅ **§11** |
+
+### ⭐⭐ Y trae algo nuevo: en un contorno CERRADO no hay retorno entre pasadas
+
+```
+G1 Y200.000 Z-5.000        <- cierra la pasada en el punto de arranque
+G1 Z-10.000 F5000.000      <- baja y SIGUE: no sube, no vuelve
+```
+
+⇒ **El retorno «En la pieza» de §31 no aparece.** Y es lógico: en un cerrado el final coincide
+con el arranque, así que **no hay que volver a ningún lado** — baja y arranca la pasada
+siguiente.
+
+⇒ ⭐ **Completa el modelo del multipaso**: `Conexión entre huecos` —y con ella el
+`MillingRetractDistance`— **sólo actúa en geometría ABIERTA**.
+
+### ⚠️ Y abre un hilo nuevo: hay DOS formas de resolver el lado de la corrección
+
+| | recorrido | arcos | offset |
+|---|---|---|---|
+| `…_corr_izq_…` | `Y400 · X400 · Y0 · X0` — **horario** | `G2` | afuera |
+| `…_corr_der_…` | `Y0 · X400 · Y400 · X0` — **antihorario** | `G3` | afuera |
+
+Los dos van **por afuera** y lo que cambia es **el sentido de giro**. Y es coherente con el
+nombre: `SideOfFeature` es el lado de la **herramienta respecto del avance**, y recorrer al
+revés pone el material del otro lado.
+
+⚠️ **Pero §30.2 mostró la otra resolución**: ahí `corr_izq_CAD` mantuvo el sentido y desplazó
+**hacia adentro**. ⇒ **Maestro tiene dos maneras de conseguir lo mismo** —cambiar el lado del
+offset, o cambiar el sentido de giro— y **con estos archivos no se puede derivar qué elige
+cuál** (difieren en el punto de arranque —vértice contra punto medio— y en el multipaso).
+
+⇒ **Atenuante grande**: al converter no lo afecta, porque **lee la traza guardada** y no tiene
+que decidir. Le importa al **sintetizador**, que sí tiene que generarla.
