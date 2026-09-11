@@ -2748,3 +2748,110 @@ primer mensaje **corre el offset del segundo**: exactamente el `+largo(texto)` m
 Renombrados a `…_x50_x350_y200_prof10` —que es lo que la traza dice— y con sus ISO nuevos, así
 que **el par vuelve a ser consistente**: la línea 1 del ISO coincide con el nombre del archivo.
 El corpus queda sin nombres que mientan.
+
+---
+
+# 36. Grupo 19 — el `Xmsg` en programas reales, y los incrementos se suman (2026-09-11)
+
+Cinco archivos, y son justo los que el conteo necesitaba: **el `Xmsg` solo** en los tres modos
+de paro, **`Xn` → `Xmsg` → `Xn`** (la secuencia de girar la pieza), y **el programa completo de
+dos caras**.
+
+## 36.1 El bloque mínimo del `Xmsg`, aislado del todo
+
+Un programa con **un solo `Xmsg`** y nada más, contra el programa vacío:
+
+| modo | `.pgmx` | qué agrega al ISO |
+|---|---|---|
+| `Ningún paro` | `Stop = Nothing` | `?%ETK[8]=1` · `G40` · **`$0?212S0I0D0?`** · `G4 F0` — **4 líneas** |
+| `Paro con espera de start` | `Stop = NoUnlock` | ídem con **`S1`**, más **`M0`** — **5 líneas** |
+
+⇒ ⭐ **La base del conteo queda confirmada en el caso más limpio posible: `212` en campo `A`**,
+con el `Xmsg` como único elemento del programa. Y el `?%ETK[8]=1` + `G40` que en los otros
+archivos venían del preámbulo de un mecanizado, acá aparecen solos: **son del bloque, no del
+mecanizado**.
+
+### ⚠️ Y un nombre que miente, atrapado por el atributo
+
+`R_PV_A_manual_xmsg_solo_pdes` afirma `Paro con Desbloqueo` pero el `.pgmx` dice
+**`Stop = NoUnlock`** — el mismo que el `_pes`. Por eso los dos ISO son **idénticos** (723 y
+724 bytes, y la diferencia es el largo del nombre).
+
+⇒ ✅ **No contradice §18**: son el mismo caso medido dos veces. El `Unlock` → `S2` sigue
+derivado del canal (Grupo 14), y acá simplemente falta. `fixtures.md` §2 funcionando otra vez.
+
+## 36.2 ⭐⭐ `Xn` → `Xmsg` → `Xn`: el incremento del `Xn` NO depende del valor
+
+```
+$0?257S1I0D0?        ⇒  257 = 212 + 45
+```
+
+Y el `Xn` que lo precede tiene **`X = -2500`**, mientras el `ops_tres` donde se midió el `45`
+tenía **`X = -3700`**. **Mismo largo de texto emitido, valor distinto, mismo incremento.**
+
+⇒ ✅ **Es exactamente el fixture que §17.6 pedía** —*«el mismo programa con `x-2500` en vez de
+`x-3700`»*— y el resultado confirma la regla general del §18: **el conteo mide el largo del
+texto que el ISO escribe, no el valor**. `X-2500.000` y `X-3700.000` tienen los mismos
+caracteres.
+
+⇒ Y el `45` del `Xn` pasa de *«observado una sola vez»* a **medido dos veces con valores
+distintos**.
+
+## 36.3 ⭐⭐⭐ El programa de dos caras, completo — y los incrementos se suman
+
+`fresado_xn_xmsg_taladro_xn` es la **técnica real**, postprocesada de punta a punta:
+
+```
+T1 · SYN · M06 · […fresado del contorno con la E001, pasante…]
+M5 · G0 G53 Z201.000 · G0 G53 X-2500.000        <- Xn: retira la cabina
+$0?787S1I0D0? · G4 F0 · M0                      <- Xmsg: PARA y espera start
+G0 G53 Z201.000 · […taladrado…]                  <- la otra cara
+M5 · G0 G53 Z201.000 · G0 G53 X-3700.000 Y1000.000   <- Xn final
+```
+
+⇒ **Es el caso de uso que justifica todo el trabajo sobre el `Xmsg`**: el `M0` para la máquina,
+el operario gira la pieza, y el start reanuda con el mecanizado de la otra cara. El converter
+lo tiene medido.
+
+### El conteo: `787`
+
+```
+787 = 212 (base) + 530 (el fresado) + 45 (el Xn)
+```
+
+⇒ ⭐ **Los incrementos se suman**, con dos elementos distintos antes del mensaje. El modelo
+`N = base + Σ incrementos` queda confirmado en un programa realista.
+
+⚠️ **El `530` no se puede verificar por separado** —no hay el mismo fresado con un `Xmsg`
+inmediatamente detrás— así que sale por resta. Es plausible: ese fresado es el contorno de la
+pieza con la `E001`, con lead en arco de radio 36,72 y coordenadas largas (`X163.280`,
+`Y-37.720`, `X236.720`), o sea mucho texto emitido.
+
+### 📌 Y una observación fina: el `Xn` emite la `Y` con el signo invertido
+
+El `.pgmx` guarda `Y = -1000` y el ISO emite **`G0 G53 X-3700.000 Y1000.000`**. La `X` conserva
+el signo (`-2500` → `X-2500.000`) y la `Y` lo invierte.
+
+⚠️ Anotado como **observación**, no como derivación: es un solo caso, y el `Xn` es de la rama C
+— conviene cruzarlo contra `operaciones_maquina.md` antes de darlo por regla. Si se confirma,
+es una trampa de signo para el converter.
+
+## 36.4 ✅ Y el test de ejecución queda listo para correr
+
+El `xmsg_solo_pes` es el programa inocuo que hacía falta: **un solo mensaje con paro, sin
+ningún mecanizado**. Ya está postprocesado.
+
+Y al lado quedó preparado **`r_pv_a_manual_xmsg_solo_pes_nfalso.iso`**, idéntico salvo el
+conteo:
+
+```
+$0?212S1I0D0?      ->      $0?999S1I0D0?
+```
+
+`999` tiene el mismo largo que `212`, así que **no se movió ni un byte** del resto del archivo
+(sólo la línea 1, que lleva el nombre del programa, para que el par siga siendo consistente).
+
+⇒ **Ejecutar los dos y comparar.** Si los dos paran y esperan start, el `N` **no bloquea el
+byte-idéntico** y se declara divergencia deliberada, como `%DONTCARESPEEDV` (`CLAUDE.md` §4).
+Si el falso da alarma o no para, el `N` es esencial y hay que ir al `.pgm` del
+`xmsg_dos_largo` (§35.3).
