@@ -308,10 +308,13 @@ de la pieza y el de la máquina apunten al revés, pero eso hoy es lectura, no e
 > ejecución**. El eje Y va de **−1870 a +131 mm** (`Params.cfg`), así que `+1000` está **fuera
 > de recorrido** — mientras el `−1000` que se tipeó **sí** está dentro del rango físico.
 >
-> ⚖️ **Y precisa cuál es el error**: si la inversión es la convención correcta, el rango útil en
-> la UI es el espejo (`−131` a `+1870`) y `−1000` no cae ahí. ⇒ **el error de Maestro no es
-> invertir: es NO VALIDAR** — acepta un valor que su propia configuración declara inalcanzable,
-> no avisa al tipearlo, y postprocesa igual.
+> ✅ **Y confirmado ejecutando en los dos sentidos**: con `Y = +1000` el ISO emite `Y-1000.000`,
+> la máquina **ejecuta** y queda en **(−3700, −1000)**. ⇒ **la inversión es la convención
+> correcta** —el usuario pide `+1000` y la máquina va a `−1000`, una cota alcanzable— y el
+> **rango útil en la UI** queda derivado: **`−131` a `+1870`**, el espejo del físico.
+>
+> ⚖️ ⇒ **El error de Maestro no es invertir: es NO VALIDAR.** Acepta un valor que su propia
+> configuración declara inalcanzable, no avisa al tipearlo, y postprocesa igual.
 >
 > ⇒ Es el **sexto caso de fail-loud** del converter, y el primero **confirmado ejecutando**. Se
 > cubre con lo que ya hay: `AP_MINQUOTA ≤ cota ≤ AP_MAXQUOTA` antes de emitir un `G53`.

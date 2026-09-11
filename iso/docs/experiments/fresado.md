@@ -2903,6 +2903,22 @@ como pendiente con una frase que hoy se vuelve profética: *«el signo de la `Y`
 y **el resultado cae fuera del rango del eje**»*. Estaba visto en el papel; **faltaba la
 máquina**.
 
+### ✅ CONFIRMADO EJECUTANDO, en los dos sentidos (2026-09-11)
+
+Fermín rehizo el archivo con **`Y = +1000`** en el `.pgmx`:
+
+| `.pgmx` | ISO | la máquina |
+|---|---|---|
+| `Y = −1000` | `Y1000.000` | ⛔ **se planta**, no termina |
+| `Y = +1000` | **`Y-1000.000`** | ✅ **ejecuta**, y queda en **(−3700, −1000)** |
+
+⇒ ⭐⭐⭐ **La inversión es la CONVENCIÓN CORRECTA**: el usuario pide `+1000` y la máquina va a
+`−1000`, que es una cota real y alcanzable. La posición final medida lo confirma de punta a
+punta — la `X` va directo (`−3700` → `X−3700`) y la `Y` se invierte.
+
+⇒ Y con eso el **rango útil de la `Y` en la UI** queda derivado con dos puntos experimentales
+más la config: **`−131` a `+1870`**, el espejo del recorrido físico.
+
 ### ⚖️ Y precisa cuál es el error
 
 Si la inversión es la convención correcta —coherente con que el eje Y de la pieza y el de la
@@ -2911,7 +2927,8 @@ máquina apunten al revés—, entonces el rango **útil en la UI** es el espejo
 
 ⇒ ⇒ **El error de Maestro no es invertir: es no validar.** Acepta un valor que su propia
 configuración declara inalcanzable, no avisa al tipearlo, y **postprocesa igual** emitiendo una
-cota fuera de recorrido.
+cota fuera de recorrido. **Probado en los dos sentidos**: con el valor del espejo funciona, con
+el que cae afuera se planta.
 
 ⇒ Es la misma clase que el offset interior imposible (§35.1) — pero **peor en un sentido**:
 allá al menos aparecía una advertencia en pantalla; acá **no hay ningún aviso**.
@@ -2940,7 +2957,18 @@ valor y el límite.
 converter lee. Es la regla 4 del `CLAUDE.md` aplicada — fail-loud con un mensaje que dice qué
 falta.
 
-## 37.4 📌 Y de paso, este fixture cubre un pendiente viejo de la rama C
+## 37.4 ⭐ Y un control del conteo que salió gratis
+
+El archivo corregido cambia la `Y` del **segundo** `Xn` —el que va **después** del mensaje— y el
+conteo **no se mueve**: sigue en `257`.
+
+Y el texto emitido sí cambió de largo: `Y1000.000` son 9 caracteres y `Y-1000.000` son 10.
+
+⇒ ✅ **Confirma la posicionalidad de §27.2 desde el otro lado**: lo que se emite **después** del
+`Xmsg` no lo toca, ni siquiera cuando cambia el largo del texto. Antes se había probado
+agregando un fresado después (el `intercalado`); ahora, cambiando un carácter.
+
+## 37.5 📌 Y de paso, este fixture cubre un pendiente viejo de la rama C
 
 §6 de `operaciones_maquina.md` listaba como no derivable: *«**varios `Xn` en un programa** —
 todos los fixtures tienen uno solo. La memoria del proyecto dice que el `Xn` es posicional y
