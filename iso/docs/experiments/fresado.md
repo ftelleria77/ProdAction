@@ -2576,10 +2576,38 @@ Los dos van **por afuera** y lo que cambia es **el sentido de giro**. Y es coher
 nombre: `SideOfFeature` es el lado de la **herramienta respecto del avance**, y recorrer al
 revés pone el material del otro lado.
 
-⚠️ **Pero §30.2 mostró la otra resolución**: ahí `corr_izq_CAD` mantuvo el sentido y desplazó
-**hacia adentro**. ⇒ **Maestro tiene dos maneras de conseguir lo mismo** —cambiar el lado del
-offset, o cambiar el sentido de giro— y **con estos archivos no se puede derivar qué elige
-cuál** (difieren en el punto de arranque —vértice contra punto medio— y en el multipaso).
+> ⚠️ **CORREGIDO el 2026-09-11 — esto era un artefacto mío, y la regla es UNA sola.**
+>
+> Escribí que «Maestro tiene dos maneras de resolver el lado» porque §30.2 mostró el offset
+> yendo **hacia adentro** con `Left` y acá va **hacia afuera** con `Left`. Comparé dos archivos
+> con **dibujos distintos** — el mismo error que ya había cometido con los ocho
+> `contorno_corr_*` del Grupo 14.
+>
+> **Dato de Fermín**: *el sentido de giro de la traza lo establece el PROGRAMADOR en función del
+> tipo de material; para resolver el lado de la corrección, el método aconsejable es cambiar el
+> lado del offset.* Y los dibujos lo confirman: las direcciones de los miembros son
+> `+Y · +X · −Y · −X` en el `corr_izq` y `−Y · +X · +Y · −X` en el `corr_der` — **dos dibujos
+> con sentidos opuestos**. Los dos `contorno_medio_izq_corr_*` sin multipaso, en cambio,
+> comparten el dibujo exacto, y por eso ahí el recorrido no cambia (§34.3).
 
-⇒ **Atenuante grande**: al converter no lo afecta, porque **lee la traza guardada** y no tiene
-que decidir. Le importa al **sintetizador**, que sí tiene que generarla.
+⇒ ⭐⭐⭐ **Queda UNA regla, y explica los dos casos que parecían contradecirse:**
+
+```
+SideOfFeature = el lado de la HERRAMIENTA respecto del AVANCE
+```
+
+Dado el sentido que trae el dibujo, eso determina solo si el offset cae adentro o afuera:
+
+| | dibujo | avance en el primer tramo | `Left` cae |
+|---|---|---|---|
+| §30.2 (`corr_izq_CAD`) | antihorario desde `(0,0)` | `+X` por el borde inferior | a `+Y` = **adentro** ✅ |
+| §34.6 (`corr_izq` pasante) | desde `(0,200)` hacia `+Y` | `+Y` por el borde izquierdo | a `−X` = **afuera** ✅ |
+
+⇒ **No hay dos resoluciones: hay un dibujo distinto.** Y el modelo completo queda en cuatro
+piezas independientes:
+
+- el **dibujo** da el sentido de recorrido (decisión del programador, según el material);
+- **`IsGeomSameDirection`** lo invierte si hace falta (§26.1);
+- **`SideOfFeature`** da el lado de la herramienta respecto del avance ⇒ de ahí sale de qué lado
+  cae el offset;
+- el **`G41`/`G42`** sale de cruzar lado × sentido (§26.2), y sólo en modo C.N.

@@ -529,9 +529,14 @@ ISO; estas sí, así que por primera vez se puede derivar la emisión de punta a
   cinco reglas de una vez y traen una nueva: **en un contorno CERRADO no hay retorno entre
   pasadas** — baja en el punto de cierre y sigue. ⇒ `Conexión entre huecos` y el
   `MillingRetractDistance` **sólo actúan en geometría abierta**.
-- ⚠️ **Hilo nuevo**: Maestro tiene **dos formas** de resolver el lado de la corrección en CAD
-  —cambiar el lado del offset (§30.2) o cambiar el sentido de giro (§34.6)— y no está derivado
-  qué elige cuál. **No afecta al converter** (lee la traza); sí al **sintetizador**.
+- 📌 **Y un hilo que se abrió y se cerró el mismo día.** Anoté que «Maestro tiene dos formas de
+  resolver el lado de la corrección»; era **un artefacto de comparar dos archivos con dibujos
+  distintos** — el mismo error de los ocho `contorno_corr_*`. **Dato de Fermín**: *el sentido de
+  giro lo establece el programador según el tipo de material; el lado de la corrección se
+  resuelve cambiando el lado del offset.* Los dibujos lo confirman (direcciones opuestas), y
+  queda **una sola regla**: `SideOfFeature` es el lado de la herramienta **respecto del avance**,
+  y dado el sentido del dibujo eso determina solo si el offset cae adentro o afuera. Explica los
+  dos casos que parecían contradecirse.
 
 
 ### 2026-09-10 — `%DONTCARESPEEDV=1` es un bug de Maestro, y los dos incidentes eran el mismo
