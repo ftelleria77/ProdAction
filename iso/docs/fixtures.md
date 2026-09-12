@@ -24,7 +24,7 @@ Rutas simétricas bajo `PGMX_ROOT` (`S:\Maestro\Projects\ProdAction`) e `ISO_ROO
 | D1 | `…\Reinvestigación\Mecanizados\Perforado\` | 158 | el perforado — ✅ doce grupos, cerrado el 2026-09-03 (140 `.iso`) | `experiments/perforado.md` |
 | D2 | `…\Reinvestigación\Mecanizados\Canal\` | 85 | el canal (Sierra Vertical X) — ✅ **quince grupos, CERRADO** el 2026-09-07 (65 `.iso`) | `experiments/canal.md` |
 | D3 | `…\Reinvestigación\Mecanizados\Fresado\` | 225 | el fresado — ✅ **CERRADO el 2026-09-11**: diecinueve grupos, 213 `.iso` y 23 capturas. Las geometrías, la rampa, la estrategia, el acercamiento, la matriz 7×7 de herramientas, la cara, el cruce `Invertir` × corrección, el conteo del `Xmsg` y el barrido A5. **Sólo quedan las microuniones**, en pausa (grupo 13) | `experiments/fresado.md` |
-| D4 | `…\Reinvestigación\Mecanizados\Galceado\` | — | el galceado — ⏸ **pedido el 2026-09-11**, siete grupos | *(por crear)* |
+| D4 | `…\Reinvestigación\Mecanizados\Galceado\` | 14 | el galceado — 🔄 **arrancado el 2026-09-12**: el Grupo 1 cerrado (la predicción se cumplió **byte a byte**) y el 2 en curso | `experiments/galceado.md` |
 
 R001, R002, D1, D2, D3 y D4 llevan un `INSTRUCCIONES.md` en la carpeta del lote, con el pedido
 que les dio origen.

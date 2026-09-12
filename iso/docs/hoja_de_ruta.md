@@ -8,6 +8,32 @@ rumbo se anotan como decisiones con fecha). La vista visual se republica en cada
 
 Estados: ✅ hecho · 🔄 en curso · ⏸ esperando a Fermín · ⬜ pendiente · 🔮 futuro (sin fecha)
 
+### 2026-09-12 — El Galceado arranca con la predicción cumplida BYTE A BYTE
+Grupo 1 cerrado y Grupo 2 en curso, con las capturas de la ventana hechas.
+
+- ⭐⭐⭐ **El par de control es byte-idéntico.** Fermín hizo el mismo contorno de la pieza con
+  `Fresado` **y** con `Galceado`, misma herramienta y profundidad: el ISO sale **idéntico salvo
+  la línea del nombre**. ⇒ **tercera confirmación, y la más fuerte, de que la familia de emisión
+  la decide la HERRAMIENTA**: el canal y el fresado habían mostrado que «coinciden en
+  estructura»; acá coinciden **byte a byte**.
+  - ⇒ **El Galceado no necesita ni una línea propia de emisión en el converter**, y se hereda
+    todo sin re-barrer. **Medio lote se cae**, como la predicción anticipaba.
+- ⚠️ **La nomenclatura: Maestro usa TRES nombres en la misma pantalla** — el botón dice
+  **`Galceado`**, el tooltip **«Contorno»**, y el panel (y el `Name` del `.pgmx`)
+  **`Perfilado`**. El tipo serializado es `ContourFeature`. Y nuestro `contour.py` lleva un
+  docstring *«Squaring milling»* que **no es ninguno de los tres**. ⚖️ **Decisión de Fermín**:
+  la regla 3 dice que manda la UI, pero acá la UI dice tres cosas.
+- ⭐⭐ **El Galceado NO expone la corrección de herramienta**: la resuelve con **`Perfil`**
+  (`Pieza`/`Geometría` → `ContourType` `Workpiece`/`Geometry`) y **`Lado`**
+  (`Externo`/`Interno`). Y el `Lado` **reusa `SideOfFeature`**: `Externo` = `Right` = **`G42`**,
+  `Interno` = `Left` = **`G41`**, con **una sola línea de diff** entre los dos ISO.
+  - ⇒ Para el converter **no agrega nada al modelo**, y confirma desde otra operación la regla
+    única del `fresado.md` §34.6.
+- ⭐ **Y el milímetro del `G41`/`G42` va por la tangente en las CUATRO direcciones**: Fermín
+  amplió el Grupo 1 con el contorno arrancando en el medio de cada lado. Cierra el acotamiento
+  que §34.4 le había puesto.
+
+
 ## Estado actual (2026-09-11)
 
 > ⭐⭐⭐ **El fresado (D3) queda CERRADO, y con él caen los dos bloqueos duros que arrastraba la
