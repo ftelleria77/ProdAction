@@ -821,6 +821,18 @@ manda la máquina*. Queda como el caso más claro de esa excepción.
 emitido** —«Salida a cota de seguridad» con multipaso— en vez de descubrirla comparando. La
 omisión deliberada ya existía (`DELIBERATE_OMISSIONS`); lo que faltaba era el gatillo.
 
+> ⭐ **ACOTAMIENTO (2026-09-12, desde el Galceado).** El gatillo es más estrecho que «SCS +
+> multipaso»: en un contorno **cerrado** la línea **no** aparece. `galceado_top_E004_uni_SCS_ph5`
+> es `LiftShiftPlunge` con multipaso y su ISO es **byte-idéntico** al del `_EP_`. La razón es la
+> de §34.6: en un cerrado **no hay retorno entre pasadas** —la herramienta se hunde en el punto de
+> cierre—, así que no hay salida a cota que pedir.
+>
+> ⇒ **El gatillo es «SCS + multipaso *con retorno real*», o sea geometría ABIERTA.** Importa
+> porque la omisión es una **divergencia deliberada declarada**, y una divergencia se audita por
+> su gatillo: cuanto más preciso, en menos programas el converter se aparta de Maestro sin
+> necesidad. Los cinco testigos de acá eran todos la línea abierta `x50_x350_y200_prof10`.
+> Detalle en `galceado.md` §9.2.
+
 ### ⭐⭐⭐ Y con eso se unifican los dos incidentes de julio y agosto
 
 Eran el mismo bug visto desde dos lados, y hasta hoy figuraban como cosas distintas:
@@ -2334,7 +2346,7 @@ Ordenado por lo que cuesta si no se cierra.
 | | |
 |---|---|
 | ~~**4. el arco de esquina con otra herramienta**~~ | ✅ **CERRADO §34.2 y §35.1**: el radio es `SVR` y escala sin degenerar por afuera. **Y el offset INTERIOR imposible resultó el QUINTO FAIL-LOUD**: con la `E006` (radio 40) en un rectángulo de 50×50 Maestro **declara** que no puede calcular la traza y **emite igual**, delegando al CN. ⭐ La señal para el converter es limpia y está en el `.pgmx`: **`ToolpathList` vacío ⇒ rechazar** |
-| ~~**5. el sentido de giro con corrección**~~ | ✅ **CERRADO §34.3 y §34.6, y la respuesta es doble**: en **C.N.** el sentido **no cambia** (sólo el código G); en **CAD con multipaso** sí cambia. ⚠️ Y abre un hilo: Maestro tiene **dos formas** de resolver el lado —cambiar el offset o cambiar el sentido— y no está derivado qué elige cuál. No afecta al converter (lee la traza); sí al sintetizador |
+| ~~**5. el sentido de giro con corrección**~~ | ✅ **CERRADO §34.3 y §34.6, y la respuesta es doble**: en **C.N.** el sentido **no cambia** (sólo el código G); en **CAD con multipaso** sí cambia. ✅ Y el «hilo» que había anotado acá —«Maestro tiene **dos formas** de resolver el lado»— **quedó cerrado por Fermín**: era un artefacto mío de comparar archivos con dibujos distintos. **Es UNA sola regla** — ver la corrección al final de §34.6 |
 | ~~**6. el lado del arco EXPLÍCITO**~~ | ✅ **CERRADO §34.4: lo ignoran.** `Automático` es el único que sigue a la corrección. Y acota §21.5: el milímetro de `G41`/`G42` va por la tangente **sólo si el lado del arco es coherente** con la corrección |
 
 ### C. Anotado, sin costo conocido

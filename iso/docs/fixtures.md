@@ -24,7 +24,7 @@ Rutas simétricas bajo `PGMX_ROOT` (`S:\Maestro\Projects\ProdAction`) e `ISO_ROO
 | D1 | `…\Reinvestigación\Mecanizados\Perforado\` | 158 | el perforado — ✅ doce grupos, cerrado el 2026-09-03 (140 `.iso`) | `experiments/perforado.md` |
 | D2 | `…\Reinvestigación\Mecanizados\Canal\` | 85 | el canal (Sierra Vertical X) — ✅ **quince grupos, CERRADO** el 2026-09-07 (65 `.iso`) | `experiments/canal.md` |
 | D3 | `…\Reinvestigación\Mecanizados\Fresado\` | 225 | el fresado — ✅ **CERRADO el 2026-09-11**: diecinueve grupos, 213 `.iso` y 23 capturas. Las geometrías, la rampa, la estrategia, el acercamiento, la matriz 7×7 de herramientas, la cara, el cruce `Invertir` × corrección, el conteo del `Xmsg` y el barrido A5. **Sólo quedan las microuniones**, en pausa (grupo 13) | `experiments/fresado.md` |
-| D4 | `…\Reinvestigación\Mecanizados\Galceado\` | 14 | el galceado — 🔄 **arrancado el 2026-09-12**: el Grupo 1 cerrado (la predicción se cumplió **byte a byte**) y el 2 en curso | `experiments/galceado.md` |
+| D4 | `…\Reinvestigación\Mecanizados\Galceado\` | 44 | el galceado — 🔄 **arrancado el 2026-09-12**: tres grupos, **42 `.iso`** y **11 capturas**. El `Perfil`, el `Lado`, las tres estrategias, el barrido de acercamiento/alejamiento, el círculo y el rechazo de la geometría abierta. **Falta el barrido A5** y tres archivos del Grupo 8 | `experiments/galceado.md` |
 
 R001, R002, D1, D2, D3 y D4 llevan un `INSTRUCCIONES.md` en la carpeta del lote, con el pedido
 que les dio origen.
@@ -285,3 +285,44 @@ Mismo chequeo, misma salvedad. Sobre esos seis ISO, que nunca habíamos mirado:
 
 ⇒ Ninguna de las reglas derivadas se movió con el cambio de configuración.
 
+---
+
+## 8. La auditoría del lote D4 — Galceado (2026-09-12)
+
+Los 18 archivos del acercamiento/alejamiento afirman **tres cosas cada uno** en el nombre (tipo
+× multiplicador × modo), y eso los hace auditables — que es justamente para lo que la regla
+pide que el nombre afirme. Cruzados contra el atributo del `.pgmx`: **16 de 18 coinciden**.
+
+| archivo | el nombre dice | el `.pgmx` tiene | el ISO |
+|---|---|---|---|
+| `E004_acerc_arco_mr4_bajada` | `mr = 4` | **`RadiusMultiplier = 2`** | **duplicado exacto** de `_mr2_bajada` |
+| `E001_aleja_lineal_mr2_subida` | modo `Up` | **`DetachMode = Quote`** | **duplicado exacto** de `_mr2_cota` |
+
+⇒ Los dos son **archivos que quedaron sin el cambio aplicado**, no errores de tipeo del nombre:
+el ISO lo prueba, porque es byte a byte el de otro fixture del lote. Es la misma clase que la
+marca del campo (§"La marca del campo"): **el valor se cambia en la ventana y hay que aceptar
+antes de guardar**.
+
+⇒ Y como en los seis casos anteriores, **ninguna derivación se apoyó en el nombre**: la fórmula
+`distancia = RadiusMultiplier × SVR` quedó cruzada con las otras catorce combinaciones y **dos
+herramientas de `SVR` distinto**. Los dos cruces sin testigo están anotados como **predicción a
+verificar** en `galceado.md` §11.6 y pedidos en el Grupo 8 del lote.
+
+### ⚠️ Y un valor que no significa lo que aparenta
+
+El nodo `Approach` con `IsEnabled = false` trae `RadiusMultiplier = 1.2` — que **no es** ninguno
+de los defaults de la ventana `Opciones` (2 en una PC, 4 en otra; ver §"El testigo es la captura
+de la ventana"). Es el default de fábrica del nodo, **inerte mientras el acercamiento está
+apagado**.
+
+⇒ **Leer `RadiusMultiplier` sin mirar `IsEnabled` sería inventar un acercamiento que no
+existe.** Va en la misma lista que el `xn=None` del `CLAUDE.md` §1: un parámetro cuyo valor no
+significa lo que aparenta.
+
+### El contraste que conviene recordar
+
+Los 42 ISO del lote dan **36 clases distintas**. De las seis repeticiones, **cuatro son
+intencionales** (el par de control `Fresado`≡`Galceado`, la referencia duplicada en dos grupos,
+el «inicio medio» que es el frontal con otro nombre, y `SCS`≡`EP` que es un **hallazgo**) y dos
+son estas. ⇒ Un ISO repetido **no es por sí mismo un error**: hay que ver si la repetición era
+la respuesta esperada o la señal de un fixture que no quedó puesto.
