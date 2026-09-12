@@ -105,6 +105,56 @@ escuadrado se piensa.
 ⇒ Y por eso **el Grupo 4 del pedido (la corrección) no existe como tal**: queda reemplazado por
 el barrido de `Perfil` × `Lado`, que Fermín ya arrancó en el Grupo 2.
 
+### ⭐⭐ Y hay DOS restricciones más, que son las que importan (dato de Fermín, 2026-09-12)
+
+> *«La ventana reemplaza las correcciones izquierda y derecha por interno y externo, y **no
+> ofrece ninguna opción para corrección central**. Tampoco me permite **modificar manualmente
+> entre CAD y C.N.**»*
+
+Los **14 archivos del lote lo respaldan**: `SideOfFeature` vale sólo `Right` (12) o `Left` (2),
+**nunca `Center`**, y `ActivateCNCCorrection` está en **`true` en todos**.
+
+#### 1 · No existe la corrección central ⇒ el Galceado SIEMPRE corrige
+
+En el fresado `Center` era el default: sin corrección, `G40`, la traza nominal. Acá **no se
+puede elegir**, y tiene sentido físico — un escuadrado sin corrección comería la mitad del
+material que tiene que dejar, así que la pieza saldría con la medida equivocada.
+
+⇒ ⭐ **Regla del modelo**: un `ContourFeature` **nunca** lleva `SideOfFeature = Center`.
+⇒ Y el converter lo puede usar como **validación**: un `.pgmx` con esa combinación es un archivo
+que **Maestro no pudo haber producido**.
+
+#### 2 · No se puede elegir CAD ⇒ el Galceado SIEMPRE emite `G41`/`G42`
+
+`ActivateCNCCorrection` no es editable en esta ventana, y está fijo en `true`.
+
+⇒ ⭐⭐ **El ISO del Galceado lleva SIEMPRE la línea nominal más `G41`/`G42`**, nunca la traza
+offseteada. Y de ahí salen tres consecuencias para el converter, todas a favor:
+
+| | |
+|---|---|
+| **nunca hay que deshacer la corrección** | el trabajo fino que el canal §21 derivó no aplica acá |
+| **nunca aparecen los arcos de esquina** del offset exterior | son del modo CAD (`fresado.md` §30.2) |
+| **nunca se enciende el «modo largo»** | lo enciende `cnc = false` (`fresado.md` §15.3) |
+
+⇒ Y por eso **el pendiente que §8 tenía anotado —«falta un caso en CAD para ver los arcos de
+esquina»— es IMPOSIBLE**: la ventana no lo ofrece. Se cae.
+
+#### ❓ Pero abre una pregunta concreta, y es la del Grupo 6
+
+En el fresado, **con multipaso la UI FUERZA `CAD`** (`fresado.md` §20). Acá **CAD no se puede
+elegir**. Las dos cosas no pueden ser ciertas a la vez, así que el Galceado con multipaso tiene
+que hacer **una de tres**:
+
+| | qué significaría |
+|---|---|
+| sale con `cnc = false` | la UI lo **fuerza sin mostrarlo** ⇒ el flag no es editable, pero sí cambia |
+| sale con `cnc = true` y traza nominal | el Galceado **no** se rige por la regla del fresado |
+| **no admite multipaso** | otra restricción de la operación |
+
+⇒ **Un solo archivo lo decide**: el contorno de la pieza con `Unidireccional` + `PH`. Es el que
+más rinde de lo que queda del lote.
+
 ## 4. El modelo en el `.pgmx`: tres diferencias contra el fresado
 
 Descontando los identificadores internos, el diff del XML entre los dos archivos del par de
@@ -198,6 +248,7 @@ Por el par de control byte-idéntico del §1, se cae casi todo el pedido origina
 | el `Extra` del pasante | el archivo está, falta medirlo contra el `pasante` |
 | `ContourType` con una **línea abierta** | el Galceado es de contorno: ¿la rechaza? El mensaje sería la respuesta |
 | `ContourType` con un **círculo** | un cerrado que no es polígono |
-| el **offset exterior** y sus arcos de esquina | el fresado los derivó (§30.2); acá está en C.N., así que no se ven. Falta un `CAD` |
+| ~~el **offset exterior** y sus arcos de esquina~~ | ⛔ **IMPOSIBLE**: la ventana **no deja elegir CAD** (§3), así que el Galceado siempre emite la nominal con `G41`/`G42` y los arcos nunca aparecen |
+| ❓ **el Galceado con multipaso** | en el fresado el multipaso **fuerza CAD**, y acá CAD **no se puede elegir**: las dos no pueden valer a la vez. **Un archivo lo decide** (§3) — es lo que más rinde de lo que queda |
 | la **estrategia** y el **acercamiento** | las capturas están; falta un testigo de cada uno |
 | el **barrido A5** | la rutina permanente, ocho archivos con captura |
