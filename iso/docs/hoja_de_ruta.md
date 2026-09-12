@@ -18,11 +18,21 @@ Grupo 1 cerrado y Grupo 2 en curso, con las capturas de la ventana hechas.
   estructura»; acá coinciden **byte a byte**.
   - ⇒ **El Galceado no necesita ni una línea propia de emisión en el converter**, y se hereda
     todo sin re-barrer. **Medio lote se cae**, como la predicción anticipaba.
-- ⚠️ **La nomenclatura: Maestro usa TRES nombres en la misma pantalla** — el botón dice
-  **`Galceado`**, el tooltip **«Contorno»**, y el panel (y el `Name` del `.pgmx`)
-  **`Perfilado`**. El tipo serializado es `ContourFeature`. Y nuestro `contour.py` lleva un
-  docstring *«Squaring milling»* que **no es ninguno de los tres**. ⚖️ **Decisión de Fermín**:
-  la regla 3 dice que manda la UI, pero acá la UI dice tres cosas.
+- ⚠️ **La nomenclatura: el taller dice `Escuadrado` y Maestro dice TRES cosas** en la misma
+  pantalla — el botón **`Galceado`**, el tooltip **«Contorno»**, y el panel (más el `Name` del
+  `.pgmx`) **`Perfilado`**. El tipo serializado es `ContourFeature`.
+  - 📌 **Corrección mía**: escribí que el docstring *«Squaring milling»* de `contour.py` era un
+    nombre inventado. **No lo era**: con el dato de Fermín —*el término del taller es
+    `Escuadrado`, porque la función es escuadrar la pieza*— resulta que **`Squaring` es
+    `Escuadrado` en inglés**, o sea el único de los nombres que **dice lo que la operación
+    hace**.
+  - ⇒ Y eso **matiza el ejemplo que el `CLAUDE.md` usa para enseñar la regla 1**: lo de fondo
+    sigue en pie (la spec se nombra por lo que hace y no por lo que es en el archivo), pero el
+    paréntesis presenta `Galceado` como el nombre correcto y resulta ser **uno de tres**, y
+    probablemente el peor: *galce* es el rebaje donde algo encaja, no una escuadra.
+  - ⚖️ **La decisión se reduce a**: la spec se llama por la **función** (`Escuadrado`/`Squaring`)
+    o por el **tipo del archivo** (`Contour`). Y el docstring hay que arreglarlo igual: no dice
+    de qué operación se trata.
 - ⭐⭐ **El Galceado NO expone la corrección de herramienta**: la resuelve con **`Perfil`**
   (`Pieza`/`Geometría` → `ContourType` `Workpiece`/`Geometry`) y **`Lado`**
   (`Externo`/`Interno`). Y el `Lado` **reusa `SideOfFeature`**: `Externo` = `Right` = **`G42`**,

@@ -1,6 +1,8 @@
-# Galceado — rama D
+# Galceado (Escuadrado) — rama D
 
-**Documento vivo.** El **Galceado**: el escuadrado del contorno. Cuarto mecanizado de la rama D,
+**Documento vivo.** La operación que **escuadra la pieza**: la lleva a sus medidas finales y
+sus esquinas a 90°. En el taller se la llama **`Escuadrado`**; el botón de Maestro dice
+`Galceado` y el archivo dice `Perfilado` (§2). Cuarto mecanizado de la rama D,
 y el primero que arranca con **medio lote resuelto antes del segundo archivo**.
 
 > ⭐⭐⭐ **2026-09-12 — la predicción del Grupo 1 se cumplió BYTE A BYTE.** El mismo contorno
@@ -30,33 +32,55 @@ necesita es el **modelo del `.pgmx`**, que es donde están las diferencias.
 `S`, `F`, `DescentSpeed`), la cota de seguridad, los atributos, las transiciones, el conteo del
 `Xmsg`, los seis casos de fail-loud.
 
-## 2. ⚠️ La nomenclatura: Maestro usa TRES nombres, en la misma pantalla
+## 2. ⚠️ La nomenclatura: el taller dice `Escuadrado` y Maestro dice TRES cosas
 
 Era lo primero que el lote pedía, y la captura de la ventana lo resuelve — el problema **no es
 nuestro**:
 
 | dónde | cómo lo llama |
 |---|---|
+| **el taller** (dato de Fermín, 2026-09-12) | **`Escuadrado`** — *«esa es la función: escuadrar la pieza, o sea, llevar la pieza a sus medidas finales y sus esquinas a 90 grados»* |
 | el **botón** de la cinta `Operaciones` | **`Galceado`** |
 | el **tooltip** de ese botón | **«Contorno.** Mando que permite crear un contorno…» |
 | el **panel** que se abre, y su sección | **`Perfilado`** / `Datos perfilado` |
 | el **`Name`** que Maestro escribe en el `.pgmx` | **`Perfilado`** |
 | el **tipo serializado** | **`ContourFeature`** |
+| nuestro código | `contour.py`, docstring *«Squaring milling contracts»* |
 
-Y del lado nuestro, `pgmx/synthesis/milling/contour.py` lleva el docstring
-*«Squaring milling contracts»* — **«Squaring» (escuadrado) no es ninguno de los tres**.
+### ⚠️ CORRECCIÓN MÍA (2026-09-12): el docstring del código NO estaba inventado
 
-⇒ La regla 3 dice *«la nomenclatura manda desde la UI de Maestro»*, pero acá **la UI dice tres
-cosas distintas**. ⚖️ **Es una decisión de Fermín.** Mi propuesta, para que la evalúe:
+Escribí que *«Squaring no es ninguno de los tres»* y que era un nombre nuestro sin respaldo.
+**Es falso.** Con el dato de Fermín: **`Squaring` es `Escuadrado` en inglés** — o sea, el
+docstring nombraba la operación **por el término del taller y por su función**, que es la única
+de las seis denominaciones que **dice lo que la operación hace**.
+
+⇒ Y eso **matiza el ejemplo que el `CLAUDE.md` usa para enseñar la regla 1**:
+
+> *«una spec llamada por la operación genérica y no por su feature (`SquaringMillingSpec` para
+> lo que la UI llama Galceado)»*
+
+La parte que **sigue en pie** es la de fondo: la spec se nombra por **lo que hace** y no por
+**lo que es en el archivo**, y eso oculta que el tipo serializado es `ContourFeature`. La parte
+que **hay que ajustar** es el paréntesis: presenta `Galceado` como si fuera el nombre correcto,
+y resulta que **`Galceado` es sólo uno de los tres nombres que Maestro usa en la misma
+pantalla** — y probablemente el peor, porque *galce* es el rebaje donde algo encaja, no una
+escuadra. Huele a mala traducción del italiano.
+
+⇒ ⚖️ **Y eso convierte la decisión en algo más chico de lo que parecía**: no hay que elegir
+entre seis nombres, hay que decidir **si la spec se llama por la función (`Escuadrado` /
+`Squaring`) o por el tipo del archivo (`Contour`)**. Mi propuesta ahora:
 
 | | |
 |---|---|
-| la **operación** se llama **`Galceado`** | es el botón que se aprieta y el término del taller |
-| el **tipo serializado** queda **`ContourFeature`** | viene del `.pgmx`: intocable (regla 3, excepción legítima) |
-| y se **documenta** que Maestro nombra el paso **`Perfilado`** | no es cosmético: **es lo que el converter lee del archivo** |
+| en la **doc y al hablar** | **`Escuadrado`**, el término del taller y el único que dice qué hace |
+| el **tipo serializado** | **`ContourFeature`**, intocable (viene del `.pgmx`) |
+| la **spec** del sintetizador | por el tipo del archivo, para que el nombre diga **qué es**: `ContourSpec` (el archivo ya se llama `contour.py`) |
+| y se **documenta** que la UI dice `Galceado`/`Contorno`/`Perfilado` | no es cosmético: **`Perfilado` es lo que el converter lee del `.pgmx`** |
 
-📌 Y el docstring de `contour.py` hay que corregirlo en cualquiera de los casos: hoy afirma un
-nombre que no existe en ningún lado.
+📌 Lo que hay que corregir del código en cualquier caso es **el docstring**: hoy dice sólo
+«Squaring milling contracts», sin explicar que es el `Galceado` de la cinta ni que Maestro lo
+serializa como `ContourFeature`. Un lector que abra el archivo no puede saber de qué operación
+se trata.
 
 ## 3. La ventana `Perfilado`, capturada
 
@@ -170,7 +194,7 @@ Por el par de control byte-idéntico del §1, se cae casi todo el pedido origina
 
 | | |
 |---|---|
-| ⚖️ **la nomenclatura** | tres nombres de Maestro más el nuestro inventado (§2). **Decisión de Fermín** |
+| ⚖️ **la nomenclatura** | el taller dice **`Escuadrado`** y Maestro dice tres cosas (§2). La decisión se reduce a: la spec por la **función** o por el **tipo del archivo**. **De Fermín** |
 | el `Extra` del pasante | el archivo está, falta medirlo contra el `pasante` |
 | `ContourType` con una **línea abierta** | el Galceado es de contorno: ¿la rechaza? El mensaje sería la respuesta |
 | `ContourType` con un **círculo** | un cerrado que no es polígono |
